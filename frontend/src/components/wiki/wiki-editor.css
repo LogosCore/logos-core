@@ -1,0 +1,1658 @@
+/* Collaboration cursor caret — colored bar only, no name label. */
+.collaboration-cursor__caret {
+  border-left: 2px solid;
+  border-right: none;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+
+/* TipTap editor focus */
+.tiptap:focus {
+  outline: none;
+}
+
+/* Break extremely long tokens (file paths, URLs, code) that would
+   otherwise force the editor wider than its flex allocation. */
+.tiptap {
+  overflow-wrap: anywhere;
+}
+
+/* Compact block rhythm — prose-sm's default ~1.14em paragraph margins
+   produce wide gaps between top-level blocks. Outline-style editors keep
+   ~0.5em consistent rhythm; align paragraphs and the wiki block wrappers
+   below (code, file, image) to the same value. */
+.tiptap p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+/* Horizontal rule (page break / divider). prose-sm defaults to ~2.86em
+   top + bottom, which dominates the surrounding rhythm. Match the
+   block-margin baseline so the rule reads as a thin separator, not a
+   structural section break. */
+.tiptap hr {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+/* Custom HR NodeView wrapper — gives the HR a clickable surface, a
+   selection frame, and a floating toolbar for picking a variant. The
+   prose plugin's <hr> margins live on the inner element below; the
+   wrapper itself uses the same block rhythm as paragraphs. */
+.tiptap .wiki-hr {
+  position: relative;
+  margin: 0.75em 0;
+  padding: 6px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.tiptap .wiki-hr__line {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.tiptap .wiki-hr[data-variant="dashed"] .wiki-hr__line {
+  border-top-style: dashed;
+}
+
+/* Selection cue. ProseMirror's auto-applied `ProseMirror-selectednode` class
+   does not always land on a React-rendered atom NodeView wrapper, so drive
+   the visible state off our own `data-selected` (already wired via
+   useEditorState for the toolbar) — that signal is reliable. Tint the
+   surface, ring it with the focus color, and recolor the rule itself so the
+   divider doesn't visually disappear into the band. Outline-style cue. */
+.tiptap .wiki-hr[data-selected="true"] {
+  background: color-mix(in oklch, var(--primary) 18%, transparent);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.tiptap .wiki-hr[data-selected="true"] .wiki-hr__line {
+  border-top-width: 2px;
+  border-top-color: var(--primary);
+}
+
+.tiptap .wiki-hr__toolbar {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+  z-index: 5;
+}
+
+.tiptap .wiki-hr[data-selected="true"] > .wiki-hr__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tiptap .wiki-hr__variant {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 120ms ease-out, background 120ms ease-out;
+}
+
+.tiptap .wiki-hr__variant:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.tiptap .wiki-hr__variant[aria-pressed="true"] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+/* Placeholder text */
+.tiptap p.is-editor-empty:first-child::before {
+  color: var(--color-muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Task list checkboxes */
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* Inter-item spacing lives on the li, not the inner <p>. The <p>'s prose
+   margins are zeroed below — margins on flex items don't collapse and
+   would otherwise inflate each row and break checkbox/text alignment. */
+.tiptap ul[data-type="taskList"] li + li {
+  margin-top: 0.25rem;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  display: inline-flex;
+  height: 1lh;
+}
+
+.tiptap ul[data-type="taskList"] li > label input[type="checkbox"] {
+  margin: 0;
+  /* Tailwind preflight / typography plugin sets align-self on <input>,
+     which overrides the label's align-items. Force-center the checkbox
+     inside its 1lh-tall label so it lines up with the text optical mid. */
+  align-self: center !important;
+}
+
+.tiptap ul[data-type="taskList"] li > div > p {
+  margin: 0;
+}
+
+/* Tables — prosemirror-tables requires positioned, fixed-layout cells
+   with min-width for resize to work. Theme vars track light/dark. */
+.tiptap .tableWrapper {
+  overflow-x: auto;
+  margin: 0.75em 0;
+  /* Skip layout + paint for offscreen tables. Tables can be tall and dense
+     (resize handles, selection overlays, many cells), and they have no
+     overhanging chrome that would be clipped by the implicit `contain: paint`.
+     The intrinsic-size hint keeps the scrollbar stable while a table is
+     unrendered — 300px is a reasonable average until the real layout lands. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
+
+.tiptap table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+}
+
+.tiptap th,
+.tiptap td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  vertical-align: top;
+  position: relative;
+  min-width: 1em;
+}
+
+.tiptap th {
+  background: var(--muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.tiptap th > *,
+.tiptap td > * {
+  margin: 0;
+}
+
+.tiptap .selectedCell::after {
+  background: color-mix(in oklch, var(--primary) 18%, transparent);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+/* The handle stays inside its cell. prosemirror-tables' stock rule hangs it
+   2px past the right and bottom edges; on the last column or row that pokes
+   out of the tableWrapper, whose `overflow-x: auto` forces `overflow-y` to
+   auto as well, so both scrollbars appear the moment a column boundary is
+   hovered. The scrollbar shifts layout, the pointer leaves the boundary,
+   the handle goes, the scrollbar goes, and it flickers. */
+.tiptap .column-resize-handle {
+  background: var(--primary);
+  bottom: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 3px;
+  pointer-events: none;
+}
+
+.tiptap.resize-cursor {
+  cursor: col-resize;
+}
+
+/* Inline code (Code mark from StarterKit) — styled to read as a small
+   inlined slice of the code block: same surface, monospace, keyword-red
+   foreground (matches the hljs keyword color used in blocks). The class
+   is set in wiki-editor.tsx via StarterKit's code.HTMLAttributes so we
+   don't fight prose's default `:where(code)` rule. */
+.tiptap code.wiki-inline-code {
+  background: var(--wiki-code-bg);
+  color: var(--hljs-keyword);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  font-size: 0.875em;
+  font-weight: 500;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  /* Subtle border so the pill separates from the document surface when
+     the page background is similar in luminance to --wiki-code-bg. */
+  border: 1px solid color-mix(in oklch, var(--wiki-code-fg) 18%, transparent);
+  /* Disable the prose plugin's literal backticks around inline code. */
+}
+.tiptap code.wiki-inline-code::before,
+.tiptap code.wiki-inline-code::after {
+  content: none;
+}
+
+/* Link mark — produced by StarterKit's Link extension via HTMLAttributes.class.
+   Styled here so we don't fight `.prose a` defaults from the typography plugin
+   (otherwise the prose underline + foreground color win and links read like
+   plain bold text). Cursor stays text-style in edit mode because `openOnClick`
+   is "whenNotEditable" — the click places the caret instead of navigating. */
+.tiptap .wiki-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(in oklch, var(--primary) 45%, transparent);
+  transition: text-decoration-color 120ms ease-out;
+  cursor: text;
+}
+.tiptap .wiki-link:hover {
+  text-decoration-color: var(--primary);
+}
+/* Read-only renderer: the link is clickable, so use the pointer cursor and a
+   slightly stronger underline to signal "this navigates". */
+.tiptap:not([contenteditable="true"]) .wiki-link,
+.tiptap[contenteditable="false"] .wiki-link {
+  cursor: pointer;
+}
+
+/* Text highlight mark (WikiHighlightMark). The data-color attribute carries
+   an OKLCH literal from icon-color-palette; the renderHTML hook emits a
+   matching `background-color: color-mix(...)` inline style so the tinted
+   highlight survives copy/paste-as-HTML and SSR rendering. The class only
+   handles shape and the cross-line offsets so the swatch reads as a
+   highlighter pass rather than a hard-edged box. */
+.tiptap mark.wiki-highlight {
+  background-color: transparent;
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.2em;
+  margin: 0 -0.05em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+/* Legacy / unconfigured highlight (no data-color) — render as a soft amber
+   highlight so an imported `<mark>` from an older doc or external paste
+   doesn't render invisibly. */
+.tiptap mark.wiki-highlight:not([data-color]),
+.tiptap mark.wiki-highlight[data-color=""] {
+  background-color: color-mix(in oklch, oklch(0.78 0.14 85) 28%, transparent);
+}
+
+/* Code block — NodeView wrapper around <pre><code>. The hljs token
+   colors below are scoped to :root vs .dark so both themes look right. */
+.tiptap .wiki-code-block {
+  position: relative;
+  margin: 0.5em 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--wiki-code-bg);
+  /* Bound style + layout invalidation inside each code block — typing in
+     one block no longer triggers style recalc across the rest of the doc.
+     `paint` is deliberately omitted because it would force every code
+     block onto its own composite layer, which compounds with the inner
+     <pre>'s scroll-container layer. Stacking layers per block makes
+     scroll-time compositing bumpy on docs that are mostly code (every
+     block paints text runs + hljs spans, and per-layer texture work
+     scales with block count). Layer-light scroll over a stable, already-
+     painted document is cheaper here than `content-visibility: auto`'s
+     skip/render churn — that property buys low idle cost on docs full
+     of code but pays it back as scroll bumps when many tall blocks
+     transition in and out of view per scroll frame. */
+  contain: layout style;
+  /* Collapsed preview height: `--wiki-code-preview-lines` lines of code (set
+     inline from PREVIEW_LINES in wiki-code-block.tsx, so the two cannot drift
+     apart) + the <pre>'s 12px top/bottom padding. Deliberately independent of
+     the collapse *threshold* — see PREVIEW_LINES for why. Keep the line
+     metrics in sync with `__pre code` (line-height 1.55 × font-size
+     0.8125rem). */
+  --wiki-code-collapsed-max: calc(
+    var(--wiki-code-preview-lines, 16) * 1.55 * 0.8125rem + 24px
+  );
+}
+
+/* When any node with a top-floating toolbar is the first element on the page,
+   the toolbar has nothing above it to overlay and would collide with the
+   surrounding page chrome (sticky editor header, etc). Reserve clearance.
+   Opt-in: any NodeView that hangs a toolbar above itself adds
+   `wiki-node--toolbar-top` to its NodeViewWrapper.
+   Note: ReactNodeViewRenderer wraps the NodeView in an outer
+   `<div class="react-renderer node-{nodeType}">` — THAT wrapper is the real
+   first child of `.tiptap`, not the inner `.wiki-*` element. Hence `:has()`. */
+.tiptap > .react-renderer:has(> .wiki-node--toolbar-top):first-child {
+  padding-top: 1.6rem;
+}
+
+.tiptap .wiki-code-block__toolbar {
+  position: absolute;
+  /* Sit inside the block at the top-right corner. Was previously
+     overhanging (`bottom: calc(100% + 4px)`); moved inside so the wrapper
+     can use `content-visibility: auto` without clipping the toolbar.
+     The translucent surface keeps the language label and copy/wrap
+     buttons legible against the first line of code they may briefly
+     overlap while visible (cursor-inside or hover). */
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+  z-index: 5;
+}
+
+/* Editable mode: reveal while the cursor is inside THIS code block OR while
+   a toolbar control holds focus (e.g. the language <select> dropdown is open).
+   Without the focus-within rule the select would hide itself mid-click because
+   focusing it pulls the ProseMirror cursor out of the node. */
+.tiptap .wiki-code-block[data-cursor-inside="true"] > .wiki-code-block__toolbar,
+.tiptap .wiki-code-block[data-editable="true"] > .wiki-code-block__toolbar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* A collapsed block hides content, so the control that reveals it has to be
+   reachable without first committing to a click. In edit mode the toolbar is
+   otherwise caret-gated — and placing the caret *is* the expand (see the
+   auto-expand effect in wiki-code-block.tsx), which would leave "Show all N"
+   permanently unreachable. Applies in both modes. */
+.tiptap .wiki-code-block[data-collapsed="true"]:hover > .wiki-code-block__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Read-only mode: cursor-driven visibility doesn't apply (no cursor), so fall
+   back to hover/focus so viewers can still reach the copy button. */
+.tiptap .wiki-code-block[data-editable="false"]:hover > .wiki-code-block__toolbar,
+.tiptap .wiki-code-block[data-editable="false"]:focus-within > .wiki-code-block__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tiptap .wiki-code-block__select,
+.tiptap .wiki-code-block__language {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+  background: var(--wiki-code-chrome);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.tiptap .wiki-code-block__select {
+  appearance: none;
+  padding-right: 18px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 9px) 50%, calc(100% - 5px) 50%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.tiptap .wiki-code-block__select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* Class is shared with WikiInlineCodePopover, which renders as a floating
+   BubbleMenu outside the .tiptap DOM tree — the .tiptap prefix is dropped
+   so the same styling applies in both places. */
+.wiki-code-block__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+  background: var(--wiki-code-chrome);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: 3px 6px 3px 5px;
+  cursor: pointer;
+  transition: color 120ms ease-out, background 120ms ease-out;
+}
+
+.wiki-code-block__copy:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.tiptap .wiki-code-block__wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--muted-foreground);
+  background: var(--wiki-code-chrome);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
+  transition: color 120ms ease-out, background 120ms ease-out;
+}
+
+.tiptap .wiki-code-block__wrap:hover,
+.tiptap .wiki-code-block__wrap[aria-pressed="true"] {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+/* Collapse/expand toggle — a text pill (like the copy button) so the
+   "Show all (N)" / "Collapse" label is legible. Shown in both edit and read
+   mode whenever the block is collapsible. */
+.tiptap .wiki-code-block__collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted-foreground);
+  background: var(--wiki-code-chrome);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-md) - 2px);
+  padding: 3px 6px 3px 5px;
+  cursor: pointer;
+  transition: color 120ms ease-out, background 120ms ease-out;
+}
+
+.tiptap .wiki-code-block__collapse:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+/* Two-column layout: gutter (line numbers + wrap markers) on the left, the
+   scrollable <pre> on the right. Both share the wrapper's background — the
+   gutter has no chrome and no separator, it just sits on the left edge with
+   the numbers right-aligned. `min-width: 0` on the <pre> lets it shrink
+   inside the flex row so its horizontal scroll bar appears instead of
+   overflowing the wrapper. The gutter stays fixed — it must not scroll
+   horizontally with the code. */
+.tiptap .wiki-code-block__body {
+  display: flex;
+  align-items: stretch;
+}
+
+/* Collapsed large block: clip the body to the preview height. At rest it is
+   deliberately NOT a live scroll container — that is the whole point.
+   A nested vertical scroller sitting under the pointer steals wheel gestures
+   from the page: the browser latches each new wheel burst onto whatever
+   scroller the cursor happens to be over, and with the default
+   `overscroll-behavior` the page does not move again until the block's entire
+   remaining height has been consumed. On a document that is mostly code that
+   turns ordinary reading into a fight. So a resting block is inert, the page
+   scrolls straight past it, and the fade + "Show all N" pill are the
+   affordance for what is hidden. It becomes a real scroll viewport only once
+   engaged — see the :focus-within rule below.
+
+   `overflow: hidden` rather than `clip`: `scrollbar-gutter: stable` only
+   reserves space on a scroll container, and `hidden` is one while `clip` is
+   not. That reservation is what stops the code jumping sideways when
+   engaging swaps a real scrollbar in. Both axes are pinned because leaving
+   `overflow-x` at `visible` would compute it back to `auto` and hand the
+   body a horizontal scroller of its own, on top of the <pre>'s. */
+.tiptap .wiki-code-block[data-collapsed="true"] .wiki-code-block__body {
+  max-height: var(--wiki-code-collapsed-max);
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  /* The base rule uses `align-items: stretch`, which — once the body has a
+     max-height and becomes a scroll container — clamps the gutter and <pre>
+     to the VISIBLE height instead of their content height. That breaks the
+     shared scroll (one child clips/freezes while the other paints past its
+     box). `flex-start` lets each child take its full content height so the
+     body is the single element that clips and scrolls them together. */
+  align-items: flex-start;
+}
+
+/* Engaged — the wheel is now meant for the code, so hand it a real scroll
+   container. Two triggers, because "inside" means different things per mode:
+
+     - edit: the caret is in this block. DOM focus is useless here —
+       ProseMirror keeps focus on the editor root, so no descendant of the
+       body is ever the active element and :focus-within never matches.
+     - read: there is no caret, so focus on the body (which carries tabindex
+       in that mode) is what marks it.
+
+   The vertical scroll lives on the body, not the <pre>, so the gutter and the
+   code scroll together and line numbers stay aligned; the <pre> keeps its own
+   horizontal scroll. `contain` stops the gesture at either end rather than
+   punting it back to the document — engagement was deliberate, so leaving the
+   block should be too. */
+.tiptap
+  .wiki-code-block[data-collapsed="true"][data-cursor-inside="true"]
+  .wiki-code-block__body,
+.tiptap
+  .wiki-code-block[data-collapsed="true"]
+  .wiki-code-block__body:focus-within {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+/* Keyboard focus lands on the body in read mode; say so. Mouse clicks focus
+   it too but :focus-visible keeps the ring off that path. */
+.tiptap .wiki-code-block__body:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+  border-radius: calc(var(--radius-md) - 1px);
+}
+
+/* "There is more below" for a block at rest. Dropped once engaged, where the
+   scrollbar says the same thing without dimming the last visible lines — so
+   this has to negate BOTH engagement triggers, or the fade would sit over the
+   code the whole time the caret is in the block.
+   `:has()` scopes the focus test to the body specifically — focus on a
+   toolbar control (the language <select>) must not count as engagement. */
+.tiptap
+  .wiki-code-block[data-collapsed="true"]:not([data-cursor-inside="true"]):not(
+    :has(.wiki-code-block__body:focus-within)
+  )::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.5rem;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: linear-gradient(to bottom, transparent, var(--wiki-code-bg));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* The <pre> keeps `overflow-x: auto` for horizontal code scroll, but CSS
+   forces the cross-axis to `auto` too. With the children at full height
+   (above) there's nothing to scroll vertically inside the <pre>; pinning
+   `overflow-y: hidden` guarantees it never steals the vertical scroll from the
+   body (which would leave the gutter behind) or shows a spurious scrollbar. */
+.tiptap .wiki-code-block[data-collapsed="true"] .wiki-code-block__pre {
+  overflow-y: hidden;
+}
+
+.tiptap .wiki-code-block__gutter {
+  flex: 0 0 auto;
+  min-width: 2.25rem;
+  padding: 12px 8px 12px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Each gutter row mirrors a single visual line of code. Matching the code's
+   `line-height: 1.55` is what keeps numbers aligned with their lines even
+   when wrap re-flows the content; if these diverge the gutter desyncs. */
+.tiptap .wiki-code-block__line {
+  display: block;
+  line-height: 1.55;
+  opacity: 0.55;
+}
+
+.tiptap .wiki-code-block__line--wrap {
+  opacity: 0.3;
+}
+
+.tiptap .wiki-code-block__pre {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 14px 12px 4px;
+  background: transparent;
+  overflow-x: auto;
+}
+
+.tiptap .wiki-code-block__pre code,
+.tiptap .wiki-code-block__pre code.hljs {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--wiki-code-fg);
+  background: transparent;
+  padding: 0;
+  /* `white-space` is set inline by WikiCodeBlock — @tiptap/react's
+     NodeViewContent hardcodes `whiteSpace: 'pre-wrap'` as an inline style,
+     which would beat any rule we put here. See wiki-code-block.tsx. */
+  /* The editor root sets `overflow-wrap: anywhere` so long prose tokens
+     don't widen the column. That rule also breaks long code lines unless
+     we reset it here — we want horizontal scroll, not a forced wrap. */
+  overflow-wrap: normal;
+  word-break: normal;
+  tab-size: 2;
+}
+
+/* Soft-wrap toggle — driven by node attr mirrored onto the wrapper.
+   `white-space` itself is bound inline in WikiCodeBlock (see comment above);
+   the rules below cover the companion break behavior, which CSS *can* set
+   because @tiptap/react does not pin those properties inline. */
+.tiptap .wiki-code-block[data-wrap="true"] .wiki-code-block__pre code,
+.tiptap .wiki-code-block[data-wrap="true"] .wiki-code-block__pre code.hljs {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Surface tokens — GitHub light by default, overridden under .dark below. */
+:root {
+  --wiki-code-bg: oklch(0.94 0 0);
+  --wiki-code-chrome: oklch(1 0 0);
+  --wiki-code-fg: #24292e;
+  --hljs-comment: #6a737d;
+  --hljs-keyword: #d73a49;
+  --hljs-entity: #6f42c1;
+  --hljs-constant: #005cc5;
+  --hljs-string: #032f62;
+  --hljs-variable: #e36209;
+  --hljs-tag: #22863a;
+  --hljs-addition-fg: #22863a;
+  --hljs-addition-bg: #f0fff4;
+  --hljs-deletion-fg: #b31d28;
+  --hljs-deletion-bg: #ffeef0;
+}
+
+.dark {
+  --wiki-code-bg: oklch(0.22 0 0);
+  --wiki-code-chrome: oklch(0.16 0 0);
+  --wiki-code-fg: #c9d1d9;
+  --hljs-comment: #8b949e;
+  --hljs-keyword: #ff7b72;
+  --hljs-entity: #d2a8ff;
+  --hljs-constant: #79c0ff;
+  --hljs-string: #a5d6ff;
+  --hljs-variable: #ffa657;
+  --hljs-tag: #7ee787;
+  --hljs-addition-fg: #aff5b4;
+  --hljs-addition-bg: #033a16;
+  --hljs-deletion-fg: #ffdcd7;
+  --hljs-deletion-bg: #67060c;
+}
+
+/* highlight.js token classes — applied by lowlight on the <code>. */
+.tiptap .wiki-code-block__pre code.hljs .hljs-comment,
+.tiptap .wiki-code-block__pre code.hljs .hljs-quote {
+  color: var(--hljs-comment);
+  font-style: italic;
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-keyword,
+.tiptap .wiki-code-block__pre code.hljs .hljs-selector-tag,
+.tiptap .wiki-code-block__pre code.hljs .hljs-literal,
+.tiptap .wiki-code-block__pre code.hljs .hljs-doctag,
+.tiptap .wiki-code-block__pre code.hljs .hljs-type {
+  color: var(--hljs-keyword);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-title,
+.tiptap .wiki-code-block__pre code.hljs .hljs-title.class_,
+.tiptap .wiki-code-block__pre code.hljs .hljs-title.function_,
+.tiptap .wiki-code-block__pre code.hljs .hljs-section {
+  color: var(--hljs-entity);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-number,
+.tiptap .wiki-code-block__pre code.hljs .hljs-symbol,
+.tiptap .wiki-code-block__pre code.hljs .hljs-bullet,
+.tiptap .wiki-code-block__pre code.hljs .hljs-built_in,
+.tiptap .wiki-code-block__pre code.hljs .hljs-attr,
+.tiptap .wiki-code-block__pre code.hljs .hljs-meta {
+  color: var(--hljs-constant);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-string,
+.tiptap .wiki-code-block__pre code.hljs .hljs-regexp,
+.tiptap .wiki-code-block__pre code.hljs .hljs-attribute,
+.tiptap .wiki-code-block__pre code.hljs .hljs-template-tag,
+.tiptap .wiki-code-block__pre code.hljs .hljs-template-variable {
+  color: var(--hljs-string);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-variable,
+.tiptap .wiki-code-block__pre code.hljs .hljs-params {
+  color: var(--hljs-variable);
+}
+
+/* `.hljs-tag` is the XML/HTML tag *wrapper* — it contains the brackets plus
+   nested `.hljs-name`, `.hljs-attr`, `.hljs-string` spans. We flatten that
+   nested tree into ProseMirror inline decorations, so a tag-name leaf ends
+   up with `class="hljs-tag hljs-name"`. Coloring `.hljs-tag` here would
+   override every nested class because of CSS declaration order. Leave it
+   to the default fg; color the leaves below instead. */
+.tiptap .wiki-code-block__pre code.hljs .hljs-name,
+.tiptap .wiki-code-block__pre code.hljs .hljs-selector-id,
+.tiptap .wiki-code-block__pre code.hljs .hljs-selector-class {
+  color: var(--hljs-tag);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-addition {
+  color: var(--hljs-addition-fg);
+  background-color: var(--hljs-addition-bg);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-deletion {
+  color: var(--hljs-deletion-fg);
+  background-color: var(--hljs-deletion-bg);
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-emphasis {
+  font-style: italic;
+}
+
+.tiptap .wiki-code-block__pre code.hljs .hljs-strong {
+  font-weight: 700;
+}
+
+/* Wiki-embedded images. The NodeView wraps the raw <img> in a figure +
+   frame so we can overlay an on-hover preview button. */
+.tiptap figure.wiki-image-wrapper {
+  margin: 0.5em 0;
+  padding: 0;
+  /* Bound layout invalidation to the image. With many embedded images, a
+     resize/reflow inside one would otherwise propagate through the whole
+     document. No paint containment — image dimensions aren't known up front
+     and `content-visibility: auto` would jump the scroll on decode. */
+  contain: layout style;
+}
+
+.tiptap .wiki-image-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  /* Collapse the font-based inline strut so the frame hugs the image pixel-
+     tight — otherwise the ~4px baseline descent leaks through inline-block. */
+  font-size: 0;
+  line-height: 0;
+}
+
+.tiptap .wiki-image-frame .wiki-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  /* Override the prose plugin's default `img { margin: 2em 0 }`. The outer
+     <figure> already owns vertical rhythm; without this, the image drops
+     below the frame's top and the preview button lands in empty space. */
+  margin: 0;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+  cursor: zoom-in;
+}
+
+.tiptap figure.wiki-image-wrapper.ProseMirror-selectednode .wiki-image-frame {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* Placeholder shown when an image fails to load — typically because its blob
+   was deleted but the reference still lives in the document. Replaces a
+   confusing blank gap with an explicit "unavailable" affordance. Mirrors the
+   frame's border/radius so it sits in the layout like a real image would. */
+.tiptap .wiki-image-missing {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  /* font-size was zeroed on the wrapper context for the real frame; restore
+     it so the placeholder text renders. */
+  font-size: 0.875rem;
+  line-height: 1.4;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.tiptap figure.wiki-image-wrapper.ProseMirror-selectednode .wiki-image-missing {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.tiptap .wiki-image-missing-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.tiptap .wiki-image-missing-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tiptap .wiki-image-missing-title {
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.tiptap .wiki-image-missing-alt {
+  /* The original alt text, when present, helps identify what's missing. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The placeholder has no hover-reveal cluster; the delete button (edit mode
+   only) sits inline so a dead reference is easy to clear. */
+.tiptap .wiki-image-missing-delete {
+  position: static;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Action cluster overlay: preview + delete, anchored to the image's top-right
+   corner. Hidden until the frame is hovered or a button receives focus.
+   Uses `display: none` toggle rather than opacity/transform transitions —
+   the latter pair was forcing Chrome to keep every image's overlay on a
+   permanent composite layer (auto-promotion for animatable properties)
+   regardless of hover state, which compounded GPU cost on long docs. */
+.tiptap .wiki-image-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.tiptap .wiki-image-frame:hover .wiki-image-actions,
+.tiptap .wiki-image-actions:focus-within {
+  display: inline-flex;
+  pointer-events: auto;
+}
+
+.tiptap .wiki-image-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  /* Solid translucent surface in place of the previous backdrop-blur. The
+     blur was per-frame GPU shader work on a permanent composite layer for
+     EVERY image in the doc (the overlay is `opacity: 0` until hover but the
+     layer is still allocated); bumping alpha from 0.72 → 0.85 keeps the
+     glyph legible without the shader. */
+  background: rgba(17, 24, 39, 0.85);
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.tiptap .wiki-image-action-button:hover {
+  background: rgba(17, 24, 39, 0.88);
+}
+
+.tiptap .wiki-image-action-button--danger:hover {
+  /* Cue the destructive action with red, but only on hover — ambient red
+     would compete with the preview affordance next to it. */
+  background: rgb(185, 28, 28);
+}
+
+/* Wiki file attachments: horizontal download card with icon + filename +
+   size + hover actions. Rendered by WikiFileExtension's NodeView. */
+.tiptap figure.wiki-file-wrapper {
+  margin: 0.5em 0;
+  padding: 0;
+  /* File cards have fixed-ish height; bound layout + paint so a per-card
+     hover/focus change doesn't ripple. No overhanging children to clip. */
+  contain: layout paint style;
+}
+
+.tiptap .wiki-file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-muted, rgba(0, 0, 0, 0.03));
+  transition: background-color 120ms ease, border-color 120ms ease;
+  min-width: 0;
+}
+
+.tiptap .wiki-file-card:hover {
+  background: var(--color-accent, rgba(0, 0, 0, 0.05));
+}
+
+.tiptap figure.wiki-file-wrapper.ProseMirror-selectednode .wiki-file-card {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.tiptap .wiki-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--color-background, #fff);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground, #111);
+  flex-shrink: 0;
+}
+
+/* Image attachments swap the type-icon slot for a real thumbnail. Slightly
+   larger than the 36px icon — at icon size a photo is unreadable, and the few
+   extra pixels are what make the card worth having. Fixed square so a portrait
+   and a landscape attachment produce identically-sized cards; object-fit
+   crops rather than letterboxes so the tile is never part-empty. */
+.tiptap .wiki-file-thumb {
+  appearance: none;
+  padding: 0;
+  margin: 0;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-background, #fff);
+  cursor: zoom-in;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tiptap .wiki-file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tiptap .wiki-file-thumb:hover,
+.tiptap .wiki-file-thumb:focus-visible {
+  border-color: var(--color-ring, #6b7280);
+  box-shadow: 0 0 0 2px var(--color-ring, #6b7280);
+  outline: none;
+}
+
+.tiptap .wiki-file-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.tiptap .wiki-file-name {
+  /* Rendered as a <button> so click events stay idempotent under
+     ProseMirror + StrictMode — reset the user-agent button styling. */
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font-weight: 500;
+  font-size: inherit;
+  font-family: inherit;
+  color: var(--color-foreground, #111);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tiptap .wiki-file-name:hover {
+  text-decoration: underline;
+}
+
+.tiptap .wiki-file-size {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground, #6b7280);
+  margin-top: 2px;
+}
+
+/* See .wiki-image-actions — `display: none` toggle in place of the
+   opacity/transform transition that was forcing layer promotion. */
+.tiptap .wiki-file-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.tiptap .wiki-file-card:hover .wiki-file-actions,
+.tiptap .wiki-file-actions:focus-within {
+  display: flex;
+  pointer-events: auto;
+}
+
+.tiptap .wiki-file-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  /* See .wiki-image-action-button — backdrop-filter dropped for the same
+     reason; alpha bumped from 0.72 → 0.85 to preserve glyph contrast. */
+  background: rgba(17, 24, 39, 0.85);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+
+.tiptap .wiki-file-action-button:hover {
+  background: rgba(17, 24, 39, 0.88);
+}
+
+.tiptap .wiki-file-action-button--danger:hover {
+  background: rgb(185, 28, 28);
+}
+
+/* Inline preview panel — expands below the file card when the user toggles
+   preview. Mounted only while open (see WikiFileCard), so collapsed cards never
+   load the iframe. Used for both PDF (iframe src) and HTML (sandboxed srcdoc). */
+.tiptap .wiki-file-preview {
+  margin-top: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-muted, rgba(0, 0, 0, 0.03));
+}
+
+/* Native video/audio player. Video keeps its own aspect ratio under the same
+   height ceiling the frame uses; audio is a one-line control strip. */
+.tiptap .wiki-file-preview-media {
+  display: block;
+  width: 100%;
+  max-height: min(75vh, 720px);
+  background: #000;
+}
+
+.tiptap .wiki-file-preview-media--audio {
+  max-height: none;
+  padding: 8px;
+  background: transparent;
+}
+
+.tiptap .wiki-file-preview-frame {
+  display: block;
+  width: 100%;
+  /* Default height, overridable per-card by the drag handle which sets
+     --wiki-preview-height on the panel. */
+  height: var(--wiki-preview-height, min(75vh, 720px));
+  border: 0;
+  background: #fff;
+}
+
+/* Drag handle along the bottom edge — lets the reader grow or shrink the frame.
+   Hidden in fullscreen, where the frame already fills the viewport. */
+.tiptap .wiki-file-preview-resize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 11px;
+  cursor: ns-resize;
+  background: var(--color-muted, rgba(0, 0, 0, 0.03));
+  border-top: 1px solid var(--color-border);
+  touch-action: none;
+  transition: background 120ms ease;
+}
+
+.tiptap .wiki-file-preview-resize:hover {
+  background: var(--color-accent, rgba(0, 0, 0, 0.06));
+}
+
+.tiptap .wiki-file-preview-resize-grip {
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-border);
+  transition: background 120ms ease;
+}
+
+.tiptap .wiki-file-preview-resize:hover .wiki-file-preview-resize-grip {
+  background: var(--color-primary, var(--color-text-muted, rgba(0, 0, 0, 0.45)));
+}
+
+/* While a drag is in flight (class is on <body>): keep the resize cursor
+   everywhere and stop the iframe from swallowing mousemove so the drag tracks
+   smoothly even as the pointer passes over the frame. */
+body.wiki-preview-resizing {
+  cursor: ns-resize;
+  user-select: none;
+}
+
+body.wiki-preview-resizing .wiki-file-preview-frame {
+  pointer-events: none;
+}
+
+/* Native fullscreen: the panel fills the screen, so drop its inline framing and
+   let the frame take the whole viewport. */
+.tiptap .wiki-file-preview:fullscreen {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
+.tiptap .wiki-file-preview:fullscreen .wiki-file-preview-frame {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.tiptap .wiki-file-preview:fullscreen .wiki-file-preview-resize {
+  display: none;
+}
+
+/* Transient loading / error message shown in the panel while the HTML body is
+   being fetched (or if the fetch fails). */
+.tiptap .wiki-file-preview-status {
+  margin: 0;
+  padding: 16px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, rgba(0, 0, 0, 0.6));
+}
+
+.tiptap .wiki-file-preview-status--error {
+  color: var(--color-danger, #c0392b);
+}
+
+/* Wiki credential reference — inline atom chip rendered inside prose.
+   Click opens the same details modal as a Findings table row; right-click
+   surfaces the same per-row context menu. The chip is sized to sit on a
+   single text line without disturbing the line box.
+
+   Inline placement: both the NodeViewWrapper span and ReactNodeViewRenderer's
+   own outer `.react-renderer.node-wikiCredentialReference` wrapper need to
+   render as inline boxes — otherwise the chip drops onto its own line when
+   placed between prose tokens. The outer wrapper defaults to block in
+   @tiptap/react, so we force it inline here. */
+.tiptap .wiki-credential-chip-wrapper {
+  display: inline;
+}
+
+.tiptap .react-renderer.node-wikiCredentialReference {
+  display: inline;
+}
+
+/* Wiki document reference — inline atom chip rendered inside prose. Click
+   navigates to the referenced document. Mirrors the credential chip layout
+   (same inline-atom constraints — see notes above) but uses a sky/blue
+   accent so the two reference flavors are visually distinguishable at a
+   glance. The blue keeps "cross-document link" feeling like prose-anchored
+   navigation, while violet keeps "credential" feeling like sensitive data. */
+.tiptap .wiki-document-chip-wrapper {
+  display: inline;
+}
+
+.tiptap .react-renderer.node-wikiDocumentReference {
+  display: inline;
+}
+
+/* Notice / callout block — Outline-style tinted band with a left accent rail,
+   a small leading icon (filled chip with white glyph for info/success/warning,
+   solid star for tip), and a floating variant picker that appears while the
+   cursor is inside the block. The four variants share layout and only differ
+   in the accent and surface tones. */
+.tiptap .wiki-notice {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: 10px;
+  margin: 0.6em 0;
+  padding: 7px 14px 7px 12px;
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--wiki-notice-rail);
+  background: var(--wiki-notice-surface);
+  color: var(--wiki-notice-fg);
+  /* Skip layout + paint + composite for offscreen notices. The variant
+     picker now lives inside the top-right corner (see
+     .wiki-notice__toolbar) so the implicit paint containment no longer
+     clips overhanging chrome. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 60px;
+  /* Deliberately do NOT pin line-height here. The icon container's
+     `min-height: 1lh` must resolve to the SAME value as the body's first
+     line; the simplest way to guarantee that is to let both sides inherit
+     prose-sm's line-height (1.71) from the surrounding `.prose-sm` editor
+     wrapper. Pinning a different value here decouples the two and the
+     chip ends up shorter than the line. */
+}
+
+.tiptap .wiki-notice__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Make the icon container exactly one body line-box tall. `1lh` resolves
+     against THIS element's own line-height — so we deliberately let it
+     inherit 1.55 from `.wiki-notice` rather than overriding it to `1`,
+     otherwise `1lh` collapses to the icon font-size (14px) and the chip
+     ends up ~8px shorter than the first line of prose text. */
+  min-height: 1lh;
+  color: var(--wiki-notice-accent);
+  flex-shrink: 0;
+}
+
+/* Filled-icon styling. lucide ships stroke-only paths with `fill="none"` at
+   the SVG root, which we override per-element via JSX (`fill="currentColor"`):
+   - circle  → outer disk, fully filled with the accent color (no halo, so the
+               stroke is forced back to currentColor too)
+   - path/line → inner glyph (i / check / !), drawn as a white stroke against
+               the chip
+   For the tip variant only a single <path> exists (the star) — keep its
+   stroke matching the fill so it reads as one solid filled shape. */
+.tiptap .wiki-notice__icon svg circle {
+  stroke: currentColor;
+}
+
+.tiptap .wiki-notice[data-variant="info"] .wiki-notice__icon svg :is(path, line),
+.tiptap .wiki-notice[data-variant="success"] .wiki-notice__icon svg :is(path, line),
+.tiptap .wiki-notice[data-variant="warning"] .wiki-notice__icon svg :is(path, line) {
+  stroke: var(--wiki-notice-on-accent);
+  fill: none;
+}
+
+.tiptap .wiki-notice[data-variant="tip"] .wiki-notice__icon svg path {
+  stroke: currentColor;
+}
+
+.tiptap .wiki-notice__body {
+  min-width: 0;
+  /* Body inherits prose-sm's line-height (1.71) — see the note on
+     `.wiki-notice` above for why we don't pin this. */
+}
+
+/* Outline-style rhythm: consecutive paragraphs in a notice sit flush so a
+   multi-line notice reads as stacked rows of text rather than as separately-
+   margined paragraphs. Line-height alone (inherited from prose-sm = 1.71)
+   provides the between-row breathing room.
+   IMPORTANT: do NOT use `>` here. ReactNodeViewRenderer wraps node content
+   in an extra `<div data-node-view-content-react>` — so `<p>` is a
+   grandchild of `.wiki-notice__body`, not a direct child. A `> p` selector
+   silently misses every paragraph and the global `.tiptap p` rule wins at
+   0.5em. The descendant-combinator form here matches both the wrapped
+   shape (live editor) and the un-wrapped HTML output (parseHTML on
+   reload). */
+.tiptap .wiki-notice__body p {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Variant tokens — accent (rail + chip), surface (band bg), on-accent (glyph
+   color inside the chip). White glyph reads cleanly on every accent. */
+.tiptap .wiki-notice[data-variant="info"] {
+  --wiki-notice-rail: oklch(0.55 0.22 268);
+  --wiki-notice-accent: oklch(0.52 0.24 268);
+  --wiki-notice-surface: oklch(0.965 0.025 268);
+  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-fg: var(--foreground);
+}
+
+.tiptap .wiki-notice[data-variant="success"] {
+  --wiki-notice-rail: oklch(0.62 0.16 152);
+  --wiki-notice-accent: oklch(0.58 0.18 152);
+  --wiki-notice-surface: oklch(0.965 0.045 152);
+  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-fg: var(--foreground);
+}
+
+.tiptap .wiki-notice[data-variant="warning"] {
+  --wiki-notice-rail: oklch(0.58 0.22 22);
+  --wiki-notice-accent: oklch(0.55 0.24 22);
+  --wiki-notice-surface: oklch(0.965 0.03 22);
+  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-fg: var(--foreground);
+}
+
+.tiptap .wiki-notice[data-variant="tip"] {
+  --wiki-notice-rail: oklch(0.78 0.17 85);
+  --wiki-notice-accent: oklch(0.78 0.17 85);
+  --wiki-notice-surface: oklch(0.965 0.06 95);
+  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-fg: var(--foreground);
+}
+
+.dark .tiptap .wiki-notice[data-variant="info"] {
+  --wiki-notice-rail: oklch(0.65 0.20 268);
+  --wiki-notice-accent: oklch(0.62 0.22 268);
+  --wiki-notice-surface: oklch(0.27 0.06 268);
+}
+
+.dark .tiptap .wiki-notice[data-variant="success"] {
+  --wiki-notice-rail: oklch(0.68 0.16 152);
+  --wiki-notice-accent: oklch(0.62 0.18 152);
+  --wiki-notice-surface: oklch(0.26 0.05 152);
+}
+
+.dark .tiptap .wiki-notice[data-variant="warning"] {
+  --wiki-notice-rail: oklch(0.65 0.22 22);
+  --wiki-notice-accent: oklch(0.60 0.24 22);
+  --wiki-notice-surface: oklch(0.27 0.07 22);
+}
+
+.dark .tiptap .wiki-notice[data-variant="tip"] {
+  --wiki-notice-rail: oklch(0.78 0.17 85);
+  --wiki-notice-accent: oklch(0.80 0.17 85);
+  --wiki-notice-surface: oklch(0.27 0.06 80);
+}
+
+/* Variant picker — same layering pattern as the code-block toolbar.
+   Hidden until the cursor lives inside this notice. Sits inside the
+   top-right corner so the wrapper can use `content-visibility: auto`
+   without clipping the toolbar. */
+.tiptap .wiki-notice__toolbar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+  z-index: 5;
+}
+
+.tiptap .wiki-notice[data-cursor-inside="true"] > .wiki-notice__toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tiptap .wiki-notice__variant {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 120ms ease-out, background 120ms ease-out;
+}
+
+.tiptap .wiki-notice__variant:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.tiptap .wiki-notice__variant[aria-pressed="true"] {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+/* -------------------------------------------------------------------------
+   Checklist item node (wikiChecklistItem) + coverage bar
+   ------------------------------------------------------------------------- */
+
+.tiptap .wiki-checklist-item {
+  position: relative;
+  margin: 0.55em 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in oklch, var(--muted) 35%, transparent);
+}
+
+.tiptap .wiki-checklist-item[data-status="answered"] {
+  border-left: 3px solid var(--primary);
+}
+.tiptap .wiki-checklist-item[data-status="not_applicable"] {
+  opacity: 0.72;
+}
+.tiptap .wiki-checklist-item[data-status="flagged"] {
+  border-left: 3px solid oklch(70% 0.17 50);
+}
+
+.tiptap .wiki-checklist-item__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.tiptap .wiki-checklist-item__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tiptap .wiki-checklist-item__prompt {
+  margin: 0;
+  font-weight: 600;
+  /* Wrap long prompts (including unbroken strings) instead of overflowing
+     behind the controls. */
+  overflow-wrap: anywhere;
+}
+.tiptap .wiki-checklist-item__muted {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.tiptap .wiki-checklist-item__prompt-input,
+.tiptap .wiki-checklist-item__hint-edit input {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 2px 6px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+.tiptap .wiki-checklist-item__prompt-input {
+  font-weight: 600;
+  /* Textarea behaves like a growing single field: no manual resize handle,
+     hidden scrollbar (JS sizes it), and long prompts wrap rather than scroll. */
+  resize: none;
+  overflow: hidden;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.tiptap .wiki-checklist-item__prompt-input:focus,
+.tiptap .wiki-checklist-item__hint-edit input:focus {
+  outline: none;
+  border-color: var(--border);
+  background: var(--popover);
+}
+
+.tiptap .wiki-checklist-item__controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.tiptap .wiki-checklist-item__required {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75em;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.tiptap .wiki-checklist-item__state-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+/* The icon must not be the pointer target: ProseMirror's native mousedown
+   handler runs before React's, and its stopEvent only ignores events whose
+   target is the BUTTON itself (not an inner <svg>). Without this, clicking the
+   glyph lets ProseMirror process the mousedown and the button's click is lost. */
+.tiptap .wiki-checklist-item__state-btn svg {
+  pointer-events: none;
+}
+.tiptap .wiki-checklist-item__state-btn[data-active="true"] {
+  background: var(--accent);
+  color: var(--foreground);
+  border-color: var(--primary);
+}
+/* Destructive delete control: neutral until hovered, then reads red so the
+   intent is unmistakable before the confirm dialog. */
+.tiptap .wiki-checklist-item__state-btn--danger:hover {
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+  border-color: color-mix(in oklch, var(--destructive) 45%, transparent);
+  color: var(--destructive);
+}
+
+.tiptap .wiki-checklist-item__hint {
+  display: flex;
+  /* Top-align so the $ prompt and copy button sit on the first line when the
+     command spans multiple lines. */
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  background: var(--wiki-code-bg, var(--muted));
+  color: var(--wiki-code-fg, var(--foreground));
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+.tiptap .wiki-checklist-item__hint-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 0;
+}
+.tiptap .wiki-checklist-item__hint-copy:hover {
+  color: var(--foreground);
+}
+/* Same reason as __state-btn svg: keep the glyph from being the pointer target
+   so ProseMirror's pre-React mousedown handler doesn't eat the click. */
+.tiptap .wiki-checklist-item__hint-copy svg {
+  pointer-events: none;
+}
+.tiptap .wiki-checklist-item__hint-prompt {
+  color: var(--muted-foreground);
+  user-select: none;
+  flex-shrink: 0;
+}
+.tiptap .wiki-checklist-item__hint-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  outline: none;
+  padding: 0;
+  /* Multiline command editor: auto-sized in JS (autoGrow), so disable the
+     manual resize grip and hide the scrollbar it would otherwise show. */
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  word-break: break-word;
+}
+.tiptap pre.wiki-checklist-item__hint {
+  overflow-x: auto;
+}
+.tiptap .wiki-checklist-item__hint code {
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+
+.tiptap .wiki-checklist-item__answer {
+  margin-top: 8px;
+}
+
+/* Coverage bar — used in document headers and (compact) tree rows. */
+.wiki-checklist-coverage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.wiki-checklist-coverage__track {
+  position: relative;
+  width: 120px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+.wiki-checklist-coverage--compact .wiki-checklist-coverage__track {
+  width: 44px;
+  height: 4px;
+}
+.wiki-checklist-coverage__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 150ms ease;
+}
+.wiki-checklist-coverage[data-complete="true"] .wiki-checklist-coverage__fill {
+  background: oklch(62% 0.17 150);
+}
+.wiki-checklist-coverage__label {
+  font-size: 0.75em;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}

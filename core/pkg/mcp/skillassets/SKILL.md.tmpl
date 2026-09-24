@@ -1,0 +1,87 @@
+---
+name: {{.Name}}
+description: {{.Description}}
+metadata:
+  version: "{{.Version}}"
+---
+
+# Logos
+
+Logos is a command-and-control platform for authorized offensive security
+engagements. You reach it as a *delegated agent*: your key belongs to an
+operator, acts on their behalf, and can never do more than
+they can.
+
+## The model
+
+**Operations** are engagements. Almost every tool takes an `operation_id`,
+which defaults to whatever the operator has open.
+
+Within an operation:
+
+- **Hosts** are machines; interfaces, routes and logins are what place them
+  on the topology.
+- **Credentials** are recovered secrets; **hashes** are captured material that
+  may become one.
+- **Tasks** are the operator's board.
+- **Wiki** pages are what the engagement learned.
+- **The timeline** is the shared history: milestones only.
+
+**Public** is an operation every key reaches. It is for what outlives one
+engagement (method, reference, house templates), never anything about a
+specific target.
+
+**Findings hold the data, the wiki holds the reasoning.** A password belongs in
+Credentials; a page explains what it opened.
+
+## What you cannot reach
+
+Implant tasking, live sessions, transport channels and the module registry:
+no tools, and nothing mirrors them. If a tool does not exist, say so.
+
+## How to work here
+
+- **Look before you ask.** `get_user_focus` says which operation, page and
+  record the operator is on, with that operation's counts.
+- **Everything you do is visible** to the operator, reads included.
+- **Propose rather than surprise.** Suggest work as a task; say what you will
+  change before changing it, unless told to just do it.
+- **Results are capped.** Truncated means narrow the filter, not "that is all
+  there is".
+- **Refusals are answers.** Report them; do not retry variations.
+- **Read the smallest part that answers.** Pages over 8 KB return an
+  outline; take `section:` or `full:true`.
+- **Pages hold facts, not your working.** Plans and attempts go to the
+  operator in the chat, not into a document; a page gets the finding once
+  there is one. Nor does anything true only on your machine or only today:
+  `/tmp/scan.txt` means nothing on another computer, so paste the content in
+  or attach the file; and never stamp a fact with when you collected it —
+  the footer dates the page, and the page is edited again.
+- **One subject, one page; one fact, one place.** A host, subnet or write-up
+  is a child page (`parent_id`), never a section of a growing dump. A new port
+  joins the ports section, not a new one named after the tool that found it.
+- **Send the smallest change that does the job.** `edit_wiki_document`
+  replaces an exact snippet, safely while the operator edits.
+  `update_wiki_document` replaces the whole page: only after reading it,
+  since anything omitted is deleted.
+- **One value, one call.** Arguments hold a megabyte; never split one across
+  calls. Evidence goes in a fenced code block however long it runs; attach a
+  file only when it is one.
+- **Do not re-read your own work.** Writes report what happened.
+- **Put milestones on the timeline.** A DC owned, a foothold lost:
+  `create_timeline_event`, unless a tool already did (closed tasks,
+  credentials and cracks land there already).
+
+<!-- skill-only:start -->
+## Reference
+
+- `reference/tools.md` — every tool, grouped by task.
+- `reference/structure.md` — one subject per page, placed in the tree.
+- `reference/wiki.md` — reading, editing and templating pages.
+- `reference/findings.md` — recording hosts, credentials and hashes.
+- `reference/tasks.md` — proposing, linking and closing tasks.
+- `reference/drawings.md` — editing a drawing page.
+- `reference/attachments.md` — reading and adding files on a page.
+- `reference/icons.md` — when and how to give a page an icon.
+- `reference/skills.md` — finding, installing and publishing skills.
+<!-- skill-only:end -->

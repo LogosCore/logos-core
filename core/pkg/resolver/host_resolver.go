@@ -1,0 +1,527 @@
+package resolver
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/authorization"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
+	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-core/core/pkg/logger"
+	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/repository"
+	"go.uber.org/zap"
+)
+
+// IHostResolver defines the business logic methods for the Host entity. These
+// map 1:1 to the GraphQL query, mutation, and field resolvers for Host.
+type IHostResolver interface {
+	// Mutations
+	CreateHost(ctx context.Context, operationID string, input model.CreateHostInput) (*models.Host, error)
+	UpdateHost(ctx context.Context, id string, input model.UpdateHostInput) (*models.Host, error)
+	DeleteHost(ctx context.Context, id string) (bool, error)
+
+	// Queries
+	Host(ctx context.Context, id string) (*models.Host, error)
+	Hosts(ctx context.Context, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.HostConnection, error)
+
+	// Field resolvers for Host type
+	ID(ctx context.Context, obj *models.Host) (string, error)
+	OperationIDField(ctx context.Context, obj *models.Host) (string, error)
+	Operation(ctx context.Context, obj *models.Host) (*models.Operation, error)
+	CreatedBy(ctx context.Context, obj *models.Host) (*models.User, error)
+	CreatedAt(ctx context.Context, obj *models.Host) (string, error)
+	UpdatedAt(ctx context.Context, obj *models.Host) (string, error)
+}
+
+type hostResolver struct {
+	hostRepo      repository.IHostRepository
+	operationRepo repository.IOperationRepository
+	userRepo      repository.IUserRepository
+	// wikiDocRes strips a deleted host's id from the wiki host_references
+	// inverse index on hard-delete. Optional — nil is acceptable for tests and
+	// any pre-wiki wiring. Mirrors credentialResolver.wikiDocRes.
+	wikiDocRes IWikiDocumentResolver
+	eventBus   eventbus.IEventBus
+}
+
+// NewHostResolver creates a new host resolver with the given dependencies.
+// wikiDocRes is optional; pass nil if the wiki side is not wired (tests).
+func NewHostResolver(
+	hostRepo repository.IHostRepository,
+	operationRepo repository.IOperationRepository,
+	userRepo repository.IUserRepository,
+	wikiDocRes IWikiDocumentResolver,
+	bus eventbus.IEventBus,
+) IHostResolver {
+	if bus == nil {
+		bus = eventbus.NewNopEventBus()
+	}
+	return &hostResolver{
+		hostRepo:      hostRepo,
+		operationRepo: operationRepo,
+		userRepo:      userRepo,
+		wikiDocRes:    wikiDocRes,
+		eventBus:      bus,
+	}
+}
+
+// authorizeForOperation enforces a minimum operation role on the caller.
+func (r *hostResolver) authorizeForOperation(ctx context.Context, operationID uuid.UUID, minRole models.OperationRole) error {
+	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, operationID)
+	if err != nil {
+		return fmt.Errorf("operation not found: %w", err)
+	}
+	return authorization.AuthorizeOperationRole(ctx, &op, minRole)
+}
+
+// CreateHost creates a new host in an operation.
+// Requires at least operator role in the operation.
+func (r *hostResolver) CreateHost(ctx context.Context, operationID string, input model.CreateHostInput) (*models.Host, error) {
+	opUID, err := uuid.Parse(operationID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid operation ID: %w", err)
+	}
+
+	if err := r.authorizeForOperation(ctx, opUID, models.OperationRoleOperator); err != nil {
+		return nil, err
+	}
+
+	hostname := strings.TrimSpace(input.Hostname)
+	if hostname == "" {
+		return nil, fmt.Errorf("hostname is required")
+	}
+
+	interfaces, err := normalizeInterfaces(input.Interfaces)
+	if err != nil {
+		return nil, err
+	}
+	routes, err := normalizeRoutes(input.Routes)
+	if err != nil {
+		return nil, err
+	}
+	logins, err := normalizeLogins(input.Logins)
+	if err != nil {
+		return nil, err
+	}
+
+	auth := gqlctx.AuthFromContext(ctx)
+	callerUID, err := uuid.Parse(auth.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid caller ID: %w", err)
+	}
+
+	host := &models.Host{
+		HostID:      uuid.New(),
+		OperationID: opUID,
+		Hostname:    hostname,
+		Interfaces:  interfaces,
+		Routes:      routes,
+		Logins:      logins,
+		Description: strings.TrimSpace(strDeref(input.Description)),
+		OS:          strings.TrimSpace(strDeref(input.Os)),
+		Emoji:       strings.TrimSpace(strDeref(input.Emoji)),
+		Icon:        strings.TrimSpace(strDeref(input.Icon)),
+		Color:       strings.TrimSpace(strDeref(input.Color)),
+		CreatedByID: callerUID,
+	}
+
+	if err := r.hostRepo.Create(ctx, host); err != nil {
+		return nil, fmt.Errorf("failed to create host: %w", err)
+	}
+
+	r.eventBus.Publish(eventbus.NewHostCreatedEvent(
+		eventActor(auth),
+		eventbus.HostEventPayload{
+			HostID:      host.HostID.String(),
+			OperationID: host.OperationID.String(),
+		},
+	))
+
+	return host, nil
+}
+
+// UpdateHost applies a partial update to an existing host.
+// Requires at least operator role in the operation.
+func (r *hostResolver) UpdateHost(ctx context.Context, id string, input model.UpdateHostInput) (*models.Host, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid host ID: %w", err)
+	}
+
+	host, err := r.hostRepo.FindByID(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("host not found: %w", err)
+	}
+
+	if err := r.authorizeForOperation(ctx, host.OperationID, models.OperationRoleOperator); err != nil {
+		return nil, err
+	}
+
+	updates := make(map[string]interface{})
+	if input.Hostname != nil {
+		hostname := strings.TrimSpace(*input.Hostname)
+		if hostname == "" {
+			return nil, fmt.Errorf("hostname cannot be empty")
+		}
+		updates["hostname"] = hostname
+	}
+	if input.Interfaces != nil {
+		interfaces, err := normalizeInterfaces(input.Interfaces)
+		if err != nil {
+			return nil, err
+		}
+		updates["interfaces"] = interfaces
+	}
+	if input.Routes != nil {
+		routes, err := normalizeRoutes(input.Routes)
+		if err != nil {
+			return nil, err
+		}
+		updates["routes"] = routes
+	}
+	if input.Logins != nil {
+		logins, err := normalizeLogins(input.Logins)
+		if err != nil {
+			return nil, err
+		}
+		updates["logins"] = logins
+	}
+	if input.Description != nil {
+		updates["description"] = strings.TrimSpace(*input.Description)
+	}
+	if input.Os != nil {
+		updates["os"] = strings.TrimSpace(*input.Os)
+	}
+	if input.Emoji != nil {
+		updates["emoji"] = strings.TrimSpace(*input.Emoji)
+	}
+	if input.Icon != nil {
+		updates["icon"] = strings.TrimSpace(*input.Icon)
+	}
+	if input.Color != nil {
+		updates["color"] = strings.TrimSpace(*input.Color)
+	}
+
+	if len(updates) == 0 {
+		return &host, nil
+	}
+
+	if err := r.hostRepo.Update(ctx, &host, updates); err != nil {
+		return nil, fmt.Errorf("failed to update host: %w", err)
+	}
+
+	updated, err := r.hostRepo.FindByID(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch updated host: %w", err)
+	}
+
+	auth := gqlctx.AuthFromContext(ctx)
+	r.eventBus.Publish(eventbus.NewHostUpdatedEvent(
+		eventActor(auth),
+		eventbus.HostEventPayload{
+			HostID:      updated.HostID.String(),
+			OperationID: updated.OperationID.String(),
+		},
+	))
+
+	return &updated, nil
+}
+
+// DeleteHost removes a host by ID.
+// Requires at least operator role in the operation.
+func (r *hostResolver) DeleteHost(ctx context.Context, id string) (bool, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return false, fmt.Errorf("invalid host ID: %w", err)
+	}
+
+	host, err := r.hostRepo.FindByID(ctx, uid)
+	if err != nil {
+		return false, fmt.Errorf("host not found: %w", err)
+	}
+
+	if err := r.authorizeForOperation(ctx, host.OperationID, models.OperationRoleOperator); err != nil {
+		return false, err
+	}
+
+	if err := r.hostRepo.Delete(ctx, &host); err != nil {
+		return false, fmt.Errorf("failed to delete host: %w", err)
+	}
+
+	// Strip this host id from host_references on every wiki doc in the
+	// operation so the inverse index doesn't carry dangling UUIDs. Best-effort,
+	// same rationale as the credential/hash delete paths — the chip render
+	// handles "host not found" gracefully.
+	if r.wikiDocRes != nil {
+		if err := r.wikiDocRes.CleanupHostReferences(ctx, host.OperationID, host.HostID); err != nil {
+			logger.From(ctx).Warn("cleanup of host backlinks failed",
+				zap.String("host_id", host.HostID.String()),
+				zap.Error(err),
+			)
+		}
+	}
+
+	auth := gqlctx.AuthFromContext(ctx)
+	r.eventBus.Publish(eventbus.NewHostDeletedEvent(
+		eventActor(auth),
+		eventbus.HostEventPayload{
+			HostID:      host.HostID.String(),
+			OperationID: host.OperationID.String(),
+		},
+	))
+
+	return true, nil
+}
+
+// Host returns a single host by ID.
+// Requires at least viewer role in the operation.
+func (r *hostResolver) Host(ctx context.Context, id string) (*models.Host, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid host ID: %w", err)
+	}
+
+	host, err := r.hostRepo.FindByID(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("host not found: %w", err)
+	}
+
+	if err := r.authorizeForOperation(ctx, host.OperationID, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+
+	return &host, nil
+}
+
+// Hosts returns a cursor-paginated list of hosts for an operation.
+// Requires at least viewer role in the operation.
+func (r *hostResolver) Hosts(ctx context.Context, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.HostConnection, error) {
+	opUID, err := uuid.Parse(operationID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid operation ID: %w", err)
+	}
+
+	if err := r.authorizeForOperation(ctx, opUID, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+
+	args, err := pagination.ParseArgs(first, after, last, before)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pagination args: %w", err)
+	}
+
+	sortSpec, err := mapHostSort(sortBy, sortDirection)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := repository.HostFilter{}
+	if search != nil {
+		filter.Search = strings.TrimSpace(*search)
+	}
+
+	total, err := r.hostRepo.CountByOperationID(ctx, opUID, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count hosts: %w", err)
+	}
+
+	hosts, err := r.hostRepo.FindByOperationIDWithCursor(ctx, opUID, filter, sortSpec, args.Cursor, args.Limit+1, args.Forward)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list hosts: %w", err)
+	}
+
+	edges, pageInfo := pagination.BuildEdges(hosts, args,
+		func(h *models.Host) string { return sortSpec.Cursor(h) },
+		func(h *models.Host, cursor string) *model.HostEdge {
+			return &model.HostEdge{Node: h, Cursor: cursor}
+		})
+
+	return &model.HostConnection{
+		Edges:      edges,
+		PageInfo:   &pageInfo,
+		TotalCount: int(total),
+	}, nil
+}
+
+// ID converts the Host's UUID to a GraphQL ID string.
+func (r *hostResolver) ID(ctx context.Context, obj *models.Host) (string, error) {
+	return obj.HostID.String(), nil
+}
+
+// OperationIDField converts the OperationID UUID to a GraphQL ID string.
+func (r *hostResolver) OperationIDField(ctx context.Context, obj *models.Host) (string, error) {
+	return obj.OperationID.String(), nil
+}
+
+// Operation resolves the host's parent Operation via a DB lookup. Authorization
+// is upstream: the host was already returned to the caller, which means they
+// had at least viewer access to its operation via the parent query.
+func (r *hostResolver) Operation(ctx context.Context, obj *models.Host) (*models.Operation, error) {
+	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, obj.OperationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load operation: %w", err)
+	}
+	return &op, nil
+}
+
+// CreatedBy resolves the User who created the host, or nil if that user was
+// deleted. A missing creator is nullable rather than failing the whole query.
+func (r *hostResolver) CreatedBy(ctx context.Context, obj *models.Host) (*models.User, error) {
+	if obj.CreatedByID == uuid.Nil {
+		return nil, nil
+	}
+	return loadNullableUser(ctx, r.userRepo, obj.CreatedByID, "host creator")
+}
+
+// CreatedAt converts the qmgo DefaultField timestamp to an ISO 8601 string.
+func (r *hostResolver) CreatedAt(ctx context.Context, obj *models.Host) (string, error) {
+	return obj.CreateAt.Format(time.RFC3339), nil
+}
+
+// UpdatedAt converts the qmgo DefaultField timestamp to an ISO 8601 string.
+func (r *hostResolver) UpdatedAt(ctx context.Context, obj *models.Host) (string, error) {
+	return obj.UpdateAt.Format(time.RFC3339), nil
+}
+
+// --- helpers ---
+// strDeref lives in helpers.go.
+
+// mapHostSort converts the GraphQL sort args to the repository's sort spec.
+// Nil args fall back to the default (createAt descending) — gqlgen fills the
+// schema defaults, so nils only appear when a client sends explicit nulls.
+func mapHostSort(sortBy *model.HostSortField, sortDirection *model.SortDirection) (repository.HostSort, error) {
+	sort := repository.DefaultHostSort()
+
+	if sortBy != nil {
+		switch *sortBy {
+		case model.HostSortFieldHostname:
+			sort.Field = repository.HostSortFieldHostname
+		case model.HostSortFieldOs:
+			sort.Field = repository.HostSortFieldOS
+		case model.HostSortFieldCreatedAt:
+			sort.Field = repository.HostSortFieldCreatedAt
+		default:
+			return repository.HostSort{}, fmt.Errorf("invalid host sort field: %s", *sortBy)
+		}
+	}
+
+	if sortDirection != nil {
+		switch *sortDirection {
+		case model.SortDirectionAsc:
+			sort.Ascending = true
+		case model.SortDirectionDesc:
+			sort.Ascending = false
+		default:
+			return repository.HostSort{}, fmt.Errorf("invalid sort direction: %s", *sortDirection)
+		}
+	}
+
+	return sort, nil
+}
+
+// normalizeInterfaces trims each interface, validates that every address parses
+// as CIDR (the prefix length is load-bearing for topology derivation), and
+// drops fully-empty entries. Returns a non-nil empty slice for nil input to
+// keep BSON arrays consistent.
+func normalizeInterfaces(in []*model.NetworkInterfaceInput) ([]models.Interface, error) {
+	if len(in) == 0 {
+		return []models.Interface{}, nil
+	}
+	out := make([]models.Interface, 0, len(in))
+	for _, iface := range in {
+		if iface == nil {
+			continue
+		}
+		name := strings.TrimSpace(iface.Name)
+		mac := strings.TrimSpace(strDeref(iface.Mac))
+		addresses := make([]string, 0, len(iface.Addresses))
+		for _, a := range iface.Addresses {
+			addr := strings.TrimSpace(a)
+			if addr == "" {
+				continue
+			}
+			if _, _, err := net.ParseCIDR(addr); err != nil {
+				return nil, fmt.Errorf("invalid interface address %q (expected CIDR, e.g. 10.0.5.12/24)", addr)
+			}
+			addresses = append(addresses, addr)
+		}
+		if name == "" && mac == "" && len(addresses) == 0 {
+			continue
+		}
+		out = append(out, models.Interface{Name: name, MAC: mac, Addresses: addresses})
+	}
+	return out, nil
+}
+
+// normalizeRoutes trims each route, validates the destination as CIDR and the
+// gateway (when present) as an IP, and drops fully-empty entries.
+func normalizeRoutes(in []*model.RouteInput) ([]models.Route, error) {
+	if len(in) == 0 {
+		return []models.Route{}, nil
+	}
+	out := make([]models.Route, 0, len(in))
+	for _, rt := range in {
+		if rt == nil {
+			continue
+		}
+		destination := strings.TrimSpace(rt.Destination)
+		gateway := strings.TrimSpace(strDeref(rt.Gateway))
+		iface := strings.TrimSpace(strDeref(rt.Interface))
+		if destination == "" && gateway == "" && iface == "" {
+			continue
+		}
+		if destination == "" {
+			return nil, fmt.Errorf("route destination is required")
+		}
+		if _, _, err := net.ParseCIDR(destination); err != nil {
+			return nil, fmt.Errorf("invalid route destination %q (expected CIDR, e.g. 0.0.0.0/0)", destination)
+		}
+		if gateway != "" && net.ParseIP(gateway) == nil {
+			return nil, fmt.Errorf("invalid route gateway %q (expected an IP address)", gateway)
+		}
+		out = append(out, models.Route{Destination: destination, Gateway: gateway, Interface: iface})
+	}
+	return out, nil
+}
+
+// normalizeLogins trims each footprint, requires a non-empty user (the identity
+// is the whole point of the record), defaults an absent/zero count to 1, and
+// drops entries that carry no user. Unlike interfaces/routes the fields are
+// free-text (a `from` may be a hostname, an IP, or empty for a local login), so
+// nothing is shape-validated here — the parser already filtered noise and the
+// topology derivation tolerates whatever survives. Returns a non-nil empty
+// slice for nil input to keep BSON arrays consistent.
+func normalizeLogins(in []*model.LoginInput) ([]models.Login, error) {
+	if len(in) == 0 {
+		return []models.Login{}, nil
+	}
+	out := make([]models.Login, 0, len(in))
+	for _, l := range in {
+		if l == nil {
+			continue
+		}
+		user := strings.TrimSpace(l.User)
+		if user == "" {
+			continue
+		}
+		count := 1
+		if l.Count != nil && *l.Count > 0 {
+			count = *l.Count
+		}
+		out = append(out, models.Login{
+			User:     user,
+			From:     strings.TrimSpace(strDeref(l.From)),
+			TTY:      strings.TrimSpace(strDeref(l.Tty)),
+			LastSeen: strings.TrimSpace(strDeref(l.LastSeen)),
+			Count:    count,
+		})
+	}
+	return out, nil
+}

@@ -1,0 +1,212 @@
+import { type FormEvent, useState } from "react"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { useHostStore } from "@/stores/hosts"
+import { useCreateHost, useUpdateHost } from "@/graphql/hooks/hosts"
+import { HostFormFields } from "@/components/findings/host-form-fields"
+import { HostImportStep } from "@/components/findings/host-import-step"
+import {
+  emptyHostFormValues,
+  hostFormValuesFromWire,
+  interfaceDraftsToInputs,
+  loginDraftsToInputs,
+  routeDraftsToInputs,
+  type HostFormValues,
+} from "@/components/findings/host-drafts"
+import type { HostFieldsFragment } from "@/graphql/gql/graphql"
+
+interface HostFormDialogProps {
+  operationId: string
+}
+
+// Two sub-views share one set of form values: the normal field editor and the
+// "Magic" command-output importer. The importer only patches `values` (one
+// category at a time) and hands control back; saving always happens from the
+// form view.
+type HostFormStep = "form" | "import"
+
+// One dialog covers both create and edit (selected === null → create).
+// Unlike credentials, create never needs an operation picker (the Hosts tab
+// only exists scoped) and edit never needs a fetch (the row fragment already
+// carries full interfaces/routes), so the two modes differ only in copy and
+// which mutation fires.
+export function HostFormDialog({ operationId }: HostFormDialogProps) {
+  const { formDialogOpen, selected, closeFormDialog } = useHostStore()
+  // Step lives here (not in HostForm) so the dialog's close request (X button,
+  // Escape, backdrop) can be intercepted: closing from the "Magic" import step
+  // returns to the form instead of dismissing the whole dialog.
+  const [step, setStep] = useState<HostFormStep>("form")
+
+  // If the subject changes while open (HostForm remounts via its key), the
+  // form state resets — reset the step with it so the new subject never
+  // mounts straight into a stale import screen. Render-time reset, same
+  // pattern as credential-picker-dialog.tsx.
+  const subjectKey = selected?.id ?? "create"
+  const [prevSubjectKey, setPrevSubjectKey] = useState(subjectKey)
+  if (prevSubjectKey !== subjectKey) {
+    setPrevSubjectKey(subjectKey)
+    setStep("form")
+  }
+
+  // Resets the step so reopening never lands on a stale import screen.
+  function handleClose() {
+    setStep("form")
+    closeFormDialog()
+  }
+
+  return (
+    <Dialog
+      open={formDialogOpen}
+      onOpenChange={(open) => {
+        if (open) return
+        if (step === "import") setStep("form")
+        else handleClose()
+      }}
+    >
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)] max-h-[calc(100dvh-2rem)] sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>{selected ? "Edit host" : "Add host"}</DialogTitle>
+          <DialogDescription>
+            {selected
+              ? "Update hostname, description, OS, interfaces, and routes."
+              : "Record a discovered machine — its interfaces and routes describe where it sits on the target network."}
+          </DialogDescription>
+        </DialogHeader>
+        {/* Remount the form when the subject changes so its initial state
+            re-seeds from the selected host (or resets for create). Avoids
+            setState-in-effect. */}
+        <HostForm
+          key={selected?.id ?? "create"}
+          operationId={operationId}
+          host={selected}
+          step={step}
+          onStepChange={setStep}
+          onSaved={handleClose}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+interface HostFormProps {
+  operationId: string
+  host: HostFieldsFragment | null
+  // Owned by the dialog (not local state) so its close request can step back
+  // from the importer instead of dismissing. See HostFormStep.
+  step: HostFormStep
+  onStepChange: (step: HostFormStep) => void
+  onSaved: () => void
+}
+
+function HostForm({
+  operationId,
+  host,
+  step,
+  onStepChange,
+  onSaved,
+}: HostFormProps) {
+  const createHost = useCreateHost()
+  const updateHost = useUpdateHost()
+  const [values, setValues] = useState<HostFormValues>(() =>
+    host ? hostFormValuesFromWire(host) : emptyHostFormValues(),
+  )
+  const [error, setError] = useState<string | null>(null)
+
+  const isPending = createHost.isPending || updateHost.isPending
+
+  if (step === "import") {
+    return (
+      <HostImportStep
+        onBack={() => onStepChange("form")}
+        onApply={(patch) => {
+          setValues((v) => ({ ...v, ...patch }))
+          onStepChange("form")
+        }}
+      />
+    )
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+    // Always send the full lists (never omit): on update an omitted list
+    // means "leave unchanged" server-side, which would make clearing the
+    // last interface/route impossible.
+    const input = {
+      hostname: values.hostname.trim(),
+      description: values.description.trim(),
+      os: values.os.trim(),
+      // Always sent (never omitted) for the same reason as the lists:
+      // empty string = "clear back to the OS-derived default", and an
+      // omitted field would mean "leave unchanged" on update.
+      emoji: values.emoji,
+      icon: values.icon,
+      color: values.color,
+      interfaces: interfaceDraftsToInputs(values.interfaces),
+      routes: routeDraftsToInputs(values.routes),
+      logins: loginDraftsToInputs(values.logins),
+    }
+    try {
+      if (host) {
+        await updateHost.mutateAsync({ id: host.id, input })
+      } else {
+        await createHost.mutateAsync({ operationId, input })
+      }
+      onSaved()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : host
+            ? "Failed to update host"
+            : "Failed to create host",
+      )
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      autoComplete="off"
+      className="flex min-h-0 flex-col"
+    >
+      {/* Body scrolls; header (parent) and footer stay pinned. The negative
+          inset + padding keeps focus rings from being clipped by overflow. */}
+      <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+        {error && (
+          <div className="mb-3 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+        {/* Shortcut past manual entry: paste `ip a` / `ip ro` output and let
+            the importer fill the interfaces/routes editors below. The trigger
+            lives next to each list's "Add" button (see HostFormFields). */}
+        <HostFormFields
+          idPrefix={host ? "edit-host" : "create-host"}
+          values={values}
+          onChange={setValues}
+          onImport={() => onStepChange("import")}
+        />
+      </div>
+      <DialogFooter className="mt-4">
+        <Button
+          type="submit"
+          disabled={isPending || !values.hostname.trim()}
+        >
+          {isPending
+            ? "Saving..."
+            : host
+              ? "Save changes"
+              : "Create host"}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}

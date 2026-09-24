@@ -1,0 +1,94 @@
+.PHONY: test test-integration infra infra-stop infra-reset services services-stop services-reset services-rebuild seaweedfs-reset sso sso-stop swag gqlgen gqlcodegen frontend help
+
+include .env
+export
+
+infra: ## Start infrastructure services only (for local debugging)
+	@echo "Starting infrastructure services"
+	docker-compose up -d
+
+infra-stop: ## Stop infrastructure services
+	@echo "Stopping infrastructure services"
+	docker-compose down
+
+infra-reset: ## Reset infrastructure services and volumes
+	@echo "Resetting infrastructure services"
+	docker-compose down -v
+
+services: ## Start all services (infra + core dev container)
+	@echo "Starting all services"
+	docker-compose --profile development up -d
+
+services-stop: ## Stop all services (infra + core dev container)
+	@echo "Stopping all services"
+	docker-compose --profile development down
+
+services-reset: ## Reset all services and volumes
+	@echo "Resetting all services"
+	docker-compose --profile development down -v
+
+services-rebuild: ## Rebuild dev images and restart all services (run after package.json / Dockerfile / go.mod changes)
+	@echo "Rebuilding dev images and restarting all services"
+	docker-compose --profile development up -d --build
+
+sso: ## Start the dev Keycloak (profile sso); set OIDC_ENABLED=true in .env to use it
+	@echo "Starting dev Keycloak on http://keycloak.localhost:8180 (admin/admin; users kc-admin, kc-user, kc-norole)"
+	docker-compose --profile sso up -d keycloak
+
+sso-stop: ## Stop the dev Keycloak
+	docker-compose --profile sso stop keycloak
+
+seaweedfs-reset: ## Reset only SeaweedFS volumes (clears bucket state; keeps Mongo/Redis/RabbitMQ)
+	@echo "Stopping SeaweedFS containers and clearing their volumes"
+	docker-compose --profile development stop seaweedfs-s3 seaweedfs-filer seaweedfs-volume seaweedfs-master
+	docker-compose --profile development rm -f seaweedfs-s3 seaweedfs-filer seaweedfs-volume seaweedfs-master
+	@project=$$(basename $$(pwd) | tr '[:upper:].' '[:lower:]-'); \
+	for vol in seaweedfs_master_data seaweedfs_filer_data seaweedfs_volume_data; do \
+		docker volume rm "$${project}_$${vol}" 2>/dev/null || true; \
+	done
+	@echo "Done. Run 'make services' to recreate SeaweedFS with fresh state."
+
+test-integration: ## Run the repository integration tests against the running MongoDB (needs `make infra`)
+	@echo "Running repository integration tests against MONGO_URI"
+	@echo "These write to scratch databases named itest_* and drop their collections afterwards."
+	cd core && \
+	JWT_SECRET_KEY=$(or $(JWT_SECRET_KEY),test) \
+	MONGO_URI=$(or $(MONGO_URI),mongodb://localhost:27017) \
+	MONGO_DATABASE=$(or $(MONGO_DATABASE),test) \
+	RABBITMQ_DEFAULT_USER=$(or $(RABBITMQ_DEFAULT_USER),test) \
+	RABBITMQ_DEFAULT_PASS=$(or $(RABBITMQ_DEFAULT_PASS),test) \
+	INTEGRATION_MONGO_URI=$(MONGO_URI) \
+	go test -count=1 -v ./pkg/repository/ -run 'TestIntegration|TestBSONRoundTrip'
+
+swag: ## swag: Generates or updates the Swagger/OpenAPI documentation files.
+	@echo "Generating API documentation"
+	cd core && go run github.com/swaggo/swag/cmd/swag@latest init --parseDependency --parseInternal
+
+test: ## Run Go tests with the race detector (dummy values fill any required env var missing from .env)
+	cd core && \
+	JWT_SECRET_KEY=$(or $(JWT_SECRET_KEY),test) \
+	MONGO_URI=$(or $(MONGO_URI),mongodb://localhost:27017) \
+	MONGO_DATABASE=$(or $(MONGO_DATABASE),test) \
+	RABBITMQ_DEFAULT_USER=$(or $(RABBITMQ_DEFAULT_USER),test) \
+	RABBITMQ_DEFAULT_PASS=$(or $(RABBITMQ_DEFAULT_PASS),test) \
+	go test -race $(or $(PKG),./...)
+
+frontend: ## Start frontend dev server
+	$(MAKE) -C frontend frontend
+
+gqlgen: ## Regenerate GraphQL code from schema (resolvers, models, runtime)
+	$(MAKE) -C core gqlgen
+
+gqlcodegen: ## Regenerate frontend GraphQL types from schema
+	$(MAKE) -C frontend codegen
+
+seed-timeline: ## Seed the timeline with mock events (vars: OP, YEARS, EVENTS_PER_DAY, DRY_RUN)
+	@echo "Seeding timeline (op=$(or $(OP),test) years=$(or $(YEARS),2) events/day=$(or $(EVENTS_PER_DAY),50))"
+	cd core && go run ./cmd/seed-timeline \
+		-op $(or $(OP),test) \
+		-years $(or $(YEARS),2) \
+		-events-per-day $(or $(EVENTS_PER_DAY),50) \
+		$(if $(DRY_RUN),-dry-run,)
+
+help: ## help: Displays all available targets with their descriptions.
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'

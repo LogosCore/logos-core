@@ -1,0 +1,696 @@
+import { useEffect, useRef, type ReactNode } from "react"
+import { Extension } from "@tiptap/core"
+import { useEditor, EditorContent, ReactNodeViewRenderer } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import Collaboration from "@tiptap/extension-collaboration"
+import Placeholder from "@tiptap/extension-placeholder"
+import TaskList from "@tiptap/extension-task-list"
+import TaskItem from "@tiptap/extension-task-item"
+import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table"
+import Image from "@tiptap/extension-image"
+import { Link } from "@tiptap/extension-link"
+import { HorizontalRule } from "@tiptap/extension-horizontal-rule"
+import { CodeBlock } from "@tiptap/extension-code-block"
+import { yCursorPlugin } from "@tiptap/y-tiptap"
+import { useHocuspocus } from "@/hooks/use-hocuspocus"
+import { useAuthStore } from "@/stores/auth"
+import { useWikiStore } from "@/stores/wiki"
+import { getCursorColor, renderCursor } from "@/lib/cursor-colors"
+import { lowlight } from "@/lib/wiki-lowlight"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ConnectionBanner } from "@/components/wiki/connection-banner"
+import { WikiSchemaOutdatedNotice } from "@/components/wiki/wiki-schema-outdated-notice"
+import { WikiCodeBlock } from "@/components/wiki/wiki-code-block"
+import { createIncrementalLowlightPlugin } from "@/components/wiki/wiki-code-block-highlight-plugin"
+import { WikiHorizontalRuleNode } from "@/components/wiki/wiki-horizontal-rule-node"
+import { WikiImageNode } from "@/components/wiki/wiki-image-node"
+import { WikiFileExtension } from "@/components/wiki/wiki-file-node"
+import { WikiCredentialReferenceExtension } from "@/components/wiki/wiki-credential-reference-node"
+import { WikiHashReferenceExtension } from "@/components/wiki/wiki-hash-reference-node"
+import { WikiHostReferenceExtension } from "@/components/wiki/wiki-host-reference-node"
+import { WikiDocumentReferenceExtension } from "@/components/wiki/wiki-document-reference-node"
+import { WikiEditorBubbleMenu } from "@/components/wiki/wiki-editor-bubble-menu"
+import { WikiEditorTableMenu } from "@/components/wiki/wiki-editor-table-menu"
+import { WikiEditorTableContextMenu } from "@/components/wiki/wiki-editor-table-context-menu"
+import { WikiEditorTableHandles } from "@/components/wiki/wiki-editor-table-handles"
+import { WikiEditorToc } from "@/components/wiki/wiki-editor-toc"
+import { WikiLinkPopover, startLinkInsert } from "@/components/wiki/wiki-link-popover"
+import { WikiInlineCodePopover } from "@/components/wiki/wiki-inline-code-popover"
+import { WikiSlashCommand } from "@/components/wiki/wiki-slash-command/extension"
+import { WikiNoticeExtension } from "@/components/wiki/wiki-notice-node"
+import { WikiChecklistItemExtension } from "@/components/wiki/wiki-checklist-item-node"
+import { WikiHighlightMark } from "@/components/wiki/wiki-highlight-mark"
+import { WikiEscapeEdgeBlock } from "@/components/wiki/wiki-escape-edge-block"
+import { isDrawingRoom } from "@/components/wiki/drawing/drawing-scene"
+import {
+  extractClipboardImages,
+  extractDropImages,
+  uploadAndInsertWikiImages,
+} from "@/components/wiki/wiki-image-upload"
+import {
+  extractClipboardFiles,
+  extractDropFiles,
+  uploadAndInsertWikiFiles,
+} from "@/components/wiki/wiki-file-upload"
+import {
+  extractMarkdownFromClipboard,
+  markdownToSlice,
+} from "@/components/wiki/wiki-markdown-paste"
+import { pastePlan } from "@/components/wiki/wiki-paste-plan"
+import { toast } from "sonner"
+import { clipboardFileShortfall } from "@/components/wiki/wiki-clipboard-files"
+import "./wiki-editor.css"
+
+/**
+ * Tell the user when a paste dropped files on the floor.
+ *
+ * Our extractors and upload loop both handle any number of files; what varies
+ * is how many the browser exposes from a multi-file clipboard. Rather than
+ * leave the missing ones unexplained, point at the two routes that do carry
+ * a whole selection.
+ */
+function warnOnClipboardShortfall(
+  clipboardData: DataTransfer | null,
+  extracted: number,
+): void {
+  const missing = clipboardFileShortfall(clipboardData, extracted)
+  if (missing === 0) return
+
+  toast.warning(
+    `Your system only handed over ${extracted} of ${extracted + missing} copied files.`,
+    {
+      description:
+        "Drag the files in from Finder, or use the /image and /file commands, to add them all at once.",
+    },
+  )
+}
+
+interface WikiEditorProps {
+  documentId: string
+  operationId: string
+  isEditor: boolean
+  // Rendered inside the scroll container after the editor content so it
+  // scrolls together with the document body (Notion-style "Sub-pages" block).
+  footer?: ReactNode
+  // Fires once when the Y.js doc has finished its initial sync and the
+  // editor view is mounted with that content. The print page uses it as
+  // the "safe to call window.print()" signal — printing before this fires
+  // would capture the skeleton placeholder.
+  onReady?: () => void
+}
+
+export function WikiEditor({
+  documentId,
+  operationId,
+  isEditor,
+  footer,
+  onReady,
+}: WikiEditorProps) {
+  const { ydoc, provider, connectionStatus, isSynced, isReady, schemaOutdated } =
+    useHocuspocus(documentId)
+  const user = useAuthStore((s) => s.user)
+  const pendingFocusDocId = useWikiStore((s) => s.pendingFocusDocId)
+  const setPendingFocusDocId = useWikiStore((s) => s.setPendingFocusDocId)
+  const tocVisible = useWikiStore((s) => s.editorTocVisible)
+
+  // Paste/drop handlers run long after the editor config is captured; route
+  // through a ref so they always observe the current editor (not a stale
+  // reference from the render in which the config was built).
+  const editorRef = useRef<ReturnType<typeof useEditor> | null>(null)
+
+  const editor = useEditor({
+    editable: isEditor,
+    editorProps: {
+      attributes: {
+        spellcheck: "false",
+      },
+      handleDOMEvents: {
+        // Suppress the browser's default navigation for <a target="_blank">
+        // when the editor is editable. Without this, clicking a link inside
+        // contentEditable still opens a new tab even though Tiptap's
+        // openOnClick is false — contentEditable does not auto-suppress
+        // anchor activation. Caret placement / mark selection is unaffected
+        // because we don't return true from this handler.
+        click: (view, event) => {
+          if (!view.editable) return false
+          const target = event.target as HTMLElement | null
+          const anchor = target?.closest("a")
+          if (!anchor || !view.dom.contains(anchor)) return false
+          event.preventDefault()
+          return false
+        },
+      },
+      handlePaste: (view, event) => {
+        if (!isEditor) return false
+        const images = extractClipboardImages(event.clipboardData)
+        const attachments = extractClipboardFiles(event.clipboardData)
+        if (images.length > 0 || attachments.length > 0) {
+          const currentEditor = editorRef.current
+          if (!currentEditor) return false
+          event.preventDefault()
+          const pos = view.state.selection.from
+          if (images.length > 0) {
+            void uploadAndInsertWikiImages(currentEditor, documentId, images, { pos })
+          }
+          if (attachments.length > 0) {
+            void uploadAndInsertWikiFiles(currentEditor, documentId, attachments, { pos })
+          }
+          // Pasting a multi-file selection does not reliably hand over every
+          // file — macOS is the reported case. Say so rather than letting the
+          // user believe four of their five images simply failed.
+          warnOnClipboardShortfall(
+            event.clipboardData,
+            images.length + attachments.length,
+          )
+          return true
+        }
+
+        // Text paste. What happens — and crucially whether the dispatch asks
+        // ProseMirror to reveal the caret — is decided by pastePlan; see
+        // wiki-paste-plan.ts for why a code-block paste must not scroll.
+        const inCodeBlock = view.state.selection.$from.parent.type.name === "codeBlock"
+        const plainText = event.clipboardData?.getData("text/plain")
+        const markdown = inCodeBlock
+          ? null
+          : extractMarkdownFromClipboard(event.clipboardData)
+        const plan = pastePlan({
+          inCodeBlock,
+          plainText,
+          hasMarkdown: markdown !== null,
+        })
+
+        if (plan.kind === "passthrough") return false
+
+        event.preventDefault()
+        const tr = view.state.tr
+        if (plan.kind === "code-literal") {
+          const { from, to } = view.state.selection
+          tr.insertText(plainText as string, from, to)
+        } else {
+          tr.replaceSelection(markdownToSlice(markdown as string, view.state.schema))
+        }
+        view.dispatch(plan.scrollIntoView ? tr.scrollIntoView() : tr)
+        return true
+      },
+      handleDrop: (view, event) => {
+        if (!isEditor) return false
+        const dt =
+          event instanceof DragEvent ? event.dataTransfer : null
+        const images = extractDropImages(dt)
+        const attachments = extractDropFiles(dt)
+        if (images.length === 0 && attachments.length === 0) return false
+        const currentEditor = editorRef.current
+        if (!currentEditor) return false
+        event.preventDefault()
+        const coords =
+          event instanceof DragEvent
+            ? view.posAtCoords({ left: event.clientX, top: event.clientY })
+            : null
+        const pos = coords?.pos ?? view.state.selection.from
+        if (images.length > 0) {
+          void uploadAndInsertWikiImages(currentEditor, documentId, images, { pos })
+        }
+        if (attachments.length > 0) {
+          void uploadAndInsertWikiFiles(currentEditor, documentId, attachments, { pos })
+        }
+        return true
+      },
+    },
+    extensions: [
+      StarterKit.configure({
+        undoRedo: false, // Y.js collaboration handles undo/redo
+        codeBlock: false, // Replaced by CodeBlockLowlight below
+        horizontalRule: false, // Replaced by custom NodeView below
+        code: { HTMLAttributes: { class: "wiki-inline-code" } },
+        // The bundled Link mark defaults to inclusive=true, which makes the
+        // mark grow when the user types past its right boundary (e.g. typing
+        // a space after an autolinked URL extends the link onto the space).
+        // Disable here and re-register an extended Link below with
+        // inclusive=false so the boundary is sticky.
+        link: false,
+      }),
+      Link.extend({ inclusive: false }).configure({
+        // Tiptap's "whenNotEditable" string actually resolves to true inside
+        // the click plugin and still calls window.open in edit mode. Disable
+        // outright; the read-only renderer relies on the browser default
+        // (<a target=_blank>) for navigation, not Tiptap's click handler.
+        openOnClick: false,
+        // A click should just place the caret. The popover keys off
+        // `editor.isActive('link')`, which is true for a collapsed selection
+        // inside the mark, so we don't need to extend to the full mark range.
+        enableClickSelection: false,
+        autolink: true,
+        linkOnPaste: true,
+        defaultProtocol: "https",
+        HTMLAttributes: {
+          class: "wiki-link",
+          rel: "noopener noreferrer nofollow",
+          target: "_blank",
+        },
+      }),
+      Extension.create({
+        name: "wikiLinkShortcut",
+        addKeyboardShortcuts() {
+          return {
+            "Mod-k": () => {
+              startLinkInsert(this.editor)
+              return true
+            },
+          }
+        },
+      }),
+      HorizontalRule.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            variant: {
+              default: "line",
+              parseHTML: (el) => {
+                const v = el.getAttribute("data-variant")
+                return v === "dashed" ? "dashed" : "line"
+              },
+              renderHTML: (attrs) =>
+                attrs.variant && attrs.variant !== "line"
+                  ? { "data-variant": attrs.variant }
+                  : {},
+            },
+          }
+        },
+        addNodeView() {
+          return ReactNodeViewRenderer(WikiHorizontalRuleNode)
+        },
+      }),
+      // Use the base CodeBlock + our own incremental lowlight plugin instead
+      // of @tiptap/extension-code-block-lowlight: upstream re-tokenizes every
+      // code block on every keystroke (via highlight.js), which makes typing
+      // in large blocks lag by 1-2 seconds per character. The incremental
+      // variant memoizes per-block decorations and only re-runs highlight.js
+      // for the block whose content actually changed. See
+      // wiki-code-block-highlight-plugin.ts.
+      CodeBlock.extend({
+        addKeyboardShortcuts() {
+          return {
+            ...this.parent?.(),
+            // Ctrl/Cmd+A inside a code block selects only that block's text
+            // instead of the whole document. Falls through (returns false) to
+            // ProseMirror's default select-all whenever the caret isn't in a
+            // code block. The read-only equivalent lives in a native keydown
+            // listener below — this keymap entry never fires when the editor
+            // is not editable.
+            "Mod-a": () => {
+              const { $from } = this.editor.state.selection
+              if ($from.parent.type.name !== this.name) return false
+              return this.editor.commands.setTextSelection({
+                from: $from.start(),
+                to: $from.end(),
+              })
+            },
+          }
+        },
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            wrap: {
+              default: false,
+              parseHTML: (el) => el.classList.contains("is-wrapped"),
+              renderHTML: (attrs) => (attrs.wrap ? { class: "is-wrapped" } : {}),
+            },
+            // Stable, write-once identity for a code block. Used solely as the
+            // key for per-viewer collapse/expand state (see
+            // wiki-code-expansion.ts) so that a viewer's expansion survives
+            // y-prosemirror replacing node references on remote edits. Assigned
+            // lazily by the NodeView on first edit-mode mount; never changed
+            // after, so it syncs across collaborators with no conflict risk.
+            blockId: {
+              default: null,
+              parseHTML: (el) => el.getAttribute("data-block-id"),
+              renderHTML: (attrs) =>
+                attrs.blockId ? { "data-block-id": attrs.blockId } : {},
+            },
+          }
+        },
+        addNodeView() {
+          return ReactNodeViewRenderer(WikiCodeBlock, {
+            // Custom update guard so a remote collaborator typing in some
+            // unrelated paragraph doesn't re-render every code block in the
+            // doc. Tiptap's default update returns true (triggering a React
+            // render) whenever node/decorations/innerDecorations are a new
+            // reference — true on every transaction, since both PM and our
+            // lowlight plugin can produce fresh DecorationSet references
+            // even when nothing observable changed for THIS block. The
+            // WikiCodeBlock component only reads node.attrs.language,
+            // node.attrs.wrap, and node.textContent (via marks recompute),
+            // plus a cursorInside boolean from useEditorState — none of
+            // which are derivable from the new decoration set. So when none
+            // of those changed, skip the React render and let PM's view
+            // layer reconcile the (no-op) decoration diff on its own.
+            update: ({ oldNode, newNode, updateProps }) => {
+              if (oldNode.type !== newNode.type) return false
+              const renderInputsSame =
+                oldNode.attrs.language === newNode.attrs.language &&
+                oldNode.attrs.wrap === newNode.attrs.wrap &&
+                oldNode.attrs.blockId === newNode.attrs.blockId &&
+                oldNode.textContent === newNode.textContent
+              if (!renderInputsSame) updateProps()
+              return true
+            },
+          })
+        },
+        addProseMirrorPlugins() {
+          return [
+            ...(this.parent?.() ?? []),
+            createIncrementalLowlightPlugin({
+              name: this.name,
+              lowlight,
+              defaultLanguage: this.options.defaultLanguage,
+            }),
+          ]
+        },
+      }).configure({
+        defaultLanguage: "plaintext",
+        HTMLAttributes: { class: "wiki-code-block" },
+      }),
+      Collaboration.configure({
+        document: ydoc,
+      }),
+      // Use yCursorPlugin from @tiptap/y-tiptap directly (same package
+      // that Collaboration uses for ySyncPlugin) so the plugin keys match.
+      // The @tiptap/extension-collaboration-cursor package imports from
+      // y-prosemirror which has a different PluginKey instance.
+      ...(provider && provider.awareness
+        ? [Extension.create({
+            name: "collaborationCursor",
+            addProseMirrorPlugins() {
+              const awareness = provider.awareness
+              if (!awareness) return []
+              awareness.setLocalStateField("user", {
+                name: user?.username ?? "Anonymous",
+                color: getCursorColor(user?.userId ?? "anon"),
+              })
+              return [
+                yCursorPlugin(awareness, { cursorBuilder: renderCursor }),
+              ]
+            },
+          })]
+        : []),
+      Placeholder.configure({
+        placeholder: isEditor ? "Start writing..." : "",
+      }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Table.configure({
+        resizable: true,
+        allowTableNodeSelection: true,
+        HTMLAttributes: { class: "wiki-table" },
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image.extend({
+        // Persist intrinsic dimensions captured at upload time. The base
+        // Image extension only models src/alt/title, which means the <img>
+        // ships with no `width`/`height` attributes and the layout shifts
+        // on first decode — a problem that compounds across many images.
+        // Storing the natural dimensions lets the browser reserve the
+        // correct aspect ratio before pixels arrive (combined with the
+        // CSS `max-width: 100%; height: auto`), eliminating per-image
+        // decode-time reflows. Legacy nodes without these attrs render
+        // exactly as before.
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            width: {
+              default: null,
+              parseHTML: (el) => {
+                const raw = el.getAttribute("width")
+                if (raw === null) return null
+                const n = Number(raw)
+                return Number.isFinite(n) && n > 0 ? n : null
+              },
+              renderHTML: (attrs) =>
+                attrs.width ? { width: String(attrs.width) } : {},
+            },
+            height: {
+              default: null,
+              parseHTML: (el) => {
+                const raw = el.getAttribute("height")
+                if (raw === null) return null
+                const n = Number(raw)
+                return Number.isFinite(n) && n > 0 ? n : null
+              },
+              renderHTML: (attrs) =>
+                attrs.height ? { height: String(attrs.height) } : {},
+            },
+          }
+        },
+        addNodeView() {
+          return ReactNodeViewRenderer(WikiImageNode)
+        },
+      }).configure({
+        // Images render as block-level nodes so they break the paragraph
+        // flow rather than wedging inline — matches how paste/drop are used.
+        inline: false,
+        allowBase64: false,
+        HTMLAttributes: { class: "wiki-image" },
+      }),
+      WikiFileExtension,
+      WikiCredentialReferenceExtension,
+      WikiHashReferenceExtension,
+      WikiHostReferenceExtension,
+      WikiDocumentReferenceExtension,
+      WikiNoticeExtension,
+      WikiChecklistItemExtension,
+      WikiHighlightMark,
+      WikiSlashCommand.configure({
+        context: { documentId, operationId },
+      }),
+      WikiEscapeEdgeBlock,
+    ],
+  }, [ydoc, provider, documentId, operationId, isEditor])
+
+  // Keep the paste/drop ref pointed at the live editor so those handlers
+  // never fire against a stale/destroyed instance after a deps-driven rebuild.
+  useEffect(() => {
+    editorRef.current = editor
+  }, [editor])
+
+  // Keep editable in sync with role changes without remounting.
+  useEffect(() => {
+    if (editor && editor.isEditable !== isEditor) {
+      editor.setEditable(isEditor)
+    }
+  }, [editor, isEditor])
+
+  // Read-only Ctrl/Cmd+A scoping. In edit mode the CodeBlock keymap above
+  // scopes select-all to the focused code block, but ProseMirror's keydown
+  // handling is edit-only — when the editor isn't editable a plain browser
+  // Ctrl+A selects the entire page. Re-scope it ourselves: when the current
+  // selection sits inside a rendered code block, select just that block's
+  // text. Listen on document (the contenteditable=false view DOM isn't
+  // focusable, so keydown lands on body and never bubbles to the view root)
+  // and gate on the selection anchor living inside this editor's code block.
+  useEffect(() => {
+    if (!editor || editor.isEditable) return
+    const root = editor.view.dom as HTMLElement
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "a" || !(event.metaKey || event.ctrlKey)) return
+      if (event.shiftKey || event.altKey) return
+      const selection = window.getSelection()
+      const anchor = selection?.anchorNode
+      if (!anchor || !root.contains(anchor)) return
+      const anchorEl = anchor instanceof Element ? anchor : anchor.parentElement
+      const codeEl = anchorEl
+        ?.closest(".wiki-code-block__pre")
+        ?.querySelector("code")
+      if (!codeEl) return
+      event.preventDefault()
+      const range = document.createRange()
+      range.selectNodeContents(codeEl)
+      selection!.removeAllRanges()
+      selection!.addRange(range)
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [editor, isEditor])
+
+  // Hide cursor when the tab is not visible, restore when it returns.
+  // Only clear the cursor field — the user identity (color) stays in
+  // awareness so the caret's color is immediately correct when the cursor
+  // reappears, with no flicker from a stale/missing user state.
+  useEffect(() => {
+    if (!provider || !editor) return
+    const awareness = provider.awareness
+    if (!awareness) return
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        awareness.setLocalStateField("cursor", null)
+      } else {
+        const { from, to } = editor.state.selection
+        editor.commands.setTextSelection({ from, to })
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange)
+  }, [provider, editor])
+
+  // One-time migration: if a document was authored with the textarea editor
+  // (Y.Text on "content" key), the XmlFragment on "default" will be empty.
+  // Copy the plain text into the rich editor so legacy content is preserved.
+  //
+  // A drawing page's "default" fragment is empty permanently, not legacily, so
+  // it matches this condition forever. Routing means this editor should never
+  // mount on one (see wiki-content-area.tsx) — the guard is here because if
+  // that routing ever breaks, the symptom without it is a prose body being
+  // written into a drawing's room, which nothing would report.
+  useEffect(() => {
+    if (!isReady || !editor) return
+    if (isDrawingRoom(ydoc)) return
+    const xmlFragment = ydoc.getXmlFragment("default")
+    if (xmlFragment.length > 0) return
+
+    const legacyText = ydoc.getText("content").toString()
+    if (!legacyText) return
+
+    editor.commands.setContent(legacyText)
+  }, [isReady, editor, ydoc])
+
+  // Land the caret inside a freshly-created doc so the user can start typing
+  // immediately. The create dialog sets pendingFocusDocId right before it
+  // navigates here; we consume the flag on first apply so revisiting the doc
+  // later doesn't steal focus from wherever the user is.
+  useEffect(() => {
+    if (!isReady || !editor) return
+    if (!isEditor) return
+    if (pendingFocusDocId !== documentId) return
+    editor.chain().focus("start").run()
+    setPendingFocusDocId(null)
+  }, [isReady, editor, isEditor, pendingFocusDocId, documentId, setPendingFocusDocId])
+
+  // Fire the optional ready signal once the editor has its content. Used
+  // by the print page to trigger window.print() at the right moment.
+  // Guarded on editor too so the callback doesn't fire against a half-built
+  // view in development with strict-mode double mounts.
+  useEffect(() => {
+    if (!isReady || !editor || !onReady) return
+    onReady()
+  }, [isReady, editor, onReady])
+
+  // The backend blocked this client as too old to safely edit the document.
+  // No WebSocket was opened (so nothing can be pruned); show a reload prompt
+  // in place of the editor. Placed after all hooks above to keep hook order
+  // stable across renders.
+  if (schemaOutdated) {
+    return <WikiSchemaOutdatedNotice />
+  }
+
+  return (
+    // The relative wrapper anchors the floating TOC overlay so it pins to
+    // the editor area's upper-right corner instead of scrolling with the
+    // document body. min-h-0 + flex-col lets the inner scroll container
+    // claim the remaining height under the (optional) connection banner.
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <ConnectionBanner connectionStatus={connectionStatus} isSynced={isSynced} isReady={isReady} />
+      {isEditor && <WikiEditorBubbleMenu editor={editor} />}
+      {isEditor && <WikiEditorTableMenu editor={editor} />}
+      {isEditor && <WikiEditorTableHandles editor={editor} />}
+      {isEditor && <WikiInlineCodePopover editor={editor} />}
+      {isEditor && <WikiLinkPopover editor={editor} />}
+      {tocVisible && isReady && <WikiEditorToc editor={editor} />}
+      <div
+        className="flex-1 overflow-y-auto px-4 py-2"
+        // Anchor for the document guide's "type /" step.
+        data-tour="editor-body"
+        onMouseDown={(e) => {
+          if (!isEditor || !editor) return
+          if (e.target !== e.currentTarget) return
+          e.preventDefault()
+
+          if (editor.isEmpty) {
+            editor.chain().focus().run()
+            return
+          }
+
+          const view = editor.view
+          const editorRect = (view.dom as HTMLElement).getBoundingClientRect()
+
+          if (e.clientY > editorRect.bottom) {
+            editor.chain().focus("end").run()
+            return
+          }
+          if (e.clientY < editorRect.top) {
+            editor.chain().focus("start").run()
+            return
+          }
+
+          // Gutter click next to a line — resolve position at clamped X so
+          // the caret lands on the clicked line, not at the end of the doc.
+          const clampedX = Math.min(
+            Math.max(e.clientX, editorRect.left + 1),
+            editorRect.right - 1,
+          )
+          const coords = view.posAtCoords({ left: clampedX, top: e.clientY })
+          if (coords) {
+            const targetPos = coords.pos
+            // At a wrap boundary, a single pos can render either at
+            // end-of-previous-line or start-of-next-line. Resolve both
+            // sides via view.coordsAtPos: if their line-Y differs,
+            // we're at a wrap. If the click Y is closer to the forward
+            // side, set the DOM selection directly using the forward
+            // DOM position so the caret renders at line-2 start.
+            const before = view.coordsAtPos(targetPos, -1)
+            const after = view.coordsAtPos(targetPos, 1)
+            const linesDiffer =
+              Math.abs(
+                (before.top + before.bottom) / 2 -
+                  (after.top + after.bottom) / 2,
+              ) > 4
+            const afterIsCloser =
+              Math.abs(e.clientY - (after.top + after.bottom) / 2) <
+              Math.abs(e.clientY - (before.top + before.bottom) / 2)
+
+            editor.chain().focus().setTextSelection(targetPos).run()
+
+            if (linesDiffer && afterIsCloser) {
+              const domPos = view.domAtPos(targetPos, 1)
+              const domSel = window.getSelection()
+              if (domSel) {
+                const range = document.createRange()
+                range.setStart(domPos.node, domPos.offset)
+                range.collapse(true)
+                domSel.removeAllRanges()
+                domSel.addRange(range)
+              }
+            }
+          } else {
+            editor.chain().focus("end").run()
+          }
+        }}
+      >
+        {isReady ? (
+          <>
+            <EditorContent
+              editor={editor}
+              className="prose prose-sm dark:prose-invert max-w-none focus:outline-none"
+            />
+            {/* Renders no wrapper of its own — it attaches a contextmenu
+                listener to the editor DOM and portals its menu. Right-click
+                outside a table is left to the browser. */}
+            <WikiEditorTableContextMenu editor={isEditor ? editor : null} />
+          </>
+        ) : (
+          <div aria-busy="true" aria-live="polite" className="flex flex-col gap-3">
+            <Skeleton className="h-4 w-3/5" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-4/6" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        )}
+        {isReady && footer}
+      </div>
+    </div>
+  )
+}

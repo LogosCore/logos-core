@@ -1,0 +1,193 @@
+# =============================================================================
+# Findings — Hosts
+# =============================================================================
+#
+# Hosts are an operation-scoped record of discovered machines on a target
+# network. They carry just enough structure — interfaces (network segments) and
+# routes (pivots/gateways) — for the frontend to derive a network topology.
+#
+# Edges are never stored. The topology graph is a projection the client
+# computes: hosts sharing an interface subnet (same CIDR) sit on the same
+# segment, and a route whose gateway IP is owned by another host reveals a
+# pivot. Because edges are derived, the graph can never go stale relative to
+# its hosts.
+
+# Sortable columns for the `hosts` query. Only the columns the UI exposes as
+# sortable are listed; the default (and the historical order) is CREATED_AT
+# descending. HOSTNAME and OS sort case-insensitively.
+enum HostSortField {
+  HOSTNAME
+  OS
+  CREATED_AT
+}
+
+# --- Types ---
+
+# A single network interface on a host. Addresses are in CIDR form
+# ("10.0.5.12/24") — the prefix length is what lets the client cluster hosts
+# into subnets.
+type NetworkInterface {
+  name: String!
+  mac: String!
+  addresses: [String!]!
+}
+
+# A single routing-table entry. A route's gateway is the next-hop IP used to
+# reach destination; when that gateway belongs to another host it surfaces as a
+# pivot edge. Destination "0.0.0.0/0" is the default route.
+type Route {
+  destination: String!
+  gateway: String!
+  interface: String!
+}
+
+# A user footprint parsed from `last` output — the identity layer of the
+# topology. The same `user` across hosts is a credential-reuse lead; `from`
+# (the source host a session came from) is an observed access path. `count`
+# collapses repeated sessions of the same (user, from) pair.
+type Login {
+  user: String!
+  from: String!
+  tty: String!
+  lastSeen: String!
+  count: Int!
+}
+
+type Host {
+  id: ID!
+  operationId: ID!
+  # Full parent Operation. Used by views where a row may belong to any
+  # operation. In scoped views the operation is implicit — skip this field to
+  # avoid a DB round-trip per row.
+  operation: Operation!
+  hostname: String!
+  # What the machine is to the engagement — its role, why it matters, what is
+  # notable about it. Distinct from `os`, which is only a fingerprint. Empty
+  # string when unset.
+  description: String!
+  interfaces: [NetworkInterface!]!
+  routes: [Route!]!
+  logins: [Login!]!
+  # Free-text OS fingerprint, e.g. "Windows Server 2019". Empty string when unset.
+  os: String!
+  # Visual identity, same triple as WikiDocument: emoji glyph OR lucide icon
+  # name (mutually exclusive), plus an optional color for the icon variant.
+  # All empty = default — the client derives a glyph from the OS field.
+  emoji: String!
+  icon: String!
+  color: String!
+  createdBy: User
+  createdAt: String!
+  updatedAt: String!
+}
+
+type HostEdge {
+  node: Host!
+  cursor: String!
+}
+
+type HostConnection {
+  edges: [HostEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type HostEvent {
+  action: EventAction!
+  hostId: ID!
+  operationId: ID!
+  host: Host
+}
+
+# --- Inputs ---
+
+input NetworkInterfaceInput {
+  name: String!
+  mac: String
+  addresses: [String!]
+}
+
+input RouteInput {
+  destination: String!
+  gateway: String
+  interface: String
+}
+
+# A user footprint to record on a host. Only `user` is required; `from`/`tty`/
+# `lastSeen` are optional context and `count` defaults to 1 when omitted.
+input LoginInput {
+  user: String!
+  from: String
+  tty: String
+  lastSeen: String
+  count: Int
+}
+
+input CreateHostInput {
+  hostname: String!
+  description: String
+  interfaces: [NetworkInterfaceInput!]
+  routes: [RouteInput!]
+  logins: [LoginInput!]
+  os: String
+  emoji: String
+  icon: String
+  color: String
+}
+
+# UpdateHostInput is a partial update — every field is nullable. Omit a field to
+# leave it unchanged; pass interfaces/routes/logins to replace the whole list.
+input UpdateHostInput {
+  hostname: String
+  description: String
+  interfaces: [NetworkInterfaceInput!]
+  routes: [RouteInput!]
+  logins: [LoginInput!]
+  os: String
+  # Pass an explicit empty string to clear emoji/icon/color back to the
+  # OS-derived default; omit (null) to leave unchanged.
+  emoji: String
+  icon: String
+  color: String
+}
+
+# --- Queries ---
+
+extend type Query {
+  host(id: ID!): Host!
+    @hasPermission(permission: "operation:member")
+
+  hosts(
+    operationId: ID!
+    search: String
+    # Sort column + direction. Cursors are minted per sort mode, so
+    # changing the sort restarts pagination (see SortDirection).
+    sortBy: HostSortField = CREATED_AT
+    sortDirection: SortDirection = DESC
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): HostConnection!
+    @hasPermission(permission: "operation:member")
+}
+
+# --- Mutations ---
+
+extend type Mutation {
+  createHost(operationId: ID!, input: CreateHostInput!): Host!
+    @hasPermission(permission: "operation:member")
+
+  updateHost(id: ID!, input: UpdateHostInput!): Host!
+    @hasPermission(permission: "operation:member")
+
+  deleteHost(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+}
+
+# --- Subscriptions ---
+
+extend type Subscription {
+  hostChanged(operationId: ID!): HostEvent!
+    @hasPermission(permission: "operation:member")
+}

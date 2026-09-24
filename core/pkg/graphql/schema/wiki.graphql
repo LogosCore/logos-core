@@ -1,0 +1,555 @@
+# =============================================================================
+# Wiki — Operation-Scoped Knowledge Base with Real-Time Collaborative Editing
+# =============================================================================
+#
+# Documents form a recursive tree: any document can have content AND children.
+# Root-level documents have no parentDocument; nested documents appear under
+# their parent. Sort order uses fractional indexing (lexicographic strings).
+#
+# Content edits flow through Y.js CRDT via the Hocuspocus WebSocket — the
+# content field here is a read-only derived Markdown string. The GraphQL API
+# handles metadata CRUD, backups, search, trash, and presence.
+
+# --- Enums ---
+
+enum WikiDocumentBackupTrigger {
+  AUTO
+  MANUAL
+}
+
+# What a page's body is. DOCUMENT is prose — a ProseMirror tree in the Y.js
+# room's "default" fragment, projected to the Markdown `content` field below.
+# DRAWING is an Excalidraw scene in the same room under its own root key, and
+# has no Markdown body: `content` is always empty for one, so read `kind`
+# rather than inferring emptiness from `content` or `hasContent`.
+#
+# Pages created before drawings existed report DOCUMENT.
+enum WikiDocumentKind {
+  DOCUMENT
+  DRAWING
+}
+
+enum PresenceAction {
+  JOINED
+  LEFT
+}
+
+# Sort order for wikiDocuments list queries. Default RECENTLY_CREATED matches
+# the legacy behaviour (newest createdAt first). RECENTLY_UPDATED sorts by
+# last_updated_at — the explicit attribution stamp set by metadata mutations
+# and Hocuspocus content persists — falling back to createdAt for legacy rows
+# that predate the field.
+enum WikiDocumentSort {
+  RECENTLY_CREATED
+  RECENTLY_UPDATED
+}
+
+# --- Types ---
+
+type WikiDocument {
+  id: ID!
+  operationId: ID!
+  parentDocument: WikiDocument
+  # Scalar form of parentDocument.id — exposed so tree-style queries can avoid
+  # a per-row Mongo lookup just to surface the parent's id. Null for roots.
+  parentDocumentId: ID
+  childDocuments: [WikiDocument!]!
+  title: String!
+  # What this page's body is. Branch on this before treating `content`,
+  # `excerpt` or `hasContent` as meaningful — a DRAWING carries none of them.
+  kind: WikiDocumentKind!
+  content: String!
+  emoji: String!
+  color: String!
+  icon: String!
+  sortOrder: String!
+  childCount: Int!
+  # True when this page has a body at all, so callers can cheaply tell a real
+  # page from an empty container ("folder") without fetching it — used by the
+  # create-from-template picker to hide contentless templates. Kind-aware: for
+  # a DOCUMENT it means the derived Markdown has non-whitespace content, and
+  # for a DRAWING it means the scene has at least one element. Computing it
+  # from `content` alone would report every drawing as empty forever.
+  hasContent: Boolean!
+  # The opening of the body as plain text, for hover previews and any other
+  # surface that wants a taste of the page without shipping its whole body.
+  # Whitespace is collapsed, the cut lands on a word boundary and is marked
+  # with an ellipsis, and the length is counted in characters (default 280,
+  # capped at 1000). Empty for pages with no body.
+  excerpt(maxLength: Int): String!
+  # True when this document is flagged as a reusable template. Any document
+  # (in an operation or the Public tree) can be a template; the flag is toggled
+  # by anyone with edit access via setWikiDocumentTemplate. Template documents
+  # render a fixed template icon in the UI and appear in the create-from-template
+  # picker. Independent of content — a template may or may not hold checklist
+  # items or any other body.
+  isTemplate: Boolean!
+  # Template provenance + checklist coverage. sourceTemplateId is set on
+  # documents forked from a template via instantiateTemplate, null otherwise.
+  # A document "has a checklist" when it holds at least one checklist item, i.e.
+  # checklistTotal > 0. The three counts are projected by the Hocuspocus sidecar
+  # from the document's checklist items: checklistTotal = number of items,
+  # checklistRequired = subset whose `required` flag is set, checklistAnswered =
+  # number of items (required or not) that are answered or marked not-applicable.
+  # They drive the per-document coverage bar; all are 0 for docs with no items.
+  sourceTemplateId: ID
+  checklistTotal: Int!
+  checklistRequired: Int!
+  checklistAnswered: Int!
+  # Other active documents in this operation that cite this one inline via
+  # the /doc slash command. Trashed referrers are excluded; self-references
+  # are excluded. Capped at 200 most recently updated — past that, refining
+  # the source documents is the expected fix, not pagination.
+  backlinks: [WikiDocument!]!
+  # Parent chain from root to the document's immediate parent (excludes self).
+  # Walks through trashed ancestors too — each segment carries an isDeleted
+  # flag so the client can render them distinctly. Empty for root documents.
+  ancestors: [WikiDocumentAncestor!]!
+  createdBy: User!
+  # Who last persisted this document (metadata change via GraphQL, or content
+  # edit via Hocuspocus). Null for legacy documents that predate attribution —
+  # clients fall back to createdBy in that case.
+  lastUpdatedBy: User
+  lastUpdatedAt: String
+  lastBackupAt: String
+  deletedAt: String
+  deletedBy: User
+  createdAt: String!
+  updatedAt: String!
+}
+
+# Flattened ancestor segment used for breadcrumb-style rendering. Not a
+# WikiDocument to keep the shape cheap and prevent accidental recursion
+# into full subtrees.
+type WikiDocumentAncestor {
+  id: ID!
+  title: String!
+  emoji: String!
+  icon: String!
+  color: String!
+  # Carried for the same reason the icon is: a breadcrumb renders the page's
+  # glyph, and a drawing's glyph is fixed rather than taken from `icon`.
+  # Without this a drawing in a breadcrumb trail shows as an ordinary page.
+  kind: WikiDocumentKind!
+  isDeleted: Boolean!
+}
+
+type WikiDocumentEdge {
+  node: WikiDocument!
+  cursor: String!
+}
+
+type WikiDocumentConnection {
+  edges: [WikiDocumentEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# --- Search ---
+# wikiSearch uses a different shape than wikiDocuments because search ranks by
+# relevance (MongoDB text score) and cannot share the createdAt-cursor pagination
+# that the list path uses. Offset-based pagination fits the "user finds what they
+# want in the first page or two" pattern of search UIs.
+
+type WikiSearchMatchRange {
+  start: Int!  # rune offset in snippet
+  end: Int!    # rune offset in snippet (exclusive)
+}
+
+type WikiSearchHit {
+  document: WikiDocument!
+  # A short excerpt of the document's content around the first match, or the
+  # document's leading content if the match is title-only. Always rune-safe.
+  snippet: String!
+  # Rune-offset ranges within snippet where matches occur — frontend wraps
+  # these in <mark> for highlighting.
+  matchRanges: [WikiSearchMatchRange!]!
+  # MongoDB text score. Null for short-query prefix matches (no $text involved).
+  score: Float
+}
+
+type WikiSearchConnection {
+  hits: [WikiSearchHit!]!
+  total: Int!
+  hasMore: Boolean!
+}
+
+type WikiDocumentBackup {
+  id: ID!
+  documentId: ID!
+  title: String!
+  # The document's kind at the moment of the snapshot. Branch on it before
+  # diffing `content` — for a DRAWING both sides of any such diff are empty,
+  # so a text diff would report "no changes" however much the scene moved.
+  kind: WikiDocumentKind!
+  content: String!
+  trigger: WikiDocumentBackupTrigger!
+  description: String!
+  # Byte length of the content at backup time. Server-computed so the list
+  # query can surface size without shipping full content for every row.
+  # Reports the CRDT state's size for a DRAWING, whose Markdown is always empty.
+  contentLength: Int!
+  # Null for AUTO (system-created) backups and safety backups whose originating user was deleted.
+  createdBy: User
+  createdAt: String!
+}
+
+type WikiDocumentBackupEdge {
+  node: WikiDocumentBackup!
+  cursor: String!
+}
+
+type WikiDocumentBackupConnection {
+  edges: [WikiDocumentBackupEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type WikiDocumentPresence {
+  documentId: ID!
+  activeEditors: [WikiDocumentEditor!]!
+}
+
+type WikiDocumentEditor {
+  userId: ID!
+  username: String!
+  connectedAt: String!
+}
+
+type WikiDocumentPresenceEvent {
+  documentId: ID!
+  operationId: ID!
+  userId: ID!
+  username: String!
+  action: PresenceAction!
+}
+
+type WikiDocumentEvent {
+  action: EventAction!
+  documentId: ID!
+  operationId: ID!
+  parentDocumentId: ID
+  # Populated only when this event represents a move; carries the parent the
+  # document just left. Clients use it (together with parentDocumentId) to
+  # invalidate exactly the two affected per-parent caches instead of the
+  # whole operation subtree.
+  previousParentDocumentId: ID
+  document: WikiDocument
+}
+
+# Per-user "recently visited" entry. The collection deduplicates by
+# (user, operation, document) — a revisit refreshes visitedAt and moves the
+# entry to the top of the list. History is capped server-side; older entries
+# are pruned automatically. The `document` field is the live wiki document,
+# resolved at query time so renamed/moved docs render with current metadata.
+type WikiDocumentVisit {
+  id: ID!
+  document: WikiDocument!
+  visitedAt: String!
+}
+
+type WikiDocumentVisitEdge {
+  node: WikiDocumentVisit!
+  cursor: String!
+}
+
+type WikiDocumentVisitConnection {
+  edges: [WikiDocumentVisitEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# --- Inputs ---
+
+input CreateWikiDocumentInput {
+  parentDocumentId: ID
+  title: String!
+  # Defaults to DOCUMENT. A DRAWING page starts empty and is filled in by the
+  # canvas over the collaborative session, so passing `content` with it is
+  # refused rather than silently dropped.
+  kind: WikiDocumentKind
+  content: String
+  emoji: String
+  color: String
+  icon: String
+  sortOrder: String
+}
+
+input UpdateWikiDocumentInput {
+  title: String
+  emoji: String
+  color: String
+  icon: String
+  parentDocumentId: ID
+  sortOrder: String
+}
+
+# Bulk sibling reorder. The client computes a complete ordering of the
+# parent's direct children (including any incoming document being inserted
+# from elsewhere) and ships the list in the desired order. The server
+# rebalances sortOrders across the list, reparents any incoming document
+# whose previous parent differs, and emits ONE wikiDocumentChanged event.
+input ReorderWikiDocumentSiblingsInput {
+  operationId: ID!
+  # Target parent for the reorder, or null for the root level.
+  parentDocumentId: ID
+  # All sibling ids in their final desired order. Must reference documents
+  # within `operationId`. Documents not currently under `parentDocumentId`
+  # are reparented as part of the reorder.
+  orderedIds: [ID!]!
+}
+
+# --- Queries ---
+
+extend type Query {
+  wikiDocument(id: ID!): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocuments(
+    operationId: ID!
+    parentDocumentId: ID
+    search: String
+    sort: WikiDocumentSort = RECENTLY_CREATED
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): WikiDocumentConnection!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocumentTree(operationId: ID!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  # Documents flagged isTemplate in the operation, active only, sorted by
+  # title. Backs the create-from-template picker: templates are a handful of
+  # rows scattered anywhere in the tree, so this returns just them instead of
+  # forcing the client to pull the whole wikiDocumentTree and filter in memory.
+  # Backed by the {operation_id, is_template} partial index, so cost scales
+  # with template count, not total document count.
+  wikiTemplates(operationId: ID!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  # The document's body as Markdown, for export.
+  #
+  # Not the same as WikiDocument.content, which is a plain-text search
+  # projection with headings and lists flattened and inline marks rendered as
+  # pseudo-tags. This renders content_state — the authoritative CRDT body —
+  # back through the Hocuspocus sidecar that wrote it, so it round-trips.
+  # Viewer role, the same as reading the page.
+  wikiDocumentMarkdown(id: ID!): String!
+    @hasPermission(permission: "operation:member")
+
+  # Direct children of `parentDocumentId` (or root-level documents when
+  # `parentDocumentId` is null), sorted by sortOrder. Trashed documents are
+  # excluded. Drives the lazy tree sidebar — the client fetches roots on
+  # mount, then a fresh page per expanded branch. childCount on each
+  # returned row is precomputed in a single aggregation so the
+  # caret-vs-no-caret decision is one round trip per expand.
+  wikiDocumentChildren(
+    operationId: ID!
+    parentDocumentId: ID
+  ): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  # Returns every document needed to render the sidebar tree expanded down to
+  # `documentId`: ancestors + each ancestor's siblings + roots. One round
+  # trip instead of N when a user lands on a deeply nested doc via direct
+  # link. Returns an empty list if the document doesn't exist or the caller
+  # lacks access — the sidebar falls back to the roots fetch.
+  wikiDocumentTreeRevealPath(documentId: ID!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  # IDs of every active descendant of `documentId` (excluding the document
+  # itself), derived from the materialized path_ids chain via the
+  # {operation_id, path_ids} index. Backs the move dialog's exclusion set — a
+  # document can't be moved under its own subtree — so the picker can hide
+  # invalid targets without pulling the whole wikiDocumentTree just to walk
+  # parent links client-side. Cost scales with subtree size. Returns an empty
+  # list for a missing or trashed document; denies with an error if the caller
+  # lacks access to the operation.
+  wikiDocumentDescendantIds(documentId: ID!): [ID!]!
+    @hasPermission(permission: "operation:member")
+
+  # Total count of soft-deleted documents in the operation. Cheap badge query
+  # for the sidebar; avoids fetching the full trash list just to read its
+  # totalCount.
+  wikiDocumentTrashCount(operationId: ID!): Int!
+    @hasPermission(permission: "operation:member")
+
+  # Ranked, snippet-returning search over wiki documents within an operation.
+  # Offset is capped server-side at 500; past that, hasMore stays false and
+  # users must refine the query. Short queries (<2 chars) use anchored prefix
+  # matching on title for palette-style autocomplete; longer queries use the
+  # MongoDB text index on title+content.
+  wikiSearch(
+    operationId: ID!
+    scope: ID            # optional subtree scope: limit to this parent's descendants
+    query: String!
+    offset: Int = 0
+    limit: Int = 20
+  ): WikiSearchConnection!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocumentTrash(
+    operationId: ID!
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): WikiDocumentConnection!
+    @hasPermission(permission: "operation:member")
+
+  # All currently-trashed descendants of the given document (children, grand-
+  # children, etc.). Used to drive the cascade-restore prompt: when a user
+  # restores a doc whose subtree was cascade-deleted, this lists what would
+  # come back if they choose "restore all". Returns documents in BFS order.
+  wikiDocumentTrashedDescendants(documentId: ID!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  # Same data as WikiDocument.backlinks, exposed standalone so the editor
+  # footer can refetch backlinks independently (e.g. after a wikiDocumentChanged
+  # event) without re-pulling the whole document.
+  wikiDocumentBacklinks(documentId: ID!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  # Wiki documents in the credential's operation that reference the given
+  # credential via the /credential slash command. Same data as
+  # Credential.backlinks; exposed standalone so the credential details
+  # dialog can refetch independently without re-pulling the credential.
+  # Trashed referrers are excluded. Capped at 200 most recently updated.
+  wikiDocumentsReferencingCredential(credentialId: ID!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocumentBackups(
+    documentId: ID!
+    trigger: WikiDocumentBackupTrigger
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): WikiDocumentBackupConnection!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocumentBackup(id: ID!): WikiDocumentBackup!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocumentPresence(documentId: ID!): WikiDocumentPresence!
+    @hasPermission(permission: "operation:member")
+
+  wikiOperationPresence(operationId: ID!): [WikiDocumentPresence!]!
+    @hasPermission(permission: "operation:member")
+
+  # The calling user's wiki document visit history within an operation,
+  # most-recent-first. Visits to soft-deleted documents are filtered out
+  # server-side. Pagination uses an offset/limit shape rather than a cursor
+  # because the underlying list is small (capped at a few hundred entries
+  # per user) and the dropdown loads it in one shot.
+  wikiDocumentHistory(
+    operationId: ID!
+    offset: Int = 0
+    limit: Int = 300
+  ): WikiDocumentVisitConnection!
+    @hasPermission(permission: "operation:member")
+}
+
+# --- Mutations ---
+
+extend type Mutation {
+  createWikiDocument(operationId: ID!, input: CreateWikiDocumentInput!): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  updateWikiDocument(id: ID!, input: UpdateWikiDocumentInput!): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  # Reorder a parent's children (and optionally reparent incoming documents)
+  # in one round trip. Replaces the N-mutation rebalance loop the DnD UI
+  # used to perform on every drop. Returns the affected documents in their
+  # new order, freshly fetched. Emits exactly one wikiDocumentChanged event
+  # per affected previous-parent bucket plus one for the new parent.
+  reorderWikiDocumentSiblings(input: ReorderWikiDocumentSiblingsInput!): [WikiDocument!]!
+    @hasPermission(permission: "operation:member")
+
+  deleteWikiDocument(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+
+  # Duplicates a wiki document as a sibling of the source, placed immediately
+  # after it in sort order. The duplicate's title is prefixed with "Copy of ".
+  # When `withChildren` is true the entire active subtree is cloned (descendants
+  # keep their original titles); when false only the document itself is cloned.
+  # Trashed descendants are skipped — they stay in trash. Returns the new root.
+  duplicateWikiDocument(id: ID!, withChildren: Boolean = false): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  # Flags or unflags a document as a reusable template. The caller needs edit
+  # (operator) access to the document's operation — the same bar as any other
+  # metadata edit. On the Public tree every authenticated user is an implicit
+  # operator, so Public documents can be flagged by anyone (consistent with
+  # Public being a shared read-write space). Returns the updated document.
+  setWikiDocumentTemplate(id: ID!, isTemplate: Boolean!): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  # Instantiates a template into an operation. `templateId` must be a document
+  # flagged as a template (isTemplate) that the caller can read; the new
+  # document is created in `targetOperationId`'s wiki tree (optionally under
+  # `parentDocumentId`) with its content byte-copied from the template and
+  # `sourceTemplateId` set to the source. The instance is an ordinary wiki
+  # document thereafter — it can have children, is searchable, is not itself a
+  # template, and edits never propagate back to the template. The caller needs
+  # at least operator role in the target operation and read access to the
+  # template's operation.
+  instantiateTemplate(
+    templateId: ID!
+    targetOperationId: ID!
+    parentDocumentId: ID
+    # Name for the new instance. Optional — falls back to the template's title
+    # when omitted or blank.
+    title: String
+    # Icon for the new instance. Each field is independent: a non-null value
+    # overrides the corresponding glyph the instance would otherwise inherit
+    # from the template, a null value inherits. The create dialog seeds the
+    # picker from the template and sends whatever the operator leaves there, so
+    # the forked document can carry its own icon distinct from the template's.
+    emoji: String
+    icon: String
+    color: String
+  ): WikiDocument! @hasPermission(permission: "operation:member")
+
+  # Restores a soft-deleted document. When `cascade` is true, also restores
+  # every currently-trashed descendant of the document (children, grand-
+  # children, etc.). Defaults to false: the document itself comes back but
+  # any cascade-deleted subtree stays in trash unless the caller opts in.
+  restoreWikiDocument(id: ID!, cascade: Boolean = false): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  permanentlyDeleteWikiDocument(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+
+  emptyWikiDocumentTrash(operationId: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+
+  createWikiDocumentBackup(documentId: ID!, description: String): WikiDocumentBackup!
+    @hasPermission(permission: "operation:member")
+
+  restoreWikiDocumentBackup(documentId: ID!, backupId: ID!): WikiDocument!
+    @hasPermission(permission: "operation:member")
+
+  deleteWikiDocumentBackup(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+
+  # Records (or refreshes) a visit to the given document for the calling
+  # user. Idempotent: if a visit row already exists for this user-document
+  # pair, its visitedAt is bumped and it moves to the top of history.
+  # The user's history is pruned to the configured cap on each call.
+  trackWikiDocumentVisit(documentId: ID!): WikiDocumentVisit!
+    @hasPermission(permission: "operation:member")
+}
+
+# --- Subscriptions ---
+
+extend type Subscription {
+  wikiDocumentChanged(operationId: ID!): WikiDocumentEvent!
+    @hasPermission(permission: "operation:member")
+
+  wikiDocumentPresenceChanged(operationId: ID!): WikiDocumentPresenceEvent!
+    @hasPermission(permission: "operation:member")
+}

@@ -1,0 +1,65 @@
+Thanks for installing {{ .Chart.Name }} {{ .Chart.Version }} (app: {{ .Chart.AppVersion }}).
+
+The release "{{ .Release.Name }}" is now in namespace "{{ .Release.Namespace }}".
+
+────────────────────────────────────────────────────────────────────────
+1. Reach the application
+
+{{- if .Values.ingress.enabled }}
+   The ingress is configured for: {{ .Values.ingress.host }}
+   {{- if .Values.ingress.tls.enabled }}
+   TLS is enabled — open: https://{{ .Values.ingress.host }}/
+   {{- else }}
+   TLS is disabled — open: http://{{ .Values.ingress.host }}/
+
+   ⚠  Browsers send Secure cookies (refresh + CSRF) only over HTTPS. For
+      production deployments, terminate TLS at the ingress.
+   {{- end }}
+{{- else }}
+   Ingress is disabled. Forward the frontend Service locally for testing:
+
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "logos.frontend.fullname" . }} 8080:{{ .Values.frontend.service.port }}
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "logos.core.fullname" . }} 8002:{{ .Values.core.service.port }}
+{{- end }}
+
+────────────────────────────────────────────────────────────────────────
+2. Create the first admin user
+
+Open the enrollment page in a browser. The form posts to the public
+enroll endpoint, which is automatically locked after the first
+successful call. Use the UI rather than curl so the password never
+lands in shell history.
+
+{{- if .Values.ingress.enabled }}
+{{- if .Values.ingress.tls.enabled }}
+   https://{{ .Values.ingress.host }}/enroll
+{{- else }}
+   http://{{ .Values.ingress.host }}/enroll
+{{- end }}
+{{- else }}
+   Port-forward the frontend Service first (see step 1), then open:
+   http://localhost:8080/enroll
+{{- end }}
+
+────────────────────────────────────────────────────────────────────────
+3. Verify the bucket bootstrap
+
+   kubectl -n {{ .Release.Namespace }} get jobs -l app.kubernetes.io/component=bucket-bootstrap
+
+   The Job creates "{{ .Values.core.config.wikiImage.bucket }}" and
+   "{{ .Values.core.config.wikiFile.bucket }}" against SeaweedFS S3 so
+   the first wiki upload succeeds.
+
+────────────────────────────────────────────────────────────────────────
+4. Useful commands
+
+   kubectl -n {{ .Release.Namespace }} get pods
+   kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/component=core
+   kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/component=hocuspocus
+
+────────────────────────────────────────────────────────────────────────
+{{- if and (not .Values.secrets.existingSecret) (or (eq .Values.secrets.values.jwtSecretKey "changeme") (eq .Values.secrets.values.jwtSecretKey "")) }}
+
+⚠  WARNING: secrets.values.jwtSecretKey is unset or weak. Override it
+   for any non-development install. See deploy/helm/logos/README.md.
+{{- end }}

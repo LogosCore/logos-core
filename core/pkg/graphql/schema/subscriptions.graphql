@@ -1,0 +1,74 @@
+# =============================================================================
+# GraphQL Subscriptions
+# =============================================================================
+#
+# Subscriptions provide real-time updates. The primary transport is the
+# graphql-transport-ws protocol over a single WebSocket — every active
+# subscription on a browser tab is multiplexed onto one connection at
+# /api/v1/graphql/ws. The legacy SSE transport at POST /api/v1/graphql
+# (Accept: text/event-stream) is still mounted server-side for graceful
+# rollback and non-browser clients, but the SPA uses graphql-ws.
+#
+# How it works from the client side (modern WS path):
+#   1. Open a WebSocket to /api/v1/graphql/ws with Sec-WebSocket-Protocol:
+#      graphql-transport-ws. The `access_token` httpOnly cookie is sent on
+#      the upgrade and validated by Gin's JWTAuth middleware before gqlgen
+#      sees the connection.
+#   2. Send `{"type": "connection_init"}`; server replies `connection_ack`.
+#   3. Send `{"type": "subscribe", "id": "<op>", "payload": {"query": ...}}`
+#      for each subscription. Multiple subscribes share the one socket.
+#   4. Server streams `{"type": "next", "id": "<op>", "payload": {"data":...}}`
+#      frames; `complete` ends a single subscription.
+#
+# Each event wrapper type includes an "action" enum (CREATED/UPDATED/DELETED)
+# so the frontend knows what happened, plus the entity IDs and an optional
+# full entity object (null on DELETE since the entity no longer exists).
+
+# EventAction indicates what happened to the entity.
+enum EventAction {
+  CREATED
+  UPDATED
+  DELETED
+}
+
+# UserEvent wraps a user domain event for real-time updates.
+# The user field is null on DELETE (the entity no longer exists).
+type UserEvent {
+  action: EventAction!
+  userId: ID!
+  username: String
+  user: User
+}
+
+# OperationEvent wraps an operation domain event.
+# The operation field is null on DELETE.
+type OperationEvent {
+  action: EventAction!
+  operationId: ID!
+  name: String
+  operation: Operation
+}
+
+# OperationMemberEvent wraps a membership change event.
+# action: CREATED = member added, UPDATED = role changed, DELETED = member removed.
+type OperationMemberEvent {
+  action: EventAction!
+  operationId: ID!
+  userId: ID!
+}
+
+type Subscription {
+  # Real-time user changes (create/update/delete). Admin only.
+  userChanged: UserEvent! @hasPermission(permission: "user:read")
+
+  # Real-time operation changes. Optional operationId to scope to one operation.
+  # Without operationId, receives events for all operations the caller is a member of.
+  operationChanged(operationId: ID): OperationEvent!
+    @hasPermission(permission: "operation:member")
+
+  # Real-time membership changes (member added/removed/role changed).
+  # Same scoping as operationChanged — provide operationId to filter, or omit
+  # to receive events for all operations the caller belongs to.
+  operationMemberChanged(operationId: ID): OperationMemberEvent!
+    @hasPermission(permission: "operation:member")
+}

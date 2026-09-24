@@ -1,0 +1,497 @@
+// MUST stay in sync with frontend/src/components/wiki/wiki-editor.tsx.
+// Adding/changing a node there requires updating this file.
+//
+// This schema is used for encoding markdown → Y.js binary on import AND for
+// decoding Y.js → markdown on export, which is how an MCP agent reads and
+// writes a page. It is not used to render anything; the frontend's TipTap
+// extensions own rendering. Therefore we only need to declare the node
+// types, attributes, and content models — not toDOM/parseDOM details that
+// the editor cares about. The toDOM/parseDOM stubs here exist to satisfy
+// prosemirror-model's API; the values they produce are never inspected.
+//
+// On the import side (markdown → Y.js) an unrecognised token shape falls
+// back to a plain paragraph, so nothing is lost there.
+//
+// The export side is not so forgiving, and this comment used to claim it
+// was. A node the editor writes but this schema does not declare is DROPPED
+// by y-prosemirror on the way to markdown, and a node with no serializer
+// entry is skipped in silence by the non-strict serializer. Either way it
+// disappears from what an MCP agent reads — and since the agent writes that
+// markdown back, the next write deletes it from the document.
+//
+// src/__tests__/schema-drift.test.ts fails when the editor gains a node this
+// file has not been taught.
+
+import { Schema } from "prosemirror-model";
+
+export const wikiSchema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+
+    paragraph: {
+      group: "block",
+      content: "inline*",
+      parseDOM: [{ tag: "p" }],
+      toDOM: () => ["p", 0],
+    },
+
+    text: { group: "inline" },
+
+    heading: {
+      group: "block",
+      content: "inline*",
+      defining: true,
+      attrs: { level: { default: 1 } },
+      parseDOM: [
+        { tag: "h1", attrs: { level: 1 } },
+        { tag: "h2", attrs: { level: 2 } },
+        { tag: "h3", attrs: { level: 3 } },
+        { tag: "h4", attrs: { level: 4 } },
+        { tag: "h5", attrs: { level: 5 } },
+        { tag: "h6", attrs: { level: 6 } },
+      ],
+      toDOM: (node) => [`h${node.attrs.level}`, 0],
+    },
+
+    blockquote: {
+      group: "block",
+      content: "block+",
+      defining: true,
+      parseDOM: [{ tag: "blockquote" }],
+      toDOM: () => ["blockquote", 0],
+    },
+
+    codeBlock: {
+      group: "block",
+      content: "text*",
+      marks: "",
+      code: true,
+      defining: true,
+      attrs: {
+        language: { default: null },
+        wrap: { default: false },
+      },
+      parseDOM: [{ tag: "pre", preserveWhitespace: "full" }],
+      toDOM: (node) => [
+        "pre",
+        node.attrs.wrap ? { class: "is-wrapped" } : {},
+        ["code", 0],
+      ],
+    },
+
+    horizontalRule: {
+      group: "block",
+      attrs: { variant: { default: "line" } },
+      parseDOM: [{ tag: "hr" }],
+      toDOM: (node) =>
+        node.attrs.variant && node.attrs.variant !== "line"
+          ? ["hr", { "data-variant": node.attrs.variant }]
+          : ["hr"],
+    },
+
+    bulletList: {
+      group: "block",
+      content: "listItem+",
+      parseDOM: [{ tag: "ul" }],
+      toDOM: () => ["ul", 0],
+    },
+
+    orderedList: {
+      group: "block",
+      content: "listItem+",
+      attrs: { start: { default: 1 } },
+      parseDOM: [
+        {
+          tag: "ol",
+          getAttrs: (el) => {
+            const start = (el as HTMLElement).getAttribute("start");
+            return { start: start ? parseInt(start, 10) : 1 };
+          },
+        },
+      ],
+      toDOM: (node) =>
+        node.attrs.start === 1
+          ? ["ol", 0]
+          : ["ol", { start: String(node.attrs.start) }, 0],
+    },
+
+    listItem: {
+      content: "paragraph block*",
+      defining: true,
+      parseDOM: [{ tag: "li" }],
+      toDOM: () => ["li", 0],
+    },
+
+    taskList: {
+      group: "block",
+      content: "taskItem+",
+      parseDOM: [{ tag: 'ul[data-type="taskList"]' }],
+      toDOM: () => ["ul", { "data-type": "taskList" }, 0],
+    },
+
+    taskItem: {
+      content: "paragraph block*",
+      defining: true,
+      attrs: { checked: { default: false } },
+      parseDOM: [
+        {
+          tag: 'li[data-type="taskItem"]',
+          getAttrs: (el) => ({
+            checked: (el as HTMLElement).getAttribute("data-checked") === "true",
+          }),
+        },
+      ],
+      toDOM: (node) => [
+        "li",
+        {
+          "data-type": "taskItem",
+          "data-checked": String(Boolean(node.attrs.checked)),
+        },
+        0,
+      ],
+    },
+
+    image: {
+      group: "block",
+      atom: true,
+      attrs: {
+        src: { default: null },
+        alt: { default: null },
+        title: { default: null },
+        width: { default: null },
+        height: { default: null },
+      },
+      parseDOM: [
+        {
+          tag: "img[src]",
+          getAttrs: (el) => {
+            const e = el as HTMLElement;
+            const w = e.getAttribute("width");
+            const h = e.getAttribute("height");
+            return {
+              src: e.getAttribute("src"),
+              alt: e.getAttribute("alt"),
+              title: e.getAttribute("title"),
+              width: w ? parseInt(w, 10) : null,
+              height: h ? parseInt(h, 10) : null,
+            };
+          },
+        },
+      ],
+      toDOM: (node) => [
+        "img",
+        {
+          src: node.attrs.src,
+          alt: node.attrs.alt,
+          title: node.attrs.title,
+          width: node.attrs.width != null ? String(node.attrs.width) : null,
+          height: node.attrs.height != null ? String(node.attrs.height) : null,
+        },
+      ],
+    },
+
+    hardBreak: {
+      group: "inline",
+      inline: true,
+      selectable: false,
+      parseDOM: [{ tag: "br" }],
+      toDOM: () => ["br"],
+    },
+
+    table: {
+      group: "block",
+      content: "tableRow+",
+      tableRole: "table",
+      isolating: true,
+      parseDOM: [{ tag: "table" }],
+      toDOM: () => ["table", ["tbody", 0]],
+    },
+
+    tableRow: {
+      content: "(tableCell | tableHeader)*",
+      tableRole: "row",
+      parseDOM: [{ tag: "tr" }],
+      toDOM: () => ["tr", 0],
+    },
+
+    tableCell: {
+      content: "block+",
+      tableRole: "cell",
+      isolating: true,
+      attrs: {
+        colspan: { default: 1 },
+        rowspan: { default: 1 },
+        colwidth: { default: null },
+      },
+      parseDOM: [{ tag: "td" }],
+      toDOM: () => ["td", 0],
+    },
+
+    tableHeader: {
+      content: "block+",
+      tableRole: "header_cell",
+      isolating: true,
+      attrs: {
+        colspan: { default: 1 },
+        rowspan: { default: 1 },
+        colwidth: { default: null },
+      },
+      parseDOM: [{ tag: "th" }],
+      toDOM: () => ["th", 0],
+    },
+
+    wikiNotice: {
+      group: "block",
+      content: "block+",
+      defining: true,
+      attrs: { variant: { default: "info" } },
+      parseDOM: [{ tag: 'div[data-type="wiki-notice"]' }],
+      toDOM: (node) => [
+        "div",
+        { "data-type": "wiki-notice", "data-variant": node.attrs.variant },
+        0,
+      ],
+    },
+
+    // One checklist question and its answer. Mirrors the editor's
+    // wiki-checklist-item-node.ts: the structure (prompt, command hint,
+    // required, state) lives in attributes and the answer is the content
+    // region, which accepts any block content including reference chips.
+    //
+    // Attribute defaults match the editor's exactly. They have to: a value
+    // that round-trips to a different default silently changes what the
+    // coverage bar counts.
+    wikiChecklistItem: {
+      group: "block",
+      content: "block+",
+      defining: true,
+      isolating: true,
+      attrs: {
+        key: { default: null },
+        prompt: { default: "" },
+        commandHint: { default: "" },
+        commandHintEnabled: { default: false },
+        required: { default: true },
+        state: { default: "" },
+      },
+      parseDOM: [{ tag: 'div[data-type="wiki-checklist-item"]' }],
+      toDOM: (node) => [
+        "div",
+        {
+          "data-type": "wiki-checklist-item",
+          "data-prompt": String(node.attrs.prompt ?? ""),
+          "data-required": node.attrs.required ? "true" : "false",
+          "data-state": String(node.attrs.state ?? ""),
+        },
+        0,
+      ],
+    },
+
+    // Inline atom referencing a host by id. Matches the editor's
+    // wiki-host-reference-node.tsx. Sibling of wikiCredentialReference and
+    // wikiHashReference: the only persisted attribute is the id, and the
+    // chip's visible text is hydrated client-side from the hosts API.
+    wikiHostReference: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { hostId: { default: null } },
+      parseDOM: [{ tag: "span[data-wiki-host]" }],
+      toDOM: (node) => [
+        "span",
+        {
+          "data-wiki-host": "true",
+          "data-host-id": node.attrs.hostId,
+        },
+      ],
+    },
+
+    // Inline atom referencing another wiki page by id. Matches the editor's
+    // wiki-document-reference-node.tsx.
+    wikiDocumentReference: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { documentId: { default: null } },
+      parseDOM: [{ tag: "span[data-wiki-document]" }],
+      toDOM: (node) => [
+        "span",
+        {
+          "data-wiki-document": "true",
+          "data-document-id": node.attrs.documentId,
+        },
+      ],
+    },
+
+    wikiFile: {
+      group: "block",
+      atom: true,
+      attrs: {
+        fileId: { default: null },
+        url: { default: null },
+        filename: { default: "" },
+        size: { default: 0 },
+        contentType: { default: "application/octet-stream" },
+      },
+      parseDOM: [{ tag: "div[data-wiki-file]" }],
+      toDOM: (node) => [
+        "div",
+        {
+          "data-wiki-file": "true",
+          "data-file-id": node.attrs.fileId,
+          "data-url": node.attrs.url,
+          "data-filename": node.attrs.filename,
+          "data-size": String(node.attrs.size ?? 0),
+          "data-content-type":
+            node.attrs.contentType ?? "application/octet-stream",
+        },
+      ],
+    },
+
+    // Inline atom referencing a credential by id. Matches the editor's
+    // wiki-credential-reference-node.tsx. The only persisted attribute is
+    // `credentialId`; the chip's visible text is hydrated client-side from
+    // the credentials API. On export, the serializer lifts these inline
+    // atoms into block-level wikiCredentialBlock nodes so they can be
+    // emitted as fenced ```logos-credential code blocks (CommonMark fences
+    // are block-level only, so the inline chip can't carry the JSON
+    // directly).
+    wikiCredentialReference: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { credentialId: { default: null } },
+      parseDOM: [{ tag: "span[data-wiki-credential]" }],
+      toDOM: (node) => [
+        "span",
+        {
+          "data-wiki-credential": "true",
+          "data-credential-id": node.attrs.credentialId,
+        },
+      ],
+    },
+
+    // Inline atom referencing a hash by id. Matches the editor's
+    // wiki-hash-reference-node.tsx. The only persisted attribute is `hashId`;
+    // the chip's visible text (truncated value + cracked status) is hydrated
+    // client-side from the hashes API. Sibling of wikiCredentialReference.
+    wikiHashReference: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { hashId: { default: null } },
+      parseDOM: [{ tag: "span[data-wiki-hash]" }],
+      toDOM: (node) => [
+        "span",
+        {
+          "data-wiki-hash": "true",
+          "data-hash-id": node.attrs.hashId,
+        },
+      ],
+    },
+
+    // Block-level companion to wikiCredentialReference. This node is NEVER
+    // produced by the editor and NEVER persisted in Y.js — it exists solely
+    // at the markdown serialize/parse boundary. The serializer's pre-walk
+    // lifts inline credential chips into wikiCredentialBlock nodes (so they
+    // can be emitted as fences); the parser's post-walk lowers each
+    // wikiCredentialBlock back to a paragraph containing one inline chip.
+    //
+    // payload is the verbatim JSON object carried in the fence body. Keys:
+    //   { id, name?, type?, username?, password?, keys?, properties?,
+    //     validity?, tags?, deleted? }
+    // The core import orchestrator uses payload to resolve-or-create the
+    // credential in the target operation and then rewrites the chip's id
+    // to the final value before applying the Y.js update.
+    wikiCredentialBlock: {
+      group: "block",
+      atom: true,
+      attrs: {
+        credentialId: { default: null },
+        payload: { default: null },
+      },
+      parseDOM: [{ tag: "div[data-wiki-credential-block]" }],
+      toDOM: (node) => [
+        "div",
+        {
+          "data-wiki-credential-block": "true",
+          "data-credential-id": node.attrs.credentialId,
+        },
+      ],
+    },
+  },
+
+  marks: {
+    link: {
+      attrs: {
+        href: { default: null },
+        title: { default: null },
+      },
+      inclusive: false,
+      parseDOM: [
+        {
+          tag: "a[href]",
+          getAttrs: (el) => ({
+            href: (el as HTMLElement).getAttribute("href"),
+            title: (el as HTMLElement).getAttribute("title"),
+          }),
+        },
+      ],
+      toDOM: (mark) => [
+        "a",
+        { href: mark.attrs.href, title: mark.attrs.title },
+        0,
+      ],
+    },
+
+    bold: {
+      parseDOM: [
+        { tag: "strong" },
+        { tag: "b" },
+        { style: "font-weight=bold" },
+      ],
+      toDOM: () => ["strong", 0],
+    },
+
+    italic: {
+      parseDOM: [
+        { tag: "em" },
+        { tag: "i" },
+        { style: "font-style=italic" },
+      ],
+      toDOM: () => ["em", 0],
+    },
+
+    code: {
+      parseDOM: [{ tag: "code" }],
+      toDOM: () => ["code", 0],
+    },
+
+    strike: {
+      parseDOM: [{ tag: "s" }, { tag: "strike" }, { tag: "del" }],
+      toDOM: () => ["s", 0],
+    },
+
+    wikiHighlight: {
+      attrs: {
+        // OKLCH literal from frontend/src/components/wiki/icon-color-palette.
+        // Empty string = legacy/unconfigured highlight (renders with the
+        // editor's default amber tint).
+        color: { default: "" },
+      },
+      inclusive: true,
+      parseDOM: [
+        {
+          tag: "mark",
+          getAttrs: (el) => ({
+            color: (el as HTMLElement).getAttribute("data-color") ?? "",
+          }),
+        },
+      ],
+      toDOM: (mark) =>
+        mark.attrs.color
+          ? ["mark", { "data-color": mark.attrs.color }, 0]
+          : ["mark", 0],
+    },
+  },
+});

@@ -1,0 +1,251 @@
+import { useMemo } from "react"
+import type { TimelineGranularity } from "@/graphql/gql/graphql"
+import { dayjs } from "./dayjs-setup"
+import {
+  GroupGlyph,
+  type TimelineGroupIdentity,
+} from "./event-icon-display"
+import { renderSubjectKindSummary } from "./event-summary"
+import type { BucketTopicCount } from "./piecewise-axis"
+import {
+  computeChipColumns,
+  distributeChipRows,
+  mergeByGroupIdentity,
+} from "./chip-layout"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
+
+interface Props {
+  bucketStart: string
+  count: number
+  // Per-topic breakdown for the bucket. Comes from the timelineBuckets
+  // aggregation, which means we no longer need to fan out an N-bucket
+  // timelineEventsByDay query just to render the dot stack. Server-side
+  // sort guarantees count desc, topic asc.
+  topicCounts: BucketTopicCount[]
+  widthPx: number
+  granularity: TimelineGranularity
+  timezone: string
+  isSelected: boolean
+  // Fired when the user clicks the anchor on the axis line. Selects the bucket
+  // so the detail panel below the canvas renders every event in the bucket.
+  onSelectBucket: (bucketStart: string) => void
+  // Fired when the user clicks an individual chip. The page opens a modal
+  // that lists just the events in that one group, tighter than the day panel
+  // which shows the whole bucket. The identity carries the custom glyph so the
+  // modal scopes to the exact chip, not every custom event.
+  onSelectGroup: (bucketStart: string, group: TimelineGroupIdentity) => void
+}
+
+// ActiveDaySegment renders one active bucket on the axis: a chip cloud of
+// topic-group chips above a centered stem, the anchor dot on the axis line,
+// and the date label below.
+//
+// The cloud is a balanced grid. Its height is bounded (columns cap at
+// MAX_ROWS_PER_COLUMN chips, see chip-layout) and it grows in WIDTH instead, so
+// a busy day fans into a wide cloud rather than a tall stack that would clip
+// the fixed-height canvas. The segment's widthPx (computed in piecewise-axis
+// from the same grouping) reserves the horizontal room, and the grid is
+// centered so the cloud fans symmetrically over the anchor.
+//
+// All data comes from the parent's bucket query, no per-segment GraphQL fetch.
+// A timeline with N active buckets renders in 1 query, not N+1.
+export function ActiveDaySegment({
+  bucketStart,
+  count,
+  topicCounts,
+  widthPx,
+  granularity,
+  timezone,
+  isSelected,
+  onSelectBucket,
+  onSelectGroup,
+}: Props) {
+  const subjectGroups = useMemo(
+    () => mergeByGroupIdentity(topicCounts),
+    [topicCounts],
+  )
+  // Lay the groups into a balanced grid, bottom row first. Groups arrive
+  // sorted count-desc, so row 0 (rendered nearest the axis via
+  // flex-col-reverse) holds the heaviest groups.
+  const chipRows = useMemo(() => {
+    const columns = computeChipColumns(subjectGroups.length)
+    return distributeChipRows(subjectGroups, columns)
+  }, [subjectGroups])
+
+  const label = formatBucketLabel(bucketStart, granularity, timezone)
+  const hasStackContent = subjectGroups.length > 0
+
+  return (
+    <div
+      className="relative shrink-0 flex flex-col"
+      style={{ width: `${widthPx}px` }}
+    >
+      {/* Outer column takes the remaining vertical space and pins the cloud to
+          the bottom; the inner column shrinks to fit just the chips + stem.
+          min-h-0 lets the column shrink inside the parent flex layout. */}
+      <div className="flex-1 min-h-0 flex flex-col-reverse items-center overflow-hidden">
+        <div className="flex flex-col-reverse items-center gap-1.5 pb-1">
+          {/* Stem: a short centered connector tying the cloud to the anchor on
+              the axis line below. Rendered first so flex-col-reverse places it
+              at the bottom of the cloud, directly above the anchor. */}
+          {hasStackContent && (
+            <span aria-hidden className="w-px h-3 bg-border" />
+          )}
+          {chipRows.map((row) => (
+            // Rows are never empty (distributeChipRows slices a non-empty,
+            // sorted group list) and each group key is unique within the
+            // bucket, so the first group's key is a stable row key.
+            <div
+              key={row[0].key}
+              className="flex items-center justify-center gap-4"
+            >
+              {row.map((g) => (
+                <EventGroupChip
+                  key={g.key}
+                  group={g}
+                  count={g.count}
+                  onClick={() =>
+                    onSelectGroup(bucketStart, {
+                      subjectKind: g.subjectKind,
+                      emoji: g.emoji,
+                      icon: g.icon,
+                      color: g.color,
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Horizontal axis line sits at the bottom of the segment. The anchor is
+          centered on the line; clicking it selects the bucket so the detail
+          panel below the canvas renders every event in that range. Anchor size
+          is fixed: density is communicated by the chip cloud above (taller +
+          wider = busier), not by the anchor itself. */}
+      <div className="relative h-4 border-t border-border">
+        <button
+          type="button"
+          onClick={() => onSelectBucket(bucketStart)}
+          className={cn(
+            "absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 size-2.5 rounded-full bg-muted-foreground/50 ring-2 ring-background transition-colors hover:bg-foreground",
+            isSelected && "bg-foreground ring-primary/40",
+          )}
+          aria-label={`Show ${count} events on ${label}`}
+          aria-pressed={isSelected}
+          title={`${count} event${count === 1 ? "" : "s"}`}
+        />
+      </div>
+
+      <div
+        className={cn(
+          "pt-1.5 text-center text-xs tabular-nums",
+          isSelected
+            ? "text-foreground font-medium"
+            : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </div>
+      {/* Invisible subtitle row reserves the same footer height as the Start
+          and Today bookend markers; without this, those markers' axis lines
+          float higher than the active segments' and the horizontal axis reads
+          as broken across the canvas. */}
+      <div
+        aria-hidden
+        className="pt-1 text-center text-[10px] uppercase tracking-wide invisible"
+      >
+        ·
+      </div>
+    </div>
+  )
+}
+
+// EventGroupChip renders a single group as a count-badged icon button. The
+// glyph comes from the group identity (subject kind for system events, the
+// authored emoji/icon/color for custom events). Clicks fire onSelectGroup so
+// the page can open the group-scoped modal scoped to exactly this identity.
+function EventGroupChip({
+  group,
+  count,
+  onClick,
+}: {
+  group: TimelineGroupIdentity
+  count: number
+  onClick: () => void
+}) {
+  const tooltip = renderSubjectKindSummary(group.subjectKind, count)
+  const showBadge = count > 1
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={onClick}
+            className={cn(
+              "relative z-10 flex size-8 items-center justify-center rounded-full border bg-card",
+              "hover:scale-110 hover:border-foreground/40 transition-transform",
+            )}
+            aria-label={tooltip}
+          >
+            <GroupGlyph
+              subjectKind={group.subjectKind}
+              emoji={group.emoji}
+              icon={group.icon}
+              color={group.color}
+            />
+            {showBadge && (
+              <span
+                className={cn(
+                  "absolute -top-2 -right-2.5 min-w-[22px] h-[18px]",
+                  "flex items-center justify-center px-1.5 rounded-full",
+                  "border border-border bg-card text-[11px] leading-none",
+                  "text-muted-foreground tabular-nums",
+                )}
+              >
+                {formatBadgeCount(count)}
+              </span>
+            )}
+          </button>
+        }
+      />
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+// formatBadgeCount keeps the corner badge to a tight 1-4 character width so
+// it doesn't stretch the dot. Big buckets degrade to "1.2k" / "12k" rather
+// than spraying digits across the axis.
+function formatBadgeCount(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 10000) {
+    const v = (n / 1000).toFixed(1)
+    return v.endsWith(".0") ? `${v.slice(0, -2)}k` : `${v}k`
+  }
+  return `${Math.floor(n / 1000)}k`
+}
+
+function formatBucketLabel(
+  bucketStart: string,
+  granularity: TimelineGranularity,
+  timezone: string,
+): string {
+  const d = dayjs(bucketStart).tz(timezone)
+  switch (granularity) {
+    case "WEEK":
+      return d.format("MMM D")
+    case "MONTH":
+      return d.format("MMM YYYY")
+    default:
+      return d.format("MMM D")
+  }
+}

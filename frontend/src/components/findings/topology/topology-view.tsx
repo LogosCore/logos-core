@@ -1,0 +1,690 @@
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react"
+import {
+  Background,
+  Controls,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  type Edge,
+  type Node,
+  type Rect,
+} from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
+import {
+  Loader2Icon,
+  NetworkIcon,
+  RouteIcon,
+  TriangleAlertIcon,
+  UsersIcon,
+} from "lucide-react"
+import { MAX_TOPOLOGY_HOSTS, useAllHosts } from "@/graphql/hooks/hosts"
+import { useMe, useSetHiddenIdentities } from "@/graphql/hooks/users"
+import { useHostStore, type TopologyRelation } from "@/stores/hosts"
+import {
+  deriveTopology,
+  withoutHiddenIdentities,
+  WELL_KNOWN_ACCOUNTS,
+  type Topology,
+  type TopologyStats,
+} from "@/lib/topology/derive"
+import {
+  collapseLeafSubnets,
+  collapseLocalIdentities,
+  collapsePhantomHosts,
+} from "@/lib/topology/aggregate"
+import {
+  NodeContextMenu,
+  type NodeMenuState,
+} from "@/components/findings/topology/node-context-menu"
+import {
+  AggregateViewDialog,
+  type AggregateViewState,
+} from "@/components/findings/topology/aggregate-view-dialog"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
+import { HiddenIdentitiesPanel } from "@/components/findings/topology/hidden-identities-panel"
+import { TopologyLegend } from "@/components/findings/topology/topology-legend"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  FloatingEdge,
+  TopologyEdgeDefs,
+} from "@/components/findings/topology/floating-edge"
+import type { SimNode } from "@/components/findings/topology/layout"
+import { useTopologySimulation } from "@/components/findings/topology/use-simulation"
+import { useTopologyEmphasis } from "@/components/findings/topology/use-emphasis"
+import { TopologySearch } from "@/components/findings/topology/topology-search"
+import { TopologyExportButton } from "@/components/findings/topology/topology-export-button"
+import {
+  HostNode,
+  IdentityNode,
+  LeafSubnetsNode,
+  LocalIdentitiesNode,
+  LoneSourcesNode,
+  PhantomGatewayNode,
+  PhantomHostNode,
+  PhantomSubnetNode,
+  SubnetNode,
+  type HostNodeData,
+  type IdentityNodeData,
+  type LeafSubnetsNodeData,
+  type LocalIdentitiesNodeData,
+  type LoneSourcesNodeData,
+  type PhantomGatewayNodeData,
+  type PhantomHostNodeData,
+  type PhantomSubnetNodeData,
+} from "@/components/findings/topology/topology-nodes"
+
+// Defined here (not in topology-nodes.tsx) so that file can stay a pure
+// component module — exporting this const alongside components trips the
+// fast-refresh lint rule. Stable identity outside the component so React Flow
+// doesn't see a new object each render.
+const nodeTypes = {
+  host: HostNode,
+  subnet: SubnetNode,
+  phantomGateway: PhantomGatewayNode,
+  phantomSubnet: PhantomSubnetNode,
+  leafSubnets: LeafSubnetsNode,
+  loneSources: LoneSourcesNode,
+  localIdentities: LocalIdentitiesNode,
+  identity: IdentityNode,
+  phantomHost: PhantomHostNode,
+}
+
+const edgeTypes = {
+  floating: FloatingEdge,
+}
+
+// Map a right-clicked React Flow node to its context-menu state, or null for
+// node kinds that have no menu. Switching on node.type (the nodeTypes keys
+// above) keeps every kind accounted for in one place; node.data is the matching
+// *NodeData shape for that type.
+function buildNodeMenu(
+  node: Node,
+  at: { x: number; y: number },
+): NodeMenuState | null {
+  switch (node.type) {
+    case "host":
+      return { ...at, kind: "host", host: (node.data as HostNodeData).host }
+    case "identity":
+      return { ...at, kind: "identity", user: (node.data as IdentityNodeData).user }
+    case "phantomGateway":
+      return {
+        ...at,
+        kind: "copy",
+        copyLabel: "IP",
+        value: (node.data as PhantomGatewayNodeData).ip,
+      }
+    case "phantomSubnet":
+      return {
+        ...at,
+        kind: "copy",
+        copyLabel: "CIDR",
+        value: (node.data as PhantomSubnetNodeData).cidr,
+      }
+    case "phantomHost":
+      return {
+        ...at,
+        kind: "copy",
+        copyLabel: "source",
+        value: (node.data as PhantomHostNodeData).label,
+      }
+    case "leafSubnets":
+      return {
+        ...at,
+        kind: "aggregate",
+        title: "Local subnets",
+        data: { kind: "leaf-subnets", entries: (node.data as LeafSubnetsNodeData).entries },
+      }
+    case "loneSources":
+      return {
+        ...at,
+        kind: "aggregate",
+        title: "Unknown sources",
+        data: {
+          kind: "lone-sources",
+          labels: (node.data as LoneSourcesNodeData).sources.map((s) => s.label),
+        },
+      }
+    case "localIdentities":
+      return {
+        ...at,
+        kind: "aggregate",
+        title: "Local accounts",
+        data: { kind: "local-identities", users: (node.data as LocalIdentitiesNodeData).users },
+      }
+    default:
+      return null
+  }
+}
+
+interface TopologyViewProps {
+  operationId: string
+}
+
+// The Hosts tab's second view: a network map derived entirely from the
+// operation's host data (no manual editing). Fetches ALL hosts (not the
+// paginated list), derives the graph, lays it out, and renders it read-only.
+//
+// The graph is built from exactly ONE relation type at a time. Routes and
+// subnet membership are different semantics (L3 "routes through" vs L2 "sits
+// on segment"); overlaying both turned real operations into a hairball. Both
+// lenses are pure view filters — the underlying derivation is untouched.
+
+const lenses: Record<TopologyRelation, (t: Topology) => Topology> = {
+  // Host cards + route-derived elements (pivots, unknown gateways, unexplored
+  // subnets). An allowlist, not a denylist: every other relation's nodes/edges
+  // (subnet hubs, identities, login edges) are excluded, so a new node kind
+  // can't silently leak into this lens the way identities once did.
+  routes: (t) => ({
+    ...t,
+    nodes: t.nodes.filter(
+      (n) =>
+        n.kind === "host" ||
+        n.kind === "phantom-gateway" ||
+        n.kind === "phantom-subnet",
+    ),
+    edges: t.edges.filter(
+      (e) =>
+        e.kind === "pivot" ||
+        e.kind === "pivot-unknown" ||
+        e.kind === "reaches",
+    ),
+  }),
+  // Host cards + subnet hubs + interface edges. Route-derived elements are
+  // stripped — phantom gateways/subnets only exist because of routes, so
+  // keeping them would smuggle the second relation back in. Single-host
+  // subnets then fold into one list node per host (the VPN-concentrator
+  // case: ten tun networks orbiting one card said nothing).
+  subnets: (t) =>
+    collapseLeafSubnets({
+      ...t,
+      nodes: t.nodes.filter((n) => n.kind === "host" || n.kind === "subnet"),
+      edges: t.edges.filter((e) => e.kind === "membership"),
+    }),
+  // Host cards + identity pills + unknown-source hosts, joined by the two login
+  // edges (logged into / logged in from). Hosts never connect directly here —
+  // only through an identity — so this lens reads as "who touched what, and
+  // from where". Network-derived elements are all stripped.
+  identities: (t) => ({
+    ...t,
+    nodes: t.nodes.filter(
+      (n) =>
+        n.kind === "host" || n.kind === "identity" || n.kind === "phantom-host",
+    ),
+    edges: t.edges.filter(
+      (e) => e.kind === "logged-into" || e.kind === "logged-from",
+    ),
+  }),
+}
+
+export function TopologyView({ operationId }: TopologyViewProps) {
+  const { data, isLoading, isError } = useAllHosts(operationId)
+  // Persisted in the host store so the choice survives reloads.
+  const relation = useHostStore((s) => s.topologyRelation)
+  const setRelation = useHostStore((s) => s.setTopologyRelation)
+  // Layer 1 (built-in well-known group): a localStorage toggle in the store.
+  const hideWellKnown = useHostStore((s) => s.hideWellKnownIdentities)
+  const setHideWellKnown = useHostStore((s) => s.setHideWellKnownIdentities)
+  const legendOpen = useHostStore((s) => s.topologyLegendOpen)
+  const setLegendOpen = useHostStore((s) => s.setTopologyLegendOpen)
+  const openEditDialog = useHostStore((s) => s.openEditDialog)
+
+  // Layer 2 (per-operator custom list): server state, normalized server-side.
+  const { data: meData } = useMe()
+  const setHiddenIdentities = useSetHiddenIdentities()
+  const customHidden = useMemo(
+    () => meData?.me.hiddenIdentities ?? [],
+    [meData?.me.hiddenIdentities],
+  )
+
+  // Both layers feed one set of usernames to hide (already lowercased: the
+  // built-in set is lowercase and the custom list is normalized on the server).
+  const hiddenUsers = useMemo(() => {
+    const set = new Set<string>(customHidden)
+    if (hideWellKnown) for (const a of WELL_KNOWN_ACCOUNTS) set.add(a)
+    return set
+  }, [customHidden, hideWellKnown])
+
+  // Right-click "Hide" / panel "unhide" both rewrite the whole list (the
+  // mutation replaces it). Compute the next array from the current one.
+  const hideIdentity = useCallback(
+    (user: string) => {
+      const name = user.trim().toLowerCase()
+      if (!name || customHidden.includes(name)) return
+      setHiddenIdentities.mutate([...customHidden, name])
+    },
+    [customHidden, setHiddenIdentities],
+  )
+  const unhideIdentity = useCallback(
+    (user: string) => {
+      const name = user.trim().toLowerCase()
+      setHiddenIdentities.mutate(customHidden.filter((n) => n !== name))
+    },
+    [customHidden, setHiddenIdentities],
+  )
+
+  // One shared right-click menu for all host cards and identity pills (see
+  // node-context-menu). Host "Edit" opens the same dialog as a table row, so
+  // topology and table share one editing path.
+  const [nodeMenu, setNodeMenu] = useState<NodeMenuState | null>(null)
+  // Ghost (phantom) and aggregate nodes are otherwise read-only dead-ends: the
+  // info they carry (an IP, a collapsed list of accounts) can't be selected or
+  // copied. Give them the same right-click affordance host/identity nodes have —
+  // a "Copy" for the single value a ghost holds, a "View" dialog for an
+  // aggregate's collapsed members.
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      const at = { x: event.clientX, y: event.clientY }
+      const menu = buildNodeMenu(node, at)
+      if (!menu) return
+      event.preventDefault()
+      setNodeMenu(menu)
+    },
+    [],
+  )
+
+  // Read-only dialog for an aggregate node's collapsed members, opened from the
+  // menu's "View". Local state (not the host store) — it's ephemeral and owns no
+  // server state. See aggregate-view-dialog.
+  const [aggView, setAggView] = useState<AggregateViewState | null>(null)
+
+  // Virtualization is on in normal use (only on-screen nodes mount), but the
+  // image export toggles it off around a capture so the whole graph is in the
+  // DOM to rasterize. See use-topology-export.
+  const [virtualize, setVirtualize] = useState(true)
+
+  const topology = useMemo(
+    () => deriveTopology(data?.hosts ?? []),
+    [data?.hosts],
+  )
+  const targetTopology = useMemo(() => {
+    const lensed = lenses[relation](topology)
+    if (relation !== "identities") return lensed
+    // Hide accounts first (it can strip a ghost source's only other edge), THEN
+    // collapse: lone unknown sources into one pill per identity, and each host's
+    // single-host accounts into one "local accounts" pill — the leaf-merge that
+    // unwinds the hairball, leaving only the shared accounts wiring hosts.
+    const filtered = withoutHiddenIdentities(lensed, hiddenUsers)
+    return collapseLocalIdentities(collapsePhantomHosts(filtered))
+  }, [topology, relation, hiddenUsers])
+
+  // Rebuilding the layout (pre-settle ticks + crossing reduction in
+  // layoutTopology) is a synchronous main-thread chunk — noticeable on the
+  // dense users lens. Deferring the topology splits any rebuild into two
+  // renders: an urgent one that keeps the old graph up (lens button + the
+  // overlay below paint immediately), then the heavy one at deferred
+  // priority. One mechanism for every rebuild source: lens switch, hiding
+  // identities, data refresh.
+  const visibleTopology = useDeferredValue(targetTopology)
+  const isRebuilding = visibleTopology !== targetTopology
+
+  // Live force-directed layout: pre-settled for first paint, re-heated while
+  // a node is dragged so neighbors follow. Positions are session-only: any
+  // data change rebuilds the simulation and resets them.
+  const {
+    nodes,
+    edges,
+    simNodeById,
+    onNodesChange,
+    onNodeDragStart,
+    onNodeDrag,
+    onNodeDragStop,
+  } = useTopologySimulation(visibleTopology)
+
+  // Click-to-focus + search emphasis: dims/rings layered over the simulation
+  // output. See use-emphasis.ts for the interaction rules.
+  const {
+    displayNodes,
+    displayEdges,
+    toggleFocus,
+    toggleEdgeFocus,
+    focusFromSearch,
+    handleEscape,
+    clearEmphasis,
+    search,
+    fitIds,
+  } = useTopologyEmphasis(visibleTopology, nodes, edges)
+
+  // Click = focus (toggle on re-click). Editing lives in the right-click menu.
+  const onNodeClick = useCallback(
+    (_e: React.MouseEvent, node: Node) => toggleFocus(node.id),
+    [toggleFocus],
+  )
+  // Edges focus too: on the users lens a login edge lights the whole travel
+  // path it belongs to (source host → user → destination hosts).
+  const onEdgeClick = useCallback(
+    (_e: React.MouseEvent, edge: Edge) => toggleEdgeFocus(edge.id),
+    [toggleEdgeFocus],
+  )
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-lg border bg-card p-4">
+        <Skeleton className="h-full w-full" />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Centered>
+        <TriangleAlertIcon className="size-8 text-destructive opacity-70" />
+        <p className="text-sm">Couldn’t load the topology. Try again.</p>
+      </Centered>
+    )
+  }
+
+  if (topology.stats.hosts === 0) {
+    return (
+      <Centered>
+        <NetworkIcon className="size-8 opacity-50" />
+        <p className="text-sm">
+          No hosts yet — add hosts in the table to build the network map.
+        </p>
+      </Centered>
+    )
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+      {data?.truncated && (
+        <div className="flex items-center gap-2 border-b bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <TriangleAlertIcon className="size-3.5 shrink-0" />
+          Showing the first {MAX_TOPOLOGY_HOSTS} hosts — the map may be
+          incomplete.
+        </div>
+      )}
+      {isRebuilding && (
+        <div className="absolute inset-x-0 top-12 z-20 flex justify-center">
+          <div className="flex items-center gap-2 rounded-md border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            {/* CSS spin runs on the compositor, so it keeps turning while the
+                layout rebuild blocks the JS thread. */}
+            <Loader2Icon className="size-3.5 animate-spin" />
+            Building map…
+          </div>
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={displayNodes}
+            edges={displayEdges}
+            onNodesChange={onNodesChange}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onNodeClick={onNodeClick}
+            onEdgeClick={onEdgeClick}
+            onNodeContextMenu={onNodeContextMenu}
+            onPaneClick={clearEmphasis}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            fitView
+            minZoom={0.1}
+            // Ceiling for both manual zoom and the focus fit-to-scope below:
+            // framing a lone node would otherwise compute an enormous zoom, so
+            // fitBounds clamps to this and frames it at a sane size instead.
+            maxZoom={2}
+            proOptions={{ hideAttribution: true }}
+            nodesConnectable={false}
+            edgesFocusable={false}
+            // Virtualize: only mount nodes/edges intersecting the viewport.
+            // The users lens can carry hundreds of identity edges; rendering the
+            // off-screen ones (and, before, animating them) was dead weight.
+            // Toggled off transiently during image export (see setVirtualize).
+            onlyRenderVisibleElements={virtualize}
+            // An accidental double-click while focusing/dragging shouldn't
+            // lurch the viewport.
+            zoomOnDoubleClick={false}
+            // Clicking now selects nodes routinely (click = focus), and React
+            // Flow's default Backspace would visually delete the selection
+            // from this read-only derived view.
+            deleteKeyCode={null}
+          >
+            <TopologyEdgeDefs />
+            <Background gap={16} className="!bg-muted/20" />
+            <Controls showInteractive={false} />
+            <Legend stats={topology.stats} relation={relation} />
+            <TopologyLegend
+              relation={relation}
+              open={legendOpen}
+              onOpenChange={setLegendOpen}
+            />
+            <div className="absolute right-3 top-3 z-10 flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <TopologyExportButton
+                  relation={relation}
+                  setVirtualize={setVirtualize}
+                />
+                <RelationPicker relation={relation} onChange={setRelation} />
+              </div>
+              {relation === "identities" && (
+                <HiddenIdentitiesPanel
+                  hideWellKnown={hideWellKnown}
+                  onToggleWellKnown={setHideWellKnown}
+                  customHidden={customHidden}
+                  onUnhide={unhideIdentity}
+                />
+              )}
+            </div>
+            {/* focusFromSearch (not toggleFocus): remembers the search so Esc
+                can step back into it. onEscape shares the window-level Esc
+                authority so the outcome doesn't depend on where focus is. */}
+            <TopologySearch
+              {...search}
+              onSelect={focusFromSearch}
+              onEscape={handleEscape}
+            />
+            <FitToHighlight fitIds={fitIds} simNodeById={simNodeById} />
+          </ReactFlow>
+        </ReactFlowProvider>
+        {nodeMenu && (
+          <NodeContextMenu
+            menu={nodeMenu}
+            onHide={hideIdentity}
+            onEdit={openEditDialog}
+            onCopy={copyToClipboard}
+            onView={(m) => setAggView({ title: m.title, data: m.data })}
+            onClose={() => setNodeMenu(null)}
+          />
+        )}
+        {aggView && (
+          <AggregateViewDialog view={aggView} onClose={() => setAggView(null)} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Breathing room left around the fitted scope, as a fraction of the viewport.
+const FIT_PADDING = 0.25
+// Glide duration for the fit-to-scope camera move.
+const FIT_DURATION_MS = 500
+
+// Frame the focused scope. Whenever the highlighted focus set changes (a new
+// node/edge focus) — or the layout rebuilds under an existing focus, e.g. a
+// lens switch or data refresh lands the nodes somewhere new — pan AND zoom so
+// the bounding box of every highlighted node fits the viewport. `fitIds` is
+// the lens-agnostic highlight set, so this single path frames node+neighbors
+// for a node focus and the whole lit relation for an edge focus. The computed
+// zoom is clamped to the flow's maxZoom (see the ReactFlow prop). A null/empty
+// target leaves the viewport where the operator put it — deselect never yanks
+// the camera.
+function FitToHighlight({
+  fitIds,
+  simNodeById,
+}: {
+  fitIds: string[] | null
+  simNodeById: Map<string, SimNode>
+}) {
+  const { fitBounds } = useReactFlow()
+
+  useEffect(() => {
+    if (!fitIds || fitIds.length === 0) return
+    const bounds = highlightBounds(fitIds, simNodeById)
+    if (!bounds) return
+    fitBounds(bounds, { duration: FIT_DURATION_MS, padding: FIT_PADDING })
+  }, [fitIds, simNodeById, fitBounds])
+
+  return null
+}
+
+// Union of the on-screen rectangles of the given nodes, in flow coordinates.
+// Sim x/y are node centers; React Flow bounds want top-left + size. Nodes the
+// current lens doesn't render are absent from simNodeById and skipped; returns
+// null if none of the ids resolve to a settled position.
+function highlightBounds(
+  ids: string[],
+  simNodeById: Map<string, SimNode>,
+): Rect | null {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const id of ids) {
+    const s = simNodeById.get(id)
+    if (!s || s.x === undefined || s.y === undefined) continue
+    const left = s.x - s.width / 2
+    const top = s.y - s.height / 2
+    minX = Math.min(minX, left)
+    minY = Math.min(minY, top)
+    maxX = Math.max(maxX, left + s.width)
+    maxY = Math.max(maxY, top + s.height)
+  }
+  if (minX === Infinity) return null
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-lg border bg-card text-muted-foreground">
+      {children}
+    </div>
+  )
+}
+
+// One entry per relation the picker offers; the lens table above must have a
+// matching key (TypeScript enforces both via TopologyRelation).
+const relationOptions: {
+  value: TopologyRelation
+  label: string
+  Icon: typeof RouteIcon
+  title: string
+}[] = [
+  {
+    value: "routes",
+    label: "Routes",
+    Icon: RouteIcon,
+    title: "Build the map from routes — who pivots through whom",
+  },
+  {
+    value: "subnets",
+    label: "Subnets",
+    Icon: NetworkIcon,
+    title: "Build the map from subnet membership — who shares a segment",
+  },
+  {
+    value: "identities",
+    label: "Users",
+    Icon: UsersIcon,
+    title: "Build the map from user footprints — who logged in where, from where",
+  },
+]
+
+// Top-right selector for the relation the graph is built from. Mutually
+// exclusive by design — see the lens comments above.
+function RelationPicker({
+  relation,
+  onChange,
+}: {
+  relation: TopologyRelation
+  onChange: (relation: TopologyRelation) => void
+}) {
+  return (
+    <div className="flex overflow-hidden rounded-md border bg-card/90 shadow-sm backdrop-blur">
+      {relationOptions.map(({ value, label, Icon, title }) => (
+        <Button
+          key={value}
+          variant={relation === value ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 gap-1.5 rounded-none text-xs"
+          onClick={() => onChange(value)}
+          aria-pressed={relation === value}
+          title={title}
+        >
+          <Icon className="size-3.5" />
+          {label}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
+// Compact key + counts, top-left over the canvas. Counts double as a summary
+// of what the operator has (and hasn't) mapped. Only rows that exist in the
+// current lens are shown — pivot/phantom counts are meaningless on the
+// subnets lens and vice versa.
+function Legend({
+  stats,
+  relation,
+}: {
+  stats: TopologyStats
+  relation: TopologyRelation
+}) {
+  return (
+    <div className="absolute left-3 top-3 z-10 flex flex-col gap-1 rounded-md border bg-card/90 px-3 py-2 text-[11px] shadow-sm backdrop-blur">
+      {relation === "subnets" ? (
+        <span className="font-medium">
+          {stats.hosts} hosts · {stats.subnets} subnets
+        </span>
+      ) : relation === "identities" ? (
+        <>
+          <span className="font-medium">
+            {stats.hosts} hosts · {stats.identities} identit
+            {stats.identities === 1 ? "y" : "ies"}
+          </span>
+          <LegendRow color="bg-primary" label="logged into" />
+          <LegendRow color="bg-muted-foreground/50" label="logged in from" />
+          {stats.phantomHosts > 0 && (
+            <LegendRow
+              color="bg-muted-foreground/50"
+              label={`${stats.phantomHosts} unknown source${stats.phantomHosts === 1 ? "" : "s"}`}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <span className="font-medium">{stats.hosts} hosts</span>
+          <LegendRow color="bg-primary" label={`${stats.pivots} pivots`} />
+          {stats.phantomGateways > 0 && (
+            <LegendRow
+              color="bg-amber-500"
+              label={`${stats.phantomGateways} unknown gateway${stats.phantomGateways === 1 ? "" : "s"}`}
+            />
+          )}
+          {stats.phantomSubnets > 0 && (
+            <LegendRow
+              color="bg-sky-500"
+              label={`${stats.phantomSubnets} unexplored subnet${stats.phantomSubnets === 1 ? "" : "s"}`}
+            />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function LegendRow({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-muted-foreground">
+      <span className={`size-2 rounded-full ${color}`} />
+      {label}
+    </span>
+  )
+}

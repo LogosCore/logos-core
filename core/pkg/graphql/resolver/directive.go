@@ -1,0 +1,82 @@
+// directive.go — Implements the @hasPermission GraphQL directive.
+//
+// In GraphQL, a "directive" is a decorator you attach to schema fields to add
+// cross-cutting behavior. Think of it like middleware, but for individual
+// GraphQL fields instead of HTTP routes.
+//
+// In our schema, we write:
+//
+//	type Query {
+//	    users(...): UserConnection! @hasPermission(permission: "user:read")
+//	}
+//
+// gqlgen sees this and generates code that calls our HasPermission function
+// BEFORE the actual resolver runs. If we return an error, the resolver is
+// never called and the client gets a "forbidden" error.
+//
+// This is much cleaner than checking permissions inside every resolver —
+// you can see the required permission right in the schema file.
+
+package resolver
+
+import (
+	"context"
+
+	"github.com/99designs/gqlgen/graphql"
+	"github.com/logoscore/logos-core/core/pkg/auth/permissions"
+	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
+	"github.com/logoscore/logos-core/core/pkg/logger"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"go.uber.org/zap"
+)
+
+// newForbiddenError returns the error surfaced to clients whenever
+// @hasPermission fails. The message is intentionally generic — we must not
+// leak the specific permission name, since that would reveal internal RBAC
+// structure to any authenticated caller probing the API. The specific
+// permission is logged server-side.
+//
+// We attach extensions.code = "FORBIDDEN" so the frontend GraphQL client can
+// classify this as a hard failure (and throw) rather than treating it as a
+// partial-data warning.
+func newForbiddenError(ctx context.Context) error {
+	return &gqlerror.Error{
+		Message: "forbidden",
+		Path:    graphql.GetPath(ctx),
+		Extensions: map[string]interface{}{
+			"code": "FORBIDDEN",
+		},
+	}
+}
+
+// HasPermission is the directive handler for @hasPermission.
+//
+// Parameters:
+//   - ctx:        the request context (contains AuthInfo from the JWT)
+//   - obj:        the parent object being resolved (unused for our top-level directives)
+//   - next:       the actual resolver function — we call this if the check passes
+//   - permission: the required permission string from the schema (e.g. "user:read")
+//
+// Returns:
+//   - The resolver's result if permission is granted
+//   - An error if the user lacks the required permission
+func HasPermission(ctx context.Context, obj interface{}, next graphql.Resolver, permission string) (interface{}, error) {
+	// Extract the authenticated user's info from the context.
+	// This was placed there by the GraphQL handler (see handler.go).
+	auth := gqlctx.AuthFromContext(ctx)
+
+	// Check if any of the user's roles grant the required permission.
+	// For example, the "admin" role has "user:read", but the "user" role does not.
+	// The AdminPermission ("admin") acts as a wildcard — it grants everything.
+	if !permissions.HasPermissionForRoles(auth.Roles, permission) {
+		logger.From(ctx).Warn("graphql permission denied",
+			zap.String("user_id", auth.UserID),
+			zap.Strings("roles", auth.Roles),
+			zap.String("permission", permission),
+		)
+		return nil, newForbiddenError(ctx)
+	}
+
+	// Permission granted — call the actual resolver and return its result.
+	return next(ctx)
+}

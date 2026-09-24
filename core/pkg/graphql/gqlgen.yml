@@ -1,0 +1,515 @@
+# =============================================================================
+# gqlgen Configuration
+# =============================================================================
+#
+# This file tells gqlgen how to generate Go code from the GraphQL schema.
+# When you run `go generate`, gqlgen reads this config to know:
+#   - Where the .graphql schema files are
+#   - Where to output the generated Go code
+#   - How to map GraphQL types to existing Go structs
+#
+# After changing the schema, run:  go generate ./pkg/graphql/...
+# =============================================================================
+
+# Where to find the GraphQL SDL schema files.
+# You can split your schema across multiple files if it gets large.
+schema:
+  - schema/*.graphql
+
+# The generated "executable schema" — this is the core runtime that gqlgen
+# produces. You never edit this file; it's regenerated every time.
+exec:
+  filename: generated/generated.go
+  package: generated
+
+# Where gqlgen puts generated Go types for GraphQL inputs and types
+# that aren't mapped to existing structs. For example, CreateUserInput
+# will be generated here because we don't have a Go struct for it yet.
+model:
+  filename: model/models_gen.go
+  package: model
+
+# The resolver skeleton. gqlgen generates a resolver interface and
+# (on first run) stub implementations that you fill in with real logic.
+resolver:
+  layout: follow-schema          # One resolver file per schema file
+  dir: resolver                  # Directory for resolver files
+  package: resolver
+  filename_template: "{name}.resolvers.go"
+
+# Model mappings — this is the key part!
+# Here we tell gqlgen: "Don't generate a new User struct. Instead, use
+# our existing models.User from the codebase." This avoids duplication
+# and lets resolvers work directly with our domain model.
+models:
+  # Map PageInfo to our shared pagination package struct so gqlgen
+  # uses it directly instead of generating a new type.
+  PageInfo:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/pagination.PageInfo
+
+  # Map GraphQL ID scalar to Go string (default is usually fine, but
+  # being explicit helps avoid confusion).
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+
+  # Map the GraphQL "User" type to our existing User model.
+  # Because some fields don't match exactly (e.g., UserID vs id,
+  # DefaultField timestamps vs createdAt/updatedAt), we'll use
+  # custom field resolvers to bridge the gap.
+  User:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.User
+    fields:
+      # These fields need custom resolvers because the Go struct field
+      # names/types don't match the GraphQL field names directly.
+      id:
+        resolver: true         # UserID (uuid.UUID) -> ID (string)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+      authSource:
+        resolver: true         # "" (legacy rows) -> "local"
+      skillDownloadedVersion:
+        resolver: true         # *SkillDownload -> nullable Int
+      skillDownloadedAt:
+        resolver: true         # *SkillDownload -> nullable ISO 8601 string
+      skillUpdateSnoozedVersion:
+        resolver: true         # 0 -> null
+
+  # Map the GraphQL "OperationRole" enum to our existing OperationRole type.
+  # The Go type implements MarshalGQL/UnmarshalGQL for case conversion.
+  OperationRole:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.OperationRole
+
+  # Map the GraphQL "OperationMember" type to our existing OperationMember model.
+  # The "user" field needs a resolver because the Go struct stores a UserID (UUID)
+  # but GraphQL expects a full User object (requires a DB lookup).
+  OperationMember:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.OperationMember
+    fields:
+      user:
+        resolver: true         # UserID (uuid.UUID) -> User (fetched from DB)
+
+  # Map the GraphQL "Operation" type to our existing Operation model.
+  # Same pattern as User — fields that don't map directly get custom resolvers.
+  Operation:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Operation
+    fields:
+      id:
+        resolver: true         # OperationID (uuid.UUID) -> ID (string)
+      members:
+        resolver: true         # []OperationMember -> [OperationMember!]! (resolve User for each)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # Map the GraphQL "Session" type to our existing Session model.
+  # `status` and `lastActivityAt` are decorated from Redis at query time;
+  # `isCurrent` is computed from the request context. Everything else is
+  # a field on the underlying Mongo row.
+  Session:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Session
+    fields:
+      id:
+        resolver: true         # SessionID (uuid.UUID) -> ID (string)
+      userId:
+        resolver: true         # UserID (uuid.UUID) -> ID (string)
+      user:
+        resolver: true         # UserID (uuid.UUID) -> User (fetched from DB)
+      status:
+        resolver: true         # Decorated from Redis presence
+      lastActivityAt:
+        resolver: true         # Decorated from Redis value, nullable
+      isCurrent:
+        resolver: true         # Computed field — not stored in model
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # SessionStatus is a derived enum (ACTIVE/INACTIVE), still mapped to a
+  # Go type for marshalling to GraphQL.
+  SessionStatus:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.SessionStatus
+
+  # Map the GraphQL "WikiDocument" type to our existing WikiDocument model.
+  # Field resolvers bridge UUID->string, timestamp->RFC3339, and relation lookups.
+  WikiDocument:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.WikiDocument
+    fields:
+      id:
+        resolver: true
+      operationId:
+        resolver: true
+      parentDocument:
+        resolver: true
+      parentDocumentId:
+        resolver: true
+      hasContent:
+        resolver: true
+      excerpt:
+        resolver: true
+      sourceTemplateId:
+        resolver: true
+      childDocuments:
+        resolver: true
+      childCount:
+        resolver: true
+      createdBy:
+        resolver: true
+      deletedBy:
+        resolver: true
+      lastBackupAt:
+        resolver: true
+      deletedAt:
+        resolver: true
+      createdAt:
+        resolver: true
+      updatedAt:
+        resolver: true
+
+  # Map the GraphQL "WikiDocumentBackup" type to our existing model.
+  WikiDocumentBackup:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.WikiDocumentBackup
+    fields:
+      id:
+        resolver: true
+      documentId:
+        resolver: true
+      contentLength:
+        resolver: true
+      createdBy:
+        resolver: true
+      createdAt:
+        resolver: true
+
+  # Map the backup trigger enum to our existing Go type.
+  WikiDocumentBackupTrigger:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.WikiDocumentBackupTrigger
+
+  # Map the page-kind enum to our existing Go type. Its zero value marshals as
+  # DOCUMENT, which is what satisfies the non-null schema field for every row
+  # written before the field existed.
+  WikiDocumentKind:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.WikiDocumentKind
+
+  # Map the GraphQL "WikiDocumentVisit" type to our existing model. The
+  # `document` field is a relation lookup — we store DocumentID and resolve
+  # the live WikiDocument at query time so renamed/moved docs render with
+  # current metadata.
+  WikiDocumentVisit:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.WikiDocumentVisit
+    fields:
+      id:
+        resolver: true   # ObjectID -> ID (string)
+      document:
+        resolver: true   # DocumentID (uuid.UUID) -> WikiDocument (fetched from DB)
+      visitedAt:
+        resolver: true   # time.Time -> RFC3339 string
+
+  # Map the GraphQL "CredentialType" enum to our existing Go type.
+  CredentialType:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.CredentialType
+
+  # Map the GraphQL "CredentialValidity" enum to our existing Go type.
+  CredentialValidity:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.CredentialValidity
+
+  # Map the GraphQL "Credential" type to our existing Go model.
+  # Field resolvers bridge UUID->string, timestamp->RFC3339, and the
+  # createdBy lookup that fetches the User by CreatedByID.
+  Credential:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Credential
+    fields:
+      id:
+        resolver: true         # CredentialID (uuid.UUID) -> ID (string)
+      operationId:
+        resolver: true         # OperationID (uuid.UUID) -> ID (string)
+      operation:
+        resolver: true         # OperationID (uuid.UUID) -> Operation (fetched from DB)
+      comments:
+        resolver: true         # []CredentialComment -> []*CredentialComment
+      viewerCanModerateComments:
+        resolver: true         # caller-role check (app admin or operation admin)
+      createdBy:
+        resolver: true         # CreatedByID (uuid.UUID) -> User (fetched from DB)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # Map the GraphQL "CredentialKey" type to our existing Go model. The struct
+  # fields line up with the GraphQL field names, so no field resolvers needed.
+  CredentialKey:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.CredentialKey
+
+  # Map the GraphQL "CredentialProperty" type to our existing Go model. Field
+  # names line up (Name, Value) so no field resolvers needed.
+  CredentialProperty:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.CredentialProperty
+
+  # Map the GraphQL "CredentialComment" type to our existing model.
+  CredentialComment:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.CredentialComment
+    fields:
+      id:
+        resolver: true         # CommentID (uuid.UUID) -> ID (string)
+      author:
+        resolver: true         # AuthorID (uuid.UUID) -> User (fetched from DB)
+      createdAt:
+        resolver: true         # time.Time -> RFC3339 string
+      updatedAt:
+        resolver: true         # time.Time -> RFC3339 string
+
+  # --- Hashes ---
+
+  HashStatus:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.HashStatus
+
+  Hash:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Hash
+    fields:
+      id:
+        resolver: true         # HashID (uuid.UUID) -> ID (string)
+      operationId:
+        resolver: true         # OperationID (uuid.UUID) -> ID (string)
+      operation:
+        resolver: true         # OperationID -> Operation (fetched from DB)
+      credentialId:
+        resolver: true         # *uuid.UUID -> *string (nullable)
+      credential:
+        resolver: true         # CredentialID -> Credential (fetched from DB, nullable)
+      createdBy:
+        resolver: true         # CreatedByID -> User
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # --- Hosts ---
+
+  # Map the GraphQL "Host" type to our existing Go model. Field resolvers
+  # bridge UUID->string, timestamp->RFC3339, and the createdBy/operation
+  # lookups. interfaces/routes autobind — their struct field names line up
+  # with the GraphQL types (NetworkInterface, Route) so no resolver needed.
+  Host:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Host
+    fields:
+      id:
+        resolver: true         # HostID (uuid.UUID) -> ID (string)
+      operationId:
+        resolver: true         # OperationID (uuid.UUID) -> ID (string)
+      operation:
+        resolver: true         # OperationID -> Operation (fetched from DB)
+      createdBy:
+        resolver: true         # CreatedByID -> User (fetched from DB, nullable)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # Map the GraphQL "NetworkInterface" type to our existing models.Interface.
+  # Field names line up (Name, Mac, Addresses) so no field resolvers needed.
+  NetworkInterface:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Interface
+
+  # Map the GraphQL "Route" type to our existing models.Route. Field names
+  # line up (Destination, Gateway, Interface) so no field resolvers needed.
+  Route:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Route
+
+  # Map the GraphQL "Login" type to our existing models.Login. Field names line
+  # up (User, From, Tty, LastSeen, Count) so no field resolvers needed.
+  Login:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Login
+
+  # --- Tasks ---
+
+  # TaskStage / TaskStatus are mapped to the Go enum types so gqlgen marshals
+  # them directly without an intermediate string conversion. The Go side has
+  # IsValid() / IsTerminal() for boundary validation.
+  TaskStage:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.TaskStage
+  TaskStatus:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.TaskStatus
+
+  # Map the GraphQL "Task" type to our existing model. Field resolvers bridge
+  # UUID→string for ids, *time.Time→*string for nullable timestamps, and the
+  # relation lookups (assignees, wikiReferences, credentialReferences,
+  # createdBy, lastUpdatedBy, operation).
+  Task:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Task
+    fields:
+      id:
+        resolver: true         # TaskID (uuid.UUID) -> ID (string)
+      operationId:
+        resolver: true         # OperationID (uuid.UUID) -> ID (string)
+      operation:
+        resolver: true         # OperationID -> Operation (fetched from DB)
+      riskScore:
+        resolver: true         # uint8 -> Int
+      profitScore:
+        resolver: true         # uint8 -> Int
+      assignees:
+        resolver: true         # []uuid.UUID -> []User (fetched from DB)
+      wikiReferences:
+        resolver: true         # []uuid.UUID -> []WikiDocument (fetched from DB)
+      credentialReferences:
+        resolver: true         # []uuid.UUID -> []Credential (fetched from DB)
+      createdBy:
+        resolver: true         # CreatedByID (uuid.UUID) -> User
+      lastUpdatedBy:
+        resolver: true         # LastUpdatedByID (*uuid.UUID) -> User (nullable)
+      lastUpdatedAt:
+        resolver: true         # *time.Time -> *string (RFC3339 or null)
+      deletedAt:
+        resolver: true         # *time.Time -> *string (RFC3339 or null)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # --- API Keys ---
+
+  # Map the GraphQL "APIKey" type to our existing model. Field resolvers
+  # bridge UUID->string (the Mongo row's _id), timestamp->RFC3339, and
+  # *time.Time -> *string for the nullable lastUsedAt.
+  APIKey:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.APIKey
+    fields:
+      id:
+        resolver: true         # qmgo ObjectID -> ID (string)
+      lastUsedAt:
+        resolver: true         # *time.Time -> *string (RFC3339 or null)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # --- Agent Keys ---
+
+  # Map "AgentKey" to models.AgentKey. Same bridging as APIKey, plus
+  # operationScopes, which resolves []uuid.UUID into full Operation objects so
+  # the settings UI can render names rather than ids.
+  AgentKey:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.AgentKey
+    fields:
+      id:
+        resolver: true         # AgentKeyID (uuid.UUID) -> ID (string)
+      operationScopes:
+        resolver: true         # []uuid.UUID -> [Operation!]!
+      lastUsedAt:
+        resolver: true         # *time.Time -> *string (RFC3339 or null)
+      createdAt:
+        resolver: true         # field.DefaultField.CreateAt -> string
+      updatedAt:
+        resolver: true         # field.DefaultField.UpdateAt -> string
+
+  # --- Agent Actions ---
+
+  AgentAction:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.AgentAction
+    fields:
+      id:
+        resolver: true         # ActionID (uuid.UUID) -> ID
+      operationId:
+        resolver: true         # *uuid.UUID -> *ID
+      agentKeyId:
+        resolver: true         # uuid.UUID -> ID
+      operation:
+        resolver: true         # OperationID -> Operation (fetched, for a cross-operation feed)
+      outcome:
+        resolver: true         # models enum -> GraphQL enum
+      error:
+        resolver: true         # "" -> null
+      durationMs:
+        resolver: true         # int64 -> Int
+      occurredAt:
+        resolver: true         # time.Time -> RFC3339
+
+  # --- Modules ---
+
+  # Map the GraphQL "Module" type to our existing registry model. Most fields
+  # autobind (instance, type, version, status, lastStatus, deregisterReason);
+  # only the timestamps need resolvers (time.Time -> RFC3339, *time.Time ->
+  # nullable RFC3339). ModuleEvent is generated (no model mapping).
+  Module:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.Module
+    fields:
+      registeredAt:
+        resolver: true         # time.Time -> String
+      lastHeartbeatAt:
+        resolver: true         # *time.Time -> *String (nullable)
+      deregisteredAt:
+        resolver: true         # *time.Time -> *String (nullable)
+      declaredDeadAt:
+        resolver: true         # *time.Time -> *String (nullable)
+
+  # --- Timeline ---
+
+  # TimelineGranularity is mapped to the repository's TimelineGranularity
+  # so the resolver can pass the query argument straight through to Mongo
+  # without re-encoding it as a string. The Go side has IsValid().
+  TimelineGranularity:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/repository.TimelineGranularity
+
+  # Map the GraphQL "TimelineEvent" type to our persisted OperationEvent
+  # model. Most fields need resolvers because UUIDs need to be stringified,
+  # the actor is fetched from the user repo, and metadata is JSON-encoded
+  # on demand (no dedicated JSON scalar yet).
+  TimelineEvent:
+    model:
+      - github.com/logoscore/logos-core/core/pkg/models.OperationEvent
+    fields:
+      id:
+        resolver: true         # EventID (uuid.UUID) -> ID (string)
+      operationId:
+        resolver: true         # OperationID (uuid.UUID) -> ID (string)
+      subjectId:
+        resolver: true         # SubjectID (uuid.UUID) -> ID (string)
+      subjectKind:
+        resolver: true         # SubjectKind (typed) -> string
+      actor:
+        resolver: true         # ActorID (*uuid.UUID) -> User (fetched from DB)
+      actorKind:
+        resolver: true         # EventActorType -> String
+      actorLabel:
+        resolver: true         # username / agent name -> display string
+      occurredAt:
+        resolver: true         # time.Time -> RFC3339 string
+      metadata:
+        resolver: true         # map[string]any -> JSON-encoded string

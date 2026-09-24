@@ -1,0 +1,6 @@
+[submodule "docs/logos-docs"]
+	path = docs/logos-docs
+	url = https://github.com/logoscore/logos-docs
+[submodule "logos-golang-protocol"]
+	path = logos-golang-protocol
+	url = https://github.com/logoscore/logos-golang-protocol

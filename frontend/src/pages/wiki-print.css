@@ -1,0 +1,180 @@
+/* Print page styles.
+ *
+ * Scoped to the dedicated /wiki/<id>/print route. The browser renders the
+ * page first (so the user sees a preview), then opens its native print
+ * dialog. Both views need to look like a clean printable document — the
+ * @media print block below tightens it further for the actual paper /
+ * "Save as PDF" output.
+ *
+ * Strategy:
+ *   - The light theme is forced for this whole route in wiki-print.tsx (it
+ *     drops the `.dark` class), so both the preview and the PDF render the
+ *     app's light palette — no theme overrides are needed here.
+ *   - The on-screen wrapper (.wiki-print-shell) gives the document a clean
+ *     full-width layout; @media print handles only print-specific concerns:
+ *     page geometry, preserving fills (print-color-adjust), dropping residual
+ *     editor chrome, and page-break hints so code blocks / tables / images
+ *     don't get guillotined mid-element.
+ */
+
+.wiki-print-shell {
+  background: var(--background);
+  min-height: 100vh;
+  width: 100%;
+}
+
+.wiki-print-article {
+  width: 100%;
+  /* No on-screen width clamp: the preview tab uses the full browser width.
+   * The printed/PDF output is governed separately by the @page margins in
+   * the @media print block below, so widening the preview here does not
+   * change the exported page. */
+  max-width: none;
+  padding: 32px 40px 64px;
+  box-sizing: border-box;
+}
+
+.wiki-print-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.wiki-print-icon {
+  flex-shrink: 0;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.wiki-print-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--foreground);
+}
+
+/* The embedded WikiEditor expects to live inside a flex column with a fixed
+ * scroll height. On the print page we want the editor to grow with its
+ * content instead, so the whole document is laid out as one tall block —
+ * that's what the browser then paginates into pages.
+ */
+.wiki-print-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.wiki-print-body > div {
+  min-height: 0;
+}
+
+.wiki-print-body .flex-1.overflow-y-auto {
+  overflow: visible !important;
+  flex: initial !important;
+}
+
+@media print {
+  /* Reset page geometry — let the browser's print dialog control margins. */
+  @page {
+    margin: 16mm;
+  }
+
+  /* Paper is always white, independent of the (already light) document
+   * palette — guards against any inherited surface bleeding to the edges. */
+  html,
+  body {
+    background: white !important;
+  }
+
+  /* Preserve background colors and borders in the PDF. Browsers drop all
+   * background fills (and box-shadows) when printing unless an element opts
+   * in with print-color-adjust: exact. Without this, backgrounded blocks —
+   * file-attachment cards, their icon chips, code blocks, notice blocks —
+   * lose their fill and render as bare text. The light theme is already
+   * forced in wiki-print.tsx, so what prints is the light palette. Scope it
+   * to the print surface so we only force-print the document's own colors. */
+  .wiki-print-shell,
+  .wiki-print-shell * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* The on-screen wrapper pads the document for the preview; the @page
+   * margins own the whitespace on paper, so drop the padding here. */
+  .wiki-print-article {
+    padding: 0;
+  }
+
+  /* Hide anything that's clearly editor chrome: floating bubble menus,
+   * table menus, popovers, the slash-command menu, toast notifications,
+   * collab cursors, the floating TOC. isEditor={false} suppresses most of
+   * these already; @media print is the belt-and-suspenders layer for
+   * anything that escapes (third-party libs, future additions). */
+  [data-tippy-root],
+  .ProseMirror-yjs-cursor,
+  .collaboration-cursor__caret,
+  [data-sonner-toaster],
+  .wiki-image-actions,
+  .wiki-hr-toolbar,
+  .wiki-code-block__language-picker {
+    display: none !important;
+  }
+
+  /* Collapsed code blocks print in full. The preview height and its fade are
+   * a screen reading affordance, not a content boundary — printing only the
+   * first N lines of a long block would silently drop the rest of the page. */
+  .wiki-code-block[data-collapsed="true"] .wiki-code-block__body {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .wiki-code-block[data-collapsed="true"]::after {
+    display: none !important;
+  }
+
+  /* Page-break hints. The defaults split mid-block too aggressively — the
+   * rules below keep code blocks, tables, images, and figures together
+   * when possible, and prevent orphaned headings at the bottom of a page. */
+  pre,
+  .wiki-code-block,
+  table,
+  .wiki-image-wrapper,
+  .wiki-file-wrapper,
+  blockquote,
+  .wiki-notice {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* Make sure long URLs / code lines wrap so they don't get clipped. */
+  pre,
+  code,
+  .wiki-code-block {
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  /* Tables: fix layout so they don't try to overflow the printable area. */
+  table {
+    table-layout: fixed;
+    width: 100%;
+    word-break: break-word;
+  }
+
+  /* Images: clamp to the printable area so they don't bleed off the page. */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}

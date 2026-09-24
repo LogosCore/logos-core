@@ -1,0 +1,866 @@
+basePath: /api/v1
+definitions:
+  controller.ExportRequest:
+    properties:
+      format:
+        description: Format is "bundle" (default) or "markdown".
+        type: string
+      operationId:
+        type: string
+      rootId:
+        description: RootId scopes the export to one page and its descendants.
+        type: string
+    required:
+    - operationId
+    type: object
+  controller.JobResponse:
+    properties:
+      artifactName:
+        description: ArtifactName is the filename offered on download.
+        type: string
+      artifactSize:
+        type: integer
+      createAt:
+        type: string
+      error:
+        description: Error is the request-level failure message when Status is failed.
+        type: string
+      expiresAt:
+        type: string
+      finishedAt:
+        type: string
+      format:
+        $ref: '#/definitions/models.WikiTransferFormat'
+      id:
+        type: string
+      jobId:
+        type: string
+      kind:
+        $ref: '#/definitions/models.WikiTransferKind'
+      operationId:
+        type: string
+      progress:
+        $ref: '#/definitions/models.WikiTransferProgress'
+      report:
+        items:
+          type: integer
+        type: array
+      request:
+        $ref: '#/definitions/models.WikiTransferRequest'
+      requestedById:
+        type: string
+      startedAt:
+        type: string
+      status:
+        $ref: '#/definitions/models.WikiTransferStatus'
+      updateAt:
+        type: string
+    type: object
+  controller.WikiFileUploadResponse:
+    properties:
+      contentType:
+        type: string
+      filename:
+        type: string
+      id:
+        type: string
+      size:
+        type: integer
+      url:
+        type: string
+    type: object
+  controller.WikiImageUploadResponse:
+    properties:
+      height:
+        type: integer
+      id:
+        type: string
+      url:
+        type: string
+      width:
+        type: integer
+    type: object
+  controller.collabTicketRequest:
+    properties:
+      documentId:
+        type: string
+      schemaVersion:
+        description: |-
+          SchemaVersion is the editor schema version compiled into the requesting
+          client. Absent (legacy/old clients that predate this field) decodes to 0.
+          Compared against the document's ContentStateSchemaVersion to block clients
+          too old to safely render — and thus edit — the stored content.
+        type: integer
+    required:
+    - documentId
+    type: object
+  models.WikiTransferFormat:
+    enum:
+    - bundle
+    - markdown
+    type: string
+    x-enum-varnames:
+    - WikiTransferBundle
+    - WikiTransferMarkdown
+  models.WikiTransferKind:
+    enum:
+    - export
+    - import
+    type: string
+    x-enum-varnames:
+    - WikiTransferExport
+    - WikiTransferImport
+  models.WikiTransferProgress:
+    properties:
+      done:
+        type: integer
+      total:
+        type: integer
+    type: object
+  models.WikiTransferRequest:
+    properties:
+      holdingPen:
+        description: |-
+          HoldingPen lands an import in import/<timestamp>/ instead of
+          TargetParentID.
+        type: boolean
+      includeCredentials:
+        description: IncludeCredentials embeds credential payloads in an export.
+        type: boolean
+      rootDocumentId:
+        description: RootDocumentID scopes an export to a subtree; nil exports the
+          tree.
+        type: string
+      targetParentId:
+        description: TargetParentID places an import under a page; nil means the root.
+        type: string
+      uploadFilename:
+        description: UploadFilename is the name of the uploaded archive, for display.
+        type: string
+    type: object
+  models.WikiTransferStatus:
+    enum:
+    - queued
+    - running
+    - done
+    - failed
+    type: string
+    x-enum-varnames:
+    - WikiTransferQueued
+    - WikiTransferRunning
+    - WikiTransferDone
+    - WikiTransferFailed
+  protocol.InboundMinionMessage:
+    properties:
+      encrypted_data:
+        type: string
+      id:
+        type: string
+      message_id:
+        type: string
+      meta:
+        $ref: '#/definitions/protocol.MessageMeta'
+      source:
+        $ref: '#/definitions/protocol.SourceInfo'
+      timestamp:
+        type: string
+      type:
+        type: string
+      version:
+        type: string
+    type: object
+  protocol.MessageMeta:
+    additionalProperties: {}
+    type: object
+  protocol.OutboundMinionMessage:
+    properties:
+      encrypted_data:
+        type: string
+      id:
+        type: string
+      message_id:
+        type: string
+      meta:
+        $ref: '#/definitions/protocol.MessageMeta'
+      timestamp:
+        type: string
+      type:
+        type: string
+      version:
+        type: string
+    type: object
+  protocol.SourceInfo:
+    properties:
+      module:
+        type: string
+      module_instance:
+        type: string
+      tenant:
+        type: string
+      transport:
+        type: string
+    type: object
+  requests.EnrollRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  requests.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  responses.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  responses.OIDCStatus:
+    properties:
+      display_name:
+        type: string
+      enabled:
+        type: boolean
+      login_url:
+        description: LoginURL is the API-relative path that starts the flow.
+        type: string
+      unavailable_reason:
+        description: |-
+          UnavailableReason is set when OIDC is configured but the provider
+          could not be discovered; the SPA shows the button disabled.
+        type: string
+    type: object
+  responses.SessionResponse:
+    properties:
+      permissions:
+        items:
+          type: string
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
+      user_id:
+        type: string
+      username:
+        type: string
+    type: object
+  responses.StatusResponse:
+    properties:
+      enrolled:
+        type: boolean
+      local_login_enabled:
+        description: |-
+          LocalLoginEnabled is false when the deployment is SSO-only; the SPA
+          then hides the password form.
+        type: boolean
+      oidc:
+        allOf:
+        - $ref: '#/definitions/responses.OIDCStatus'
+        description: OIDC describes the single sign-on option, if any.
+    type: object
+  responses.SuccessResponse:
+    properties:
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Command-and-control core backend API.
+  title: Logos Core API
+  version: "1.0"
+paths:
+  /auth/oidc/callback:
+    get:
+      description: Provider redirect target. On success sets the usual auth cookies
+        and redirects into the SPA; on failure redirects to the SPA login page with
+        ?error=<code>.
+      parameters:
+      - description: Authorization code
+        in: query
+        name: code
+        type: string
+      - description: State echoed by the provider
+        in: query
+        name: state
+        type: string
+      - description: Provider-side error
+        in: query
+        name: error
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: Single sign-on callback
+      tags:
+      - Auth
+  /auth/oidc/login:
+    get:
+      description: Seals a handshake (state, nonce, PKCE verifier) into a short-lived
+        httpOnly cookie and redirects the browser to the OpenID provider. Optional
+        return_to is a SPA-relative path to land on afterwards.
+      parameters:
+      - description: SPA-relative path to return to after login
+        in: query
+        name: return_to
+        type: string
+      responses:
+        "302":
+          description: Found
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Start single sign-on
+      tags:
+      - Auth
+  /channel/sync:
+    post:
+      consumes:
+      - application/json
+      description: Accepts an inbound.minion_message from a channel module and returns
+        an outbound.minion_message. Payloads are opaque encrypted blobs; core currently
+        returns a no-op outbound payload.
+      parameters:
+      - description: Inbound minion message
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/protocol.InboundMinionMessage'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/protocol.OutboundMinionMessage'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: instance is not a registered module
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "503":
+          description: module registry unavailable
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Channel sync (data plane)
+      tags:
+      - Channels
+  /enroll:
+    post:
+      consumes:
+      - application/json
+      description: Create the initial admin account. Only works when no users exist
+        (cold startup).
+      parameters:
+      - description: Admin credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.EnrollRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Enroll first admin
+      tags:
+      - Enrollment
+  /graphql:
+    get:
+      description: Serves the Altair GraphQL Client UI for interactive query testing.
+        Development only.
+      produces:
+      - text/html
+      responses: {}
+      summary: GraphQL Playground (Altair)
+      tags:
+      - GraphQL
+    post:
+      consumes:
+      - application/json
+      description: Execute GraphQL queries and mutations. Authentication via httpOnly
+        cookies; state-changing operations require an X-CSRF-Token header matching
+        the csrf_token cookie.
+      produces:
+      - application/json
+      responses: {}
+      summary: GraphQL endpoint
+      tags:
+      - GraphQL
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate with username and password. Tokens are set as httpOnly
+        cookies; CSRF token in a non-httpOnly cookie.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/requests.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Login
+      tags:
+      - Auth
+  /login/me:
+    get:
+      description: Return the authenticated user's info.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.SessionResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Current user
+      tags:
+      - Auth
+  /login/refresh:
+    post:
+      description: Rotate the refresh token. Reads tokens from httpOnly cookies. Requires
+        X-CSRF-Token header matching the csrf_token cookie.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.SessionResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Refresh tokens
+      tags:
+      - Auth
+  /logout:
+    post:
+      description: Terminate the current session and clear auth cookies. Requires
+        X-CSRF-Token header.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.SuccessResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Logout
+      tags:
+      - Auth
+  /status:
+    get:
+      description: Returns system state including whether initial enrollment has been
+        completed.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/responses.StatusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: System status
+      tags:
+      - Status
+  /wiki/collab-ticket:
+    post:
+      consumes:
+      - application/json
+      description: Issue a short-lived JWT for Hocuspocus WebSocket authentication
+      parameters:
+      - description: Document to collaborate on
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controller.collabTicketRequest'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Get collaboration ticket
+      tags:
+      - Wiki
+  /wiki/files:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a non-image file to be attached to a wiki document. The
+        original filename is preserved for downloads; bytes are stored as-is.
+      parameters:
+      - description: Owning document ID (UUID)
+        in: formData
+        name: documentId
+        required: true
+        type: string
+      - description: File bytes (max 50MB by default)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.WikiFileUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a wiki file attachment
+      tags:
+      - Wiki
+  /wiki/files/{id}:
+    get:
+      description: Streams the file bytes. Caller must be a member of the file's operation.
+        Pass ?preview=1 for inline rendering of safe formats (PDF, text, raster images).
+      parameters:
+      - description: File ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: If true, serve inline for safe MIME types
+        in: query
+        name: preview
+        type: boolean
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Fetch a wiki file attachment
+      tags:
+      - Wiki
+  /wiki/images:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an image to be embedded in a wiki document. Images are validated,
+        sanitized (SVG) or re-encoded (raster, strips EXIF), and optionally downscaled.
+      parameters:
+      - description: Owning document ID (UUID)
+        in: formData
+        name: documentId
+        required: true
+        type: string
+      - description: Image bytes (png/jpeg/webp/gif/avif/svg, max 10MB)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.WikiImageUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a wiki image
+      tags:
+      - Wiki
+  /wiki/images/{id}:
+    get:
+      description: Streams the image bytes for an uploaded wiki image. Caller must
+        be a member of the image's operation.
+      parameters:
+      - description: Image ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - image/*
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Fetch a wiki image
+      tags:
+      - Wiki
+  /wiki/transfer/exports:
+    post:
+      consumes:
+      - application/json
+      description: Queues an export of the operation's wiki (or one subtree) as a
+        native bundle or a markdown zip. Poll the returned job and download the archive
+        when it is done. Viewer+ on the operation; credentials are embedded only when
+        the caller is operator+.
+      parameters:
+      - description: Export request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/controller.ExportRequest'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/controller.JobResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Start a wiki export job
+      tags:
+      - Wiki
+  /wiki/transfer/imports:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Accepts a native bundle (.logoswiki.zip) or a markdown zip. The
+        format is detected from the archive. Pages land under `targetParentId`, at
+        the root when it is absent, or in import/<timestamp>/ when `holdingPen=true`.
+        Operator+ on the operation.
+      parameters:
+      - description: Target operation ID (UUID)
+        in: query
+        name: operationId
+        required: true
+        type: string
+      - description: Page to import under (UUID). Omit for the root.
+        in: query
+        name: targetParentId
+        type: string
+      - description: Land in import/<timestamp>/ instead of targetParentId
+        in: query
+        name: holdingPen
+        type: boolean
+      - description: Archive
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/controller.JobResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload an archive and start a wiki import job
+      tags:
+      - Wiki
+  /wiki/transfer/jobs:
+    get:
+      parameters:
+      - description: Operation ID (UUID)
+        in: query
+        name: operationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/controller.JobResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List an operation's wiki transfer jobs
+      tags:
+      - Wiki
+  /wiki/transfer/jobs/{id}:
+    get:
+      parameters:
+      - description: Job ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.JobResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Fetch one wiki transfer job
+      tags:
+      - Wiki
+  /wiki/transfer/jobs/{id}/download:
+    get:
+      parameters:
+      - description: Job ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download a finished export
+      tags:
+      - Wiki
+securityDefinitions:
+  BearerAuth:
+    description: Bearer JWT token (e.g. "Bearer eyJhb...")
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

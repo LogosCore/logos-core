@@ -1,0 +1,921 @@
+// Markdown -> ProseMirror parser for the Outline import flow.
+//
+// Built on top of prosemirror-markdown, with these Outline-specific
+// extensions:
+//
+//   - ::: info / success / warning / tip ... :::  →  wikiNotice nodes
+//   - ![](url " =WxH")                            →  image with width/height
+//   - [label size](/api/v1/wiki/files/<uuid>)     →  wikiFile atom block
+//
+// Unknown syntax never throws and never loses text. The parser falls back
+// to a paragraph containing the raw markdown when prosemirror-markdown
+// rejects a token shape it doesn't understand. See the parseOutlineMarkdown
+// wrapper at the bottom of this file.
+
+import MarkdownIt, { type PluginWithParams } from "markdown-it";
+import MarkdownItContainer from "markdown-it-container";
+import Token from "markdown-it/lib/token.mjs";
+import type StateCore from "markdown-it/lib/rules_core/state_core.mjs";
+import type StateInline from "markdown-it/lib/rules_inline/state_inline.mjs";
+import { MarkdownParser } from "prosemirror-markdown";
+import { Node, type Attrs, Fragment } from "prosemirror-model";
+import { isTruthyAttr } from "./references.js";
+import { wikiSchema } from "./wiki-schema.js";
+import {
+  CHECKLIST_CONTAINER,
+  CREDENTIAL_FENCE_INFO,
+  REFERENCE_CHIP_KINDS,
+  REFERENCE_LINK_SCHEME,
+} from "./markdown-serializer.js";
+
+// The four notice variants our editor supports. New variants must be added
+// here, in wiki-schema.ts, and on the editor side at the same time.
+const NOTICE_VARIANTS = ["info", "success", "warning", "tip"] as const;
+type NoticeVariant = (typeof NOTICE_VARIANTS)[number];
+
+// An attachment link, with or without an origin in front of it.
+//
+// The canonical form stored in a document is relative. The export dialog
+// absolutises it so the Markdown is useful outside the app, which means
+// re-importing an exported page hands us `https://host/api/v1/wiki/files/…`.
+// Anchoring to the relative form alone would leave that as an inert link and
+// quietly lose the attachment on the way back in.
+export const FILE_HREF_PATTERN =
+  /^(?:[a-z][a-z0-9+.-]*:\/\/[^/]+)?\/api\/v1\/wiki\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+// markdown-it core rule: walk the block-level token stream and replace any
+// paragraph whose inline children are images and whitespace only with one
+// synthetic `image_block` token per image. The image node in our schema
+// is block-level (matching the editor's `Image.configure({ inline: false })`),
+// so it can't sit inside the paragraph's `inline*` content. Hoisting each
+// image to a top-level token lets prosemirror-markdown insert them at doc
+// level instead of trying — and silently failing — to insert a block node
+// into an inline context. Multi-image paragraphs (e.g. two screenshots
+// side-by-side, common in Outline) become a sequence of image blocks.
+function liftStandaloneImagesRule(state: StateCore): void {
+  const tokens = state.tokens;
+  const out: Token[] = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i];
+    const inline = tokens[i + 1];
+    const close = tokens[i + 2];
+
+    if (
+      open?.type === "paragraph_open" &&
+      inline?.type === "inline" &&
+      close?.type === "paragraph_close" &&
+      Array.isArray(inline.children)
+    ) {
+      const images = collectStandaloneImages(inline.children);
+      if (images) {
+        for (const { attrs } of images) {
+          const blockToken = new Token("image_block", "", 0);
+          blockToken.attrs = attrs;
+          blockToken.block = true;
+          blockToken.map = open.map;
+          out.push(blockToken);
+        }
+        i += 2; // skip inline and paragraph_close
+        continue;
+      }
+    }
+
+    out.push(open);
+  }
+
+  state.tokens = out;
+}
+
+// Core rule: recognise ```logos-credential fences as credential reference
+// blocks rather than generic code blocks. The fence body is JSON shaped
+// like { id, name?, ... } — the parser keeps the raw body in token.content
+// so the post-walk in parseOutlineMarkdown can extract the id without
+// re-tokenising. Invalid JSON or missing `id` leaves the fence alone (it
+// falls through to the regular `fence` -> `codeBlock` mapping), so an
+// accidental info-string collision produces a visible code block rather
+// than a silent drop.
+function recogniseCredentialFenceRule(state: StateCore): void {
+  for (const token of state.tokens) {
+    if (token.type !== "fence") continue;
+    const info = (token.info ?? "").trim();
+    if (info !== CREDENTIAL_FENCE_INFO) continue;
+
+    let parsed: { id?: unknown } | null = null;
+    try {
+      parsed = JSON.parse(token.content) as { id?: unknown };
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed.id !== "string" || parsed.id.length === 0) {
+      continue;
+    }
+
+    token.type = "wiki_credential_block";
+    token.tag = "div";
+    // Stash the parsed id as a token attr; the JSON body stays on
+    // token.content so the import orchestrator can read the full payload.
+    token.attrs = [["data-credential-id", parsed.id]];
+  }
+}
+
+// Core rule: wrap the `inline` token inside each table cell (`td`/`th`)
+// with `paragraph_open` / `paragraph_close`. Our schema's tableCell and
+// tableHeader content is `block+`, so raw inline text fails ProseMirror's
+// `createAndFill` — the cell is then dropped entirely (you get empty
+// rows on the editor side). Markdown-it always emits exactly one `inline`
+// token between *_open/*_close for pipe-table cells, including empty
+// cells (zero-length inline). We wrap it so the inline children land in
+// a paragraph node that satisfies the schema.
+function wrapTableCellInlineRule(state: StateCore): void {
+  const tokens = state.tokens;
+  const out: Token[] = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i];
+    const isCellOpen = open?.type === "td_open" || open?.type === "th_open";
+    if (!isCellOpen) {
+      out.push(open);
+      continue;
+    }
+
+    out.push(open);
+
+    // Walk forward to the matching close, wrapping any `inline` token in a
+    // paragraph and leaving block-level tokens (rare in pipe tables but
+    // possible in extended table syntaxes) untouched.
+    const closeType = open.type === "td_open" ? "td_close" : "th_close";
+    i += 1;
+    while (i < tokens.length && tokens[i].type !== closeType) {
+      const t = tokens[i];
+      if (t.type === "inline") {
+        const pOpen = new Token("paragraph_open", "p", 1);
+        pOpen.block = true;
+        pOpen.map = t.map;
+        const pClose = new Token("paragraph_close", "p", -1);
+        pClose.block = true;
+        out.push(pOpen, t, pClose);
+      } else {
+        out.push(t);
+      }
+      i += 1;
+    }
+    if (i < tokens.length) out.push(tokens[i]); // the *_close token
+  }
+
+  state.tokens = out;
+}
+
+// Return the image tokens if the inline children are images with only
+// whitespace/softbreak/text-only-spaces between them. Returns null when
+// the paragraph contains real text (in which case it must remain a
+// paragraph; the inline `image` tokens inside will be dropped by the
+// `image: { ignore }` token map). Outline emits standalone block images
+// this way, sometimes two side-by-side in a single paragraph.
+function collectStandaloneImages(
+  children: Token[],
+): Array<{ attrs: [string, string][] }> | null {
+  const images: Array<{ attrs: [string, string][] }> = [];
+  for (const c of children) {
+    if (c.type === "image") {
+      // Markdown-it stores image alt text inside a children array on the
+      // image token; flatten it to a string and stash it as an `alt` attr
+      // so our image_block handler doesn't have to walk children later.
+      const altText = c.children?.map((t) => t.content).join("") ?? "";
+      const attrs: [string, string][] = [...(c.attrs ?? [])];
+      if (altText && !attrs.some(([k]) => k === "alt")) {
+        attrs.push(["alt", altText]);
+      }
+      images.push({ attrs });
+    } else if (c.type === "text") {
+      if (c.content.trim().length > 0) return null;
+    } else if (c.type === "softbreak" || c.type === "hardbreak") {
+      // ignore whitespace breaks around the images
+    } else {
+      return null;
+    }
+  }
+  return images.length > 0 ? images : null;
+}
+
+// Inverse of markdown-serializer's wikiHighlight emitter. Matches:
+//   `<mark>`                                  →  open token, color=""
+//   `<mark data-color="oklch(...)">`          →  open token, color attr
+//   `</mark>`                                 →  close token
+// markdown-it default has html=false, so raw HTML otherwise lands as text;
+// this rule re-claims `<mark>` specifically so the import round-trip
+// preserves the highlight mark + color. Unmatched pairs short-circuit
+// through prosemirror-markdown's existing failure path (fallback paragraph)
+// rather than producing partial marks.
+const HIGHLIGHT_OPEN_RE = /^<mark(?:\s+data-color="([^"]*)")?\s*>/;
+const HIGHLIGHT_CLOSE = "</mark>";
+
+function decodeMarkAttr(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+function highlightInlineRule(state: StateInline, silent: boolean): boolean {
+  if (state.src.charCodeAt(state.pos) !== 0x3c /* < */) return false;
+  const rest = state.src.slice(state.pos);
+
+  const openMatch = HIGHLIGHT_OPEN_RE.exec(rest);
+  if (openMatch) {
+    if (!silent) {
+      const token = state.push("wiki_highlight_open", "mark", 1);
+      token.markup = "<mark>";
+      const rawColor = openMatch[1] ?? "";
+      const color = rawColor ? decodeMarkAttr(rawColor) : "";
+      // Always attach the data-color attribute so prosemirror-markdown's
+      // getAttrs can read it back via tok.attrGet — even when empty, so the
+      // mark serializes consistently. Omitting it produced "undefined" on
+      // the editor side via the attribute reader's null check.
+      token.attrs = [["data-color", color]];
+    }
+    state.pos += openMatch[0].length;
+    return true;
+  }
+
+  if (rest.startsWith(HIGHLIGHT_CLOSE)) {
+    if (!silent) {
+      const token = state.push("wiki_highlight_close", "mark", -1);
+      token.markup = "</mark>";
+    }
+    state.pos += HIGHLIGHT_CLOSE.length;
+    return true;
+  }
+
+  return false;
+}
+
+// Build a markdown-it instance with notice-block containers registered.
+function buildTokenizer(): MarkdownIt {
+  const md = new MarkdownIt("default", {
+    html: false,
+    linkify: false,
+    typographer: false,
+    breaks: false,
+  });
+
+  // Register the standalone-image lifter as a core rule. Runs after
+  // `block` (which produces paragraphs) and after `inline` (which fills
+  // in inline children). markdown-it's default rule order: normalize →
+  // block → inline → linkify → replacements → smartquotes → text_join.
+  // We slot in just before `linkify` to see fully-resolved inline tokens.
+  md.core.ruler.before("linkify", "lift_standalone_images", liftStandaloneImagesRule);
+  md.core.ruler.before("linkify", "wrap_table_cell_inline", wrapTableCellInlineRule);
+  // Slot the credential-fence recogniser before our other lifters so the
+  // token mutation happens once on the canonical fence shape.
+  md.core.ruler.before(
+    "lift_standalone_images",
+    "recognise_credential_fence",
+    recogniseCredentialFenceRule,
+  );
+
+  // Inline rule for `<mark>` highlight tags. Slot before `autolink` so the
+  // opening `<` doesn't get consumed by the bare-URL auto-linker (which
+  // expects `<scheme:...>` and wouldn't actually match `<mark>`, but
+  // ordering it first keeps the contract obvious if autolink ever loosens).
+  md.inline.ruler.before("autolink", "wiki_highlight", highlightInlineRule);
+
+  for (const variant of NOTICE_VARIANTS) {
+    // Type-cast: @types/markdown-it-container expects the legacy
+    // `import = require()` shape of MarkdownIt; we use the modern ESM
+    // default import. The runtime contract is identical.
+    //
+    // No `validate` override: the plugin's default validate matches only
+    // when the marker line's first word equals the registered name, so
+    // each variant routes to its own container_<variant>_open token.
+    // Overriding to `() => true` made every container match every marker
+    // and the first-registered (info) ate everything.
+    md.use(MarkdownItContainer as unknown as PluginWithParams, variant, {});
+  }
+
+  // Checklist items ride the same container mechanism as notices. The
+  // structure travels on the marker line as JSON, which the token map reads
+  // off token.info.
+  md.use(MarkdownItContainer as unknown as PluginWithParams, CHECKLIST_CONTAINER, {});
+
+  return md;
+}
+
+// Parse an image token's title attribute for an Outline-style size hint.
+// Outline emits images as `![](url " =WxH")` where the title is the literal
+// string ` =WxH`. We extract numeric width and height and clear the title.
+function parseImageAttrs(token: { attrGet: (name: string) => string | null; children: Array<{ content: string }> | null }): Attrs {
+  const src = token.attrGet("src");
+  const rawTitle = token.attrGet("title") ?? "";
+  const alt = token.children && token.children[0] ? token.children[0].content : null;
+
+  let width: number | null = null;
+  let height: number | null = null;
+  let cleanedTitle: string | null = rawTitle.length > 0 ? rawTitle : null;
+
+  // Outline puts the size hint as " =WxH" inside the title. Strip whitespace
+  // before matching so we don't fail on extra spaces.
+  const sizeMatch = rawTitle.trim().match(/^=(\d+)x(\d+)$/);
+  if (sizeMatch) {
+    width = parseInt(sizeMatch[1], 10);
+    height = parseInt(sizeMatch[2], 10);
+    cleanedTitle = null;
+  }
+
+  return {
+    src,
+    alt,
+    title: cleanedTitle,
+    width,
+    height,
+  };
+}
+
+// The raw token map. Keys are markdown-it token names (always snake_case
+// from the tokenizer); values reference our schema's camelCase node/mark
+// names. Unknown variants of `:::` containers are not registered and
+// therefore parsed as plain paragraphs by markdown-it itself — that is
+// our graceful-degradation path for unknown notice variants.
+function buildTokenMap() {
+  const map: Record<string, unknown> = {
+    paragraph: { block: "paragraph" },
+    heading: {
+      block: "heading",
+      getAttrs: (tok: { tag: string }) => ({
+        level: parseInt(tok.tag.slice(1), 10) || 1,
+      }),
+    },
+    blockquote: { block: "blockquote" },
+    bullet_list: { block: "bulletList" },
+    ordered_list: {
+      block: "orderedList",
+      getAttrs: (tok: { attrGet: (name: string) => string | null }) => ({
+        start: parseInt(tok.attrGet("start") ?? "1", 10) || 1,
+      }),
+    },
+    list_item: { block: "listItem" },
+    code_block: {
+      block: "codeBlock",
+      noCloseToken: true,
+      getAttrs: () => ({ language: null, wrap: false }),
+    },
+    fence: {
+      block: "codeBlock",
+      noCloseToken: true,
+      getAttrs: (tok: { info: string }) => ({
+        language: tok.info ? tok.info.trim() : null,
+        wrap: false,
+      }),
+    },
+    hr: {
+      node: "horizontalRule",
+      getAttrs: () => ({ variant: "line" }),
+    },
+    // `image` is the inline-image token type — only emitted when an image
+    // appears mid-paragraph alongside other text. Our schema doesn't model
+    // an inline image (matches editor exactly), so we tell the parser to
+    // ignore those. `noCloseToken: true` is required because markdown-it
+    // emits `image` as a single atomic token; without this flag the
+    // ignore-handler registers under `image_open`/`image_close` instead
+    // and the parser throws "Token type `image` not supported" the moment
+    // an inline image survives the standalone-image lifter rule above.
+    image: { ignore: true, noCloseToken: true },
+    image_block: {
+      node: "image",
+      getAttrs: parseImageAttrs,
+    },
+    hardbreak: { node: "hardBreak" },
+    // A bare newline inside a paragraph keeps its line instead of folding
+    // into a space (prosemirror-markdown's default for softbreak). Markdown
+    // written by an agent — a checklist answer listing three shares, one per
+    // line — is meant to be read as written. Round trips stay stable: the
+    // serializer emits hardBreak as `\\` + newline, which parses back to the
+    // same node.
+    softbreak: { node: "hardBreak" },
+
+    // Tables (GFM) — markdown-it default preset emits these tokens.
+    table: { block: "table" },
+    thead: { ignore: true },
+    tbody: { ignore: true },
+    tr: { block: "tableRow" },
+    th: { block: "tableHeader" },
+    td: { block: "tableCell" },
+
+    // Marks
+    em: { mark: "italic" },
+    strong: { mark: "bold" },
+    s: { mark: "strike" },
+    link: {
+      mark: "link",
+      getAttrs: (tok: { attrGet: (name: string) => string | null }) => ({
+        href: tok.attrGet("href"),
+        title: tok.attrGet("title") ?? null,
+      }),
+    },
+    code_inline: { mark: "code", noCloseToken: true },
+    wiki_highlight: {
+      mark: "wikiHighlight",
+      getAttrs: (tok: { attrGet: (name: string) => string | null }) => ({
+        color: tok.attrGet("data-color") ?? "",
+      }),
+    },
+
+    // Credential reference block, lifted by recogniseCredentialFenceRule
+    // out of a ```logos-credential fence. The id and verbatim JSON payload
+    // both land in attrs so the post-parse pass can decide how to lower
+    // the block back to an inline chip (or, server-side, rewrite the id).
+    //
+    // Uses `node:` (atom leaf), not `block:` — wikiCredentialBlock has
+    // `atom: true` and no content. The `block:` form pushes onto the
+    // content stack and expects child tokens; for a contentless block,
+    // prosemirror-markdown silently drops the node.
+    wiki_credential_block: {
+      node: "wikiCredentialBlock",
+      noCloseToken: true,
+      getAttrs: (tok: {
+        content: string;
+        attrGet: (name: string) => string | null;
+      }) => {
+        const id = tok.attrGet("data-credential-id") ?? "";
+        let payload: Record<string, unknown> = { id };
+        try {
+          payload = JSON.parse(tok.content) as Record<string, unknown>;
+        } catch {
+          // Should not happen — the recognise rule only converts fences whose
+          // body parses as JSON. Defensive: keep the id-only payload.
+        }
+        return { credentialId: id, payload };
+      },
+    },
+  };
+
+  for (const variant of NOTICE_VARIANTS) {
+    map[`container_${variant}`] = {
+      block: "wikiNotice",
+      getAttrs: () => ({ variant }),
+    };
+  }
+
+  map[`container_${CHECKLIST_CONTAINER}`] = {
+    block: "wikiChecklistItem",
+    getAttrs: (tok: { info: string }) => parseChecklistInfo(tok.info),
+  };
+
+  return map;
+}
+
+/**
+ * Read a checklist container's marker line back into node attributes.
+ *
+ * The info string is `checklist {json}`. A malformed or absent payload
+ * degrades to an unattributed item rather than throwing: the answer text is
+ * the part that matters, and losing a page because someone hand-edited a
+ * marker line would be a far worse outcome than losing its `state`.
+ */
+function parseChecklistInfo(info: string): Attrs {
+  const brace = info.indexOf("{");
+  if (brace === -1) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(info.slice(brace));
+  } catch {
+    return {};
+  }
+  if (typeof parsed !== "object" || parsed === null) return {};
+
+  // Only known attributes are carried across. An unknown key in the JSON
+  // would be rejected by prosemirror-model when the node is constructed, so
+  // filtering here is what keeps a hand-edited marker line from failing the
+  // whole parse.
+  const source = parsed as Record<string, unknown>;
+  const attrs: Record<string, unknown> = {};
+  for (const name of CHECKLIST_ATTRS) {
+    if (!(name in source)) continue;
+    // The two flags are coerced rather than trusted. A hand-written marker
+    // line saying "required": "false" would otherwise land a truthy string in
+    // an attribute the coverage walker reads as a boolean.
+    attrs[name] =
+      name === "required" || name === "commandHintEnabled"
+        ? isTruthyAttr(source[name])
+        : source[name];
+  }
+  return attrs as Attrs;
+}
+
+// Attribute names wikiChecklistItem declares. Kept beside the parser because
+// this is the only place an untrusted key set reaches the schema.
+const CHECKLIST_ATTRS = [
+  "key",
+  "prompt",
+  "commandHint",
+  "commandHintEnabled",
+  "required",
+  "state",
+] as const;
+
+const tokenizer = buildTokenizer();
+const tokens = buildTokenMap() as ConstructorParameters<typeof MarkdownParser>[2];
+
+const innerParser = new MarkdownParser(wikiSchema, tokenizer, tokens);
+
+// After parsing, sweep the doc and replace any paragraph that consists of
+// exactly one link to /api/v1/wiki/files/<uuid> with a wikiFile atom block.
+// Outline serialises its block-level attachments as `[Filename 1234](url)`
+// inside an otherwise-empty paragraph; we restore the block atom here.
+//
+// The sweep descends into containers (checklist items, notices, table
+// cells, list items) rather than stopping at the top level. An agent
+// attaches its evidence to the checklist item it is answering, and a link
+// that only becomes an attachment card at the top of the page is a rule it
+// has no way to learn. The one place a paragraph cannot become a block is
+// the first child of a list item, which the schema pins to a paragraph.
+type JsonNode = Record<string, unknown> & { type: string; content?: JsonNode[] };
+
+function liftFileLinksToBlocks(doc: Node): Node {
+  const json = doc.toJSON() as JsonNode;
+  if (!Array.isArray(json.content)) return doc;
+  return wikiSchema.nodeFromJSON(liftInChildren(json));
+}
+
+// Names of container nodes whose first child must stay a paragraph.
+const PARAGRAPH_FIRST_CONTAINERS = new Set(["listItem", "taskItem"]);
+
+function liftInChildren(parent: JsonNode): JsonNode {
+  if (!Array.isArray(parent.content)) return parent;
+  const content = parent.content.flatMap((child, index) => {
+    const pinned = index === 0 && PARAGRAPH_FIRST_CONTAINERS.has(parent.type);
+    if (child.type === "paragraph" && !pinned) {
+      const lifted = liftFileLinesInParagraph(child);
+      if (lifted) return lifted;
+    }
+    return [liftInChildren(child)];
+  });
+  return { ...parent, content };
+}
+
+// Split a paragraph at its hard line breaks and turn every line that is
+// nothing but a file link into a wikiFile block, keeping the other lines as
+// paragraphs around it. Returns null when no line qualifies, so an ordinary
+// paragraph is left exactly as parsed.
+//
+// A single newline is where this matters. An agent writes "Done:" and the
+// file line under it without a blank line between; markdown keeps both in
+// one paragraph, and a rule that only lifts a paragraph consisting of the
+// link alone leaves that as a link. From the agent's side the two shapes
+// are the same instruction, so both produce the card.
+function liftFileLinesInParagraph(paragraph: JsonNode): JsonNode[] | null {
+  const inline = paragraph.content;
+  if (!inline) return null;
+
+  const lines: JsonNode[][] = [[]];
+  for (const node of inline) {
+    if (node.type === "hardBreak") lines.push([]);
+    else lines[lines.length - 1].push(node);
+  }
+  if (!lines.some((line) => fileLinkLineToBlock(line))) return null;
+
+  const out: JsonNode[] = [];
+  let pending: JsonNode[][] = [];
+  const flush = () => {
+    const kept = pending.filter((line) => line.length > 0);
+    if (kept.length > 0) {
+      const content = kept.flatMap((line, i) =>
+        i === 0 ? line : [{ type: "hardBreak" } as JsonNode, ...line],
+      );
+      out.push({ ...paragraph, content });
+    }
+    pending = [];
+  };
+  for (const line of lines) {
+    const block = fileLinkLineToBlock(line);
+    if (block) {
+      flush();
+      out.push(block);
+    } else {
+      pending.push(line);
+    }
+  }
+  flush();
+  return out;
+}
+
+// The wikiFile JSON for a line holding one file link and nothing else, or
+// null when the line is anything else.
+function fileLinkLineToBlock(line: JsonNode[]): JsonNode | null {
+  // Whitespace-only text around the link (a trailing space, an indent) is
+  // not content and never blocks the lift.
+  const significant = line.filter(
+    (c) => !(c.type === "text" && String(c.text ?? "").trim() === "" && !c.marks),
+  );
+  if (significant.length !== 1) return null;
+  const t = significant[0];
+  if (t.type !== "text") return null;
+  const marks = t.marks as Array<{ type: string; attrs?: Record<string, unknown> }> | undefined;
+  const linkMark = marks?.find((m) => m.type === "link");
+  if (!linkMark) return null;
+  const href = linkMark.attrs?.href as string | undefined;
+  if (!href) return null;
+  const m = FILE_HREF_PATTERN.exec(href);
+  if (!m) return null;
+  // Outline label format: "<filename> <size>". Split off the trailing
+  // numeric token; if it's absent or non-numeric, treat the whole label
+  // as the filename and report size as 0.
+  const label = String(t.text ?? "").trim();
+  const trailing = label.match(/^(.*) (\d+)$/);
+  const filename = trailing ? trailing[1] : label;
+  return {
+    type: "wikiFile",
+    attrs: {
+      fileId: m[1],
+      // Canonical relative form, not the href as written. An exported page
+      // carries an absolute link so it is useful outside the app; storing
+      // that back would bake one deployment's hostname into a document on
+      // another, and those links die with that host. The id is what matters
+      // and the path is derived from it.
+      url: `/api/v1/wiki/files/${m[1]}`,
+      filename,
+      size: trailing ? parseInt(trailing[2], 10) : 0,
+      contentType: guessContentType(filename),
+    },
+  };
+}
+
+function guessContentType(filename: string): string {
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  switch (ext) {
+    case "pdf": return "application/pdf";
+    case "png": return "image/png";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "gif": return "image/gif";
+    case "webp": return "image/webp";
+    case "svg": return "image/svg+xml";
+    case "txt": return "text/plain";
+    case "md": return "text/markdown";
+    case "csv": return "text/csv";
+    case "json": return "application/json";
+    case "zip": return "application/zip";
+    case "doc": return "application/msword";
+    case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case "xls": return "application/vnd.ms-excel";
+    case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    default: return "application/octet-stream";
+  }
+}
+
+// Lower every wikiCredentialBlock at the top level back to a paragraph
+// containing one inline wikiCredentialReference atom. Y.js + the editor
+// only model the inline chip; the block form exists solely at the
+// markdown boundary. We replace top-level blocks because that's where the
+// serializer's lifter places them — chips nested inside blockquotes or
+// list items round-trip as top-level blocks (the structural change is the
+// trade-off the user accepted when choosing the fenced-code-block carrier).
+function lowerCredentialBlocksToChips(doc: Node): Node {
+  const blockType = wikiSchema.nodes.wikiCredentialBlock;
+  const chipType = wikiSchema.nodes.wikiCredentialReference;
+  if (!blockType || !chipType) return doc;
+
+  let json = doc.toJSON() as { content?: unknown[] };
+  if (!Array.isArray(json.content)) return doc;
+
+  const newContent: Array<Record<string, unknown>> = [];
+  for (const child of json.content as Array<Record<string, unknown>>) {
+    if (child.type === "wikiCredentialBlock") {
+      const attrs = (child.attrs ?? {}) as Record<string, unknown>;
+      const credentialId = String(attrs.credentialId ?? "");
+      newContent.push({
+        type: "paragraph",
+        content: [
+          {
+            type: "wikiCredentialReference",
+            attrs: { credentialId },
+          },
+        ],
+      });
+      continue;
+    }
+    newContent.push(child);
+  }
+
+  return wikiSchema.nodeFromJSON({ ...json, content: newContent });
+}
+
+// Public entry point. Always returns a valid ProseMirror Node — never throws
+// on malformed markdown. On parser failure, returns a single paragraph
+// containing the original markdown so no text content is lost.
+export function parseOutlineMarkdown(markdown: string): Node {
+  let parsed: Node;
+  try {
+    parsed = innerParser.parse(markdown) ?? buildFallbackDoc(markdown);
+  } catch {
+    return buildFallbackDoc(markdown);
+  }
+
+  // Empty body → an empty paragraph so the schema's "block+" content rule
+  // is satisfied.
+  if (parsed.content.size === 0) {
+    return wikiSchema.nodes.doc.create(
+      null,
+      wikiSchema.nodes.paragraph.create()
+    );
+  }
+
+  const withFiles = liftFileLinksToBlocks(parsed);
+  const withTasks = liftCheckboxListsToTaskLists(withFiles);
+  const withChips = lowerReferenceLinksToChips(withTasks);
+  return lowerCredentialBlocksToChips(withChips);
+}
+
+// A GFM task marker at the start of a list item: "[ ] ", "[x] ", "[X] ".
+const TASK_MARKER = /^\[([ xX])\]\s+/;
+
+/**
+ * Turn a bullet list whose every item opens with a `[ ]` / `[x]` marker into
+ * a taskList.
+ *
+ * The serializer has always emitted task lists as GFM checkboxes, but nothing
+ * read them back: markdown-it core has no task-list rule, so they parsed as
+ * an ordinary bullet list with a literal "[x]" in the text — which the next
+ * serialize then escaped to "\[x\]". An agent that read a page and wrote it
+ * back turned every checklist of this kind into escaped prose, one round trip
+ * at a time.
+ *
+ * All items must carry a marker. A list where only some do is a bullet list
+ * that happens to mention brackets, and rewriting it would be the same class
+ * of damage in the other direction.
+ */
+function liftCheckboxListsToTaskLists(doc: Node): Node {
+  const bulletList = wikiSchema.nodes.bulletList;
+  const taskList = wikiSchema.nodes.taskList;
+  const taskItem = wikiSchema.nodes.taskItem;
+  const paragraph = wikiSchema.nodes.paragraph;
+  if (!bulletList || !taskList || !taskItem || !paragraph) return doc;
+
+  // The marker lives in the first text node of the item's first paragraph.
+  const markerOf = (item: Node): RegExpMatchArray | null => {
+    const first = item.firstChild;
+    if (!first || first.type !== paragraph) return null;
+    const text = first.firstChild;
+    if (!text || !text.isText) return null;
+    return text.text?.match(TASK_MARKER) ?? null;
+  };
+
+  const convert = (list: Node): Node | null => {
+    const items: Node[] = [];
+    let ok = true;
+
+    list.forEach((item) => {
+      if (!ok) return;
+      const match = markerOf(item);
+      if (!match) {
+        ok = false;
+        return;
+      }
+      const para = item.firstChild!;
+      const text = para.firstChild!;
+      const remaining = (text.text ?? "").slice(match[0].length);
+
+      const inline: Node[] = [];
+      if (remaining !== "") inline.push(wikiSchema.text(remaining, text.marks));
+      para.content.forEach((child, _offset, index) => {
+        if (index > 0) inline.push(child);
+      });
+
+      const blocks: Node[] = [para.copy(Fragment.fromArray(inline))];
+      item.content.forEach((child, _offset, index) => {
+        if (index > 0) blocks.push(child);
+      });
+
+      items.push(
+        taskItem.create(
+          { checked: match[1] !== " " },
+          Fragment.fromArray(blocks),
+        ),
+      );
+    });
+
+    if (!ok || items.length === 0) return null;
+    return taskList.create(null, Fragment.fromArray(items));
+  };
+
+  const rebuild = (node: Node): Node => {
+    if (node.content.size === 0) return node;
+
+    const children: Node[] = [];
+    node.forEach((child) => {
+      if (child.type === bulletList) {
+        const converted = convert(child);
+        children.push(converted ?? rebuild(child));
+        return;
+      }
+      children.push(rebuild(child));
+    });
+    return node.copy(Fragment.fromArray(children));
+  };
+
+  return rebuild(doc);
+}
+
+/**
+ * Turn every `[label](logos://host|hash|doc/<id>)` link back into the inline
+ * atom it was serialized from.
+ *
+ * This is what makes a chip survive a read-modify-write. Without it an agent
+ * that reads a page and writes it back would replace every host, hash and
+ * page reference with an inert link — the chips would stop resolving, and
+ * the reverse lookups that hang off them ("which pages reference this host?")
+ * would go quiet.
+ *
+ * A link the scheme does not match is left alone; ordinary links are not
+ * this function's business.
+ */
+function lowerReferenceLinksToChips(doc: Node): Node {
+  const linkType = wikiSchema.marks.link;
+  if (!linkType) return doc;
+
+  const rebuild = (node: Node): Node => {
+    if (node.isText) {
+      const mark = node.marks.find((m) => m.type === linkType);
+      const chip = mark ? chipForHref(String(mark.attrs.href ?? "")) : null;
+      return chip ?? node;
+    }
+    if (node.content.size === 0) return node;
+
+    const children: Node[] = [];
+    node.forEach((child) => children.push(rebuild(child)));
+    return node.copy(Fragment.fromArray(children));
+  };
+
+  return rebuild(doc);
+}
+
+/** The inline atom a reference href names, or null when it names none. */
+function chipForHref(href: string): Node | null {
+  if (!href.startsWith(REFERENCE_LINK_SCHEME)) return null;
+
+  const rest = href.slice(REFERENCE_LINK_SCHEME.length);
+  const slash = rest.indexOf("/");
+  if (slash === -1) return null;
+
+  const segment = rest.slice(0, slash);
+  const id = rest.slice(slash + 1);
+  if (id === "") return null;
+
+  const kind = REFERENCE_CHIP_KINDS.find((k) => k.segment === segment);
+  if (!kind) return null;
+
+  const type = wikiSchema.nodes[kind.node];
+  if (!type) return null;
+  return type.create({ [kind.idAttr]: id });
+}
+
+/**
+ * Parse the markdown and return the credential reference payloads embedded
+ * in `logos-credential` fences, in source order. Used by the core import
+ * orchestrator to resolve-or-create credentials in the target operation
+ * BEFORE handing the rewritten markdown to markdownToYjs.
+ *
+ * Returns an empty array when the markdown has no credential fences.
+ * Returned payloads preserve insertion order so a deterministic id-rewrite
+ * map can be built without re-walking.
+ */
+export function extractCredentialPayloads(
+  markdown: string,
+): Array<Record<string, unknown>> {
+  // Run the parser; the credential lifter mutates fence tokens in place and
+  // the token map populates payload on each wikiCredentialBlock attrs.
+  let parsed: Node;
+  try {
+    parsed = innerParser.parse(markdown) ?? buildFallbackDoc(markdown);
+  } catch {
+    return [];
+  }
+  const json = parsed.toJSON() as { content?: unknown[] };
+  if (!Array.isArray(json.content)) return [];
+  const out: Array<Record<string, unknown>> = [];
+  for (const child of json.content as Array<Record<string, unknown>>) {
+    if (child.type !== "wikiCredentialBlock") continue;
+    const attrs = (child.attrs ?? {}) as Record<string, unknown>;
+    const payload = attrs.payload;
+    if (payload && typeof payload === "object") {
+      out.push(payload as Record<string, unknown>);
+    }
+  }
+  return out;
+}
+
+function buildFallbackDoc(text: string): Node {
+  // Split on blank lines so multi-paragraph input survives as multiple
+  // paragraphs. Always emits at least one paragraph (possibly empty) so
+  // the doc node validates.
+  const paragraphs = text.split(/\n\s*\n/).filter((p) => p.length > 0);
+  const blocks =
+    paragraphs.length > 0
+      ? paragraphs.map((p) =>
+          wikiSchema.nodes.paragraph.create(null, wikiSchema.text(p))
+        )
+      : [wikiSchema.nodes.paragraph.create()];
+  return wikiSchema.nodes.doc.create(null, blocks);
+}

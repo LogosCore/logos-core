@@ -1,0 +1,217 @@
+# =============================================================================
+# Timeline — Operation Event History
+# =============================================================================
+#
+# The Timeline page renders an operation's full activity history as a
+# horizontal axis from operation creation through today, with vertical event
+# stacks above each active day. Rows are persisted by the in-process event
+# bus subscriber (core/pkg/events) into the operation_events collection.
+#
+# Two read paths:
+#   - timelineBuckets   — bucket counts for the axis (cheap, one row per day/
+#                         week/month at the requested granularity).
+#   - timelineEventsByDay — full event list for a single bucket, used by the
+#                           vertical stack above that day.
+#
+# One subscription path:
+#   - timelineEventAdded — real-time append of new events for the operation
+#                          the viewer currently has open.
+#
+# Time bucketing happens server-side in MongoDB via $dateTrunc using the
+# viewer's IANA timezone. The frontend passes that timezone with every query
+# so day boundaries match the viewer's working day, not UTC.
+#
+# The Timeline's "OperationEvent" type clashes by name with the operation
+# domain-event wrapper used by operationChanged. To avoid renaming the
+# existing subscription type, timeline rows ship as `TimelineEvent`.
+
+# Granularity of axis buckets. Maps 1:1 to MongoDB $dateTrunc units.
+enum TimelineGranularity {
+  DAY
+  WEEK
+  MONTH
+}
+
+# A single event row. SubjectName is captured at write time so events
+# survive deletion of their subject — a credential deleted six months ago
+# still renders with its original name. Metadata is a JSON-encoded string
+# of topic-specific fields (e.g. parent_document_id on wiki events).
+type TimelineEvent {
+  id: ID!
+  operationId: ID!
+  topic: String!
+  subjectKind: String!
+  subjectId: ID!
+  subjectName: String!
+  # Null for system / service actors, or when the actor account was deleted.
+  #
+  # For an AI agent this resolves to the OWNER of the agent key, so filtering
+  # the timeline by an operator still surfaces the work their agent did on
+  # their behalf. Use actorKind and actorLabel to tell the two apart.
+  actor: User
+  # "user", "agent", "service" or "system". Lets the client render a delegated
+  # action differently from one the operator performed themselves.
+  actorKind: String!
+  # Display name for the actor: the username for a person, "Claude (via alice)"
+  # for an agent, the service name for a service. Empty when unattributable.
+  actorLabel: String!
+  occurredAt: String!
+  # JSON-encoded payload of topic-specific fields. Empty string when no
+  # metadata was captured. A typed scalar can replace this later if it
+  # becomes inconvenient on the client.
+  metadata: String!
+}
+
+type TimelineEventEdge {
+  node: TimelineEvent!
+  cursor: String!
+}
+
+type TimelineEventConnection {
+  edges: [TimelineEventEdge!]!
+  pageInfo: PageInfo!
+}
+
+# One bucket on the timeline axis. The bucket is "active" iff count > 0;
+# the server only returns buckets that have events. Empty stretches are
+# computed client-side by walking from operation creation through today.
+type TimelineBucket {
+  # Start of the bucket in the requested timezone (RFC3339 with offset).
+  bucketStart: String!
+  count: Int!
+  # Per-topic breakdown of the bucket. Lets the axis render the topic-grouped
+  # dot stack without fetching the underlying events — the previous design
+  # fired one timelineEventsByDay query per active bucket on page load.
+  # Sorted by count desc, then topic asc, to match the canvas render order.
+  topicCounts: [TimelineTopicCount!]!
+}
+
+# Per-topic count inside a TimelineBucket. subjectKind is included because
+# the axis dot icon is keyed off subject_kind (events with the same topic
+# always share the same subject_kind, so server-side grouping is safe).
+#
+# emoji/icon/color carry the custom-event chip identity: user-authored
+# annotations are sub-grouped by their chosen glyph + color so two custom
+# events with different icons render as separate chips on the axis. They are
+# always the empty string for system-generated kinds (only custom events can
+# carry an icon/color), so a non-custom group's identity collapses to its
+# subjectKind alone.
+type TimelineTopicCount {
+  topic: String!
+  subjectKind: String!
+  count: Int!
+  emoji: String!
+  icon: String!
+  color: String!
+}
+
+extend type Query {
+  # Bucket counts for the timeline axis. Returns one entry per non-empty
+  # bucket at the given granularity, sorted ascending by bucketStart.
+  #
+  # The timezone argument is the viewer's IANA name
+  # (e.g. "Europe/Berlin"). Day/week/month boundaries are computed in that
+  # zone, so day buckets line up with the operator's local day.
+  #
+  # types and actorIds are optional filters: types lists subject_kind
+  # values (e.g. ["credential", "wiki_document"]); actorIds restricts to
+  # events originated by those users.
+  timelineBuckets(
+    operationId: ID!
+    granularity: TimelineGranularity = DAY
+    timezone: String!
+    from: String
+    to: String
+    types: [String!]
+    actorIds: [ID!]
+  ): [TimelineBucket!]!
+    @hasPermission(permission: "operation:member")
+
+  # Events that fall within a single bucket. `date` is any timestamp inside
+  # the bucket (typically the bucketStart returned by timelineBuckets); the
+  # resolver truncates it to the granularity's start boundary in the given
+  # timezone. Cursor-paginated newest-first.
+  timelineEventsByDay(
+    operationId: ID!
+    date: String!
+    timezone: String!
+    granularity: TimelineGranularity = DAY
+    types: [String!]
+    actorIds: [ID!]
+    first: Int = 100
+    after: String
+  ): TimelineEventConnection!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Subscription {
+  # Real-time append of new persisted events for an operation. Fires once
+  # per event after the persistence subscriber has stored it.
+  timelineEventAdded(operationId: ID!): TimelineEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+# -----------------------------------------------------------------------------
+# Custom timeline events
+# -----------------------------------------------------------------------------
+# Custom events are user-authored timeline annotations. They are stored as
+# rows in the operation_events collection with subject_kind="custom_event"
+# and event_id == subject_id (the row is its own subject). The description
+# lives in metadata["description"].
+#
+# Unlike system-generated topics, custom events are NOT routed through the
+# pkg/events.Logger subscriber — the resolver writes the row inline and
+# publishes TopicOperationEventLogged so the live subscription reaches
+# connected clients.
+
+input CreateCustomTimelineEventInput {
+  # Short title shown on the timeline. Required, trimmed, non-empty.
+  name: String!
+  # Free-form context surfaced in the event detail dialog. Optional.
+  description: String
+  # When the event happened, in RFC3339. May be in the past or the future —
+  # the operator decides what the event represents.
+  occurredAt: String!
+  # Optional visual identity, mirroring wiki documents. emoji and icon are
+  # mutually exclusive (icon wins when both are set); icon is a Lucide name
+  # (e.g. "Flag"); color is an OKLCH string from the shared palette, or empty
+  # for the default. Events sharing the same (emoji, icon, color) tuple group
+  # into one chip on the timeline axis.
+  emoji: String
+  icon: String
+  color: String
+}
+
+input UpdateCustomTimelineEventInput {
+  name: String
+  description: String
+  occurredAt: String
+  # See CreateCustomTimelineEventInput. An explicit empty string clears the
+  # field (e.g. switching from an icon back to an emoji clears icon).
+  emoji: String
+  icon: String
+  color: String
+}
+
+extend type Mutation {
+  # Create a custom timeline event annotation on an operation.
+  # Requires at least operator role in the operation.
+  createCustomTimelineEvent(
+    operationId: ID!
+    input: CreateCustomTimelineEventInput!
+  ): TimelineEvent!
+    @hasPermission(permission: "operation:member")
+
+  # Update a custom timeline event in place. Only the original author or
+  # an operation admin may edit; resolver enforces the check.
+  updateCustomTimelineEvent(
+    id: ID!
+    input: UpdateCustomTimelineEventInput!
+  ): TimelineEvent!
+    @hasPermission(permission: "operation:member")
+
+  # Delete a custom timeline event. Hard delete; no soft-delete tombstone
+  # (the row never existed for any other purpose). Author-or-admin only.
+  deleteCustomTimelineEvent(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+}

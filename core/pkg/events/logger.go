@@ -1,0 +1,502 @@
+// Package events persists domain events emitted on the in-process IEventBus
+// into the operation_events MongoDB collection so they can be queried as a
+// historical timeline.
+//
+// The Logger struct is a single subscriber on the bus. Adding a new event
+// type to the timeline is one line in Topics() plus a switch arm in Handle.
+package events
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/repository"
+	"go.uber.org/zap"
+)
+
+// eventNamespace is the UUIDv5 namespace used for deterministic event IDs in
+// backfill. Stable per (topic, subject_id) so re-runs cannot duplicate rows.
+var eventNamespace = uuid.MustParse("4f6d2d24-2b0d-5d8a-9c11-7a8f8c3a1f7e")
+
+// Logger is the persistence subscriber. Construct via NewLogger and register
+// with the event bus via Subscribe.
+type Logger struct {
+	repo   repository.IOperationEventRepository
+	ops    repository.IOperationRepository
+	creds  repository.ICredentialRepository
+	hashes repository.IHashRepository
+	bus    eventbus.IEventBus
+	log    *zap.Logger
+}
+
+// NewLogger wires repository dependencies and returns a ready-to-subscribe
+// handler. The bus parameter is used to re-publish TopicOperationEventLogged
+// after a successful insert so live subscriptions can fan the row out to
+// connected clients.
+func NewLogger(
+	repo repository.IOperationEventRepository,
+	ops repository.IOperationRepository,
+	creds repository.ICredentialRepository,
+	hashes repository.IHashRepository,
+	bus eventbus.IEventBus,
+	log *zap.Logger,
+) *Logger {
+	return &Logger{repo: repo, ops: ops, creds: creds, hashes: hashes, bus: bus, log: log}
+}
+
+// Topics returns the bus topics this logger persists. Wire one Subscribe call
+// in app.go with this slice; new topics are added here without touching the
+// app wiring.
+//
+// Task coverage: stage_changed only — and inside toTaskRow we further drop
+// every transition whose new stage is not DONE. The timeline records "task
+// closed" events, not the full lifecycle. Creation, status-set, and the
+// delete/restore family are intentionally absent: they were too noisy on
+// the operator's timeline. Generic task.updated, assignees_changed, and
+// references_changed have never been persisted for the same reason.
+//
+// Wiki coverage: none. Document creation was previously persisted but the
+// timeline now treats wiki maintenance as out-of-scope churn.
+func (l *Logger) Topics() []eventbus.Topic {
+	return []eventbus.Topic{
+		eventbus.TopicCredentialCreated,
+		eventbus.TopicTaskStageChanged,
+		// Hash topics: creation is the main signal; bulk import collapses to
+		// a single summary row (see toHashBulkRow); cracked gets its own row
+		// because the timeline card links to BOTH the hash and the resulting
+		// credential. Status changes and comment events are intentionally
+		// dropped — they would drown the timeline in low-signal churn.
+		eventbus.TopicHashCreated,
+		eventbus.TopicHashBulkImported,
+		eventbus.TopicHashCracked,
+	}
+}
+
+// Handle is the eventbus.Handler entry point. Translates a bus event into an
+// OperationEvent row and persists it. Errors are logged and swallowed — a
+// failed insert must not break the originating user flow.
+func (l *Logger) Handle(ctx context.Context, e eventbus.Event) {
+	row, err := l.toRow(ctx, e)
+	if err != nil {
+		l.log.Warn("event logger: translate failed",
+			zap.String("topic", string(e.Topic)),
+			zap.Error(err))
+		return
+	}
+	if row == nil {
+		// Topic is not (yet) one we persist. Silent skip.
+		return
+	}
+	if err := l.repo.Insert(ctx, row); err != nil {
+		l.log.Warn("event logger: insert failed",
+			zap.String("topic", string(e.Topic)),
+			zap.String("event_id", row.EventID.String()),
+			zap.Error(err))
+		return
+	}
+
+	// Re-publish the persisted row so live subscriptions can refetch it and
+	// stream it to connected clients. Use the same actor as the source event
+	// so a future "show me events I triggered" filter still works.
+	if l.bus != nil {
+		l.bus.Publish(eventbus.NewOperationEventLoggedEvent(e.Actor, eventbus.OperationEventLoggedPayload{
+			EventID:     row.EventID.String(),
+			OperationID: row.OperationID.String(),
+		}))
+	}
+}
+
+// toRow translates a bus event into a persistence row, looking up the
+// subject's current name to snapshot. Returns (nil, nil) for topics that
+// are intentionally not persisted (forward-compat for new bus topics).
+func (l *Logger) toRow(ctx context.Context, e eventbus.Event) (*models.OperationEvent, error) {
+	actorType, actorID, actorName := translateActor(e.Actor)
+
+	switch e.Topic {
+	case eventbus.TopicCredentialCreated:
+		p, ok := e.Payload.(eventbus.CredentialEventPayload)
+		if !ok {
+			return nil, fmt.Errorf("unexpected payload type %T for %s", e.Payload, e.Topic)
+		}
+		credID, err := uuid.Parse(p.CredentialID)
+		if err != nil {
+			return nil, fmt.Errorf("parse credential id: %w", err)
+		}
+		opID, err := uuid.Parse(p.OperationID)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation id: %w", err)
+		}
+		name := ""
+		if cred, err := l.creds.FindByID(ctx, credID); err == nil {
+			name = cred.Name
+		}
+		return &models.OperationEvent{
+			EventID:     uuid.New(),
+			OperationID: opID,
+			Topic:       string(e.Topic),
+			SubjectKind: models.SubjectKindCredential,
+			SubjectID:   credID,
+			SubjectName: name,
+			ActorType:   actorType,
+			ActorID:     actorID,
+			ActorName:   actorName,
+			OccurredAt:  occurredAt(e),
+		}, nil
+
+	case eventbus.TopicTaskStageChanged:
+		return l.toTaskRow(e, actorType, actorID, actorName)
+
+	case eventbus.TopicHashCreated:
+		return l.toHashRow(ctx, e, actorType, actorID, actorName)
+
+	case eventbus.TopicHashBulkImported:
+		return l.toHashBulkRow(e, actorType, actorID, actorName)
+
+	case eventbus.TopicHashCracked:
+		return l.toHashCrackedRow(ctx, e, actorType, actorID, actorName)
+	}
+
+	return nil, nil
+}
+
+// toHashRow translates a hash.created event into a single timeline row.
+// SubjectName is the truncated hash value (see hashDisplayName) — enough to
+// keep the timeline card scannable without rendering the full hash string.
+func (l *Logger) toHashRow(ctx context.Context, e eventbus.Event, actorType models.EventActorType, actorID *uuid.UUID, actorName string) (*models.OperationEvent, error) {
+	p, ok := e.Payload.(eventbus.HashEventPayload)
+	if !ok {
+		return nil, fmt.Errorf("unexpected payload type %T for %s", e.Payload, e.Topic)
+	}
+	hashUID, err := uuid.Parse(p.HashID)
+	if err != nil {
+		return nil, fmt.Errorf("parse hash id: %w", err)
+	}
+	opID, err := uuid.Parse(p.OperationID)
+	if err != nil {
+		return nil, fmt.Errorf("parse operation id: %w", err)
+	}
+	name := ""
+	if l.hashes != nil {
+		if h, err := l.hashes.FindByID(ctx, hashUID); err == nil {
+			name = hashDisplayName(h)
+		}
+	}
+	return &models.OperationEvent{
+		EventID:     uuid.New(),
+		OperationID: opID,
+		Topic:       string(e.Topic),
+		SubjectKind: models.SubjectKindHash,
+		SubjectID:   hashUID,
+		SubjectName: name,
+		ActorType:   actorType,
+		ActorID:     actorID,
+		ActorName:   actorName,
+		OccurredAt:  occurredAt(e),
+	}, nil
+}
+
+// toHashBulkRow collapses a bulk import into a single timeline row. The row
+// is its own subject (EventID = SubjectID, like CustomEvent) because there is
+// no single hash to point at. Count goes into metadata for the frontend's
+// summary renderer.
+func (l *Logger) toHashBulkRow(e eventbus.Event, actorType models.EventActorType, actorID *uuid.UUID, actorName string) (*models.OperationEvent, error) {
+	p, ok := e.Payload.(eventbus.HashBulkImportPayload)
+	if !ok {
+		return nil, fmt.Errorf("unexpected payload type %T for %s", e.Payload, e.Topic)
+	}
+	opID, err := uuid.Parse(p.OperationID)
+	if err != nil {
+		return nil, fmt.Errorf("parse operation id: %w", err)
+	}
+	eventID := uuid.New()
+	return &models.OperationEvent{
+		EventID:     eventID,
+		OperationID: opID,
+		Topic:       string(e.Topic),
+		SubjectKind: models.SubjectKindHash,
+		SubjectID:   eventID,
+		SubjectName: fmt.Sprintf("%d hashes", p.Count),
+		ActorType:   actorType,
+		ActorID:     actorID,
+		ActorName:   actorName,
+		Metadata:    map[string]any{"count": p.Count},
+		OccurredAt:  occurredAt(e),
+	}, nil
+}
+
+// toHashCrackedRow records a hash → credential link. The row's subject is the
+// hash; the linked credential id rides in metadata so the timeline card can
+// render two chips (hash, credential) without a follow-up lookup.
+func (l *Logger) toHashCrackedRow(ctx context.Context, e eventbus.Event, actorType models.EventActorType, actorID *uuid.UUID, actorName string) (*models.OperationEvent, error) {
+	p, ok := e.Payload.(eventbus.HashCrackedPayload)
+	if !ok {
+		return nil, fmt.Errorf("unexpected payload type %T for %s", e.Payload, e.Topic)
+	}
+	hashUID, err := uuid.Parse(p.HashID)
+	if err != nil {
+		return nil, fmt.Errorf("parse hash id: %w", err)
+	}
+	opID, err := uuid.Parse(p.OperationID)
+	if err != nil {
+		return nil, fmt.Errorf("parse operation id: %w", err)
+	}
+	name := ""
+	if l.hashes != nil {
+		if h, err := l.hashes.FindByID(ctx, hashUID); err == nil {
+			name = hashDisplayName(h)
+		}
+	}
+	return &models.OperationEvent{
+		EventID:     uuid.New(),
+		OperationID: opID,
+		Topic:       string(e.Topic),
+		SubjectKind: models.SubjectKindHash,
+		SubjectID:   hashUID,
+		SubjectName: name,
+		ActorType:   actorType,
+		ActorID:     actorID,
+		ActorName:   actorName,
+		Metadata: map[string]any{
+			"credential_id": p.CredentialID,
+		},
+		OccurredAt: occurredAt(e),
+	}, nil
+}
+
+// hashDisplayName produces the SubjectName snapshot for a hash row. Returns
+// a truncated hash value — the timeline card stays scannable even for long
+// hashes by capping at a short prefix.
+func hashDisplayName(h models.Hash) string {
+	v := h.Value
+	const maxLen = 24
+	if len(v) > maxLen {
+		return v[:maxLen] + "…"
+	}
+	return v
+}
+
+// toTaskRow translates a task.stage_changed bus event into a row, but only
+// when the new stage is DONE. Every other transition (e.g. BACKLOG→TODO,
+// IN_PROCESS→TODO, DONE→IN_PROCESS) returns (nil, nil) so the subscriber
+// silently drops it — the timeline records task closures, nothing else.
+//
+// Task payloads already snapshot Name at publish time, so no repo lookup is
+// needed; the row keeps the original name even if the task is later
+// hard-deleted.
+//
+// Metadata carries old_stage and new_stage so the frontend's summary
+// function can render "Closed from X" without a follow-up lookup.
+func (l *Logger) toTaskRow(e eventbus.Event, actorType models.EventActorType, actorID *uuid.UUID, actorName string) (*models.OperationEvent, error) {
+	p, ok := e.Payload.(eventbus.TaskEventPayload)
+	if !ok {
+		return nil, fmt.Errorf("unexpected payload type %T for %s", e.Payload, e.Topic)
+	}
+	if p.Stage != string(models.TaskStageDone) {
+		// Only closures land on the timeline.
+		return nil, nil
+	}
+	taskID, err := uuid.Parse(p.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("parse task id: %w", err)
+	}
+	opID, err := uuid.Parse(p.OperationID)
+	if err != nil {
+		return nil, fmt.Errorf("parse operation id: %w", err)
+	}
+
+	meta := map[string]any{
+		"old_stage": p.OldStage,
+		"new_stage": p.Stage,
+		"status":    p.Status,
+	}
+
+	return &models.OperationEvent{
+		EventID:     uuid.New(),
+		OperationID: opID,
+		Topic:       string(e.Topic),
+		SubjectKind: models.SubjectKindTask,
+		SubjectID:   taskID,
+		SubjectName: p.Name,
+		ActorType:   actorType,
+		ActorID:     actorID,
+		ActorName:   actorName,
+		Metadata:    meta,
+		OccurredAt:  occurredAt(e),
+	}, nil
+}
+
+// translateActor converts the eventbus actor into the model's persisted form.
+// System / service actors carry no user UUID, so ActorID is nil for them.
+func translateActor(a eventbus.Actor) (models.EventActorType, *uuid.UUID, string) {
+	switch a.Type {
+	case eventbus.ActorUser:
+		if id, err := uuid.Parse(a.ID); err == nil {
+			return models.EventActorUser, &id, ""
+		}
+		return models.EventActorUser, nil, ""
+	case eventbus.ActorAgent:
+		// Attribute to the OWNER, not the key: a timeline filtered by actor
+		// should still find the work an operator's agent did on their behalf.
+		// The agent's own name rides alongside so the row can say which one.
+		if id, err := uuid.Parse(a.OnBehalfOf); err == nil {
+			return models.EventActorAgent, &id, a.Name
+		}
+		return models.EventActorAgent, nil, a.Name
+	case eventbus.ActorService:
+		// Previously the service name was dropped here, leaving every service
+		// row anonymous. Carry it now that the model has somewhere to put it.
+		return models.EventActorService, nil, a.ID
+	default:
+		return models.EventActorSystem, nil, ""
+	}
+}
+
+// occurredAt prefers the event's own timestamp but falls back to now so a
+// missing field never produces a zero-time row.
+func occurredAt(e eventbus.Event) time.Time {
+	if e.Timestamp.IsZero() {
+		return time.Now().UTC()
+	}
+	return e.Timestamp.UTC()
+}
+
+// deterministicEventID is the backfill-only constructor. Stable for a given
+// (topic, subject_id) pair so re-running backfill cannot duplicate rows.
+func deterministicEventID(topic string, subjectID uuid.UUID) uuid.UUID {
+	return uuid.NewSHA1(eventNamespace, []byte(topic+"|"+subjectID.String()))
+}
+
+// backfillBatchSize is the chunk size used for InsertMany. Kept small so a
+// single failed batch only loses that chunk; the deterministic event IDs let
+// a retry pick up exactly where it left off.
+const backfillBatchSize = 500
+
+// backfillOpPageSize is the page size used when walking the operations list.
+// Pet-scale; revisit if we ever ship to a deployment with thousands of
+// operations.
+const backfillOpPageSize = int64(100)
+
+// backfillCredPageSize is the page size used when walking credentials per
+// operation. Large enough that almost every op finishes in one page.
+const backfillCredPageSize = int64(1000)
+
+// BackfillIfEmpty seeds the operation_events collection from existing
+// credential and wiki document rows the first time the service starts. It is
+// idempotent: event IDs are derived deterministically as
+// uuidv5(topic + subject_id) so a re-run cannot duplicate rows even if the
+// initial pass partially completed.
+//
+// On a non-empty collection this is a single Count round-trip and returns
+// nil.
+func (l *Logger) BackfillIfEmpty(ctx context.Context) error {
+	empty, err := l.repo.IsEmpty(ctx)
+	if err != nil {
+		return fmt.Errorf("check operation_events emptiness: %w", err)
+	}
+	if !empty {
+		return nil
+	}
+
+	l.log.Info("event logger: backfilling operation_events from existing rows")
+
+	var totalCreds int
+
+	var offset int64
+	for {
+		ops, err := l.ops.FindAll(ctx, "", offset, backfillOpPageSize, nil)
+		if err != nil {
+			return fmt.Errorf("list operations for backfill: %w", err)
+		}
+		if len(ops) == 0 {
+			break
+		}
+
+		for _, op := range ops {
+			c, err := l.backfillCredentialsFor(ctx, op.OperationID)
+			if err != nil {
+				l.log.Warn("event logger: credential backfill failed",
+					zap.String("operation_id", op.OperationID.String()),
+					zap.Error(err))
+			}
+			totalCreds += c
+		}
+
+		if int64(len(ops)) < backfillOpPageSize {
+			break
+		}
+		offset += int64(len(ops))
+	}
+
+	l.log.Info("event logger: backfill complete",
+		zap.Int("credentials", totalCreds))
+	return nil
+}
+
+// backfillCredentialsFor seeds credential.created events for one operation.
+// Returns the number of rows successfully inserted.
+func (l *Logger) backfillCredentialsFor(ctx context.Context, opID uuid.UUID) (int, error) {
+	creds, err := l.creds.FindByOperationIDWithCursor(ctx, opID, repository.CredentialFilter{}, repository.DefaultCredentialSort(), nil, backfillCredPageSize, true)
+	if err != nil {
+		return 0, fmt.Errorf("list credentials: %w", err)
+	}
+
+	rows := make([]*models.OperationEvent, 0, len(creds))
+	for _, c := range creds {
+		actor := userActorPtr(c.CreatedByID)
+		rows = append(rows, &models.OperationEvent{
+			EventID:     deterministicEventID(string(eventbus.TopicCredentialCreated), c.CredentialID),
+			OperationID: c.OperationID,
+			Topic:       string(eventbus.TopicCredentialCreated),
+			SubjectKind: models.SubjectKindCredential,
+			SubjectID:   c.CredentialID,
+			SubjectName: c.Name,
+			ActorType:   models.EventActorUser,
+			ActorID:     actor,
+			OccurredAt:  c.CreateAt.UTC(),
+		})
+	}
+
+	return l.insertInBatches(ctx, rows)
+}
+
+// insertInBatches writes rows in chunks of backfillBatchSize. Returns the
+// total number of rows handed to InsertMany (regardless of whether each
+// batch succeeded); per-batch errors are logged but not propagated so one
+// bad batch does not abort the rest of the seed.
+func (l *Logger) insertInBatches(ctx context.Context, rows []*models.OperationEvent) (int, error) {
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	inserted := 0
+	for start := 0; start < len(rows); start += backfillBatchSize {
+		end := start + backfillBatchSize
+		if end > len(rows) {
+			end = len(rows)
+		}
+		batch := rows[start:end]
+		if err := l.repo.InsertMany(ctx, batch); err != nil {
+			l.log.Warn("event logger: backfill batch insert failed",
+				zap.Int("batch_size", len(batch)),
+				zap.Error(err))
+			continue
+		}
+		inserted += len(batch)
+	}
+	return inserted, nil
+}
+
+// userActorPtr wraps a non-zero UUID as a pointer for ActorID storage.
+// The zero UUID (no recorded creator) becomes nil so we never write a
+// meaningless actor id.
+func userActorPtr(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	cp := id
+	return &cp
+}
