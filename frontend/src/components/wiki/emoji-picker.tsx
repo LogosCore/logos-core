@@ -1,3 +1,4 @@
+import data from "@emoji-mart/data";
 import { Picker } from "emoji-mart";
 import { useEffect, useRef } from "react";
 
@@ -22,14 +23,15 @@ import { useEffect, useRef } from "react";
 // and appends itself, and its disconnectedCallback unregisters the component
 // when React removes the host. We clear the host on cleanup anyway so a
 // remount never renders two pickers into the same node.
+//
+// The dataset is imported here rather than passed in so that the one lazy
+// import of this module (see document-icon-picker.tsx) fetches both.
 
 /** The subset of emoji-mart's Picker options this app uses. The library's own
  *  typings declare `constructor(props: any)`, so this interface — not the
  *  library — is what gives call sites type safety. Widen it deliberately if a
  *  new option is needed. */
 export interface EmojiPickerProps {
-  /** Emoji dataset, imported from @emoji-mart/data. Opaque to us. */
-  data: unknown;
   /** Fires with the chosen emoji; `native` is the character itself. */
   onEmojiSelect: (emoji: EmojiSelection) => void;
   theme: "light" | "dark";
@@ -50,7 +52,6 @@ interface PickerInstance {
 }
 
 export function EmojiPicker({
-  data,
   onEmojiSelect,
   theme,
   previewPosition = "none",
@@ -70,7 +71,7 @@ export function EmojiPicker({
   // Construction options are captured once. Everything that can change at
   // runtime is applied through update() in the effect below instead, so the
   // picker is never rebuilt (which would lose scroll position and focus).
-  const initialRef = useRef({ data, theme, previewPosition, skinTonePosition });
+  const initialRef = useRef({ theme, previewPosition, skinTonePosition });
 
   useEffect(() => {
     const host = hostRef.current;
@@ -78,7 +79,7 @@ export function EmojiPicker({
 
     const initial = initialRef.current;
     pickerRef.current = new Picker({
-      data: initial.data,
+      data,
       theme: initial.theme,
       previewPosition: initial.previewPosition,
       skinTonePosition: initial.skinTonePosition,

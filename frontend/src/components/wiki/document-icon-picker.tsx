@@ -1,7 +1,5 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
-import data from "@emoji-mart/data";
-import { EmojiPicker } from "@/components/wiki/emoji-picker";
 import {
   BanIcon,
   FolderIcon,
@@ -40,6 +38,15 @@ import {
   type WikiIconColor,
 } from "@/components/wiki/icon-color-palette";
 import { cn } from "@/lib/utils";
+
+// The emoji picker and its dataset are some 600 KB. This picker sits on
+// every page that shows a document or host icon, and most of its uses never
+// open the Emoji tab, so both load when the tab first renders.
+const EmojiPicker = lazy(() =>
+  import("@/components/wiki/emoji-picker").then((m) => ({
+    default: m.EmojiPicker,
+  })),
+);
 
 type IconPickerTab = "emoji" | "icons";
 
@@ -183,13 +190,22 @@ export function DocumentIconPicker({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="emoji" className="flex justify-center">
-            <EmojiPicker
-              data={data}
-              onEmojiSelect={(e) => handleEmojiPick(e.native)}
-              theme={resolvedTheme === "dark" ? "dark" : "light"}
-              previewPosition="none"
-              skinTonePosition="none"
-            />
+            {/* Same height as emoji-mart's picker, so the popover does not
+                jump when it arrives. */}
+            <Suspense
+              fallback={
+                <div className="flex h-[435px] items-center text-sm text-muted-foreground">
+                  Loading...
+                </div>
+              }
+            >
+              <EmojiPicker
+                onEmojiSelect={(e) => handleEmojiPick(e.native)}
+                theme={resolvedTheme === "dark" ? "dark" : "light"}
+                previewPosition="none"
+                skinTonePosition="none"
+              />
+            </Suspense>
           </TabsContent>
           <TabsContent value="icons">
             <ColorSwatchRow
