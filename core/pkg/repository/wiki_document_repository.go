@@ -146,7 +146,10 @@ type IWikiDocumentRepository interface {
 	// HardDeleteTrashedByIDs removes the given documents from opID's trash.
 	// A document restored since its id was read is still active and is kept.
 	HardDeleteTrashedByIDs(ctx context.Context, opID uuid.UUID, ids []uuid.UUID) error
-	FindChangedSinceLastBackup(ctx context.Context, batchSize int64) ([]models.WikiDocument, error)
+	// FindChangedSinceLastBackup returns active documents updated since their
+	// last backup, or never backed up, oldest change first. A non-zero since
+	// limits it to documents updated at or after since.
+	FindChangedSinceLastBackup(ctx context.Context, since time.Time, batchSize int64) ([]models.WikiDocument, error)
 	RestoreFromBackup(ctx context.Context, docID uuid.UUID, content string, contentState []byte) error
 	SearchByOperationID(ctx context.Context, opID uuid.UUID, scopeParentID *uuid.UUID, query string, offset, limit int64) (hits []WikiDocumentSearchHit, total int64, err error)
 	// FindReferrers returns active documents in opID whose References array
@@ -213,7 +216,9 @@ func NewWikiDocumentRepository(db database.Database) IWikiDocumentRepository {
 		{Key: []string{"operation_id", "deleted_at"}},
 		{Key: []string{"operation_id", "parent_document_id", "deleted_at"}},
 		{Key: []string{"-createAt", "-_id"}},
-		{Key: []string{"last_backup_at", "updateAt"}},
+		// The backup scheduler's window: documents updated since its last
+		// complete pass, oldest first (FindChangedSinceLastBackup).
+		{Key: []string{"updateAt"}},
 		// Recently-updated list ordering. Partial index on documents that have
 		// been touched at least once after creation — Create stamps
 		// last_updated_at, but legacy rows predate the field and are excluded
@@ -1004,16 +1009,28 @@ func (r *wikiDocumentRepository) HardDeleteTrashedByIDs(ctx context.Context, opI
 
 // FindChangedSinceLastBackup finds documents that have been updated since their
 // last backup (or have never been backed up). Used by the auto-backup scheduler.
-func (r *wikiDocumentRepository) FindChangedSinceLastBackup(ctx context.Context, batchSize int64) ([]models.WikiDocument, error) {
+//
+// "Changed since backed up" compares two fields of one document, which no
+// index can answer, so on its own the query reads the whole collection. since
+// is what makes it cheap: the scheduler passes the time of its last complete
+// pass, the {updateAt} index narrows the read to documents touched since, and
+// the comparison only runs on those.
+func (r *wikiDocumentRepository) FindChangedSinceLastBackup(ctx context.Context, since time.Time, batchSize int64) ([]models.WikiDocument, error) {
 	var docs []models.WikiDocument
 	// Documents where: no last_backup_at, OR updateAt > last_backup_at. Active docs only.
-	err := r.coll.Find(ctx, bson.M{
+	filter := bson.M{
 		"deleted_at": nil,
 		"$or": bson.A{
 			bson.M{"last_backup_at": nil},
 			bson.M{"$expr": bson.M{"$gt": bson.A{"$updateAt", "$last_backup_at"}}},
 		},
-	}).Limit(batchSize).All(&docs)
+	}
+	if !since.IsZero() {
+		filter["updateAt"] = bson.M{"$gte": since}
+	}
+	// Oldest change first, so a batch that cannot take everything leaves the
+	// newest for the next tick rather than an arbitrary set.
+	err := r.coll.Find(ctx, filter).Sort("updateAt").Limit(batchSize).All(&docs)
 	return docs, err
 }
 

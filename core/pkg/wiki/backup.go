@@ -21,7 +21,17 @@ type BackupScheduler struct {
 	batchSize  int64
 	ctx        context.Context
 	cancel     context.CancelFunc
+	// scanFrom bounds each tick's search to documents updated since the last
+	// pass that left nothing behind — see runBackupTick. Zero until then,
+	// which searches everything. Only the ticker goroutine touches it.
+	scanFrom time.Time
 }
+
+// backupScanOverlap is how far behind a complete pass the next one starts.
+// updateAt is stamped by the Hocuspocus sidecar on its own clock, and a write
+// in flight during a pass lands with a timestamp from before it; both need
+// the next pass to look back a little.
+const backupScanOverlap = 5 * time.Minute
 
 // NewBackupScheduler creates a new auto-backup scheduler.
 func NewBackupScheduler(
@@ -72,24 +82,30 @@ func (s *BackupScheduler) runBackupTick() {
 	tickCtx, cancel := context.WithTimeout(s.ctx, s.interval/2)
 	defer cancel()
 
-	docs, err := s.docRepo.FindChangedSinceLastBackup(tickCtx, s.batchSize)
+	started := time.Now().UTC()
+	docs, err := s.docRepo.FindChangedSinceLastBackup(tickCtx, s.scanFrom, s.batchSize)
 	if err != nil {
 		s.logger.Error("Auto-backup: failed to find changed documents", zap.Error(err))
 		return
 	}
 
-	if len(docs) == 0 {
-		return
-	}
-
 	backed := 0
-	for _, doc := range docs {
-		if err := s.backupDocument(tickCtx, &doc); err != nil {
+	for i := range docs {
+		doc := &docs[i]
+		if err := s.backupDocument(tickCtx, doc); err != nil {
 			s.logger.Error("Auto-backup: failed to backup document",
 				zap.String("document_id", doc.DocumentID.String()), zap.Error(err))
 			continue
 		}
 		backed++
+	}
+
+	// A pass that found fewer documents than it could take, and backed all of
+	// them up, has left nothing changed before it started: the next one only
+	// needs to look from there. A full batch may have left some behind, and a
+	// failed backup must be retried, so either keeps the old starting point.
+	if int64(len(docs)) < s.batchSize && backed == len(docs) {
+		s.scanFrom = started.Add(-backupScanOverlap)
 	}
 
 	if backed > 0 {
