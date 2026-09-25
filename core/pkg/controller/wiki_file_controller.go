@@ -18,9 +18,7 @@ import (
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/blob"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/responses"
@@ -181,7 +179,7 @@ func (wfc *WikiFileController) Upload(c *gin.Context) {
 		return
 	}
 
-	if !wfc.callerCanEdit(c, &doc) {
+	if !callerHasOperationRole(c, wfc.opRepo, doc.OperationID, models.OperationRoleOperator) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -351,7 +349,7 @@ func (wfc *WikiFileController) Download(c *gin.Context) {
 		return
 	}
 
-	if !wfc.callerIsOperationMember(c, file.OperationID) {
+	if !callerHasOperationRole(c, wfc.opRepo, file.OperationID, models.OperationRoleViewer) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -416,45 +414,6 @@ func writeFileBody(w http.ResponseWriter, r *http.Request, body io.Reader, size 
 	w.WriteHeader(http.StatusOK)
 	_, err := io.Copy(w, body)
 	return err
-}
-
-// callerCanEdit returns true when the caller is app-admin or operator+ in
-// the operation owning the document. Matches the write-permission rule used
-// by the image controller and collab ticket endpoint.
-func (wfc *WikiFileController) callerCanEdit(c *gin.Context, doc *models.WikiDocument) bool {
-	if isAppAdminFromContext(c) {
-		return true
-	}
-	op, err := gqlctx.LoadOperation(c.Request.Context(), wfc.opRepo, doc.OperationID)
-	if err != nil {
-		return false
-	}
-	rolesSlice, _ := c.Get("roles")
-	ctx := gqlctx.WithAuthInfo(c.Request.Context(), gqlctx.AuthInfo{
-		UserID:   c.GetString("userID"),
-		Username: c.GetString("username"),
-		Roles:    toStringSlice(rolesSlice),
-	})
-	return authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleOperator) == nil
-}
-
-// callerIsOperationMember is the read-side permission — viewer or higher in
-// the operation, or app-admin.
-func (wfc *WikiFileController) callerIsOperationMember(c *gin.Context, opID uuid.UUID) bool {
-	if isAppAdminFromContext(c) {
-		return true
-	}
-	op, err := gqlctx.LoadOperation(c.Request.Context(), wfc.opRepo, opID)
-	if err != nil {
-		return false
-	}
-	rolesSlice, _ := c.Get("roles")
-	ctx := gqlctx.WithAuthInfo(c.Request.Context(), gqlctx.AuthInfo{
-		UserID:   c.GetString("userID"),
-		Username: c.GetString("username"),
-		Roles:    toStringSlice(rolesSlice),
-	})
-	return authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer) == nil
 }
 
 // SanitizeUploadFilename normalizes the client-supplied filename into something

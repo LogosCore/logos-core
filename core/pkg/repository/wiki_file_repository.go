@@ -7,9 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
-	opts "github.com/qiniu/qmgo/options"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const wikiFileCollection = "wiki_files"
@@ -26,48 +23,6 @@ type IWikiFileRepository interface {
 	HardDelete(ctx context.Context, id uuid.UUID) error
 }
 
-type wikiFileRepository struct {
-	coll database.Collection
-}
-
 func NewWikiFileRepository(db database.Database) IWikiFileRepository {
-	coll := db.Collection(wikiFileCollection)
-
-	db.EnsureIndexes(context.Background(), wikiFileCollection, []opts.IndexModel{
-		{Key: []string{"file_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
-		{Key: []string{"document_id"}},
-		{Key: []string{"operation_id"}},
-		{Key: []string{"createAt"}},
-	})
-
-	return &wikiFileRepository{coll: coll}
-}
-
-func (r *wikiFileRepository) Create(ctx context.Context, file *models.WikiFile) error {
-	_, err := r.coll.InsertOne(ctx, file)
-	return err
-}
-
-func (r *wikiFileRepository) FindByID(ctx context.Context, id uuid.UUID) (models.WikiFile, error) {
-	var file models.WikiFile
-	err := r.coll.FindOne(ctx, bson.M{"file_id": id}).One(&file)
-	return file, err
-}
-
-func (r *wikiFileRepository) FindByDocumentID(ctx context.Context, docID uuid.UUID) ([]models.WikiFile, error) {
-	var files []models.WikiFile
-	err := r.coll.Find(ctx, bson.M{"document_id": docID}).All(&files)
-	return files, err
-}
-
-func (r *wikiFileRepository) FindCandidatesOlderThan(ctx context.Context, cutoff time.Time, limit int64) ([]models.WikiFile, error) {
-	var files []models.WikiFile
-	err := r.coll.Find(ctx, bson.M{
-		"createAt": bson.M{"$lt": cutoff},
-	}).Limit(limit).All(&files)
-	return files, err
-}
-
-func (r *wikiFileRepository) HardDelete(ctx context.Context, id uuid.UUID) error {
-	return r.coll.Remove(ctx, bson.M{"file_id": id})
+	return newAttachmentRepository[models.WikiFile](db, wikiFileCollection, "file_id")
 }

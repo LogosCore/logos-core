@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/blob"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -113,7 +112,7 @@ func (wtc *WikiTransferController) StartExport(c *gin.Context) {
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("operation not found"))
 		return
 	}
-	if !wtc.callerHasRole(c, &op, models.OperationRoleViewer) {
+	if !callerHasRoleIn(c, &op, models.OperationRoleViewer) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -134,7 +133,7 @@ func (wtc *WikiTransferController) StartExport(c *gin.Context) {
 	}
 
 	request := models.WikiTransferRequest{
-		IncludeCredentials: wtc.callerHasRole(c, &op, models.OperationRoleOperator),
+		IncludeCredentials: callerHasRoleIn(c, &op, models.OperationRoleOperator),
 	}
 	if req.RootID != nil && *req.RootID != "" {
 		rootID, err := uuid.Parse(*req.RootID)
@@ -202,7 +201,7 @@ func (wtc *WikiTransferController) StartImport(c *gin.Context) {
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("operation not found"))
 		return
 	}
-	if !wtc.callerHasRole(c, &op, models.OperationRoleOperator) {
+	if !callerHasRoleIn(c, &op, models.OperationRoleOperator) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -304,7 +303,7 @@ func (wtc *WikiTransferController) ListJobs(c *gin.Context) {
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("operation not found"))
 		return
 	}
-	if !wtc.callerHasRole(c, &op, models.OperationRoleViewer) {
+	if !callerHasRoleIn(c, &op, models.OperationRoleViewer) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -400,7 +399,7 @@ func (wtc *WikiTransferController) loadAuthorisedJob(c *gin.Context) (models.Wik
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("operation not found"))
 		return models.WikiTransferJob{}, false
 	}
-	if !wtc.callerHasRole(c, &op, models.OperationRoleViewer) {
+	if !callerHasRoleIn(c, &op, models.OperationRoleViewer) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return models.WikiTransferJob{}, false
 	}
@@ -421,19 +420,6 @@ func (wtc *WikiTransferController) reserveSlot(c *gin.Context, opID uuid.UUID) b
 		return false
 	}
 	return true
-}
-
-func (wtc *WikiTransferController) callerHasRole(c *gin.Context, op *models.Operation, role models.OperationRole) bool {
-	if isAppAdminFromContext(c) {
-		return true
-	}
-	rolesSlice, _ := c.Get("roles")
-	ctx := gqlctx.WithAuthInfo(c.Request.Context(), gqlctx.AuthInfo{
-		UserID:   c.GetString("userID"),
-		Username: c.GetString("username"),
-		Roles:    toStringSlice(rolesSlice),
-	})
-	return authorization.AuthorizeOperationRole(ctx, op, role) == nil
 }
 
 // asciiFallback replaces every non-ASCII or quote character with "_" so the

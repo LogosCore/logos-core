@@ -12,9 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/blob"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/responses"
@@ -118,7 +116,7 @@ func (wic *WikiImageController) Upload(c *gin.Context) {
 		return
 	}
 
-	if !wic.callerCanEdit(c, &doc) {
+	if !callerHasOperationRole(c, wic.opRepo, doc.OperationID, models.OperationRoleOperator) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -280,7 +278,7 @@ func (wic *WikiImageController) Download(c *gin.Context) {
 		return
 	}
 
-	if !wic.callerIsOperationMember(c, img.OperationID) {
+	if !callerHasOperationRole(c, wic.opRepo, img.OperationID, models.OperationRoleViewer) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
@@ -326,61 +324,6 @@ func (wic *WikiImageController) Download(c *gin.Context) {
 		// Client disconnect; not worth logging as error.
 		wic.logger.Debug("Stream aborted", zap.Error(err))
 	}
-}
-
-// callerCanEdit returns true when the caller is app-admin or operator+ in
-// the operation owning the document. Matches the write-permission rule used
-// by the collab ticket endpoint.
-func (wic *WikiImageController) callerCanEdit(c *gin.Context, doc *models.WikiDocument) bool {
-	if isAppAdminFromContext(c) {
-		return true
-	}
-	op, err := gqlctx.LoadOperation(c.Request.Context(), wic.opRepo, doc.OperationID)
-	if err != nil {
-		return false
-	}
-	rolesSlice, _ := c.Get("roles")
-	ctx := gqlctx.WithAuthInfo(c.Request.Context(), gqlctx.AuthInfo{
-		UserID:   c.GetString("userID"),
-		Username: c.GetString("username"),
-		Roles:    toStringSlice(rolesSlice),
-	})
-	return authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleOperator) == nil
-}
-
-// callerIsOperationMember is the read-side permission — viewer or higher in
-// the operation, or app-admin. Mirrors the @hasPermission("operation:member")
-// directive used on GraphQL queries.
-func (wic *WikiImageController) callerIsOperationMember(c *gin.Context, opID uuid.UUID) bool {
-	if isAppAdminFromContext(c) {
-		return true
-	}
-	op, err := gqlctx.LoadOperation(c.Request.Context(), wic.opRepo, opID)
-	if err != nil {
-		return false
-	}
-	rolesSlice, _ := c.Get("roles")
-	ctx := gqlctx.WithAuthInfo(c.Request.Context(), gqlctx.AuthInfo{
-		UserID:   c.GetString("userID"),
-		Username: c.GetString("username"),
-		Roles:    toStringSlice(rolesSlice),
-	})
-	return authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer) == nil
-}
-
-func isAppAdminFromContext(c *gin.Context) bool {
-	raw, _ := c.Get("roles")
-	for _, r := range toStringSlice(raw) {
-		if r == "admin" {
-			return true
-		}
-	}
-	return false
-}
-
-func toStringSlice(v any) []string {
-	s, _ := v.([]string)
-	return s
 }
 
 func etagFor(checksum string) string {
