@@ -571,30 +571,19 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 		return []*models.WikiDocument{}, nil
 	}
 
-	// Resolve the target parent (nil for root).
 	var targetParent *uuid.UUID
 	if input.ParentDocumentID != nil && *input.ParentDocumentID != "" {
 		pid, err := uuid.Parse(*input.ParentDocumentID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid parent document ID: %w", err)
 		}
-		parent, err := r.docRepo.FindByID(ctx, pid)
-		if err != nil {
-			return nil, fmt.Errorf("parent document not found: %w", err)
-		}
-		if parent.OperationID != opUID {
-			return nil, fmt.Errorf("parent document belongs to a different operation")
-		}
-		if parent.DeletedAt != nil {
-			return nil, fmt.Errorf("cannot reorder under a deleted document")
-		}
 		targetParent = &pid
 	}
 
 	// Reject duplicate ids up front — the rebalance math depends on each
 	// position being unique.
+	ids := make([]uuid.UUID, 0, len(input.OrderedIds))
 	seen := make(map[uuid.UUID]struct{}, len(input.OrderedIds))
-	docs := make([]models.WikiDocument, 0, len(input.OrderedIds))
 	for _, idStr := range input.OrderedIds {
 		docUID, err := uuid.Parse(idStr)
 		if err != nil {
@@ -604,16 +593,51 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 			return nil, fmt.Errorf("duplicate document ID in ordering: %s", idStr)
 		}
 		seen[docUID] = struct{}{}
+		ids = append(ids, docUID)
+	}
 
-		doc, err := r.docRepo.FindByID(ctx, docUID)
-		if err != nil {
-			return nil, fmt.Errorf("document not found: %s: %w", idStr, err)
+	// One read for every document and the target parent — this used to be a
+	// query per document. The checks below only need each one's place in the
+	// tree, so summaries do.
+	lookup := ids
+	if targetParent != nil {
+		if _, listed := seen[*targetParent]; !listed {
+			lookup = append(append(make([]uuid.UUID, 0, len(ids)+1), ids...), *targetParent)
+		}
+	}
+	found, err := r.docRepo.FindSummariesByIDs(ctx, lookup)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load documents: %w", err)
+	}
+	byID := make(map[uuid.UUID]models.WikiDocument, len(found))
+	for i := range found {
+		byID[found[i].DocumentID] = found[i]
+	}
+
+	if targetParent != nil {
+		parent, ok := byID[*targetParent]
+		if !ok {
+			return nil, fmt.Errorf("parent document not found")
+		}
+		if parent.OperationID != opUID {
+			return nil, fmt.Errorf("parent document belongs to a different operation")
+		}
+		if parent.DeletedAt != nil {
+			return nil, fmt.Errorf("cannot reorder under a deleted document")
+		}
+	}
+
+	docs := make([]models.WikiDocument, 0, len(ids))
+	for _, id := range ids {
+		doc, ok := byID[id]
+		if !ok {
+			return nil, fmt.Errorf("document not found: %s", id)
 		}
 		if doc.OperationID != opUID {
-			return nil, fmt.Errorf("document %s belongs to a different operation", idStr)
+			return nil, fmt.Errorf("document %s belongs to a different operation", id)
 		}
 		if doc.DeletedAt != nil {
-			return nil, fmt.Errorf("cannot reorder a trashed document: %s", idStr)
+			return nil, fmt.Errorf("cannot reorder a trashed document: %s", id)
 		}
 		if targetParent != nil && *targetParent == doc.DocumentID {
 			return nil, fmt.Errorf("cannot make a document its own parent")
@@ -625,8 +649,8 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 	// parent's depth is the same for every incoming doc).
 	if targetParent != nil {
 		needsDepthCheck := false
-		for _, d := range docs {
-			if !sameParent(d.ParentDocumentID, targetParent) {
+		for i := range docs {
+			if !sameParent(docs[i].ParentDocumentID, targetParent) {
 				needsDepthCheck = true
 				break
 			}
@@ -647,9 +671,10 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 		return nil, fmt.Errorf("invalid caller ID: %w", err)
 	}
 
-	// Pass 1: write the updates that actually change something. Track which
-	// docs got reparented (so the path_ids cascade only runs where needed)
-	// and which buckets lost children (for the event fan-out).
+	// Pass 1: collect the updates that actually change something, and write
+	// them in one ordered bulk write. Track which docs got reparented (so the
+	// path_ids cascade only runs where needed) and which buckets lost
+	// children (for the event fan-out).
 	//
 	// `sourceBuckets` keys: *uuid.UUID parent id, or nil sentinel for "root".
 	// We store one representative doc per bucket so the published event
@@ -661,7 +686,9 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 		isRoot bool
 	}
 	sourceBuckets := make(map[bucketKey]uuid.UUID) // bucket -> representative doc id
-	for i, doc := range docs {
+	writes := make([]repository.DocumentUpdate, 0, count)
+	for i := range docs {
+		doc := &docs[i]
 		newSort := rebalancedSortOrderAt(i, count)
 		parentChanged := !sameParent(doc.ParentDocumentID, targetParent)
 		sortChanged := doc.SortOrder != newSort
@@ -692,10 +719,10 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 			// are bookkeeping and must not bump last_updated_*.
 			stampLastUpdated(updates, callerUID)
 		}
-
-		if err := r.docRepo.Update(ctx, &doc, updates); err != nil {
-			return nil, fmt.Errorf("failed to update document %s: %w", doc.DocumentID, err)
-		}
+		writes = append(writes, repository.DocumentUpdate{DocumentID: doc.DocumentID, Set: updates})
+	}
+	if err := r.docRepo.BulkUpdate(ctx, opUID, writes); err != nil {
+		return nil, fmt.Errorf("failed to reorder documents: %w", err)
 	}
 
 	// Pass 2: rebuild path_ids for each reparented subtree. Done after all
@@ -706,17 +733,24 @@ func (r *wikiDocumentResolver) ReorderWikiDocumentSiblings(
 		}
 	}
 
-	// Pass 3: reload the docs in their final order so the response (and the
-	// optimistic client cache) reflect committed state.
-	resultsByID := make(map[uuid.UUID]*models.WikiDocument, count)
+	// Pass 3: reload the docs, in one read, and return them in their final
+	// order so the response (and the optimistic client cache) reflect
+	// committed state.
+	reloaded, err := r.docRepo.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload documents: %w", err)
+	}
+	resultsByID := make(map[uuid.UUID]*models.WikiDocument, len(reloaded))
+	for i := range reloaded {
+		resultsByID[reloaded[i].DocumentID] = &reloaded[i]
+	}
 	results := make([]*models.WikiDocument, 0, count)
-	for _, d := range docs {
-		updated, err := r.docRepo.FindByID(ctx, d.DocumentID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to reload document %s: %w", d.DocumentID, err)
+	for _, id := range ids {
+		doc, ok := resultsByID[id]
+		if !ok {
+			return nil, fmt.Errorf("failed to reload document %s", id)
 		}
-		results = append(results, &updated)
-		resultsByID[d.DocumentID] = &updated
+		results = append(results, doc)
 	}
 
 	// Fan out one event per *affected parent bucket*. Each event sets

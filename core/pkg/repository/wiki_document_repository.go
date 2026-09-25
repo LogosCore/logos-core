@@ -11,6 +11,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -133,6 +134,10 @@ type IWikiDocumentRepository interface {
 	// empty slice.
 	RestoreBatch(ctx context.Context, docIDs []uuid.UUID, restorerID uuid.UUID) error
 	Update(ctx context.Context, doc *models.WikiDocument, updates map[string]interface{}) error
+	// BulkUpdate applies each update's $set in one ordered bulk write,
+	// stopping at the first failure. operation_id is pinned in every filter,
+	// as Update pins it, so an id from another operation matches nothing.
+	BulkUpdate(ctx context.Context, opID uuid.UUID, updates []DocumentUpdate) error
 	HardDelete(ctx context.Context, doc *models.WikiDocument) error
 	HardDeleteByOperationID(ctx context.Context, opID uuid.UUID) error
 	HardDeleteTrashed(ctx context.Context, opID uuid.UUID) error
@@ -925,6 +930,32 @@ func (r *wikiDocumentRepository) Update(ctx context.Context, doc *models.WikiDoc
 		bson.M{"document_id": doc.DocumentID, "operation_id": doc.OperationID},
 		bson.M{"$set": updates},
 	)
+}
+
+// DocumentUpdate is one document's $set in a BulkUpdate.
+type DocumentUpdate struct {
+	DocumentID uuid.UUID
+	Set        map[string]interface{}
+}
+
+func (r *wikiDocumentRepository) BulkUpdate(ctx context.Context, opID uuid.UUID, updates []DocumentUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	raw, err := r.coll.RawCollection()
+	if err != nil {
+		return fmt.Errorf("bulk update: %w", err)
+	}
+	writes := make([]mongo.WriteModel, len(updates))
+	for i, u := range updates {
+		writes[i] = mongo.NewUpdateOneModel().
+			SetFilter(bson.M{"document_id": u.DocumentID, "operation_id": opID}).
+			SetUpdate(bson.M{"$set": u.Set})
+	}
+	if _, err := raw.BulkWrite(ctx, writes, options.BulkWrite().SetOrdered(true)); err != nil {
+		return fmt.Errorf("bulk update: %w", err)
+	}
+	return nil
 }
 
 func (r *wikiDocumentRepository) HardDelete(ctx context.Context, doc *models.WikiDocument) error {
