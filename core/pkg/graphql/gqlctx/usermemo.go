@@ -48,9 +48,10 @@ func LoadUser(ctx context.Context, finder UserFinder, id uuid.UUID) (models.User
 // rows are known and their user ids can be collected.
 //
 // Ids already memoised are not re-fetched, and nil ids are skipped; with
-// nothing left to fetch there is no query at all. Ids that match no row are
-// simply absent, so LoadUser still reaches the repository for them and the
-// caller's existing "user was deleted" handling is unchanged.
+// nothing left to fetch — or no memo to fill — there is no query at all. Ids
+// that match no row are simply absent, so LoadUser still reaches the
+// repository for them and the caller's existing "user was deleted" handling
+// is unchanged.
 //
 // A failure is not fatal and is returned only for logging: every field resolver
 // still works without a primed memo, just one query at a time. Callers may

@@ -542,6 +542,7 @@ func (r *hashResolver) Hashes(ctx context.Context, operationID string, search *s
 	if err != nil {
 		return nil, fmt.Errorf("failed to list hashes: %w", err)
 	}
+	r.warmPage(ctx, hashes)
 	return buildHashConnection(hashes, args, int(total)), nil
 }
 
@@ -587,6 +588,7 @@ func (r *hashResolver) MyHashes(ctx context.Context, operationIDs []string, sear
 	if err != nil {
 		return nil, fmt.Errorf("failed to list hashes: %w", err)
 	}
+	r.warmPage(ctx, hashes)
 	return buildHashConnection(hashes, args, int(total)), nil
 }
 
@@ -622,6 +624,8 @@ func (r *hashResolver) resolveAccessibleOperationIDs(ctx context.Context, operat
 		if len(ops) == 0 {
 			return nil, nil, false
 		}
+		// The page's per-row operation field asks for these same rows.
+		gqlctx.PrimeOperations(ctx, ops)
 		opUIDs := make([]uuid.UUID, len(ops))
 		for i := range ops {
 			opUIDs[i] = ops[i].OperationID
@@ -742,6 +746,23 @@ func (r *hashResolver) SourceHashesForCredential(ctx context.Context, credential
 }
 
 // --- Helpers ---
+
+// warmPage readies the request caches for the field resolvers of a page of
+// hashes: backlinkCount counts the page in one aggregation per operation, and
+// the createdBy users load in one query. Best-effort, like the credential
+// resolver's.
+func (r *hashResolver) warmPage(ctx context.Context, hashes []models.Hash) {
+	registerBacklinkPage(ctx, hashes, func(h *models.Hash) (uuid.UUID, uuid.UUID) {
+		return h.OperationID, h.HashID
+	})
+	userIDs := make([]uuid.UUID, len(hashes))
+	for i := range hashes {
+		userIDs[i] = hashes[i].CreatedByID
+	}
+	if err := gqlctx.PreloadUsers(ctx, r.userRepo, userIDs); err != nil {
+		logger.From(ctx).Warn("preload hash users", zap.Error(err))
+	}
+}
 
 func buildHashListFilter(search *string, statuses []models.HashStatus, tags []string, hasCredential *bool) repository.HashFilter {
 	filter := repository.HashFilter{

@@ -604,6 +604,7 @@ func (r *credentialResolver) Credentials(ctx context.Context, operationID string
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
+	r.warmPage(ctx, creds)
 
 	edges, pageInfo := pagination.BuildEdges(creds, args,
 		// Edge cursors are sort-specific: they carry the active sort
@@ -670,6 +671,8 @@ func (r *credentialResolver) resolveAccessibleOperationIDs(ctx context.Context, 
 		if len(ops) == 0 {
 			return nil, nil, false
 		}
+		// The page's per-row operation field asks for these same rows.
+		gqlctx.PrimeOperations(ctx, ops)
 		opUIDs := make([]uuid.UUID, len(ops))
 		for i := range ops {
 			opUIDs[i] = ops[i].OperationID
@@ -696,6 +699,27 @@ func (r *credentialResolver) resolveAccessibleOperationIDs(ctx context.Context, 
 		opUIDs = append(opUIDs, opUID)
 	}
 	return opUIDs, nil, true
+}
+
+// warmPage readies the request caches for the field resolvers of a page of
+// credentials: backlinkCount counts the page in one aggregation per
+// operation, and the users behind createdBy and every comment's author load
+// in one query. Best-effort: a failed preload costs speed, not correctness,
+// because each field resolver still falls through to the repository.
+func (r *credentialResolver) warmPage(ctx context.Context, creds []models.Credential) {
+	registerBacklinkPage(ctx, creds, func(c *models.Credential) (uuid.UUID, uuid.UUID) {
+		return c.OperationID, c.CredentialID
+	})
+	userIDs := make([]uuid.UUID, 0, len(creds))
+	for i := range creds {
+		userIDs = append(userIDs, creds[i].CreatedByID)
+		for _, c := range creds[i].Comments {
+			userIDs = append(userIDs, c.AuthorID)
+		}
+	}
+	if err := gqlctx.PreloadUsers(ctx, r.userRepo, userIDs); err != nil {
+		logger.From(ctx).Warn("preload credential users", zap.Error(err))
+	}
 }
 
 // MyCredentials returns a cursor-paginated list of credentials across the
@@ -755,6 +779,7 @@ func (r *credentialResolver) MyCredentials(ctx context.Context, operationIDs []s
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
+	r.warmPage(ctx, creds)
 
 	edges, pageInfo := pagination.BuildEdges(creds, args,
 		// Edge cursors are sort-specific: they carry the active sort

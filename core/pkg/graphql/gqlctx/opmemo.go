@@ -39,3 +39,12 @@ func WithOperationMemo(ctx context.Context) context.Context {
 func LoadOperation(ctx context.Context, finder OperationFinder, id uuid.UUID) (models.Operation, error) {
 	return loadEntity(ctx, id, finder.FindByID)
 }
+
+// PrimeOperations seeds the memo with operations the caller already holds —
+// a membership listing, say — so the per-row operation lookups of the page
+// that follows are map reads.
+func PrimeOperations(ctx context.Context, ops []models.Operation) {
+	for i := range ops {
+		primeEntity(ctx, ops[i].OperationID, ops[i])
+	}
+}

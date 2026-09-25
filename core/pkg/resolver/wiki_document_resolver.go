@@ -2191,17 +2191,29 @@ func (r *wikiDocumentResolver) CredentialBacklinks(ctx context.Context, cred *mo
 }
 
 // CredentialBacklinkCount is the field resolver body for
-// Credential.backlinkCount. Single Mongo countDocuments per call — the
-// batched repo method is used by list resolvers that page through credentials.
+// Credential.backlinkCount. Rows a list resolver registered with the
+// request's BacklinkCounter are counted a page at a time; anything else
+// (a single credential, a subscription payload) is counted alone.
 func (r *wikiDocumentResolver) CredentialBacklinkCount(ctx context.Context, cred *models.Credential) (int, error) {
 	if cred == nil {
 		return 0, nil
 	}
-	counts, err := r.docRepo.CountCredentialReferrersBatch(ctx, cred.OperationID, []uuid.UUID{cred.CredentialID})
-	if err != nil {
-		return 0, fmt.Errorf("failed to count credential backlinks: %w", err)
+	return backlinkCount(ctx, cred.OperationID, cred.CredentialID, r.docRepo.CountCredentialReferrersBatch, "credential")
+}
+
+// backlinkCount counts id's referrers through its page's batch when a list
+// resolver registered one, otherwise with a batch of one.
+func backlinkCount(ctx context.Context, opID, id uuid.UUID, countBatch countReferrersFunc, what string) (int, error) {
+	n, batched, err := BacklinkCounterFromContext(ctx).count(ctx, id, countBatch)
+	if !batched {
+		var counts map[uuid.UUID]int64
+		counts, err = countBatch(ctx, opID, []uuid.UUID{id})
+		n = counts[id]
 	}
-	return int(counts[cred.CredentialID]), nil
+	if err != nil {
+		return 0, fmt.Errorf("failed to count %s backlinks: %w", what, err)
+	}
+	return int(n), nil
 }
 
 // CleanupCredentialReferences pulls credentialID from credential_references
@@ -2260,16 +2272,13 @@ func (r *wikiDocumentResolver) HashBacklinks(ctx context.Context, hash *models.H
 	return r.fetchHashBacklinks(ctx, hash.OperationID, hash.HashID)
 }
 
-// HashBacklinkCount is the field resolver body for Hash.backlinkCount.
+// HashBacklinkCount is the field resolver body for Hash.backlinkCount,
+// batched the same way as CredentialBacklinkCount.
 func (r *wikiDocumentResolver) HashBacklinkCount(ctx context.Context, hash *models.Hash) (int, error) {
 	if hash == nil {
 		return 0, nil
 	}
-	counts, err := r.docRepo.CountHashReferrersBatch(ctx, hash.OperationID, []uuid.UUID{hash.HashID})
-	if err != nil {
-		return 0, fmt.Errorf("failed to count hash backlinks: %w", err)
-	}
-	return int(counts[hash.HashID]), nil
+	return backlinkCount(ctx, hash.OperationID, hash.HashID, r.docRepo.CountHashReferrersBatch, "hash")
 }
 
 // CleanupHashReferences pulls hashID from hash_references across every document

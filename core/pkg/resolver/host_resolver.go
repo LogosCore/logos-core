@@ -337,6 +337,16 @@ func (r *hostResolver) Hosts(ctx context.Context, operationID string, search *st
 		return nil, fmt.Errorf("failed to list hosts: %w", err)
 	}
 
+	// One query for the page's createdBy users instead of one per distinct
+	// creator. Best-effort: the field resolver still falls through.
+	creators := make([]uuid.UUID, len(hosts))
+	for i := range hosts {
+		creators[i] = hosts[i].CreatedByID
+	}
+	if err := gqlctx.PreloadUsers(ctx, r.userRepo, creators); err != nil {
+		logger.From(ctx).Warn("preload host users", zap.Error(err))
+	}
+
 	edges, pageInfo := pagination.BuildEdges(hosts, args,
 		func(h *models.Host) string { return sortSpec.Cursor(h) },
 		func(h *models.Host, cursor string) *model.HostEdge {

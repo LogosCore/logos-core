@@ -225,6 +225,8 @@ func NewHandler(
 	//     per-row field resolvers over a handful of distinct operators.
 	//   - wiki tree loader: lets tree queries hand precomputed childCount and
 	//     ancestor values to the per-document field resolvers.
+	//   - backlink counter: lets credential and hash lists have their page's
+	//     backlinkCount rows counted in one aggregation instead of one each.
 	// A subscription operation is itself long-lived — it stays open as long as
 	// the client is subscribed — so it gets neither cache. Its resolvers
 	// re-authorize per event against live repository reads, which is what makes
@@ -236,6 +238,7 @@ func NewHandler(
 		ctx = gqlctx.WithOperationMemo(ctx)
 		ctx = gqlctx.WithUserMemo(ctx)
 		ctx = resolver.WithWikiTreeLoader(ctx, resolver.NewWikiTreeLoader())
+		ctx = resolver.WithBacklinkCounter(ctx, resolver.NewBacklinkCounter())
 		return next(ctx)
 	})
 
