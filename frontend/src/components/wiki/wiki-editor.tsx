@@ -141,7 +141,7 @@ export function WikiEditor({
         },
       },
       handlePaste: (view, event) => {
-        if (!isEditor) return false
+        if (!view.editable) return false
         const images = extractClipboardImages(event.clipboardData)
         const attachments = extractClipboardFiles(event.clipboardData)
         if (images.length > 0 || attachments.length > 0) {
@@ -193,7 +193,7 @@ export function WikiEditor({
         return true
       },
       handleDrop: (view, event) => {
-        if (!isEditor) return false
+        if (!view.editable) return false
         const dt =
           event instanceof DragEvent ? event.dataTransfer : null
         const images = extractDropImages(dt)
@@ -393,8 +393,10 @@ export function WikiEditor({
             },
           })]
         : []),
+      // Only rendered while the editor is editable (showOnlyWhenEditable),
+      // so it follows setEditable without a rebuild.
       Placeholder.configure({
-        placeholder: isEditor ? "Start writing..." : "",
+        placeholder: "Start writing...",
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -466,7 +468,11 @@ export function WikiEditor({
       }),
       WikiEscapeEdgeBlock,
     ],
-  }, [ydoc, provider, documentId, operationId, isEditor])
+    // isEditor is deliberately not a dependency: the effect below syncs it
+    // through setEditable. A rebuild tears down the collaboration binding
+    // and every node view, and isEditor flips false → true on every page
+    // open once the role query resolves.
+  }, [ydoc, provider, documentId, operationId])
 
   // Keep the paste/drop ref pointed at the live editor so those handlers
   // never fire against a stale/destroyed instance after a deps-driven rebuild.
