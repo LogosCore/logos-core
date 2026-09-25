@@ -24,9 +24,12 @@ package pagination
 // matching PageInfo.
 //
 // Callers fetch args.Limit+1 rows so that one surplus row signals another
-// page; BuildEdges trims it back off before building edges. mkEdge is handed a
-// pointer into that trimmed slice, so edge nodes alias the caller's rows
-// rather than copies of them — the same aliasing the hand-written loops had.
+// page; BuildEdges trims it back off before building edges. items must be in
+// display order — every *WithCursor repository reverses a backward page before
+// returning it — so the surplus is the last row going forward and the first
+// going backward. mkEdge is handed a pointer into that trimmed slice, so edge
+// nodes alias the caller's rows rather than copies of them — the same aliasing
+// the hand-written loops had.
 //
 // cursorOf is separate from mkEdge because the cursor is needed twice: once on
 // the edge and once for the page bounds. Sort-aware callers pass their
@@ -39,7 +42,14 @@ func BuildEdges[T any, E any](
 ) ([]E, PageInfo) {
 	hasMore := int64(len(items)) > args.Limit
 	if hasMore {
-		items = items[:args.Limit]
+		if args.Forward {
+			items = items[:args.Limit]
+		} else {
+			// A backward page is fetched nearest-first and handed over
+			// reversed into display order, so the surplus row — furthest
+			// from the cursor — is the first one, not the last.
+			items = items[int64(len(items))-args.Limit:]
+		}
 	}
 
 	edges := make([]E, len(items))

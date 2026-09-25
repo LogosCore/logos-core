@@ -84,6 +84,33 @@ func TestBuildEdges_TrimsTheSurplusRow(t *testing.T) {
 	}
 }
 
+// TestBuildEdges_BackwardTrimsTheRowFurthestFromTheCursor pins which row a
+// backward page drops. Repositories fetch a backward page nearest-first and
+// reverse it into display order, so the surplus row — the one furthest from
+// the cursor — arrives first. Dropping the last row instead loses the row
+// right next to the cursor and returns the surplus in its place.
+func TestBuildEdges_BackwardTrimsTheRowFurthestFromTheCursor(t *testing.T) {
+	// Display order c0 c1 c2, fetched for last: 2 before some cursor after c2.
+	args := Args{Limit: 2, Forward: false, Cursor: &Cursor{}}
+	edges, info := BuildEdges(rows(3), args, cursorOf, mkEdge)
+
+	got := make([]string, len(edges))
+	for i, e := range edges {
+		got[i] = e.Cursor
+	}
+	if fmt.Sprint(got) != "[c1 c2]" {
+		t.Fatalf("backward page = %v, want [c1 c2]: c0 is the surplus row", got)
+	}
+	if !info.HasPreviousPage {
+		t.Error("a surplus row on a backward page should report HasPreviousPage")
+	}
+	// The next backward page continues from StartCursor, so it must be the
+	// first returned row, not the dropped one.
+	if *info.StartCursor != "c1" || *info.EndCursor != "c2" {
+		t.Errorf("bounds = %s..%s, want c1..c2", *info.StartCursor, *info.EndCursor)
+	}
+}
+
 func TestBuildEdges_NodesAliasTheCallerRows(t *testing.T) {
 	// The hand-written loops all did &items[i]; edges must point at the
 	// caller's rows, not at copies, and each edge at a distinct row.

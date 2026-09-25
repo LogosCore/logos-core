@@ -189,6 +189,71 @@ func TestIntegrationWikiDocumentBackwardPagination(t *testing.T) {
 	}
 }
 
+// TestIntegrationBackwardPaginationThroughConnection walks a list the way a
+// client pages backward — last: n, then before: startCursor — through the
+// same over-fetch and pagination.BuildEdges trim the resolvers use. The test
+// above fetches everything before the cursor in one go, so it never reaches
+// the trim; this one does, and the pages must reassemble into exactly the
+// forward order. The trim used to drop the wrong end of a backward page, so
+// even the first page (last: n, no cursor) missed the list's final row.
+func TestIntegrationBackwardPaginationThroughConnection(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewWikiDocumentRepository(db)
+
+	opID := uuid.New()
+	const total, pageSize = 8, 3
+	clock := newSeedClock(time.Minute)
+	for i := range total {
+		doc := &models.WikiDocument{
+			DocumentID:   uuid.New(),
+			OperationID:  opID,
+			Title:        fmt.Sprintf("walk-%02d", i),
+			DefaultField: createdAt(clock.next()),
+		}
+		if err := repo.Create(ctx, doc); err != nil {
+			t.Fatalf("seed %d: %v", i, err)
+		}
+	}
+
+	filter := WikiDocumentFilter{Sort: SortByCreatedAt}
+	want, err := repo.FindByOperationIDWithCursor(ctx, opID, filter, nil, total+5, true)
+	if err != nil {
+		t.Fatalf("forward fetch: %v", err)
+	}
+
+	var (
+		got    []string
+		before *pagination.Cursor
+	)
+	for steps := 0; ; steps++ {
+		if steps > total {
+			t.Fatalf("backward pagination did not terminate (collected %v)", got)
+		}
+		fetched, err := repo.FindByOperationIDWithCursor(ctx, opID, filter, before, pageSize+1, false)
+		if err != nil {
+			t.Fatalf("backward page %d: %v", steps, err)
+		}
+		args := pagination.Args{Limit: pageSize, Cursor: before, Forward: false}
+		nodes, info := pagination.BuildEdges(fetched, args,
+			func(d *models.WikiDocument) string { return pagination.EncodeCursor(d.CreateAt, d.Id) },
+			func(d *models.WikiDocument, _ string) models.WikiDocument { return *d })
+
+		got = append(titlesOf(nodes), got...) // pages arrive last-first
+		if !info.HasPreviousPage {
+			break
+		}
+		c, err := pagination.DecodeCursor(*info.StartCursor)
+		if err != nil {
+			t.Fatalf("decode start cursor: %v", err)
+		}
+		before = &c
+	}
+
+	assertNoDuplicates(t, "backward walk", got)
+	assertSameOrder(t, "backward walk vs forward order", got, titlesOf(want))
+}
+
 // TestIntegrationWikiDocumentSortByLastUpdatedAt covers the second sort mode
 // and the exclusion the comment on SortByLastUpdatedAt promises: rows with a
 // null last_updated_at have nothing to sort against and must not appear.
