@@ -53,7 +53,7 @@ func EnsureHoldingPen(
 	defer holdingPenMu.Unlock()
 
 	var pen HoldingPen
-	all, err := docRepo.FindAllByOperationID(ctx, operationID)
+	all, err := docRepo.FindSummariesByOperationID(ctx, operationID, false)
 	if err != nil {
 		return pen, fmt.Errorf("list documents: %w", err)
 	}

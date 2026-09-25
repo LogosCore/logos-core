@@ -150,8 +150,9 @@ func (r *wikiDocumentVisitResolver) WikiDocumentHistory(ctx context.Context, ope
 
 	// Active doc set in this operation. The history list is bounded at
 	// MaxWikiVisitHistory rows so this scan is cheap; we can revisit if
-	// operations grow to tens of thousands of docs.
-	activeDocs, err := r.docRepo.FindAllByOperationID(ctx, opUID)
+	// operations grow to tens of thousands of docs. Only the ids are used,
+	// so the bodies stay in Mongo.
+	activeDocs, err := r.docRepo.FindSummariesByOperationID(ctx, opUID, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load active documents: %w", err)
 	}

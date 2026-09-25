@@ -92,11 +92,31 @@ func (f *DocRepo) FindAllByOperationID(_ context.Context, opID uuid.UUID) ([]mod
 	return out, nil
 }
 
-func (f *DocRepo) FindDescendants(_ context.Context, docID uuid.UUID) ([]models.WikiDocument, error) {
+// FindSummariesByOperationID mirrors the repository's projection: active
+// documents only, with content and content_state stripped, so a caller that
+// starts reading the body from a summary fails here as it would in Mongo.
+func (f *DocRepo) FindSummariesByOperationID(_ context.Context, opID uuid.UUID, templatesOnly bool) ([]models.WikiDocument, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []models.WikiDocument
 	for _, d := range f.Docs {
+		if d.OperationID != opID || d.DeletedAt != nil || (templatesOnly && !d.IsTemplate) {
+			continue
+		}
+		d.Content, d.ContentState = "", nil
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+func (f *DocRepo) FindDescendants(_ context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []models.WikiDocument
+	for _, d := range f.Docs {
+		if d.OperationID != opID {
+			continue
+		}
 		for _, p := range d.PathIDs {
 			if p == docID {
 				out = append(out, d)

@@ -787,7 +787,7 @@ func (r *wikiDocumentResolver) DeleteWikiDocument(ctx context.Context, id string
 	}
 
 	// Find all descendants for cascading soft-delete
-	descendants, err := r.docRepo.FindDescendants(ctx, uid)
+	descendants, err := r.docRepo.FindDescendants(ctx, doc.OperationID, uid)
 	if err != nil {
 		return false, fmt.Errorf("failed to find descendants: %w", err)
 	}
@@ -912,7 +912,7 @@ func (r *wikiDocumentResolver) DuplicateWikiDocument(ctx context.Context, id str
 			newParentID := idMap[oldParentID]
 			newParentPath := pathByNewID[newParentID]
 
-			children, err := r.docRepo.FindChildDocuments(ctx, oldParentID)
+			children, err := r.docRepo.FindChildDocuments(ctx, source.OperationID, oldParentID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch children of %s: %w", oldParentID, err)
 			}
@@ -1292,7 +1292,7 @@ func (r *wikiDocumentResolver) RestoreWikiDocument(ctx context.Context, id strin
 	// invalidate the whole tree on a single restore event, so per-descendant
 	// events would just duplicate that work.
 	if cascade != nil && *cascade {
-		descendants, err := r.docRepo.FindTrashedDescendants(ctx, uid)
+		descendants, err := r.docRepo.FindTrashedDescendants(ctx, doc.OperationID, uid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find trashed descendants: %w", err)
 		}
@@ -2125,7 +2125,7 @@ func (r *wikiDocumentResolver) WikiDocumentTrashedDescendants(ctx context.Contex
 		return nil, err
 	}
 
-	descendants, err := r.docRepo.FindTrashedDescendants(ctx, uid)
+	descendants, err := r.docRepo.FindTrashedDescendants(ctx, doc.OperationID, uid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list trashed descendants: %w", err)
 	}
@@ -2456,14 +2456,16 @@ func (r *wikiDocumentResolver) WikiDocumentParentDocument(ctx context.Context, o
 	if obj.ParentDocumentID == nil {
 		return nil, nil
 	}
-	parent, err := r.docRepo.FindByID(ctx, *obj.ParentDocumentID)
+	// FindByIDs, not FindByID: the parent goes straight to the API, which
+	// never reads its CRDT state.
+	parents, err := r.docRepo.FindByIDs(ctx, []uuid.UUID{*obj.ParentDocumentID})
 	if err != nil {
-		if repository.IsNotFound(err) {
-			return nil, nil // parent may have been deleted
-		}
 		return nil, fmt.Errorf("failed to load parent document: %w", err)
 	}
-	return &parent, nil
+	if len(parents) == 0 {
+		return nil, nil // parent may have been deleted
+	}
+	return &parents[0], nil
 }
 
 // WikiDocumentParentDocumentID exposes the parent's id as a scalar — preferred
@@ -2594,7 +2596,7 @@ func preloadAncestorEntries(
 		want = append(want, id)
 	}
 
-	ancestors, err := docRepo.FindByIDs(ctx, want)
+	ancestors, err := docRepo.FindSummariesByIDs(ctx, want)
 	if err != nil {
 		// Don't fail the page — the field resolver falls back to the live
 		// walk on a partial preload.
@@ -2620,7 +2622,7 @@ func preloadAncestorEntries(
 }
 
 func (r *wikiDocumentResolver) WikiDocumentChildDocuments(ctx context.Context, obj *models.WikiDocument) ([]*models.WikiDocument, error) {
-	children, err := r.docRepo.FindChildDocuments(ctx, obj.DocumentID)
+	children, err := r.docRepo.FindChildDocuments(ctx, obj.OperationID, obj.DocumentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch child documents: %w", err)
 	}
@@ -2639,7 +2641,7 @@ func (r *wikiDocumentResolver) WikiDocumentChildCount(ctx context.Context, obj *
 	if c, ok := WikiTreeLoaderFromContext(ctx).ChildCount(obj.DocumentID); ok {
 		return c, nil
 	}
-	count, err := r.docRepo.CountChildDocuments(ctx, obj.DocumentID)
+	count, err := r.docRepo.CountChildDocuments(ctx, obj.OperationID, obj.DocumentID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count children: %w", err)
 	}

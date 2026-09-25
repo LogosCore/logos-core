@@ -57,18 +57,26 @@ type IWikiDocumentRepository interface {
 	Create(ctx context.Context, doc *models.WikiDocument) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.WikiDocument, error)
 	// FindByIDs returns documents matching any id in `ids`, in unspecified
-	// order. Like FindByID, it reads through soft-deletes so callers that
-	// need trashed rows (e.g. ancestor crumb resolution) still get them.
-	// One Mongo round trip regardless of len(ids); ids should already be
-	// deduplicated by the caller.
+	// order, without content_state (see wikiNoStateProjection) — the rows
+	// are meant for the API. Like FindByID, it reads through soft-deletes so
+	// callers that need trashed rows still get them. One Mongo round trip
+	// regardless of len(ids); ids should already be deduplicated by the
+	// caller.
 	FindByIDs(ctx context.Context, ids []uuid.UUID) ([]models.WikiDocument, error)
+	// FindSummariesByIDs is FindByIDs without content either, for callers
+	// that only read a document's place and label (ancestor crumbs).
+	FindSummariesByIDs(ctx context.Context, ids []uuid.UUID) ([]models.WikiDocument, error)
 	FindByOperationIDWithCursor(ctx context.Context, opID uuid.UUID, filter WikiDocumentFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.WikiDocument, error)
 	// FindTrashedByOperationIDWithCursor lists soft-deleted documents ordered by
 	// deleted_at (most recently deleted first). Cursor encodes deleted_at +
 	// _id so concurrent restores/permanent-deletes don't perturb pagination.
 	FindTrashedByOperationIDWithCursor(ctx context.Context, opID uuid.UUID, cursor *pagination.Cursor, limit int64, forward bool) ([]models.WikiDocument, error)
 	CountByOperationID(ctx context.Context, opID uuid.UUID, filter WikiDocumentFilter) (int64, error)
-	FindChildDocuments(ctx context.Context, parentID uuid.UUID) ([]models.WikiDocument, error)
+	// FindChildDocuments, CountChildDocuments and the descendant walks take
+	// the operation even though a parent id is globally unique: every index
+	// on parent_document_id leads with operation_id, so a lookup by parent
+	// alone scans the whole collection, across every operation.
+	FindChildDocuments(ctx context.Context, opID, parentID uuid.UUID) ([]models.WikiDocument, error)
 	FindAllByOperationID(ctx context.Context, opID uuid.UUID) ([]models.WikiDocument, error)
 	// FindSummariesByOperationID is FindAllByOperationID without the body:
 	// content and content_state are projected out, so listing a wiki's
@@ -83,7 +91,7 @@ type IWikiDocumentRepository interface {
 	// picker via the {operation_id, is_template} partial index — cost scales
 	// with the number of templates, not the total document count.
 	FindTemplatesByOperationID(ctx context.Context, opID uuid.UUID) ([]models.WikiDocument, error)
-	CountChildDocuments(ctx context.Context, parentID uuid.UUID) (int64, error)
+	CountChildDocuments(ctx context.Context, opID, parentID uuid.UUID) (int64, error)
 	// FindChildDocumentsWithCounts returns active children of `parentID` (or
 	// root documents in opID when parentID is nil), sorted by sort_order with
 	// -createAt as tiebreaker (so newer docs surface above older ones when
@@ -99,7 +107,7 @@ type IWikiDocumentRepository interface {
 	// (typically the target's ancestor chain). One Find + one count
 	// aggregation. Counts cover every returned row.
 	FindDocumentsForRevealPath(ctx context.Context, opID uuid.UUID, parentIDs []uuid.UUID) ([]models.WikiDocument, map[uuid.UUID]int, error)
-	FindDescendants(ctx context.Context, docID uuid.UUID) ([]models.WikiDocument, error)
+	FindDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error)
 	// FindDescendantIDs returns just the document IDs of every active
 	// descendant of docID (excluding docID itself), via the materialized
 	// path_ids chain. Projection-only + subtree-scoped, so it replaces a
@@ -114,7 +122,7 @@ type IWikiDocumentRepository interface {
 	// FindTrashedDescendants returns soft-deleted descendants of docID. Walks
 	// downward through parent_document_id, only following children whose
 	// deleted_at is set. Used for cascade-restore prompts.
-	FindTrashedDescendants(ctx context.Context, docID uuid.UUID) ([]models.WikiDocument, error)
+	FindTrashedDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error)
 	FindAncestors(ctx context.Context, id uuid.UUID) ([]models.WikiDocument, error)
 	NestingDepth(ctx context.Context, parentID uuid.UUID) (int, error)
 	SoftDelete(ctx context.Context, doc *models.WikiDocument, deletedByID uuid.UUID) error
@@ -296,7 +304,7 @@ func (r *wikiDocumentRepository) Create(ctx context.Context, doc *models.WikiDoc
 		if doc.ParentDocumentID == nil {
 			doc.PathIDs = []uuid.UUID{}
 		} else {
-			parent, err := r.FindByID(ctx, *doc.ParentDocumentID)
+			parent, err := r.findSummaryByID(ctx, *doc.ParentDocumentID)
 			if err != nil {
 				return fmt.Errorf("resolve parent path_ids: %w", err)
 			}
@@ -322,14 +330,14 @@ func (r *wikiDocumentRepository) Create(ctx context.Context, doc *models.WikiDoc
 // branches retain a valid path chain (cheap correctness, helps restore).
 // Cycle-guarded via a visited set in case of corrupt data.
 func (r *wikiDocumentRepository) RebuildPathIDsCascade(ctx context.Context, rootID uuid.UUID) error {
-	root, err := r.FindByID(ctx, rootID)
+	root, err := r.findSummaryByID(ctx, rootID)
 	if err != nil {
 		return fmt.Errorf("rebuild path_ids: load root: %w", err)
 	}
 
 	var rootPath []uuid.UUID
 	if root.ParentDocumentID != nil {
-		parent, err := r.FindByID(ctx, *root.ParentDocumentID)
+		parent, err := r.findSummaryByID(ctx, *root.ParentDocumentID)
 		if err != nil {
 			return fmt.Errorf("rebuild path_ids: load parent: %w", err)
 		}
@@ -357,7 +365,8 @@ func (r *wikiDocumentRepository) RebuildPathIDsCascade(ctx context.Context, root
 		queue = queue[1:]
 
 		var children []models.WikiDocument
-		if err := r.coll.Find(ctx, bson.M{"parent_document_id": node.id}).All(&children); err != nil {
+		if err := r.coll.Find(ctx, bson.M{"operation_id": root.OperationID, "parent_document_id": node.id}).
+			Select(bson.M{"document_id": 1}).All(&children); err != nil {
 			return fmt.Errorf("rebuild path_ids: find children of %s: %w", node.id, err)
 		}
 		if len(children) == 0 {
@@ -395,12 +404,28 @@ func (r *wikiDocumentRepository) FindByID(ctx context.Context, id uuid.UUID) (mo
 	return doc, err
 }
 
+// findSummaryByID is FindByID without the body, for the tree walks inside
+// this repository that only read a document's position and label.
+func (r *wikiDocumentRepository) findSummaryByID(ctx context.Context, id uuid.UUID) (models.WikiDocument, error) {
+	var doc models.WikiDocument
+	err := r.coll.FindOne(ctx, bson.M{"document_id": id}).Select(wikiSummaryProjection).One(&doc)
+	return doc, err
+}
+
 func (r *wikiDocumentRepository) FindByIDs(ctx context.Context, ids []uuid.UUID) ([]models.WikiDocument, error) {
+	return r.findByIDs(ctx, ids, wikiNoStateProjection)
+}
+
+func (r *wikiDocumentRepository) FindSummariesByIDs(ctx context.Context, ids []uuid.UUID) ([]models.WikiDocument, error) {
+	return r.findByIDs(ctx, ids, wikiSummaryProjection)
+}
+
+func (r *wikiDocumentRepository) findByIDs(ctx context.Context, ids []uuid.UUID, projection bson.M) ([]models.WikiDocument, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	var docs []models.WikiDocument
-	if err := r.coll.Find(ctx, bson.M{"document_id": bson.M{"$in": ids}}).All(&docs); err != nil {
+	if err := r.coll.Find(ctx, bson.M{"document_id": bson.M{"$in": ids}}).Select(projection).All(&docs); err != nil {
 		return nil, fmt.Errorf("find by ids: %w", err)
 	}
 	return docs, nil
@@ -423,6 +448,7 @@ func (r *wikiDocumentRepository) FindByOperationIDWithCursor(ctx context.Context
 
 	var docs []models.WikiDocument
 	err := r.coll.Find(ctx, mongoFilter).
+		Select(wikiNoStateProjection).
 		Sort(pagination.SortFieldsOn(forward, sortField)...).
 		Limit(limit).
 		All(&docs)
@@ -477,6 +503,7 @@ func (r *wikiDocumentRepository) FindTrashedByOperationIDWithCursor(ctx context.
 
 	var docs []models.WikiDocument
 	err := r.coll.Find(ctx, mongoFilter).
+		Select(wikiNoStateProjection).
 		Sort(sort...).
 		Limit(limit).
 		All(&docs)
@@ -498,9 +525,10 @@ func (r *wikiDocumentRepository) CountByOperationID(ctx context.Context, opID uu
 	return r.coll.Count(ctx, mongoFilter)
 }
 
-func (r *wikiDocumentRepository) FindChildDocuments(ctx context.Context, parentID uuid.UUID) ([]models.WikiDocument, error) {
+func (r *wikiDocumentRepository) FindChildDocuments(ctx context.Context, opID, parentID uuid.UUID) ([]models.WikiDocument, error) {
 	var docs []models.WikiDocument
 	err := r.coll.Find(ctx, bson.M{
+		"operation_id":       opID,
 		"parent_document_id": parentID,
 		"deleted_at":         nil,
 	}).Sort("sort_order", "-createAt").All(&docs)
@@ -518,6 +546,14 @@ func (r *wikiDocumentRepository) FindAllByOperationID(ctx context.Context, opID 
 
 // wikiSummaryProjection drops the two fields that make a document heavy.
 var wikiSummaryProjection = bson.M{"content": 0, "content_state": 0}
+
+// wikiNoStateProjection drops only content_state, the Yjs CRDT blob — about
+// half of an average document's bytes. No GraphQL field reads it, so finders
+// whose rows only ever reach the API select this and can still serve
+// content, hasContent and excerpt. FindByID, FindChildDocuments,
+// FindAllByOperationID and FindDescendants stay whole: duplicate, backup and
+// export copy the state out of their results.
+var wikiNoStateProjection = bson.M{"content_state": 0}
 
 func (r *wikiDocumentRepository) FindSummariesByOperationID(ctx context.Context, opID uuid.UUID, templatesOnly bool) ([]models.WikiDocument, error) {
 	filter := bson.M{"operation_id": opID, "deleted_at": nil}
@@ -548,12 +584,13 @@ func (r *wikiDocumentRepository) FindTemplatesByOperationID(ctx context.Context,
 		"operation_id": opID,
 		"is_template":  true,
 		"deleted_at":   nil,
-	}).Sort("title_lower").All(&docs)
+	}).Select(wikiNoStateProjection).Sort("title_lower").All(&docs)
 	return docs, err
 }
 
-func (r *wikiDocumentRepository) CountChildDocuments(ctx context.Context, parentID uuid.UUID) (int64, error) {
+func (r *wikiDocumentRepository) CountChildDocuments(ctx context.Context, opID, parentID uuid.UUID) (int64, error) {
 	return r.coll.Count(ctx, bson.M{
+		"operation_id":       opID,
 		"parent_document_id": parentID,
 		"deleted_at":         nil,
 	})
@@ -568,7 +605,7 @@ func (r *wikiDocumentRepository) FindChildDocumentsWithCounts(ctx context.Contex
 	}
 
 	var docs []models.WikiDocument
-	if err := r.coll.Find(ctx, filter).Sort("sort_order", "-createAt").All(&docs); err != nil {
+	if err := r.coll.Find(ctx, filter).Select(wikiNoStateProjection).Sort("sort_order", "-createAt").All(&docs); err != nil {
 		return nil, nil, err
 	}
 	if len(docs) == 0 {
@@ -579,7 +616,7 @@ func (r *wikiDocumentRepository) FindChildDocumentsWithCounts(ctx context.Contex
 	for i, d := range docs {
 		ids[i] = d.DocumentID
 	}
-	counts, err := r.aggregateChildCounts(ctx, ids)
+	counts, err := r.aggregateChildCounts(ctx, opID, ids)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -601,7 +638,7 @@ func (r *wikiDocumentRepository) FindDocumentsForRevealPath(ctx context.Context,
 	}
 
 	var docs []models.WikiDocument
-	if err := r.coll.Find(ctx, filter).Sort("sort_order", "-createAt").All(&docs); err != nil {
+	if err := r.coll.Find(ctx, filter).Select(wikiNoStateProjection).Sort("sort_order", "-createAt").All(&docs); err != nil {
 		return nil, nil, err
 	}
 	if len(docs) == 0 {
@@ -612,23 +649,26 @@ func (r *wikiDocumentRepository) FindDocumentsForRevealPath(ctx context.Context,
 	for i, d := range docs {
 		ids[i] = d.DocumentID
 	}
-	counts, err := r.aggregateChildCounts(ctx, ids)
+	counts, err := r.aggregateChildCounts(ctx, opID, ids)
 	if err != nil {
 		return nil, nil, err
 	}
 	return docs, counts, nil
 }
 
-// aggregateChildCounts groups active documents by parent_document_id where the
-// parent is in `parentIDs`, returning a map of parent → direct child count.
-// Parents with zero children are absent from the map. Used by tree-shaped
-// queries to populate the per-row childCount field without an N+1 storm.
-func (r *wikiDocumentRepository) aggregateChildCounts(ctx context.Context, parentIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+// aggregateChildCounts groups active documents in opID by parent_document_id
+// where the parent is in `parentIDs`, returning a map of parent → direct child
+// count. Parents with zero children are absent from the map. Used by
+// tree-shaped queries to populate the per-row childCount field without an N+1
+// storm. Runs on every sidebar expand, so the operation_id in the $match is
+// load-bearing: it is what lets the stage use an index instead of a scan.
+func (r *wikiDocumentRepository) aggregateChildCounts(ctx context.Context, opID uuid.UUID, parentIDs []uuid.UUID) (map[uuid.UUID]int, error) {
 	if len(parentIDs) == 0 {
 		return map[uuid.UUID]int{}, nil
 	}
 	pipeline := bson.A{
 		bson.M{"$match": bson.M{
+			"operation_id":       opID,
 			"parent_document_id": bson.M{"$in": parentIDs},
 			"deleted_at":         nil,
 		}},
@@ -653,21 +693,21 @@ func (r *wikiDocumentRepository) aggregateChildCounts(ctx context.Context, paren
 
 // FindDescendants returns all descendants of a document (children, grandchildren, etc.)
 // for cascading soft-delete. Uses iterative breadth-first traversal.
-func (r *wikiDocumentRepository) FindDescendants(ctx context.Context, docID uuid.UUID) ([]models.WikiDocument, error) {
-	return r.findDescendantsBFS(ctx, docID, false)
+func (r *wikiDocumentRepository) FindDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
+	return r.findDescendantsBFS(ctx, opID, docID, false)
 }
 
 // FindTrashedDescendants is the trash-only counterpart of FindDescendants:
 // it walks the parent chain downward but only follows children whose
 // deleted_at is set. Cycle-safe via a visited set.
-func (r *wikiDocumentRepository) FindTrashedDescendants(ctx context.Context, docID uuid.UUID) ([]models.WikiDocument, error) {
-	return r.findDescendantsBFS(ctx, docID, true)
+func (r *wikiDocumentRepository) FindTrashedDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
+	return r.findDescendantsBFS(ctx, opID, docID, true)
 }
 
 // findDescendantsBFS is the shared BFS walker. trashed=false matches active
 // children (deleted_at == nil); trashed=true matches soft-deleted children
 // (deleted_at != nil). The starting docID itself is never included.
-func (r *wikiDocumentRepository) findDescendantsBFS(ctx context.Context, docID uuid.UUID, trashed bool) ([]models.WikiDocument, error) {
+func (r *wikiDocumentRepository) findDescendantsBFS(ctx context.Context, opID, docID uuid.UUID, trashed bool) ([]models.WikiDocument, error) {
 	var allDescendants []models.WikiDocument
 	queue := []uuid.UUID{docID}
 	visited := map[uuid.UUID]struct{}{docID: {}}
@@ -682,11 +722,18 @@ func (r *wikiDocumentRepository) findDescendantsBFS(ctx context.Context, docID u
 		queue = queue[1:]
 
 		var children []models.WikiDocument
-		err := r.coll.Find(ctx, bson.M{
+		q := r.coll.Find(ctx, bson.M{
+			"operation_id":       opID,
 			"parent_document_id": parentID,
 			"deleted_at":         deletedAtFilter,
-		}).All(&children)
-		if err != nil {
+		})
+		if trashed {
+			// Trashed descendants feed the trash UI and the restore cascade,
+			// which never read the CRDT state. The active path feeds export
+			// and pre-delete backups, which copy it, so it stays whole.
+			q = q.Select(wikiNoStateProjection)
+		}
+		if err := q.All(&children); err != nil {
 			return nil, err
 		}
 
@@ -735,14 +782,14 @@ func (r *wikiDocumentRepository) FindDescendantIDs(ctx context.Context, opID, do
 const maxAncestorDepth = 100
 
 // FindAncestors walks parent_document_id upward from the given document and
-// returns the chain root→leaf, excluding the document itself. Reads through
-// soft-deleted ancestors (FindByID does not filter on deleted_at) so the
-// caller can still render trashed parents. Stops — without error — when an
-// ancestor is missing, when a cycle is detected, or when maxAncestorDepth
-// is reached.
+// returns the chain root→leaf, excluding the document itself, as summaries
+// (no content or content_state). Reads through soft-deleted ancestors (the
+// lookup does not filter on deleted_at) so the caller can still render
+// trashed parents. Stops — without error — when an ancestor is missing, when
+// a cycle is detected, or when maxAncestorDepth is reached.
 func (r *wikiDocumentRepository) FindAncestors(ctx context.Context, id uuid.UUID) ([]models.WikiDocument, error) {
 	return walkAncestorChain(id, func(id uuid.UUID) (models.WikiDocument, bool) {
-		doc, err := r.FindByID(ctx, id)
+		doc, err := r.findSummaryByID(ctx, id)
 		if err != nil {
 			return models.WikiDocument{}, false
 		}
@@ -793,7 +840,7 @@ func walkAncestorChain(startID uuid.UUID, lookup func(uuid.UUID) (models.WikiDoc
 // parent_document_id one FindOne per level, which cost up to maxNestingDepth
 // sequential round trips on every mutation.
 func (r *wikiDocumentRepository) NestingDepth(ctx context.Context, parentID uuid.UUID) (int, error) {
-	doc, err := r.FindByID(ctx, parentID)
+	doc, err := r.findSummaryByID(ctx, parentID)
 	if err != nil {
 		return 0, err
 	}
@@ -804,7 +851,7 @@ func (r *wikiDocumentRepository) NestingDepth(ctx context.Context, parentID uuid
 	// depth and letting the nesting cap be bypassed.
 	if len(doc.PathIDs) == 0 && doc.ParentDocumentID != nil {
 		chain := walkAncestorChain(doc.DocumentID, func(id uuid.UUID) (models.WikiDocument, bool) {
-			d, err := r.FindByID(ctx, id)
+			d, err := r.findSummaryByID(ctx, id)
 			if err != nil {
 				return models.WikiDocument{}, false
 			}
@@ -941,7 +988,7 @@ func (r *wikiDocumentRepository) FindReferrers(ctx context.Context, opID, docume
 		"references":   documentID,
 		"deleted_at":   nil,
 		"document_id":  bson.M{"$ne": documentID},
-	}).Sort("-updateAt", "-_id").Limit(limit).All(&docs)
+	}).Select(wikiNoStateProjection).Sort("-updateAt", "-_id").Limit(limit).All(&docs)
 	return docs, err
 }
 
@@ -955,7 +1002,7 @@ func (r *wikiDocumentRepository) FindCredentialReferrers(ctx context.Context, op
 		"operation_id":          opID,
 		"credential_references": credentialID,
 		"deleted_at":            nil,
-	}).Sort("-updateAt", "-_id").Limit(limit).All(&docs)
+	}).Select(wikiNoStateProjection).Sort("-updateAt", "-_id").Limit(limit).All(&docs)
 	return docs, err
 }
 
@@ -1024,7 +1071,7 @@ func (r *wikiDocumentRepository) FindHashReferrers(ctx context.Context, opID, ha
 		"operation_id":    opID,
 		"hash_references": hashID,
 		"deleted_at":      nil,
-	}).Sort("-updateAt", "-_id").Limit(limit).All(&docs)
+	}).Select(wikiNoStateProjection).Sort("-updateAt", "-_id").Limit(limit).All(&docs)
 	return docs, err
 }
 

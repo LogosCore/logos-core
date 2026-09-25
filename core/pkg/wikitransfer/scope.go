@@ -79,7 +79,7 @@ func CollectScope(ctx context.Context, docRepo repository.IWikiDocumentRepositor
 		if root.DeletedAt != nil {
 			return nil, errors.New("subtree root is in trash")
 		}
-		descendants, err := docRepo.FindDescendants(ctx, root.DocumentID)
+		descendants, err := docRepo.FindDescendants(ctx, root.OperationID, root.DocumentID)
 		if err != nil {
 			return nil, fmt.Errorf("find descendants: %w", err)
 		}
