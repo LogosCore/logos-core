@@ -1677,11 +1677,6 @@ func (r *wikiDocumentResolver) WikiDocuments(ctx context.Context, operationID st
 		return nil, fmt.Errorf("failed to list documents: %w", err)
 	}
 
-	hasMore := int64(len(docs)) > args.Limit
-	if hasMore {
-		docs = docs[:args.Limit]
-	}
-
 	// Bulk-preload the per-page ancestor crumbs into the request-scoped loader
 	// so the field resolver becomes a map walk over PathIDs instead of one
 	// upward chain traversal per row. PathIDs is the materialized
@@ -2075,11 +2070,6 @@ func (r *wikiDocumentResolver) WikiDocumentTrash(ctx context.Context, operationI
 	docs, err := r.docRepo.FindTrashedByOperationIDWithCursor(ctx, opUID, args.Cursor, args.Limit+1, args.Forward)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list trashed documents: %w", err)
-	}
-
-	hasMore := int64(len(docs)) > args.Limit
-	if hasMore {
-		docs = docs[:args.Limit]
 	}
 
 	edges, pageInfo := pagination.BuildEdges(docs, args,
