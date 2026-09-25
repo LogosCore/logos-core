@@ -1,4 +1,5 @@
 import { Outlet } from "react-router"
+import { PageBoundary } from "@/components/page-boundary"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import {
   SidebarInset,
@@ -63,7 +64,10 @@ export function AppLayout() {
       >
         <AppSidebar />
         <SidebarInset className="min-w-0">
-          <Outlet />
+          {/* Inside the shell, so the sidebar stays while a page loads. */}
+          <PageBoundary>
+            <Outlet />
+          </PageBoundary>
           {/* Floated over the page rather than placed in it: every surface
               should show what the agent is doing, and no page owns the
               concern. Renders nothing when no agent is active. */}

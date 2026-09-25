@@ -1,25 +1,40 @@
-import { useEffect, useRef } from "react"
+import { lazy, useEffect, useRef, type ComponentType } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 import { QueryProvider } from "@/providers/query-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { ProtectedRoute } from "@/components/protected-route"
 import { ConnectivityBanner } from "@/components/connectivity-banner"
+import { PageBoundary } from "@/components/page-boundary"
 import { AppLayout } from "@/components/layout/app-layout"
-import { LoginPage } from "@/pages/login"
-import { EnrollPage } from "@/pages/enroll"
-import { OperationsPage } from "@/pages/operations"
-import { UsersPage } from "@/pages/users"
-import { ModulesPage } from "@/pages/modules"
-import { SkillsPage } from "@/pages/skills"
-import { WikiPage } from "@/pages/wiki"
-import { WikiPrintPage } from "@/pages/wiki-print"
-import { FindingsPage } from "@/pages/findings"
-import { TasksPage } from "@/pages/tasks"
-import { AgentActivityPage } from "@/pages/agent-activity"
-import { TimelinePage } from "@/pages/timeline"
 import { useAuthStore } from "@/stores/auth"
 import { useConnectivityStore } from "@/stores/connectivity"
+
+// Every page is its own chunk, fetched the first time it is visited, so the
+// first paint waits for the shell and one page rather than for all of them.
+// PageBoundary shows the loading and failure states.
+function page<K extends string>(
+  load: () => Promise<Record<K, ComponentType>>,
+  name: K,
+) {
+  return lazy(() => load().then((m) => ({ default: m[name] })))
+}
+
+const LoginPage = page(() => import("@/pages/login"), "LoginPage")
+const EnrollPage = page(() => import("@/pages/enroll"), "EnrollPage")
+const OperationsPage = page(() => import("@/pages/operations"), "OperationsPage")
+const UsersPage = page(() => import("@/pages/users"), "UsersPage")
+const ModulesPage = page(() => import("@/pages/modules"), "ModulesPage")
+const SkillsPage = page(() => import("@/pages/skills"), "SkillsPage")
+const WikiPage = page(() => import("@/pages/wiki"), "WikiPage")
+const WikiPrintPage = page(() => import("@/pages/wiki-print"), "WikiPrintPage")
+const FindingsPage = page(() => import("@/pages/findings"), "FindingsPage")
+const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
+const AgentActivityPage = page(
+  () => import("@/pages/agent-activity"),
+  "AgentActivityPage",
+)
+const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
 
 function App() {
   const checkAuth = useAuthStore((s) => s.checkAuth)
@@ -48,6 +63,7 @@ function App() {
         <Toaster />
         <ConnectivityBanner />
         <BrowserRouter>
+        <PageBoundary fullScreen>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/enroll" element={<EnrollPage />} />
@@ -78,6 +94,7 @@ function App() {
             />
           </Route>
         </Routes>
+        </PageBoundary>
         </BrowserRouter>
       </ThemeProvider>
     </QueryProvider>

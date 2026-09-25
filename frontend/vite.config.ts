@@ -98,22 +98,24 @@ export default defineConfig({
   ],
   build: {
     rollupOptions: {
-      // icon-catalog.ts statically imports a curated set of lucide icons (for
-      // synchronous, Suspense-free rendering) AND enumerates the whole icon
-      // directory via import.meta.glob (for lazily loading the uncurated
-      // long-tail). For the curated icons those two paths overlap, so Rollup
-      // emits INEFFECTIVE_DYNAMIC_IMPORT — correctly noting the dynamic import
-      // can't split them into their own chunk. That overlap is intentional
-      // (curated icons belong in the main bundle), so silence only that code
-      // for lucide icon modules and let every other warning through.
-      onwarn(warning, defaultHandler) {
-        if (
-          warning.code === "INEFFECTIVE_DYNAMIC_IMPORT" &&
-          warning.message.includes("lucide-react/dist/esm/icons/")
-        ) {
-          return
-        }
-        defaultHandler(warning)
+      output: {
+        codeSplitting: {
+          groups: [
+            // Once pages load lazily, the bundler cuts a module shared by
+            // several chunks into a chunk of its own, and lucide icons are
+            // shared twice over: between the app shell and the pages, and
+            // with icon-catalog.ts's lazy imports, where lucide's alias files
+            // (alert-circle is circle-alert) re-export the icon by its plain
+            // path. That was a request of a few hundred bytes per icon, some
+            // 150 on first paint. Keep the icons the entry loads anyway in
+            // one chunk; the ones only pages use stay with those pages.
+            {
+              name: "icons",
+              test: /lucide-react[\\/]dist[\\/]esm[\\/]icons[\\/]/,
+              tags: ["$initial"],
+            },
+          ],
+        },
       },
     },
   },

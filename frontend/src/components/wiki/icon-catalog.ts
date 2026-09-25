@@ -406,10 +406,23 @@ export type IconComponent = ComponentType<{
 // library on the next dependency bump — which is exactly what happened when
 // 1.6.0 moved to 1.35.0. `*.mjs` does not match the sibling `.mjs.map`
 // sourcemaps, so no filtering is needed. ALL_LUCIDE_NAMES has a guard test.
-const ICON_GLOB = import.meta.glob<{ default: IconComponent }>([
-  "/node_modules/lucide-react/dist/esm/icons/*.mjs",
-  "/node_modules/lucide-react/dist/esm/icons/*.js",
-])
+//
+// The `?lazy` query gives these imports module ids of their own, apart from
+// the same files imported statically (the curated set above, and every
+// `import { X } from "lucide-react"` in the app). Without it each of those
+// icons is also a dynamic-import target, and a target has to be loadable on
+// its own — so the bundler cut every statically used icon out of the code
+// that uses it into a chunk of a few hundred bytes, and a page cost one
+// request per icon. The price is that an icon loaded both ways is fetched
+// twice, which is a few hundred bytes.
+const ICON_GLOB = import.meta.glob<{ default: IconComponent }>(
+  [
+    "/node_modules/lucide-react/dist/esm/icons/*.mjs",
+    "/node_modules/lucide-react/dist/esm/icons/*.js",
+    "!/node_modules/lucide-react/dist/esm/icons/index.*",
+  ],
+  { query: "?lazy" },
+)
 
 function kebabToPascal(s: string): string {
   return s

@@ -20,6 +20,13 @@ describe("lucide icon registry", () => {
     }
   })
 
+  test("the icons barrel is not offered as an icon", () => {
+    // lucide ships icons/index.mjs next to the icons, re-exporting all of
+    // them. Globbed as an icon it showed up as "Index", a module with no
+    // default export, and loading it lazily pulled every icon in with it.
+    expect(ALL_LUCIDE_NAMES.has("Index")).toBe(false)
+  })
+
   test("names are PascalCase with no file extension left over", () => {
     for (const name of ALL_LUCIDE_NAMES.keys()) {
       expect(name).toMatch(/^[A-Z][A-Za-z0-9]*$/)
