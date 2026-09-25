@@ -27,6 +27,7 @@ import type {
 } from "@/graphql/gql/graphql"
 import {
   HashDocument,
+  HashChipDocument,
   HashesDocument,
   HashTagsDocument,
   HashBacklinksDocument,
@@ -70,6 +71,8 @@ export const hashKeys = {
     [...hashKeys.lists(), "infinite-my", params] as const,
   details: () => [...hashKeys.all, "detail"] as const,
   detail: (id: string) => [...hashKeys.details(), id] as const,
+  // The inline chip's lighter projection of the same row (useHashChip).
+  chip: (id: string) => [...hashKeys.all, "chip", id] as const,
   tagSets: () => [...hashKeys.all, "tags"] as const,
   tagSet: (operationId: string) => [...hashKeys.tagSets(), operationId] as const,
   myTagSet: (operationIds: string[] | null) =>
@@ -90,9 +93,10 @@ const hashLists: LiveListSpec<HashFieldsFragment> = {
   membership: (h) => [h.value, h.comment, h.status, h.tags, h.credentialId],
 }
 
-// patchHashDetail merges a row into a loaded detail. The detail also carries
-// the linked credential, which the row does not; when the link changed that
-// copy is stale, so the detail refetches instead.
+// patchHashDetail merges a row into a loaded detail and chip. The detail also
+// carries the linked credential, which the row does not; when the link
+// changed that copy is stale, so the detail refetches instead. The chip holds
+// only the id of the link, so it always takes the row.
 function patchHashDetail(queryClient: QueryClient, hash: HashFieldsFragment) {
   const key = hashKeys.detail(hash.id)
   const cached = queryClient.getQueryData<HashQuery>(key)?.hash
@@ -101,6 +105,7 @@ function patchHashDetail(queryClient: QueryClient, hash: HashFieldsFragment) {
   } else {
     patchDetail(queryClient, key, "hash", hash)
   }
+  patchDetail(queryClient, hashKeys.chip(hash.id), "hash", hash)
 }
 
 // updatedHash applies an updated row to the detail and the lists. A hash that
@@ -129,6 +134,7 @@ function applyHashEvent(
 ) {
   if (action === "DELETED" && hashId) {
     queryClient.removeQueries({ queryKey: hashKeys.detail(hashId) })
+    queryClient.removeQueries({ queryKey: hashKeys.chip(hashId) })
     applyRowRemoval(queryClient, hashLists, hashId)
   } else if (hashId && hash && action !== "CREATED") {
     updatedHash(queryClient, hash)
@@ -145,6 +151,16 @@ export function useHash(id: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: hashKeys.detail(id),
     queryFn: () => graphqlClient(HashDocument, { id }),
+    enabled: !!id && (options?.enabled ?? true),
+  })
+}
+
+// useHashChip loads what an inline chip and its context menu read, without
+// the linked credential and createdBy the details dialog resolves.
+export function useHashChip(id: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: hashKeys.chip(id),
+    queryFn: () => graphqlClient(HashChipDocument, { id }),
     enabled: !!id && (options?.enabled ?? true),
   })
 }
@@ -261,6 +277,7 @@ export function useDeleteHash() {
     mutationFn: (id: string) => graphqlClient(DeleteHashDocument, { id }),
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: hashKeys.detail(id) })
+      queryClient.removeQueries({ queryKey: hashKeys.chip(id) })
       applyRowRemoval(queryClient, hashLists, id)
       scheduleRefresh(queryClient, hashKeys.tagSets())
     },
@@ -291,6 +308,7 @@ export function useMarkHashCracked() {
     onSuccess: (data) => {
       const hash = data.markHashCracked
       queryClient.setQueryData(hashKeys.detail(hash.id), { hash })
+      patchDetail(queryClient, hashKeys.chip(hash.id), "hash", hash)
       applyRowUpdate(queryClient, hashLists, hash)
       scheduleRefresh(queryClient, hashKeys.tagSets())
       scheduleRefresh(queryClient, credentialKeys.lists())

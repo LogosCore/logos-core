@@ -26,6 +26,7 @@ import type {
 } from "@/graphql/gql/graphql"
 import {
   CredentialDocument,
+  CredentialChipDocument,
   CredentialsDocument,
   CredentialTagsDocument,
   CredentialBacklinksDocument,
@@ -84,6 +85,8 @@ export const credentialKeys = {
     [...credentialKeys.lists(), "infinite-my", params] as const,
   details: () => [...credentialKeys.all, "detail"] as const,
   detail: (id: string) => [...credentialKeys.details(), id] as const,
+  // The inline chip's lighter projection of the same row (useCredentialChip).
+  chip: (id: string) => [...credentialKeys.all, "chip", id] as const,
   tagSets: () => [...credentialKeys.all, "tags"] as const,
   tagSet: (operationId: string) => [...credentialKeys.tagSets(), operationId] as const,
   myTagSet: (operationIds: string[] | null) =>
@@ -123,9 +126,11 @@ function applyCredentialEvent(
 ) {
   if (action === "DELETED") {
     queryClient.removeQueries({ queryKey: credentialKeys.detail(credentialId) })
+    queryClient.removeQueries({ queryKey: credentialKeys.chip(credentialId) })
     applyRowRemoval(queryClient, credentialLists, credentialId)
   } else if (credential && action !== "CREATED") {
     patchDetail(queryClient, credentialKeys.detail(credentialId), "credential", credential)
+    patchDetail(queryClient, credentialKeys.chip(credentialId), "credential", credential)
     applyRowUpdate(queryClient, credentialLists, credential)
   } else {
     scheduleRefresh(queryClient, credentialKeys.lists())
@@ -146,6 +151,20 @@ export function useCredential(
   return useQuery({
     queryKey: credentialKeys.detail(id),
     queryFn: () => graphqlClient(CredentialDocument, { id }),
+    enabled: !!id && (options?.enabled ?? true),
+  })
+}
+
+// useCredentialChip loads what an inline chip and its context menu read,
+// without the details-only fields that cost the server extra lookups per
+// chip (see CredentialChipFields).
+export function useCredentialChip(
+  id: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: credentialKeys.chip(id),
+    queryFn: () => graphqlClient(CredentialChipDocument, { id }),
     enabled: !!id && (options?.enabled ?? true),
   })
 }
@@ -287,6 +306,7 @@ export function useCreateCredential() {
 // whole, the lists get it patched in.
 function updatedCredential(queryClient: QueryClient, credential: CredentialFieldsFragment) {
   queryClient.setQueryData(credentialKeys.detail(credential.id), { credential })
+  patchDetail(queryClient, credentialKeys.chip(credential.id), "credential", credential)
   applyRowUpdate(queryClient, credentialLists, credential)
 }
 
@@ -309,6 +329,7 @@ export function useDeleteCredential() {
       graphqlClient(DeleteCredentialDocument, { id }),
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: credentialKeys.detail(id) })
+      queryClient.removeQueries({ queryKey: credentialKeys.chip(id) })
       applyRowRemoval(queryClient, credentialLists, id)
       scheduleRefresh(queryClient, credentialKeys.tagSets())
     },

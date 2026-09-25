@@ -48,6 +48,26 @@ export const HashFieldsWithOperation = graphql(`
   }
 `)
 
+// What an inline hash chip and its context menu read — not the linked
+// credential or createdBy the details dialog resolves.
+export const HashChipFields = graphql(`
+  fragment HashChipFields on Hash {
+    id
+    operationId
+    value
+    status
+    credentialId
+  }
+`)
+
+export const HashChipQuery = graphql(`
+  query HashChip($id: ID!) {
+    hash(id: $id) {
+      ...HashChipFields
+    }
+  }
+`)
+
 export const HashQuery = graphql(`
   query Hash($id: ID!) {
     hash(id: $id) {

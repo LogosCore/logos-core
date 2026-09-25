@@ -9,14 +9,14 @@ import {
   XIcon,
 } from "lucide-react"
 import { CredentialRowContextMenu } from "@/components/findings/credential-row-context-menu"
-import { useCredential } from "@/graphql/hooks/credentials"
+import { useCredentialChip } from "@/graphql/hooks/credentials"
 import { useCredentialStore } from "@/stores/credentials"
 import { useInViewport } from "@/hooks/use-in-viewport"
 import { GraphQLRequestError } from "@/lib/graphql-client"
 import { useSha1Hashes } from "@/lib/sha1"
 import { cn } from "@/lib/utils"
 import type {
-  CredentialFieldsFragment,
+  CredentialChipFieldsFragment,
   CredentialValidity,
 } from "@/graphql/gql/graphql"
 
@@ -39,16 +39,15 @@ const VALIDITY_ICON_CLASS: Record<CredentialValidity, string> = {
 // the editor chip — see wiki-credential-chip-view.css notes for why 12.
 const KEY_HASH_DISPLAY_LEN = 12
 
-// The view accepts the full CredentialFieldsFragment because withContextMenu
-// surfaces require the rich shape (tags, comments count, etc.) for the
-// row-level menu. Pickers that don't use the context menu can still pass
-// the same fragment — useCredential returns this exact shape, so both
-// call sites stay strongly typed without an intermediate projection.
-export type WikiCredentialChipCredential = CredentialFieldsFragment
+// The view takes CredentialChipFields: what the chip and its context menu
+// read, and nothing the details dialog alone needs. A document can hold
+// dozens of chips, one request each, so the rest stays off the wire. A full
+// CredentialFieldsFragment satisfies the type too.
+export type WikiCredentialChipCredential = CredentialChipFieldsFragment
 
 interface WikiCredentialChipViewProps {
   id: string
-  cred?: CredentialFieldsFragment | null
+  cred?: CredentialChipFieldsFragment | null
   isLoading?: boolean
   error?: unknown
   selected?: boolean
@@ -345,7 +344,7 @@ interface WikiCredentialChipByIdProps {
 }
 
 /**
- * Id-driven wrapper that fetches the credential via useCredential and renders
+ * Id-driven wrapper that fetches the credential via useCredentialChip and renders
  * the view. Used by both the editor NodeView (with `gateOnViewport`) and the
  * task picker (no gating — the working set is bounded by the picker UI).
  */
@@ -361,7 +360,7 @@ export function WikiCredentialChipById({
 }: WikiCredentialChipByIdProps) {
   const { ref, isVisible } = useInViewport<HTMLElement>()
   const effectivelyVisible = gateOnViewport ? isVisible : true
-  const { data, isLoading, error } = useCredential(id, {
+  const { data, isLoading, error } = useCredentialChip(id, {
     enabled: effectivelyVisible,
   })
   const cred = data?.credential

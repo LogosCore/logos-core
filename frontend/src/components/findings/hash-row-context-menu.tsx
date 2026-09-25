@@ -26,10 +26,10 @@ import {
   hashStatusLabel,
   truncateHashValue,
 } from "@/components/findings/hash-status-utils"
-import type { HashFieldsFragment, HashStatus } from "@/graphql/gql/graphql"
+import type { HashChipFieldsFragment, HashStatus } from "@/graphql/gql/graphql"
 
 interface HashRowContextMenuProps {
-  hash: HashFieldsFragment
+  hash: HashChipFieldsFragment
   children: ReactNode
   triggerRender?: ReactElement
   // Optional caller-supplied menu items, rendered in their own separated

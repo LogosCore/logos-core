@@ -59,6 +59,38 @@ export const CredentialFieldsWithOperation = graphql(`
   }
 `)
 
+// What an inline credential chip and its context menu read. A document can
+// hold dozens of chips, one request each, so the chip leaves out what only
+// the details dialog shows — comments and their authors, createdBy, and the
+// backlinkCount aggregation.
+export const CredentialChipFields = graphql(`
+  fragment CredentialChipFields on Credential {
+    id
+    operationId
+    name
+    type
+    username
+    password
+    validity
+    keys {
+      name
+      content
+    }
+    properties {
+      name
+      value
+    }
+  }
+`)
+
+export const CredentialChipQuery = graphql(`
+  query CredentialChip($id: ID!) {
+    credential(id: $id) {
+      ...CredentialChipFields
+    }
+  }
+`)
+
 export const CredentialQuery = graphql(`
   query Credential($id: ID!) {
     credential(id: $id) {

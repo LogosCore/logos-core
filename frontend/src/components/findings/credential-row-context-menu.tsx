@@ -29,12 +29,12 @@ import {
 import { useUpdateCredential } from "@/graphql/hooks/credentials"
 import { buildCredentialShareUrl } from "@/components/findings/credential-share-link"
 import type {
-  CredentialFieldsFragment,
+  CredentialChipFieldsFragment,
   CredentialValidity,
 } from "@/graphql/gql/graphql"
 
 interface CredentialRowContextMenuProps {
-  credential: CredentialFieldsFragment
+  credential: CredentialChipFieldsFragment
   children: ReactNode
   // Optional override for the trigger's host element. Base UI's
   // ContextMenu.Trigger defaults to a <div>, which is fine for full-width row

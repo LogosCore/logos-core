@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { useHash } from "@/graphql/hooks/hashes"
+import { useHashChip } from "@/graphql/hooks/hashes"
 import { useHashStore } from "@/stores/hashes"
 import { useInViewport } from "@/hooks/use-in-viewport"
 import { GraphQLRequestError } from "@/lib/graphql-client"
@@ -22,14 +22,13 @@ import {
   truncateHashValue,
 } from "@/components/findings/hash-status-utils"
 import { cn } from "@/lib/utils"
-import type { HashFieldsWithCredentialFragment } from "@/graphql/gql/graphql"
+import type { HashChipFieldsFragment } from "@/graphql/gql/graphql"
 
 interface WikiHashChipViewProps {
   id: string
-  // The full HashFieldsWithCredential — withContextMenu needs the rich shape
-  // (status, tags, credentialId) for the row menu, and useHash returns exactly
-  // this, so the chip stays strongly typed without a projection.
-  hash?: HashFieldsWithCredentialFragment | null
+  // HashChipFields: what the chip and its row menu read (value, status,
+  // credentialId) — not the linked credential the details dialog resolves.
+  hash?: HashChipFieldsFragment | null
   isLoading?: boolean
   error?: unknown
   selected?: boolean
@@ -251,7 +250,7 @@ interface WikiHashChipByIdProps {
 }
 
 /**
- * Id-driven wrapper that fetches the hash via useHash and renders the view.
+ * Id-driven wrapper that fetches the hash via useHashChip and renders the view.
  * Used by the editor NodeView with `gateOnViewport` so a long document with
  * many inline chips doesn't fan out one request per chip on mount. Mirrors
  * WikiCredentialChipById.
@@ -265,7 +264,7 @@ export function WikiHashChipById({
 }: WikiHashChipByIdProps) {
   const { ref, isVisible } = useInViewport<HTMLElement>()
   const effectivelyVisible = gateOnViewport ? isVisible : true
-  const { data, isLoading, error } = useHash(id, {
+  const { data, isLoading, error } = useHashChip(id, {
     enabled: effectivelyVisible,
   })
   const hash = data?.hash

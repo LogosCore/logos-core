@@ -35,6 +35,8 @@ type Documents = {
     "\n  fragment CredentialCommentFields on CredentialComment {\n    id\n    text\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n    }\n  }\n": typeof types.CredentialCommentFieldsFragmentDoc,
     "\n  fragment CredentialFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n    validity\n    tags\n    comments {\n      ...CredentialCommentFields\n    }\n    viewerCanModerateComments\n    createdBy {\n      id\n      username\n    }\n    backlinkCount\n    createdAt\n    updatedAt\n  }\n": typeof types.CredentialFieldsFragmentDoc,
     "\n  fragment CredentialFieldsWithOperation on Credential {\n    ...CredentialFields\n    operation {\n      id\n      name\n    }\n  }\n": typeof types.CredentialFieldsWithOperationFragmentDoc,
+    "\n  fragment CredentialChipFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    validity\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n  }\n": typeof types.CredentialChipFieldsFragmentDoc,
+    "\n  query CredentialChip($id: ID!) {\n    credential(id: $id) {\n      ...CredentialChipFields\n    }\n  }\n": typeof types.CredentialChipDocument,
     "\n  query Credential($id: ID!) {\n    credential(id: $id) {\n      ...CredentialFields\n    }\n  }\n": typeof types.CredentialDocument,
     "\n  query Credentials(\n    $operationId: ID!\n    $search: String\n    $searchFields: [CredentialSearchField!]\n    $type: CredentialType\n    $tags: [String!]\n    $validity: [CredentialValidity!]\n    $sortBy: CredentialSortField\n    $sortDirection: SortDirection\n    $first: Int\n    $after: String\n  ) {\n    credentials(\n      operationId: $operationId\n      search: $search\n      searchFields: $searchFields\n      type: $type\n      tags: $tags\n      validity: $validity\n      sortBy: $sortBy\n      sortDirection: $sortDirection\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...CredentialFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.CredentialsDocument,
     "\n  query CredentialTags($operationId: ID!) {\n    credentialTags(operationId: $operationId)\n  }\n": typeof types.CredentialTagsDocument,
@@ -55,6 +57,8 @@ type Documents = {
     "\n  fragment HashFields on Hash {\n    id\n    operationId\n    value\n    status\n    comment\n    tags\n    credentialId\n    createdBy {\n      id\n      username\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.HashFieldsFragmentDoc,
     "\n  fragment HashFieldsWithCredential on Hash {\n    ...HashFields\n    credential {\n      id\n      name\n      type\n      username\n    }\n  }\n": typeof types.HashFieldsWithCredentialFragmentDoc,
     "\n  fragment HashFieldsWithOperation on Hash {\n    ...HashFields\n    operation {\n      id\n      name\n    }\n  }\n": typeof types.HashFieldsWithOperationFragmentDoc,
+    "\n  fragment HashChipFields on Hash {\n    id\n    operationId\n    value\n    status\n    credentialId\n  }\n": typeof types.HashChipFieldsFragmentDoc,
+    "\n  query HashChip($id: ID!) {\n    hash(id: $id) {\n      ...HashChipFields\n    }\n  }\n": typeof types.HashChipDocument,
     "\n  query Hash($id: ID!) {\n    hash(id: $id) {\n      ...HashFieldsWithCredential\n    }\n  }\n": typeof types.HashDocument,
     "\n  query Hashes(\n    $operationId: ID!\n    $search: String\n    $statuses: [HashStatus!]\n    $tags: [String!]\n    $hasCredential: Boolean\n    $first: Int\n    $after: String\n  ) {\n    hashes(\n      operationId: $operationId\n      search: $search\n      statuses: $statuses\n      tags: $tags\n      hasCredential: $hasCredential\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...HashFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.HashesDocument,
     "\n  query HashTags($operationId: ID!) {\n    hashTags(operationId: $operationId)\n  }\n": typeof types.HashTagsDocument,
@@ -212,6 +216,8 @@ const documents: Documents = {
     "\n  fragment CredentialCommentFields on CredentialComment {\n    id\n    text\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n    }\n  }\n": types.CredentialCommentFieldsFragmentDoc,
     "\n  fragment CredentialFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n    validity\n    tags\n    comments {\n      ...CredentialCommentFields\n    }\n    viewerCanModerateComments\n    createdBy {\n      id\n      username\n    }\n    backlinkCount\n    createdAt\n    updatedAt\n  }\n": types.CredentialFieldsFragmentDoc,
     "\n  fragment CredentialFieldsWithOperation on Credential {\n    ...CredentialFields\n    operation {\n      id\n      name\n    }\n  }\n": types.CredentialFieldsWithOperationFragmentDoc,
+    "\n  fragment CredentialChipFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    validity\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n  }\n": types.CredentialChipFieldsFragmentDoc,
+    "\n  query CredentialChip($id: ID!) {\n    credential(id: $id) {\n      ...CredentialChipFields\n    }\n  }\n": types.CredentialChipDocument,
     "\n  query Credential($id: ID!) {\n    credential(id: $id) {\n      ...CredentialFields\n    }\n  }\n": types.CredentialDocument,
     "\n  query Credentials(\n    $operationId: ID!\n    $search: String\n    $searchFields: [CredentialSearchField!]\n    $type: CredentialType\n    $tags: [String!]\n    $validity: [CredentialValidity!]\n    $sortBy: CredentialSortField\n    $sortDirection: SortDirection\n    $first: Int\n    $after: String\n  ) {\n    credentials(\n      operationId: $operationId\n      search: $search\n      searchFields: $searchFields\n      type: $type\n      tags: $tags\n      validity: $validity\n      sortBy: $sortBy\n      sortDirection: $sortDirection\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...CredentialFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.CredentialsDocument,
     "\n  query CredentialTags($operationId: ID!) {\n    credentialTags(operationId: $operationId)\n  }\n": types.CredentialTagsDocument,
@@ -232,6 +238,8 @@ const documents: Documents = {
     "\n  fragment HashFields on Hash {\n    id\n    operationId\n    value\n    status\n    comment\n    tags\n    credentialId\n    createdBy {\n      id\n      username\n    }\n    createdAt\n    updatedAt\n  }\n": types.HashFieldsFragmentDoc,
     "\n  fragment HashFieldsWithCredential on Hash {\n    ...HashFields\n    credential {\n      id\n      name\n      type\n      username\n    }\n  }\n": types.HashFieldsWithCredentialFragmentDoc,
     "\n  fragment HashFieldsWithOperation on Hash {\n    ...HashFields\n    operation {\n      id\n      name\n    }\n  }\n": types.HashFieldsWithOperationFragmentDoc,
+    "\n  fragment HashChipFields on Hash {\n    id\n    operationId\n    value\n    status\n    credentialId\n  }\n": types.HashChipFieldsFragmentDoc,
+    "\n  query HashChip($id: ID!) {\n    hash(id: $id) {\n      ...HashChipFields\n    }\n  }\n": types.HashChipDocument,
     "\n  query Hash($id: ID!) {\n    hash(id: $id) {\n      ...HashFieldsWithCredential\n    }\n  }\n": types.HashDocument,
     "\n  query Hashes(\n    $operationId: ID!\n    $search: String\n    $statuses: [HashStatus!]\n    $tags: [String!]\n    $hasCredential: Boolean\n    $first: Int\n    $after: String\n  ) {\n    hashes(\n      operationId: $operationId\n      search: $search\n      statuses: $statuses\n      tags: $tags\n      hasCredential: $hasCredential\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...HashFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.HashesDocument,
     "\n  query HashTags($operationId: ID!) {\n    hashTags(operationId: $operationId)\n  }\n": types.HashTagsDocument,
@@ -469,6 +477,14 @@ export function graphql(source: "\n  fragment CredentialFieldsWithOperation on C
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function graphql(source: "\n  fragment CredentialChipFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    validity\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n  }\n"): (typeof documents)["\n  fragment CredentialChipFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    validity\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query CredentialChip($id: ID!) {\n    credential(id: $id) {\n      ...CredentialChipFields\n    }\n  }\n"): (typeof documents)["\n  query CredentialChip($id: ID!) {\n    credential(id: $id) {\n      ...CredentialChipFields\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function graphql(source: "\n  query Credential($id: ID!) {\n    credential(id: $id) {\n      ...CredentialFields\n    }\n  }\n"): (typeof documents)["\n  query Credential($id: ID!) {\n    credential(id: $id) {\n      ...CredentialFields\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -546,6 +562,14 @@ export function graphql(source: "\n  fragment HashFieldsWithCredential on Hash {
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  fragment HashFieldsWithOperation on Hash {\n    ...HashFields\n    operation {\n      id\n      name\n    }\n  }\n"): (typeof documents)["\n  fragment HashFieldsWithOperation on Hash {\n    ...HashFields\n    operation {\n      id\n      name\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment HashChipFields on Hash {\n    id\n    operationId\n    value\n    status\n    credentialId\n  }\n"): (typeof documents)["\n  fragment HashChipFields on Hash {\n    id\n    operationId\n    value\n    status\n    credentialId\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query HashChip($id: ID!) {\n    hash(id: $id) {\n      ...HashChipFields\n    }\n  }\n"): (typeof documents)["\n  query HashChip($id: ID!) {\n    hash(id: $id) {\n      ...HashChipFields\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
