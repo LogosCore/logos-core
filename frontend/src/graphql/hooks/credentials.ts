@@ -3,10 +3,19 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
+import {
+  applyRowRemoval,
+  applyRowUpdate,
+  patchDetail,
+  scheduleRefresh,
+  type LiveListSpec,
+} from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import type {
+  CredentialFieldsFragment,
   CreateCredentialInput,
   UpdateCredentialInput,
   CredentialType,
@@ -83,6 +92,44 @@ export const credentialKeys = {
     [...credentialKeys.all, "backlinks", credentialId] as const,
   sourceHashes: (credentialId: string) =>
     [...credentialKeys.all, "sourceHashes", credentialId] as const,
+}
+
+// How credential events and mutations keep the lists live (lib/live-lists).
+// Membership lists every field a list filter, search field or sort reads.
+const credentialLists: LiveListSpec<CredentialFieldsFragment> = {
+  lists: credentialKeys.lists(),
+  sensitive: (params) => {
+    const p = params as CredentialListParams | MyCredentialListParams
+    return (
+      !!p.search ||
+      !!p.type ||
+      !!p.tags?.length ||
+      !!p.validity?.length ||
+      (p.sortBy != null && p.sortBy !== "CREATED_AT")
+    )
+  },
+  membership: (c) => [c.name, c.username, c.password, c.properties, c.type, c.tags, c.validity],
+}
+
+// applyCredentialEvent folds one credential event into the cache. An update
+// is patched into the lists and a loaded detail; a delete drops the row; a
+// create has no place in a loaded page until the server orders it, so the
+// lists refresh. So does an event whose row the server could not load.
+function applyCredentialEvent(
+  queryClient: QueryClient,
+  action: string,
+  credentialId: string,
+  credential: CredentialFieldsFragment | null | undefined,
+) {
+  if (action === "DELETED") {
+    queryClient.removeQueries({ queryKey: credentialKeys.detail(credentialId) })
+    applyRowRemoval(queryClient, credentialLists, credentialId)
+  } else if (credential && action !== "CREATED") {
+    patchDetail(queryClient, credentialKeys.detail(credentialId), "credential", credential)
+    applyRowUpdate(queryClient, credentialLists, credential)
+  } else {
+    scheduleRefresh(queryClient, credentialKeys.lists())
+  }
 }
 
 // --- Queries ---
@@ -224,17 +271,23 @@ export function useCreateCredential() {
   return useMutation({
     mutationFn: (vars: { operationId: string; input: CreateCredentialInput }) =>
       graphqlClient(CreateCredentialDocument, vars),
-    onSuccess: (data, vars) => {
+    // The actor's own event echo asks for the same refreshes; both fold into
+    // one (lib/live-lists).
+    onSuccess: (data) => {
       queryClient.setQueryData(credentialKeys.detail(data.createCredential.id), {
         credential: data.createCredential,
       })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-      // Invalidate both the scoped tag set and any my-tag sets that include
-      // this operation; cheaper to drop tagSets() wholesale than to enumerate.
-      queryClient.invalidateQueries({ queryKey: credentialKeys.tagSet(vars.operationId) })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.tagSets() })
+      scheduleRefresh(queryClient, credentialKeys.lists())
+      scheduleRefresh(queryClient, credentialKeys.tagSets())
     },
   })
+}
+
+// updatedCredential applies a mutation's returned row: the detail takes it
+// whole, the lists get it patched in.
+function updatedCredential(queryClient: QueryClient, credential: CredentialFieldsFragment) {
+  queryClient.setQueryData(credentialKeys.detail(credential.id), { credential })
+  applyRowUpdate(queryClient, credentialLists, credential)
 }
 
 export function useUpdateCredential() {
@@ -242,15 +295,9 @@ export function useUpdateCredential() {
   return useMutation({
     mutationFn: (vars: { id: string; input: UpdateCredentialInput }) =>
       graphqlClient(UpdateCredentialDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(credentialKeys.detail(vars.id), {
-        credential: data.updateCredential,
-      })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-      queryClient.invalidateQueries({
-        queryKey: credentialKeys.tagSet(data.updateCredential.operationId),
-      })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.tagSets() })
+    onSuccess: (data) => {
+      updatedCredential(queryClient, data.updateCredential)
+      scheduleRefresh(queryClient, credentialKeys.tagSets())
     },
   })
 }
@@ -262,10 +309,8 @@ export function useDeleteCredential() {
       graphqlClient(DeleteCredentialDocument, { id }),
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: credentialKeys.detail(id) })
-      // lists() covers both scoped (infiniteList) and global (infiniteMyList)
-      // because their query keys share the [..., "list"] prefix.
-      queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.tagSets() })
+      applyRowRemoval(queryClient, credentialLists, id)
+      scheduleRefresh(queryClient, credentialKeys.tagSets())
     },
   })
 }
@@ -275,12 +320,7 @@ export function useAddCredentialComment() {
   return useMutation({
     mutationFn: (vars: { credentialId: string; text: string }) =>
       graphqlClient(AddCredentialCommentDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(credentialKeys.detail(vars.credentialId), {
-        credential: data.addCredentialComment,
-      })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-    },
+    onSuccess: (data) => updatedCredential(queryClient, data.addCredentialComment),
   })
 }
 
@@ -289,11 +329,7 @@ export function useUpdateCredentialComment() {
   return useMutation({
     mutationFn: (vars: { credentialId: string; commentId: string; text: string }) =>
       graphqlClient(UpdateCredentialCommentDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(credentialKeys.detail(vars.credentialId), {
-        credential: data.updateCredentialComment,
-      })
-    },
+    onSuccess: (data) => updatedCredential(queryClient, data.updateCredentialComment),
   })
 }
 
@@ -302,42 +338,28 @@ export function useDeleteCredentialComment() {
   return useMutation({
     mutationFn: (vars: { credentialId: string; commentId: string }) =>
       graphqlClient(DeleteCredentialCommentDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(credentialKeys.detail(vars.credentialId), {
-        credential: data.deleteCredentialComment,
-      })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-    },
+    onSuccess: (data) => updatedCredential(queryClient, data.deleteCredentialComment),
   })
 }
 
 // --- Subscriptions ---
 
 // Subscribe to real-time credential change events via SSE. The server pushes the
-// full credential entity for non-delete actions; we reuse it to keep the detail
-// cache hot and invalidate the list/tag caches so any open table re-renders.
+// full credential entity for non-delete actions; applyCredentialEvent folds it
+// into the detail and list caches instead of refetching every open table.
 export function useCredentialChangedSubscription(operationId: string) {
   const queryClient = useQueryClient()
 
   useSubscription(CredentialChangedDocument, { operationId }, {
     onData: (data) => {
       const { action, credentialId, credential } = data.credentialChanged
-
-      if (action === "DELETED") {
-        queryClient.removeQueries({ queryKey: credentialKeys.detail(credentialId) })
-      } else if (credential) {
-        queryClient.setQueryData(credentialKeys.detail(credentialId), { credential })
-      }
-
-      queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: credentialKeys.tagSet(operationId) })
+      applyCredentialEvent(queryClient, action, credentialId, credential)
+      scheduleRefresh(queryClient, credentialKeys.tagSet(operationId))
       // A credential delete strips its id from wiki credential_references;
       // a rename surfaces in backlink list titles. Either way the cached
       // backlinks rows can drift, so refresh them all — the data is light
       // and the prefix matches every per-credential entry.
-      queryClient.invalidateQueries({
-        queryKey: [...credentialKeys.all, "backlinks"],
-      })
+      scheduleRefresh(queryClient, [...credentialKeys.all, "backlinks"])
     },
     enabled: !!operationId,
   })
@@ -348,10 +370,10 @@ export function useCredentialChangedSubscription(operationId: string) {
 // and accepts an operationIds list (null = caller's full accessible set, []
 // = explicit empty — see MyCredentialsQuery for the same semantics).
 //
-// Invalidation is broader than the scoped version: we drop all credential
-// lists and all tag sets, because a single event can affect either the
-// global infiniteMyList key or any scoped infiniteList key (e.g. another
-// session of the same user has a scoped page open).
+// The tag refresh is broader than the scoped version: all tag sets, because a
+// single event can affect either the global myTagSet key or any scoped one.
+// The lists need no special case — applyCredentialEvent covers every list
+// under credentialKeys.lists(), global and scoped alike.
 export function useMyCredentialChangedSubscription(
   operationIds: string[] | null,
   options: { enabled?: boolean } = {},
@@ -364,24 +386,11 @@ export function useMyCredentialChangedSubscription(
     {
       onData: (data) => {
         const { action, credentialId, credential } = data.myCredentialChanged
-
-        if (action === "DELETED") {
-          queryClient.removeQueries({
-            queryKey: credentialKeys.detail(credentialId),
-          })
-        } else if (credential) {
-          queryClient.setQueryData(credentialKeys.detail(credentialId), {
-            credential,
-          })
-        }
-
-        queryClient.invalidateQueries({ queryKey: credentialKeys.lists() })
-        queryClient.invalidateQueries({ queryKey: credentialKeys.tagSets() })
+        applyCredentialEvent(queryClient, action, credentialId, credential)
+        scheduleRefresh(queryClient, credentialKeys.tagSets())
         // Same rationale as the scoped subscription — see the comment in
         // useCredentialChangedSubscription.
-        queryClient.invalidateQueries({
-          queryKey: [...credentialKeys.all, "backlinks"],
-        })
+        scheduleRefresh(queryClient, [...credentialKeys.all, "backlinks"])
       },
       enabled: options.enabled ?? true,
     },

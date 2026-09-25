@@ -3,12 +3,21 @@ import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
+import {
+  applyRowRemoval,
+  applyRowUpdate,
+  patchDetail,
+  scheduleRefresh,
+  type LiveListSpec,
+} from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import type {
   ChangeTaskStageInput,
   CreateTaskInput,
+  TaskFieldsFragment,
   TaskStage,
   UpdateTaskInput,
 } from "@/graphql/gql/graphql"
@@ -75,6 +84,36 @@ export const taskKeys = {
   credentialBacklinks: () => [...taskKeys.all, "credentialBacklinks"] as const,
   credentialBacklinksFor: (credentialId: string) =>
     [...taskKeys.credentialBacklinks(), credentialId] as const,
+}
+
+// How task events and mutations keep the board and matrix live
+// (lib/live-lists). Nearly every task list filters — kanban columns by stage,
+// matrix quadrants by score — so the membership fields decide the common
+// case: an edit that leaves stage, scores and searchable text alone (assignees,
+// references, summary) patches in place instead of refetching every column.
+// doneAt is in because the DONE column sorts by it.
+const taskLists: LiveListSpec<TaskFieldsFragment> = {
+  lists: taskKeys.lists(),
+  sensitive: (params) => {
+    const p = params as TaskListParams
+    return (
+      p.stage != null ||
+      !!p.excludeStages?.length ||
+      p.riskScoreMin != null ||
+      p.riskScoreMax != null ||
+      p.profitScoreMin != null ||
+      p.profitScoreMax != null ||
+      !!p.search
+    )
+  },
+  membership: (t) => [t.stage, t.doneAt, t.riskScore, t.profitScore, t.name, t.description],
+}
+
+// updatedTask applies a mutation's returned row: the detail takes it whole,
+// the lists get it patched in.
+function updatedTask(queryClient: QueryClient, task: TaskFieldsFragment) {
+  queryClient.setQueryData(taskKeys.detail(task.id), { task })
+  applyRowUpdate(queryClient, taskLists, task)
 }
 
 // --- Queries ---
@@ -178,11 +217,13 @@ export function useCreateTask() {
   return useMutation({
     mutationFn: (input: CreateTaskInput) =>
       graphqlClient(CreateTaskDocument, { input }),
+    // The actor's own event echo asks for the same refresh; both fold into
+    // one (lib/live-lists).
     onSuccess: (data) => {
       queryClient.setQueryData(taskKeys.detail(data.createTask.id), {
         task: data.createTask,
       })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
+      scheduleRefresh(queryClient, taskKeys.lists())
     },
   })
 }
@@ -192,12 +233,7 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: (vars: { id: string; input: UpdateTaskInput }) =>
       graphqlClient(UpdateTaskDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(taskKeys.detail(vars.id), {
-        task: data.updateTask,
-      })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-    },
+    onSuccess: (data) => updatedTask(queryClient, data.updateTask),
   })
 }
 
@@ -210,8 +246,9 @@ export function useUpdateTask() {
 // (one cache entry per column), so a cross-stage move means removing the
 // edge from the source column's pages and prepending it to the target
 // column's first page. We snapshot every list query, mutate in place,
-// and roll back on error. onSettled invalidates so the server-side
-// cursor ordering reconciles.
+// and roll back on error. onSettled refreshes the lists so the server-side
+// cursor ordering reconciles — folded with the refresh the event echo asks
+// for, rather than refetching every column twice.
 export function useChangeTaskStage() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -326,7 +363,7 @@ export function useChangeTaskStage() {
       })
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
+      scheduleRefresh(queryClient, taskKeys.lists())
     },
   })
 }
@@ -336,12 +373,7 @@ export function useSetTaskAssignees() {
   return useMutation({
     mutationFn: (vars: { taskId: string; assigneeIds: string[] }) =>
       graphqlClient(SetTaskAssigneesDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(taskKeys.detail(vars.taskId), {
-        task: data.setTaskAssignees,
-      })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-    },
+    onSuccess: (data) => updatedTask(queryClient, data.setTaskAssignees),
   })
 }
 
@@ -350,12 +382,7 @@ export function useSetTaskWikiReferences() {
   return useMutation({
     mutationFn: (vars: { taskId: string; wikiIds: string[] }) =>
       graphqlClient(SetTaskWikiReferencesDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(taskKeys.detail(vars.taskId), {
-        task: data.setTaskWikiReferences,
-      })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-    },
+    onSuccess: (data) => updatedTask(queryClient, data.setTaskWikiReferences),
   })
 }
 
@@ -364,18 +391,15 @@ export function useSetTaskWikiReferences() {
 // id, picks a task, server does $addToSet. Idempotent.
 //
 // Invalidates wikiBacklinks so the wiki editor footer ("Task backlinks")
-// picks up the new row immediately, plus the lists prefix so any open
-// kanban / matrix view re-renders the chip count on the affected task.
+// picks up the new row immediately, and patches the task into any open
+// kanban / matrix view so its chip count updates.
 export function useAddTaskWikiReference() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (vars: { taskId: string; wikiId: string }) =>
       graphqlClient(AddTaskWikiReferenceDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(taskKeys.detail(vars.taskId), {
-        task: data.addTaskWikiReference,
-      })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
+    onSuccess: (data) => {
+      updatedTask(queryClient, data.addTaskWikiReference)
       queryClient.invalidateQueries({ queryKey: taskKeys.wikiBacklinks() })
     },
   })
@@ -386,12 +410,7 @@ export function useSetTaskCredentialReferences() {
   return useMutation({
     mutationFn: (vars: { taskId: string; credentialIds: string[] }) =>
       graphqlClient(SetTaskCredentialReferencesDocument, vars),
-    onSuccess: (data, vars) => {
-      queryClient.setQueryData(taskKeys.detail(vars.taskId), {
-        task: data.setTaskCredentialReferences,
-      })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-    },
+    onSuccess: (data) => updatedTask(queryClient, data.setTaskCredentialReferences),
   })
 }
 
@@ -401,8 +420,8 @@ export function useDeleteTask() {
     mutationFn: (id: string) => graphqlClient(DeleteTaskDocument, { id }),
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: taskKeys.detail(id) })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: taskKeys.trashLists() })
+      applyRowRemoval(queryClient, taskLists, id)
+      scheduleRefresh(queryClient, taskKeys.trashLists())
     },
   })
 }
@@ -415,8 +434,8 @@ export function useRestoreTask() {
       queryClient.setQueryData(taskKeys.detail(id), {
         task: data.restoreTask,
       })
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: taskKeys.trashLists() })
+      scheduleRefresh(queryClient, taskKeys.lists())
+      scheduleRefresh(queryClient, taskKeys.trashLists())
     },
   })
 }
@@ -427,7 +446,7 @@ export function usePurgeTask() {
     mutationFn: (id: string) => graphqlClient(PurgeTaskDocument, { id }),
     onSuccess: (_data, id) => {
       queryClient.removeQueries({ queryKey: taskKeys.detail(id) })
-      queryClient.invalidateQueries({ queryKey: taskKeys.trashLists() })
+      scheduleRefresh(queryClient, taskKeys.trashLists())
     },
   })
 }
@@ -435,13 +454,13 @@ export function usePurgeTask() {
 // --- Subscription ---
 
 // useTaskChangedSubscription wires the realtime kanban + matrix updates.
-// Same shape as useCredentialChangedSubscription: hot-update the detail
-// cache for non-DELETED events so an open dialog reflects the change
-// without a follow-up query, then blanket-invalidate the lists so any
-// open columns/matrix re-render.
+// Same shape as useCredentialChangedSubscription: an update is patched into
+// a loaded detail and every open column and quadrant, and only the lists
+// whose stage, score or search it could have moved the task across are
+// refreshed (lib/live-lists).
 //
-// Trash lists are also invalidated because deletes flow through the same
-// topic (soft-delete becomes DELETED action) — a deleted task should
+// Trash lists are also refreshed on deletes and restores, which flow through
+// the same topic (soft-delete becomes DELETED action) — a deleted task should
 // disappear from active lists and appear in trash without a refresh.
 export function useTaskChangedSubscription(operationId: string) {
   const queryClient = useQueryClient()
@@ -455,20 +474,24 @@ export function useTaskChangedSubscription(operationId: string) {
 
         if (action === "DELETED") {
           queryClient.removeQueries({ queryKey: taskKeys.detail(taskId) })
-        } else if (task) {
-          queryClient.setQueryData(taskKeys.detail(taskId), { task })
+          applyRowRemoval(queryClient, taskLists, taskId)
+        } else if (task && action !== "CREATED") {
+          patchDetail(queryClient, taskKeys.detail(taskId), "task", task)
+          applyRowUpdate(queryClient, taskLists, task)
+        } else {
+          // Created or restored: only the server knows where it sorts.
+          scheduleRefresh(queryClient, taskKeys.lists())
         }
-
-        queryClient.invalidateQueries({ queryKey: taskKeys.lists() })
-        queryClient.invalidateQueries({ queryKey: taskKeys.trashLists() })
+        // Only deletes and restores move a task in or out of the trash.
+        if (action !== "UPDATED") {
+          scheduleRefresh(queryClient, taskKeys.trashLists())
+        }
         // Any task mutation in the op may add/remove the task from any
         // doc/credential backlink set. The reverse-reference arrays are not
-        // in the event payload, so broad-invalidate instead of trying to
+        // in the event payload, so broad-refresh instead of trying to
         // surgically patch — backlink lists are small (≤200) and per-doc.
-        queryClient.invalidateQueries({ queryKey: taskKeys.wikiBacklinks() })
-        queryClient.invalidateQueries({
-          queryKey: taskKeys.credentialBacklinks(),
-        })
+        scheduleRefresh(queryClient, taskKeys.wikiBacklinks())
+        scheduleRefresh(queryClient, taskKeys.credentialBacklinks())
       },
       enabled: !!operationId,
     },

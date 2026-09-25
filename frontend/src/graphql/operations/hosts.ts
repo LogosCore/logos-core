@@ -107,14 +107,17 @@ export const DeleteHostMutation = graphql(`
   }
 `)
 
-// The handler invalidates and refetches the list rather than patching rows in
-// place, so it only needs the event to fire — no host payload is selected,
-// sparing the server a full host resolution per event.
+// The handler patches the host into the cached lists, detail and topology
+// rather than refetching them, so it selects the row. The server reads the
+// host for every non-delete event whether or not it is selected.
 export const HostChangedSubscription = graphql(`
   subscription HostChanged($operationId: ID!) {
     hostChanged(operationId: $operationId) {
       action
       hostId
+      host {
+        ...HostFields
+      }
     }
   }
 `)

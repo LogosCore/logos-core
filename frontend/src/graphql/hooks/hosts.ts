@@ -3,8 +3,17 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
+import {
+  applyRowRemoval,
+  applyRowUpdate,
+  mergeRow,
+  patchDetail,
+  scheduleRefresh,
+  type LiveListSpec,
+} from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import type {
   CreateHostInput,
@@ -35,7 +44,7 @@ export type HostListParams = {
 // Query key factory. The table/topology read through the infinite list, but
 // the inline /host wiki chip resolves a single host by id (it persists only the
 // id), so there is also a per-host detail key. Mutations and the live
-// subscription invalidate `all`, which covers the list, topology, and details.
+// subscription fold each change into all three through applyHostEvent.
 export const hostKeys = {
   all: ["hosts"] as const,
   lists: () => [...hostKeys.all, "list"] as const,
@@ -48,6 +57,83 @@ export const hostKeys = {
   // Per-host detail, keyed by id — backs the inline /host wiki reference chip.
   details: () => [...hostKeys.all, "detail"] as const,
   detail: (id: string) => [...hostKeys.details(), id] as const,
+}
+
+// How host events and mutations keep the table live (lib/live-lists).
+// Membership lists every field the search or a sort reads.
+const hostLists: LiveListSpec<HostFieldsFragment> = {
+  lists: hostKeys.lists(),
+  sensitive: (params) => {
+    const p = params as HostListParams
+    return !!p.search || (p.sortBy != null && p.sortBy !== "CREATED_AT")
+  },
+  membership: (h) => [h.hostname, h.os, h.description, h.interfaces],
+}
+
+interface TopologySnapshot {
+  hosts: HostFieldsFragment[]
+  truncated: boolean
+}
+
+// patchTopologies folds a host change into every loaded topology snapshot.
+// A snapshot is every host of its operation, unfiltered, so a change maps
+// onto it exactly and the whole-operation drain behind it is not repeated.
+// The exception is the render cap: past it, which hosts belong in the
+// snapshot is the server's call, so a truncated snapshot refetches.
+function patchTopologies(
+  queryClient: QueryClient,
+  action: string,
+  hostId: string,
+  host: HostFieldsFragment | null | undefined,
+) {
+  for (const [key, snap] of queryClient.getQueriesData<TopologySnapshot>({
+    queryKey: [...hostKeys.all, "topology"],
+  })) {
+    if (!snap) continue
+    const operationId = key[key.length - 1]
+    const holds = snap.hosts.some((h) => h.id === hostId)
+    let hosts: HostFieldsFragment[] | undefined
+    if (action === "CREATED" && host && host.operationId === operationId) {
+      if (snap.truncated || snap.hosts.length >= MAX_TOPOLOGY_HOSTS) {
+        scheduleRefresh(queryClient, key, { exact: true })
+        continue
+      }
+      hosts = [...snap.hosts, host]
+    } else if (action === "DELETED" && holds) {
+      if (snap.truncated) {
+        scheduleRefresh(queryClient, key, { exact: true })
+        continue
+      }
+      hosts = snap.hosts.filter((h) => h.id !== hostId)
+    } else if (action !== "CREATED" && action !== "DELETED" && holds) {
+      if (!host) {
+        scheduleRefresh(queryClient, key, { exact: true })
+        continue
+      }
+      hosts = snap.hosts.map((h) => (h.id === hostId ? mergeRow(h, host) : h))
+    }
+    if (hosts) queryClient.setQueryData(key, { ...snap, hosts })
+  }
+}
+
+// applyHostEvent folds one host change — from the subscription or from the
+// caller's own mutation — into the table, the chip details and the topology.
+function applyHostEvent(
+  queryClient: QueryClient,
+  action: string,
+  hostId: string,
+  host: HostFieldsFragment | null | undefined,
+) {
+  if (action === "DELETED") {
+    queryClient.removeQueries({ queryKey: hostKeys.detail(hostId) })
+    applyRowRemoval(queryClient, hostLists, hostId)
+  } else if (host && action !== "CREATED") {
+    patchDetail(queryClient, hostKeys.detail(hostId), "host", host)
+    applyRowUpdate(queryClient, hostLists, host)
+  } else {
+    scheduleRefresh(queryClient, hostKeys.lists())
+  }
+  patchTopologies(queryClient, action, hostId, host)
 }
 
 // The topology cross-references every host against every other (a route's
@@ -131,13 +217,16 @@ export function useAllHosts(operationId: string) {
 
 // --- Mutations ---
 
+// The mutations apply their result the same way the subscription applies the
+// event it echoes back; applying both is harmless, and their refreshes fold
+// into one.
 export function useCreateHost() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (vars: { operationId: string; input: CreateHostInput }) =>
       graphqlClient(CreateHostDocument, vars),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: hostKeys.all })
+    onSuccess: (data) => {
+      applyHostEvent(queryClient, "CREATED", data.createHost.id, data.createHost)
     },
   })
 }
@@ -147,8 +236,8 @@ export function useUpdateHost() {
   return useMutation({
     mutationFn: (vars: { id: string; input: UpdateHostInput }) =>
       graphqlClient(UpdateHostDocument, vars),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: hostKeys.all })
+    onSuccess: (data) => {
+      applyHostEvent(queryClient, "UPDATED", data.updateHost.id, data.updateHost)
     },
   })
 }
@@ -157,18 +246,17 @@ export function useDeleteHost() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => graphqlClient(DeleteHostDocument, { id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: hostKeys.all })
+    onSuccess: (_data, id) => {
+      applyHostEvent(queryClient, "DELETED", id, null)
     },
   })
 }
 
 // --- Subscriptions ---
 
-// Keeps every operator's Hosts table live. Any create/update/delete can move a
-// row in or out of the current search filter, so the list is blanket-
-// invalidated and refetched. Hosts don't cross-link other entities, so there
-// are no credential/wiki invalidations (unlike the hash subscription).
+// Keeps every operator's Hosts table, chips and topology live. Hosts don't
+// cross-link other entities, so there are no credential/wiki refreshes
+// (unlike the hash subscription).
 export function useHostChangedSubscription(operationId: string) {
   const queryClient = useQueryClient()
 
@@ -176,8 +264,9 @@ export function useHostChangedSubscription(operationId: string) {
     HostChangedDocument,
     { operationId },
     {
-      onData: () => {
-        queryClient.invalidateQueries({ queryKey: hostKeys.all })
+      onData: (data) => {
+        const { action, hostId, host } = data.hostChanged
+        applyHostEvent(queryClient, action, hostId, host)
       },
       enabled: !!operationId,
     },
