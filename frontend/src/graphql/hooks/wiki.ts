@@ -827,7 +827,6 @@ export function useWikiDocumentChangedSubscription(operationId: string) {
       const {
         action,
         documentId,
-        document,
         parentDocumentId,
         previousParentDocumentId,
       } = data.wikiDocumentChanged
@@ -858,8 +857,8 @@ export function useWikiDocumentChangedSubscription(operationId: string) {
         }
         queryClient.invalidateQueries({ queryKey: wikiKeys.trash(operationId) })
         queryClient.invalidateQueries({ queryKey: wikiKeys.trashCount(operationId) })
-      } else if (document) {
-        // Seed detail cache on create/update so navigating to the doc is instant.
+      } else if (documentId) {
+        // Create/update: refresh whichever per-document views are mounted.
         queryClient.invalidateQueries({ queryKey: wikiKeys.detail(documentId) })
         queryClient.invalidateQueries({ queryKey: wikiKeys.lite(documentId) })
         queryClient.invalidateQueries({ queryKey: wikiKeys.preview(documentId) })
@@ -945,7 +944,7 @@ export function useWikiDocumentChangedSubscription(operationId: string) {
         queryClient.invalidateQueries({
           queryKey: ["credentials", "backlinks"],
         })
-      } else if (action === "UPDATED" && document) {
+      } else if (action === "UPDATED") {
         // Wiki content edits (via Hocuspocus) can add/remove credential
         // chips, which shifts the credential backlinks list — though not
         // the wiki-doc backlinks. The list contents are small and writes

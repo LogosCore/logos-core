@@ -4,14 +4,19 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/vektah/gqlparser/v2/ast"
+	"go.uber.org/zap"
 )
 
 var errOperationNotFound = errors.New("operation not found")
@@ -223,5 +228,85 @@ func TestBuildOperationsFilter_NilIncludesPublic(t *testing.T) {
 	}
 	if !filter(publicOpEvent(eventbus.TopicWikiDocumentUpdated)) {
 		t.Fatal("nil-opIDs filter must deliver Public-scoped events")
+	}
+}
+
+// countingDocRepo stands in for the wiki repository, counting the document
+// reads a subscription makes. Every other method panics via the nil embed.
+type countingDocRepo struct {
+	repository.IWikiDocumentRepository
+	reads atomic.Int32
+}
+
+func (f *countingDocRepo) FindByIDs(_ context.Context, ids []uuid.UUID) ([]models.WikiDocument, error) {
+	f.reads.Add(1)
+	docs := make([]models.WikiDocument, len(ids))
+	for i, id := range ids {
+		docs[i] = models.WikiDocument{DocumentID: id, OperationID: models.PublicOperationID}
+	}
+	return docs, nil
+}
+
+// withSelection attaches the operation and field context gqlgen would, with
+// the given fields selected on the subscription's event type.
+func withSelection(ctx context.Context, fields ...string) context.Context {
+	sel := make(ast.SelectionSet, len(fields))
+	for i, name := range fields {
+		sel[i] = &ast.Field{Name: name, Alias: name}
+	}
+	ctx = graphql.WithOperationContext(ctx, &graphql.OperationContext{})
+	return graphql.WithFieldContext(ctx, &graphql.FieldContext{
+		Field: graphql.CollectedField{Selections: sel},
+	})
+}
+
+// TestWikiDocumentChanged_ReadsDocumentOnlyWhenSelected pins the per-event
+// cost of the subscription. Every connected client runs its own read on every
+// save — and Hocuspocus saves every couple of seconds while someone types —
+// so a client that does not select `document` must not trigger one.
+func TestWikiDocumentChanged_ReadsDocumentOnlyWhenSelected(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		selection []string
+		wantReads int32
+	}{
+		{"ids only", []string{"action", "documentId", "parentDocumentId"}, 0},
+		{"with document", []string{"action", "documentId", "document"}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bus := eventbus.NewEventBus(zap.NewNop())
+			bus.Start()
+			docs := &countingDocRepo{}
+			r := newResolverForTest(&fakeOperationRepo{})
+			r.EventBus = bus
+			r.WikiDocumentRepo = docs
+
+			authed, _ := authedCtx(uuid.NewString(), "user")
+			ctx, cancel := context.WithCancel(withSelection(authed, tc.selection...))
+			ch, err := r.wikiDocumentChanged(ctx, models.PublicOperationID.String())
+			if err != nil {
+				cancel()
+				t.Fatalf("subscribe: %v", err)
+			}
+			t.Cleanup(func() {
+				cancel()
+				for range ch { // closed once the resolver has unsubscribed
+				}
+				bus.Stop(context.Background())
+			})
+
+			bus.Publish(publicOpEvent(eventbus.TopicWikiDocumentUpdated))
+			select {
+			case evt := <-ch:
+				if got := docs.reads.Load(); got != tc.wantReads {
+					t.Errorf("document reads = %d, want %d", got, tc.wantReads)
+				}
+				if got, want := evt.Document != nil, tc.wantReads > 0; got != want {
+					t.Errorf("event carries a document = %v, want %v", got, want)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("no event delivered")
+			}
+		})
 	}
 }

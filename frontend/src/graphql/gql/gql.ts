@@ -187,7 +187,7 @@ type Documents = {
     "\n  mutation RestoreWikiDocumentBackup($documentId: ID!, $backupId: ID!) {\n    restoreWikiDocumentBackup(documentId: $documentId, backupId: $backupId) {\n      id title content\n    }\n  }\n": typeof types.RestoreWikiDocumentBackupDocument,
     "\n  mutation DeleteWikiDocumentBackup($id: ID!) {\n    deleteWikiDocumentBackup(id: $id)\n  }\n": typeof types.DeleteWikiDocumentBackupDocument,
     "\n  mutation TrackWikiDocumentVisit($documentId: ID!) {\n    trackWikiDocumentVisit(documentId: $documentId) {\n      id\n      visitedAt\n    }\n  }\n": typeof types.TrackWikiDocumentVisitDocument,
-    "\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n      document { id title emoji icon color sortOrder parentDocument { id } }\n    }\n  }\n": typeof types.WikiDocumentChangedDocument,
+    "\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n    }\n  }\n": typeof types.WikiDocumentChangedDocument,
     "\n  subscription WikiDocumentPresenceChanged($operationId: ID!) {\n    wikiDocumentPresenceChanged(operationId: $operationId) {\n      documentId operationId userId username action\n    }\n  }\n": typeof types.WikiDocumentPresenceChangedDocument,
 };
 const documents: Documents = {
@@ -364,7 +364,7 @@ const documents: Documents = {
     "\n  mutation RestoreWikiDocumentBackup($documentId: ID!, $backupId: ID!) {\n    restoreWikiDocumentBackup(documentId: $documentId, backupId: $backupId) {\n      id title content\n    }\n  }\n": types.RestoreWikiDocumentBackupDocument,
     "\n  mutation DeleteWikiDocumentBackup($id: ID!) {\n    deleteWikiDocumentBackup(id: $id)\n  }\n": types.DeleteWikiDocumentBackupDocument,
     "\n  mutation TrackWikiDocumentVisit($documentId: ID!) {\n    trackWikiDocumentVisit(documentId: $documentId) {\n      id\n      visitedAt\n    }\n  }\n": types.TrackWikiDocumentVisitDocument,
-    "\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n      document { id title emoji icon color sortOrder parentDocument { id } }\n    }\n  }\n": types.WikiDocumentChangedDocument,
+    "\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n    }\n  }\n": types.WikiDocumentChangedDocument,
     "\n  subscription WikiDocumentPresenceChanged($operationId: ID!) {\n    wikiDocumentPresenceChanged(operationId: $operationId) {\n      documentId operationId userId username action\n    }\n  }\n": types.WikiDocumentPresenceChangedDocument,
 };
 
@@ -1077,7 +1077,7 @@ export function graphql(source: "\n  mutation TrackWikiDocumentVisit($documentId
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n      document { id title emoji icon color sortOrder parentDocument { id } }\n    }\n  }\n"): (typeof documents)["\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n      document { id title emoji icon color sortOrder parentDocument { id } }\n    }\n  }\n"];
+export function graphql(source: "\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n    }\n  }\n"): (typeof documents)["\n  subscription WikiDocumentChanged($operationId: ID!) {\n    wikiDocumentChanged(operationId: $operationId) {\n      action\n      documentId\n      operationId\n      parentDocumentId\n      previousParentDocumentId\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

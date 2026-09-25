@@ -609,6 +609,10 @@ export const TrackWikiDocumentVisitMutation = graphql(`
 // --- Subscriptions ---
 
 // Real-time document CRUD events via SSE.
+//
+// Ids only, no `document`: the server reads the document once per subscriber
+// per event, and Hocuspocus saves every couple of seconds while someone
+// types. The handler only ever invalidates, so the ids are all it needs.
 export const WikiDocumentChangedSubscription = graphql(`
   subscription WikiDocumentChanged($operationId: ID!) {
     wikiDocumentChanged(operationId: $operationId) {
@@ -617,7 +621,6 @@ export const WikiDocumentChangedSubscription = graphql(`
       operationId
       parentDocumentId
       previousParentDocumentId
-      document { id title emoji icon color sortOrder parentDocument { id } }
     }
   }
 `)

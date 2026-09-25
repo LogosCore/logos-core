@@ -7,8 +7,10 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/99designs/gqlgen/graphql"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
@@ -196,6 +198,17 @@ func filterFromOpSet(opSet map[string]struct{}, auth gqlctx.AuthInfo) eventbus.F
 		_, ok := opSet[extractOperationID(event)]
 		return ok
 	}
+}
+
+// selectsField reports whether the client's selection on the current field
+// includes name, fragments included. Without an executing operation — a
+// resolver called directly from a test — it reports true, so the caller
+// falls back to doing the work.
+func selectsField(ctx context.Context, name string) bool {
+	if !graphql.HasOperationContext(ctx) || graphql.GetFieldContext(ctx) == nil {
+		return true
+	}
+	return slices.Contains(graphql.CollectAllFields(ctx), name)
 }
 
 // extractOperationID pulls the operation ID from any operation-related event payload.
@@ -512,6 +525,12 @@ func (r *subscriptionResolver) wikiDocumentChanged(ctx context.Context, operatio
 		return nil, err
 	}
 
+	// The document read runs once per subscriber per event, and Hocuspocus
+	// persists every couple of seconds while someone types — so a client
+	// that only wants the event's ids should not pay for it. The selection
+	// cannot change for the life of the subscription, so decide once.
+	fetchDocument := selectsField(ctx, "document")
+
 	ch := make(chan *model.WikiDocumentEvent, 1)
 
 	unsubscribe := r.EventBus.Subscribe(
@@ -519,11 +538,12 @@ func (r *subscriptionResolver) wikiDocumentChanged(ctx context.Context, operatio
 		func(_ context.Context, event eventbus.Event) {
 			evt := toWikiDocumentEvent(event)
 
-			// For non-DELETE events, fetch the full document
-			if evt.Action != model.EventActionDeleted {
+			// For non-DELETE events, fetch the document without its CRDT
+			// state, which no field of the event exposes.
+			if fetchDocument && evt.Action != model.EventActionDeleted {
 				if docID, err := uuid.Parse(evt.DocumentID); err == nil {
-					if doc, err := r.WikiDocumentRepo.FindByID(ctx, docID); err == nil {
-						evt.Document = &doc
+					if docs, err := r.WikiDocumentRepo.FindByIDs(ctx, []uuid.UUID{docID}); err == nil && len(docs) == 1 {
+						evt.Document = &docs[0]
 					}
 				}
 			}
