@@ -7,12 +7,8 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -78,48 +74,15 @@ func (r *queryResolver) Hosts(ctx context.Context, operationID string, search *s
 // operation, fetch the full host for non-delete events, and stream them to the
 // client.
 func (r *subscriptionResolver) HostChanged(ctx context.Context, operationID string) (<-chan *model.HostEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.HostEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		hostTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toHostEvent(event)
-
-			// For non-DELETE events, fetch the full host so the client gets
-			// fresh state without a follow-up query.
-			if evt.Action != model.EventActionDeleted && r.HostRepo != nil {
-				if hid, err := uuid.Parse(evt.HostID); err == nil {
-					if host, err := r.HostRepo.FindByID(ctx, hid); err == nil {
-						evt.Host = &host
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, hostTopics, filter, r.hostEvent), nil
 }
 
 // Host returns generated.HostResolver implementation.

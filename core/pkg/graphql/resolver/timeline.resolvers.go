@@ -7,12 +7,9 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -51,48 +48,15 @@ func (r *queryResolver) TimelineEventsByDay(ctx context.Context, operationID str
 // committed, so this stream is always lossless with respect to what's in
 // the database.
 func (r *subscriptionResolver) TimelineEventAdded(ctx context.Context, operationID string) (<-chan *models.OperationEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *models.OperationEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		[]eventbus.Topic{eventbus.TopicOperationEventLogged},
-		func(_ context.Context, event eventbus.Event) {
-			p, ok := event.Payload.(eventbus.OperationEventLoggedPayload)
-			if !ok {
-				return
-			}
-			eventUID, err := uuid.Parse(p.EventID)
-			if err != nil {
-				return
-			}
-			row, err := r.TimelineResolver.FindByEventID(ctx, eventUID)
-			if err != nil || row == nil {
-				return
-			}
-			select {
-			case ch <- row:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, []eventbus.Topic{eventbus.TopicOperationEventLogged}, filter, r.timelineEvent), nil
 }
 
 // ID is the resolver for the id field.

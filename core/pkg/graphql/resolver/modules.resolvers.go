@@ -7,11 +7,8 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -54,38 +51,10 @@ func (r *queryResolver) Modules(ctx context.Context, status []string) ([]*models
 // row (which is never hard-deleted) so the client updates without a follow-up
 // query.
 func (r *subscriptionResolver) ModuleChanged(ctx context.Context) (<-chan *model.ModuleEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	if _, err := subscriberAuth(ctx); err != nil {
+		return nil, err
 	}
-
-	ch := make(chan *model.ModuleEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		moduleTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toModuleEvent(event)
-
-			if r.ModuleRepo != nil && evt.Instance != "" {
-				if mod, err := r.ModuleRepo.FindByInstance(ctx, evt.Instance); err == nil {
-					evt.Module = &mod
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, moduleTopics, nil, r.moduleEvent), nil
 }
 
 // Module returns generated.ModuleResolver implementation.

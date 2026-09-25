@@ -7,11 +7,9 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -68,53 +66,15 @@ func (r *queryResolver) MyAgentActivitySummary(ctx context.Context) ([]*model.Ag
 
 // MyAgentActionOccurred is the resolver for the myAgentActionOccurred field.
 func (r *subscriptionResolver) MyAgentActionOccurred(ctx context.Context) (<-chan *model.AgentActivityEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	ch := make(chan *model.AgentActivityEvent, 1)
-
-	// Filtered on the OWNER rather than an operation: this feeds a personal
-	// audit page that spans engagements, so the operator should see an agent
-	// of theirs working in any of them. Filtering on the bus rather than in
-	// the handler keeps another user's agent traffic off this subscriber's
-	// channel entirely.
-	unsubscribe := r.EventBus.Subscribe(
-		[]eventbus.Topic{eventbus.TopicAgentAction},
-		func(_ context.Context, event eventbus.Event) {
-			p, ok := event.Payload.(eventbus.AgentActionPayload)
-			if !ok {
-				return
-			}
-			select {
-			case ch <- &model.AgentActivityEvent{
-				OperationID: p.OperationID,
-				AgentKeyID:  p.AgentKeyID,
-				AgentName:   p.AgentName,
-				AgentLabel:  p.AgentLabel,
-				OwnerUserID: p.OwnerUserID,
-				Tool:        p.Tool,
-				Write:       p.Write,
-				Outcome:     p.Outcome,
-				Summary:     p.Summary,
-			}:
-			case <-ctx.Done():
-			}
-		},
-		func(event eventbus.Event) bool {
-			p, ok := event.Payload.(eventbus.AgentActionPayload)
-			return ok && p.OwnerUserID == auth.UserID
-		},
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	ownActions := func(event eventbus.Event) bool {
+		p, ok := event.Payload.(eventbus.AgentActionPayload)
+		return ok && p.OwnerUserID == auth.UserID
+	}
+	return stream(ctx, r.EventBus, []eventbus.Topic{eventbus.TopicAgentAction}, ownActions, pure(agentActivityEvent)), nil
 }
 
 // AgentAction returns generated.AgentActionResolver implementation.

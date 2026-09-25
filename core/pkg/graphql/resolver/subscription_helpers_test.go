@@ -290,8 +290,6 @@ func TestWikiDocumentChanged_ReadsDocumentOnlyWhenSelected(t *testing.T) {
 			}
 			t.Cleanup(func() {
 				cancel()
-				for range ch { // closed once the resolver has unsubscribed
-				}
 				bus.Stop(context.Background())
 			})
 
@@ -308,5 +306,64 @@ func TestWikiDocumentChanged_ReadsDocumentOnlyWhenSelected(t *testing.T) {
 				t.Fatal("no event delivered")
 			}
 		})
+	}
+}
+
+// capturingBus hands the test the handler a subscription registers, and
+// signals when the subscription lets go of the bus.
+type capturingBus struct {
+	eventbus.IEventBus
+	handler      eventbus.Handler
+	unsubscribed chan struct{}
+}
+
+func (b *capturingBus) Subscribe(_ []eventbus.Topic, h eventbus.Handler, _ ...eventbus.Filter) func() {
+	b.handler = h
+	return func() { close(b.unsubscribed) }
+}
+
+// TestStream_SurvivesAnEventInFlightAtDisconnect pins the race every
+// subscription resolver used to have: they closed the client channel right
+// after unsubscribing, while the bus could still be running the handler for
+// an event it had already dispatched — and a send on the closed channel
+// panicked. The bus recovered it, as an error in the log.
+func TestStream_SurvivesAnEventInFlightAtDisconnect(t *testing.T) {
+	bus := &capturingBus{unsubscribed: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := stream(ctx, bus, nil, nil, func(_ context.Context, e eventbus.Event) *string {
+		if e.Topic == "skip" {
+			return nil
+		}
+		topic := string(e.Topic)
+		return &topic
+	})
+
+	bus.handler(context.Background(), eventbus.Event{Topic: "skip"})
+	bus.handler(context.Background(), eventbus.Event{Topic: "first"})
+	if got := <-ch; *got != "first" {
+		t.Fatalf("first payload = %q, want the event after the skipped one", *got)
+	}
+
+	cancel()
+	<-bus.unsubscribed
+	time.Sleep(20 * time.Millisecond) // anything the stream does after unsubscribing, it has done
+
+	// Late deliveries must neither panic nor find the channel closed.
+	for range 20 {
+		bus.handler(context.Background(), eventbus.Event{Topic: "late"})
+	}
+	for {
+		select {
+		case v, open := <-ch:
+			if !open {
+				t.Fatal("the stream closed the client channel; a send racing that close panics")
+			}
+			if *v != "late" {
+				t.Fatalf("unexpected payload %q", *v)
+			}
+			continue
+		default:
+		}
+		break
 	}
 }

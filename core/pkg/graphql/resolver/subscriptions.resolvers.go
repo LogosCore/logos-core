@@ -7,12 +7,9 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
 
@@ -29,47 +26,15 @@ import (
 //  4. When the client disconnects, gqlgen cancels ctx — our cleanup goroutine
 //     unsubscribes from the event bus and closes the channel
 func (r *subscriptionResolver) UserChanged(ctx context.Context) (<-chan *model.UserEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	if _, err := subscriberAuth(ctx); err != nil {
+		return nil, err
 	}
-
-	ch := make(chan *model.UserEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		[]eventbus.Topic{
-			eventbus.TopicUserCreated,
-			eventbus.TopicUserUpdated,
-			eventbus.TopicUserDeleted,
-		},
-		func(_ context.Context, event eventbus.Event) {
-			evt := toUserEvent(event)
-
-			// For non-DELETE events, fetch the full user from DB so the
-			// frontend gets complete data without a follow-up query.
-			if evt.Action != model.EventActionDeleted {
-				if uid, err := uuid.Parse(evt.UserID); err == nil {
-					if user, err := r.UserRepo.FindByID(ctx, uid); err == nil {
-						evt.User = &user
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-	)
-
-	// Cleanup: when the client disconnects, unsubscribe and close the channel.
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	topics := []eventbus.Topic{
+		eventbus.TopicUserCreated,
+		eventbus.TopicUserUpdated,
+		eventbus.TopicUserDeleted,
+	}
+	return stream(ctx, r.EventBus, topics, nil, r.userEvent), nil
 }
 
 // OperationChanged is the resolver for the operationChanged field.
@@ -79,51 +44,20 @@ func (r *subscriptionResolver) UserChanged(ctx context.Context) (<-chan *model.U
 // The membership set is captured at subscribe time — if the caller joins a new
 // operation, they need to reconnect to receive events for it.
 func (r *subscriptionResolver) OperationChanged(ctx context.Context, operationID *string) (<-chan *model.OperationEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	// Build the filter: either a single operation ID or the caller's full membership set.
 	filter, err := r.buildOperationFilter(ctx, auth, operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.OperationEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		[]eventbus.Topic{
-			eventbus.TopicOperationCreated,
-			eventbus.TopicOperationUpdated,
-			eventbus.TopicOperationDeleted,
-		},
-		func(_ context.Context, event eventbus.Event) {
-			evt := toOperationEvent(event)
-
-			if evt.Action != model.EventActionDeleted {
-				if opID, err := uuid.Parse(evt.OperationID); err == nil {
-					if op, err := r.OperationRepo.FindByID(ctx, opID); err == nil {
-						evt.Operation = &op
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	topics := []eventbus.Topic{
+		eventbus.TopicOperationCreated,
+		eventbus.TopicOperationUpdated,
+		eventbus.TopicOperationDeleted,
+	}
+	return stream(ctx, r.EventBus, topics, filter, r.operationEvent), nil
 }
 
 // OperationMemberChanged is the resolver for the operationMemberChanged field.
@@ -131,42 +65,20 @@ func (r *subscriptionResolver) OperationChanged(ctx context.Context, operationID
 // Same scoping as OperationChanged — provide operationId to filter to one
 // operation, or omit to receive events for all the caller's operations.
 func (r *subscriptionResolver) OperationMemberChanged(ctx context.Context, operationID *string) (<-chan *model.OperationMemberEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.OperationMemberEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		[]eventbus.Topic{
-			eventbus.TopicOperationMemberAdded,
-			eventbus.TopicOperationMemberRemoved,
-			eventbus.TopicOperationMemberUpdated,
-		},
-		func(_ context.Context, event eventbus.Event) {
-			evt := toOperationMemberEvent(event)
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	topics := []eventbus.Topic{
+		eventbus.TopicOperationMemberAdded,
+		eventbus.TopicOperationMemberRemoved,
+		eventbus.TopicOperationMemberUpdated,
+	}
+	return stream(ctx, r.EventBus, topics, filter, pure(toOperationMemberEvent)), nil
 }
 
 // Subscription returns generated.SubscriptionResolver implementation.

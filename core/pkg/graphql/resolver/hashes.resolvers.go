@@ -7,12 +7,8 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -129,90 +125,28 @@ func (r *queryResolver) WikiDocumentsReferencingHash(ctx context.Context, hashID
 
 // HashChanged is the resolver for the hashChanged field.
 func (r *subscriptionResolver) HashChanged(ctx context.Context, operationID string) (<-chan *model.HashEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.HashEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		hashTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toHashEvent(event)
-
-			if evt.Action != model.EventActionDeleted && evt.HashID != "" && r.HashRepo != nil {
-				if hid, err := uuid.Parse(evt.HashID); err == nil {
-					if h, err := r.HashRepo.FindByID(ctx, hid); err == nil {
-						evt.Hash = &h
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, hashTopics, filter, r.hashEvent), nil
 }
 
 // MyHashChanged is the resolver for the myHashChanged field.
 func (r *subscriptionResolver) MyHashChanged(ctx context.Context, operationIds []string) (<-chan *model.HashEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationsFilter(ctx, auth, operationIds)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.HashEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		hashTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toHashEvent(event)
-
-			if evt.Action != model.EventActionDeleted && evt.HashID != "" && r.HashRepo != nil {
-				if hid, err := uuid.Parse(evt.HashID); err == nil {
-					if h, err := r.HashRepo.FindByID(ctx, hid); err == nil {
-						evt.Hash = &h
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, hashTopics, filter, r.hashEvent), nil
 }
 
 // Hash returns generated.HashResolver implementation.

@@ -7,12 +7,8 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -148,48 +144,15 @@ func (r *queryResolver) MyCredentialTags(ctx context.Context, operationIds []str
 // to the given operation, fetch the full credential for non-delete events,
 // and stream them to the client over SSE.
 func (r *subscriptionResolver) CredentialChanged(ctx context.Context, operationID string) (<-chan *model.CredentialEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.CredentialEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		credentialTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toCredentialEvent(event)
-
-			// For non-DELETE events, fetch the full credential so the
-			// client gets fresh state without a follow-up query.
-			if evt.Action != model.EventActionDeleted && r.CredentialRepo != nil {
-				if cid, err := uuid.Parse(evt.CredentialID); err == nil {
-					if cred, err := r.CredentialRepo.FindByID(ctx, cid); err == nil {
-						evt.Credential = &cred
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, credentialTopics, filter, r.credentialEvent), nil
 }
 
 // MyCredentialChanged is the resolver for the myCredentialChanged field.
@@ -200,46 +163,15 @@ func (r *subscriptionResolver) CredentialChanged(ctx context.Context, operationI
 // to the subscriber. For non-DELETE events we fetch the full credential here
 // so the client can update its cache without a follow-up query.
 func (r *subscriptionResolver) MyCredentialChanged(ctx context.Context, operationIds []string) (<-chan *model.CredentialEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationsFilter(ctx, auth, operationIds)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.CredentialEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		credentialTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toCredentialEvent(event)
-
-			if evt.Action != model.EventActionDeleted && r.CredentialRepo != nil {
-				if cid, err := uuid.Parse(evt.CredentialID); err == nil {
-					if cred, err := r.CredentialRepo.FindByID(ctx, cid); err == nil {
-						evt.Credential = &cred
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, credentialTopics, filter, r.credentialEvent), nil
 }
 
 // Credential returns generated.CredentialResolver implementation.

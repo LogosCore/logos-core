@@ -512,93 +512,232 @@ var wikiPresenceTopics = []eventbus.Topic{
 	eventbus.TopicWikiPresenceLeft,
 }
 
+// --- Streaming ---
+
+// subscriberAuth returns the caller's identity, refusing anonymous callers —
+// the first check of every subscription.
+func subscriberAuth(ctx context.Context) (gqlctx.AuthInfo, error) {
+	auth := gqlctx.AuthFromContext(ctx)
+	if auth.UserID == "" {
+		return auth, fmt.Errorf("unauthorized")
+	}
+	return auth, nil
+}
+
+// stream feeds a subscription: every event on topics that passes filter (nil
+// for all) is turned into a payload by build — which may return nil to skip
+// it — and sent to the client until the subscription's context ends.
+//
+// The channel is never closed. gqlgen stops reading it when ctx ends, and at
+// that moment the bus may still be running build for an event in flight.
+// Every resolver used to close the channel right after unsubscribing, and a
+// send racing that close panicked. Unsubscribing alone stops the bus calling
+// build, and the channel is collected with the subscription.
+func stream[T any](
+	ctx context.Context,
+	bus eventbus.IEventBus,
+	topics []eventbus.Topic,
+	filter eventbus.Filter,
+	build func(context.Context, eventbus.Event) *T,
+) <-chan *T {
+	ch := make(chan *T, 1)
+	unsubscribe := bus.Subscribe(topics, func(_ context.Context, event eventbus.Event) {
+		payload := build(ctx, event)
+		if payload == nil {
+			return
+		}
+		select {
+		case ch <- payload:
+		case <-ctx.Done():
+		}
+	}, filter)
+	go func() {
+		<-ctx.Done()
+		unsubscribe()
+	}()
+	return ch
+}
+
+// pure adapts a conversion that reads nothing to stream's builder shape.
+func pure[T any](convert func(eventbus.Event) *T) func(context.Context, eventbus.Event) *T {
+	return func(_ context.Context, event eventbus.Event) *T { return convert(event) }
+}
+
+// load reads the row an event names, or returns nil when the id does not
+// parse or the row cannot be read — the event still goes out, with its ids.
+func load[T any](ctx context.Context, id string, find func(context.Context, uuid.UUID) (T, error)) *T {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return nil
+	}
+	row, err := find(ctx, uid)
+	if err != nil {
+		return nil
+	}
+	return &row
+}
+
+// Event builders: each converts a bus event to its GraphQL payload and, for
+// anything but a delete, loads the row it names so the client can update
+// without a follow-up query.
+
+func (r *subscriptionResolver) userEvent(ctx context.Context, event eventbus.Event) *model.UserEvent {
+	evt := toUserEvent(event)
+	if evt.Action != model.EventActionDeleted {
+		evt.User = load(ctx, evt.UserID, r.UserRepo.FindByID)
+	}
+	return evt
+}
+
+func (r *subscriptionResolver) operationEvent(ctx context.Context, event eventbus.Event) *model.OperationEvent {
+	evt := toOperationEvent(event)
+	if evt.Action != model.EventActionDeleted {
+		evt.Operation = load(ctx, evt.OperationID, r.OperationRepo.FindByID)
+	}
+	return evt
+}
+
+func (r *subscriptionResolver) credentialEvent(ctx context.Context, event eventbus.Event) *model.CredentialEvent {
+	evt := toCredentialEvent(event)
+	if evt.Action != model.EventActionDeleted && r.CredentialRepo != nil {
+		evt.Credential = load(ctx, evt.CredentialID, r.CredentialRepo.FindByID)
+	}
+	return evt
+}
+
+// hashEvent leaves a bulk import's summary event — which names no single
+// hash — without a row.
+func (r *subscriptionResolver) hashEvent(ctx context.Context, event eventbus.Event) *model.HashEvent {
+	evt := toHashEvent(event)
+	if evt.Action != model.EventActionDeleted && evt.HashID != "" && r.HashRepo != nil {
+		evt.Hash = load(ctx, evt.HashID, r.HashRepo.FindByID)
+	}
+	return evt
+}
+
+func (r *subscriptionResolver) hostEvent(ctx context.Context, event eventbus.Event) *model.HostEvent {
+	evt := toHostEvent(event)
+	if evt.Action != model.EventActionDeleted && r.HostRepo != nil {
+		evt.Host = load(ctx, evt.HostID, r.HostRepo.FindByID)
+	}
+	return evt
+}
+
+func (r *subscriptionResolver) taskEvent(ctx context.Context, event eventbus.Event) *model.TaskEvent {
+	evt := toTaskEvent(event)
+	if evt.Action != model.EventActionDeleted && r.TaskRepo != nil {
+		evt.Task = load(ctx, evt.TaskID, r.TaskRepo.FindByID)
+	}
+	return evt
+}
+
+// sessionEvent's row carries the status the event's topic implies; see
+// applySessionStatusFromTopic.
+func (r *subscriptionResolver) sessionEvent(ctx context.Context, event eventbus.Event) *model.SessionEvent {
+	evt := toSessionEvent(event)
+	if evt.SessionID != "" {
+		if sess := load(ctx, evt.SessionID, r.SessionRepo.FindByID); sess != nil {
+			applySessionStatusFromTopic(sess, event.Topic)
+			evt.Session = sess
+		}
+	}
+	return evt
+}
+
+func (r *subscriptionResolver) moduleEvent(ctx context.Context, event eventbus.Event) *model.ModuleEvent {
+	evt := toModuleEvent(event)
+	if r.ModuleRepo != nil && evt.Instance != "" {
+		if mod, err := r.ModuleRepo.FindByInstance(ctx, evt.Instance); err == nil {
+			evt.Module = &mod
+		}
+	}
+	return evt
+}
+
+// timelineEvent streams the logged row itself, so an event whose row cannot
+// be read is skipped rather than sent empty.
+func (r *subscriptionResolver) timelineEvent(ctx context.Context, event eventbus.Event) *models.OperationEvent {
+	p, ok := event.Payload.(eventbus.OperationEventLoggedPayload)
+	if !ok {
+		return nil
+	}
+	eventUID, err := uuid.Parse(p.EventID)
+	if err != nil {
+		return nil
+	}
+	row, err := r.TimelineResolver.FindByEventID(ctx, eventUID)
+	if err != nil {
+		return nil
+	}
+	return row
+}
+
+// wikiDocumentEvents builds wiki document events, reading the document only
+// when the client selected it — see wikiDocumentChanged.
+func (r *subscriptionResolver) wikiDocumentEvents(fetchDocument bool) func(context.Context, eventbus.Event) *model.WikiDocumentEvent {
+	return func(ctx context.Context, event eventbus.Event) *model.WikiDocumentEvent {
+		evt := toWikiDocumentEvent(event)
+		// Without its CRDT state, which no field of the event exposes.
+		if fetchDocument && evt.Action != model.EventActionDeleted {
+			if docID, err := uuid.Parse(evt.DocumentID); err == nil {
+				if docs, err := r.WikiDocumentRepo.FindByIDs(ctx, []uuid.UUID{docID}); err == nil && len(docs) == 1 {
+					evt.Document = &docs[0]
+				}
+			}
+		}
+		return evt
+	}
+}
+
+// agentActivityEvent converts an agent action to its feed row.
+func agentActivityEvent(event eventbus.Event) *model.AgentActivityEvent {
+	p, ok := event.Payload.(eventbus.AgentActionPayload)
+	if !ok {
+		return nil
+	}
+	return &model.AgentActivityEvent{
+		OperationID: p.OperationID,
+		AgentKeyID:  p.AgentKeyID,
+		AgentName:   p.AgentName,
+		AgentLabel:  p.AgentLabel,
+		OwnerUserID: p.OwnerUserID,
+		Tool:        p.Tool,
+		Write:       p.Write,
+		Outcome:     p.Outcome,
+		Summary:     p.Summary,
+	}
+}
+
 // wikiDocumentChanged implements the wikiDocumentChanged subscription.
 // Same operation-scoping pattern as OperationChanged.
 func (r *subscriptionResolver) wikiDocumentChanged(ctx context.Context, operationID string) (<-chan *model.WikiDocumentEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
 	// The document read runs once per subscriber per event, and Hocuspocus
 	// persists every couple of seconds while someone types — so a client
 	// that only wants the event's ids should not pay for it. The selection
 	// cannot change for the life of the subscription, so decide once.
 	fetchDocument := selectsField(ctx, "document")
-
-	ch := make(chan *model.WikiDocumentEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		wikiDocumentTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toWikiDocumentEvent(event)
-
-			// For non-DELETE events, fetch the document without its CRDT
-			// state, which no field of the event exposes.
-			if fetchDocument && evt.Action != model.EventActionDeleted {
-				if docID, err := uuid.Parse(evt.DocumentID); err == nil {
-					if docs, err := r.WikiDocumentRepo.FindByIDs(ctx, []uuid.UUID{docID}); err == nil && len(docs) == 1 {
-						evt.Document = &docs[0]
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, wikiDocumentTopics, filter, r.wikiDocumentEvents(fetchDocument)), nil
 }
 
 // wikiDocumentPresenceChanged implements the wikiDocumentPresenceChanged subscription.
 func (r *subscriptionResolver) wikiDocumentPresenceChanged(ctx context.Context, operationID string) (<-chan *model.WikiDocumentPresenceEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.WikiDocumentPresenceEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		wikiPresenceTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toWikiDocumentPresenceEvent(event)
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, wikiPresenceTopics, filter, pure(toWikiDocumentPresenceEvent)), nil
 }
 
 // taskTopics is the list of task event bus topics for subscriptions.
@@ -641,50 +780,18 @@ func toTaskEvent(event eventbus.Event) *model.TaskEvent {
 }
 
 // taskChanged implements the taskChanged subscription. Same shape as
-// wikiDocumentChanged — auth via the operation filter, then refetch the
-// full task for non-DELETED events so clients can update without an
-// additional query.
+// wikiDocumentChanged — auth via the operation filter, then the full task for
+// non-DELETED events so clients can update without an additional query.
 func (r *subscriptionResolver) taskChanged(ctx context.Context, operationID string) (<-chan *model.TaskEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.TaskEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		taskTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toTaskEvent(event)
-
-			if evt.Action != model.EventActionDeleted && r.TaskRepo != nil {
-				if tid, err := uuid.Parse(evt.TaskID); err == nil {
-					if task, err := r.TaskRepo.FindByID(ctx, tid); err == nil {
-						evt.Task = &task
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, taskTopics, filter, r.taskEvent), nil
 }
 
 // sessionTopics is the list of session event bus topics for subscriptions.

@@ -7,12 +7,9 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -95,97 +92,29 @@ func (r *sessionResolver) UpdatedAt(ctx context.Context, obj *models.Session) (s
 // MySessionChanged is the resolver for the mySessionChanged field.
 // Streams session events for the caller's own sessions only.
 func (r *subscriptionResolver) MySessionChanged(ctx context.Context) (<-chan *model.SessionEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	ch := make(chan *model.SessionEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		sessionTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toSessionEvent(event)
-			// Only forward events for the caller's own sessions
-			if evt.UserID != auth.UserID {
-				return
-			}
-
-			// Fetch the full session from DB (use subscription ctx for cancellation)
-			if evt.SessionID != "" {
-				if sid, err := uuid.Parse(evt.SessionID); err == nil {
-					if sess, err := r.SessionRepo.FindByID(ctx, sid); err == nil {
-						// Status is bson:"-" so FindByID leaves it empty,
-						// which the field resolver would turn into INACTIVE.
-						// Derive it from the event topic instead.
-						applySessionStatusFromTopic(&sess, event.Topic)
-						evt.Session = &sess
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	ownSessions := func(event eventbus.Event) bool {
+		return toSessionEvent(event).UserID == auth.UserID
+	}
+	return stream(ctx, r.EventBus, sessionTopics, ownSessions, r.sessionEvent), nil
 }
 
 // SessionChanged is the resolver for the sessionChanged field.
 // Streams session events for all users (admin only). Optionally filter by userId.
 func (r *subscriptionResolver) SessionChanged(ctx context.Context, userID *string) (<-chan *model.SessionEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	if _, err := subscriberAuth(ctx); err != nil {
+		return nil, err
 	}
-
-	ch := make(chan *model.SessionEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		sessionTopics,
-		func(_ context.Context, event eventbus.Event) {
-			evt := toSessionEvent(event)
-
-			// If filtering by userId, skip events for other users
-			if userID != nil && *userID != "" && evt.UserID != *userID {
-				return
-			}
-
-			// Fetch the full session from DB (use subscription ctx for cancellation)
-			if evt.SessionID != "" {
-				if sid, err := uuid.Parse(evt.SessionID); err == nil {
-					if sess, err := r.SessionRepo.FindByID(ctx, sid); err == nil {
-						// Same rationale as MySessionChanged: FindByID leaves
-						// the derived Status empty, so we set it from the topic.
-						applySessionStatusFromTopic(&sess, event.Topic)
-						evt.Session = &sess
-					}
-				}
-			}
-
-			select {
-			case ch <- evt:
-			case <-ctx.Done():
-			}
-		},
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	var oneUser eventbus.Filter
+	if userID != nil && *userID != "" {
+		oneUser = func(event eventbus.Event) bool {
+			return toSessionEvent(event).UserID == *userID
+		}
+	}
+	return stream(ctx, r.EventBus, sessionTopics, oneUser, r.sessionEvent), nil
 }
 
 // Session returns generated.SessionResolver implementation.

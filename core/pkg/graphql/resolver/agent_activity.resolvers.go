@@ -7,10 +7,8 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
 
@@ -23,48 +21,13 @@ import (
 // agent running dozens of tools a minute should not put a database read on
 // the hot path.
 func (r *subscriptionResolver) AgentActivity(ctx context.Context, operationID string) (<-chan *model.AgentActivityEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	auth, err := subscriberAuth(ctx)
+	if err != nil {
+		return nil, err
 	}
-
 	filter, err := r.buildOperationFilter(ctx, auth, &operationID)
 	if err != nil {
 		return nil, err
 	}
-
-	ch := make(chan *model.AgentActivityEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		[]eventbus.Topic{eventbus.TopicAgentAction},
-		func(_ context.Context, event eventbus.Event) {
-			p, ok := event.Payload.(eventbus.AgentActionPayload)
-			if !ok {
-				return
-			}
-			select {
-			case ch <- &model.AgentActivityEvent{
-				OperationID: p.OperationID,
-				AgentKeyID:  p.AgentKeyID,
-				AgentName:   p.AgentName,
-				AgentLabel:  p.AgentLabel,
-				OwnerUserID: p.OwnerUserID,
-				Tool:        p.Tool,
-				Write:       p.Write,
-				Outcome:     p.Outcome,
-				Summary:     p.Summary,
-			}:
-			case <-ctx.Done():
-			}
-		},
-		filter,
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, []eventbus.Topic{eventbus.TopicAgentAction}, filter, pure(agentActivityEvent)), nil
 }

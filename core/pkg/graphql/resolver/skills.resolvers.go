@@ -7,10 +7,7 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/logoscore/logos-core/core/pkg/eventbus"
-	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
 
@@ -47,28 +44,8 @@ func (r *queryResolver) SkillVersions(ctx context.Context, name string) ([]*mode
 // because the interesting per-viewer part, whether they have the current
 // version, is not in the payload.
 func (r *subscriptionResolver) SkillChanged(ctx context.Context) (<-chan *model.SkillEvent, error) {
-	auth := gqlctx.AuthFromContext(ctx)
-	if auth.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+	if _, err := subscriberAuth(ctx); err != nil {
+		return nil, err
 	}
-
-	ch := make(chan *model.SkillEvent, 1)
-
-	unsubscribe := r.EventBus.Subscribe(
-		skillTopics,
-		func(_ context.Context, event eventbus.Event) {
-			select {
-			case ch <- toSkillEvent(event):
-			case <-ctx.Done():
-			}
-		},
-	)
-
-	go func() {
-		<-ctx.Done()
-		unsubscribe()
-		close(ch)
-	}()
-
-	return ch, nil
+	return stream(ctx, r.EventBus, skillTopics, nil, pure(toSkillEvent)), nil
 }
