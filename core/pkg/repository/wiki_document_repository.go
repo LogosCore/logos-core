@@ -140,7 +140,12 @@ type IWikiDocumentRepository interface {
 	BulkUpdate(ctx context.Context, opID uuid.UUID, updates []DocumentUpdate) error
 	HardDelete(ctx context.Context, doc *models.WikiDocument) error
 	HardDeleteByOperationID(ctx context.Context, opID uuid.UUID) error
-	HardDeleteTrashed(ctx context.Context, opID uuid.UUID) error
+	// FindTrashedIDs returns the ids of every soft-deleted document in opID,
+	// and nothing else — the trash sweep only needs to name them.
+	FindTrashedIDs(ctx context.Context, opID uuid.UUID) ([]uuid.UUID, error)
+	// HardDeleteTrashedByIDs removes the given documents from opID's trash.
+	// A document restored since its id was read is still active and is kept.
+	HardDeleteTrashedByIDs(ctx context.Context, opID uuid.UUID, ids []uuid.UUID) error
 	FindChangedSinceLastBackup(ctx context.Context, batchSize int64) ([]models.WikiDocument, error)
 	RestoreFromBackup(ctx context.Context, docID uuid.UUID, content string, contentState []byte) error
 	SearchByOperationID(ctx context.Context, opID uuid.UUID, scopeParentID *uuid.UUID, query string, offset, limit int64) (hits []WikiDocumentSearchHit, total int64, err error)
@@ -967,9 +972,31 @@ func (r *wikiDocumentRepository) HardDeleteByOperationID(ctx context.Context, op
 	return err
 }
 
-func (r *wikiDocumentRepository) HardDeleteTrashed(ctx context.Context, opID uuid.UUID) error {
+func (r *wikiDocumentRepository) FindTrashedIDs(ctx context.Context, opID uuid.UUID) ([]uuid.UUID, error) {
+	var rows []struct {
+		DocumentID uuid.UUID `bson:"document_id"`
+	}
+	err := r.coll.Find(ctx, bson.M{
+		"operation_id": opID,
+		"deleted_at":   bson.M{"$ne": nil},
+	}).Select(bson.M{"document_id": 1}).All(&rows)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(rows))
+	for i := range rows {
+		ids[i] = rows[i].DocumentID
+	}
+	return ids, nil
+}
+
+func (r *wikiDocumentRepository) HardDeleteTrashedByIDs(ctx context.Context, opID uuid.UUID, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
 	_, err := r.coll.RemoveAll(ctx, bson.M{
 		"operation_id": opID,
+		"document_id":  bson.M{"$in": ids},
 		"deleted_at":   bson.M{"$ne": nil},
 	})
 	return err

@@ -104,6 +104,9 @@ type ITaskRepository interface {
 	// hard-delete path so dangling pointers don't accumulate. A miss (the
 	// wiki was never referenced) silently affects zero rows.
 	PullWikiReference(ctx context.Context, opID, wikiID uuid.UUID) error
+	// PullWikiReferences is PullWikiReference for many documents in one
+	// round trip.
+	PullWikiReferences(ctx context.Context, opID uuid.UUID, wikiIDs []uuid.UUID) error
 
 	// PullCredentialReference is the credential equivalent of
 	// PullWikiReference. Wired into the credential hard-delete path.
@@ -354,17 +357,24 @@ func (r *taskRepository) addReference(ctx context.Context, taskID uuid.UUID, fie
 }
 
 func (r *taskRepository) PullWikiReference(ctx context.Context, opID, wikiID uuid.UUID) error {
+	return r.PullWikiReferences(ctx, opID, []uuid.UUID{wikiID})
+}
+
+func (r *taskRepository) PullWikiReferences(ctx context.Context, opID uuid.UUID, wikiIDs []uuid.UUID) error {
+	if len(wikiIDs) == 0 {
+		return nil
+	}
 	// Pull from active and trashed rows alike — a restored task should not
 	// resurrect a dead pointer.
 	_, err := r.coll.UpdateAll(ctx,
 		bson.M{
 			"operation_id":    opID,
-			"wiki_references": wikiID,
+			"wiki_references": bson.M{"$in": wikiIDs},
 		},
-		bson.M{"$pull": bson.M{"wiki_references": wikiID}},
+		bson.M{"$pull": bson.M{"wiki_references": bson.M{"$in": wikiIDs}}},
 	)
 	if err != nil {
-		return fmt.Errorf("failed to pull wiki reference: %w", err)
+		return fmt.Errorf("failed to pull wiki references: %w", err)
 	}
 	return nil
 }

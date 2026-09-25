@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -1443,6 +1444,11 @@ func (r *wikiDocumentResolver) PermanentlyDeleteWikiDocument(ctx context.Context
 	return true, nil
 }
 
+// emptyTrashChunk bounds the id lists the trash sweep sends per statement. A
+// whole trash in one $in works, but makes a query document megabytes long;
+// a thousand keeps each one small and still costs a handful of round trips.
+const emptyTrashChunk = 1000
+
 func (r *wikiDocumentResolver) EmptyWikiDocumentTrash(ctx context.Context, operationID string) (bool, error) {
 	auth := gqlctx.AuthFromContext(ctx)
 
@@ -1455,45 +1461,37 @@ func (r *wikiDocumentResolver) EmptyWikiDocumentTrash(ctx context.Context, opera
 		return false, err
 	}
 
-	// Find all trashed documents to delete their backups
-	trashed, err := r.docRepo.FindByOperationIDWithCursor(ctx, opUID,
-		repository.WikiDocumentFilter{Trashed: true}, nil, 10000, true)
+	// Ids only, and all of them: the sweep used to load up to 10,000 whole
+	// documents, and past that cap cleaned up after none of the rest while
+	// still deleting them.
+	ids, err := r.docRepo.FindTrashedIDs(ctx, opUID)
 	if err != nil {
 		return false, fmt.Errorf("failed to find trashed documents: %w", err)
 	}
-
-	// Delete backups for each trashed document
-	for _, doc := range trashed {
-		if err := r.backupRepo.DeleteByDocumentID(ctx, doc.DocumentID); err != nil {
-			return false, fmt.Errorf("failed to delete backups for document %s: %w", doc.DocumentID, err)
-		}
+	if len(ids) == 0 {
+		return true, nil
 	}
 
-	// Cascade visit history rows for the docs about to be purged.
-	if len(trashed) > 0 {
-		trashedIDs := make([]uuid.UUID, len(trashed))
-		for i := range trashed {
-			trashedIDs[i] = trashed[i].DocumentID
+	// Each chunk costs four round trips however many documents it names,
+	// where this used to cost two per document. The set read above is the
+	// set deleted: a document trashed while this runs stays in the trash
+	// with its backups, instead of being purged without them.
+	for chunk := range slices.Chunk(ids, emptyTrashChunk) {
+		if err := r.backupRepo.DeleteByDocumentIDs(ctx, chunk); err != nil {
+			return false, fmt.Errorf("failed to delete backups: %w", err)
 		}
-		if err := r.visitRepo.DeleteByDocumentIDs(ctx, trashedIDs); err != nil {
+		if err := r.visitRepo.DeleteByDocumentIDs(ctx, chunk); err != nil {
 			return false, fmt.Errorf("failed to delete visit history: %w", err)
 		}
-	}
-
-	// Hard-delete all trashed documents
-	if err := r.docRepo.HardDeleteTrashed(ctx, opUID); err != nil {
-		return false, fmt.Errorf("failed to empty trash: %w", err)
-	}
-
-	// Strip each purged doc's id from every task's wiki_references in the
-	// operation. Looped because the repo's PullWikiReference takes one id
-	// at a time; trash empties are admin-initiated and rare, so the loop
-	// is fine. Best-effort — surviving stale pointers are pruned at read.
-	if r.taskRepo != nil {
-		for _, d := range trashed {
-			if err := r.taskRepo.PullWikiReference(ctx, opUID, d.DocumentID); err != nil {
+		if err := r.docRepo.HardDeleteTrashedByIDs(ctx, opUID, chunk); err != nil {
+			return false, fmt.Errorf("failed to empty trash: %w", err)
+		}
+		// Strip the purged ids from every task's wiki_references in the
+		// operation. Best-effort — surviving stale pointers are pruned at read.
+		if r.taskRepo != nil {
+			if err := r.taskRepo.PullWikiReferences(ctx, opUID, chunk); err != nil {
 				logger.From(ctx).Warn("cleanup of task wiki references failed",
-					zap.String("document_id", d.DocumentID.String()),
+					zap.Int("documents", len(chunk)),
 					zap.Error(err),
 				)
 			}

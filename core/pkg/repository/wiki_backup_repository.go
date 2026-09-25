@@ -23,6 +23,9 @@ type IWikiDocumentBackupRepository interface {
 	FindLatestByDocumentID(ctx context.Context, docID uuid.UUID) (*models.WikiDocumentBackup, error)
 	Delete(ctx context.Context, backup *models.WikiDocumentBackup) error
 	DeleteByDocumentID(ctx context.Context, docID uuid.UUID) error
+	// DeleteByDocumentIDs is DeleteByDocumentID for many documents in one
+	// round trip.
+	DeleteByDocumentIDs(ctx context.Context, docIDs []uuid.UUID) error
 	DeleteByOperationID(ctx context.Context, opID uuid.UUID) error
 }
 
@@ -98,7 +101,14 @@ func (r *wikiDocumentBackupRepository) Delete(ctx context.Context, backup *model
 }
 
 func (r *wikiDocumentBackupRepository) DeleteByDocumentID(ctx context.Context, docID uuid.UUID) error {
-	_, err := r.coll.RemoveAll(ctx, bson.M{"document_id": docID})
+	return r.DeleteByDocumentIDs(ctx, []uuid.UUID{docID})
+}
+
+func (r *wikiDocumentBackupRepository) DeleteByDocumentIDs(ctx context.Context, docIDs []uuid.UUID) error {
+	if len(docIDs) == 0 {
+		return nil
+	}
+	_, err := r.coll.RemoveAll(ctx, bson.M{"document_id": bson.M{"$in": docIDs}})
 	return err
 }
 
