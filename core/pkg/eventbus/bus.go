@@ -210,12 +210,17 @@ func (b *eventBus) Stop(ctx context.Context) {
 		close(b.ch)
 		<-b.dispatched
 
-		// 2. Mark as stopped and close all subscriber channels.
+		// 2. Mark as stopped and close all subscriber channels. The list is
+		//    dropped with them: a subscription can still unsubscribe after
+		//    this (a WebSocket outlives the HTTP server's Shutdown), and it
+		//    must find nothing left to close.
 		b.mu.Lock()
 		b.stopped = true
 		for _, sub := range b.subs {
+			sub.closed.Store(true)
 			close(sub.ch)
 		}
+		b.subs = nil
 		b.mu.Unlock()
 
 		// 3. Wait for all drain goroutines to finish.

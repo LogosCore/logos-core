@@ -370,6 +370,25 @@ func TestDoubleStopSafe(t *testing.T) {
 	bus.Stop(context.Background())
 }
 
+// TestUnsubscribeAfterStop guards shutdown. Stop closes every subscriber
+// channel, and a GraphQL subscription can unsubscribe afterwards: the HTTP
+// server's Shutdown does not close hijacked connections, so a WebSocket can
+// end after the bus has stopped. The second close used to panic in the
+// resolver's goroutine, where nothing recovers it.
+func TestUnsubscribeAfterStop(t *testing.T) {
+	bus := newTestBus()
+	unsub := bus.Subscribe([]Topic{TopicUserCreated}, func(context.Context, Event) {})
+	bus.Start()
+	bus.Stop(context.Background())
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("unsubscribe after Stop panicked: %v", r)
+		}
+	}()
+	unsub()
+}
+
 // --- New tests for multi-topic and filter support ---
 
 func TestMultiTopicSubscriber(t *testing.T) {
