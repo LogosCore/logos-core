@@ -1,5 +1,5 @@
 import { createElement } from "react"
-import { renderToStaticMarkup } from "react-dom/server"
+import { createRoot } from "react-dom/client"
 import type { LucideIcon } from "lucide-react"
 
 export const STATIC_FAVICON_HREF = "/favicon.svg"
@@ -31,17 +31,40 @@ function svgToDataUrl(svg: string): string {
   return `data:image/svg+xml;base64,${btoa(binary)}`
 }
 
+/**
+ * Renders a lucide icon to an SVG data URI. The icon is mounted in a
+ * detached root and its markup read back once React has committed it. That
+ * is the renderer every page already runs; renderToStaticMarkup produced the
+ * same markup but pulled react-dom/server, some 180 KB, into every page for
+ * this one call.
+ */
 export function lucideToSvgDataUrl(
   Icon: LucideIcon,
   color?: string | null,
-): string {
-  const element = createElement(Icon, {
-    size: 32,
-    color: color || DEFAULT_LUCIDE_COLOR,
-    strokeWidth: FAVICON_STROKE_WIDTH,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // A root cannot be unmounted from inside its own commit, where the ref
+    // callback runs, so both exits unmount on the next microtask.
+    const unmount = () => queueMicrotask(() => root.unmount())
+    const root = createRoot(document.createElement("div"), {
+      onUncaughtError: (error) => {
+        reject(error)
+        unmount()
+      },
+    })
+    root.render(
+      createElement(Icon, {
+        size: 32,
+        color: color || DEFAULT_LUCIDE_COLOR,
+        strokeWidth: FAVICON_STROKE_WIDTH,
+        ref: (svg: SVGSVGElement | null) => {
+          if (!svg) return
+          resolve(svgToDataUrl(svg.outerHTML))
+          unmount()
+        },
+      }),
+    )
   })
-  const svg = renderToStaticMarkup(element)
-  return svgToDataUrl(svg)
 }
 
 export function emojiToSvgDataUrl(emoji: string): string {

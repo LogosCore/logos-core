@@ -30,22 +30,6 @@ export interface PageMetadata {
   icon: PageIcon
 }
 
-// Returns null when async resolution is required (uncurated lucide name).
-function resolveSyncFavicon(icon: PageIcon): string | null {
-  switch (icon.kind) {
-    case "lucide":
-      return lucideToSvgDataUrl(icon.component, icon.color)
-    case "lucide-name": {
-      const curated = ICON_LOOKUP[icon.name]
-      return curated ? lucideToSvgDataUrl(curated, icon.color) : null
-    }
-    case "emoji":
-      return emojiToSvgDataUrl(icon.emoji)
-    case "static":
-      return STATIC_FAVICON_HREF
-  }
-}
-
 /**
  * Sets `document.title` and the favicon for the current page. The next
  * page's call overrides cleanly with no cleanup — intentional, avoids a
@@ -68,27 +52,47 @@ export function usePageMetadata(meta: PageMetadata): void {
   useEffect(() => {
     document.title = title
 
-    const sync = resolveSyncFavicon(icon)
-    if (sync !== null) {
-      setFavicon(sync)
-      return
+    // Lucide icons render asynchronously (see lucideToSvgDataUrl), and an
+    // uncurated one is imported first. The cancellation token prevents a
+    // late result from clobbering a newer effect.
+    let cancelled = false
+    const paintLucide = (Icon: LucideIcon, color?: string | null) => {
+      lucideToSvgDataUrl(Icon, color).then(
+        (href) => {
+          if (!cancelled) setFavicon(href)
+        },
+        (error) => console.error("Favicon render failed:", error),
+      )
     }
 
-    // Uncurated lucide-name: paint emoji-or-static fallback, then upgrade
-    // when the async import lands. The cancellation token prevents a
-    // late-arriving import from clobbering a newer effect.
-    let cancelled = false
-    setFavicon(
-      icon.kind === "lucide-name" && icon.fallbackEmoji
-        ? emojiToSvgDataUrl(icon.fallbackEmoji)
-        : STATIC_FAVICON_HREF,
-    )
-
-    if (icon.kind === "lucide-name") {
-      loadLucideIconAsync(icon.name).then((Icon) => {
-        if (cancelled || !Icon) return
-        setFavicon(lucideToSvgDataUrl(Icon, icon.color))
-      })
+    switch (icon.kind) {
+      case "lucide":
+        paintLucide(icon.component, icon.color)
+        break
+      case "lucide-name": {
+        const curated = ICON_LOOKUP[icon.name]
+        if (curated) {
+          paintLucide(curated, icon.color)
+          break
+        }
+        // Uncurated: paint the emoji-or-static fallback, then upgrade when
+        // the async import lands.
+        setFavicon(
+          icon.fallbackEmoji
+            ? emojiToSvgDataUrl(icon.fallbackEmoji)
+            : STATIC_FAVICON_HREF,
+        )
+        loadLucideIconAsync(icon.name).then((Icon) => {
+          if (!cancelled && Icon) paintLucide(Icon, icon.color)
+        })
+        break
+      }
+      case "emoji":
+        setFavicon(emojiToSvgDataUrl(icon.emoji))
+        break
+      case "static":
+        setFavicon(STATIC_FAVICON_HREF)
+        break
     }
 
     return () => {
