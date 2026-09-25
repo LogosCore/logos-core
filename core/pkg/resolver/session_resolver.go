@@ -129,16 +129,16 @@ func (r *sessionResolver) Session(ctx context.Context, id string) (*models.Sessi
 	return &sess, nil
 }
 
-// listSessions returns paginated session rows with `is_active` and
-// `last_activity_at` decorated from Redis.
+// listSessions returns one page of session rows, each decorated with
+// `status` and `last_activity_at` from Redis.
 //
-//   - activeOnly=false (default): Mongo paginated find scoped to userIDs,
-//     each row decorated.
-//   - activeOnly=true: pull live session_ids from Redis (bounded by the
-//     active set), Mongo find by session_id $in, decorate. Pagination is a
-//     no-op since the active set is small; we just respect `first` as a cap.
-//   - userIDs empty: admin global view. Mongo paginated find unscoped,
-//     decoration falls back to per-row Redis lookups (small N).
+//   - activeOnly=false (default): every row scoped to userIDs; empty
+//     userIDs is the admin global view.
+//   - activeOnly=true: the live session ids come from Redis first — per
+//     user, or a SCAN of every user's index for the global view — and then
+//     scope the same paginated Mongo query. Both modes share cursors,
+//     totalCount and hasNextPage; the active mode used to return the first
+//     page only, with totalCount set to that page's length.
 func (r *sessionResolver) listSessions(ctx context.Context, userIDs []uuid.UUID, activeOnly bool,
 	first *int, after *string, last *int, before *string) (*model.SessionConnection, error) {
 
@@ -147,90 +147,80 @@ func (r *sessionResolver) listSessions(ctx context.Context, userIDs []uuid.UUID,
 		return nil, fmt.Errorf("invalid pagination args: %w", err)
 	}
 
+	filter := repository.SessionFilter{UserIDs: userIDs}
+	var live map[uuid.UUID]time.Time
 	if activeOnly {
-		// Redis-first: collect live session_ids, then Mongo find by
-		// session_id. Two paths depending on whether a user scope exists.
-		var ids []uuid.UUID
-		if len(userIDs) == 0 {
-			// Global active view: SCAN all session_index:* keys.
-			// O(total Redis keys) — acceptable for admin-only queries.
-			allActive, err := r.tokenStore.ListAllActive(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("list all active: %w", err)
-			}
-			for _, a := range allActive {
-				ids = append(ids, a.SessionID)
-			}
-		} else {
-			for _, uid := range userIDs {
-				actives, err := r.tokenStore.ListByUser(ctx, uid)
-				if err != nil {
-					return nil, fmt.Errorf("list active: %w", err)
-				}
-				for _, a := range actives {
-					ids = append(ids, a.SessionID)
-				}
-			}
-		}
-		if len(ids) == 0 {
-			return &model.SessionConnection{
-				Edges:      []*model.SessionEdge{},
-				PageInfo:   &pagination.PageInfo{},
-				TotalCount: 0,
-			}, nil
-		}
-		rows, err := r.sessionRepo.FindBySessionIDs(ctx, ids)
+		live, err = r.liveSessions(ctx, userIDs)
 		if err != nil {
-			return nil, fmt.Errorf("find by session ids: %w", err)
+			return nil, err
 		}
-		// Cap to first if provided.
-		if int64(len(rows)) > args.Limit {
-			rows = rows[:args.Limit]
+		// Non-nil even when empty: no live sessions must match no rows.
+		filter.SessionIDs = make([]uuid.UUID, 0, len(live))
+		for id := range live {
+			filter.SessionIDs = append(filter.SessionIDs, id)
 		}
-		ptrs := toPtrs(rows)
-		r.decorate(ctx, ptrs)
-		return r.buildConnection(ptrs, len(ptrs), false), nil
 	}
 
-	// History path: Mongo paginated find scoped to userIDs.
-	total, err := r.sessionRepo.Count(ctx, userIDs)
+	total, err := r.sessionRepo.Count(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("count: %w", err)
 	}
-	rows, err := r.sessionRepo.FindWithCursor(ctx, userIDs, args.Cursor, args.Limit+1, args.Forward)
+	rows, err := r.sessionRepo.FindWithCursor(ctx, filter, args.Cursor, args.Limit+1, args.Forward)
 	if err != nil {
 		return nil, fmt.Errorf("find: %w", err)
 	}
-	hasMore := int64(len(rows)) > args.Limit
-	if hasMore {
-		rows = rows[:args.Limit]
-	}
-	ptrs := toPtrs(rows)
-	r.decorate(ctx, ptrs)
 
-	conn := r.buildConnection(ptrs, int(total), hasMore)
-	conn.PageInfo.HasNextPage = args.Forward && hasMore
-	conn.PageInfo.HasPreviousPage = (!args.Forward && hasMore) || (args.Forward && args.Cursor != nil)
-	return conn, nil
-}
+	edges, pageInfo := pagination.BuildEdges(rows, args,
+		func(s *models.Session) string { return pagination.EncodeCursor(s.CreateAt, s.Id) },
+		func(s *models.Session, cursor string) *model.SessionEdge {
+			return &model.SessionEdge{Node: s, Cursor: cursor}
+		})
+	page := make([]*models.Session, len(edges))
+	for i, e := range edges {
+		page[i] = e.Node
+	}
+	if live != nil {
+		// Every row here came out of this snapshot; asking Redis again per
+		// user would only add round trips.
+		markLive(page, live)
+	} else {
+		r.decorate(ctx, page)
+	}
 
-// buildConnection wraps a row slice into a SessionConnection with cursors.
-func (r *sessionResolver) buildConnection(rows []*models.Session, total int, _ bool) *model.SessionConnection {
-	edges := make([]*model.SessionEdge, len(rows))
-	for i, row := range rows {
-		cursor := pagination.EncodeCursor(row.CreateAt, row.Id)
-		edges[i] = &model.SessionEdge{Node: row, Cursor: cursor}
-	}
-	pi := &pagination.PageInfo{}
-	if len(edges) > 0 {
-		pi.StartCursor = &edges[0].Cursor
-		pi.EndCursor = &edges[len(edges)-1].Cursor
-	}
 	return &model.SessionConnection{
 		Edges:      edges,
-		PageInfo:   pi,
-		TotalCount: total,
+		PageInfo:   &pageInfo,
+		TotalCount: int(total),
+	}, nil
+}
+
+// liveSessions returns the live session ids, with their last activity, for
+// userIDs — or for every user when userIDs is empty. Redis is the only
+// source of truth for what is active.
+func (r *sessionResolver) liveSessions(ctx context.Context, userIDs []uuid.UUID) (map[uuid.UUID]time.Time, error) {
+	var actives []auth.ActiveSession
+	if len(userIDs) == 0 {
+		// Global active view: SCAN all session_index:* keys.
+		// O(total Redis keys) — acceptable for admin-only queries.
+		all, err := r.tokenStore.ListAllActive(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list all active: %w", err)
+		}
+		actives = all
+	} else {
+		for _, uid := range userIDs {
+			own, err := r.tokenStore.ListByUser(ctx, uid)
+			if err != nil {
+				return nil, fmt.Errorf("list active: %w", err)
+			}
+			actives = append(actives, own...)
+		}
 	}
+	live := make(map[uuid.UUID]time.Time, len(actives))
+	for _, a := range actives {
+		live[a.SessionID] = a.LastActivityAt
+	}
+	return live, nil
 }
 
 // decorate populates Status + LastActivityAt on each row from Redis.
@@ -242,45 +232,37 @@ func (r *sessionResolver) buildConnection(rows []*models.Session, total int, _ b
 // For typical pages (one or a few users) this is O(pages) Redis calls
 // regardless of page size.
 func (r *sessionResolver) decorate(ctx context.Context, rows []*models.Session) {
-	if len(rows) == 0 {
-		return
-	}
-	cache := make(map[uuid.UUID]map[uuid.UUID]time.Time)
+	live := make(map[uuid.UUID]time.Time)
+	fetched := make(map[uuid.UUID]struct{})
 	for _, row := range rows {
-		set, ok := cache[row.UserID]
-		if !ok {
-			actives, err := r.tokenStore.ListByUser(ctx, row.UserID)
-			if err != nil {
-				// Best-effort: leave rows un-decorated (status zero-value).
-				cache[row.UserID] = nil
-				continue
-			}
-			set = make(map[uuid.UUID]time.Time, len(actives))
-			for _, a := range actives {
-				set[a.SessionID] = a.LastActivityAt
-			}
-			cache[row.UserID] = set
+		if _, done := fetched[row.UserID]; done {
+			continue
 		}
-		if set == nil {
+		fetched[row.UserID] = struct{}{}
+		actives, err := r.tokenStore.ListByUser(ctx, row.UserID)
+		if err != nil {
+			continue // best-effort: that user's rows render inactive
+		}
+		for _, a := range actives {
+			live[a.SessionID] = a.LastActivityAt
+		}
+	}
+	markLive(rows, live)
+}
+
+// markLive sets each row's status and last activity from a snapshot of the
+// live set, keyed by session id. Rows absent from it are inactive.
+func markLive(rows []*models.Session, live map[uuid.UUID]time.Time) {
+	for _, row := range rows {
+		last, ok := live[row.SessionID]
+		if !ok {
 			row.Status = models.SessionStatusInactive
 			continue
 		}
-		if last, live := set[row.SessionID]; live {
-			row.Status = models.SessionStatusActive
-			unix := last.Unix()
-			row.LastActivityAt = &unix
-		} else {
-			row.Status = models.SessionStatusInactive
-		}
+		row.Status = models.SessionStatusActive
+		unix := last.Unix()
+		row.LastActivityAt = &unix
 	}
-}
-
-func toPtrs(rows []models.Session) []*models.Session {
-	out := make([]*models.Session, len(rows))
-	for i := range rows {
-		out[i] = &rows[i]
-	}
-	return out
 }
 
 func boolOr(p *bool, def bool) bool {

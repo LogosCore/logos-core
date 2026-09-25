@@ -139,11 +139,10 @@ func (s *memSessionRepo) Insert(_ context.Context, row *models.Session) error {
 func (s *memSessionRepo) FindByID(context.Context, uuid.UUID) (models.Session, error) {
 	return models.Session{}, errNotFound
 }
-func (s *memSessionRepo) FindBySessionIDs(context.Context, []uuid.UUID) ([]models.Session, error) {
-	return nil, nil
+func (s *memSessionRepo) Count(context.Context, repository.SessionFilter) (int64, error) {
+	return 0, nil
 }
-func (s *memSessionRepo) Count(context.Context, []uuid.UUID) (int64, error) { return 0, nil }
-func (s *memSessionRepo) FindWithCursor(context.Context, []uuid.UUID, *pagination.Cursor, int64, bool) ([]models.Session, error) {
+func (s *memSessionRepo) FindWithCursor(context.Context, repository.SessionFilter, *pagination.Cursor, int64, bool) ([]models.Session, error) {
 	return nil, nil
 }
 

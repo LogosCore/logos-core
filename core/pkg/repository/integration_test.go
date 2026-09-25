@@ -72,7 +72,7 @@ func integrationDB(t *testing.T) database.Database {
 		for _, c := range []string{
 			wikiDocumentCollection, credentialCollection, taskCollection,
 			hostCollection, hashCollection, userCollection, operationCollection,
-			wikiDocumentBackupCollection,
+			wikiDocumentBackupCollection, sessionCollection,
 		} {
 			_ = db.Collection(c).DropCollection(ctx)
 		}

@@ -30,18 +30,23 @@ type ISessionRepository interface {
 	// AdminRevokeSession to learn the owning user_id from a session_id.
 	FindByID(ctx context.Context, id uuid.UUID) (models.Session, error)
 
-	// FindBySessionIDs returns the rows whose session_id is in the given
-	// set. Used by the resolver's `activeOnly=true` path: it pulls live
-	// session_ids from Redis and then loads their corresponding rows.
-	// Sorted by createAt descending. Empty input returns nil.
-	FindBySessionIDs(ctx context.Context, ids []uuid.UUID) ([]models.Session, error)
+	// Count returns the number of rows matching the filter.
+	Count(ctx context.Context, filter SessionFilter) (int64, error)
 
-	// Count returns the number of rows matching the user filter.
-	Count(ctx context.Context, userIDs []uuid.UUID) (int64, error)
-
-	// FindWithCursor returns paginated rows scoped to the given users.
-	FindWithCursor(ctx context.Context, userIDs []uuid.UUID,
+	// FindWithCursor returns one page of rows matching the filter, newest
+	// first.
+	FindWithCursor(ctx context.Context, filter SessionFilter,
 		cursor *pagination.Cursor, limit int64, forward bool) ([]models.Session, error)
+}
+
+// SessionFilter narrows the session log. The zero value matches every row.
+type SessionFilter struct {
+	// UserIDs keeps rows owned by any of these users. Empty: every user.
+	UserIDs []uuid.UUID
+	// SessionIDs keeps only these sessions — on the activeOnly path, the
+	// live set from Redis. Nil: no constraint. Non-nil but empty matches
+	// nothing, so an empty live set can never widen into every session.
+	SessionIDs []uuid.UUID
 }
 
 type sessionRepository struct {
@@ -72,25 +77,14 @@ func (r *sessionRepository) FindByID(ctx context.Context, id uuid.UUID) (models.
 	return session, err
 }
 
-func (r *sessionRepository) FindBySessionIDs(ctx context.Context, ids []uuid.UUID) ([]models.Session, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	var sessions []models.Session
-	err := r.coll.Find(ctx, bson.M{"session_id": bson.M{"$in": ids}}).
-		Sort("-createAt", "-_id").
-		All(&sessions)
-	return sessions, err
+func (r *sessionRepository) Count(ctx context.Context, filter SessionFilter) (int64, error) {
+	return r.coll.Count(ctx, buildSessionFilter(filter))
 }
 
-func (r *sessionRepository) Count(ctx context.Context, userIDs []uuid.UUID) (int64, error) {
-	return r.coll.Count(ctx, buildSessionFilter(userIDs))
-}
-
-func (r *sessionRepository) FindWithCursor(ctx context.Context, userIDs []uuid.UUID,
+func (r *sessionRepository) FindWithCursor(ctx context.Context, f SessionFilter,
 	cursor *pagination.Cursor, limit int64, forward bool) ([]models.Session, error) {
 
-	filter := pagination.ApplyCursorFilter(buildSessionFilter(userIDs), cursor, forward)
+	filter := pagination.ApplyCursorFilter(buildSessionFilter(f), cursor, forward)
 
 	var sessions []models.Session
 	err := r.coll.Find(ctx, filter).
@@ -107,12 +101,16 @@ func (r *sessionRepository) FindWithCursor(ctx context.Context, userIDs []uuid.U
 	return sessions, err
 }
 
-func buildSessionFilter(userIDs []uuid.UUID) bson.M {
+func buildSessionFilter(f SessionFilter) bson.M {
 	filter := bson.M{}
-	if len(userIDs) == 1 {
-		filter["user_id"] = userIDs[0]
-	} else if len(userIDs) > 1 {
-		filter["user_id"] = bson.M{"$in": userIDs}
+	if len(f.UserIDs) == 1 {
+		filter["user_id"] = f.UserIDs[0]
+	} else if len(f.UserIDs) > 1 {
+		filter["user_id"] = bson.M{"$in": f.UserIDs}
+	}
+	if f.SessionIDs != nil {
+		// $in with an empty list matches nothing, which is the point.
+		filter["session_id"] = bson.M{"$in": f.SessionIDs}
 	}
 	return filter
 }
