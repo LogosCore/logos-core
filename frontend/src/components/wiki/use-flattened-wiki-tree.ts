@@ -1,11 +1,11 @@
-import { useMemo } from "react"
+import { useEffect, useLayoutEffect, useMemo } from "react"
 import { useQueries } from "@tanstack/react-query"
 import {
   useWikiDocumentChildren,
   wikiChildrenQueryOptions,
 } from "@/graphql/hooks/wiki"
 import { rowToTreeNode, sortByOrder } from "@/components/wiki/wiki-tree-helpers"
-import { useWikiStore } from "@/stores/wiki"
+import { settleRestoredIds, useWikiStore } from "@/stores/wiki"
 import type { TreeNode } from "@/components/wiki/wiki-tree-sidebar"
 import type { WikiDocumentChildrenQuery } from "@/graphql/gql/graphql"
 
@@ -21,6 +21,8 @@ export interface FlattenedWikiTree {
   rootsLoading: boolean
 }
 
+const NONE_EXPANDED: ReadonlySet<string> = new Set()
+
 /**
  * Flatten the *currently visible* wiki tree into a single ordered array so the
  * sidebar can virtualize it (render only the rows in the viewport).
@@ -33,17 +35,29 @@ export interface FlattenedWikiTree {
  * Fetching strategy: we subscribe (via `useQueries`) to the children of every
  * id in `expandedNodes`. That keeps the controller reactive — when any branch
  * resolves, the list re-flattens. The chevron only appears on nodes with
- * children, so `expandedNodes` only ever holds real parents; a stale id simply
- * resolves to an empty slice and never surfaces in the walk. Requesting a few
- * children-of-collapsed-ancestor branches is the only redundancy, and those
- * were already fetched under the previous per-node scheme.
+ * children, so ids enter `expandedNodes` as real parents; one that has since
+ * lost its children (or been deleted) resolves to an empty slice, never
+ * surfaces in the walk, and is dropped on the next load (see settleExpanded
+ * below). Requesting a few children-of-collapsed-ancestor branches is the
+ * only redundancy, and those were already fetched under the previous
+ * per-node scheme.
  *
  * Convergence: the walk only descends through a parent once its children are in
  * the `useQueries` results. Deeper levels become known as their parent resolves,
  * so a freshly-revealed deep path fills in over O(depth) renders.
  */
 export function useFlattenedWikiTree(operationId: string): FlattenedWikiTree {
-  const expandedNodes = useWikiStore((s) => s.expandedNodes)
+  // The store holds one operation's expanded set at a time. Swap in this
+  // one's before the child queries subscribe; until the swap lands, the set
+  // on hand is another operation's and reads as empty, rather than asking
+  // this operation for the children of those ids.
+  const showOperationTree = useWikiStore((s) => s.showOperationTree)
+  useLayoutEffect(() => {
+    if (operationId) showOperationTree(operationId)
+  }, [operationId, showOperationTree])
+  const expandedNodes = useWikiStore((s) =>
+    s.expandedOperationId === operationId ? s.expandedNodes : NONE_EXPANDED,
+  )
 
   // Roots — same query the sidebar used before (parentDocumentId: null).
   const { data: rootsData, isLoading: rootsLoading } = useWikiDocumentChildren(
@@ -95,6 +109,42 @@ export function useFlattenedWikiTree(operationId: string): FlattenedWikiTree {
     // every slice change without rebuilding on unrelated parent re-renders.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedIds, childrenFingerprint])
+
+  // Each id restored from storage is checked once against the server, and
+  // dropped if it has no children left (settleRestoredIds has the rule).
+  // Otherwise the set only grows, and every load asks for the children of
+  // every id it ever held. Ids expanded during the session are not checked:
+  // a branch expanded right after a child is created or moved under it can
+  // show a stale empty list until the change event lands.
+  const unconfirmed = useWikiStore((s) => s.unconfirmedExpandedIds)
+  const restoredAt = useWikiStore((s) => s.expandedRestoredAt)
+  const settleExpanded = useWikiStore((s) => s.settleExpanded)
+  const settled = useMemo(
+    () =>
+      settleRestoredIds(
+        expandedIds.map((id, i) => {
+          const q = childQueries[i]
+          const data = q?.isSuccess
+            ? (q.data as WikiDocumentChildrenQuery)
+            : undefined
+          return {
+            id,
+            childCount: data ? data.wikiDocumentChildren.length : null,
+            fetchedAt: q?.dataUpdatedAt ?? 0,
+          }
+        }),
+        unconfirmed,
+        restoredAt,
+      ),
+    // Keyed on the same fingerprint as childrenByParent, for the same reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expandedIds, childrenFingerprint, unconfirmed, restoredAt],
+  )
+  useEffect(() => {
+    if (settled.confirmed.length > 0 || settled.dropped.length > 0) {
+      settleExpanded(settled.confirmed, settled.dropped)
+    }
+  }, [settled, settleExpanded])
 
   const rows = useMemo(() => {
     const out: FlatRow[] = []
