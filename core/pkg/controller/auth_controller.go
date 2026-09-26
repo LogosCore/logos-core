@@ -170,11 +170,14 @@ func (ctrl *authController) Refresh(c *gin.Context) {
 	}
 
 	// Phase 1: attempt normal rotation.
-	newRaw, sessionID, rotated := ctrl.tryRotate(c, log, userID, oldHash)
-
-	// Phase 2: if rotation failed because the old hash is gone (loser of a
-	// multi-tab race), check the grace shadow written by the winner.
-	if !rotated {
+	newRaw, sessionID, outcome := ctrl.tryRotate(c, log, userID, oldHash)
+	switch outcome {
+	case rotateFailed:
+		return // response already written
+	case rotateNotFound:
+		// Phase 2: the old hash is gone (loser of a multi-tab race, a
+		// replay, or a session from before a redeploy), so check the grace
+		// shadow written by the winner.
 		newRaw, sessionID, ok = ctrl.tryGraceLookup(c, log, userID, oldHash)
 		if !ok {
 			return // response already written
@@ -184,27 +187,39 @@ func (ctrl *authController) Refresh(c *gin.Context) {
 	ctrl.completeRefresh(c, log, userID, sessionID, newRaw)
 }
 
+// rotateOutcome tells Refresh what tryRotate did. rotateNotFound and
+// rotateFailed must stay distinct: rotateFailed has already written a 500,
+// and falling through to the grace lookup after it wrote a second response
+// on top — the 401 status and the Set-Cookie headers clearing the stale
+// refresh cookie were dropped, so the browser retried with it forever.
+type rotateOutcome int
+
+const (
+	rotateOK       rotateOutcome = iota
+	rotateNotFound               // old hash gone; nothing written yet
+	rotateFailed                 // error response already written
+)
+
 // tryRotate performs the normal atomic CAS rotation. On success it also
 // writes a short-lived grace shadow so that other tabs presenting the same
 // old hash within the grace window receive the same new token.
-// Returns ("", uuid.Nil, false) if the old hash is already gone.
-func (ctrl *authController) tryRotate(c *gin.Context, log *zap.Logger, userID uuid.UUID, oldHash string) (newRaw string, sessionID uuid.UUID, ok bool) {
+func (ctrl *authController) tryRotate(c *gin.Context, log *zap.Logger, userID uuid.UUID, oldHash string) (newRaw string, sessionID uuid.UUID, outcome rotateOutcome) {
 	newRaw, newHash, err := auth.MintRefreshToken(userID)
 	if err != nil {
 		log.Error("refresh: mint refresh token", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
-		return "", uuid.Nil, false
+		return "", uuid.Nil, rotateFailed
 	}
 
 	sessionID, err = ctrl.tokenStore.Rotate(c.Request.Context(), userID, oldHash, newHash, ctrl.cfg.RefreshTTL)
 	if err != nil {
 		if errors.Is(err, auth.ErrTokenInvalid) {
 			// Old hash gone — caller should fall through to grace lookup.
-			return "", uuid.Nil, false
+			return "", uuid.Nil, rotateNotFound
 		}
 		log.Error("refresh: rotate failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
-		return "", uuid.Nil, false
+		return "", uuid.Nil, rotateFailed
 	}
 
 	// Best-effort: write a grace shadow so the loser of the race can
@@ -226,7 +241,7 @@ func (ctrl *authController) tryRotate(c *gin.Context, log *zap.Logger, userID uu
 		}
 	}
 
-	return newRaw, sessionID, true
+	return newRaw, sessionID, rotateOK
 }
 
 // tryGraceLookup checks the grace shadow written by the rotation winner.
