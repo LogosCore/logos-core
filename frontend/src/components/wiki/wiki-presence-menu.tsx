@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -70,25 +71,30 @@ export function WikiPresenceMenu({ documentId }: WikiPresenceMenuProps) {
       </Tooltip>
 
       <DropdownMenuContent align="end" className="w-auto min-w-52">
-        <DropdownMenuLabel>Also here</DropdownMenuLabel>
-        {others.map((editor) => (
-          // Plain rows rather than menu items: nothing here responds to a
-          // click, so nothing should take focus or highlight on hover.
-          <div
-            key={editor.userId}
-            className="flex items-center gap-2 px-1.5 py-1 text-sm"
-          >
-            <Avatar
-              className="size-6 border-2"
-              style={{ borderColor: getCursorColor(editor.userId) }}
+        {/* GroupLabel (DropdownMenuLabel) must sit inside a Group, or Base UI
+            throws "MenuGroupContext is missing" and takes the page down with
+            it. The rows belong in the same group, so the label names them. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Also here</DropdownMenuLabel>
+          {others.map((editor) => (
+            // Plain rows rather than menu items: nothing here responds to a
+            // click, so nothing should take focus or highlight on hover.
+            <div
+              key={editor.userId}
+              className="flex items-center gap-2 px-1.5 py-1 text-sm"
             >
-              <AvatarFallback className="text-[10px]">
-                {avatarLabel(editor.username)}
-              </AvatarFallback>
-            </Avatar>
-            <span className="min-w-0 flex-1 truncate">{editor.username}</span>
-          </div>
-        ))}
+              <Avatar
+                className="size-6 border-2"
+                style={{ borderColor: getCursorColor(editor.userId) }}
+              >
+                <AvatarFallback className="text-[10px]">
+                  {avatarLabel(editor.username)}
+                </AvatarFallback>
+              </Avatar>
+              <span className="min-w-0 flex-1 truncate">{editor.username}</span>
+            </div>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
