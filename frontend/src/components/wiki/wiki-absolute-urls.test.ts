@@ -21,6 +21,15 @@ describe("absolutizeWikiMedia", () => {
     )
   })
 
+  // A chip pointing at another page leaves the server as `/wiki/<id>`,
+  // which is dead the moment the markdown is pasted anywhere else.
+  it("absolutises a link to another page", () => {
+    const md = `[Server VLAN](/wiki/${ID})`
+    expect(absolutizeWikiMedia(md, ORIGIN)).toBe(
+      `[Server VLAN](${ORIGIN}/wiki/${ID})`,
+    )
+  })
+
   it("rewrites every occurrence", () => {
     const md = `a](/api/v1/wiki/files/${ID}) b](/api/v1/wiki/images/${ID})`
     const out = absolutizeWikiMedia(md, ORIGIN)
@@ -41,6 +50,8 @@ describe("absolutizeWikiMedia", () => {
       `[x](/api/v1/wiki/files/not-a-uuid)`,
       `[x](/api/v1/wiki/documents/${ID})`,
       `see /api/v1/wiki/files/${ID} in the docs`,
+      `[x](/wiki/not-a-uuid)`,
+      `[x](/wiki/${ID}/print)`,
     ]
     for (const md of cases) {
       expect(absolutizeWikiMedia(md, ORIGIN)).toBe(md)

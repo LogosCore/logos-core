@@ -69,6 +69,14 @@ broken — several obvious-looking assertions here do not, because `$text` and a
 regex branch can cover for each other, and `searchPattern` is byte-identical to
 `regexp.QuoteMeta` for any input without quotes.
 
+The same target also runs `TestIntegration*` in `pkg/blob` against the
+SeaweedFS S3 gateway (opt-in through `INTEGRATION_S3_ENDPOINT`). They cover
+`PutStream`, the unknown-length upload the wiki export streams its archive
+through: the rest of that package scripts a fake client, which cannot answer
+whether the gateway implements the multipart API an unknown-length body
+needs, nor that a producer failing mid-stream aborts the upload instead of
+completing a truncated object.
+
 The same target also runs `TestIntegration*` in `pkg/auth` against the Redis
 from `make infra` (opt-in through `INTEGRATION_REDIS_ADDR`). They pin how the
 token store's Lua error replies reach Go: Redis 7 turns

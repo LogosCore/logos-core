@@ -14,21 +14,30 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/blob"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-core/core/pkg/wiki"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer/markdown"
 	"go.uber.org/zap"
 )
 
-// Renderer produces the human-readable .md copy of each page. Optional: a
-// nil renderer skips the copies.
+// Renderer produces the human-readable .md copy of each prose page.
+// Optional: a nil renderer skips the copies.
 type Renderer interface {
 	YjsToMarkdown(ctx context.Context, contentState []byte) (string, error)
 }
 
-// Config caps one export.
+// Config bounds one export. The budgets default to unlimited: an operator
+// asking for their wiki is asking for all of it, and a cap that stops early
+// produces an archive that is missing pages and says it succeeded. Nothing
+// about the run is proportional to the total — the tree walks bodiless and
+// the zip streams straight to the blob store — so there is no resource to
+// protect by refusing. Set one only to impose a deliberate limit; zero means
+// no limit, and a refusal is loud rather than a short archive.
 type Config struct {
-	MaxDocuments       int   // default 5000
-	MaxAttachmentBytes int64 // default 1 GiB
+	// MaxDocuments caps the pages in one export. 0 = unlimited.
+	MaxDocuments int
+	// MaxAttachmentBytes caps total attachment bytes. 0 = unlimited.
+	MaxAttachmentBytes int64
 	// InstallationID is stamped into the manifest source when set.
 	InstallationID string
 	// SchemaVersion is the editor schema the stored content_state follows.
@@ -36,12 +45,6 @@ type Config struct {
 }
 
 func (c Config) withDefaults() Config {
-	if c.MaxDocuments <= 0 {
-		c.MaxDocuments = 5000
-	}
-	if c.MaxAttachmentBytes <= 0 {
-		c.MaxAttachmentBytes = 1 << 30
-	}
 	if c.SchemaVersion <= 0 {
 		c.SchemaVersion = 1
 	}
@@ -58,12 +61,14 @@ type Writer struct {
 	hashRepo    repository.IHashRepository
 	credentials wikitransfer.CredentialLookup
 	renderer    Renderer
+	drawings    *wiki.DrawingFileRenderer
 	logger      *zap.Logger
 	cfg         Config
 }
 
-// NewWriter wires the writer. hostRepo, hashRepo, credentials and renderer
-// may be nil: hints, credential payloads and .md copies are then omitted.
+// NewWriter wires the writer. hostRepo, hashRepo, credentials, renderer and
+// drawings may be nil: hints, credential payloads and the readable copies
+// are then omitted.
 func NewWriter(
 	imageRepo repository.IWikiImageRepository,
 	fileRepo repository.IWikiFileRepository,
@@ -72,6 +77,7 @@ func NewWriter(
 	hashRepo repository.IHashRepository,
 	credentials wikitransfer.CredentialLookup,
 	renderer Renderer,
+	drawings *wiki.DrawingFileRenderer,
 	logger *zap.Logger,
 	cfg Config,
 ) *Writer {
@@ -80,7 +86,8 @@ func NewWriter(
 	}
 	return &Writer{
 		imageRepo: imageRepo, fileRepo: fileRepo, imageStore: imageStore, fileStore: fileStore,
-		hostRepo: hostRepo, hashRepo: hashRepo, credentials: credentials, renderer: renderer,
+		hostRepo: hostRepo, hashRepo: hashRepo, credentials: credentials,
+		renderer: renderer, drawings: drawings,
 		logger: logger, cfg: cfg.withDefaults(),
 	}
 }
@@ -108,7 +115,7 @@ type writeRun struct {
 
 // Run writes the scope into zw. The caller owns zw and closes it.
 func (w *Writer) Run(ctx context.Context, zw *zip.Writer, scope *wikitransfer.Scope, opts Options, progress wikitransfer.Progress) (*wikitransfer.ExportReport, error) {
-	if len(scope.Docs) > w.cfg.MaxDocuments {
+	if w.cfg.MaxDocuments > 0 && len(scope.Docs) > w.cfg.MaxDocuments {
 		return nil, fmt.Errorf("export exceeds %d documents (got %d)", w.cfg.MaxDocuments, len(scope.Docs))
 	}
 	now := time.Now().UTC()
@@ -202,16 +209,35 @@ func (r *writeRun) writeDocument(ctx context.Context, doc models.WikiDocument, d
 		entry.ParentID = &pid
 	}
 
-	if len(doc.ContentState) > 0 {
+	// The body is read here rather than carried on the Scope: one page's
+	// state at a time is what keeps a whole-wiki export flat in memory.
+	state, err := r.scope.ContentState(ctx, doc.DocumentID)
+	if err != nil {
+		r.report.Skip(path, "content_state_read_failed: "+err.Error())
+		r.advance()
+		return
+	}
+
+	if len(state) > 0 {
 		entry.ContentStateFile = documentsDir + doc.DocumentID.String() + ".ystate"
-		entry.ContentStateBytes = int64(len(doc.ContentState))
-		if err := writeBytes(r.zw, entry.ContentStateFile, doc.ContentState); err != nil {
+		entry.ContentStateBytes = int64(len(state))
+		if err := writeBytes(r.zw, entry.ContentStateFile, state); err != nil {
 			r.report.Skip(path, "zip_write_failed: "+err.Error())
 			r.advance()
 			return
 		}
-		if r.w.renderer != nil {
-			if md, err := r.w.renderer.YjsToMarkdown(ctx, doc.ContentState); err == nil {
+		// The readable companion beside the CRDT state. For a drawing that
+		// is the scene, not markdown: rendering a drawing's state as prose
+		// walks an empty fragment and writes a 0-byte `.md`, which tells
+		// whoever unzipped the bundle that the page is blank when it holds
+		// a diagram. The bytes are duplicated — the scene's images are also
+		// in attachments/ — and that is the price of a companion somebody
+		// can open, which is the only reason these files exist.
+		switch {
+		case doc.Kind.IsDrawing():
+			r.writeSceneCopy(ctx, doc, state, path)
+		case r.w.renderer != nil:
+			if md, err := r.w.renderer.YjsToMarkdown(ctx, state); err == nil {
 				_ = writeBytes(r.zw, documentsDir+doc.DocumentID.String()+".md", []byte(md))
 				// The stored indexes are what the sidecar wrote on the last
 				// save; a page last saved before an index existed has an
@@ -235,6 +261,33 @@ func (r *writeRun) writeDocument(ctx context.Context, doc models.WikiDocument, d
 	r.manifest.Documents = append(r.manifest.Documents, entry)
 	r.report.ExportedDocs++
 	r.advance()
+}
+
+// writeSceneCopy writes a drawing's readable companion: the same
+// `.excalidraw` file the markdown export and the editor's Export menu
+// produce, beside the page's `.ystate`.
+//
+// A failure here is a warning, not a skip. The `.ystate` is the bundle's
+// authoritative copy and has already been written — the page re-imports
+// intact whether or not anyone can read the companion.
+func (r *writeRun) writeSceneCopy(ctx context.Context, doc models.WikiDocument, state []byte, path string) {
+	if r.w.drawings == nil {
+		return
+	}
+	file, result, err := r.w.drawings.File(ctx, doc, state, wiki.DrawingFileOptions{})
+	if err != nil {
+		r.report.Warn(path, "scene_copy_failed: "+err.Error())
+		return
+	}
+	for _, skip := range result.Skips {
+		r.report.Warn(path, skip.Reason+": "+skip.ImageID)
+	}
+	if file.IsEmpty() {
+		return
+	}
+	if err := writeJSON(r.zw, documentsDir+doc.DocumentID.String()+wiki.ExcalidrawExtension, file); err != nil {
+		r.report.Warn(path, "scene_copy_failed: "+err.Error())
+	}
 }
 
 // streamAttachments copies every attachment the document's index names.
@@ -269,7 +322,7 @@ func (r *writeRun) streamAttachments(ctx context.Context, doc models.WikiDocumen
 }
 
 func (r *writeRun) streamBlob(ctx context.Context, store blob.ObjectStore, objectKey string, att *Attachment, path string) bool {
-	if r.totalAttachments+att.SizeBytes > r.w.cfg.MaxAttachmentBytes {
+	if r.w.cfg.MaxAttachmentBytes > 0 && r.totalAttachments+att.SizeBytes > r.w.cfg.MaxAttachmentBytes {
 		r.report.Warn(path, "attachment_budget_exhausted")
 		return false
 	}

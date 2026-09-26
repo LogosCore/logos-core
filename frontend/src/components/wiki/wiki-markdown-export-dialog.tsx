@@ -22,12 +22,19 @@ interface WikiMarkdownExportDialogProps {
 }
 
 /**
- * Shows a page's Markdown source, ready to copy or save.
+ * Shows a page's Markdown, ready to copy or save.
  *
- * The source is rendered server-side from the CRDT body, not from the search
- * projection the `content` field carries, so what lands here is the same
- * Markdown the importer would read back — paste it into another instance and
- * the page rebuilds, checklists and reference chips included.
+ * Rendered server-side from the CRDT body, not from the search projection
+ * the `content` field carries — and then lowered the way a wiki export
+ * lowers it, so what lands here is markdown for wherever it is going rather
+ * than for us: checklists are task lists, reference chips are links and
+ * names, credential blocks are written out. It used to be the editor's own
+ * markdown, which re-imported perfectly and read as JSON and colons
+ * everywhere else; moving a page between instances is the bundle's job.
+ *
+ * How much of a credential appears depends on the reader's role in the
+ * operation, decided on the server — an operator sees the values, anyone
+ * else sees which credential it is.
  *
  * Read-only rather than an editor. This is an export surface: the document
  * itself is edited in place, collaboratively, and offering a second editable
@@ -63,8 +70,8 @@ export function WikiMarkdownExportDialog({
         <DialogHeader>
           <DialogTitle>Export as Markdown</DialogTitle>
           <DialogDescription>
-            The source for {title || "this page"}. Copy it, or save it as a
-            file.
+            {title || "This page"} as Markdown, for reading anywhere else.
+            Copy it, or save it as a file.
           </DialogDescription>
         </DialogHeader>
 

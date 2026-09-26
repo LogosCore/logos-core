@@ -8,11 +8,21 @@
 // The Exporter writes a Scope to this layout and ReadPlan reads it back:
 //
 //	<rootSlug>/
-//	  001-<doc-a>.md             ← leaf
-//	  002-<doc-b>.md             ← branch (has children)
-//	  002-<doc-b>/               ← children of doc-b, same naming rules
-//	    001-<child>.md
+//	  <doc-a>.md             ← leaf
+//	  <doc-b>.md             ← branch (has children)
+//	  <doc-b>/               ← children of doc-b, same naming rules
+//	    <child>.md
+//	  <drawing>.md           ← stub page for a drawing
+//	  <drawing>.excalidraw   ← its scene, beside it under the same name
 //	  uploads/<documentId>/<attId>/<filename>
+//
+// Files are named after their page and nothing else. They used to carry the
+// page's position among its siblings as a `001-` prefix, so that a re-import
+// could rebuild the tree's order — which is an ordering only Logos has an
+// opinion about, and it read as wrong everywhere else: a Findings folder
+// whose newest page sorts first gave `001-fnd-006…` through `006-fnd-001…`,
+// numbered backwards in every file browser. Sorted by name, the titles now
+// carry whatever order their author gave them.
 //
 // See docs/wiki-outline-import.md §2 for the layout invariants the
 // importer enforces — this builder is the inverse.
@@ -70,32 +80,19 @@ func uniqueSlug(slug string, used map[string]struct{}) string {
 	}
 }
 
-// indexPrefix is a zero-padded three-digit number used to preserve sibling
-// order through re-import (the importer sorts case-insensitively by
-// filename). 999 siblings is well beyond any realistic wiki branch; we cap
-// to "999" rather than expand the prefix width to keep filenames bounded.
-func indexPrefix(i int) string {
-	if i < 0 {
-		i = 0
-	}
-	if i > 999 {
-		i = 999
-	}
-	return fmt.Sprintf("%03d", i)
-}
-
-// buildDocFilename produces the leaf filename for a document. The index is
-// 0-based; the on-disk prefix is 1-based for human readability ("001-…").
-func buildDocFilename(index int, slug string) string {
-	return indexPrefix(index+1) + "-" + slug + ".md"
+// buildDocFilename produces the leaf filename for a document: its slug and
+// the extension, with nothing in front. See the package comment for why the
+// sibling index is not part of it.
+func buildDocFilename(slug string) string {
+	return slug + ".md"
 }
 
 // buildChildrenFolder produces the sibling folder name that holds a
 // branch document's children. Matches the leaf filename without the `.md`
 // extension, so the importer's "<name>.md + <name>/ folder" convention
 // holds (see docs/wiki-outline-import.md §2.2).
-func buildChildrenFolder(index int, slug string) string {
-	return indexPrefix(index+1) + "-" + slug
+func buildChildrenFolder(slug string) string {
+	return slug
 }
 
 // uploadsZipPath returns the path inside the export zip for an attachment

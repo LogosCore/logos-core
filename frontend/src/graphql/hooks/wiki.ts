@@ -10,6 +10,7 @@ import type {
 import {
   WikiDocumentTreeDocument,
   WikiDocumentMarkdownDocument,
+  WikiDrawingSceneDocument,
   WikiTemplatesDocument,
   WikiDocumentChildrenDocument,
   WikiDocumentTreeRevealPathDocument,
@@ -63,6 +64,7 @@ export const wikiKeys = {
   // can be refetched without disturbing the document caches, and so the
   // wikiDocumentChanged handler can drop it when the body changes.
   markdown: (documentId: string) => [...wikiKeys.all, "markdown", documentId] as const,
+  drawingScene: (documentId: string) => [...wikiKeys.all, "drawingScene", documentId] as const,
   // Per-parent direct-children entry. Used by the lazy sidebar (one entry per
   // expanded branch) and the document-footer Sub-pages list. Root-level rows
   // live under the sentinel "__root__" so a single shape covers both cases.
@@ -159,6 +161,21 @@ export function useWikiDocumentMarkdown(
   return useQuery({
     queryKey: wikiKeys.markdown(documentId),
     queryFn: () => graphqlClient(WikiDocumentMarkdownDocument, { id: documentId }),
+    enabled: !!documentId && (options?.enabled ?? true),
+    staleTime: 0,
+  })
+}
+
+// A drawing page as an Excalidraw scene file, for the Export menu. Same
+// contract as the Markdown hook above, and disabled by default because the
+// fetch carries every image on the canvas.
+export function useWikiDrawingScene(
+  documentId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: wikiKeys.drawingScene(documentId),
+    queryFn: () => graphqlClient(WikiDrawingSceneDocument, { id: documentId }),
     enabled: !!documentId && (options?.enabled ?? true),
     staleTime: 0,
   })

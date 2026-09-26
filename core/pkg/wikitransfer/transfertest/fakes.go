@@ -11,6 +11,7 @@ package transfertest
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"regexp"
@@ -127,6 +128,33 @@ func (f *DocRepo) FindDescendants(_ context.Context, opID, docID uuid.UUID) ([]m
 	return out, nil
 }
 
+// FindSummaryDescendants mirrors the repository's projection, like
+// FindSummariesByOperationID: a caller that reads a body off one of these
+// rows gets nothing here, exactly as it would from Mongo.
+func (f *DocRepo) FindSummaryDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
+	docs, err := f.FindDescendants(ctx, opID, docID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.WikiDocument, 0, len(docs))
+	for _, d := range docs {
+		d.Content, d.ContentState = "", nil
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+func (f *DocRepo) FindContentState(_ context.Context, id uuid.UUID) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, d := range f.Docs {
+		if d.DocumentID == id {
+			return d.ContentState, nil
+		}
+	}
+	return nil, nil
+}
+
 func (f *DocRepo) FindChildDocumentsWithCounts(_ context.Context, opID uuid.UUID, parentID *uuid.UUID) ([]models.WikiDocument, map[uuid.UUID]int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -178,6 +206,9 @@ type Store struct {
 	mu    sync.Mutex
 	Bytes map[string][]byte
 	Types map[string]string
+	// PutStreamErr makes PutStream fail, for the upload half of an export
+	// that cannot finish: a bucket that has gone away mid-archive.
+	PutStreamErr error
 }
 
 func NewStore() *Store {
@@ -194,6 +225,28 @@ func (s *Store) Put(_ context.Context, key string, body io.Reader, _ int64, cont
 	s.Bytes[key] = b
 	s.Types[key] = contentType
 	return nil
+}
+
+// PutStream stores what it is given, like Put. The production store uploads
+// in parts as the bytes arrive; there is nothing to simulate about that in
+// memory, so the only difference kept here is the one callers depend on —
+// the size comes back from the store, not from the caller.
+func (s *Store) PutStream(_ context.Context, key string, body io.Reader, contentType string) (int64, error) {
+	s.mu.Lock()
+	failure := s.PutStreamErr
+	s.mu.Unlock()
+	if failure != nil {
+		return 0, failure
+	}
+	b, err := io.ReadAll(body)
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Bytes[key] = b
+	s.Types[key] = contentType
+	return int64(len(b)), nil
 }
 
 func (s *Store) Get(_ context.Context, key string) (io.ReadCloser, blob.ObjectInfo, error) {
@@ -525,6 +578,35 @@ type Renderer struct{}
 
 func (Renderer) YjsToMarkdown(_ context.Context, state []byte) (string, error) {
 	return string(state), nil
+}
+
+// YjsToExcalidraw stands in for the sidecar's scene reader. A fake drawing's
+// content_state is either the scene JSON itself — which comes back verbatim,
+// so a test can pin exactly what an exporter does with a given scene — or
+// plain text, which becomes a one-element scene carrying it.
+func (Renderer) YjsToExcalidraw(_ context.Context, state []byte) (wiki.ExcalidrawScene, error) {
+	var scene wiki.ExcalidrawScene
+	if trimmed := bytes.TrimSpace(state); len(trimmed) > 0 && trimmed[0] == '{' && json.Valid(trimmed) {
+		if err := json.Unmarshal(trimmed, &scene); err != nil {
+			return wiki.ExcalidrawScene{}, err
+		}
+		return scene, nil
+	}
+	element, err := json.Marshal(map[string]any{"id": "text-1", "type": "text", "text": string(state)})
+	if err != nil {
+		return wiki.ExcalidrawScene{}, err
+	}
+	return wiki.ExcalidrawScene{
+		Elements: []json.RawMessage{element},
+		AppState: map[string]any{"viewBackgroundColor": "#ffffff"},
+	}, nil
+}
+
+// NewDrawingRenderer builds the real wiki.DrawingFileRenderer over the fake
+// sidecar and the given attachment fakes, so a test exercises the same file
+// builder the bundle, the markdown export and the editor all use.
+func NewDrawingRenderer(images repository.IWikiImageRepository, store blob.ObjectStore) *wiki.DrawingFileRenderer {
+	return wiki.NewDrawingFileRenderer(Renderer{}, images, store)
 }
 
 // ---------------------------------------------------------------------------

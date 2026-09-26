@@ -39,7 +39,7 @@ const FORMATS: Array<{ value: TransferFormat; label: string; hint: string }> = [
   {
     value: "markdown",
     label: "Markdown zip",
-    hint: "For Obsidian, Outline and other tools. Logos-only features do not survive.",
+    hint: "For Obsidian, Outline and other tools. Drawings come out as .excalidraw scenes; other Logos-only features do not survive.",
   },
 ]
 

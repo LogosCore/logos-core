@@ -298,15 +298,19 @@ func newTransferStack(
 		controller.NewWikiTransferIngestor(imageCtrl, fileCtrl),
 		w.hpClient, bus, l,
 	)
+	// One renderer for every `.excalidraw` this installation produces: the
+	// bundle's readable companion, the markdown zip's scene file, and the
+	// editor's Export menu (through the wiki document resolver).
+	drawings := wiki.NewDrawingFileRenderer(w.hpClient, repos.WikiImage, w.imageStore)
 	bundleWriter := bundle.NewWriter(
 		repos.WikiImage, repos.WikiFile, w.imageStore, w.fileStore,
-		repos.Host, repos.Hash, repos.Credential, w.hpClient, l,
+		repos.Host, repos.Hash, repos.Credential, w.hpClient, drawings, l,
 		bundle.Config{InstallationID: e.InstallationID},
 	)
 	mdExporter := transfermd.NewExporter(
 		repos.WikiImage, repos.WikiFile, w.imageStore, w.fileStore,
 		repos.WikiDocument, repos.Host, repos.Hash,
-		w.hpClient, repos.Credential, l, transfermd.Config{},
+		w.hpClient, drawings, repos.Credential, l, transfermd.Config{},
 	)
 
 	return &transferStack{

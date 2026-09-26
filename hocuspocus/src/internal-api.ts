@@ -14,6 +14,10 @@ import * as Y from "yjs";
 import { markdownToYjsUpdate } from "./markdown-to-yjs.js";
 import { yjsUpdateToMarkdown } from "./yjs-to-markdown.js";
 import {
+  EMPTY_SCENE,
+  yjsUpdateToExcalidrawScene,
+} from "./yjs-to-excalidraw.js";
+import {
   collectCredentialReferenceIds,
   collectHashReferenceIds,
 } from "./references.js";
@@ -354,6 +358,74 @@ export function setupInternalApi(app: Express): void {
       } catch (err) {
         const message = err instanceof Error ? err.message : "conversion failed";
         console.error("yjs-to-markdown conversion error:", err);
+        res.status(500).json({ error: message });
+      }
+    },
+  );
+
+  // The same direction for a drawing page: Y.js update binary in, Excalidraw
+  // scene out. Used by the markdown export, which writes the scene beside the
+  // page as a `.excalidraw` file so a diagram survives leaving Logos.
+  //
+  // Empty bytes are an empty scene, not an error: a drawing nobody has opened
+  // yet has no state, and the exporter wants a page for it either way.
+  app.post(
+    "/internal/yjs-to-excalidraw",
+    (req: Request, res: Response, next: () => void) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+        const total = chunks.reduce((n, c) => n + c.length, 0);
+        if (total > MAX_YJS_BYTES + 1024) {
+          res.status(413).json({ error: "request too large" });
+          req.destroy();
+        }
+      });
+      req.on("end", () => {
+        if (res.headersSent) return;
+        (req as Request & { rawBody?: Buffer }).rawBody = Buffer.concat(chunks);
+        next();
+      });
+      req.on("error", (err: Error) => {
+        if (res.headersSent) return;
+        res.status(400).json({ error: err.message });
+      });
+    },
+    (req: Request, res: Response) => {
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+      if (!rawBody) {
+        res.status(400).json({ error: "empty body" });
+        return;
+      }
+
+      const sigHeader = req.headers[SIGNATURE_HEADER];
+      const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+      if (!verifySignature(rawBody, sig)) {
+        res.status(401).json({ error: "invalid or missing signature" });
+        return;
+      }
+
+      if (rawBody.length === 0) {
+        res.status(200).json(EMPTY_SCENE);
+        return;
+      }
+      if (rawBody.length > MAX_YJS_BYTES) {
+        res.status(413).json({ error: "yjs update exceeds 4 MB" });
+        return;
+      }
+
+      try {
+        const scene = yjsUpdateToExcalidrawScene(
+          new Uint8Array(
+            rawBody.buffer,
+            rawBody.byteOffset,
+            rawBody.byteLength,
+          ),
+        );
+        res.status(200).json(scene);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "conversion failed";
+        console.error("yjs-to-excalidraw conversion error:", err);
         res.status(500).json({ error: message });
       }
     },

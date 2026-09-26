@@ -499,6 +499,7 @@ type ComplexityRoot struct {
 		WikiDocuments                      func(childComplexity int, operationID string, parentDocumentID *string, search *string, sort *model.WikiDocumentSort, first *int, after *string, last *int, before *string) int
 		WikiDocumentsReferencingCredential func(childComplexity int, credentialID string) int
 		WikiDocumentsReferencingHash       func(childComplexity int, hashID string) int
+		WikiDrawingScene                   func(childComplexity int, id string) int
 		WikiOperationPresence              func(childComplexity int, operationID string) int
 		WikiSearch                         func(childComplexity int, operationID string, scope *string, query string, offset *int, limit *int) int
 		WikiTemplates                      func(childComplexity int, operationID string) int
@@ -1083,6 +1084,7 @@ type QueryResolver interface {
 	WikiDocumentTree(ctx context.Context, operationID string) ([]*models.WikiDocument, error)
 	WikiTemplates(ctx context.Context, operationID string) ([]*models.WikiDocument, error)
 	WikiDocumentMarkdown(ctx context.Context, id string) (string, error)
+	WikiDrawingScene(ctx context.Context, id string) (string, error)
 	WikiDocumentChildren(ctx context.Context, operationID string, parentDocumentID *string) ([]*models.WikiDocument, error)
 	WikiDocumentTreeRevealPath(ctx context.Context, documentID string) ([]*models.WikiDocument, error)
 	WikiDocumentDescendantIds(ctx context.Context, documentID string) ([]string, error)
@@ -3807,6 +3809,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.WikiDocumentsReferencingHash(childComplexity, args["hashId"].(string)), true
+	case "Query.wikiDrawingScene":
+		if e.ComplexityRoot.Query.WikiDrawingScene == nil {
+			break
+		}
+
+		args, err := ec.field_Query_wikiDrawingScene_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.WikiDrawingScene(childComplexity, args["id"].(string)), true
 	case "Query.wikiOperationPresence":
 		if e.ComplexityRoot.Query.WikiOperationPresence == nil {
 			break
@@ -8335,6 +8348,19 @@ extend type Query {
   wikiDocumentMarkdown(id: ID!): String!
     @hasPermission(permission: "operation:member")
 
+  # A drawing page's scene as an Excalidraw file, for export.
+  #
+  # The drawing counterpart of wikiDocumentMarkdown, and the same file the
+  # wiki export writes — one renderer builds all of them, so what the
+  # editor's Export menu hands you is byte-for-byte what a tree export
+  # would have put in the zip. Images the scene places are embedded, so the
+  # file opens anywhere; nothing about it points back at this server.
+  #
+  # Errors for a prose page, which has no scene. Viewer role, the same as
+  # reading the page.
+  wikiDrawingScene(id: ID!): String!
+    @hasPermission(permission: "operation:member")
+
   # Direct children of ` + "`" + `parentDocumentId` + "`" + ` (or root-level documents when
   # ` + "`" + `parentDocumentId` + "`" + ` is null), sorted by sortOrder. Trashed documents are
   # excluded. Drives the lazy tree sidebar — the client fetches roots on
@@ -10677,6 +10703,17 @@ func (ec *executionContext) field_Query_wikiDocuments_args(ctx context.Context, 
 		return nil, err
 	}
 	args["before"] = arg7
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_wikiDrawingScene_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -26905,6 +26942,65 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentMarkdown(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_wikiDocumentMarkdown_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_wikiDrawingScene(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_wikiDrawingScene,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().WikiDrawingScene(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal string
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal string
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_wikiDrawingScene(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_wikiDrawingScene_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -45806,6 +45902,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_wikiDocumentMarkdown(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "wikiDrawingScene":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_wikiDrawingScene(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

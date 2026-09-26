@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,8 +42,9 @@ func newWorld(t *testing.T, ttl time.Duration) *world {
 	images, files := transfertest.NewImageRepo(), transfertest.NewFileRepo()
 	blank := transfertest.NewStore()
 	m := wikitransfer.NewMaterialiser(w.docs, nil, nil, nil, w.ingestor, &transfertest.Rebaser{}, nil, zap.NewNop())
-	bw := bundle.NewWriter(images, files, blank, blank, nil, nil, nil, transfertest.Renderer{}, zap.NewNop(), bundle.Config{})
-	me := markdown.NewExporter(images, files, blank, blank, w.docs, nil, nil, transfertest.Renderer{}, nil, zap.NewNop(), markdown.Config{})
+	drawings := transfertest.NewDrawingRenderer(images, blank)
+	bw := bundle.NewWriter(images, files, blank, blank, nil, nil, nil, transfertest.Renderer{}, drawings, zap.NewNop(), bundle.Config{})
+	me := markdown.NewExporter(images, files, blank, blank, w.docs, nil, nil, transfertest.Renderer{}, drawings, nil, zap.NewNop(), markdown.Config{})
 	w.runner = job.NewRunner(w.jobs, w.docs, ops, w.artifacts, m, bw, me, nil, zap.NewNop(), job.Config{ArtifactTTL: ttl, PollInterval: time.Hour})
 	return w
 }
@@ -90,6 +93,36 @@ func TestRunner_ExportProducesDownloadableBundle(t *testing.T) {
 	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
 	if err != nil || !bundle.IsBundle(zr) {
 		t.Fatalf("artifact is not a bundle: %v", err)
+	}
+}
+
+// An export is written into the upload as it goes, so a store that refuses
+// it strands a half-written archive under the job's key. The job must fail,
+// and the key must be empty afterwards: a partial zip left behind would be
+// offered on the download endpoint as if it were the export.
+func TestRunner_ExportUploadFailureLeavesNoArtifact(t *testing.T) {
+	w := newWorld(t, time.Hour)
+	w.artifacts.PutStreamErr = errors.New("bucket is gone")
+	w.runner.Start()
+	defer w.runner.Stop()
+
+	j := &models.WikiTransferJob{OperationID: w.op, Kind: models.WikiTransferExport, Format: models.WikiTransferBundle, RequestedByID: w.caller}
+	if err := w.runner.Submit(context.Background(), j); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	done := w.waitTerminal(t, j.JobID)
+
+	if done.Status != models.WikiTransferFailed {
+		t.Fatalf("status = %s, want failed", done.Status)
+	}
+	if !strings.Contains(done.Error, "bucket is gone") {
+		t.Errorf("error = %q, want the store's reason", done.Error)
+	}
+	if done.ArtifactKey != "" {
+		t.Errorf("failed export recorded an artifact key %q", done.ArtifactKey)
+	}
+	if keys := w.artifacts.Keys(); len(keys) != 0 {
+		t.Errorf("failed export left %v in the store", keys)
 	}
 }
 

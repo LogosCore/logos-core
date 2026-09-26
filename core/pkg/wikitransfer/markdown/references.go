@@ -14,25 +14,30 @@ import (
 // the id names.
 var referenceLinkFull = regexp.MustCompile(`\[([^\]\n]*)\]\(logos://(doc|host|hash)/([0-9a-fA-F-]{36})\)`)
 
-// referenceTarget is what a chip becomes in the foreign markdown. An empty
+// ReferenceTarget is what a chip becomes in the foreign markdown. An empty
 // Href renders as plain text — the reader still sees what was referenced,
-// there is just nowhere in the zip to send them.
-type referenceTarget struct {
+// there is just nowhere to send them.
+type ReferenceTarget struct {
 	Text string
 	Href string
 }
 
-// referenceResolver maps one chip to its rendering. Returning ok=false
+// ReferenceResolver maps one chip to its rendering. Returning ok=false
 // means "nothing better known": the chip is lowered to its original label
-// as plain text so no logos:// link ever reaches the archive.
-type referenceResolver func(kind string, id uuid.UUID) (referenceTarget, bool)
+// as plain text so no logos:// link ever reaches the reader.
+//
+// Where the chip points is the caller's to decide, because it depends on
+// where the markdown is going: a zip sends a page chip to that page's file,
+// while a single page copied out of the editor sends it to the page in the
+// app.
+type ReferenceResolver func(kind string, id uuid.UUID) (ReferenceTarget, bool)
 
-// rewriteReferenceLinks replaces every `[label](logos://kind/id)` link with
-// the resolver's rendering. The markdown zip is for editors that know
-// nothing about Logos, so the output never contains the logos:// scheme:
-// a resolved page becomes `[Title](relative/path.md)`, a host or hash
-// becomes its display value, and anything unresolvable becomes the label.
-func rewriteReferenceLinks(body string, resolve referenceResolver) string {
+// RewriteReferenceLinks replaces every `[label](logos://kind/id)` link with
+// the resolver's rendering. Markdown that leaves Logos is for readers that
+// know nothing about it, so the output never contains the logos:// scheme:
+// a resolved page becomes `[Title](href)`, a host or hash becomes its
+// display value, and anything unresolvable becomes the label.
+func RewriteReferenceLinks(body string, resolve ReferenceResolver) string {
 	return referenceLinkFull.ReplaceAllStringFunc(body, func(match string) string {
 		m := referenceLinkFull.FindStringSubmatch(match)
 		label, kind := m[1], m[2]

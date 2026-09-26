@@ -18,18 +18,18 @@ var (
 )
 
 // renderDocMarkdown builds the full markdown content of one exported .md
-// file: the H1 (with optional emoji), an optional `logos:meta` comment that
-// carries icon and color across the round-trip, then a blank line and the
-// body. The body has already had its attachment refs rewritten by
-// rewriteAttachmentRefs.
+// file: the H1 (with optional emoji), a blank line, and the body, which has
+// already had its attachment refs rewritten and its Logos-only constructs
+// lowered.
 //
-// The meta comment is the Logos-specific extension on top of the Outline
-// markdown format — Outline can't carry our Icon/Color fields, so we
-// emit them as an HTML comment that the import parser recognises and
-// strips. CommonMark and every off-the-shelf markdown viewer renders the
-// comment as nothing, so plain-text consumers see the H1 + body as
-// expected.
-func renderDocMarkdown(emoji, title, icon, color, body string) string {
+// A page's icon and colour do not travel. They used to, as a
+// `<!-- logos:meta icon="…" color="…" -->` comment the import parser read
+// back — which is invisible in every markdown viewer there is, so the only
+// reader it ever had was us. This zip is for tools that are not us; the
+// bundle is the format that keeps a page whole. The parser still strips the
+// comment, because zips exported before this do carry it and it would
+// otherwise show up as text.
+func renderDocMarkdown(emoji, title, body string) string {
 	var b strings.Builder
 	b.WriteString("# ")
 	if emoji != "" {
@@ -38,11 +38,6 @@ func renderDocMarkdown(emoji, title, icon, color, body string) string {
 	}
 	b.WriteString(title)
 	b.WriteString("\n")
-
-	if meta := renderLogosMeta(icon, color); meta != "" {
-		b.WriteString(meta)
-		b.WriteString("\n")
-	}
 
 	b.WriteString("\n")
 	if body != "" {
@@ -54,40 +49,6 @@ func renderDocMarkdown(emoji, title, icon, color, body string) string {
 		}
 	}
 	return b.String()
-}
-
-// renderLogosMeta builds the metadata comment that round-trips icon and
-// color. Returns the empty string when both are empty so the export
-// stays clean for docs that use the defaults. Keys are emitted in a
-// stable order so the same input always produces the same output (handy
-// for diffing exports across runs).
-func renderLogosMeta(icon, color string) string {
-	if icon == "" && color == "" {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("<!-- logos:meta")
-	if icon != "" {
-		b.WriteString(` icon="`)
-		b.WriteString(escapeMetaValue(icon))
-		b.WriteString(`"`)
-	}
-	if color != "" {
-		b.WriteString(` color="`)
-		b.WriteString(escapeMetaValue(color))
-		b.WriteString(`"`)
-	}
-	b.WriteString(" -->")
-	return b.String()
-}
-
-// escapeMetaValue defends against any double-quote that snuck into an
-// icon or color value. Icon names are lucide identifiers (alphanumeric)
-// and colors are hex strings, so in practice this is belt-and-braces —
-// but emitting a value with an unescaped " would break the parser's
-// key="value" grammar silently.
-func escapeMetaValue(s string) string {
-	return strings.ReplaceAll(s, `"`, `\"`)
 }
 
 // rewriteAttachmentRefs walks the body markdown, finds every reference to

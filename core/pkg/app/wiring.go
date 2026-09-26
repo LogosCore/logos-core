@@ -127,9 +127,11 @@ func (a *App) buildResolvers() *resolvers {
 		a.repos.WikiDocumentVisit,
 		a.repos.Credential,
 		a.repos.Hash,
+		a.repos.Host,
 		a.repos.Task,
 		a.eventBus, a.presenceTracker,
 		a.hpClient,
+		wiki.NewDrawingFileRenderer(a.hpClient, a.repos.WikiImage, a.imageStore),
 	)
 
 	// credential depends on wikiDoc for the backlinks field resolvers — the

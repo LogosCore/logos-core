@@ -257,6 +257,11 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: ${SEAWEEDFS_S3_ACCESS_KEY}
       AWS_SECRET_ACCESS_KEY: ${SEAWEEDFS_S3_SECRET_KEY}
+    # Published for the same reason as MongoDB's and Redis's: .env's
+    # SEAWEEDFS_S3_ENDPOINT points host tooling at localhost:8333, and
+    # `make test-integration` takes it at its word.
+    ports:
+      - "8333:8333"
     depends_on:
       - seaweedfs-filer
     networks:

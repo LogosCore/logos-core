@@ -339,6 +339,19 @@ extend type Query {
   wikiDocumentMarkdown(id: ID!): String!
     @hasPermission(permission: "operation:member")
 
+  # A drawing page's scene as an Excalidraw file, for export.
+  #
+  # The drawing counterpart of wikiDocumentMarkdown, and the same file the
+  # wiki export writes — one renderer builds all of them, so what the
+  # editor's Export menu hands you is byte-for-byte what a tree export
+  # would have put in the zip. Images the scene places are embedded, so the
+  # file opens anywhere; nothing about it points back at this server.
+  #
+  # Errors for a prose page, which has no scene. Viewer role, the same as
+  # reading the page.
+  wikiDrawingScene(id: ID!): String!
+    @hasPermission(permission: "operation:member")
+
   # Direct children of `parentDocumentId` (or root-level documents when
   # `parentDocumentId` is null), sorted by sortOrder. Trashed documents are
   # excluded. Drives the lazy tree sidebar — the client fetches roots on

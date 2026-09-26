@@ -193,6 +193,53 @@ func (c *HocuspocusClient) YjsToMarkdown(ctx context.Context, contentState []byt
 	return string(bytesOut), nil
 }
 
+// YjsToExcalidraw is YjsToMarkdown for a drawing page: it sends the stored
+// content_state to the sidecar and returns the Excalidraw scene read out of
+// it — elements in paint order, the shared appState, and the wiki image ids
+// the scene points at.
+//
+// Callers wanting a file rather than a scene go through DrawingFileRenderer,
+// which adds the envelope and the image bytes. Empty input is an empty scene
+// without a round trip: a drawing nobody has opened has no state to read.
+func (c *HocuspocusClient) YjsToExcalidraw(ctx context.Context, contentState []byte) (ExcalidrawScene, error) {
+	var scene ExcalidrawScene
+	if len(contentState) == 0 {
+		return scene, nil
+	}
+	if c.internalSecret == "" {
+		return scene, fmt.Errorf("yjs-to-excalidraw: no internal secret configured")
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.internalSecret))
+	mac.Write(contentState)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	url := c.baseURL + "/internal/yjs-to-excalidraw"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(contentState))
+	if err != nil {
+		return scene, fmt.Errorf("build yjs-to-excalidraw request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("X-Internal-Signature-256", signature)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return scene, fmt.Errorf("call hocuspocus yjs-to-excalidraw: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return scene, fmt.Errorf("yjs-to-excalidraw returned %d: %s",
+			resp.StatusCode, string(errBody))
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&scene); err != nil {
+		return ExcalidrawScene{}, fmt.Errorf("decode yjs-to-excalidraw response: %w", err)
+	}
+	return scene, nil
+}
+
 // MaxMarkdownBytes is the largest body ApplyMarkdown will accept.
 //
 // MUST match MAX_INPUT_BYTES in hocuspocus/src/apply-markdown.ts. Declared

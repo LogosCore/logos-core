@@ -109,6 +109,14 @@ type IWikiDocumentRepository interface {
 	// aggregation. Counts cover every returned row.
 	FindDocumentsForRevealPath(ctx context.Context, opID uuid.UUID, parentIDs []uuid.UUID) ([]models.WikiDocument, map[uuid.UUID]int, error)
 	FindDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error)
+	// FindSummaryDescendants is FindDescendants with content and content_state
+	// projected out, for callers that walk a subtree's shape rather than read
+	// its bodies. Export pairs it with FindContentState.
+	FindSummaryDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error)
+	// FindContentState returns one document's Y.js body on its own, so a
+	// caller holding a bodiless tree can read the pages it needs one at a
+	// time. Absent rows and never-opened documents both return nil, nil.
+	FindContentState(ctx context.Context, id uuid.UUID) ([]byte, error)
 	// FindDescendantIDs returns just the document IDs of every active
 	// descendant of docID (excluding docID itself), via the materialized
 	// path_ids chain. Projection-only + subtree-scoped, so it replaces a
@@ -566,8 +574,10 @@ var wikiSummaryProjection = bson.M{"content": 0, "content_state": 0}
 // half of an average document's bytes. No GraphQL field reads it, so finders
 // whose rows only ever reach the API select this and can still serve
 // content, hasContent and excerpt. FindByID, FindChildDocuments,
-// FindAllByOperationID and FindDescendants stay whole: duplicate, backup and
-// export copy the state out of their results.
+// FindAllByOperationID and FindDescendants stay whole: duplicate and backup
+// copy the state out of their results. Export does not — it walks the tree
+// through the summary finders and pulls each body from FindContentState, so
+// that a tree of any size costs one page's state at a time.
 var wikiNoStateProjection = bson.M{"content_state": 0}
 
 func (r *wikiDocumentRepository) FindSummariesByOperationID(ctx context.Context, opID uuid.UUID, templatesOnly bool) ([]models.WikiDocument, error) {
@@ -709,20 +719,50 @@ func (r *wikiDocumentRepository) aggregateChildCounts(ctx context.Context, opID 
 // FindDescendants returns all descendants of a document (children, grandchildren, etc.)
 // for cascading soft-delete. Uses iterative breadth-first traversal.
 func (r *wikiDocumentRepository) FindDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
-	return r.findDescendantsBFS(ctx, opID, docID, false)
+	return r.findDescendantsBFS(ctx, opID, docID, false, nil)
+}
+
+// FindSummaryDescendants is FindDescendants with content and content_state
+// projected out. Export walks a subtree with this and fetches each page's
+// state one at a time through FindContentState, so the walk costs the same
+// whether the subtree holds ten pages or a hundred thousand.
+func (r *wikiDocumentRepository) FindSummaryDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
+	return r.findDescendantsBFS(ctx, opID, docID, false, wikiSummaryProjection)
+}
+
+// FindContentState returns one document's Y.js body and nothing else. The
+// counterpart of the summary finders: a caller that walks a tree cheaply and
+// then needs the bodies one at a time reads them through here, so peak memory
+// is one page's state rather than the whole wiki's.
+//
+// A missing document and one that has never been opened in the editor are
+// both an empty result, not an error: the row is the authority on what
+// exists, and this is only ever called for a document the caller already has.
+func (r *wikiDocumentRepository) FindContentState(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	var doc models.WikiDocument
+	err := r.coll.Find(ctx, bson.M{"document_id": id}).
+		Select(bson.M{"content_state": 1}).One(&doc)
+	if err != nil {
+		if IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find content state: %w", err)
+	}
+	return doc.ContentState, nil
 }
 
 // FindTrashedDescendants is the trash-only counterpart of FindDescendants:
 // it walks the parent chain downward but only follows children whose
 // deleted_at is set. Cycle-safe via a visited set.
 func (r *wikiDocumentRepository) FindTrashedDescendants(ctx context.Context, opID, docID uuid.UUID) ([]models.WikiDocument, error) {
-	return r.findDescendantsBFS(ctx, opID, docID, true)
+	return r.findDescendantsBFS(ctx, opID, docID, true, wikiNoStateProjection)
 }
 
 // findDescendantsBFS is the shared BFS walker. trashed=false matches active
 // children (deleted_at == nil); trashed=true matches soft-deleted children
-// (deleted_at != nil). The starting docID itself is never included.
-func (r *wikiDocumentRepository) findDescendantsBFS(ctx context.Context, opID, docID uuid.UUID, trashed bool) ([]models.WikiDocument, error) {
+// (deleted_at != nil). A nil projection returns whole documents. The starting
+// docID itself is never included.
+func (r *wikiDocumentRepository) findDescendantsBFS(ctx context.Context, opID, docID uuid.UUID, trashed bool, projection bson.M) ([]models.WikiDocument, error) {
 	var allDescendants []models.WikiDocument
 	queue := []uuid.UUID{docID}
 	visited := map[uuid.UUID]struct{}{docID: {}}
@@ -742,11 +782,12 @@ func (r *wikiDocumentRepository) findDescendantsBFS(ctx context.Context, opID, d
 			"parent_document_id": parentID,
 			"deleted_at":         deletedAtFilter,
 		})
-		if trashed {
+		if projection != nil {
 			// Trashed descendants feed the trash UI and the restore cascade,
-			// which never read the CRDT state. The active path feeds export
-			// and pre-delete backups, which copy it, so it stays whole.
-			q = q.Select(wikiNoStateProjection)
+			// and export's tree walk reads titles and placement only; neither
+			// touches the CRDT state. Pre-delete backups copy it, so their
+			// walk passes no projection and gets whole rows.
+			q = q.Select(projection)
 		}
 		if err := q.All(&children); err != nil {
 			return nil, err

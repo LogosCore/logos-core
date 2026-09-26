@@ -8,7 +8,8 @@
 //
 //	manifest.json
 //	documents/<sourceDocId>.ystate     raw content_state bytes
-//	documents/<sourceDocId>.md         human-readable copy, never read back
+//	documents/<sourceDocId>.md         readable copy of a prose page
+//	documents/<sourceDocId>.excalidraw readable copy of a drawing
 //	attachments/<sourceAttId>          blob bytes, filename in the manifest
 //	credentials.json                   optional payloads, see Manifest
 //	REPORT.json                        what the exporter skipped and why

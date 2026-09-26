@@ -9,16 +9,16 @@ import (
 
 func TestRewriteReferenceLinks(t *testing.T) {
 	page, host, hash, unknown := uuid.New(), uuid.New(), uuid.New(), uuid.New()
-	resolve := func(kind string, id uuid.UUID) (referenceTarget, bool) {
+	resolve := func(kind string, id uuid.UUID) (ReferenceTarget, bool) {
 		switch {
 		case kind == "doc" && id == page:
-			return referenceTarget{Text: "Peering [edge]", Href: "../002-net/003-peering.md"}, true
+			return ReferenceTarget{Text: "Peering [edge]", Href: "../002-net/003-peering.md"}, true
 		case kind == "host" && id == host:
-			return referenceTarget{Text: "in-bgp01"}, true
+			return ReferenceTarget{Text: "in-bgp01"}, true
 		case kind == "hash" && id == hash:
-			return referenceTarget{Text: "aad3b435b51404ee"}, true
+			return ReferenceTarget{Text: "aad3b435b51404ee"}, true
 		}
-		return referenceTarget{}, false
+		return ReferenceTarget{}, false
 	}
 
 	body := "Dual [host](logos://host/" + host.String() + ") edge " +
@@ -27,14 +27,14 @@ func TestRewriteReferenceLinks(t *testing.T) {
 		"hash [hash](logos://hash/" + hash.String() + ") " +
 		"ordinary [link](https://example.com) stays"
 
-	got := rewriteReferenceLinks(body, resolve)
+	got := RewriteReferenceLinks(body, resolve)
 	want := "Dual in-bgp01 edge " +
 		`peering [Peering \[edge\]](../002-net/003-peering.md) + ` +
 		"page " +
 		"hash aad3b435b51404ee " +
 		"ordinary [link](https://example.com) stays"
 	if got != want {
-		t.Fatalf("rewriteReferenceLinks\n got: %s\nwant: %s", got, want)
+		t.Fatalf("RewriteReferenceLinks\n got: %s\nwant: %s", got, want)
 	}
 	if strings.Contains(got, "logos://") {
 		t.Fatal("logos:// scheme leaked into foreign markdown")
@@ -43,8 +43,8 @@ func TestRewriteReferenceLinks(t *testing.T) {
 
 func TestRewriteReferenceLinks_EmptyTextFallsBackToLabel(t *testing.T) {
 	id := uuid.New()
-	resolve := func(string, uuid.UUID) (referenceTarget, bool) { return referenceTarget{Text: ""}, true }
-	got := rewriteReferenceLinks("see [host](logos://host/"+id.String()+")", resolve)
+	resolve := func(string, uuid.UUID) (ReferenceTarget, bool) { return ReferenceTarget{Text: ""}, true }
+	got := RewriteReferenceLinks("see [host](logos://host/"+id.String()+")", resolve)
 	if got != "see host" {
 		t.Fatalf("got %q", got)
 	}

@@ -69,7 +69,7 @@ func newFixture(t *testing.T) *fixture {
 	f.imageStore.Bytes["img-key"] = []byte("PNG")
 	f.fileStore.Bytes["file-key"] = []byte("PDF")
 	f.creds = transfertest.NewCredentialRepo(f.cred)
-	f.writer = bundle.NewWriter(f.images, f.files, f.imageStore, f.fileStore, nil, nil, f.creds, transfertest.Renderer{}, zap.NewNop(), bundle.Config{InstallationID: "inst-1"})
+	f.writer = bundle.NewWriter(f.images, f.files, f.imageStore, f.fileStore, nil, nil, f.creds, transfertest.Renderer{}, transfertest.NewDrawingRenderer(f.images, f.imageStore), zap.NewNop(), bundle.Config{InstallationID: "inst-1"})
 	return f
 }
 
@@ -164,6 +164,56 @@ func TestWriter_SubtreeLayoutAndManifest(t *testing.T) {
 		t.Errorf("credentials.json = %s (%v)", readEntry(t, zr, "credentials.json"), err)
 	}
 	readEntry(t, zr, "REPORT.json")
+}
+
+// A drawing's readable companion is its scene, not an empty .md. The
+// `.ystate` beside it is still what re-imports; this is what somebody who
+// unzipped the bundle can open.
+func TestWriter_DrawingCompanionIsTheScene(t *testing.T) {
+	f := newFixture(t)
+
+	drawingID := uuid.New()
+	scene := `{"elements":[{"id":"a","type":"rectangle"},{"id":"b","type":"image","fileId":"` +
+		f.img.ImageID.String() + `"}],"appState":{"viewBackgroundColor":"#fff"},"imageIds":["` +
+		f.img.ImageID.String() + `"]}`
+	drawing := models.WikiDocument{
+		DocumentID: drawingID, OperationID: f.op, Title: "Topology", SortOrder: "d",
+		PathIDs: []uuid.UUID{}, Kind: models.WikiDocumentKindDrawing,
+		ContentState: []byte(scene),
+	}
+	f.docs = transfertest.NewDocRepo(drawing)
+	zr, report := f.export(t, nil, false)
+
+	if report.ExportedDocs != 1 {
+		t.Fatalf("report = %+v", report)
+	}
+	// The CRDT state is still the authority and still verbatim.
+	if got := readEntry(t, zr, "documents/"+drawingID.String()+".ystate"); !bytes.Equal(got, drawing.ContentState) {
+		t.Error("content_state bytes must be stored verbatim")
+	}
+	raw := readEntry(t, zr, "documents/"+drawingID.String()+".excalidraw")
+	var file struct {
+		Type     string           `json:"type"`
+		Version  int              `json:"version"`
+		Elements []map[string]any `json:"elements"`
+		Files    map[string]struct {
+			DataURL string `json:"dataURL"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("companion is not a scene file: %v\n%s", err, raw)
+	}
+	if file.Type != "excalidraw" || file.Version != 2 || len(file.Elements) != 2 {
+		t.Errorf("companion = %+v", file)
+	}
+	if img, ok := file.Files[f.img.ImageID.String()]; !ok || !strings.HasPrefix(img.DataURL, "data:image/png;base64,") {
+		t.Errorf("scene images not embedded: %+v", file.Files)
+	}
+	for _, e := range zr.File {
+		if e.Name == "documents/"+drawingID.String()+".md" {
+			t.Error("a drawing must not also get an empty markdown companion")
+		}
+	}
 }
 
 func TestWriter_TreeScopeAndCredentialsOptOut(t *testing.T) {

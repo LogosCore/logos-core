@@ -1,11 +1,11 @@
 // Package job runs wiki transfers in the background.
 //
 // A transfer is submitted as a WikiTransferJob row, claimed by one worker
-// with an atomic status flip, and executed outside any HTTP request. Exports
-// write a zip to a temp file and upload it to the blob store for the caller
-// to download; imports read the caller's uploaded zip from the same store.
-// Progress is written back to the row so a client can poll it; artifacts
-// expire and are swept.
+// with an atomic status flip, and executed outside any HTTP request. An
+// export streams its zip into the blob store as it writes it, for the caller
+// to download; an import reads the caller's uploaded zip from the same
+// store. Progress is written back to the row so a client can poll it;
+// artifacts expire and are swept.
 package job
 
 import (
@@ -261,55 +261,97 @@ func (r *Runner) runExport(ctx context.Context, job *models.WikiTransferJob) (an
 	}
 	r.progressWriter(job.JobID)(0, len(scope.Docs))
 
-	tmp, err := os.CreateTemp("", "wiki-export-*.zip")
-	if err != nil {
-		return nil, fmt.Errorf("temp file: %w", err)
-	}
-	defer func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
+	// The zip goes straight to the blob store as it is written, through a
+	// pipe: the writer goroutine produces pages, the upload consumes parts,
+	// and neither the archive nor any page of it is ever whole on this
+	// machine. Spooling to a temp file first — which is what this did — made
+	// the largest exportable wiki a question of how much scratch disk the
+	// container happened to have, and put a whole second copy of the archive
+	// through the disk before a byte of it moved.
+	key := r.ArtifactKey(job.JobID)
+	pr, pw := io.Pipe()
+
+	var (
+		report   any
+		writeErr error
+		done     = make(chan struct{})
+	)
+	go func() {
+		defer close(done)
+		zw := zip.NewWriter(pw)
+		report, writeErr = r.writeArchive(ctx, job, scope, zw)
+		if cerr := zw.Close(); cerr != nil && writeErr == nil {
+			writeErr = fmt.Errorf("close zip: %w", cerr)
+		}
+		// Closing with the error makes the upload fail rather than store a
+		// truncated archive, and minio aborts the multipart upload it had
+		// open. Closing cleanly is what lets it complete.
+		//
+		// Wrapped so the upload can never see a bare io.EOF or
+		// io.ErrUnexpectedEOF: minio reads parts with readFull and takes
+		// either to mean "this was the last, short part", so a failure
+		// signalled that way would be completed and stored as a whole
+		// archive. blob.TestIntegrationS3Store_PutStreamAbortsOnReaderError
+		// pins that behaviour against the real store.
+		if writeErr != nil {
+			_ = pw.CloseWithError(fmt.Errorf("wiki export: %w", writeErr))
+		} else {
+			_ = pw.Close()
+		}
 	}()
 
-	zw := zip.NewWriter(tmp)
-	var report any
+	size, putErr := r.artifacts.PutStream(ctx, key, pr, "application/zip")
+	// An upload that gave up leaves the writer blocked on a reader nobody
+	// is draining; closing the read end unblocks it. Then wait, so report
+	// and writeErr are safe to read.
+	_ = pr.CloseWithError(putErr)
+	<-done
+
+	// The export's own failure is the one worth reporting: a failed upload
+	// downstream of it is the same error wearing a pipe's clothes.
+	if writeErr != nil {
+		r.discardArtifact(key)
+		return report, writeErr
+	}
+	if putErr != nil {
+		r.discardArtifact(key)
+		return report, fmt.Errorf("store artifact: %w", putErr)
+	}
+
+	job.ArtifactKey = key
+	job.ArtifactName = ExportFilename(scope.Title(), job.Format, time.Now().UTC())
+	job.ArtifactSize = size
+	return report, nil
+}
+
+// writeArchive runs the format's writer against zw.
+func (r *Runner) writeArchive(ctx context.Context, job *models.WikiTransferJob, scope *wikitransfer.Scope, zw *zip.Writer) (any, error) {
 	switch job.Format {
 	case models.WikiTransferBundle:
 		if r.bundleWriter == nil {
 			return nil, errors.New("bundle export is not configured")
 		}
-		report, err = r.bundleWriter.Run(ctx, zw, scope, bundle.Options{IncludeCredentials: job.Request.IncludeCredentials}, r.progressWriter(job.JobID))
+		return r.bundleWriter.Run(ctx, zw, scope, bundle.Options{IncludeCredentials: job.Request.IncludeCredentials}, r.progressWriter(job.JobID))
 	case models.WikiTransferMarkdown:
 		if r.mdExporter == nil {
 			return nil, errors.New("markdown export is not configured")
 		}
-		report, err = r.mdExporter.Run(ctx, zw, scope, r.progressWriter(job.JobID))
+		return r.mdExporter.Run(ctx, zw, scope, r.progressWriter(job.JobID))
 	default:
-		err = fmt.Errorf("unknown export format %q", job.Format)
+		return nil, fmt.Errorf("unknown export format %q", job.Format)
 	}
-	if cerr := zw.Close(); cerr != nil && err == nil {
-		err = fmt.Errorf("close zip: %w", cerr)
-	}
-	if err != nil {
-		return report, err
-	}
+}
 
-	size, err := tmp.Seek(0, io.SeekEnd)
-	if err != nil {
-		return report, fmt.Errorf("size temp file: %w", err)
-	}
-	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
-		return report, fmt.Errorf("rewind temp file: %w", err)
-	}
-	key := r.ArtifactKey(job.JobID)
-	putCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+// discardArtifact removes whatever a failed export left in the blob store.
+// Best-effort with its own context: the runner's may already be cancelled,
+// and an orphan would otherwise sit there until the sweeper's TTL, offered
+// for download by nothing but taking up room.
+func (r *Runner) discardArtifact(key string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := r.artifacts.Put(putCtx, key, tmp, size, "application/zip"); err != nil {
-		return report, fmt.Errorf("store artifact: %w", err)
+	if err := r.artifacts.Delete(ctx, key); err != nil {
+		r.logger.Debug("wiki transfer: discard partial artifact", zap.String("key", key), zap.Error(err))
 	}
-	job.ArtifactKey = key
-	job.ArtifactName = ExportFilename(scope.Title(), job.Format, time.Now().UTC())
-	job.ArtifactSize = size
-	return report, nil
 }
 
 func (r *Runner) runImport(ctx context.Context, job *models.WikiTransferJob) (any, error) {

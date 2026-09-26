@@ -153,6 +153,13 @@ func (m *memSkillStore) Put(_ context.Context, key string, body io.Reader, _ int
 	return nil
 }
 
+func (m *memSkillStore) PutStream(ctx context.Context, key string, body io.Reader, contentType string) (int64, error) {
+	if err := m.Put(ctx, key, body, -1, contentType); err != nil {
+		return 0, err
+	}
+	return int64(len(m.objects[key])), nil
+}
+
 func (m *memSkillStore) Get(_ context.Context, key string) (io.ReadCloser, blob.ObjectInfo, error) {
 	raw, ok := m.objects[key]
 	if !ok {

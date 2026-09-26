@@ -25,6 +25,8 @@ test-export.markdown.zip
     ├── test2.md                            ← root document "test2"
     ├── test/                               ← children of the "test" document
     │   └── 1234.md                         ← child document "1234"
+    ├── test3.md                            ← stub page of a drawing (Logos only)
+    ├── test3.excalidraw                    ← its scene, same base name
     └── uploads/
         └── {userId}/
             └── {attachmentId}/
@@ -32,6 +34,8 @@ test-export.markdown.zip
 ```
 
 There is **no manifest file** — no `metadata.json`, no `test.json`. The folder tree itself is the structural source of truth.
+
+One file type Outline never emits is read back here: a `.excalidraw` sitting beside a `.md` of the same base name. That is how a Logos markdown export writes a drawing page — a stub `.md` carrying the title and a link, and the scene next to it — and reading it back attaches the scene to the imported page, so a round trip through this format does not drop the diagram. The page returns as prose, not as a canvas: rebuilding a drawing from a file another tool may have edited is the native bundle's job, not this one's. Every other unknown file outside `uploads/` is still ignored.
 
 ### 2.2 Hierarchy convention
 
@@ -44,6 +48,8 @@ A document with children is encoded as a `.md` file plus a folder of the same ba
 | `test/foo/bar.md` | document `bar` whose parent is `foo` |
 
 There is no separate "collection root" document — the collection is just the outermost folder name.
+
+Our own export names files after the page and nothing else, which is what Outline does too. It used to prefix each one with its position among its siblings (`001-foo.md`) so that a re-import could rebuild the tree's order. That ordering is something only Logos has an opinion about, and outside it read as wrong: a Findings branch held newest-first came out as `001-fnd-006…` through `006-fnd-001…`, numbered backwards in every file browser. The importer still sorts siblings case-insensitively by filename, so a zip that *does* carry prefixes — an older one of ours, or another tool's — still imports in the order its names imply.
 
 ### 2.3 Document title
 

@@ -150,6 +150,29 @@ func (s *S3Store) Put(ctx context.Context, key string, body io.Reader, size int6
 	return nil
 }
 
+// streamPartSize is how much of an unknown-length upload is buffered before
+// a part goes out.
+//
+// It is passed explicitly because the default is a trap: asked to store an
+// object of unknown size, minio-go assumes the 5 TiB maximum and picks a
+// part size to match, which allocates a ~537 MiB buffer for an upload that
+// may turn out to be a hundred kilobytes. 64 MiB costs a bounded 64 MiB of
+// memory and still reaches ~625 GB across the 10,000 parts S3 allows —
+// past any wiki, and a limit that fails loudly at the store rather than
+// truncating an archive.
+const streamPartSize = 64 << 20
+
+func (s *S3Store) PutStream(ctx context.Context, key string, body io.Reader, contentType string) (int64, error) {
+	info, err := s.client.PutObject(ctx, s.bucket, key, body, -1, minio.PutObjectOptions{
+		ContentType: contentType,
+		PartSize:    streamPartSize,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("blob: put stream %q: %w", key, err)
+	}
+	return info.Size, nil
+}
+
 func (s *S3Store) Get(ctx context.Context, key string) (io.ReadCloser, ObjectInfo, error) {
 	obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {

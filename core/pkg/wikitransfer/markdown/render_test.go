@@ -62,98 +62,48 @@ Missing: /api/v1/wiki/images/99999999-9999-9999-9999-999999999999`
 }
 
 func TestRenderDocMarkdown(t *testing.T) {
-	got := renderDocMarkdown("📘", "Intro", "", "", "Hello world.")
+	got := renderDocMarkdown("📘", "Intro", "Hello world.")
 	want := "# 📘 Intro\n\nHello world.\n"
 	if got != want {
-		t.Errorf("with emoji, no meta: got %q want %q", got, want)
+		t.Errorf("with emoji: got %q want %q", got, want)
 	}
 
-	got = renderDocMarkdown("", "Plain", "", "", "")
+	got = renderDocMarkdown("", "Plain", "")
 	want = "# Plain\n\n"
 	if got != want {
-		t.Errorf("no body, no meta: got %q want %q", got, want)
-	}
-
-	got = renderDocMarkdown("", "Notes", "Adaptive", "", "Body.")
-	want = "# Notes\n<!-- logos:meta icon=\"Adaptive\" -->\n\nBody.\n"
-	if got != want {
-		t.Errorf("icon-only meta: got %q want %q", got, want)
-	}
-
-	got = renderDocMarkdown("", "Notes", "FileText", "#1f2937", "")
-	want = "# Notes\n<!-- logos:meta icon=\"FileText\" color=\"#1f2937\" -->\n\n"
-	if got != want {
-		t.Errorf("icon + color meta: got %q want %q", got, want)
+		t.Errorf("no body: got %q want %q", got, want)
 	}
 }
 
-// TestRenderDocMarkdown_RoundTripIconColor locks the export ↔ import
-// contract: every icon/color combination the exporter writes must come
-// back out of the import parser unchanged. If the meta grammar drifts on
-// either side, this test fails loud.
-func TestRenderDocMarkdown_RoundTripIconColor(t *testing.T) {
-	cases := []struct {
-		name            string
-		emoji           string
-		title           string
-		icon            string
-		color           string
-		body            string
-		wantParserEmoji string
-		wantParserIcon  string
-		wantParserColor string
-		wantParserBody  string
-	}{
-		{
-			name:           "icon only",
-			title:          "Project Plan",
-			icon:           "Adaptive",
-			body:           "details\n",
-			wantParserIcon: "Adaptive",
-			wantParserBody: "details\n",
-		},
-		{
-			name:            "emoji + icon + color all set",
-			emoji:           "🚀",
-			title:           "Launch",
-			icon:            "Rocket",
-			color:           "#ef4444",
-			body:            "go\n",
-			wantParserEmoji: "🚀",
-			wantParserIcon:  "Rocket",
-			wantParserColor: "#ef4444",
-			wantParserBody:  "go\n",
-		},
-		{
-			name:           "no meta, body preserved",
-			title:          "Plain",
-			body:           "just text\n",
-			wantParserBody: "just text\n",
-		},
+// A page's icon and colour stay behind. They only ever travelled as an HTML
+// comment that no markdown viewer renders and only our own parser read, so
+// in a zip meant for other tools they were bytes nobody could use.
+func TestRenderDocMarkdown_DropsLogosMeta(t *testing.T) {
+	rendered := renderDocMarkdown("🚀", "Launch", "go\n")
+	if strings.Contains(rendered, "logos:meta") || strings.Contains(rendered, "<!--") {
+		t.Errorf("markdown still carries Logos-only metadata:\n%s", rendered)
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			rendered := renderDocMarkdown(c.emoji, c.title, c.icon, c.color, c.body)
-			// Feed the rendered markdown through the real importer to
-			// confirm the round-trip — using the public Parse entry
-			// point exercises the same code paths a real re-import hits.
-			doc := parseOneDoc(t, rendered)
-			if doc.Title != c.title {
-				t.Errorf("title: got %q want %q", doc.Title, c.title)
-			}
-			if doc.Emoji != c.wantParserEmoji {
-				t.Errorf("emoji: got %q want %q", doc.Emoji, c.wantParserEmoji)
-			}
-			if doc.Icon != c.wantParserIcon {
-				t.Errorf("icon: got %q want %q", doc.Icon, c.wantParserIcon)
-			}
-			if doc.Color != c.wantParserColor {
-				t.Errorf("color: got %q want %q", doc.Color, c.wantParserColor)
-			}
-			if doc.BodyMarkdown != c.wantParserBody {
-				t.Errorf("body: got %q want %q", doc.BodyMarkdown, c.wantParserBody)
-			}
-		})
+
+	// What a reader can see still arrives: the emoji is part of the heading
+	// text, so it is not metadata and does travel.
+	doc := parseOneDoc(t, rendered)
+	if doc.Title != "Launch" || doc.Emoji != "🚀" || doc.BodyMarkdown != "go\n" {
+		t.Errorf("parsed = %+v", doc)
+	}
+	if doc.Icon != "" || doc.Color != "" {
+		t.Errorf("icon/color should not survive this format: %q / %q", doc.Icon, doc.Color)
+	}
+}
+
+// The parser keeps reading the comment, because zips exported before this
+// change carry one and it would otherwise arrive as visible text.
+func TestParser_StillStripsLegacyLogosMeta(t *testing.T) {
+	doc := parseOneDoc(t, "# Notes\n<!-- logos:meta icon=\"Adaptive\" color=\"#1f2937\" -->\n\nBody.\n")
+	if doc.Icon != "Adaptive" || doc.Color != "#1f2937" {
+		t.Errorf("legacy meta not read back: %+v", doc)
+	}
+	if strings.Contains(doc.BodyMarkdown, "logos:meta") {
+		t.Errorf("legacy meta leaked into the body: %q", doc.BodyMarkdown)
 	}
 }
 

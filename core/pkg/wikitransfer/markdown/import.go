@@ -73,6 +73,19 @@ func buildPage(parsed *ParsedExport, plan *wikitransfer.Plan, tombstones map[uui
 		page.Attachments = append(page.Attachments, att.ID)
 		body = strings.ReplaceAll(body, ref, canonicalURL(att))
 	}
+	// A drawing that left a Logos markdown export comes back as its stub
+	// page with the scene attached, so the link in the stub resolves and
+	// the diagram is still there to download and open. Restoring it as a
+	// canvas is the native bundle's job.
+	if d.SceneRef != "" {
+		if scene, ok := parsed.SceneBlobs[d.SceneRef]; ok {
+			att := attachmentFromBlob(scene)
+			plan.Attachments[att.ID] = att
+			page.Attachments = append(page.Attachments, att.ID)
+			body = strings.ReplaceAll(body, path.Base(d.SceneRef), canonicalURL(att))
+		}
+	}
+
 	collectCredentialFences(body, plan.Credentials, tombstones)
 	page.Markdown = body
 
@@ -204,6 +217,10 @@ func guessContentType(filename string) string {
 		return "application/json"
 	case ".zip":
 		return "application/zip"
+	case drawingExtension:
+		// An Excalidraw scene is JSON, and saying so is what makes it
+		// readable in a browser tab rather than a download of unknown bytes.
+		return "application/json"
 	default:
 		return "application/octet-stream"
 	}

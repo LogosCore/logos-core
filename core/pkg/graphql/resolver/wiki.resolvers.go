@@ -108,6 +108,11 @@ func (r *queryResolver) WikiDocumentMarkdown(ctx context.Context, id string) (st
 	return r.WikiDocumentResolver.WikiDocumentMarkdown(ctx, id)
 }
 
+// WikiDrawingScene is the resolver for the wikiDrawingScene field.
+func (r *queryResolver) WikiDrawingScene(ctx context.Context, id string) (string, error) {
+	return r.WikiDocumentResolver.WikiDrawingScene(ctx, id)
+}
+
 // WikiDocumentChildren is the resolver for the wikiDocumentChildren field.
 func (r *queryResolver) WikiDocumentChildren(ctx context.Context, operationID string, parentDocumentID *string) ([]*models.WikiDocument, error) {
 	return r.WikiDocumentResolver.WikiDocumentChildren(ctx, operationID, parentDocumentID)

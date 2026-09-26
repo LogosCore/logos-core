@@ -42,11 +42,15 @@ the current code fails. Concretely, as of commit `c3e6e03`:
    so every internal link breaks. Host and hash chips keep IDs from the
    source operation. Only credentials have a reconcile pass.
 3. **The format cannot carry Logos state.** Lost on the round trip: template
-   flag and source template, exact sibling order (approximated by `001-`
-   filename prefixes, capped at 999), timestamps, authorship, table cells
-   with block content (dropped by the serializer), code-block wrap, rule
-   variant. Icon and colour ride in an ad-hoc HTML comment. Every new field
-   has meant a matched regex on three sides (Go export, Go import, sidecar).
+   flag and source template, sibling order, timestamps, authorship, icon and
+   colour, checklist state, credential records, table cells with block
+   content (dropped by the serializer), code-block wrap, rule variant. Every
+   attempt to carry one meant a matched regex on three sides (Go export, Go
+   import, sidecar) for a field only Logos could read — which is why the
+   export no longer tries: see §5's decision on Logos-only metadata. Sibling
+   order used to be approximated by `001-` filename prefixes; those are gone
+   too, because an order only we have an opinion about read as plainly wrong
+   outside (a Findings folder numbered `001-fnd-006` through `006-fnd-001`).
 4. **Import always lands in a holding pen.** `import/<timestamp>/<slug>/`,
    never at a chosen parent. Reparenting is manual.
 5. **Three Markdown renderers with three link policies.** Zip export writes
@@ -104,9 +108,32 @@ Two formats, one pipeline.
 ```
 
 **Decision.** The Markdown zip is the *foreign* format. It is what we accept
-from other tools and what we hand to other tools. It stays lossy and we stop
-extending it with Logos-only metadata; the `logos:meta` comment and the
-credential fences are grandfathered, nothing else gets added.
+from other tools and what we hand to other tools. It carries no Logos-only
+metadata at all: what a foreign reader cannot use does not travel.
+
+That removed three things the export used to write. The `logos:meta`
+comment carrying a page's icon and colour is gone — it is invisible in every
+markdown viewer there is, so we were the only reader it ever had. A
+`:::checklist {"prompt":…}` container is now a GFM task list item, which
+every reader draws as a checkbox, with the answer as the item's content; the
+`key` and `required` attributes were coverage bookkeeping and go no further.
+A `logos-credential` fence is now the credential written out as markdown —
+a bold name, a list of its fields, a code block per key — instead of a page
+of JSON under an info-string nobody else knows.
+
+What survives is what the content said; what goes is the structure that let
+this zip re-create Logos records on import. Re-importing a markdown zip
+therefore no longer restores a page's icon and colour, its checklist state,
+or its credential records — the credential's *values* are still on the page,
+as text. The bundle is the format that keeps both, and is what a
+Logos-to-Logos move should use.
+
+**Not** lowered: `:::info` / `:::success` / `:::warning` / `:::tip` and the
+`![](url " =WxH")` image size hint. Those are Outline's own syntax rather
+than ours, and Outline is one of the tools this zip is for. Everywhere else
+they degrade to visible text and a tooltip — the argument for lowering them
+to blockquote callouts is real, and the argument against is that it would
+break the one target that renders them today.
 
 **Decision.** The Markdown export is written for editors that know nothing
 about Logos (Obsidian, VS Code, GitHub), not for re-import — the bundle is
@@ -139,16 +166,28 @@ custom container.
 ```
 manifest.json
 documents/<sourceDocId>.ystate        raw content_state bytes
-documents/<sourceDocId>.md            human-readable rendering, informational only
+documents/<sourceDocId>.md            readable rendering of a prose page
+documents/<sourceDocId>.excalidraw    readable rendering of a drawing
 attachments/<sourceAttId>             blob bytes, filename in manifest
 credentials.json                      optional, see §4.4
 REPORT.json                           what the exporter skipped and why
 ```
 
-The `.md` copies exist so a bundle is inspectable and greppable. The
+The readable copies exist so a bundle is inspectable and greppable. The
 importer never reads them. **Decision:** they are emitted; a
 `--no-markdown` option is not offered in v1 (they cost one sidecar call per
 page, which the exporter already pays today).
+
+A drawing gets a scene file rather than markdown, because rendering a
+drawing's state as prose walks an empty fragment and writes a 0-byte `.md` —
+which tells whoever unzipped the bundle that the page is blank when it holds
+a diagram. The scene is the same `.excalidraw` the markdown export writes and
+the editor's Export menu hands over: one `wiki.DrawingFileRenderer` builds all
+three, so a file cannot differ depending on which button produced it. Its
+images are embedded, which duplicates bytes that are also in `attachments/`
+— the price of a companion somebody can actually open, which is the only
+reason these files exist. A failure to build one is a warning, not a skip:
+the `.ystate` beside it is what re-imports.
 
 ### 4.2 Manifest
 
@@ -223,9 +262,11 @@ GraphQL in v1.
 ### 4.4 Credentials
 
 Credentials are operation-private (`persistence.ts` refuses chips in the
-Public operation). Today's Markdown export already embeds full payloads in
-`logos-credential` fences, so the bundle changes nothing about the policy —
-it just moves the payloads out of the page bodies into `credentials.json`:
+Public operation). The Markdown export already writes full credentials into
+the page body — as markdown now rather than as a fence, but the same fields
+— so the bundle changes nothing about the policy. It just moves the payloads
+out of the page bodies into `credentials.json`, in the machine-readable form
+the markdown zip no longer carries:
 
 ```jsonc
 [ { "id": "uuid", "payload": { …full models.Credential minus operation_id… } } ]
@@ -359,9 +400,12 @@ Flow:
 - **Export:** `POST /api/v1/wiki/transfer/exports` (JSON: `operationId`,
   optional `rootId`, `format` = `bundle` | `markdown`) creates the job and
   returns it with `202`. A worker goroutine owned by the app (package
-  `wikitransfer/job`) claims it with an atomic status flip, renders to a
-  temp file, uploads to the file bucket under `wiki-transfers/<jobId>.zip`,
-  and marks it done. The client polls `GET /api/v1/wiki/transfer/jobs/:id`
+  `wikitransfer/job`) claims it with an atomic status flip and streams the
+  zip into the file bucket under `wiki-transfers/<jobId>.zip` as it writes
+  it — an `io.Pipe` between the format writer and a multipart upload, so
+  neither the archive nor any page of it is ever whole on the worker — then
+  marks it done. An export that fails part-way deletes what it had already
+  uploaded rather than leaving a truncated archive under the job's key. The client polls `GET /api/v1/wiki/transfer/jobs/:id`
   every 1.5 s and downloads via `GET /api/v1/wiki/transfer/jobs/:id/download`
   (cookie-authenticated GET, so it works as a plain link). Artifacts expire
   after `WIKI_TRANSFER_ARTIFACT_TTL` (24 h); the runner's tick sweeps them.
@@ -377,8 +421,17 @@ Polling replaced the proposed GraphQL query and SSE event: the two dialogs
 are the only consumers, a 1.5 s poll on a job row is negligible, and it
 avoided touching the gqlgen schema for a feature that is not entity data.
 
-Caps: 5,000 pages and 1 GiB of attachments per export (writer defaults),
-`WIKI_IMPORT_ZIP_MAX_SIZE` on an upload. Concurrency: the controller refuses
+Caps: none on an export by default. The page, body and attachment budgets
+in `bundle.Config` and `markdown.Config` still exist and still work, but
+zero means unlimited and nothing sets them: an operator asking for their
+wiki is asking for all of it, and a budget that stops early produces an
+archive missing pages that reports success. Nothing about a run is
+proportional to the total — the tree walks bodiless (`FindSummariesBy*`
+plus one `FindContentState` per page, so peak memory is one page's CRDT
+state) and the zip streams straight out — so there is no resource a refusal
+would protect. The ceiling that remains is the object store's: 64 MiB parts
+× 10,000 is ~625 GB, and it fails loudly. `WIKI_IMPORT_ZIP_MAX_SIZE` still
+caps an upload. Concurrency: the controller refuses
 a new job with `409` while one is queued or running for the operation;
 claiming is a `findOneAndUpdate` so two processes never run the same job.
 A job still marked running two hours after it started is failed by the

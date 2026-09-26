@@ -195,6 +195,16 @@ export const WikiDocumentMarkdownQuery = graphql(`
   }
 `)
 
+// A drawing page as an Excalidraw scene file — the drawing's answer to the
+// query above, and the same file a wiki export writes. Fetched on demand for
+// the same reason: it costs a sidecar round trip plus the bytes of every
+// image on the canvas.
+export const WikiDrawingSceneQuery = graphql(`
+  query WikiDrawingScene($id: ID!) {
+    wikiDrawingScene(id: $id)
+  }
+`)
+
 // Direct children of a parent (roots when parentDocumentId is null) — the
 // core query for the lazy sidebar. One request per expanded branch.
 export const WikiDocumentChildrenQuery = graphql(`

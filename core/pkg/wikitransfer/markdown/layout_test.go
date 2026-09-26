@@ -45,33 +45,26 @@ func TestUniqueSlug(t *testing.T) {
 	}
 }
 
+// A file is named after its page and nothing else — no sibling index, so a
+// folder sorted by name is sorted by title.
 func TestBuildDocFilename(t *testing.T) {
-	cases := []struct {
-		idx  int
-		slug string
-		want string
-	}{
-		{0, "intro", "001-intro.md"},
-		{9, "ten", "010-ten.md"},
-		{99, "hundred", "100-hundred.md"},
+	if got := buildDocFilename("intro"); got != "intro.md" {
+		t.Errorf("buildDocFilename = %q, want intro.md", got)
 	}
-	for _, c := range cases {
-		got := buildDocFilename(c.idx, c.slug)
-		if got != c.want {
-			t.Errorf("buildDocFilename(%d, %q) = %q, want %q", c.idx, c.slug, got, c.want)
-		}
+	if got := buildChildrenFolder("intro"); got != "intro" {
+		t.Errorf("buildChildrenFolder = %q, want intro", got)
 	}
 }
 
 func TestRelativeLink(t *testing.T) {
 	cases := []struct{ from, to, want string }{
-		{"root/001-a.md", "root/002-b.md", "002-b.md"},
-		{"root/001-a.md", "root/001-a/001-c.md", "001-a/001-c.md"},
-		{"root/001-a/001-c.md", "root/002-b.md", "../002-b.md"},
-		{"root/001-a/001-c/001-d.md", "root/001-a/002-e.md", "../002-e.md"},
-		{"root/001-a/001-c.md", "root/uploads/d/a/img.png", "../uploads/d/a/img.png"},
-		{"root/001-a.md", "root/uploads/d/a/img.png", "uploads/d/a/img.png"},
-		{"root/001-a.md", "root/001-a.md", "001-a.md"},
+		{"root/a.md", "root/b.md", "b.md"},
+		{"root/a.md", "root/a/c.md", "a/c.md"},
+		{"root/a/c.md", "root/b.md", "../b.md"},
+		{"root/a/c/d.md", "root/a/e.md", "../e.md"},
+		{"root/a/c.md", "root/uploads/d/a/img.png", "../uploads/d/a/img.png"},
+		{"root/a.md", "root/uploads/d/a/img.png", "uploads/d/a/img.png"},
+		{"root/a.md", "root/a.md", "a.md"},
 	}
 	for _, c := range cases {
 		if got := relativeLink(c.from, c.to); got != c.want {

@@ -20,16 +20,18 @@ import (
 	"strings"
 )
 
-// logosMetaPattern matches the optional metadata comment the exporter emits
-// directly after the H1 line. The comment is intentionally kept on one line
-// so it survives CommonMark passthrough cleanly. Round-trips
-// WikiDocument.Icon and Color, which Outline's markdown dialect can't carry.
+// logosMetaPattern matches the metadata comment the exporter used to emit
+// directly after the H1 line, carrying WikiDocument.Icon and Color.
 //
 //	<!-- logos:meta icon="Adaptive" color="#1f2937" -->
 //
-// Both fields are optional; missing keys are treated as empty. Other markdown
-// tools render this as nothing (HTML comment), so it degrades gracefully when
-// the export is opened in non-Logos viewers.
+// The exporter no longer writes one: an HTML comment renders as nothing in
+// every markdown viewer, which made it a field only Logos could read in a
+// format meant for everyone else (see render.go). This stays because zips
+// exported before that change carry one, and a comment we did not recognise
+// would arrive as the first line of the page's body.
+//
+// Both fields are optional; missing keys are treated as empty.
 var logosMetaPattern = regexp.MustCompile(
 	`^<!--\s*logos:meta(?:\s+([^>]*?))?\s*-->\s*$`,
 )
@@ -50,6 +52,11 @@ type ParsedExport struct {
 	// zip to the zip.File we can stream bytes out of later. Keyed by the
 	// full zip-internal path (e.g. "test/uploads/<userId>/<attId>/x.pdf").
 	AttachmentBlobs map[string]*zip.File
+
+	// SceneBlobs maps every `.excalidraw` file outside uploads to its zip
+	// entry, keyed by full zip-internal path. A document claims one through
+	// Doc.SceneRef.
+	SceneBlobs map[string]*zip.File
 }
 
 // Collection is one top-level folder in the zip. In Outline terms, this
@@ -97,6 +104,18 @@ type Doc struct {
 	// document's body references via image or link syntax. Each entry is
 	// a key into ParsedExport.AttachmentBlobs.
 	AttachmentRefs []string
+
+	// SceneRef is the zip path of the `.excalidraw` file sitting beside
+	// this document's .md, when there is one — a drawing that left a Logos
+	// markdown export. A key into ParsedExport.SceneBlobs.
+	//
+	// The page comes back as prose with the scene attached, not as a
+	// drawing: this zip is the foreign format, and rebuilding a canvas from
+	// it would be guessing at what another tool may have edited. The
+	// native bundle is what restores a drawing as a drawing. What this
+	// buys is that the scene is not dropped on the floor, and that the
+	// stub's link to it still resolves after a round trip.
+	SceneRef string
 }
 
 // Parse walks the zip and produces the export tree. Returns an error only
@@ -119,6 +138,7 @@ func Parse(zr *zip.Reader) (*ParsedExport, error) {
 
 	out := &ParsedExport{
 		AttachmentBlobs: files.attachments,
+		SceneBlobs:      files.scenes,
 	}
 
 	collectionNames := make([]string, 0, len(files.collections))
@@ -132,7 +152,7 @@ func Parse(zr *zip.Reader) (*ParsedExport, error) {
 	for _, name := range collectionNames {
 		mds := files.collections[name]
 		coll := &Collection{Name: name}
-		coll.Documents = buildDocTree(name, mds)
+		coll.Documents = buildDocTree(name, mds, files.scenes)
 		out.Collections = append(out.Collections, coll)
 	}
 
@@ -149,6 +169,12 @@ type indexedZip struct {
 	// attachments maps zip-internal path → *zip.File for every file
 	// under any "<collection>/uploads/" subtree.
 	attachments map[string]*zip.File
+	// scenes maps zip-internal path → *zip.File for every `.excalidraw`
+	// file outside uploads. A Logos markdown export writes one beside the
+	// stub page of each drawing; keying on the full path rather than the
+	// filename keeps two drawings with the same slug in different branches
+	// apart.
+	scenes map[string]*zip.File
 }
 
 type mdEntry struct {
@@ -160,6 +186,7 @@ func indexZip(zr *zip.Reader) (*indexedZip, error) {
 	out := &indexedZip{
 		collections: map[string][]mdEntry{},
 		attachments: map[string]*zip.File{},
+		scenes:      map[string]*zip.File{},
 	}
 
 	for _, f := range zr.File {
@@ -206,6 +233,11 @@ func indexZip(zr *zip.Reader) (*indexedZip, error) {
 			continue
 		}
 
+		if strings.HasSuffix(f.Name, drawingExtension) {
+			out.scenes[f.Name] = f
+			continue
+		}
+
 		if !strings.HasSuffix(f.Name, ".md") {
 			// Unknown non-markdown file outside uploads — ignore.
 			continue
@@ -241,7 +273,7 @@ func indexOfUploadsSegment(segments []string) int {
 //	foo/bar.md     — doc "bar" whose parent is "foo"
 //
 // Sibling order within each level is case-insensitive by filename.
-func buildDocTree(collectionName string, entries []mdEntry) []*Doc {
+func buildDocTree(collectionName string, entries []mdEntry, scenes map[string]*zip.File) []*Doc {
 	// Index every .md by its parent directory (relative to the collection
 	// root). Root docs have parent dir == "".
 	byPath := map[string]mdEntry{} // relPath → entry
@@ -276,6 +308,11 @@ func buildDocTree(collectionName string, entries []mdEntry) []*Doc {
 			if doc == nil {
 				continue
 			}
+			// A drawing's scene sits beside its stub, under the same name.
+			scenePath := path.Join(collectionName, parentDir, base+drawingExtension)
+			if _, ok := scenes[scenePath]; ok {
+				doc.SceneRef = scenePath
+			}
 			// Children of this doc live in a sibling folder named after
 			// the doc's base name.
 			childDir := path.Join(parentDir, base)
@@ -286,7 +323,6 @@ func buildDocTree(collectionName string, entries []mdEntry) []*Doc {
 	}
 
 	_ = byPath
-	_ = collectionName
 	return build("")
 }
 

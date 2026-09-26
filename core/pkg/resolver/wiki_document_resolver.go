@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
+	transfermd "github.com/logoscore/logos-core/core/pkg/wikitransfer/markdown"
 	"go.uber.org/zap"
 )
 
@@ -63,6 +65,10 @@ type IWikiDocumentResolver interface {
 	// inline marks rendered as pseudo-tags. content_state is the authoritative
 	// body, so it is converted back through the same sidecar that wrote it.
 	WikiDocumentMarkdown(ctx context.Context, id string) (string, error)
+
+	// WikiDrawingScene renders a drawing page's body as an Excalidraw file,
+	// the same one a wiki export writes.
+	WikiDrawingScene(ctx context.Context, id string) (string, error)
 	WikiDocumentChildren(ctx context.Context, operationID string, parentDocumentID *string) ([]*models.WikiDocument, error)
 	WikiDocumentTreeRevealPath(ctx context.Context, documentID string) ([]*models.WikiDocument, error)
 	WikiDocumentDescendantIDs(ctx context.Context, documentID string) ([]string, error)
@@ -162,6 +168,10 @@ type wikiDocumentResolver struct {
 	// by the standalone `wikiDocumentsReferencingHash` query to resolve a
 	// hash's operation_id before authorizing and querying referrers.
 	hashRepo repository.IHashRepository
+	// hostRepo names the host behind a `logos://host/<id>` chip when a page
+	// is rendered as markdown for somewhere else. Nil is acceptable: the
+	// chip then keeps its generic label.
+	hostRepo repository.IHostRepository
 	// taskRepo (optional) is used by the hard-delete paths to strip the
 	// deleted document's UUID from every task's wiki_references array. Nil
 	// is acceptable for tests and any pre-Tasks wiring.
@@ -173,6 +183,11 @@ type wikiDocumentResolver struct {
 	// this resolver depends on the conversion, not on the sidecar client.
 	// Nil is acceptable — WikiDocumentMarkdown is the only caller and says so.
 	renderer MarkdownRenderer
+	// drawings is the Markdown renderer's counterpart for a drawing page:
+	// the same builder the wiki export uses, so the editor's Export menu and
+	// an export of the tree cannot disagree about what the scene is. Nil is
+	// acceptable — WikiDrawingScene is the only caller and says so.
+	drawings *wiki.DrawingFileRenderer
 }
 
 // MarkdownRenderer converts a document's Y.js binary state back to Markdown.
@@ -191,10 +206,12 @@ func NewWikiDocumentResolver(
 	visitRepo repository.IWikiDocumentVisitRepository,
 	credRepo repository.ICredentialRepository,
 	hashRepo repository.IHashRepository,
+	hostRepo repository.IHostRepository,
 	taskRepo repository.ITaskRepository,
 	eventBus eventbus.IEventBus,
 	presence *wiki.PresenceTracker,
 	renderer MarkdownRenderer,
+	drawings *wiki.DrawingFileRenderer,
 ) IWikiDocumentResolver {
 	return &wikiDocumentResolver{
 		docRepo:       docRepo,
@@ -204,10 +221,12 @@ func NewWikiDocumentResolver(
 		visitRepo:     visitRepo,
 		credRepo:      credRepo,
 		hashRepo:      hashRepo,
+		hostRepo:      hostRepo,
 		taskRepo:      taskRepo,
 		eventBus:      eventBus,
 		presence:      presence,
 		renderer:      renderer,
+		drawings:      drawings,
 	}
 }
 
@@ -1910,11 +1929,130 @@ func (r *wikiDocumentResolver) WikiDocumentMarkdown(ctx context.Context, id stri
 		return doc.Content, nil
 	}
 
-	markdown, err := r.renderer.YjsToMarkdown(ctx, doc.ContentState)
+	body, err := r.renderer.YjsToMarkdown(ctx, doc.ContentState)
 	if err != nil {
 		return "", fmt.Errorf("failed to render the document as Markdown: %w", err)
 	}
-	return markdown, nil
+	return r.lowerForExport(ctx, doc, body), nil
+}
+
+// lowerForExport turns the editor's markdown into markdown a reader outside
+// Logos can use, exactly as the wiki export does: checklist containers
+// become task list items, credential blocks become the credential written
+// out, and reference chips stop being `logos://` URIs.
+//
+// The chips resolve differently here than in a zip. There is no archive to
+// point into, so a page chip becomes a link to that page in the app — an
+// absolute one once the browser has rewritten it (see wiki-absolute-urls.ts)
+// — and a host or hash becomes its name or value as text.
+//
+// Credentials follow the requester's role, not the page's: an operator gets
+// the values, as they would from an export, and anyone else gets the
+// credential's name and kind. A viewer may read this page, and the chip on
+// it already told them a credential belongs here; what they must not get is
+// the secret itself, on a surface whose whole purpose is to put text on a
+// clipboard.
+func (r *wikiDocumentResolver) lowerForExport(ctx context.Context, doc models.WikiDocument, body string) string {
+	detail := transfermd.CredentialNamesOnly
+	if err := r.authorizeForOperation(ctx, doc.OperationID, models.OperationRoleOperator); err == nil {
+		detail = transfermd.CredentialValues
+	}
+
+	body, _, _ = transfermd.LowerCredentialFences(ctx, body, doc.OperationID, r.credRepo, detail)
+	body = transfermd.RewriteReferenceLinks(body, r.chipResolver(ctx, doc))
+	return transfermd.LowerChecklists(body)
+}
+
+// chipResolver renders the chips of one page for a reader outside the
+// editor. Anything the repositories cannot answer, or that belongs to
+// another operation, keeps the serializer's generic label — the same rule
+// the export follows, for the same reason: a title is not ours to print to
+// someone who cannot open the page it names.
+func (r *wikiDocumentResolver) chipResolver(ctx context.Context, doc models.WikiDocument) transfermd.ReferenceResolver {
+	return func(kind string, id uuid.UUID) (transfermd.ReferenceTarget, bool) {
+		switch kind {
+		case "doc":
+			linked, err := r.docRepo.FindByID(ctx, id)
+			if err != nil || linked.DeletedAt != nil {
+				return transfermd.ReferenceTarget{}, false
+			}
+			if linked.OperationID != doc.OperationID && !models.IsPublicOperation(linked.OperationID) {
+				return transfermd.ReferenceTarget{}, false
+			}
+			title := strings.TrimSpace(linked.Title)
+			if title == "" {
+				title = "Untitled"
+			}
+			return transfermd.ReferenceTarget{Text: title, Href: "/wiki/" + id.String()}, true
+		case "host":
+			if r.hostRepo == nil {
+				return transfermd.ReferenceTarget{}, false
+			}
+			h, err := r.hostRepo.FindByID(ctx, id)
+			if err != nil || h.OperationID != doc.OperationID {
+				return transfermd.ReferenceTarget{}, false
+			}
+			return transfermd.ReferenceTarget{Text: strings.TrimSpace(h.Hostname)}, true
+		case "hash":
+			if r.hashRepo == nil {
+				return transfermd.ReferenceTarget{}, false
+			}
+			h, err := r.hashRepo.FindByID(ctx, id)
+			if err != nil || h.OperationID != doc.OperationID {
+				return transfermd.ReferenceTarget{}, false
+			}
+			return transfermd.ReferenceTarget{Text: strings.TrimSpace(h.Value)}, true
+		}
+		return transfermd.ReferenceTarget{}, false
+	}
+}
+
+// WikiDrawingScene renders one drawing page as an Excalidraw file.
+//
+// The same renderer the wiki export uses, so the file somebody downloads
+// from the editor is the file a tree export would have written. Images the
+// scene places are embedded, because the point of this is that the diagram
+// leaves: a file whose pictures are same-origin URLs draws holes the moment
+// it is opened anywhere but here.
+//
+// Authorized at viewer level, the same as reading the page.
+func (r *wikiDocumentResolver) WikiDrawingScene(ctx context.Context, id string) (string, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid document ID: %w", err)
+	}
+
+	doc, err := r.docRepo.FindByID(ctx, uid)
+	if err != nil {
+		return "", fmt.Errorf("document not found: %w", err)
+	}
+	if err := r.authorizeForOperation(ctx, doc.OperationID, models.OperationRoleViewer); err != nil {
+		return "", err
+	}
+	if !doc.Kind.IsDrawing() {
+		return "", fmt.Errorf("%q is a Markdown page, not a drawing", doc.Title)
+	}
+	if r.drawings == nil {
+		return "", fmt.Errorf("drawing export is not configured")
+	}
+
+	file, result, err := r.drawings.File(ctx, doc, doc.ContentState, wiki.DrawingFileOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to render the drawing: %w", err)
+	}
+	// An image that could not be embedded is logged, not raised: the rest of
+	// the diagram is worth handing over, and the caller asked for a file, not
+	// for a report.
+	for _, skip := range result.Skips {
+		logger.From(ctx).Warn("drawing scene export skipped an image",
+			zap.String("document_id", id), zap.String("image_id", skip.ImageID), zap.String("reason", skip.Reason))
+	}
+
+	out, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to encode the drawing: %w", err)
+	}
+	return string(out), nil
 }
 
 // WikiDocumentChildren returns the active direct children of a parent

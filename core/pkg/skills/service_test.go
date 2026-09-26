@@ -175,6 +175,15 @@ func (f *fakeStore) Put(_ context.Context, key string, body io.Reader, _ int64, 
 	return nil
 }
 
+// PutStream is Put for a body of unknown length. Skills never take this
+// path — only the wiki export does — but the store interface carries it.
+func (f *fakeStore) PutStream(ctx context.Context, key string, body io.Reader, contentType string) (int64, error) {
+	if err := f.Put(ctx, key, body, -1, contentType); err != nil {
+		return 0, err
+	}
+	return int64(len(f.objects[key])), nil
+}
+
 func (f *fakeStore) Get(_ context.Context, key string) (io.ReadCloser, blob.ObjectInfo, error) {
 	raw, ok := f.objects[key]
 	if !ok {
