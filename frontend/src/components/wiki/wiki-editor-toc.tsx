@@ -1,11 +1,10 @@
-import { SquareCheckIcon, SquareIcon, XIcon } from "lucide-react"
+import { SquareCheckIcon, SquareIcon } from "lucide-react"
 import { type Editor, useEditorState } from "@tiptap/react"
-import { Button } from "@/components/ui/button"
-import { useWikiStore } from "@/stores/wiki"
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
 interface WikiEditorTocProps {
-  editor: Editor | null
+  editor: Editor
 }
 
 interface TocItem {
@@ -52,9 +51,18 @@ const INDENT_BY_LEVEL: Record<number, string> = {
   6: "pl-12",
 }
 
+/**
+ * The page's outline, as items for the header's Outline menu.
+ *
+ * This used to be a panel floating over the editor's top-right corner, which
+ * covered the text it was an index of and stayed up until dismissed. As menu
+ * items it costs nothing while closed, and a click both navigates and closes
+ * — the two things anyone ever wanted from it.
+ *
+ * Rendered only inside an open menu, so the useEditorState subscription below
+ * exists only while someone is looking at the outline.
+ */
 export function WikiEditorToc({ editor }: WikiEditorTocProps) {
-  const setVisible = useWikiStore((s) => s.setEditorTocVisible)
-
   // Walk the doc on every transaction and collect headings. The custom
   // equalityFn avoids re-rendering on unrelated edits (typing inside a
   // paragraph, cursor moves) by shallow-comparing the heading triples.
@@ -114,7 +122,6 @@ export function WikiEditorToc({ editor }: WikiEditorTocProps) {
   }) ?? []
 
   function handleClick(pos: number) {
-    if (!editor) return
     // Resolve the heading's DOM node and scroll it into view. nodeDOM is
     // null when the node hasn't been rendered yet (e.g. mid-transaction);
     // fall back to coordsAtPos + scrollTo on the editor's scroll ancestor
@@ -133,66 +140,37 @@ export function WikiEditorToc({ editor }: WikiEditorTocProps) {
     }
   }
 
+  if (items.length === 0) {
+    return (
+      <DropdownMenuItem disabled>Nothing to outline yet.</DropdownMenuItem>
+    )
+  }
+
   return (
-    <div
-      className="absolute right-3 top-3 z-20 flex max-h-[60vh] w-60 flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-lg"
-      // Keep clicks inside the panel from being treated as gutter clicks
-      // by the editor's onMouseDown handler, which would otherwise steal
-      // focus away from the heading the user just navigated to.
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      <div className="flex items-center justify-between border-b px-3 py-1.5">
-        <span className="text-xs font-medium text-muted-foreground">
-          On this page
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => setVisible(false)}
-          aria-label="Close table of contents"
+    <>
+      {items.map((item) => (
+        <DropdownMenuItem
+          key={item.pos}
+          onClick={() => handleClick(item.pos)}
+          className={cn(
+            "text-xs",
+            INDENT_BY_LEVEL[item.level] ?? "pl-2",
+            item.kind === "heading" && item.level === 1 && "font-medium",
+            item.kind === "heading" && item.level >= 3 && "text-muted-foreground",
+            item.kind === "checklist" && "text-muted-foreground",
+          )}
+          title={item.text}
         >
-          <XIcon className="size-3.5" />
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-1">
-        {items.length === 0 ? (
-          <p className="px-2 py-3 text-xs text-muted-foreground">
-            Nothing to outline yet.
-          </p>
-        ) : (
-          <ul className="space-y-0.5">
-            {items.map((item) => (
-              <li key={item.pos}>
-                <button
-                  type="button"
-                  onClick={() => handleClick(item.pos)}
-                  className={cn(
-                    "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs hover:bg-accent hover:text-accent-foreground",
-                    INDENT_BY_LEVEL[item.level] ?? "pl-2",
-                    item.kind === "heading" &&
-                      item.level === 1 &&
-                      "font-medium text-foreground",
-                    item.kind === "heading" &&
-                      item.level >= 3 &&
-                      "text-muted-foreground",
-                    item.kind === "checklist" && "text-muted-foreground",
-                  )}
-                  title={item.text}
-                >
-                  {item.kind === "checklist" &&
-                    (item.answered ? (
-                      <SquareCheckIcon className="size-3 shrink-0 text-emerald-500" />
-                    ) : (
-                      <SquareIcon className="size-3 shrink-0 opacity-60" />
-                    ))}
-                  <span className="truncate">{item.text}</span>
-                </button>
-              </li>
+          {item.kind === "checklist" &&
+            (item.answered ? (
+              <SquareCheckIcon className="size-3 shrink-0 text-emerald-500" />
+            ) : (
+              <SquareIcon className="size-3 shrink-0 opacity-60" />
             ))}
-          </ul>
-        )}
-      </div>
-    </div>
+          <span className="truncate">{item.text}</span>
+        </DropdownMenuItem>
+      ))}
+    </>
   )
 }
 

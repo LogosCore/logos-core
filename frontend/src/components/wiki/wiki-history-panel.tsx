@@ -1,14 +1,7 @@
-import { useState, useMemo, type ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { Link } from "react-router"
 import { HistoryIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { WikiAncestorBreadcrumb } from "@/components/wiki/wiki-ancestor-breadcrumb"
 import { useWikiDocumentHistory } from "@/graphql/hooks/wiki"
@@ -16,20 +9,29 @@ import { historyGroup, relativeTime } from "@/lib/relative-time"
 import { isPlainLeftClick } from "@/lib/utils"
 import type { WikiDocumentHistoryQuery } from "@/graphql/gql/graphql"
 
-interface WikiHistoryDropdownProps {
+interface WikiHistoryPanelProps {
   operationId: string
+  /** Gates the fetch — the panel only queries while it is on screen. */
+  open: boolean
+  onClose: () => void
 }
 
 type HistoryEdge = WikiDocumentHistoryQuery["wikiDocumentHistory"]["edges"][number]
 type HistoryVisit = HistoryEdge["node"]
 
-// Anchored dropdown with the user's recently-visited wiki documents.
-// Lazy-fetches on first open so closed-dropdown sessions pay zero round-trips.
-// Renders a flat list grouped into Today / Yesterday / 2–7 days ago / dated
-// buckets via a sticky header that changes when the bucket key transitions.
-export function WikiHistoryDropdown({ operationId }: WikiHistoryDropdownProps) {
-  const [open, setOpen] = useState(false)
-
+// The user's recently-visited wiki documents, as panel contents: the caller
+// owns the popover and its anchor (see wiki-tree-header.tsx), because the way
+// in is a menu item rather than a button of its own.
+//
+// Lazy-fetches on first open so sessions that never open it pay zero
+// round-trips. Renders a flat list grouped into Today / Yesterday / 2–7 days
+// ago / dated buckets via a sticky header that changes when the bucket key
+// transitions.
+export function WikiHistoryPanel({
+  operationId,
+  open,
+  onClose,
+}: WikiHistoryPanelProps) {
   const { data, isLoading } = useWikiDocumentHistory(operationId, { enabled: open })
 
   const visits: HistoryVisit[] = useMemo(
@@ -39,55 +41,31 @@ export function WikiHistoryDropdown({ operationId }: WikiHistoryDropdownProps) {
   const totalCount = data?.wikiDocumentHistory.totalCount ?? 0
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="History"
-                />
-              }
-            >
-              <HistoryIcon className="size-3.5" />
-            </PopoverTrigger>
-          }
-        />
-        <TooltipContent>History</TooltipContent>
-      </Tooltip>
+    <>
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        <HistoryIcon className="size-4 text-muted-foreground" />
+        <span className="text-sm font-medium">History</span>
+        {totalCount > 0 && (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            {totalCount}
+          </span>
+        )}
+      </div>
 
-      <PopoverContent
-        align="start"
-        className="w-[26rem] gap-0 p-0"
-      >
-        <div className="flex items-center gap-2 border-b px-3 py-2">
-          <HistoryIcon className="size-4 text-muted-foreground" />
-          <span className="text-sm font-medium">History</span>
-          {totalCount > 0 && (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {totalCount}
-            </span>
-          )}
-        </div>
-
-        <div className="max-h-[480px] overflow-y-auto">
-          {isLoading ? (
-            <div className="flex flex-col gap-1 p-2">
-              {Array.from({ length: 4 }, (_, i) => (
-                <Skeleton key={i} className="h-9 rounded-md" />
-              ))}
-            </div>
-          ) : visits.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <GroupedList visits={visits} onClose={() => setOpen(false)} />
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+      <div className="max-h-[480px] overflow-y-auto">
+        {isLoading ? (
+          <div className="flex flex-col gap-1 p-2">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-9 rounded-md" />
+            ))}
+          </div>
+        ) : visits.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <GroupedList visits={visits} onClose={onClose} />
+        )}
+      </div>
+    </>
   )
 }
 

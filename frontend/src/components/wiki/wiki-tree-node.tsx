@@ -1,15 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
 import { useDraggable, useDroppable } from "@dnd-kit/core"
-import {
-  ChevronRightIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  EllipsisIcon,
-  Loader2Icon,
-  PlusIcon,
-  SearchIcon,
-} from "lucide-react"
+import { ChevronRightIcon, EllipsisIcon } from "lucide-react"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -25,13 +17,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { WikiTreeRowMenuItems } from "@/components/wiki/wiki-tree-row-menu-items"
-import { openWikiSearch } from "@/components/wiki/wiki-command-palette"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useWikiStore } from "@/stores/wiki"
 import { useWikiDragStore } from "@/stores/wiki-drag"
 import { useUpdateWikiDocument } from "@/graphql/hooks/wiki"
-import { useWikiSubtreeExpansion } from "@/components/wiki/use-wiki-subtree-expansion"
 import {
   DocumentIconPicker,
   type DocumentIconValue,
@@ -355,8 +345,6 @@ function WikiTreeRowQuickActionsImpl({
   onStartRename,
   onStartIconPicker,
 }: WikiTreeRowQuickActionsProps) {
-  const openCreateDialog = useWikiStore((s) => s.openCreateDialog)
-
   // Menu state tracks both `open` (Base UI's controlled state) AND `closing`
   // — a brief tail that stays true while the popup animates out. Without the
   // tail, `menuOpen` flips false the moment the user dismisses the menu and
@@ -399,86 +387,13 @@ function WikiTreeRowQuickActionsImpl({
 
   const triggerVisible = menuOpen || closing
 
-  // One loading flag shared across Expand/Collapse subtree: they hit the
-  // same tree-fetch + transition pipeline and only one runs at a time.
-  const { loading: subtreeLoading, run: runSubtreeAction } =
-    useWikiSubtreeExpansion(operationId)
-
-  // childCount is the canonical "has any children?" signal (cheap, comes
-  // from the server). The "Expand/Collapse subtree" buttons prime the full
-  // operation tree on click so they cover unloaded branches.
-  const hasChildren = node.childCount > 0
-
+  // One glyph on hover. Expand/collapse subtree, search and new child
+  // document were all buttons here too — five on a row with children, in a
+  // column narrow enough that they crowded the title they belong to. Every
+  // one of them is a named item in the menu below, which both the ⋯ and a
+  // right-click open.
   return (
     <>
-      {hasChildren && (
-        <>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={subtreeLoading ? "Working" : "Expand subtree"}
-            className={cn(
-              "shrink-0",
-              // Keep the spinner visible during the long-running case
-              // even when the cursor is no longer hovering the row.
-              subtreeLoading
-                ? "inline-flex"
-                : "hidden group-hover:inline-flex",
-            )}
-            disabled={subtreeLoading}
-            onClick={(e) => {
-              e.stopPropagation()
-              void runSubtreeAction("expand", node.id)
-            }}
-          >
-            {subtreeLoading ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <ChevronsUpDownIcon className="size-3.5" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Collapse subtree"
-            className="shrink-0 hidden group-hover:inline-flex"
-            disabled={subtreeLoading}
-            onClick={(e) => {
-              e.stopPropagation()
-              void runSubtreeAction("collapse", node.id)
-            }}
-          >
-            <ChevronsDownUpIcon className="size-3.5" />
-          </Button>
-        </>
-      )}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label={`Search in ${node.title}`}
-        className="shrink-0 hidden group-hover:inline-flex"
-        onClick={() =>
-          openWikiSearch({
-            operationId,
-            parentDocumentId: node.id,
-            parentTitle: node.title,
-          })
-        }
-      >
-        <SearchIcon className="size-3.5" />
-      </Button>
-      {isEditor && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label="New child document"
-          className="shrink-0 hidden group-hover:inline-flex"
-          onClick={() => openCreateDialog(node.id)}
-        >
-          <PlusIcon className="size-3.5" />
-        </Button>
-      )}
-
       <DropdownMenu open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <DropdownMenuTrigger
           render={
@@ -496,7 +411,12 @@ function WikiTreeRowQuickActionsImpl({
         >
           <EllipsisIcon className="size-3.5" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-48">
+        {/* w-auto undoes DropdownMenuContent's `w-(--anchor-width)`, which
+            would pin this menu to the width of the 24px ⋯ button and leave
+            "Search in <title>…" wrapping inside a 12rem box. The right-click
+            menu on the same row carries the same items at their natural
+            width; these two should not disagree. */}
+        <DropdownMenuContent align="start" className="w-auto min-w-48">
           <WikiTreeRowMenuItems
             Item={DropdownMenuItem}
             Separator={DropdownMenuSeparator}

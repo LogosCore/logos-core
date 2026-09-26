@@ -230,6 +230,16 @@ function WikiPageInner({
   const setSidebarWidth = useWikiStore((s) => s.setSidebarWidth)
   const expandMany = useWikiStore((s) => s.expandMany)
 
+  // Focus mode ends when the wiki does. It used to be reset by whichever
+  // pane unmounted, but the panes swap as a document's kind is discovered
+  // (prose → drawing), so opening a drawing while zoomed dropped zoom. This
+  // component unmounts only on actually leaving the wiki, which is what the
+  // reset always meant.
+  const setEditorZoom = useWikiStore((s) => s.setEditorZoom)
+  useEffect(() => {
+    return () => setEditorZoom(false)
+  }, [setEditorZoom])
+
   // Mirror the route param into the store from this single place. Tree rows
   // then read selection as a boolean selector (selectedDocumentId === node.id)
   // instead of each calling useParams — which re-rendered every visible row on

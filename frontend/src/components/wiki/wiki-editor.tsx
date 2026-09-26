@@ -33,7 +33,7 @@ import { WikiEditorBubbleMenu } from "@/components/wiki/wiki-editor-bubble-menu"
 import { WikiEditorTableMenu } from "@/components/wiki/wiki-editor-table-menu"
 import { WikiEditorTableContextMenu } from "@/components/wiki/wiki-editor-table-context-menu"
 import { WikiEditorTableHandles } from "@/components/wiki/wiki-editor-table-handles"
-import { WikiEditorToc } from "@/components/wiki/wiki-editor-toc"
+import { setActiveWikiEditor } from "@/components/wiki/wiki-active-editor"
 import { WikiLinkPopover, startLinkInsert } from "@/components/wiki/wiki-link-popover"
 import { WikiInlineCodePopover } from "@/components/wiki/wiki-inline-code-popover"
 import { WikiSlashCommand } from "@/components/wiki/wiki-slash-command/extension"
@@ -111,7 +111,6 @@ export function WikiEditor({
   const user = useAuthStore((s) => s.user)
   const pendingFocusDocId = useWikiStore((s) => s.pendingFocusDocId)
   const setPendingFocusDocId = useWikiStore((s) => s.setPendingFocusDocId)
-  const tocVisible = useWikiStore((s) => s.editorTocVisible)
 
   // Paste/drop handlers run long after the editor config is captured; route
   // through a ref so they always observe the current editor (not a stale
@@ -480,6 +479,14 @@ export function WikiEditor({
     editorRef.current = editor
   }, [editor])
 
+  // Publish the instance for the header's outline menu, which sits outside
+  // this subtree. Retracted on unmount and on every rebuild, so the header
+  // never holds a destroyed editor.
+  useEffect(() => {
+    setActiveWikiEditor(isReady ? editor : null)
+    return () => setActiveWikiEditor(null)
+  }, [editor, isReady])
+
   // Keep editable in sync with role changes without remounting.
   useEffect(() => {
     if (editor && editor.isEditable !== isEditor) {
@@ -594,10 +601,10 @@ export function WikiEditor({
   }
 
   return (
-    // The relative wrapper anchors the floating TOC overlay so it pins to
-    // the editor area's upper-right corner instead of scrolling with the
-    // document body. min-h-0 + flex-col lets the inner scroll container
-    // claim the remaining height under the (optional) connection banner.
+    // The relative wrapper is the positioning context for the editor's
+    // absolutely-placed affordances — the table row/column handles.
+    // min-h-0 + flex-col lets the inner scroll container claim the
+    // remaining height under the (optional) connection banner.
     <div className="relative flex min-h-0 flex-1 flex-col">
       <ConnectionBanner connectionStatus={connectionStatus} isSynced={isSynced} isReady={isReady} />
       {isEditor && <WikiEditorBubbleMenu editor={editor} />}
@@ -605,7 +612,6 @@ export function WikiEditor({
       {isEditor && <WikiEditorTableHandles editor={editor} />}
       {isEditor && <WikiInlineCodePopover editor={editor} />}
       {isEditor && <WikiLinkPopover editor={editor} />}
-      {tocVisible && isReady && <WikiEditorToc editor={editor} />}
       <div
         className="flex-1 overflow-y-auto px-4 py-2"
         // Anchor for the document guide's "type /" step.

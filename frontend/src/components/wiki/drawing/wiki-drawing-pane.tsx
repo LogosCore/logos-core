@@ -46,12 +46,9 @@ export function WikiDrawingPane({
   const editorZoomed = useWikiStore((s) => s.editorZoomed)
   const setEditorZoom = useWikiStore((s) => s.setEditorZoom)
 
-  // Dropped only on full unmount (leaving the wiki page entirely), matching
-  // the prose pane: switching between documents keeps focus mode on so
-  // navigating the sub-page list does not kick the user out of it.
-  useEffect(() => {
-    return () => setEditorZoom(false)
-  }, [setEditorZoom])
+  // Zoom is dropped when the wiki page itself unmounts, in pages/wiki.tsx —
+  // not here. This pane mounts and unmounts as a document's kind is
+  // discovered, and resetting on that would drop focus mode mid-navigation.
 
   // Escape leaves focus mode — but Excalidraw uses Escape itself, to clear a
   // selection or cancel the active tool, so defer whenever it has handled the
@@ -67,19 +64,10 @@ export function WikiDrawingPane({
     return () => window.removeEventListener("keydown", onKey)
   }, [editorZoomed, setEditorZoom])
 
-  if (isLoading) {
-    return <DrawingSkeleton />
-  }
-
-  if (error || !document) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border bg-card text-muted-foreground">
-        <p className="text-sm">Document not found</p>
-      </div>
-    )
-  }
-
   return (
+    // One wrapper for every state, including loading and not-found: focus
+    // mode is this element covering the app with `fixed inset-0`, so anything
+    // rendered outside it uncovers the sidebar and tree while it shows.
     <div
       className={cn(
         "flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card",
@@ -88,57 +76,67 @@ export function WikiDrawingPane({
         editorZoomed && "fixed inset-0 z-40 rounded-none border-0",
       )}
     >
-      <WikiEditorHeader
-        document={document}
-        operationId={operationId}
-        isEditor={isEditor}
-      />
-      <WikiForeignOperationBanner document={document} />
-      <WikiDocumentMeta document={document} />
-      <ConnectionBanner
-        connectionStatus={connectionStatus}
-        isSynced={isSynced}
-        isReady={isReady}
-      />
+      {isLoading ? (
+        <DrawingSkeleton />
+      ) : error || !document ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+          <p className="text-sm">Document not found</p>
+        </div>
+      ) : (
+        <>
+          <WikiEditorHeader
+            document={document}
+            operationId={operationId}
+            isEditor={isEditor}
+          />
+          <WikiForeignOperationBanner document={document} />
+          <WikiDocumentMeta document={document} />
+          <ConnectionBanner
+            connectionStatus={connectionStatus}
+            isSynced={isSynced}
+            isReady={isReady}
+          />
 
-      {/* The canvas is mounted only once the room has synced. Excalidraw reads
-          its initialData exactly once, so mounting early would open an empty
-          canvas and then have to reconcile the real scene into it — which the
-          user would watch happen. */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {isReady ? (
-          <Suspense fallback={<DrawingSkeleton />}>
-            <WikiDrawingCanvas
+          {/* The canvas is mounted only once the room has synced. Excalidraw reads
+              its initialData exactly once, so mounting early would open an empty
+              canvas and then have to reconcile the real scene into it — which the
+              user would watch happen. */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            {isReady ? (
+              <Suspense fallback={<DrawingSkeleton />}>
+                <WikiDrawingCanvas
+                  documentId={documentId}
+                  ydoc={ydoc}
+                  provider={provider}
+                  isEditor={isEditor}
+                  user={user ? { userId: user.userId, username: user.username } : null}
+                />
+              </Suspense>
+            ) : (
+              <DrawingSkeleton />
+            )}
+          </div>
+
+          {/* Padded to the same gutter as the header and meta line, which the
+              canvas above deliberately ignores because a canvas is full-bleed.
+
+              Scrolls on its own rather than with the page: the canvas owns the
+              wheel (Excalidraw zooms and pans with it), so the pane cannot be one
+              scrolling column the way the prose pane is. Without this the footer
+              is simply clipped by the card's overflow-hidden once a page has more
+              sub-pages than the leftover height fits, with no way to reach them.
+              Capped so a long list cannot squeeze the drawing out of its own
+              page. */}
+          <div className="max-h-[40%] shrink-0 overflow-y-auto px-4 pb-4">
+            <WikiDocumentFooterLists
               documentId={documentId}
-              ydoc={ydoc}
-              provider={provider}
+              operationId={operationId}
               isEditor={isEditor}
-              user={user ? { userId: user.userId, username: user.username } : null}
+              className="mt-0"
             />
-          </Suspense>
-        ) : (
-          <DrawingSkeleton />
-        )}
-      </div>
-
-      {/* Padded to the same gutter as the header and meta line, which the
-          canvas above deliberately ignores because a canvas is full-bleed.
-
-          Scrolls on its own rather than with the page: the canvas owns the
-          wheel (Excalidraw zooms and pans with it), so the pane cannot be one
-          scrolling column the way the prose pane is. Without this the footer
-          is simply clipped by the card's overflow-hidden once a page has more
-          sub-pages than the leftover height fits, with no way to reach them.
-          Capped so a long list cannot squeeze the drawing out of its own
-          page. */}
-      <div className="max-h-[40%] shrink-0 overflow-y-auto px-4 pb-4">
-        <WikiDocumentFooterLists
-          documentId={documentId}
-          operationId={operationId}
-          isEditor={isEditor}
-          className="mt-0"
-        />
-      </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

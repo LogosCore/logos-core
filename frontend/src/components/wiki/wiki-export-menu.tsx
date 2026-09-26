@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useWikiDrawingScene } from "@/graphql/hooks/wiki"
 import { WikiMarkdownExportDialog } from "@/components/wiki/wiki-markdown-export-dialog"
 import { markdownFilename } from "@/components/wiki/wiki-markdown-filename"
@@ -67,17 +68,22 @@ export function WikiExportMenu({
   return (
     <>
       <DropdownMenu>
-        {/* Labelled rather than icon-only, unlike its neighbours in the
-            header. It is the one control here that opens a menu instead of
-            doing something, and a word says that where an icon cannot — it
-            also means no tooltip, so there is no trigger-inside-trigger
-            composition to get wrong. */}
-        <DropdownMenuTrigger
-          render={<Button variant="ghost" size="sm" aria-label="Export" />}
-        >
-          <FileDownIcon className="size-4" />
-          Export
-        </DropdownMenuTrigger>
+        {/* Icon-only, sized to match the TOC and zoom toggles it sits
+            between. The word it used to carry now lives in the tooltip. */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" size="icon-sm" aria-label="Export" />
+                }
+              >
+                <FileDownIcon className="size-4" />
+              </DropdownMenuTrigger>
+            }
+          />
+          <TooltipContent>Export</TooltipContent>
+        </Tooltip>
 
         <DropdownMenuContent align="end" className="min-w-44">
           {/* Opens the chromeless print route in a new tab. That page mounts

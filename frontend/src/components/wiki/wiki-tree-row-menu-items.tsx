@@ -1,10 +1,13 @@
 import {
   ArrowDownAZIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
   CopyIcon,
   ExternalLinkIcon,
   FilePlusIcon,
   FolderInputIcon,
   LayoutTemplateIcon,
+  LinkIcon,
   PencilIcon,
   SearchIcon,
   SmileIcon,
@@ -16,6 +19,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import { useWikiStore } from "@/stores/wiki"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { openWikiSearch } from "@/components/wiki/wiki-command-palette"
 import {
   useDuplicateWikiDocument,
@@ -23,6 +27,7 @@ import {
   useSetWikiDocumentTemplate,
   useWikiDocumentChildren,
 } from "@/graphql/hooks/wiki"
+import { useWikiSubtreeExpansion } from "@/components/wiki/use-wiki-subtree-expansion"
 import type { TreeNode } from "@/components/wiki/wiki-tree-sidebar"
 
 interface WikiTreeRowMenuItemsProps {
@@ -63,6 +68,11 @@ export function WikiTreeRowMenuItems({
   const reorderSiblings = useReorderWikiDocumentSiblings()
   const duplicateDocument = useDuplicateWikiDocument()
   const setTemplate = useSetWikiDocumentTemplate()
+  // Expand/Collapse subtree prime the full operation tree on click so they
+  // reach branches that have never been opened. The menu closes as the action
+  // starts — the hook's own spinner has nowhere to show here — but the work
+  // lands in the wiki store, which outlives this component.
+  const { run: runSubtreeAction } = useWikiSubtreeExpansion(operationId)
 
   const hasChildren = node.childCount > 0
   // Cached children for this node, if its branch was ever expanded. Used by
@@ -78,6 +88,23 @@ export function WikiTreeRowMenuItems({
 
   return (
     <>
+      {/* First, and above the editor block: searching a branch is the one
+          thing every reader of this menu does, and it is the only item a
+          viewer would otherwise have to scroll past six disabled-looking
+          editor actions to reach. */}
+      <Item
+        onClick={() =>
+          openWikiSearch({
+            operationId,
+            parentDocumentId: node.id,
+            parentTitle: node.title,
+          })
+        }
+      >
+        <SearchIcon className="mr-2 size-4" />
+        Search inside…
+      </Item>
+      <Separator />
       {isEditor && (
         <Item onClick={() => openCreateDialog(node.id)}>
           <FilePlusIcon className="mr-2 size-4" />
@@ -160,6 +187,19 @@ export function WikiTreeRowMenuItems({
         </Item>
       )}
       <Separator />
+      {/* View actions — not gated on isEditor, a reader navigates too. */}
+      {hasChildren && (
+        <Item onClick={() => void runSubtreeAction("expand", node.id)}>
+          <ChevronsUpDownIcon className="mr-2 size-4" />
+          Expand subtree
+        </Item>
+      )}
+      {hasChildren && (
+        <Item onClick={() => void runSubtreeAction("collapse", node.id)}>
+          <ChevronsDownUpIcon className="mr-2 size-4" />
+          Collapse subtree
+        </Item>
+      )}
       <Item
         onClick={() =>
           window.open(`/wiki/${node.id}`, "_blank", "noopener,noreferrer")
@@ -168,17 +208,21 @@ export function WikiTreeRowMenuItems({
         <ExternalLinkIcon className="mr-2 size-4" />
         Open in new tab
       </Item>
+      {/* Absolute, because a copied link is a link that leaves the app —
+          into a ticket, a message, a report. The origin comes from the
+          browser for the same reason the Markdown export takes it from
+          there: it is the address this operator actually reaches the
+          deployment on. */}
       <Item
         onClick={() =>
-          openWikiSearch({
-            operationId,
-            parentDocumentId: node.id,
-            parentTitle: node.title,
-          })
+          void copyToClipboard(
+            `${window.location.origin}/wiki/${node.id}`,
+            "link",
+          )
         }
       >
-        <SearchIcon className="mr-2 size-4" />
-        Search in {node.title}...
+        <LinkIcon className="mr-2 size-4" />
+        Copy link
       </Item>
       <Item
         onClick={() =>

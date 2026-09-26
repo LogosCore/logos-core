@@ -1,19 +1,7 @@
-import { useCallback, useMemo, useRef, useTransition } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { toast } from "sonner"
-import {
-  ArrowDownAZIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  ClockIcon,
-  DownloadIcon,
-  Loader2Icon,
-  PlusIcon,
-  SearchIcon,
-  Trash2Icon,
-  UploadIcon,
-} from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -26,16 +14,11 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { useWikiStore } from "@/stores/wiki"
-import { openWikiSearch } from "@/components/wiki/wiki-command-palette"
 import { useWikiDragStore, type DropPosition, type DropTarget } from "@/stores/wiki-drag"
 import {
   useWikiDocumentChildren,
-  useWikiDocumentTrashCount,
   useReorderWikiDocumentSiblings,
   wikiKeys,
 } from "@/graphql/hooks/wiki"
@@ -43,16 +26,13 @@ import { WikiTreeRow } from "@/components/wiki/wiki-tree-node"
 import { useFlattenedWikiTree } from "@/components/wiki/use-flattened-wiki-tree"
 import { useRevealSelectedRow } from "@/components/wiki/use-reveal-selected-row"
 import { DocumentIcon } from "@/components/wiki/document-icon"
-import { WikiHistoryDropdown } from "@/components/wiki/wiki-history-dropdown"
-import { WikiTreeModeToggle } from "@/components/wiki/wiki-tree-mode-toggle"
+import { WikiTreeHeader } from "@/components/wiki/wiki-tree-header"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import {
-  rowToTreeNode,
   sortByOrder,
   wikiRowIndent,
   WIKI_TREE_ROW_HEIGHT,
 } from "@/components/wiki/wiki-tree-helpers"
-import { useWikiSubtreeExpansion } from "@/components/wiki/use-wiki-subtree-expansion"
 import type {
   WikiDocumentChildrenQuery,
   WikiDocumentKind,
@@ -176,33 +156,17 @@ export function WikiTreeSidebar({
   hasRealScope,
   ref,
 }: WikiTreeSidebarProps) {
-  // Operation name for the toggle's "Operation" segment. Read directly here so
-  // the toggle stays a presentational component.
+  // Operation name for the header's mode toggle. Read here so the toggle
+  // stays a presentational component.
   const scopedOperation = useScopedOperation()
   const sidebarWidth = useWikiStore((s) => s.sidebarWidth)
-  const openCreateDialog = useWikiStore((s) => s.openCreateDialog)
-  const openImportDialog = useWikiStore((s) => s.openImportDialog)
-  const openExportDialog = useWikiStore((s) => s.openExportDialog)
-  const openTrashPanel = useWikiStore((s) => s.openTrashPanel)
-  const openRecentDocs = useWikiStore((s) => s.openRecentDocs)
-  // expandMany lives inside useWikiSubtreeExpansion; only collapseMany is
-  // used directly here, by the no-fetch Collapse-all handler.
-  const collapseMany = useWikiStore((s) => s.collapseMany)
-
-  // Trash count for badge — scalar query, not the full list.
-  const { data: trashCountData } = useWikiDocumentTrashCount(operationId)
-  const trashCount = trashCountData?.wikiDocumentTrashCount ?? 0
 
   // Roots — children are fetched centrally by useFlattenedWikiTree below. This
-  // roots query is shared (same cache key) and still used here for DnD lookups,
-  // root sort, and the header's roots.length checks.
+  // roots query is shared (same cache key) and still used here for DnD lookups
+  // and the loading skeleton.
   const { data: rootsData, isLoading: rootsLoading } = useWikiDocumentChildren(
     operationId,
     null,
-  )
-  const roots = useMemo(
-    () => sortByOrder(rootsData?.wikiDocumentChildren ?? []).map(rowToTreeNode),
-    [rootsData?.wikiDocumentChildren],
   )
 
   // Flattened, windowable view of the *visible* tree. The controller lifts the
@@ -420,45 +384,6 @@ export function WikiTreeSidebar({
     useWikiDragStore.getState().reset()
   }
 
-  // "Expand all" primes the full operation tree (one cached GraphQL fetch)
-  // and expands every non-leaf id — including branches the user has never
-  // opened. The hook also covers the React commit phase via useTransition.
-  const { loading: expandAllLoading, run: runSubtreeAction } =
-    useWikiSubtreeExpansion(operationId)
-
-  // Collapse-all has no fetch phase — `expandedNodes` already lists every id
-  // we need to drop. Just a transition around the unmount commit.
-  const [isCollapsing, startCollapseTransition] = useTransition()
-
-  function handleCollapseAll() {
-    if (isCollapsing) return
-    const ids = [...useWikiStore.getState().expandedNodes]
-    if (ids.length === 0) return
-    startCollapseTransition(() => collapseMany(ids))
-  }
-
-  // Sort the root documents alphabetically. Mirrors the per-node "Sort" action
-  // in wiki-tree-row-menu-items.tsx but targets parentDocumentId: null.
-  function handleSortRoots() {
-    if (roots.length < 2) return
-    const sorted = [...roots].sort((a, b) =>
-      a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
-    )
-    reorderSiblings.mutate(
-      {
-        input: {
-          operationId,
-          parentDocumentId: null,
-          orderedIds: sorted.map((n) => n.id),
-        },
-      },
-      {
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : "Failed to sort"),
-      },
-    )
-  }
-
   return (
     <div
       ref={ref}
@@ -468,183 +393,12 @@ export function WikiTreeSidebar({
       } as React.CSSProperties}
       className="flex shrink-0 flex-col rounded-lg border bg-card overflow-hidden"
     >
-      {/* Header — mode toggle/pill on the left (acts as the title), action
-          icons on the right. Toggle takes the title slot so the row stays a
-          single line; the "Operation"/"Public" segment selection itself
-          communicates which tree the user is looking at. */}
-      <div className="flex h-10 items-center gap-0.5 border-b px-2">
-        <WikiTreeModeToggle
-          hasRealScope={hasRealScope}
-          operationName={scopedOperation?.name}
-        />
-        <span className="flex-1 min-w-1" />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => void runSubtreeAction("expand", null)}
-                disabled={expandAllLoading}
-              />
-            }
-          >
-            {expandAllLoading ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <ChevronsUpDownIcon className="size-3.5" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent>
-            {expandAllLoading ? "Expanding…" : "Expand all"}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleCollapseAll}
-                disabled={isCollapsing}
-              />
-            }
-          >
-            {isCollapsing ? (
-              <Loader2Icon className="size-3.5 animate-spin" />
-            ) : (
-              <ChevronsDownUpIcon className="size-3.5" />
-            )}
-          </TooltipTrigger>
-          <TooltipContent>
-            {isCollapsing ? "Collapsing…" : "Collapse all"}
-          </TooltipContent>
-        </Tooltip>
-        {isEditor && roots.length >= 2 && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleSortRoots}
-                  disabled={reorderSiblings.isPending}
-                  aria-label="Sort root documents alphabetically"
-                />
-              }
-            >
-              <ArrowDownAZIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent>Sort root documents A–Z</TooltipContent>
-          </Tooltip>
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() =>
-                  openWikiSearch({
-                    operationId,
-                    parentDocumentId: null,
-                    parentTitle: "All Documents",
-                  })
-                }
-              />
-            }
-          >
-            <SearchIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent>Search documents</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={openRecentDocs}
-                aria-label="Latest documents"
-              />
-            }
-          >
-            <ClockIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent>Latest documents</TooltipContent>
-        </Tooltip>
-        <WikiHistoryDropdown operationId={operationId} />
-        {isEditor && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => openCreateDialog()}
-                />
-              }
-            >
-              <PlusIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent>New document</TooltipContent>
-          </Tooltip>
-        )}
-        {isEditor && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={openImportDialog}
-                />
-              }
-            >
-              <DownloadIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent>Import wiki</TooltipContent>
-          </Tooltip>
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => openExportDialog()}
-                aria-label="Export wiki"
-              />
-            }
-          >
-            <UploadIcon className="size-3.5" />
-          </TooltipTrigger>
-          <TooltipContent>Export wiki</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={openTrashPanel}
-                className="relative"
-              />
-            }
-          >
-            <Trash2Icon className="size-3.5" />
-            {trashCount > 0 && (
-              <Badge
-                variant="destructive"
-                className="absolute -right-1 -top-1 size-4 justify-center p-0 text-[10px]"
-              >
-                {trashCount > 99 ? "99+" : trashCount}
-              </Badge>
-            )}
-          </TooltipTrigger>
-          <TooltipContent>Trash</TooltipContent>
-        </Tooltip>
-      </div>
+      <WikiTreeHeader
+        operationId={operationId}
+        isEditor={isEditor}
+        hasRealScope={hasRealScope}
+        operationName={scopedOperation?.name}
+      />
 
       {/* Tree body — virtualized. data-wiki-tree-scroll marks this as the
           scroll container; it's also the virtualizer scroll element and the

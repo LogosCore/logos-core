@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react"
 import { Link } from "react-router"
 import {
-  ChevronDownIcon,
   ChevronRightIcon,
   ClockIcon,
   EllipsisIcon,
@@ -12,16 +11,16 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { avatarLabel } from "@/lib/avatar-label"
 import {
   useUpdateWikiDocument,
-  useWikiDocumentBacklinks,
   useWikiDocumentChildren,
-  useWikiDocumentPresence,
 } from "@/graphql/hooks/wiki"
-import { getCursorColor } from "@/lib/cursor-colors"
 import { useWikiStore } from "@/stores/wiki"
 import {
   DocumentIconPicker,
@@ -29,7 +28,9 @@ import {
 } from "@/components/wiki/document-icon-picker"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { WikiExportMenu } from "@/components/wiki/wiki-export-menu"
-import { sortByOrder } from "@/components/wiki/wiki-tree-helpers"
+import { WikiEditorToc } from "@/components/wiki/wiki-editor-toc"
+import { WikiPresenceMenu } from "@/components/wiki/wiki-presence-menu"
+import { useActiveWikiEditor } from "@/components/wiki/wiki-active-editor"
 import type { WikiDocumentFieldsFragment } from "@/graphql/gql/graphql"
 
 interface WikiEditorHeaderProps {
@@ -57,13 +58,13 @@ export function WikiEditorHeader({
   const openBackupPanel = useWikiStore((s) => s.openBackupPanel)
   const editorZoomed = useWikiStore((s) => s.editorZoomed)
   const toggleEditorZoom = useWikiStore((s) => s.toggleEditorZoom)
-  const editorTocVisible = useWikiStore((s) => s.editorTocVisible)
-  const toggleEditorToc = useWikiStore((s) => s.toggleEditorToc)
   const zoomLabel = editorZoomed ? "Exit fullscreen" : "Zoom in"
-  const tocLabel = editorTocVisible ? "Hide outline" : "Show outline"
 
-  const { data: presenceData } = useWikiDocumentPresence(doc.id)
-  const activeEditors = presenceData?.wikiDocumentPresence.activeEditors ?? []
+  // The live tiptap instance, published by WikiEditor — this header is its
+  // sibling, not its parent, so there is no prop path. Null on a drawing
+  // page and until the editor is ready, which is exactly when there is no
+  // outline to offer.
+  const activeEditor = useActiveWikiEditor()
 
   // Inline title editing.
   const [title, setTitle] = useState(doc.title)
@@ -89,21 +90,11 @@ export function WikiEditorHeader({
     [doc.ancestors],
   )
 
-  // Drives the ▾ N-children dropdown next to the title — quick navigation
-  // without scrolling to the footer block. Shares the per-parent cache key
-  // with the sidebar's lazy expand for this doc, so the call is a cache hit
-  // whenever the user already expanded this branch in the tree.
+  // Only to pick the adaptive icon's glyph (a page with children renders as a
+  // folder). Not a fetch of its own: same cache key as the footer's
+  // WikiChildDocumentList, which is already listing these children below.
   const { data: childrenData } = useWikiDocumentChildren(operationId, doc.id)
-  const directChildren = useMemo(
-    () => sortByOrder(childrenData?.wikiDocumentChildren ?? []),
-    [childrenData?.wikiDocumentChildren],
-  )
-
-  // Same idea for backlinks. Reuses the cached query already populated by
-  // the footer's WikiBacklinkList — TanStack Query dedupes by key so this
-  // never doubles the network roundtrip.
-  const { data: backlinksData } = useWikiDocumentBacklinks(doc.id)
-  const backlinks = backlinksData?.wikiDocumentBacklinks ?? []
+  const hasChildren = (childrenData?.wikiDocumentChildren.length ?? 0) > 0
 
   function handleTitleBlur() {
     const trimmed = title.trim()
@@ -158,7 +149,7 @@ export function WikiEditorHeader({
           value={{ emoji: doc.emoji, icon: doc.icon, color: doc.color }}
           onSelect={handleIconSelect}
           disabled={!isEditor}
-          hasChildren={directChildren.length > 0}
+          hasChildren={hasChildren}
           isExpanded
         />
       )}
@@ -251,147 +242,43 @@ export function WikiEditorHeader({
         </button>
       )}
 
-      {/* Children dropdown — shown only when this doc has direct children. */}
-      {directChildren.length > 0 && (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0 text-muted-foreground"
-              />
-            }
-          >
-            <ChevronDownIcon className="size-3.5" />
-            {directChildren.length}{" "}
-            {directChildren.length === 1 ? "child" : "children"}
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto min-w-56 max-w-72 p-1">
-            {directChildren.map((child) => (
-              <Link
-                key={child.id}
-                to={`/wiki/${child.id}`}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-              >
-                <DocumentIcon
-                  emoji={child.emoji}
-                  icon={child.icon}
-                  color={child.color}
-                  isDrawing={child.kind === "DRAWING"}
-                  hasChildren={child.childCount > 0}
-                />
-                <span className="min-w-0 flex-1 truncate">{child.title || "Untitled"}</span>
-                {child.childCount > 0 && (
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {child.childCount}
-                  </span>
-                )}
-              </Link>
-            ))}
-          </PopoverContent>
-        </Popover>
-      )}
-
-      {/* Backlinks dropdown — mirror of the children dropdown for incoming
-          /doc references. Shown only when at least one other document cites
-          this page inline, so unreferenced pages don't get a noisy "0" pill. */}
-      {backlinks.length > 0 && (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0 text-muted-foreground"
-              />
-            }
-          >
-            <ChevronDownIcon className="size-3.5" />
-            {backlinks.length}{" "}
-            {backlinks.length === 1 ? "backlink" : "backlinks"}
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto min-w-56 max-w-72 p-1">
-            {backlinks.map((ref) => {
-              const parent =
-                ref.ancestors.length > 0
-                  ? ref.ancestors[ref.ancestors.length - 1]
-                  : null
-              return (
-                <Link
-                  key={ref.id}
-                  to={`/wiki/${ref.id}`}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                >
-                  <DocumentIcon
-                    emoji={ref.emoji}
-                    icon={ref.icon}
-                    color={ref.color}
-                    isDrawing={ref.kind === "DRAWING"}
-                  />
-                  <span className="min-w-0 flex-1 truncate">
-                    {ref.title || "Untitled"}
-                    {parent && (
-                      <span className="ml-1.5 text-xs text-muted-foreground/70">
-                        in {parent.title || "Untitled"}
-                      </span>
-                    )}
-                  </span>
-                </Link>
-              )
-            })}
-          </PopoverContent>
-        </Popover>
-      )}
-
       {/* Spacer + right side actions */}
       <div className="ml-auto flex shrink-0 items-center gap-2">
-        {/* Presence avatars */}
-        {activeEditors.length > 0 && (
-          <div className="flex -space-x-2">
-            {activeEditors.slice(0, 3).map((editor) => (
-              <Tooltip key={editor.userId}>
-                <TooltipTrigger
-                  render={
-                    <Avatar
-                      className="size-6 border-2"
-                      style={{ borderColor: getCursorColor(editor.userId) }}
-                    />
-                  }
-                >
-                  <AvatarFallback className="text-[10px]">
-                    {avatarLabel(editor.username)}
-                  </AvatarFallback>
-                </TooltipTrigger>
-                <TooltipContent>{editor.username}</TooltipContent>
-              </Tooltip>
-            ))}
-            {activeEditors.length > 3 && (
-              <div className="flex size-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px]">
-                +{activeEditors.length - 3}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Who else is here. Renders nothing when you are alone. */}
+        <WikiPresenceMenu documentId={doc.id} />
 
-        {/* TOC toggle — surfaces the floating outline panel anchored to
-            the editor's upper-right corner. Like zoom, it's read-only safe. */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={toggleEditorToc}
-                aria-label={tocLabel}
-                aria-pressed={editorTocVisible}
+        {/* Outline — the page's headings and checklist prompts as a menu.
+            Only offered where there is a text editor to read one from: a
+            drawing pane mounts this same header with no editor behind it.
+            Read-only safe, like zoom. */}
+        {activeEditor && (
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Outline"
+                      />
+                    }
+                  >
+                    <ListTreeIcon className="size-4" />
+                  </DropdownMenuTrigger>
+                }
               />
-            }
-          >
-            <ListTreeIcon className="size-4" />
-          </TooltipTrigger>
-          <TooltipContent>{tocLabel}</TooltipContent>
-        </Tooltip>
+              <TooltipContent>Outline</TooltipContent>
+            </Tooltip>
+            {/* max-w so a long heading truncates instead of stretching the
+                menu across the pane; the items carry the full text as a
+                title attribute. */}
+            <DropdownMenuContent align="end" className="w-auto min-w-56 max-w-80">
+              <WikiEditorToc editor={activeEditor} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Export — PDF via the print route, Markdown via a modal. Not gated
             on isEditor: exporting is reading. */}
