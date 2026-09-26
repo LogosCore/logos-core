@@ -7,7 +7,7 @@
 // dismissed, this cannot, so there is always somewhere to come back to.
 
 import { ArrowRightIcon, BookOpenIcon, PlusIcon, SwordsIcon, UsersIcon } from "lucide-react"
-import { Link, useNavigate } from "react-router"
+import { Link } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/stores/auth"
@@ -25,19 +25,23 @@ import {
 /** How many operations to offer inline before deferring to the switcher. */
 const INLINE_OPERATION_LIMIT = 5
 
-export function GettingStartedPanel() {
+export function GettingStartedPanel({
+  publicWikiInView = false,
+}: {
+  /** The Public tree is already on screen (the wiki's empty pane), so point
+   *  at it instead of linking to it. */
+  publicWikiInView?: boolean
+} = {}) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const scopeOperation = useScopedOperationStore((s) => s.scopeOperation)
   const openCreateDialog = useOperationStore((s) => s.openCreateDialog)
   const startTour = useOnboardingStore((s) => s.start)
-  const navigate = useNavigate()
 
-  // Entering an operation from here lands on its wiki, not on Tasks. This
-  // panel is rendered by the Tasks page only because / redirects there; the
-  // wiki is where an engagement's material lives and the natural first stop.
+  // Entering an operation only scopes it; the page this panel sits on then
+  // renders that operation in place. Navigating as well made Tasks flash its
+  // board before leaving for the wiki — / now lands on the wiki instead.
   function enterOperation(op: { id: string; name: string; description?: string | null }) {
     scopeOperation({ id: op.id, name: op.name, description: op.description ?? "" })
-    navigate("/wiki")
   }
 
   // Same query variables the operation switcher uses, so the two share one
@@ -129,10 +133,17 @@ export function GettingStartedPanel() {
               the switcher at the top of the sidebar and everything here unlocks.
             </p>
           </div>
-          <Button variant="outline" size="sm" className="self-start" render={<Link to="/wiki" />}>
-            <BookOpenIcon className="size-4" />
-            Browse the public wiki
-          </Button>
+          {publicWikiInView ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <BookOpenIcon className="size-4 shrink-0" />
+              Meanwhile, the public wiki in the sidebar is open to everyone.
+            </p>
+          ) : (
+            <Button variant="outline" size="sm" className="self-start" render={<Link to="/wiki" />}>
+              <BookOpenIcon className="size-4" />
+              Browse the public wiki
+            </Button>
+          )}
         </div>
       )}
     </PanelFrame>

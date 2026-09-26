@@ -317,6 +317,7 @@ function WikiPageInner({
         documentId={documentId}
         operationId={operationId}
         isEditor={isEditor}
+        hasRealScope={hasRealScope}
       />
 
       {/* Dialogs + panels — mounted once, controlled by store. Move dialog

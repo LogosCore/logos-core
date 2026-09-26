@@ -34,9 +34,9 @@ export function TasksPage() {
   // session-scoped to the kanban flow.
 
   // The Tasks feature is operation-scoped — there is no global aggregate
-  // (per the spec / user decision). With nothing scoped this is also the first
-  // surface a new operator lands on (/ redirects here), so the unscoped state
-  // carries the getting-started guide rather than a bare "nothing selected".
+  // (per the spec / user decision). With nothing scoped the page carries the
+  // same getting-started guide as the wiki (where / lands) rather than a bare
+  // "nothing selected"; choosing an operation here simply shows its board.
   if (!scopedOperation) {
     return <GettingStartedPanel />
   }

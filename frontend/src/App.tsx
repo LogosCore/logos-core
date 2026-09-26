@@ -75,7 +75,7 @@ function App() {
             <Route element={<AppLayout />}>
               {/* No landing page: Tasks is the working surface and shows a
                   "pick an operation" prompt when nothing is scoped. */}
-              <Route index element={<Navigate to="/tasks" replace />} />
+              <Route index element={<Navigate to="/wiki" replace />} />
               <Route path="operations" element={<OperationsPage />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="modules" element={<ModulesPage />} />
