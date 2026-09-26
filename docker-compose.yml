@@ -114,6 +114,12 @@ services:
     restart: unless-stopped
     profiles:
       - development
+    environment:
+      # Same-origin API path behind the dev nginx, matching .env.production.
+      # Vite otherwise reads it only from a developer-local frontend/.env;
+      # without one every API call went to /undefined/..., got the SPA's HTML
+      # back, and the login page fell back to a bare password form.
+      VITE_API_URL: ${VITE_API_URL:-/api/v1}
     volumes:
       - ./frontend:/app
     networks:
