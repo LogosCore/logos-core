@@ -1,7 +1,7 @@
 apiVersion: v2
 name: logos
 description: |
-  Logos — command-and-control platform. Bundles the core Go API, the
+  Logos — a collaborative operations platform. Bundles the core Go API, the
   React SPA frontend, the Hocuspocus collab-editing sidecar, and the
   required stateful backends (MongoDB, Redis, SeaweedFS) into a single
   Helm release suitable for on-prem Kubernetes clusters.
@@ -26,7 +26,7 @@ maintainers:
 
 keywords:
   - logos
-  - command-and-control
+  - operations
   - graphql
   - collaboration
 

@@ -35,9 +35,9 @@ func registerTimelineTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "create_timeline_event",
-		Description: "Add a milestone to the timeline: a host owned, a domain controller " +
-			"taken, a login form patched, a foothold lost. Use it for anything the operator " +
-			"would want on the engagement's history that no other tool records.",
+		Description: "Add a milestone to the timeline: a system reached, a service brought " +
+			"back, a change rolled out, access lost. Use it for anything the operator " +
+			"would want on the operation's history that no other tool records.",
 	}, writeTool, handleCreateTimelineEvent)
 }
 

@@ -329,12 +329,14 @@ services:
     profiles:
       - development
     ports:
-      # 8080 → plain HTTP (redirects to HTTPS) so old http://localhost:8080
-      # links keep working. 8443 → TLS + HTTP/2, the real entry point.
+      # 8080 → plain HTTP, same routes as 8443, for clients that don't trust
+      # the self-signed cert (MCP clients, scripts). 8443 → TLS + HTTP/2, the
+      # browser entry point.
       - "8080:80"
       - "8443:443"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/nginx/locations.conf:/etc/nginx/logos-locations.conf:ro
       - ./deploy/nginx/dev-certs:/etc/nginx/certs:ro
     depends_on:
       - core-dev

@@ -67,11 +67,11 @@ Work in this order so you reason over the whole picture rather than the first th
 1. get_operation_summary, to see the shape of what is here.
 2. find_hosts and find_credentials to see what has been collected. If a result says it was
    truncated, narrow the filter rather than assuming you have seen everything.
-3. find_hashes, and note which ones are already cracked into credentials.
+3. find_hashes, and note which ones are already resolved into credentials.
 4. find_tasks, so you do not propose work the operator has already planned.
 
 Then tell the operator, briefly:
-- what stands out — reused credentials, hosts sharing a subnet, cracked hashes nobody acted on;
+- what stands out — reused credentials, hosts sharing a subnet, resolved hashes nobody acted on;
 - what is missing that you would expect to see;
 - two or three concrete next steps, ordered by what they would unlock.
 
@@ -79,7 +79,7 @@ Propose. Do not create tasks or edit pages unless the operator asks you to.`, op
 }
 
 func engagementNotes(args map[string]string) string {
-	return fmt.Sprintf(`Draft engagement notes for host %s.
+	return fmt.Sprintf(`Draft notes for host %s.
 
 Read get_host first, then search_wiki for anything already written about it — do not duplicate a
 page that exists. Look for credentials and hashes that relate to it.
@@ -92,7 +92,7 @@ Show it to the operator before writing anything. If they want it saved, create_w
 }
 
 func whatsChanged(args map[string]string) string {
-	return fmt.Sprintf(`Summarize recent activity in %s for someone picking the engagement back up.
+	return fmt.Sprintf(`Summarize recent activity in %s for someone picking the operation back up.
 
 Use get_timeline for the last few days, and find_tasks to see what moved. Group by theme rather
 than replaying the log line by line — the operator wants to know where things stand, not what

@@ -34,7 +34,7 @@ type createCredentialArgs struct {
 		Name  string `json:"name"  jsonschema:"e.g. domain, port"`
 		Value string `json:"value"`
 	} `json:"properties,omitempty" jsonschema:"Extra fields."`
-	Tags     []string `json:"tags,omitempty"     jsonschema:"Tags, e.g. the source host."`
+	Tags     []string `json:"tags,omitempty"     jsonschema:"Tags, e.g. the host it belongs to."`
 	Validity string   `json:"validity,omitempty" jsonschema:"VALID if you have used it, INVALID if it was rejected. Omit for UNKNOWN: recorded, untried."`
 }
 
@@ -74,19 +74,19 @@ type addCredentialCommentArgs struct {
 func registerCredentialTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name:        "find_credentials",
-		Description: "Search harvested credentials. Secret material is included.",
+		Description: "Search recorded credentials. Secret material is included.",
 	}, readTool, handleFindCredentials)
 
 	register(s, &mcp.Tool{
 		Name:        "create_credential",
-		Description: "Record a recovered credential: a password, an SSH key, a token.",
+		Description: "Record a credential: a password, an SSH key, a token.",
 	}, writeTool, handleCreateCredential)
 
 	register(s, &mcp.Tool{
 		Name: "update_credential",
 		Description: "Correct a credential you or somebody else recorded. Send only the fields " +
 			"that change; anything omitted is left alone. Set validity:\"VALID\" once you have " +
-			"actually used it, \"INVALID\" once the target rejected it.",
+			"actually used it, \"INVALID\" once it was rejected.",
 	}, writeTool, handleUpdateCredential)
 
 	register(s, &mcp.Tool{

@@ -1,7 +1,7 @@
 # Skills other operators have published
 
 This server carries a small registry of skills written by the people using it:
-a recon routine somebody refined, a house style for reporting, a checklist for
+a sweep routine somebody refined, a house style for reporting, a checklist for
 a particular appliance. They are packaged exactly the way this skill is.
 
 `find_skills` lists them, `get_skill` gives you one in full. Both return
@@ -25,7 +25,7 @@ into your skills directory:
 
 ```
 curl -sS -H "Authorization: Bearer $TOKEN" \
-  "$URL/api/v1/mcp/skills/download?name=recon-sweep" -o skill.zip
+  "$URL/api/v1/mcp/skills/download?name=host-sweep" -o skill.zip
 ```
 
 Take the URL and token from your MCP client's config, the same place this
@@ -53,13 +53,13 @@ Zip the skill directory, then POST it as multipart form data:
 
 ```
 curl -sS -H "Authorization: Bearer $TOKEN" \
-  -F name=recon-sweep -F file=@skill.zip \
+  -F name=host-sweep -F file=@skill.zip \
   -F "description=Sweeps a subnet for SMB signing and logs it to the wiki" \
   -F "notes=Skips hosts already recorded" \
   "$URL/api/v1/mcp/skills/upload"
 ```
 
-`name` is normalized to a slug, so "Recon Sweep" and `recon-sweep` are the
+`name` is normalized to a slug, so "Host Sweep" and `host-sweep` are the
 same skill. `description` is one line for the listing. `notes` is what changed
 in this version, and it is what operators read in their update prompt, so
 write it for somebody deciding whether to re-download today.

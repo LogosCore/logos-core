@@ -94,6 +94,21 @@ definitions:
     required:
     - documentId
     type: object
+  controller.skillPublishResponse:
+    properties:
+      checksum:
+        type: string
+      claimed:
+        type: boolean
+      downloadUrl:
+        type: string
+      name:
+        type: string
+      sizeBytes:
+        type: integer
+      version:
+        type: integer
+    type: object
   models.WikiTransferFormat:
     enum:
     - bundle
@@ -232,7 +247,7 @@ definitions:
       enabled:
         type: boolean
       login_url:
-        description: LoginURL is the API-relative path that starts the flow.
+        description: LoginURL starts the flow; relative to the /api/v1 base.
         type: string
       unavailable_reason:
         description: |-
@@ -276,7 +291,7 @@ definitions:
     type: object
 info:
   contact: {}
-  description: Command-and-control core backend API.
+  description: Operations platform — core backend API.
   title: Logos Core API
   version: "1.0"
 paths:
@@ -505,6 +520,83 @@ paths:
       summary: Logout
       tags:
       - Auth
+  /skills:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads a zip as a new version of a named skill, claiming the name
+        if it is free. Only the operator who claimed a name may publish new versions
+        of it; an administrator may publish to any name.
+      parameters:
+      - description: Skill name; normalized to a slug
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: One-line description shown in the listing
+        in: formData
+        name: description
+        type: string
+      - description: What changed in this version
+        in: formData
+        name: notes
+        type: string
+      - description: The skill bundle, as a zip
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.skillPublishResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Publish a skill
+      tags:
+      - skills
+  /skills/{name}/download:
+    get:
+      description: Streams a skill bundle as a zip. Without a version the current
+        one is served. The download is recorded so the operator can be told when a
+        newer version is published.
+      parameters:
+      - description: Skill name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Version; defaults to the current one
+        in: query
+        name: version
+        type: integer
+      produces:
+      - application/zip
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Download a skill
+      tags:
+      - skills
   /status:
     get:
       description: Returns system state including whether initial enrollment has been

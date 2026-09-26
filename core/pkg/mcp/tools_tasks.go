@@ -29,7 +29,7 @@ type createTaskArgs struct {
 	OperationID string `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
 	Name        string `json:"name"                   jsonschema:"Short title."`
 	Description string `json:"description,omitempty"  jsonschema:"What needs doing, and why."`
-	RiskScore   int    `json:"risk_score,omitempty"   jsonschema:"Risk of attempting it, 0-10."`
+	RiskScore   int    `json:"risk_score,omitempty"   jsonschema:"Risk of doing it, 0-10."`
 	ProfitScore int    `json:"profit_score,omitempty" jsonschema:"Value of success, 0-10."`
 	AssignToMe  bool   `json:"assign_to_me,omitempty" jsonschema:"Assign to the operator you act for; omit to propose without claiming."`
 
@@ -67,7 +67,7 @@ type changeTaskStageArgs struct {
 	IdempotencyKey
 	TaskID  string `json:"task_id"           jsonschema:"Task id."`
 	Stage   string `json:"stage"             jsonschema:"BACKLOG, TODO, IN_PROCESS or DONE."`
-	Status  string `json:"status,omitempty"  jsonschema:"Outcome for the engagement, required for DONE: SUCCESS if the work advanced it (access, a credential, a confirmed vulnerability), FAIL if the lead was a dead end (technique failed, host not exploitable, vulnerability refuted). A cleanly finished task can still be FAIL."`
+	Status  string `json:"status,omitempty"  jsonschema:"Outcome for the operation, required for DONE: SUCCESS if the work moved it forward (access gained, a credential, something confirmed), FAIL if the lead went nowhere (the approach did not work, the host was not affected, the theory was disproved). A cleanly finished task can still be FAIL."`
 	Summary string `json:"summary,omitempty" jsonschema:"What happened; fill in when closing."`
 }
 
@@ -107,7 +107,7 @@ func registerTaskTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name:        "change_task_stage",
-		Description: "Move a task between board columns. DONE needs status SUCCESS or FAIL, judged by the engagement outcome not task completion: a refuted lead or failed technique is FAIL even when the task was finished cleanly. Also flips SUCCESS/FAIL on a task already in DONE.",
+		Description: "Move a task between board columns. DONE needs status SUCCESS or FAIL, judged by what the operation gained and not by task completion: a lead that went nowhere is FAIL even when the task was finished cleanly. Also flips SUCCESS/FAIL on a task already in DONE.",
 	}, writeTool, handleChangeTaskStage)
 }
 

@@ -108,7 +108,7 @@ const SkillName = "logos"
 // skillDescription is the one line that stays in the agent's context
 // permanently. It has to say both what the skill covers and when to reach for
 // it, because that sentence alone decides whether the rest is ever loaded.
-const skillDescription = "Work an offensive security engagement in Logos — hosts, credentials, hashes, tasks, wiki notes and the operation timeline — through its MCP tools. Use whenever connected to a Logos MCP endpoint, or when the user mentions an operation, findings, or engagement notes."
+const skillDescription = "Work an operation in Logos, a team workspace for tracking one — hosts, credentials, hashes, tasks, wiki notes and the operation timeline — through its MCP tools. Use whenever connected to a Logos MCP endpoint, or when the user mentions an operation, its findings, or its notes."
 
 // SkillFile is one file in the generated bundle.
 type SkillFile struct {

@@ -41,7 +41,7 @@ func registerResources(s *Server) {
 		Name:        "host",
 		Title:       "Host",
 		URITemplate: "logos://op/{operationId}/host/{hostId}",
-		Description: "One host with its interfaces, routes and login footprints, as JSON.",
+		Description: "One host with its interfaces, routes and recorded logins, as JSON.",
 		MIMEType:    resourceMIMEJSON,
 	}, s.readResource)
 

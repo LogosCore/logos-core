@@ -16,7 +16,7 @@ When a page warrants a glyph, `icon` and `emoji` are mutually exclusive and
   `Users`, `Target`, `Flag`, `Search`, `Wrench`, `Zap`. Prefer one of those
   when it fits: the operator's pages are drawn from the same shortlist.
 - **A brand logo**: any simple-icons slug behind `si:`, lowercase and
-  unpunctuated — `si:linux`, `si:ubuntu`, `si:kalilinux`, `si:docker`,
+  unpunctuated — `si:linux`, `si:ubuntu`, `si:debian`, `si:docker`,
   `si:kubernetes`, `si:nginx`, `si:postgresql`, `si:python`, `si:cisco`. The
   package ships no Microsoft or Windows mark; use `Server` or an emoji.
 

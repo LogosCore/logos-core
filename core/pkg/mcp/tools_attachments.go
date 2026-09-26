@@ -112,7 +112,7 @@ func newAttachmentView(id, filename, contentType string, sizeBytes int64, placed
 type attachTextArgs struct {
 	IdempotencyKey
 	DocumentID string `json:"document_id" jsonschema:"Page id."`
-	Filename   string `json:"filename"    jsonschema:"With an extension: recon.txt, hosts.csv."`
+	Filename   string `json:"filename"    jsonschema:"With an extension: notes.txt, hosts.csv."`
 	Content    string `json:"content"     jsonschema:"The text, whole, in one call; the cap is megabytes."`
 }
 

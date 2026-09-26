@@ -1,6 +1,6 @@
 # Wiki: where a page goes
 
-The wiki is a tree, and the tree is the structure of the engagement. One page
+The wiki is a tree, and the tree is the structure of the operation. One page
 holds one subject. A page with every subnet and host in one body is the wrong
 shape: nobody can find anything in it, edits collide, and every read costs
 the whole thing.

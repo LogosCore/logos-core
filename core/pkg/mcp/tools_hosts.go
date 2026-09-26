@@ -24,11 +24,11 @@ type createHostArgs struct {
 	IdempotencyKey
 	OperationID string         `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
 	Hostname    string         `json:"hostname"               jsonschema:"Host name."`
-	Description string         `json:"description,omitempty"  jsonschema:"What this machine is to the engagement: its role, why it matters. A sentence or two."`
+	Description string         `json:"description,omitempty"  jsonschema:"What this machine is to the operation: its role, why it matters. A sentence or two."`
 	OS          string         `json:"os,omitempty"           jsonschema:"OS fingerprint ONLY, e.g. 'Windows Server 2019'. Anything else belongs in description."`
 	Interfaces  []interfaceArg `json:"interfaces,omitempty"   jsonschema:"Interfaces; they place the host on a subnet."`
 	Routes      []routeArg     `json:"routes,omitempty"       jsonschema:"Routing table."`
-	Logins      []loginArg     `json:"logins,omitempty"       jsonschema:"Observed logins; they draw the users lens."`
+	Logins      []loginArg     `json:"logins,omitempty"       jsonschema:"Recorded logins; they draw the users lens."`
 	visualIdentity
 }
 
@@ -36,7 +36,7 @@ type updateHostArgs struct {
 	IdempotencyKey
 	HostID      string         `json:"host_id"               jsonschema:"Host id."`
 	Hostname    string         `json:"hostname,omitempty"    jsonschema:"New name."`
-	Description string         `json:"description,omitempty" jsonschema:"New description: what this machine is to the engagement."`
+	Description string         `json:"description,omitempty" jsonschema:"New description: what this machine is to the operation."`
 	OS          string         `json:"os,omitempty"          jsonschema:"New OS fingerprint ONLY; anything else belongs in description."`
 	Interfaces  []interfaceArg `json:"interfaces,omitempty"  jsonschema:"REPLACES the interface list; send the full set."`
 	Routes      []routeArg     `json:"routes,omitempty"      jsonschema:"REPLACES the route list; send the full set."`
@@ -52,12 +52,12 @@ func registerHostTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name:        "get_host",
-		Description: "One host in full: interfaces, routes and login footprints.",
+		Description: "One host in full: interfaces, routes and recorded logins.",
 	}, readTool, handleGetHost)
 
 	register(s, &mcp.Tool{
 		Name: "create_host",
-		Description: "Record a discovered host. Interfaces, routes and logins are what the " +
+		Description: "Record a host. Interfaces, routes and logins are what the " +
 			"topology view draws from; without them the host is an isolated node.",
 	}, writeTool, handleCreateHost)
 

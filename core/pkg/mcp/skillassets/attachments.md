@@ -76,7 +76,7 @@ Fields: `documentId`, `file` (the filename travels with it), `as` and
 make an HTTP request: base64 costs a third more and a copy on each side.
 
 - `as:"image"` for a screenshot (PNG, JPEG, GIF, WebP): the page shows it as a
-  picture. `as:"attachment"` (default) for anything else, a capture or a
+  picture. `as:"attachment"` (default) for anything else, an archive or a
   binary: a file card, like a text attachment.
 - `place` says where on the page: `end` (default) or `start`. The upload
   is on the page when the call returns; the result says `placed: true`.

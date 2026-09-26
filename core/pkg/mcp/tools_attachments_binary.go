@@ -30,7 +30,7 @@ type ImageIngestor interface {
 type attachFileArgs struct {
 	IdempotencyKey
 	DocumentID    string `json:"document_id"        jsonschema:"Page id."`
-	Filename      string `json:"filename"           jsonschema:"With an extension: screenshot.png, capture.pcap, report.pdf."`
+	Filename      string `json:"filename"           jsonschema:"With an extension: screenshot.png, diagram.svg, report.pdf."`
 	ContentBase64 string `json:"content_base64"     jsonschema:"The file's bytes, base64. A data: URL prefix is accepted."`
 	As            string `json:"as,omitempty"       jsonschema:"image to show it inline on the page (PNG, JPEG, GIF, WebP); attachment (default) for a downloadable file card."`
 	Place         string `json:"place,omitempty"    jsonschema:"Where the file appears on the page: end (default) adds it at the bottom, start at the top, none stores it and returns the markdown line for you to place with edit_wiki_document."`

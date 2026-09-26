@@ -14,7 +14,7 @@ import (
 
 // @title			Logos Core API
 // @version		1.0
-// @description	Command-and-control core backend API.
+// @description	Operations platform — core backend API.
 // @basePath		/api/v1
 //
 // @securityDefinitions.apikey	BearerAuth

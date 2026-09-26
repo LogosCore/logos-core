@@ -296,6 +296,15 @@ var releases = []Release{
 			"Text above the first heading is in no section, so section: cannot fetch it and only full:true reaches it. The outline already reports its size as bytes above the first heading; wiki.md now says so, and to treat a read as complete only once truncated is false.",
 		},
 	},
+	{
+		Version: 33,
+		Date:    "2026-09-26",
+		Notes: []string{
+			"The wording of the server instructions, the tool descriptions and this skill is now domain-neutral: Logos describes itself as a shared workspace a team tracks an operation in, rather than as a platform for a particular kind of engagement. Some models were refusing to work at all once the server was connected — including on a bare \"hello\", before any tool was called — because the standing brief they receive on connect combined a heavily loaded self-description with a passage about how to treat their own refusals. That combination reads like the preamble of a prompt injection, so the brief itself was the trigger.",
+			"Nothing about what the tools do has changed, and no tool, argument, status or role was renamed: mark_hash_cracked, import_hashes and the CRACKED status are all still spelled the way they were. Only prose the model reads was rewritten.",
+			"The passage telling you how to treat a refusal is gone. A permission error is still worth reporting rather than retrying, and the skill still says so, but the brief no longer discusses refusals in the abstract.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

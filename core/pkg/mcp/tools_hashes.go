@@ -26,16 +26,16 @@ type getHashArgs struct {
 type createHashArgs struct {
 	IdempotencyKey
 	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Value       string   `json:"value"                  jsonschema:"The hash, as the tooling produced it."`
+	Value       string   `json:"value"                  jsonschema:"The hash, exactly as the tool that produced it wrote it."`
 	Status      string   `json:"status,omitempty"       jsonschema:"NOT_PROCESSED (default), QUEUED, CRACKING, CRACKED or FAILED."`
 	Comment     string   `json:"comment,omitempty"      jsonschema:"Where it came from."`
-	Tags        []string `json:"tags,omitempty"         jsonschema:"Tags, e.g. the source host."`
+	Tags        []string `json:"tags,omitempty"         jsonschema:"Tags, e.g. the host it came from."`
 }
 
 type importHashesArgs struct {
 	IdempotencyKey
 	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Text        string   `json:"text"                   jsonschema:"Dump text, one hash per line; known ones are skipped."`
+	Text        string   `json:"text"                   jsonschema:"One hash per line; known ones are skipped."`
 	Comment     string   `json:"comment,omitempty"      jsonschema:"Applied to every imported hash."`
 	Tags        []string `json:"tags,omitempty"         jsonschema:"Applied to every imported hash."`
 }
@@ -43,7 +43,7 @@ type importHashesArgs struct {
 type updateHashArgs struct {
 	IdempotencyKey
 	HashID  string   `json:"hash_id"           jsonschema:"Hash id."`
-	Status  string   `json:"status,omitempty"  jsonschema:"NOT_PROCESSED, QUEUED, CRACKING, CRACKED or FAILED. For a successful crack use mark_hash_cracked."`
+	Status  string   `json:"status,omitempty"  jsonschema:"NOT_PROCESSED, QUEUED, CRACKING, CRACKED or FAILED. When you have the plaintext use mark_hash_cracked instead."`
 	Comment string   `json:"comment,omitempty" jsonschema:"New comment."`
 	Tags    []string `json:"tags,omitempty"    jsonschema:"REPLACES the tag list."`
 }
@@ -56,30 +56,30 @@ type markHashCrackedArgs struct {
 	CredentialID string   `json:"credential_id,omitempty" jsonschema:"Link an existing credential instead of creating one."`
 	Name         string   `json:"name,omitempty"          jsonschema:"Name for the new credential; required without credential_id."`
 	Username     string   `json:"username,omitempty"      jsonschema:"Account name."`
-	Password     string   `json:"password,omitempty"      jsonschema:"Recovered plaintext."`
+	Password     string   `json:"password,omitempty"      jsonschema:"The plaintext value."`
 	Tags         []string `json:"tags,omitempty"          jsonschema:"Tags for the new credential."`
 }
 
 func registerHashTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "find_hashes",
-		Description: "Search captured hashes. Long values are clipped in listings; get_hash " +
-			"returns one whole. Cracked hashes carry the id of the credential they produced.",
+		Description: "Search recorded hashes. Long values are clipped in listings; get_hash " +
+			"returns one whole. Resolved hashes carry the id of the credential they produced.",
 	}, readTool, handleFindHashes)
 
 	register(s, &mcp.Tool{
 		Name:        "get_hash",
-		Description: "One hash with its full value and, if cracked, its credential.",
+		Description: "One hash with its full value and, if resolved, its credential.",
 	}, readTool, handleGetHash)
 
 	register(s, &mcp.Tool{
 		Name:        "create_hash",
-		Description: "Record a single captured hash. For a dump of many, use import_hashes.",
+		Description: "Record a single hash. For a list of many, use import_hashes.",
 	}, writeTool, handleCreateHash)
 
 	register(s, &mcp.Tool{
 		Name:        "import_hashes",
-		Description: "Import a dump, one hash per line. Known hashes are skipped, so re-importing is safe.",
+		Description: "Import a list, one hash per line. Known hashes are skipped, so re-importing is safe.",
 	}, writeTool, handleImportHashes)
 
 	register(s, &mcp.Tool{
@@ -89,8 +89,8 @@ func registerHashTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "mark_hash_cracked",
-		Description: "Record a crack: creates (or links) the credential and marks the hash " +
-			"CRACKED. Prefer it over update_hash, which leaves the plaintext nowhere.",
+		Description: "Record the plaintext for a hash: creates (or links) the credential and sets " +
+			"the hash to CRACKED. Prefer it over update_hash, which leaves the plaintext nowhere.",
 	}, writeTool, handleMarkHashCracked)
 }
 

@@ -77,12 +77,12 @@ func New(deps Deps) *Server {
 // so it is charged per turn and has to stay short. The last line is what makes
 // that affordable: it buys the full guide on demand, in any client, instead of
 // paying for it permanently here.
-const serverInstructions = `You are a delegated agent in Logos, a command-and-control platform for
-authorized offensive security engagements. Your key acts for one human operator and can never do
-more than they can; a refusal is that ceiling, so report it rather than retrying variations.
+const serverInstructions = `Logos is a shared workspace where a team keeps track of an operation:
+the hosts involved, credentials, hashes, tasks, wiki pages and a timeline. You act for one
+operator and inherit their permissions.
 
-You reach the knowledge layer only: hosts, credentials, hashes, tasks, wiki, timeline. There are
-no tools for implants, sessions, channels or modules, and no other way in.
+Your tools read and write those records, and that is all — nothing here runs commands or reaches
+any system outside Logos.
 
 Every call, reads included, is recorded and shown to the operator. Tools default to the operation
 the operator has open (get_user_focus shows it). Results are capped: truncated means narrow the

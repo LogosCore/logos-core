@@ -1,7 +1,7 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Command-and-control core backend API.",
+        "description": "Operations platform — core backend API.",
         "title": "Logos Core API",
         "contact": {},
         "version": "1.0"
@@ -324,6 +324,116 @@
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/skills": {
+            "post": {
+                "description": "Uploads a zip as a new version of a named skill, claiming the name if it is free. Only the operator who claimed a name may publish new versions of it; an administrator may publish to any name.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "skills"
+                ],
+                "summary": "Publish a skill",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Skill name; normalized to a slug",
+                        "name": "name",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "One-line description shown in the listing",
+                        "name": "description",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "What changed in this version",
+                        "name": "notes",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "The skill bundle, as a zip",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/controller.skillPublishResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/skills/{name}/download": {
+            "get": {
+                "description": "Streams a skill bundle as a zip. Without a version the current one is served. The download is recorded so the operator can be told when a newer version is published.",
+                "produces": [
+                    "application/zip"
+                ],
+                "tags": [
+                    "skills"
+                ],
+                "summary": "Download a skill",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Skill name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Version; defaults to the current one",
+                        "name": "version",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/responses.ErrorResponse"
                         }
@@ -1003,6 +1113,29 @@
                 }
             }
         },
+        "controller.skillPublishResponse": {
+            "type": "object",
+            "properties": {
+                "checksum": {
+                    "type": "string"
+                },
+                "claimed": {
+                    "type": "boolean"
+                },
+                "downloadUrl": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sizeBytes": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.WikiTransferFormat": {
             "type": "string",
             "enum": [
@@ -1200,7 +1333,7 @@
                     "type": "boolean"
                 },
                 "login_url": {
-                    "description": "LoginURL is the API-relative path that starts the flow.",
+                    "description": "LoginURL starts the flow; relative to the /api/v1 base.",
                     "type": "string"
                 },
                 "unavailable_reason": {
