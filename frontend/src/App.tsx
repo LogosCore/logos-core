@@ -9,6 +9,7 @@ import { PageBoundary } from "@/components/page-boundary"
 import { AppLayout } from "@/components/layout/app-layout"
 import { useAuthStore } from "@/stores/auth"
 import { useConnectivityStore } from "@/stores/connectivity"
+import { RecoveryRecheckGate } from "@/lib/recovery-recheck"
 
 // Every page is its own chunk, fetched the first time it is visited, so the
 // first paint waits for the shell and one page rather than for all of them.
@@ -40,6 +41,7 @@ function App() {
   const checkAuth = useAuthStore((s) => s.checkAuth)
   const reachable = useConnectivityStore((s) => s.reachable)
   const wasUnreachable = useRef(false)
+  const recheckGate = useRef(new RecoveryRecheckGate())
 
   // Validate stored token on app load (handles page refresh)
   useEffect(() => {
@@ -48,12 +50,14 @@ function App() {
 
   // Retry auth check when backend recovers from an outage.
   // Only fires on false→true transition of reachable (skips initial mount).
+  // Rate limited: if checkAuth is itself what flips reachability, re-running
+  // it on every recovery loops forever (see lib/recovery-recheck.ts).
   useEffect(() => {
     if (!reachable) {
       wasUnreachable.current = true
     } else if (wasUnreachable.current) {
       wasUnreachable.current = false
-      checkAuth()
+      if (recheckGate.current.shouldRecheck(Date.now())) checkAuth()
     }
   }, [reachable, checkAuth])
 

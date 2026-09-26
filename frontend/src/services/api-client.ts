@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/stores/auth"
 import { useConnectivityStore } from "@/stores/connectivity"
+import { classifyRefreshFailure } from "@/lib/refresh-failure"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CSRF rotation contract (keep backend and frontend in sync!)
@@ -164,16 +165,20 @@ async function refreshSession(): Promise<boolean> {
 
     // Classify the failure. Only an explicit auth failure means the refresh
     // token is genuinely no good — anything else (backend down, nginx 502,
-    // upstream timeout) is transient and must NOT log the user out, otherwise
-    // a backend restart causes a mass deauth.
-    if (res.status === 401 || res.status === 403) {
-      useAuthStore.getState().clearSession("expired")
-      return false
+    // upstream timeout, a backend 500) must NOT log the user out, otherwise
+    // a backend restart causes a mass deauth. See lib/refresh-failure.ts for
+    // why a 500 is not reported as unreachable either.
+    switch (classifyRefreshFailure(res.status)) {
+      case "rejected":
+        useAuthStore.getState().clearSession("expired")
+        return false
+      case "unreachable":
+        useConnectivityStore.getState().markUnreachable()
+        return false
+      case "failed":
+        console.warn(`Session refresh failed (${res.status}); keeping the current session`)
+        return false
     }
-
-    // 5xx / unexpected status — treat as transient.
-    useConnectivityStore.getState().markUnreachable()
-    return false
   } catch {
     // Network error (backend unreachable, DNS, offline). Transient.
     useConnectivityStore.getState().markUnreachable()
