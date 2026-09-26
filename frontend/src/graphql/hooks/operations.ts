@@ -104,6 +104,12 @@ export function useCreateOperation() {
         operationKeys.detail(data.createOperation.id),
         { operation: data.createOperation },
       )
+      // The lists must learn about the new operation here, not only through
+      // useOperationChangedSubscription: that is mounted on /operations
+      // alone, so creating from the getting-started panel or the switcher
+      // left both still saying there were no operations.
+      queryClient.invalidateQueries({ queryKey: operationKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: operationKeys.infiniteLists() })
     },
   })
 }

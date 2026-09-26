@@ -1,9 +1,5 @@
 import { SwordsIcon } from "lucide-react"
-import {
-  useInfiniteOperations,
-  useOperationChangedSubscription,
-  useOperationMemberChangedSubscription,
-} from "@/graphql/hooks/operations"
+import { useInfiniteOperations } from "@/graphql/hooks/operations"
 import { useOperationStore } from "@/stores/operations"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
@@ -20,12 +16,8 @@ export function OperationsPage() {
     icon: { kind: "lucide", component: SwordsIcon },
   })
 
-
-  // Subscribe to real-time operation and membership changes via SSE.
-  // When another session modifies operations, the query cache is
-  // invalidated and the table refetches automatically.
-  useOperationChangedSubscription()
-  useOperationMemberChangedSubscription()
+  // Live operation and membership updates are subscribed in AppLayout, which
+  // invalidates the list this table reads.
 
   const search = useOperationStore((s) => s.search)
   const sort = useOperationStore((s) => s.sort)

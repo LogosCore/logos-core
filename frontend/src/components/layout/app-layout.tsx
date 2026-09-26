@@ -10,6 +10,10 @@ import { useAppStore } from "@/stores/app"
 import { useTaskDeepLink } from "@/hooks/use-task-deep-link"
 import { useFocusBeacon } from "@/hooks/use-focus-beacon"
 import { useResumeRefetch } from "@/hooks/use-resume-refetch"
+import {
+  useOperationChangedSubscription,
+  useOperationMemberChangedSubscription,
+} from "@/graphql/hooks/operations"
 import { AgentActivityRail } from "@/components/layout/agent-activity-rail"
 import { EditTaskDialog } from "@/components/tasks/edit-task-dialog"
 import { DeleteTaskDialog } from "@/components/tasks/delete-task-dialog"
@@ -49,6 +53,15 @@ export function AppLayout() {
   // beacon because the two describe the same absence from the operator's side:
   // one says they stopped watching, this one catches them up when they return.
   useResumeRefetch()
+
+  // Operation and membership changes, on every authed page. These lived on
+  // /operations only, so every other list of operations went stale: the
+  // sidebar switcher, and the getting-started panel, which kept telling an
+  // operator who had just been added to an operation that they were in none
+  // until they reloaded. The server passes "you were added" through even when
+  // the subscriber had no operations when it subscribed.
+  useOperationChangedSubscription()
+  useOperationMemberChangedSubscription()
 
   return (
     <TooltipProvider>
