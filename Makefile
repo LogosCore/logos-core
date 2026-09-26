@@ -48,7 +48,7 @@ seaweedfs-reset: ## Reset only SeaweedFS volumes (clears bucket state; keeps Mon
 	done
 	@echo "Done. Run 'make services' to recreate SeaweedFS with fresh state."
 
-test-integration: ## Run the repository integration tests against the running MongoDB (needs `make infra`)
+test-integration: ## Run the repository and token-store integration tests against the running MongoDB and Redis (needs `make infra`)
 	@echo "Running repository integration tests against MONGO_URI"
 	@echo "These write to scratch databases named itest_* and drop their collections afterwards."
 	cd core && \
@@ -58,7 +58,9 @@ test-integration: ## Run the repository integration tests against the running Mo
 	RABBITMQ_DEFAULT_USER=$(or $(RABBITMQ_DEFAULT_USER),test) \
 	RABBITMQ_DEFAULT_PASS=$(or $(RABBITMQ_DEFAULT_PASS),test) \
 	INTEGRATION_MONGO_URI=$(MONGO_URI) \
-	go test -count=1 -v ./pkg/repository/ -run 'TestIntegration|TestBSONRoundTrip'
+	INTEGRATION_REDIS_ADDR=$(or $(REDIS_HOST),localhost):$(or $(REDIS_PORT),6379) \
+	INTEGRATION_REDIS_PASSWORD=$(REDIS_PASSWORD) \
+	go test -count=1 -v ./pkg/repository/ ./pkg/auth/ -run 'TestIntegration|TestBSONRoundTrip'
 
 swag: ## swag: Generates or updates the Swagger/OpenAPI documentation files.
 	@echo "Generating API documentation"

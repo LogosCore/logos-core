@@ -28,7 +28,7 @@ cd core && go build ./...
 cd core && golangci-lint run       # static analysis; config is core/.golangci.yml
 make test                          # all Go tests with -race
 make test PKG=./pkg/mcp/...        # single package
-make test-integration              # repository tests against a real MongoDB (needs `make infra`)
+make test-integration              # repository + token-store tests against real MongoDB and Redis (needs `make infra`)
 ```
 
 `make test` rather than a bare `go test`: `pkg/environment` validates required
@@ -68,6 +68,12 @@ afterwards. When adding one, check it fails when the behaviour it describes is
 broken — several obvious-looking assertions here do not, because `$text` and a
 regex branch can cover for each other, and `searchPattern` is byte-identical to
 `regexp.QuoteMeta` for any input without quotes.
+
+The same target also runs `TestIntegration*` in `pkg/auth` against the Redis
+from `make infra` (opt-in through `INTEGRATION_REDIS_ADDR`). They pin how the
+token store's Lua error replies reach Go: Redis 7 turns
+`redis.error_reply('NOTFOUND')` into `ERR NOTFOUND`, which an exact string
+match missed, so a stale refresh token surfaced as a 500 and the SPA looped.
 
 `core/.golangci.yml` is kept green: a linter that fires on existing code gets
 the code fixed, or stays out with a note in the config saying why. `nilerr`

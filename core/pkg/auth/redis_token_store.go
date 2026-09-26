@@ -519,11 +519,15 @@ func (s *redisTokenStore) LookupGrace(ctx context.Context, userID uuid.UUID, old
 }
 
 // isLuaError matches the named error returned via redis.error_reply from
-// our Lua scripts. The go-redis client surfaces them as plain errors whose
-// string is exactly the reply text.
+// our Lua scripts. The reply text is not passed through verbatim: Redis 7
+// prefixes a reply with no error code of its own with "ERR ", so
+// error_reply('NOTFOUND') reaches go-redis as "ERR NOTFOUND". An exact match
+// missed that, and a vanished refresh token surfaced as a 500 instead of
+// ErrTokenInvalid. Both spellings, and a trailing message, are accepted.
 func isLuaError(err error, name string) bool {
 	if err == nil {
 		return false
 	}
-	return err.Error() == name
+	msg := strings.TrimPrefix(err.Error(), "ERR ")
+	return msg == name || strings.HasPrefix(msg, name+" ")
 }
