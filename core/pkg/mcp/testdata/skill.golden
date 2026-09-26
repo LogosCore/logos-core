@@ -3,7 +3,7 @@
 name: logos
 description: Work an operation in Logos, a team workspace for tracking one — hosts, credentials, hashes, tasks, wiki notes and the operation timeline — through its MCP tools. Use whenever connected to a Logos MCP endpoint, or when the user mentions an operation, its findings, or its notes.
 metadata:
-  version: "33"
+  version: "34"
 ---
 
 # Logos
@@ -294,8 +294,7 @@ an **outline** (headings, nesting, bytes under each) unless you pass
 One read returns at most 40 KB. A longer body or section is cut and
 `truncated` is set, with the byte offset to resume from on the last line:
 repeat with that `offset:` (still `full:true`, or the same `section:`) until
-`truncated` is false, then cross-check the bytes shown against the outline's
-size.
+`truncated` is false. Check the bytes read against the outline's size.
 
 ## Changing a page
 
@@ -343,11 +342,11 @@ Preserve these:
   The body is the answer; `state` is `answered`, `not_applicable`, `flagged`
   or absent. Edit the `state` and the body in one `edit_wiki_document` call;
   multi-line answers go in a fenced code block.
-- **Reference chips**: `[host](logos://host/<id>)`, `[hash](logos://hash/<id>)`,
-  `[page](logos://doc/<id>)`.
-- **A credential** is a block, not a link: no `logos://credential/`, and not in
-  a table cell. Fence it `logos-credential` with a JSON body `{"id":"<uuid>"}`;
-  invalid JSON (a bare uuid) stays an ordinary code block, silently.
+- **References.** Only three kinds are links: `[host](logos://host/<id>)`,
+  `[hash](logos://hash/<id>)`, `[page](logos://doc/<id>)`. A credential is a
+  block instead: fence it `logos-credential`, body `{"id":"<uuid>"}`, not in a
+  table cell. Any other `logos://` URI is one you read through, not a link:
+  dead text on a page, and refused.
 - **Notices**: `:::info`, `:::success`, `:::warning`, `:::tip`, closed `:::`.
 - Attachments as `[name bytes](/api/v1/wiki/files/<id>)` alone in a paragraph;
   `attach_text_to_wiki_document` returns the exact line.

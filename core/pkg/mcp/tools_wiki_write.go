@@ -320,8 +320,11 @@ func handleEditWikiDocument(ctx context.Context, s *Server, args editWikiDocumen
 		return toolResult{}, refuse("old_text and new_text are identical, so this edit would do nothing.")
 	}
 	// Inserting a chip into an existing page goes through here rather than
-	// writeBody, so the same guard applies to the replacement text.
+	// writeBody, so the same guards apply to the replacement text.
 	if err := checkCredentialFences(args.NewText); err != nil {
+		return toolResult{}, err
+	}
+	if err := checkReferenceLinks(args.NewText); err != nil {
 		return toolResult{}, err
 	}
 	if s.deps.Hocuspocus == nil {
@@ -452,6 +455,13 @@ func (s *Server) writeBody(ctx context.Context, doc *models.WikiDocument, body s
 	// with no error anywhere, so it is caught here rather than discovered on
 	// the page later. See credential_fence.go.
 	if err := checkCredentialFences(body); err != nil {
+		return wiki.ApplyMarkdownResult{}, err
+	}
+
+	// A logos:// link that is not one of the three chip forms is inert in the
+	// same silent way, and the resource URIs an agent reads through look
+	// exactly like one. See reference_link.go.
+	if err := checkReferenceLinks(body); err != nil {
 		return wiki.ApplyMarkdownResult{}, err
 	}
 

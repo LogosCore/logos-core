@@ -305,6 +305,15 @@ var releases = []Release{
 			"The passage telling you how to treat a refusal is gone. A permission error is still worth reporting rather than retrying, and the skill still says so, but the brief no longer discusses refusals in the abstract.",
 		},
 	},
+	{
+		Version: 34,
+		Date:    "2026-09-26",
+		Notes: []string{
+			"logos:// means two different things and only one of them belongs on a page. Exactly three forms render as a chip an operator can follow: [page](logos://doc/<id>), [host](logos://host/<id>) and [hash](logos://hash/<id>). The resource URIs you read records through — logos://guide, logos://session/focus, logos://op/<op>/wiki/<doc> — are addresses for you, and on a page they are dead text. wiki.md now says so.",
+			"Writing a logos:// link that would not render as a chip is now refused rather than accepted. That covers a resource URI pasted into a body, an invented kind such as logos://credential/ or logos://task/, and a chip kind carrying something that is not a full uuid. Until now the write was accepted, the markdown read back exactly as sent, and only the operator found out, by clicking a link that went nowhere.",
+			"Quote the URI in backticks or a code fence when you mean to write about it: code is not checked.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot
