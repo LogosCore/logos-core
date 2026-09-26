@@ -130,7 +130,7 @@ hr { border: 0; border-top: 1px solid ${c.border}; margin: 1.6em 0; }
 /* Tables: shared by docx tables and the sheet renderer. Wrapped in a scroll
    container so a wide sheet scrolls inside the frame instead of forcing the
    whole document sideways. */
-.doc-scroll { overflow-x: auto; margin: 0 0 1.4em; }
+.doc-scroll { overflow: auto; max-height: 70vh; margin: 0 0 1.4em; }
 table { border-collapse: collapse; font-size: 0.93em; }
 th, td {
   border: 1px solid ${c.border};
@@ -139,9 +139,54 @@ th, td {
   vertical-align: top;
   white-space: pre-wrap;
 }
-th { background: ${c.headerBg}; font-weight: 600; position: sticky; top: 0; }
+th { background: ${c.headerBg}; font-weight: 600; }
 tbody tr:nth-child(even) { background: ${c.stripe}; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Sheet cells opt out of the document-wide \`overflow-wrap: anywhere\`. Unlike
+   \`break-word\`, \`anywhere\` counts toward min-content intrinsic sizing, so every
+   cell's minimum width collapses to a single character — a 20-column sheet then
+   crushes itself into the panel at ~34px per column and never overflows, which
+   means .doc-scroll has nothing to scroll and the operator gets one letter per
+   column with no scrollbar. Wrapping stays on for long values, it just no longer
+   drives how narrow a column may get. */
+.doc-scroll th, .doc-scroll td {
+  overflow-wrap: break-word;
+  word-break: normal;
+  /* Readable floor for short or empty columns, and a ceiling so one free-text
+     cell cannot stretch the table to the width of its longest line. */
+  min-width: 5.5em;
+  max-width: 24em;
+}
+
+/* Frozen column letters and row numbers. These only work because .doc-scroll
+   above is a scroll container on both axes with a bounded height — sticky
+   resolves against the nearest scrollport, so without the max-height the
+   document scrolled instead and the header never stuck to anything. */
+.doc-scroll thead th { position: sticky; top: 0; z-index: 2; }
+.doc-scroll thead th:first-child,
+.doc-scroll tbody th {
+  position: sticky;
+  left: 0;
+  /* Wide enough for the three digits MAX_ROWS_PER_SHEET can reach; narrower and
+     the number wraps or clips, since these cells inherit pre-wrap. */
+  width: 3.6em;
+  min-width: 3.6em;
+  max-width: 3.6em;
+  white-space: nowrap;
+  text-align: right;
+  color: ${c.muted};
+  background: ${c.headerBg};
+}
+/* The corner cell overlaps both bands, so it outranks each of them. */
+.doc-scroll thead th:first-child { z-index: 3; }
+.doc-scroll tbody th { z-index: 1; }
+/* border-collapse: collapse gives the border to the table rather than the cell,
+   so a sticky cell slides away from its own edge and leaves the band looking
+   unbounded. Redraw the two edges that matter as inset shadows, which travel
+   with the cell. */
+.doc-scroll thead th { box-shadow: inset 0 -1px 0 ${c.border}, inset 0 1px 0 ${c.border}; }
+.doc-scroll tbody th { box-shadow: inset -1px 0 0 ${c.border}, inset 1px 0 0 ${c.border}; }
 
 /* Sheet chrome */
 .sheet-title {
