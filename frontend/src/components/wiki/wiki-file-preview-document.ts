@@ -127,10 +127,23 @@ pre { overflow-x: auto; padding: 12px; background: ${c.headerBg}; border-radius:
 .yaml-marker { color: ${c.muted}; }
 hr { border: 0; border-top: 1px solid ${c.border}; margin: 1.6em 0; }
 
-/* Tables: shared by docx tables and the sheet renderer. Wrapped in a scroll
-   container so a wide sheet scrolls inside the frame instead of forcing the
-   whole document sideways. */
-.doc-scroll { overflow: auto; max-height: 70vh; margin: 0 0 1.4em; }
+/* Tables: shared by docx tables and the sheet renderer.
+
+   .doc-scroll is deliberately *not* a scroll container, despite the name it has
+   carried since it was one. A sheet should be as tall as it is — capping it
+   turns a 500-row preview into a small window onto itself — and CSS cannot give
+   an element a horizontal scrollbar while leaving its height to grow, since a
+   non-visible overflow on one axis forces the other to scroll too. Capping the
+   height also buried the horizontal scrollbar: it sits at the bottom of the
+   scroll container, which for a full-height table is thousands of pixels below
+   the fold.
+
+   So the frame's own viewport is the scrollport for both axes. The table grows
+   to its natural height, the horizontal scrollbar stays pinned to the bottom
+   edge of the frame where it can be reached at any scroll position, and the
+   reader sizes the whole thing with the panel's drag handle. The class stays as
+   the hook that tells a sheet table apart from a docx one. */
+.doc-scroll { margin: 0 0 1.4em; }
 table { border-collapse: collapse; font-size: 0.93em; }
 th, td {
   border: 1px solid ${c.border};
@@ -159,10 +172,12 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   max-width: 24em;
 }
 
-/* Frozen column letters and row numbers. These only work because .doc-scroll
-   above is a scroll container on both axes with a bounded height — sticky
-   resolves against the nearest scrollport, so without the max-height the
-   document scrolled instead and the header never stuck to anything. */
+/* Frozen column letters and row numbers, against the frame's viewport. Sticky
+   resolves to the nearest scrollport, which is why .doc-scroll must stay a plain
+   block: as a scroll container it would capture these, and with its height left
+   to grow it would never scroll, so they would stick to nothing — which is what
+   the original sticky rule on th here did. Each band is bounded by its own
+   table, so a second sheet's header takes over as it comes into view. */
 .doc-scroll thead th { position: sticky; top: 0; z-index: 2; }
 .doc-scroll thead th:first-child,
 .doc-scroll tbody th {
