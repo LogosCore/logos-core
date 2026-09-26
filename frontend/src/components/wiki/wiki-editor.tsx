@@ -6,7 +6,8 @@ import Collaboration from "@tiptap/extension-collaboration"
 import Placeholder from "@tiptap/extension-placeholder"
 import TaskList from "@tiptap/extension-task-list"
 import TaskItem from "@tiptap/extension-task-item"
-import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table"
+import { TableRow, TableHeader, TableCell } from "@tiptap/extension-table"
+import { WikiTable } from "@/components/wiki/wiki-table"
 import Image from "@tiptap/extension-image"
 import { Link } from "@tiptap/extension-link"
 import { HorizontalRule } from "@tiptap/extension-horizontal-rule"
@@ -399,7 +400,10 @@ export function WikiEditor({
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Table.configure({
+      // WikiTable, not Table: the stock extension derives a column's default
+      // width from cellMinWidth, which leaves a wide table narrower than the
+      // content column so every column collapses to a letter. See wiki-table.ts.
+      WikiTable.configure({
         resizable: true,
         allowTableNodeSelection: true,
         HTMLAttributes: { class: "wiki-table" },

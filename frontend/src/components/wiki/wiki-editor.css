@@ -173,8 +173,11 @@
   margin: 0;
 }
 
-/* Tables — prosemirror-tables requires positioned, fixed-layout cells
-   with min-width for resize to work. Theme vars track light/dark. */
+/* Tables — prosemirror-tables needs `table-layout: fixed` for the column widths
+   it writes to be honoured, and positioned cells to hang the resize handle and
+   the selection overlay off. Theme vars track light/dark. Note that fixed layout
+   reads only `width` from a column, never `min-width`, so the `min-width` on the
+   cells below does not participate in sizing. */
 .tiptap .tableWrapper {
   overflow-x: auto;
   margin: 0.75em 0;
@@ -187,6 +190,13 @@
   contain-intrinsic-size: auto 300px;
 }
 
+/* `width: 100%` is only a floor, not the table's width: the node view also
+   writes an inline `min-width` (or `width`, once every column has been dragged)
+   summed from the per-column widths, and min-width outranks it. That sum comes
+   from WIKI_COLUMN_DEFAULT_WIDTH in wiki-table.ts — keep the two in mind
+   together, because a small default makes this rule win and squeezes every
+   column of a wide table into the content column instead of letting
+   .tableWrapper scroll. */
 .tiptap table {
   border-collapse: collapse;
   table-layout: fixed;
