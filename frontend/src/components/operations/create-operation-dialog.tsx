@@ -13,7 +13,18 @@ import { Input } from "@/components/ui/input"
 import { useOperationStore } from "@/stores/operations"
 import { useCreateOperation } from "@/graphql/hooks/operations"
 
-export function CreateOperationDialog() {
+interface CreatedOperation {
+  id: string
+  name: string
+  description?: string | null
+}
+
+export function CreateOperationDialog({
+  onCreated,
+}: {
+  /** Runs after a successful create, once the dialog has closed. */
+  onCreated?: (operation: CreatedOperation) => void
+} = {}) {
   const { createDialogOpen, closeDialogs } = useOperationStore()
   const createOperation = useCreateOperation()
   const [error, setError] = useState<string | null>(null)
@@ -27,8 +38,9 @@ export function CreateOperationDialog() {
     const description = (form.get("description") as string) || undefined
 
     try {
-      await createOperation.mutateAsync({ name, description })
+      const data = await createOperation.mutateAsync({ name, description })
       closeDialogs()
+      onCreated?.(data.createOperation)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create operation")
     }

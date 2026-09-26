@@ -7,7 +7,7 @@
 // dismissed, this cannot, so there is always somewhere to come back to.
 
 import { ArrowRightIcon, BookOpenIcon, PlusIcon, SwordsIcon, UsersIcon } from "lucide-react"
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/stores/auth"
@@ -30,6 +30,15 @@ export function GettingStartedPanel() {
   const scopeOperation = useScopedOperationStore((s) => s.scopeOperation)
   const openCreateDialog = useOperationStore((s) => s.openCreateDialog)
   const startTour = useOnboardingStore((s) => s.start)
+  const navigate = useNavigate()
+
+  // Entering an operation from here lands on its wiki, not on Tasks. This
+  // panel is rendered by the Tasks page only because / redirects there; the
+  // wiki is where an engagement's material lives and the natural first stop.
+  function enterOperation(op: { id: string; name: string; description?: string | null }) {
+    scopeOperation({ id: op.id, name: op.name, description: op.description ?? "" })
+    navigate("/wiki")
+  }
 
   // Same query variables the operation switcher uses, so the two share one
   // cache entry: this panel warms the switcher's list, and opening it right
@@ -60,13 +69,7 @@ export function GettingStartedPanel() {
               <li key={op.id}>
                 <button
                   type="button"
-                  onClick={() =>
-                    scopeOperation({
-                      id: op.id,
-                      name: op.name,
-                      description: op.description ?? "",
-                    })
-                  }
+                  onClick={() => enterOperation(op)}
                   className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ring-1 ring-foreground/10 transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
@@ -109,8 +112,11 @@ export function GettingStartedPanel() {
           </Button>
           {/* Mounted here rather than relying on the operations page: this
               panel is often the first surface an admin ever sees, and the
-              dialog is store-driven so it works anywhere it is mounted. */}
-          <CreateOperationDialog />
+              dialog is store-driven so it works anywhere it is mounted.
+              Creating from here scopes straight into the new operation:
+              whoever just made their first one has nothing else to pick, and
+              asking them to choose it from a list of one is a dead step. */}
+          <CreateOperationDialog onCreated={enterOperation} />
         </>
       )}
 
