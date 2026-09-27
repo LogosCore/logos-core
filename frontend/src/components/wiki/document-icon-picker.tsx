@@ -1,4 +1,11 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTheme } from "next-themes";
 import {
   BanIcon,
@@ -17,17 +24,19 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import {
   ADAPTIVE_ICON_NAME,
-  ALL_LUCIDE_NAMES,
   ICON_CATALOG,
-  ICON_LOOKUP,
   type IconEntry,
 } from "@/components/wiki/icon-catalog";
 import {
-  allSimpleIconSlugs,
-  CURATED_SIMPLE_SLUGS,
   SIMPLE_ICON_CATALOG,
   toSimpleIconName,
 } from "@/components/wiki/simple-icon-catalog";
+import {
+  iconSearchIndex,
+  loadIconTags,
+  rankIcons,
+  subscribeIconTags,
+} from "@/components/wiki/icon-search";
 import { DocumentIcon } from "@/components/wiki/document-icon";
 import {
   loadFrequentIconNames,
@@ -247,14 +256,11 @@ interface IconGridProps {
   onPickDerivedDefault?: () => void;
 }
 
-// Cap on the "More icons" section so a query like "a" doesn't try to lazy-load
-// hundreds of icons at once. Users can refine the search to narrow further.
-const EXTENDED_RESULTS_LIMIT = 64;
-
-// Same idea for the brand (Simple Icons) extended results. Kept a touch
-// smaller — brand logos are a secondary surface and a generic query shouldn't
-// flood the grid with them under the lucide results.
-const SIMPLE_EXTENDED_RESULTS_LIMIT = 48;
+// Cap on the ranked result list, so a query like "a" doesn't try to lazy-load
+// hundreds of icons at once. Twelve rows of eight — and because the list is
+// ranked now, what falls past the cap is what nobody was looking for, where
+// the old per-source caps cut each source at an arbitrary depth.
+const SEARCH_RESULTS_LIMIT = 96;
 
 // Keywords matched against the search query to surface the adaptive default.
 // "default"/"adaptive" are the discoverable terms; "folder"/"page"/"doc" are
@@ -296,73 +302,28 @@ function IconGrid({
   // duplicate the search results below otherwise.
   const showFrequent = !q && frequentNames.length > 0;
 
-  const filteredGroups = useMemo(() => {
-    if (!q) return ICON_CATALOG;
-    return ICON_CATALOG.map((group) => ({
-      ...group,
-      icons: group.icons.filter(
-        (i) =>
-          i.name.toLowerCase().includes(q) ||
-          i.keywords.some((k) => k.includes(q)),
-      ),
-    })).filter((g) => g.icons.length > 0);
-  }, [q]);
+  // The searchable index, subscribed to rather than called, because it gains
+  // lucide's keyword metadata part-way through: that rides in a chunk of its
+  // own (see loadIconTags), the fetch starts when a picker opens, and the
+  // index is rebuilt — a new array, so this re-renders — when it lands. Search
+  // works throughout on names, keywords and synonyms.
+  const index = useSyncExternalStore(subscribeIconTags, iconSearchIndex);
+  useEffect(() => {
+    void loadIconTags();
+  }, []);
 
-  // Extended results: full lucide set, search-only, capped, excluding curated
-  // catalog hits already shown above. Each result lazy-loads on first render
-  // via DocumentIcon's Suspense boundary.
-  const extendedResults = useMemo(() => {
-    if (!q) return { names: [] as string[], truncated: false };
-    const names: string[] = [];
-    let total = 0;
-    for (const name of ALL_LUCIDE_NAMES.keys()) {
-      if (ICON_LOOKUP[name]) continue;
-      if (!name.toLowerCase().includes(q)) continue;
-      total++;
-      if (names.length < EXTENDED_RESULTS_LIMIT) names.push(name);
-    }
-    return { names, truncated: total > names.length };
-  }, [q]);
+  // A search is one ranked list over both libraries, curated and uncurated
+  // alike — see icon-search.ts for what "ranked" means and why the four
+  // source-ordered sections this replaced put the answer in the wrong place.
+  // Browsing keeps the curated groups instead: with no word in mind, the group
+  // labels are the only way through 5,500 glyphs.
+  const results = useMemo(
+    () => (q ? rankIcons(q, index, SEARCH_RESULTS_LIMIT) : null),
+    [q, index],
+  );
 
-  // Curated brand (Simple Icons) groups. Browse → all; search → filter each
-  // group by slug or keyword, dropping emptied groups (same shape as the
-  // lucide filteredGroups above).
-  const simpleGroups = useMemo(() => {
-    if (!q) return SIMPLE_ICON_CATALOG;
-    return SIMPLE_ICON_CATALOG.map((group) => ({
-      ...group,
-      icons: group.icons.filter(
-        (i) =>
-          i.slug.includes(q) || i.keywords.some((k) => k.includes(q)),
-      ),
-    })).filter((g) => g.icons.length > 0);
-  }, [q]);
-
-  // Extended brand results: full Simple Icons set, search-only, capped,
-  // excluding curated slugs already shown. Matches on slug only (the slug is
-  // the brand's de-spaced name), mirroring the lucide name-only search.
-  const simpleExtended = useMemo(() => {
-    if (!q) return { slugs: [] as string[], truncated: false };
-    const slugs: string[] = [];
-    let total = 0;
-    for (const slug of allSimpleIconSlugs()) {
-      if (CURATED_SIMPLE_SLUGS.has(slug)) continue;
-      if (!slug.includes(q)) continue;
-      total++;
-      if (slugs.length < SIMPLE_EXTENDED_RESULTS_LIMIT) slugs.push(slug);
-    }
-    return { slugs, truncated: total > slugs.length };
-  }, [q]);
-
-  const totalShown =
-    (showFrequent ? frequentNames.length : 0) +
-    (showAdaptive ? 1 : 0) +
-    (showDefault ? 1 : 0) +
-    (showDerivedDefault ? 1 : 0) +
-    filteredGroups.reduce((n, g) => n + g.icons.length, 0) +
-    extendedResults.names.length +
-    simpleGroups.reduce((n, g) => n + g.icons.length, 0) +
-    simpleExtended.slugs.length;
+  // Only a search can come up empty — browsing always has the curated groups.
+  const nothingToShow = !!results && results.names.length === 0 && !showAdaptive;
 
   return (
     <div className="flex flex-col gap-2">
@@ -390,7 +351,7 @@ function IconGrid({
           clipped by overflow on the leftmost / rightmost / first / last
           tiles, and so the scrollbar gutter doesn't crowd the right column. */}
       <div className="max-h-72 overflow-y-auto p-1">
-        {totalShown === 0 ? (
+        {nothingToShow ? (
           <p className="px-1 py-6 text-center text-sm text-muted-foreground">
             No icons match "{search}".
           </p>
@@ -440,51 +401,27 @@ function IconGrid({
                 </PickerTile>
               </GridSection>
             )}
-            {filteredGroups.map((group) => (
-              <GridSection key={group.label} heading={group.label}>
-                {group.icons.map((entry) => (
-                  <IconButton
-                    key={entry.name}
-                    entry={entry}
-                    selected={entry.name === selectedName}
-                    previewColor={previewColor}
-                    onPick={onPick}
-                  />
-                ))}
-              </GridSection>
-            ))}
-            {extendedResults.names.length > 0 && (
-              <GridSection
-                heading={
-                  <>
-                    More icons
-                    {extendedResults.truncated && (
-                      <span className="ml-1.5 normal-case text-muted-foreground/70">
-                        (top {EXTENDED_RESULTS_LIMIT} — refine to see more)
-                      </span>
-                    )}
-                  </>
-                }
-              >
-                {extendedResults.names.map((name) => (
-                  <ExtendedIconButton
-                    key={name}
-                    name={name}
-                    selected={name === selectedName}
-                    previewColor={previewColor}
-                    onPick={onPick}
-                  />
-                ))}
-              </GridSection>
-            )}
-            {/* Brand logos (Simple Icons). Stored prefixed (`si:<slug>`); each
-                tile renders through the same ExtendedIconButton → DocumentIcon
-                path, which detects the prefix and lazy-loads the SVG. */}
-            {simpleGroups.map((group) => (
-              <GridSection key={`si-${group.label}`} heading={group.label}>
-                {group.icons.map((entry) => {
-                  const name = toSimpleIconName(entry.slug);
-                  return (
+            {results ? (
+              results.names.length > 0 && (
+                <GridSection
+                  heading={
+                    <>
+                      Best matches
+                      {results.total > results.names.length && (
+                        <span className="ml-1.5 normal-case text-muted-foreground/70">
+                          (top {SEARCH_RESULTS_LIMIT} of {results.total} —
+                          refine to see more)
+                        </span>
+                      )}
+                    </>
+                  }
+                >
+                  {/* Every result — curated lucide, uncurated lucide and brand
+                      logos — goes through the one tile. DocumentIcon resolves
+                      each name, which means a curated icon still renders from
+                      its static import and a `si:` value lazy-loads its SVG,
+                      without the grid having to know which it is holding. */}
+                  {results.names.map((name) => (
                     <ExtendedIconButton
                       key={name}
                       name={name}
@@ -492,37 +429,45 @@ function IconGrid({
                       previewColor={previewColor}
                       onPick={onPick}
                     />
-                  );
-                })}
-              </GridSection>
-            ))}
-            {simpleExtended.slugs.length > 0 && (
-              <GridSection
-                heading={
-                  <>
-                    More brand icons
-                    {simpleExtended.truncated && (
-                      <span className="ml-1.5 normal-case text-muted-foreground/70">
-                        (top {SIMPLE_EXTENDED_RESULTS_LIMIT} — refine to see
-                        more)
-                      </span>
-                    )}
-                  </>
-                }
-              >
-                {simpleExtended.slugs.map((slug) => {
-                  const name = toSimpleIconName(slug);
-                  return (
-                    <ExtendedIconButton
-                      key={name}
-                      name={name}
-                      selected={name === selectedName}
-                      previewColor={previewColor}
-                      onPick={onPick}
-                    />
-                  );
-                })}
-              </GridSection>
+                  ))}
+                </GridSection>
+              )
+            ) : (
+              <>
+                {ICON_CATALOG.map((group) => (
+                  <GridSection key={group.label} heading={group.label}>
+                    {group.icons.map((entry) => (
+                      <IconButton
+                        key={entry.name}
+                        entry={entry}
+                        selected={entry.name === selectedName}
+                        previewColor={previewColor}
+                        onPick={onPick}
+                      />
+                    ))}
+                  </GridSection>
+                ))}
+                {/* Brand logos (Simple Icons). Stored prefixed (`si:<slug>`);
+                    each tile renders through the same ExtendedIconButton →
+                    DocumentIcon path, which detects the prefix and lazy-loads
+                    the SVG. */}
+                {SIMPLE_ICON_CATALOG.map((group) => (
+                  <GridSection key={`si-${group.label}`} heading={group.label}>
+                    {group.icons.map((entry) => {
+                      const name = toSimpleIconName(entry.slug);
+                      return (
+                        <ExtendedIconButton
+                          key={name}
+                          name={name}
+                          selected={name === selectedName}
+                          previewColor={previewColor}
+                          onPick={onPick}
+                        />
+                      );
+                    })}
+                  </GridSection>
+                ))}
+              </>
             )}
           </>
         )}

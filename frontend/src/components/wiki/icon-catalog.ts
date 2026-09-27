@@ -281,8 +281,12 @@ export const ICON_CATALOG: readonly IconGroup[] = [
       entry("Zap", ZapIcon, ["fast", "lightning"]),
       entry("Flame", FlameIcon, ["hot", "trend"]),
       entry("Sparkles", SparklesIcon, ["new", "magic"]),
-      entry("Key", KeyIcon, ["secret", "auth"]),
-      entry("Lock", LockIcon, ["secure", "private"]),
+      // "password" and "credential" are hand-written rather than left to the
+      // token synonyms in icon-search.ts, because a hand keyword outranks a
+      // name-token match elsewhere and a generated synonym does not: without
+      // them, searching "password" leads with the 1Password brand logo.
+      entry("Key", KeyIcon, ["secret", "auth", "password", "credential"]),
+      entry("Lock", LockIcon, ["secure", "private", "password"]),
       entry("Shield", ShieldIcon, ["security"]),
       entry("ShieldAlert", ShieldAlertIcon, ["risk"]),
       entry("ShieldCheck", ShieldCheckIcon, ["safe", "verified"]),

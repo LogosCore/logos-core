@@ -68,6 +68,20 @@ app shell already reaches, which quietly moves a lazy chunk onto first paint.
 Raising a budget is allowed; doing it without saying why in the commit message
 is not.
 
+### Generated icon metadata
+
+`frontend/src/components/wiki/lucide-tags.generated.ts` is lucide's own keyword
+metadata — what the search on lucide.dev matches against, and the reason the
+icon picker can find `ShieldAlert` from "vulnerability". It does not ship in
+`lucide-react`, so `npm run gen:icon-tags` fetches `lucide-static` at the
+installed lucide-react version and writes the trimmed result. The artifact is
+committed; only that script needs network, and only after a lucide bump.
+
+Run it whenever `lucide-react` moves. `icon-search-tags.test.ts` fails if the
+committed file names an icon the installed set no longer has, or if coverage
+falls below 85% — a bump nobody regenerated otherwise shows up as nothing worse
+than thinner search results.
+
 Frontend lint carries documented debt. `eslint-plugin-react-hooks` v7 applies
 the React Compiler's own analysis and is stricter than the set this code was
 written against, so nine pre-existing errors across seven files are downgraded

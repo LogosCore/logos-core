@@ -13,6 +13,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "budget": "node scripts/check-bundle-budget.mjs",
+    "gen:icon-tags": "node scripts/generate-lucide-tags.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {
