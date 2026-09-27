@@ -31,6 +31,22 @@ import { cn } from "@/lib/utils"
 import { wikiRowIndent } from "@/components/wiki/wiki-tree-helpers"
 import type { TreeNode } from "@/components/wiki/wiki-tree-sidebar"
 
+/**
+ * Spells out what a row's fixed glyph stands for, or null for an ordinary
+ * page. Templates and drawings give up their icon to a kind glyph
+ * (see DocumentIcon), and one 20px glyph among a column of other 20px glyphs
+ * is not enough to tell the classes apart while scanning — the word is.
+ *
+ * Tested in the same order DocumentIcon resolves the glyph, so the label never
+ * disagrees with the icon it explains: a drawing that is also flagged as a
+ * template reads "Template".
+ */
+function rowKindLabel(node: TreeNode): string | null {
+  if (node.isTemplate) return "Template"
+  if (node.kind === "DRAWING") return "Drawing"
+  return null
+}
+
 interface WikiTreeRowProps {
   node: TreeNode
   /** Depth in the tree, supplied by the flattening controller (no recursion). */
@@ -99,6 +115,7 @@ function WikiTreeRowImpl({
   const isDropInside = dropPosition === "inside"
   const isDropBefore = dropPosition === "before"
   const isDropAfter = dropPosition === "after"
+  const kindLabel = rowKindLabel(node)
 
   function handleRenameSubmit() {
     const trimmed = renameValue.trim()
@@ -281,7 +298,24 @@ function WikiTreeRowImpl({
                 className="flex h-full flex-1 items-center truncate px-1 text-left text-sm"
               >
                 {node.title}
+                {/* The visible label below is aria-hidden and sits outside the
+                    link, so without this the kind never reaches a screen
+                    reader — every icon in the row is aria-hidden too. */}
+                {kindLabel && <span className="sr-only"> — {kindLabel}</span>}
               </Link>
+            )}
+
+            {kindLabel && (
+              // Hidden on hover, where the row's ⋯ button takes this space —
+              // the same trade the icon slot makes with its chevron. Losing
+              // the label on the one row under the pointer is cheap; it is
+              // there on every row you are actually scanning.
+              <span
+                aria-hidden
+                className="shrink-0 px-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase group-hover:hidden"
+              >
+                {kindLabel}
+              </span>
             )}
 
             {/* Quick actions + context menu — extracted so this expensive subtree
