@@ -252,7 +252,12 @@ export function WikiTreeHeader({
             <TooltipContent>More</TooltipContent>
           </Tooltip>
           <DropdownMenuContent
-            align="end"
+            // Leading-edge alignment: the menu hangs off the left edge of the
+            // button that opened it and runs rightwards over the editor, which
+            // is also how the History panel below opens. Trailing-edge would
+            // keep both inside the sidebar, but it pins the far corner to the
+            // button and leaves the near one adrift.
+            align="start"
             // w-auto: the anchor is a 24px icon button, and the default
             // `w-(--anchor-width)` would size the menu to it.
             className="w-auto min-w-52"
@@ -333,7 +338,13 @@ export function WikiTreeHeader({
       <Popover open={historyOpen} onOpenChange={setHistoryOpen}>
         <PopoverContent
           anchor={moreAnchor}
-          align="end"
+          // Same leading-edge alignment as the menu this opens from, so both
+          // grow rightwards from the same corner of the same button. It matters
+          // more here: the panel is 26rem, wider than the sidebar itself, so
+          // trailing-edge alignment swept it across the whole tree with only
+          // its far corner near the button. If the window is too narrow to fit
+          // it to the right, the positioner shifts it back into view on its own.
+          align="start"
           // No trigger of its own means no default place for focus to land on
           // close, so name the button inside the anchor.
           finalFocus={() => moreAnchor?.querySelector("button") ?? false}
