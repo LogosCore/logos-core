@@ -48,7 +48,9 @@ function roleBadgeVariant(role: OperationRole) {
 }
 
 export function MembersDialog() {
-  const { membersDialogOpen, selectedOperation, closeDialogs } = useOperationStore()
+  const membersDialogOpen = useOperationStore((s) => s.membersDialogOpen)
+  const selectedOperation = useOperationStore((s) => s.selectedOperation)
+  const closeDialogs = useOperationStore((s) => s.closeDialogs)
   const { data, isLoading } = useOperation(selectedOperation?.id ?? "")
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const currentUserId = useAuthStore((s) => s.user?.userId)

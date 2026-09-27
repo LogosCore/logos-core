@@ -12,7 +12,9 @@ import { useHashStore } from "@/stores/hashes"
 import { useDeleteHash } from "@/graphql/hooks/hashes"
 
 export function DeleteHashDialog() {
-  const { deleteDialogOpen, closeDeleteDialog, selected } = useHashStore()
+  const deleteDialogOpen = useHashStore((s) => s.deleteDialogOpen)
+  const closeDeleteDialog = useHashStore((s) => s.closeDeleteDialog)
+  const selected = useHashStore((s) => s.selected)
   const deleteHash = useDeleteHash()
   const [error, setError] = useState<string | null>(null)
 

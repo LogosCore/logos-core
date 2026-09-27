@@ -23,7 +23,7 @@ import {
   type IconEntry,
 } from "@/components/wiki/icon-catalog";
 import {
-  ALL_SIMPLE_ICON_SLUGS,
+  allSimpleIconSlugs,
   CURATED_SIMPLE_SLUGS,
   SIMPLE_ICON_CATALOG,
   toSimpleIconName,
@@ -345,7 +345,7 @@ function IconGrid({
     if (!q) return { slugs: [] as string[], truncated: false };
     const slugs: string[] = [];
     let total = 0;
-    for (const slug of ALL_SIMPLE_ICON_SLUGS) {
+    for (const slug of allSimpleIconSlugs()) {
       if (CURATED_SIMPLE_SLUGS.has(slug)) continue;
       if (!slug.includes(q)) continue;
       total++;

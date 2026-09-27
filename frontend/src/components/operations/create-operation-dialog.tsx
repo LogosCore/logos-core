@@ -25,7 +25,8 @@ export function CreateOperationDialog({
   /** Runs after a successful create, once the dialog has closed. */
   onCreated?: (operation: CreatedOperation) => void
 } = {}) {
-  const { createDialogOpen, closeDialogs } = useOperationStore()
+  const createDialogOpen = useOperationStore((s) => s.createDialogOpen)
+  const closeDialogs = useOperationStore((s) => s.closeDialogs)
   const createOperation = useCreateOperation()
   const [error, setError] = useState<string | null>(null)
 

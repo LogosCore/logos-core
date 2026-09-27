@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core"
-import { openWikiDocumentPicker } from "@/components/wiki/wiki-command-palette"
+import { openWikiDocumentPicker } from "@/components/wiki/wiki-palette-store"
 
 // Compatibility shim for the /doc slash-command call site. The picker UI
 // itself is the unified search/picker palette in `wiki-command-palette.tsx`,

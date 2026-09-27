@@ -12,7 +12,10 @@ import { useSessionStore } from "@/stores/sessions"
 import { useRevokeSession, useAdminRevokeSession } from "@/graphql/hooks/sessions"
 
 export function RevokeSessionDialog() {
-  const { revokeDialogOpen, selectedSessionId, revokeIsAdmin, closeRevokeDialog } = useSessionStore()
+  const revokeDialogOpen = useSessionStore((s) => s.revokeDialogOpen)
+  const selectedSessionId = useSessionStore((s) => s.selectedSessionId)
+  const revokeIsAdmin = useSessionStore((s) => s.revokeIsAdmin)
+  const closeRevokeDialog = useSessionStore((s) => s.closeRevokeDialog)
   const revokeSession = useRevokeSession()
   const adminRevokeSession = useAdminRevokeSession()
   const [error, setError] = useState<string | null>(null)

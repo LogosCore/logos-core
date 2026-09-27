@@ -16,8 +16,9 @@ import { useDuplicateWikiDocument } from "@/graphql/hooks/wiki"
 // leaf duplicates fire the mutation directly from the tree row without ever
 // reaching this dialog.
 export function DuplicateWikiDocumentDialog() {
-  const { duplicateDialogOpen, duplicateTarget, closeDuplicateDialog } =
-    useWikiStore()
+  const duplicateDialogOpen = useWikiStore((s) => s.duplicateDialogOpen)
+  const duplicateTarget = useWikiStore((s) => s.duplicateTarget)
+  const closeDuplicateDialog = useWikiStore((s) => s.closeDuplicateDialog)
   const duplicateDocument = useDuplicateWikiDocument()
   const [error, setError] = useState<string | null>(null)
   const [pendingMode, setPendingMode] = useState<"shallow" | "deep" | null>(

@@ -18,8 +18,11 @@ const ORIGIN_OPTIONS: { value: string; label: string }[] = [
 ]
 
 export function SkillsToolbar() {
-  const { search, setSearch, originFilter, setOriginFilter, openPublishDialog } =
-    useSkillStore()
+  const search = useSkillStore((s) => s.search)
+  const setSearch = useSkillStore((s) => s.setSearch)
+  const originFilter = useSkillStore((s) => s.originFilter)
+  const setOriginFilter = useSkillStore((s) => s.setOriginFilter)
+  const openPublishDialog = useSkillStore((s) => s.openPublishDialog)
 
   return (
     <div className="flex items-center justify-between gap-3">

@@ -1,6 +1,18 @@
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core"
-import { print } from "graphql"
+import type { TypedDocumentString } from "@/graphql/gql/graphql"
 import { apiFetch } from "@/services/api-client"
+
+// Documents arrive as query strings, not ASTs — codegen runs with
+// `documentMode: "string"` (see codegen.ts).
+//
+// Before, every generated operation was an AST object literal and this function
+// called graphql-js `print` on it per request. That cost twice: graphql-js's
+// printer and language module sat in the first-paint chunk, and the AST walk ran
+// again on each call, allocating the same string the last call already built.
+// subscription-registry.ts had noticed the second half and memoized around it;
+// this path never did.
+//
+// A string document is what the wire wants, so there is nothing left to print
+// and nothing to cache.
 
 export interface GraphQLError {
   message: string
@@ -19,13 +31,18 @@ export class GraphQLRequestError extends Error {
 }
 
 export async function graphqlClient<TResult, TVariables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: TypedDocumentString<TResult, TVariables>,
   ...[variables]: TVariables extends Record<string, never> ? [] : [TVariables]
 ): Promise<TResult> {
   const res = await apiFetch("/graphql", {
     method: "POST",
     body: JSON.stringify({
-      query: print(document),
+      // TypedDocumentString extends String, so `document` alone would also
+      // serialize to the query text — JSON.stringify unwraps a String subclass
+      // to its primitive and drops its own properties. Explicit anyway: the
+      // wire contract is a string, and nothing here should depend on a reader
+      // knowing that particular corner of JSON.stringify.
+      query: document.toString(),
       variables,
     }),
   })

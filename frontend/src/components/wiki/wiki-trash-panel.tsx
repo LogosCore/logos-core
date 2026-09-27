@@ -72,7 +72,9 @@ function formatRelativeTime(dateStr: string | null | undefined): string {
 }
 
 export function WikiTrashPanel({ operationId }: WikiTrashPanelProps) {
-  const { trashPanelOpen, closeTrashPanel, openPermanentDeleteDialog } = useWikiStore()
+  const trashPanelOpen = useWikiStore((s) => s.trashPanelOpen)
+  const closeTrashPanel = useWikiStore((s) => s.closeTrashPanel)
+  const openPermanentDeleteDialog = useWikiStore((s) => s.openPermanentDeleteDialog)
   const queryClient = useQueryClient()
   const {
     data,

@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNodesState, type Node, type OnNodeDrag } from "@xyflow/react"
 import type { Topology } from "@/lib/topology/derive"
 import {
   layoutTopology,
+  settleInputFor,
   type SimNode,
+  type TopologyLayout,
 } from "@/components/findings/topology/layout"
 import { buildAdjacency } from "@/components/findings/topology/emphasis"
+import { requestSettle } from "@/lib/topology/settle-client"
 
 // Obsidian-style live physics on top of the pre-settled layout. The first
 // paint is the finished static map (layoutTopology runs the simulation
@@ -120,29 +123,76 @@ function unparkAll(simNodeById: Map<string, SimNode>, parked: Set<string>) {
   parked.clear()
 }
 
-export function useTopologySimulation(topology: Topology) {
-  // Building the layout creates the (stopped) simulation as a side effect of
-  // the memo — harmless if StrictMode double-invokes: the extra instance has
-  // no running timer and is simply dropped.
-  const layout = useMemo(() => layoutTopology(topology), [topology])
-  const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes)
+// A finished layout and the topology it was built from, swapped in as one unit.
+// The adjacency is bundled because the localized-reheat BFS indexes into
+// simNodeById: pairing it with a newer topology than the layout was built from
+// would let a drag look up ids the simulation does not have.
+interface SettledLayout {
+  topology: Topology
+  layout: TopologyLayout
+  adjacency: Map<string, Set<string>>
+}
 
-  // Adjacency for the localized-reheat BFS. Built from the same topology the
-  // layout was, so its ids line up with simNodeById. Memoized alongside layout.
-  const adjacency = useMemo(() => buildAdjacency(topology), [topology])
+// Stable empties so a render before the first settle does not hand React Flow a
+// fresh array/map identity every pass.
+const EMPTY_EDGES: never[] = []
+const EMPTY_SIM_NODES: Map<string, SimNode> = new Map()
+
+export function useTopologySimulation(topology: Topology) {
+  // The layout arrives asynchronously now: the settle (seeding, 300–410 ticks,
+  // crossing reduction) runs in a worker, so the main thread stays free while a
+  // map is built. Until the first result lands there is nothing to draw; after
+  // that, a rebuild keeps the previous map on screen until its replacement is
+  // ready, which is what it already did under useDeferredValue.
+  const [settled, setSettled] = useState<SettledLayout | null>(null)
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+
+  // Monotonic guard. A lens switch or data refresh can outrun an in-flight
+  // settle; only the newest request may install its result. Comparing the
+  // topology itself would not do — two rebuilds can produce equal-looking
+  // objects, and the stale one must still lose.
+  const requestRef = useRef(0)
+
+  useEffect(() => {
+    const seq = ++requestRef.current
+    let cancelled = false
+
+    requestSettle(settleInputFor(topology)).then((positions) => {
+      if (cancelled || seq !== requestRef.current) return
+      // null means the worker is unavailable or the settle threw in it; passing
+      // no positions makes layoutTopology settle inline, which is the original
+      // behavior.
+      const presettled = positions
+        ? new Map(positions.map((p) => [p.id, { x: p.x, y: p.y }]))
+        : undefined
+      setSettled({
+        topology,
+        layout: layoutTopology(topology, presettled),
+        adjacency: buildAdjacency(topology),
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [topology])
+
+  const layout = settled?.layout ?? null
 
   // Drag handlers go through a ref so they always see the CURRENT simulation.
-  // With a plain `[layout]` dependency, a data refresh landing mid-drag would
-  // leave the handlers pinning nodes of the already-stopped old simulation
-  // for one render. Bonus: the handlers are referentially stable. The refs are
-  // refreshed by the effect below, which re-runs on every layout change.
-  const layoutRef = useRef(layout)
-  const adjacencyRef = useRef(adjacency)
+  // Reading `layout` directly would leave the handlers pinning nodes of an
+  // already-stopped old simulation for one render when a rebuild lands mid-drag.
+  // Bonus: the handlers are referentially stable. The refs are refreshed by the
+  // effect below, which re-runs on every layout change.
+  const layoutRef = useRef<TopologyLayout | null>(layout)
+  const adjacencyRef = useRef<Map<string, Set<string>>>(new Map())
   // Ids parked by parkOutside for the in-flight drag, so the release un-pins
   // exactly them. A ref (not state) — mutated during the drag, never rendered.
   const parkedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
+    if (!settled) return
+    const { layout, adjacency } = settled
     const { simulation, simNodeById } = layout
     layoutRef.current = layout
     adjacencyRef.current = adjacency
@@ -174,9 +224,10 @@ export function useTopologySimulation(topology: Topology) {
       simulation.on("tick", null)
       simulation.stop()
     }
-  }, [layout, adjacency, setNodes])
+  }, [settled, setNodes])
 
   const onNodeDragStart: OnNodeDrag = useCallback((_event, _node, dragged) => {
+    if (!layoutRef.current) return
     const { simNodeById, simulation } = layoutRef.current
     // Release the far side parked by the PREVIOUS drag, lazily, here — the
     // instant before we re-park for this one. Releasing it on the prior drag's
@@ -198,10 +249,12 @@ export function useTopologySimulation(topology: Topology) {
   }, [])
 
   const onNodeDrag: OnNodeDrag = useCallback((_event, _node, dragged) => {
+    if (!layoutRef.current) return
     pinNodes(layoutRef.current.simNodeById, dragged)
   }, [])
 
   const onNodeDragStop: OnNodeDrag = useCallback((_event, _node, dragged) => {
+    if (!layoutRef.current) return
     const { simNodeById, simulation } = layoutRef.current
     releaseNodes(simNodeById, dragged)
     // Leave the far side parked through the cool-down so it stays put on drop —
@@ -213,10 +266,13 @@ export function useTopologySimulation(topology: Topology) {
 
   return {
     nodes,
-    edges: layout.edges,
+    edges: layout?.edges ?? EMPTY_EDGES,
     // Pre-settled sim positions (centers), keyed by node id. New map identity
     // on every rebuild — the view keys "graph was rebuilt" effects off it.
-    simNodeById: layout.simNodeById,
+    simNodeById: layout?.simNodeById ?? EMPTY_SIM_NODES,
+    // True while a settle is in flight and there is no layout yet to show. The
+    // view ORs this into the "Building map…" overlay it already had.
+    isSettling: settled === null,
     onNodesChange,
     onNodeDragStart,
     onNodeDrag,

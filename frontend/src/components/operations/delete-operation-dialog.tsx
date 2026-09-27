@@ -12,7 +12,9 @@ import { useOperationStore } from "@/stores/operations"
 import { useDeleteOperation } from "@/graphql/hooks/operations"
 
 export function DeleteOperationDialog() {
-  const { deleteDialogOpen, selectedOperation, closeDialogs } = useOperationStore()
+  const deleteDialogOpen = useOperationStore((s) => s.deleteDialogOpen)
+  const selectedOperation = useOperationStore((s) => s.selectedOperation)
+  const closeDialogs = useOperationStore((s) => s.closeDialogs)
   const deleteOperation = useDeleteOperation()
   const [error, setError] = useState<string | null>(null)
 

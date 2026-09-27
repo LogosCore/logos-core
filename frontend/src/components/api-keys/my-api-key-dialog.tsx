@@ -27,7 +27,8 @@ import {
 } from "@/graphql/hooks/api-keys"
 
 export function MyAPIKeyDialog() {
-  const { apiKeysDialogOpen, closeAPIKeysDialog } = useAPIKeyStore()
+  const apiKeysDialogOpen = useAPIKeyStore((s) => s.apiKeysDialogOpen)
+  const closeAPIKeysDialog = useAPIKeyStore((s) => s.closeAPIKeysDialog)
 
   return (
     <Dialog
@@ -57,7 +58,8 @@ function APIKeyDialogBody() {
   const regenerate = useRegenerateMyAPIKey()
   const setEnabled = useSetMyAPIKeyEnabled()
   const deleteKey = useDeleteMyAPIKey()
-  const { freshToken, setFreshToken } = useAPIKeyStore()
+  const freshToken = useAPIKeyStore((s) => s.freshToken)
+  const setFreshToken = useAPIKeyStore((s) => s.setFreshToken)
 
   const [confirmRegen, setConfirmRegen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)

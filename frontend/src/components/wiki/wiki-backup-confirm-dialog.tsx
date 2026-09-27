@@ -20,7 +20,9 @@ import { relativeTime } from "@/lib/relative-time"
 // display context are carried on the store target so the dialog can show
 // a specific, contextful message without any extra fetches.
 export function WikiBackupConfirmDialog() {
-  const { backupConfirmTarget, closeBackupConfirm, closeBackupPreview } = useWikiStore()
+  const backupConfirmTarget = useWikiStore((s) => s.backupConfirmTarget)
+  const closeBackupConfirm = useWikiStore((s) => s.closeBackupConfirm)
+  const closeBackupPreview = useWikiStore((s) => s.closeBackupPreview)
   const restore = useRestoreWikiDocumentBackup()
   const del = useDeleteWikiDocumentBackup()
   const [error, setError] = useState<string | null>(null)

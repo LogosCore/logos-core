@@ -18,7 +18,9 @@ interface DeleteWikiDocumentDialogProps {
 }
 
 export function DeleteWikiDocumentDialog({ documentId }: DeleteWikiDocumentDialogProps) {
-  const { deleteDialogOpen, deleteTarget, closeDeleteDialog } = useWikiStore()
+  const deleteDialogOpen = useWikiStore((s) => s.deleteDialogOpen)
+  const deleteTarget = useWikiStore((s) => s.deleteTarget)
+  const closeDeleteDialog = useWikiStore((s) => s.closeDeleteDialog)
   const deleteDocument = useDeleteWikiDocument()
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)

@@ -54,10 +54,28 @@ for (const [path, importFn] of Object.entries(SVG_GLOB)) {
   SLUG_TO_IMPORTER.set(slug, importFn as () => Promise<string>)
 }
 
+// The search corpus, built on first use rather than at import.
+//
+// SLUG_TO_IMPORTER above has to be eager: resolveSimpleIcon must answer
+// synchronously for React to render the component it returns, and DocumentIcon
+// calls it per row of the wiki tree. The sorted slug list is different — only
+// the icon picker's search ever reads it, and spreading plus sorting 3,453
+// strings at import time charged every surface that renders a document icon for
+// a list none of them touch.
+let allSlugs: readonly string[] | null = null
+
 /** Every available Simple Icon slug, sorted — the search corpus. */
-export const ALL_SIMPLE_ICON_SLUGS: readonly string[] = [
-  ...SLUG_TO_IMPORTER.keys(),
-].sort()
+export function allSimpleIconSlugs(): readonly string[] {
+  allSlugs ??= [...SLUG_TO_IMPORTER.keys()].sort()
+  return allSlugs
+}
+
+/** Whether the installed package ships this slug. Answers from the importer map
+ *  directly, so a caller that only needs the membership test does not build the
+ *  sorted corpus (nor a second Set copy of it). */
+export function hasSimpleIcon(slug: string): boolean {
+  return SLUG_TO_IMPORTER.has(slug)
+}
 
 // simple-icons SVGs are single-path, 24×24, `fill` via currentColor. Pull the
 // path data out of the raw markup and rebuild a minimal <svg> we control, so

@@ -46,7 +46,9 @@ const DEFAULT_ICON_VALUE: DocumentIconValue = {
 }
 
 export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDialogProps) {
-  const { createDialogOpen, createParentId, closeCreateDialog } = useWikiStore()
+  const createDialogOpen = useWikiStore((s) => s.createDialogOpen)
+  const createParentId = useWikiStore((s) => s.createParentId)
+  const closeCreateDialog = useWikiStore((s) => s.closeCreateDialog)
   const expandNode = useWikiStore((s) => s.expandNode)
   const setPendingFocusDocId = useWikiStore((s) => s.setPendingFocusDocId)
   const createDocument = useCreateWikiDocument()

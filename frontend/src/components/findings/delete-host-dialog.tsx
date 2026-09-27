@@ -12,7 +12,9 @@ import { useHostStore } from "@/stores/hosts"
 import { useDeleteHost } from "@/graphql/hooks/hosts"
 
 export function DeleteHostDialog() {
-  const { deleteDialogOpen, closeDeleteDialog, selected } = useHostStore()
+  const deleteDialogOpen = useHostStore((s) => s.deleteDialogOpen)
+  const closeDeleteDialog = useHostStore((s) => s.closeDeleteDialog)
+  const selected = useHostStore((s) => s.selected)
   const deleteHost = useDeleteHost()
   const [error, setError] = useState<string | null>(null)
 

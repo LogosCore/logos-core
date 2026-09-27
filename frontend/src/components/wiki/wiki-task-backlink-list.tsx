@@ -2,7 +2,7 @@ import { PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { TaskBacklinkList } from "@/components/tasks/task-backlink-list"
-import { openTaskPicker } from "@/components/tasks/task-picker-dialog"
+import { openTaskPicker } from "@/components/tasks/task-picker-store"
 import {
   useTasksReferencingWikiDocument,
   useTaskChangedSubscription,

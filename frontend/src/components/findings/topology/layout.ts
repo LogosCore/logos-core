@@ -11,8 +11,16 @@ import {
 } from "d3-force"
 import { MarkerType, type Edge, type Node } from "@xyflow/react"
 import type { TopoEdge, TopoNode, Topology } from "@/lib/topology/derive"
-import { seedRadial } from "@/lib/topology/seed"
-import { reduceCrossings } from "@/lib/topology/untangle"
+import {
+  SETTLE_CENTERING_STRENGTH,
+  SETTLE_CHARGE_STRENGTH,
+  SETTLE_COLLIDE_PADDING,
+  SETTLE_DENSE_CHARGE_STRENGTH,
+  SETTLE_DENSE_LINK_SLACK,
+  SETTLE_LINK_SLACK,
+  settleTopology,
+  type SettleInput,
+} from "@/lib/topology/settle"
 
 // Maps the framework-free topology model onto React Flow nodes/edges and lays
 // it out. Subnet-as-node design: subnets are compact hub pills, hosts are
@@ -77,41 +85,21 @@ const LEAF_MIN_W = 170
 const LEAF_ROW_H = 18.5 // 11px row + gap-0.5
 const LEAF_FRAME_H = 40 // py-2 + border + header row
 
-// The settle runs in two phases. Collision is the classic force-layout trap:
-// uncrossing two arms of the graph requires nodes to pass THROUGH each other,
-// and forceCollide forbids exactly that move — enabled from tick 1 it freezes
-// early crossings into the cooled layout (a local minimum no amount of extra
-// ticks escapes, since per-tick displacement scales with the decaying alpha).
-// So phase 1 settles topology with links/charge only, letting the graph
-// unwind freely; phase 2 re-heats moderately, adds collision, and pushes the
-// remaining overlaps apart without disturbing the untangled shape.
-const UNTANGLE_TICKS = 150
-const POLISH_TICKS = 150
-// A moderate re-heat: enough energy to push the remaining overlaps apart
-// without disturbing the untangled shape. The drag re-heat (use-simulation)
-// now runs cooler (0.2) and localized to the grabbed node's neighborhood, so
-// grabbing a node perturbs the map less than this one-time settle does.
-const POLISH_ALPHA = 0.3
-const LINK_SLACK = 60 // breathing room added to every link beyond node radii
-const CHARGE_STRENGTH = -1200
-const COLLIDE_PADDING = 16
-const CENTERING_STRENGTH = 0.06 // weak pull keeps disconnected pieces nearby
-
 // The users lens is a dense bipartite mesh (shared accounts wire many hosts
 // together), not the tree-ish hub-and-spoke the subnet lens is. It needs more
-// room to breathe and a longer untangle phase before collision freezes the
-// shape, so it runs hotter than the network lenses — which stay on the tuned
-// defaults the user is happy with. Detected by the presence of any login-layer
-// node so no lens flag has to be threaded through the layout.
+// room to breathe, so it runs hotter than the network lenses — which stay on
+// the tuned defaults the user is happy with. Detected by the presence of any
+// login-layer node so no lens flag has to be threaded through the layout.
+//
+// The tick counts and force strengths themselves live in lib/topology/settle.ts
+// now, shared with the worker; this file only decides which set applies and
+// rebuilds the same forces for the live drag simulation.
 const LOGIN_NODE_KINDS = new Set<TopoNode["kind"]>([
   "identity",
   "local-identities",
   "lone-sources",
   "phantom-host",
 ])
-const DENSE_CHARGE_STRENGTH = -2200
-const DENSE_LINK_SLACK = 110
-const DENSE_UNTANGLE_TICKS = 260
 
 function isDenseLoginLens(nodes: ReadonlyArray<TopoNode>): boolean {
   return nodes.some((n) => LOGIN_NODE_KINDS.has(n.kind))
@@ -329,14 +317,54 @@ export type SimNode = SimulationNodeDatum & {
 
 type TopologySimulation = Simulation<SimNode, SimulationLinkDatum<SimNode>>
 
-type TopologyLayout = {
+export type TopologyLayout = {
   nodes: Node[]
   edges: Edge[]
   simulation: TopologySimulation
   simNodeById: Map<string, SimNode>
 }
 
-export function layoutTopology(topology: Topology): TopologyLayout {
+/**
+ * The settle's view of a topology: one entry per node with the size and radius
+ * the layout will use, plus the edges and the dense-lens flag.
+ *
+ * Exported so the worker is fed from the same code path layoutTopology uses.
+ * Deriving the node list twice, independently, is how a worker result ends up
+ * not matching the graph it gets applied to — and sizeOf/radiusOf are the exact
+ * functions that would drift.
+ */
+export function settleInputFor(topology: Topology): SettleInput {
+  const { nodes: topoNodes, edges: topoEdges } = topology
+  return {
+    nodes: topoNodes.map((n) => {
+      const size = sizeOf(n)
+      return { id: n.id, r: radiusOf(size), ...size }
+    }),
+    edges: topoEdges
+      .filter((e) => e.source !== e.target)
+      .map((e) => ({ source: e.source, target: e.target })),
+    dense: isDenseLoginLens(topoNodes),
+  }
+}
+
+/**
+ * Builds the React Flow nodes/edges and the live (paused) simulation for a
+ * topology.
+ *
+ * `presettled` carries positions already computed by the settle — normally in a
+ * worker (see lib/topology/settle.worker.ts). Given them, this function runs
+ * zero ticks: it seeds the simulation at those positions, attaches the same
+ * forces so a drag re-heat behaves identically, and leaves it stopped. That
+ * makes the main-thread cost of a rebuild the cheap half only.
+ *
+ * Without them it settles inline, which is the old behavior and the fallback
+ * when a worker is unavailable (no `Worker` at all, or one that failed to
+ * start).
+ */
+export function layoutTopology(
+  topology: Topology,
+  presettled?: ReadonlyMap<string, { x: number; y: number }>,
+): TopologyLayout {
   const { nodes: topoNodes, edges: topoEdges } = topology
 
   const sizeById = new Map<string, { width: number; height: number }>()
@@ -357,28 +385,53 @@ export function layoutTopology(topology: Topology): TopologyLayout {
     target: e.target,
   }))
 
-  // Hotter, roomier settle for the dense login mesh; defaults elsewhere.
+  // Hotter, roomier tuning for the dense login mesh; defaults elsewhere.
   const dense = isDenseLoginLens(topoNodes)
-  const chargeStrength = dense ? DENSE_CHARGE_STRENGTH : CHARGE_STRENGTH
-  const linkSlack = dense ? DENSE_LINK_SLACK : LINK_SLACK
-  const untangleTicks = dense ? DENSE_UNTANGLE_TICKS : UNTANGLE_TICKS
+  const chargeStrength = dense
+    ? SETTLE_DENSE_CHARGE_STRENGTH
+    : SETTLE_CHARGE_STRENGTH
+  const linkSlack = dense ? SETTLE_DENSE_LINK_SLACK : SETTLE_LINK_SLACK
 
-  // Pre-set positions so the simulation starts from an untangled radial shape
-  // instead of d3's input-order spiral (forceSimulation only auto-places
-  // nodes whose x/y are unset). The settle below then relaxes distances
-  // rather than untangling topology.
-  const seeded = seedRadial(simNodes, topoEdges)
+  // Positions come either from the worker or from settling right here. Either
+  // way the simulation below starts from a finished layout, so the first paint
+  // is the finished map.
+  //
+  // A worker result computed for a different graph must not be trusted: a node
+  // missing from it is left unplaced, and d3 would then drop it at its
+  // phyllotaxis default in the middle of the map. Falling back to an inline
+  // settle when the coverage does not match keeps a stale reply from producing a
+  // wrong picture rather than a slow one.
+  const covers =
+    presettled !== undefined &&
+    simNodes.every((n) => presettled.has(n.id))
+  const positions = covers
+    ? presettled!
+    : new Map(
+        settleTopology({
+          nodes: simNodes.map((n) => ({
+            id: n.id,
+            r: n.r,
+            width: n.width,
+            height: n.height,
+          })),
+          edges: realEdges.map((e) => ({ source: e.source, target: e.target })),
+          dense,
+        }).map((p) => [p.id, { x: p.x, y: p.y }]),
+      )
+
   for (const sim of simNodes) {
-    const p = seeded.get(sim.id)
+    const p = positions.get(sim.id)
     if (p) {
       sim.x = p.x
       sim.y = p.y
     }
   }
 
-  // Stopped immediately so d3's internal timer never runs on its own; the
-  // synchronous ticks settle the layout for the first paint. The instance is
-  // returned (not discarded) so drag interactions can re-heat it later.
+  // Stopped immediately so d3's internal timer never runs on its own. No ticks
+  // here: the nodes are already at their settled positions, and the forces exist
+  // only so a drag can re-heat them. Collision is attached up front (the settle
+  // adds it for its second phase) so drag physics match what produced the
+  // layout.
   const simulation: TopologySimulation = forceSimulation(simNodes)
     .force(
       "link",
@@ -391,36 +444,26 @@ export function layoutTopology(topology: Topology): TopologyLayout {
         }),
     )
     .force("charge", forceManyBody().strength(chargeStrength))
-    .force("x", forceX(0).strength(CENTERING_STRENGTH))
-    .force("y", forceY(0).strength(CENTERING_STRENGTH))
-    .stop()
-
-  // Phase 1: untangle (no collision — see the tick constants above).
-  simulation.tick(untangleTicks)
-
-  // Phase 2: polish. Collision joins permanently, so drag physics keep it
-  // too; attaching a force to a live simulation initializes it with the
-  // current nodes (documented d3 behavior). alpha() only resets the cooling
-  // variable that the synchronous tick() loop reads — the internal timer
-  // stays stopped, so no restart() here: that would start async ticking and
-  // race the first paint.
-  simulation
+    .force("x", forceX(0).strength(SETTLE_CENTERING_STRENGTH))
+    .force("y", forceY(0).strength(SETTLE_CENTERING_STRENGTH))
     .force(
       "collide",
-      forceCollide<SimNode>().radius((d) => d.r + COLLIDE_PADDING),
+      forceCollide<SimNode>().radius((d) => d.r + SETTLE_COLLIDE_PADDING),
     )
-    .alpha(POLISH_ALPHA)
-  simulation.tick(POLISH_TICKS)
+    .stop()
 
-  // Phase 3: the global uncross the springs can't do. The settle leaves
-  // local-minimum crossings frozen in (collision forbids the pass-through move
-  // that would fix them); this relocates nodes to strictly cut edge crossings.
-  // Mutates sim positions in place, before they're read into React Flow nodes.
-  // Runs on every lens — cheap and a no-op when there's nothing to uncross.
-  reduceCrossings(
-    simNodes,
-    realEdges.map((e) => ({ a: e.source, b: e.target })),
-  )
+  // Cool it to rest. stop() only halts the timer — alpha stays at its initial 1
+  // on a simulation that was never ticked, and every tick's displacement scales
+  // with alpha. The drag re-heat does `alphaTarget(0.2).restart()`, so a
+  // simulation left at alpha 1 would start the first drag at five times the
+  // intended energy and fling the whole neighborhood apart on grab. Back when
+  // the settle ran here, 300+ ticks had already decayed alpha to ~0.01 and this
+  // was free; now that the ticks happen in the worker it has to be explicit.
+  //
+  // alphaMin is the "at rest" floor d3 stops at, so this is the state a
+  // completed settle leaves behind. From there alphaTarget climbs gradually,
+  // which is the gentle reheat use-simulation documents.
+  simulation.alpha(simulation.alphaMin())
 
   const nodeType: Record<TopoNode["kind"], string> = {
     host: "host",

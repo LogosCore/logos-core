@@ -22,7 +22,10 @@ import { SessionItem } from "./session-item"
 import { RevokeSessionDialog } from "./revoke-session-dialog"
 
 export function MySessionsDialog() {
-  const { mySessionsDialogOpen, securityWarning, closeDialogs, openRevokeDialog } = useSessionStore()
+  const mySessionsDialogOpen = useSessionStore((s) => s.mySessionsDialogOpen)
+  const securityWarning = useSessionStore((s) => s.securityWarning)
+  const closeDialogs = useSessionStore((s) => s.closeDialogs)
+  const openRevokeDialog = useSessionStore((s) => s.openRevokeDialog)
 
   return (
     <>

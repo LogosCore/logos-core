@@ -13,7 +13,9 @@ import { useRemoveSkill } from "@/graphql/hooks/skills"
 import { useSkillStore } from "@/stores/skills"
 
 export function RemoveSkillDialog() {
-  const { removeDialogOpen, selectedSkill, closeDialogs } = useSkillStore()
+  const removeDialogOpen = useSkillStore((s) => s.removeDialogOpen)
+  const selectedSkill = useSkillStore((s) => s.selectedSkill)
+  const closeDialogs = useSkillStore((s) => s.closeDialogs)
   const remove = useRemoveSkill()
   const [error, setError] = useState<string | null>(null)
 

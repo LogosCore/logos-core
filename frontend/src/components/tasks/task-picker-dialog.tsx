@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react"
-import { create } from "zustand"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { ClipboardListIcon, LoaderIcon, SearchIcon } from "lucide-react"
 import {
@@ -22,83 +21,16 @@ import { useDebounced } from "@/hooks/use-debounced"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
 import { useInfiniteTasks } from "@/graphql/hooks/tasks"
 import { TaskStageBadge, TaskStatusBadge } from "@/components/tasks/task-badges"
-import type { TaskFieldsFragment } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
+import {
+  useTaskPickerStore,
+  type PickedTask,
+} from "@/components/tasks/task-picker-store"
 
-// Shape passed back to the caller on pick. Matches the subset of TaskFields
-// every consuming surface needs — the wiki "Add to task" trigger uses
-// `name` for the toast, the rest is there for completeness in case future
-// callers want to render extra context post-pick.
-export interface PickedTask {
-  id: string
-  name: string
-  stage: TaskFieldsFragment["stage"]
-  status: TaskFieldsFragment["status"]
-}
-
-interface OpenArgs {
-  operationId: string
-  /** Task IDs that should appear muted and reject clicks (e.g. tasks that
-   *  already reference the current wiki document). */
-  excludeIds?: string[]
-  /** Optional override for the dialog title — defaults to "Link to a task". */
-  title?: string
-  /** Optional override for the dialog description. */
-  description?: string
-  onPick: (task: PickedTask) => void
-}
-
-interface PickerState {
-  open: boolean
-  operationId: string
-  excludeIds: string[]
-  title: string
-  description: string
-  onPick: ((task: PickedTask) => void) | null
-  openPicker: (args: OpenArgs) => void
-  closePicker: () => void
-}
-
-// Singleton store — same pattern as the wiki document picker. Any surface
-// that needs to pick a task (today: the wiki editor's "Add to task"
-// button; later potentially the timeline / matrix views) calls
-// `openTaskPicker` to trigger it.
-const useTaskPickerStore = create<PickerState>((set) => ({
-  open: false,
-  operationId: "",
-  excludeIds: [],
-  title: "Link to a task",
-  description: "Pick a task in this operation.",
-  onPick: null,
-  openPicker: ({
-    operationId,
-    excludeIds,
-    title,
-    description,
-    onPick,
-  }) =>
-    set({
-      open: true,
-      operationId,
-      excludeIds: excludeIds ?? [],
-      title: title ?? "Link to a task",
-      description: description ?? "Pick a task in this operation.",
-      onPick,
-    }),
-  closePicker: () =>
-    set({
-      open: false,
-      operationId: "",
-      excludeIds: [],
-      onPick: null,
-    }),
-}))
-
-/** Imperative entry point — same shape regardless of which surface opens it. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function openTaskPicker(args: OpenArgs) {
-  useTaskPickerStore.getState().openPicker(args)
-}
+// State and the `openTaskPicker` entry point live in task-picker-store.ts, so
+// the wiki editor's "Add to task" button can trigger the picker without
+// importing this dialog. The deferred mount in app-layout.tsx loads this file
+// on first open.
 
 export function TaskPickerDialog() {
   const open = useTaskPickerStore((s) => s.open)

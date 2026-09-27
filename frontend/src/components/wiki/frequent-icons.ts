@@ -10,7 +10,7 @@ import {
   ICON_LOOKUP,
 } from "@/components/wiki/icon-catalog"
 import {
-  ALL_SIMPLE_ICON_SLUGS,
+  hasSimpleIcon,
   isSimpleIconName,
   simpleIconSlug,
 } from "@/components/wiki/simple-icon-catalog"
@@ -34,10 +34,8 @@ interface FrequentEntry {
 // `si:<slug>`. Both are recorded on pick, so both have to be recognised on
 // read — checking only the lucide catalog silently drops every brand icon a
 // user picks, which is exactly what it did.
-const SIMPLE_SLUGS: ReadonlySet<string> = new Set(ALL_SIMPLE_ICON_SLUGS)
-
 function isRenderable(name: string): boolean {
-  if (isSimpleIconName(name)) return SIMPLE_SLUGS.has(simpleIconSlug(name))
+  if (isSimpleIconName(name)) return hasSimpleIcon(simpleIconSlug(name))
   return !!ICON_LOOKUP[name] || ALL_LUCIDE_NAMES.has(name)
 }
 

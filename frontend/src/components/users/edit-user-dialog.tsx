@@ -17,7 +17,9 @@ import { useUser, useUpdateUser } from "@/graphql/hooks/users"
 import type { UpdateUserInput } from "@/graphql/gql/graphql"
 
 export function EditUserDialog() {
-  const { editDialogOpen, selectedUser, closeDialogs } = useUserStore()
+  const editDialogOpen = useUserStore((s) => s.editDialogOpen)
+  const selectedUser = useUserStore((s) => s.selectedUser)
+  const closeDialogs = useUserStore((s) => s.closeDialogs)
   const { data, isLoading } = useUser(selectedUser?.id ?? "")
   const updateUser = useUpdateUser()
   const [error, setError] = useState<string | null>(null)

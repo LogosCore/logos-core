@@ -41,7 +41,8 @@ const emptyValues: HashFormValues = {
 }
 
 export function CreateHashDialog({ operationId }: CreateHashDialogProps) {
-  const { createDialogOpen, closeCreateDialog } = useHashStore()
+  const createDialogOpen = useHashStore((s) => s.createDialogOpen)
+  const closeCreateDialog = useHashStore((s) => s.closeCreateDialog)
   const createHash = useCreateHash()
   const [values, setValues] = useState<HashFormValues>(emptyValues)
   const [error, setError] = useState<string | null>(null)

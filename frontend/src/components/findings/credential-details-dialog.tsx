@@ -40,8 +40,10 @@ import { buildCredentialShareUrl } from "@/components/findings/credential-share-
 import type { CredentialCommentFieldsFragment } from "@/graphql/gql/graphql"
 
 export function CredentialDetailsDialog() {
-  const { detailsPanelOpen, selected, closeDetailsPanel, openEditDialog } =
-    useCredentialStore()
+  const detailsPanelOpen = useCredentialStore((s) => s.detailsPanelOpen)
+  const selected = useCredentialStore((s) => s.selected)
+  const closeDetailsPanel = useCredentialStore((s) => s.closeDetailsPanel)
+  const openEditDialog = useCredentialStore((s) => s.openEditDialog)
   const { data, isLoading, isError } = useCredential(selected?.id ?? "")
   const credential = data?.credential
 

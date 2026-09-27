@@ -14,7 +14,9 @@ import { useOperationStore } from "@/stores/operations"
 import { useOperation, useUpdateOperation } from "@/graphql/hooks/operations"
 
 export function EditOperationDialog() {
-  const { editDialogOpen, selectedOperation, closeDialogs } = useOperationStore()
+  const editDialogOpen = useOperationStore((s) => s.editDialogOpen)
+  const selectedOperation = useOperationStore((s) => s.selectedOperation)
+  const closeDialogs = useOperationStore((s) => s.closeDialogs)
   const { data, isLoading } = useOperation(selectedOperation?.id ?? "")
   const updateOperation = useUpdateOperation()
   const [error, setError] = useState<string | null>(null)

@@ -12,7 +12,9 @@ import { useUserStore } from "@/stores/users"
 import { useDeleteUser } from "@/graphql/hooks/users"
 
 export function DeleteUserDialog() {
-  const { deleteDialogOpen, selectedUser, closeDialogs } = useUserStore()
+  const deleteDialogOpen = useUserStore((s) => s.deleteDialogOpen)
+  const selectedUser = useUserStore((s) => s.selectedUser)
+  const closeDialogs = useUserStore((s) => s.closeDialogs)
   const deleteUser = useDeleteUser()
   const [error, setError] = useState<string | null>(null)
 

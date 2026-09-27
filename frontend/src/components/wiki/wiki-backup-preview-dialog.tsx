@@ -24,8 +24,9 @@ import { getBackupVisual } from "./wiki-backup-visual";
 const CONTEXT_LINES = 5;
 
 export function WikiBackupPreviewDialog() {
-  const { backupPreviewId, closeBackupPreview, openBackupConfirm } =
-    useWikiStore();
+  const backupPreviewId = useWikiStore((s) => s.backupPreviewId);
+  const closeBackupPreview = useWikiStore((s) => s.closeBackupPreview);
+  const openBackupConfirm = useWikiStore((s) => s.openBackupConfirm);
   const open = !!backupPreviewId;
 
   return (

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core"
+import { TypedDocumentString } from "@/graphql/gql/graphql"
 
 // The registry opens subscriptions on the singleton graphql-ws client. Stub it
 // so these tests exercise the registry's own lifecycle bookkeeping and nothing
@@ -26,24 +26,16 @@ const {
   onSubscriptionsResumed,
 } = await import("@/lib/subscription-registry")
 
-// Minimal stand-in for a codegen document. The registry only reads
-// `definitions` (for the operation name) and prints it, so a hand-built AST
-// fragment is enough and avoids pulling a generated document into a unit test.
-function fakeDocument(name: string): TypedDocumentNode<unknown, unknown> {
-  return {
-    kind: "Document",
-    definitions: [
-      {
-        kind: "OperationDefinition",
-        operation: "subscription",
-        name: { kind: "Name", value: name },
-        selectionSet: {
-          kind: "SelectionSet",
-          selections: [{ kind: "Field", name: { kind: "Name", value: "ping" } }],
-        },
-      },
-    ],
-  } as unknown as TypedDocumentNode<unknown, unknown>
+// Stand-in for a codegen document. The real class, not a shape cast: the
+// registry keys on object identity and reads the operation name back out of the
+// string, so the test document has to behave like one. Written the way codegen
+// writes them — leading newline, operation definition first.
+function fakeDocument(name: string): TypedDocumentString<unknown, unknown> {
+  return new TypedDocumentString(`
+    subscription ${name} {
+  ping
+}
+    `) as unknown as TypedDocumentString<unknown, unknown>
 }
 
 describe("subscription registry visibility gap", () => {

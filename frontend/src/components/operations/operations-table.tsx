@@ -51,7 +51,9 @@ export function OperationsTable({
 }: OperationsTableProps) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const currentUserId = useAuthStore((s) => s.user?.userId)
-  const { openEditDialog, openDeleteDialog, openMembersDialog } = useOperationStore()
+  const openEditDialog = useOperationStore((s) => s.openEditDialog)
+  const openDeleteDialog = useOperationStore((s) => s.openDeleteDialog)
+  const openMembersDialog = useOperationStore((s) => s.openMembersDialog)
   const scopedOperation = useScopedOperationStore((s) => s.scopedOperation)
   const scopeOperation = useScopedOperationStore((s) => s.scopeOperation)
   const unscopeOperation = useScopedOperationStore((s) => s.unscopeOperation)

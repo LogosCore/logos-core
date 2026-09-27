@@ -19,7 +19,7 @@ import {
 } from "@/graphql/hooks/wiki"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { sortByOrder } from "@/components/wiki/wiki-tree-helpers"
-import { openWikiDocumentPicker } from "@/components/wiki/wiki-command-palette"
+import { openWikiDocumentPicker } from "@/components/wiki/wiki-palette-store"
 
 interface MoveWikiDocumentDialogProps {
   operationId: string
@@ -51,7 +51,9 @@ const ROOT_CHOICE: DestinationChoice = {
 export function MoveWikiDocumentDialog({
   operationId,
 }: MoveWikiDocumentDialogProps) {
-  const { moveDialogOpen, moveTarget, closeMoveDialog } = useWikiStore()
+  const moveDialogOpen = useWikiStore((s) => s.moveDialogOpen)
+  const moveTarget = useWikiStore((s) => s.moveTarget)
+  const closeMoveDialog = useWikiStore((s) => s.closeMoveDialog)
   const reorderSiblings = useReorderWikiDocumentSiblings()
   const queryClient = useQueryClient()
   const [destination, setDestination] = useState<DestinationChoice | null>(null)

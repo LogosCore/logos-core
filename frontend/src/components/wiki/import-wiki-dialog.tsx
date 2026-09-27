@@ -23,7 +23,7 @@ import {
   type ImportDestination,
   type ImportReport,
 } from "@/lib/wiki-transfer"
-import { openWikiDocumentPicker } from "@/components/wiki/wiki-command-palette"
+import { openWikiDocumentPicker } from "@/components/wiki/wiki-palette-store"
 import { TransferProgress, TransferSkipList } from "@/components/wiki/transfer-status"
 
 interface ImportWikiDialogProps {
@@ -36,7 +36,8 @@ interface ParentChoice {
 }
 
 export function ImportWikiDialog({ operationId }: ImportWikiDialogProps) {
-  const { importDialogOpen, closeImportDialog } = useWikiStore()
+  const importDialogOpen = useWikiStore((s) => s.importDialogOpen)
+  const closeImportDialog = useWikiStore((s) => s.closeImportDialog)
   const start = useStartImport()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState<string | null>(null)

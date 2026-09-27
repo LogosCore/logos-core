@@ -19,7 +19,8 @@ interface BulkImportDialogProps {
 }
 
 export function BulkImportHashesDialog({ operationId }: BulkImportDialogProps) {
-  const { bulkImportDialogOpen, closeBulkImportDialog } = useHashStore()
+  const bulkImportDialogOpen = useHashStore((s) => s.bulkImportDialogOpen)
+  const closeBulkImportDialog = useHashStore((s) => s.closeBulkImportDialog)
   const bulkImport = useBulkImportHashes()
 
   const [text, setText] = useState("")

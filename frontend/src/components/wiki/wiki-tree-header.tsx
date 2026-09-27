@@ -26,7 +26,7 @@ import {
 import { Popover, PopoverContent } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useWikiStore } from "@/stores/wiki"
-import { openWikiSearch } from "@/components/wiki/wiki-command-palette"
+import { openWikiSearch } from "@/components/wiki/wiki-palette-store"
 import {
   useReorderWikiDocumentSiblings,
   useWikiDocumentChildren,

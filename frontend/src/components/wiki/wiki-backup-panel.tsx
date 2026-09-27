@@ -20,7 +20,9 @@ type BackupListNode = NonNullable<
 >["pages"][number]["wikiDocumentBackups"]["edges"][number]["node"]
 
 export function WikiBackupPanel() {
-  const { backupPanelOpen, backupDocumentId, closeBackupPanel } = useWikiStore()
+  const backupPanelOpen = useWikiStore((s) => s.backupPanelOpen)
+  const backupDocumentId = useWikiStore((s) => s.backupDocumentId)
+  const closeBackupPanel = useWikiStore((s) => s.closeBackupPanel)
 
   if (!backupDocumentId) return null
 
@@ -142,7 +144,8 @@ function BackupRow({
   backup: BackupListNode
   documentId: string
 }) {
-  const { openBackupPreview, openBackupConfirm } = useWikiStore()
+  const openBackupPreview = useWikiStore((s) => s.openBackupPreview)
+  const openBackupConfirm = useWikiStore((s) => s.openBackupConfirm)
   const visual = getBackupVisual(backup)
   const Icon = visual.Icon
 

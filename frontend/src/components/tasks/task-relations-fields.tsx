@@ -12,7 +12,7 @@ import type { CredentialFieldsFragment } from "@/graphql/gql/graphql";
 import { WikiDocumentChipById } from "@/components/wiki/wiki-document-chip-view";
 import { WikiCredentialChipById } from "@/components/wiki/wiki-credential-chip-view";
 import { WikiUserChipView } from "@/components/wiki/wiki-user-chip-view";
-import { openWikiDocumentPicker } from "@/components/wiki/wiki-command-palette";
+import { openWikiDocumentPicker } from "@/components/wiki/wiki-palette-store";
 
 import type {
   RelationItem,

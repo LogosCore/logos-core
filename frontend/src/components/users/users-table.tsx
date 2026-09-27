@@ -44,7 +44,8 @@ export function UsersTable({
 }: UsersTableProps) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const currentUserId = useAuthStore((s) => s.user?.userId)
-  const { openEditDialog, openDeleteDialog } = useUserStore()
+  const openEditDialog = useUserStore((s) => s.openEditDialog)
+  const openDeleteDialog = useUserStore((s) => s.openDeleteDialog)
 
   const canUpdate = hasPermission(Permissions.USER_UPDATE)
   const canDelete = hasPermission(Permissions.USER_DELETE)

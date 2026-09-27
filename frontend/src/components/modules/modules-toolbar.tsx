@@ -16,7 +16,10 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ]
 
 export function ModulesToolbar() {
-  const { search, setSearch, statusFilter, setStatusFilter } = useModuleStore()
+  const search = useModuleStore((s) => s.search)
+  const setSearch = useModuleStore((s) => s.setSearch)
+  const statusFilter = useModuleStore((s) => s.statusFilter)
+  const setStatusFilter = useModuleStore((s) => s.setStatusFilter)
 
   return (
     <div className="flex items-center justify-between gap-3">

@@ -44,7 +44,9 @@ const FORMATS: Array<{ value: TransferFormat; label: string; hint: string }> = [
 ]
 
 export function ExportWikiDialog({ operationId }: ExportWikiDialogProps) {
-  const { exportDialogOpen, exportTarget, closeExportDialog } = useWikiStore()
+  const exportDialogOpen = useWikiStore((s) => s.exportDialogOpen)
+  const exportTarget = useWikiStore((s) => s.exportTarget)
+  const closeExportDialog = useWikiStore((s) => s.closeExportDialog)
   const start = useStartExport()
   const [format, setFormat] = useState<TransferFormat>("bundle")
   const [jobId, setJobId] = useState<string | null>(null)

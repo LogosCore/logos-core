@@ -49,13 +49,11 @@ const COMMENT_MAX_PX = 640
 // text fields (value, comment) commit on blur; status and tags commit on
 // change. Each commit is a partial UpdateHash mutation.
 export function HashDetailsDialog() {
-  const {
-    detailsPanelOpen,
-    closeDetailsPanel,
-    selected,
-    openDeleteDialog,
-    openMarkCrackedDialog,
-  } = useHashStore()
+  const detailsPanelOpen = useHashStore((s) => s.detailsPanelOpen)
+  const closeDetailsPanel = useHashStore((s) => s.closeDetailsPanel)
+  const selected = useHashStore((s) => s.selected)
+  const openDeleteDialog = useHashStore((s) => s.openDeleteDialog)
+  const openMarkCrackedDialog = useHashStore((s) => s.openMarkCrackedDialog)
   const hashQuery = useHash(selected?.id ?? "", { enabled: !!selected?.id })
   const hash = hashQuery.data?.hash
   const updateHash = useUpdateHash()

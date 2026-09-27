@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useWikiStore } from "@/stores/wiki"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
-import { openWikiSearch } from "@/components/wiki/wiki-command-palette"
+import { openWikiSearch } from "@/components/wiki/wiki-palette-store"
 import {
   useDuplicateWikiDocument,
   useReorderWikiDocumentSiblings,

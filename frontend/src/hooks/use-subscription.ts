@@ -6,7 +6,7 @@
 // the lifetime of the component.
 
 import { useEffect, useRef } from "react"
-import type { TypedDocumentNode } from "@graphql-typed-document-node/core"
+import type { TypedDocumentString } from "@/graphql/gql/graphql"
 import { subscribe } from "@/lib/subscription-registry"
 
 interface UseSubscriptionOptions<TResult> {
@@ -17,7 +17,7 @@ interface UseSubscriptionOptions<TResult> {
 }
 
 export function useSubscription<TResult, TVariables>(
-  document: TypedDocumentNode<TResult, TVariables>,
+  document: TypedDocumentString<TResult, TVariables>,
   variables: TVariables | undefined,
   options: UseSubscriptionOptions<TResult>,
 ): void {

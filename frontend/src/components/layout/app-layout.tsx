@@ -15,15 +15,59 @@ import {
   useOperationMemberChangedSubscription,
 } from "@/graphql/hooks/operations"
 import { AgentActivityRail } from "@/components/layout/agent-activity-rail"
-import { EditTaskDialog } from "@/components/tasks/edit-task-dialog"
-import { DeleteTaskDialog } from "@/components/tasks/delete-task-dialog"
-import { StatusRequiredDialog } from "@/components/tasks/status-required-dialog"
-import { ReopenTaskDialog } from "@/components/tasks/reopen-task-dialog"
-import { WikiCommandPalette } from "@/components/wiki/wiki-command-palette"
-import { TaskPickerDialog } from "@/components/tasks/task-picker-dialog"
 import { SkillUpdateDialog } from "@/components/keys/skill-update-dialog"
 import { CommunitySkillUpdateDialog } from "@/components/skills/community-skill-update-dialog"
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour"
+import { deferOverlay } from "@/components/layout/deferred-overlay"
+import { useTaskStore } from "@/stores/tasks"
+import { useTaskPickerStore } from "@/components/tasks/task-picker-store"
+import { usePaletteStore } from "@/components/wiki/wiki-palette-store"
+
+// The six overlays below open from a store flag and render null until then, so
+// their modules are fetched on first open rather than parsed at first paint.
+// See deferred-overlay.tsx for why the flag is read inside the wrapper and why
+// a mounted overlay is never unmounted again.
+//
+// The task dialogs are warmed on idle: they open from a click on a task row and
+// are a few kilobytes each, so a chunk fetch at that moment would read as lag.
+// The palette and the task picker are not. Both reach DocumentIcon and the two
+// icon catalogs behind it — roughly 1 MB of glob thunk tables — which is the
+// weight this whole arrangement exists to keep off the critical path. Warming
+// them would only move that parse from first paint into the moment the operator
+// starts interacting. They open from a keystroke (Cmd+K) or a menu item, where
+// one same-origin request against an immutable cache is not felt.
+const EditTaskDialog = deferOverlay(
+  () => import("@/components/tasks/edit-task-dialog"),
+  "EditTaskDialog",
+  () => useTaskStore((s) => s.editDialogOpen),
+  { warm: true },
+)
+const DeleteTaskDialog = deferOverlay(
+  () => import("@/components/tasks/delete-task-dialog"),
+  "DeleteTaskDialog",
+  () => useTaskStore((s) => s.deleteDialogOpen),
+  { warm: true },
+)
+const StatusRequiredDialog = deferOverlay(
+  () => import("@/components/tasks/status-required-dialog"),
+  "StatusRequiredDialog",
+  () => useTaskStore((s) => s.pendingStageChange !== null),
+)
+const ReopenTaskDialog = deferOverlay(
+  () => import("@/components/tasks/reopen-task-dialog"),
+  "ReopenTaskDialog",
+  () => useTaskStore((s) => s.pendingReopen !== null),
+)
+const WikiCommandPalette = deferOverlay(
+  () => import("@/components/wiki/wiki-command-palette"),
+  "WikiCommandPalette",
+  () => usePaletteStore((s) => s.config !== null),
+)
+const TaskPickerDialog = deferOverlay(
+  () => import("@/components/tasks/task-picker-dialog"),
+  "TaskPickerDialog",
+  () => useTaskPickerStore((s) => s.open),
+)
 
 export function AppLayout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)

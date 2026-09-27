@@ -8,6 +8,7 @@ const config: CodegenConfig = {
       preset: "client",
       config: {
         useTypeImports: true,
+        documentMode: "string",
         enumsAsTypes: true,
         scalars: {
           ID: "string",

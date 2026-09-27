@@ -24,7 +24,7 @@ export function AdminSessionsTable({
   hasNextPage,
   fetchNextPage,
 }: AdminSessionsTableProps) {
-  const { openRevokeDialog } = useSessionStore()
+  const openRevokeDialog = useSessionStore((s) => s.openRevokeDialog)
 
   return (
     <VirtualizedDataTable

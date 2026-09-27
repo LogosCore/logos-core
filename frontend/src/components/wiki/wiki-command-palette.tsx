@@ -8,7 +8,6 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router";
 import { SearchIcon, XIcon } from "lucide-react";
-import { create } from "zustand";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,121 +26,22 @@ import {
   HighlightedSubstring,
 } from "@/components/wiki/wiki-highlight";
 import { cn, isPlainLeftClick } from "@/lib/utils";
-
-// Shape passed back to the caller on pick. A subset of what `useWikiSearch`
-// projects per hit — enough for typical post-pick work (insert a wiki
-// reference node, add a relation, render a chip).
-export interface PickedWikiDocument {
-  id: string;
-  title: string;
-  emoji: string;
-  icon: string;
-  color: string;
-  /** A drawing renders a fixed glyph rather than the stored icon. */
-  kind?: string | null;
-}
+import {
+  usePaletteStore,
+  type PaletteConfig,
+  type PickedWikiDocument,
+} from "@/components/wiki/wiki-palette-store";
 
 // One result row as projected by the WikiSearch query (document + snippet +
 // match ranges). Derived from the generated type so the row shape can't drift
 // from the query.
 type WikiSearchHit = WikiSearchQuery["wikiSearch"]["hits"][number];
 
-interface PaletteScope {
-  parentDocumentId: string | null;
-  parentTitle: string;
-}
-
-// The palette runs in one of two modes. `navigate` is the Cmd+K / "search
-// within X" surface that opens the chosen doc. `pick` is the imperative
-// document picker that every reference surface (the /doc slash command, the
-// move dialog's parent chooser, the task edit dialog's wiki references) opens
-// via openWikiDocumentPicker — it hands the chosen doc back through onPick and
-// never navigates.
-interface NavigateConfig {
-  mode: "navigate";
-  operationId: string;
-  scope: PaletteScope;
-}
-
-interface PickConfig {
-  mode: "pick";
-  operationId: string;
-  excludeIds: string[];
-  title: string;
-  description: string;
-  onPick: (doc: PickedWikiDocument) => void;
-}
-
-type PaletteConfig = NavigateConfig | PickConfig;
-
-interface OpenSearchArgs {
-  operationId: string;
-  parentDocumentId: string | null;
-  parentTitle: string;
-}
-
-interface OpenPickArgs {
-  operationId: string;
-  /** Document IDs that should appear muted and reject selection (e.g. the
-   *  current doc when called from the /doc slash command, already-added
-   *  references in the task dialog, or the moved doc + its descendants in the
-   *  move dialog). */
-  excludeIds?: string[];
-  /** Override for the header label — defaults to "Insert document reference". */
-  title?: string;
-  /** Optional context line shown under the search box. */
-  description?: string;
-  onPick: (doc: PickedWikiDocument) => void;
-}
-
-interface PaletteStore {
-  config: PaletteConfig | null;
-  openNavigate: (args: OpenSearchArgs) => void;
-  openPick: (args: OpenPickArgs) => void;
-  close: () => void;
-}
-
-// Singleton store — the palette is mounted once in AppLayout and any surface
-// (tree search, /doc slash command, move dialog, task edit dialog) drives it
-// imperatively. Replaces the old wiki-store `searchScope` field and the
-// separate wiki-document-picker dialog/store; both search surfaces now share
-// this one component and the ranked `wikiSearch` backend.
-const usePaletteStore = create<PaletteStore>((set) => ({
-  config: null,
-  openNavigate: ({ operationId, parentDocumentId, parentTitle }) =>
-    set({
-      config: {
-        mode: "navigate",
-        operationId,
-        scope: { parentDocumentId, parentTitle },
-      },
-    }),
-  openPick: ({ operationId, excludeIds, title, description, onPick }) =>
-    set({
-      config: {
-        mode: "pick",
-        operationId,
-        excludeIds: excludeIds ?? [],
-        title: title ?? "Insert document reference",
-        description: description ?? "",
-        onPick,
-      },
-    }),
-  close: () => set({ config: null }),
-}));
-
-/** Open the palette in navigate mode (Cmd+K / "search within"). */
-// eslint-disable-next-line react-refresh/only-export-components
-export function openWikiSearch(args: OpenSearchArgs) {
-  usePaletteStore.getState().openNavigate(args);
-}
-
-/** Open the palette in pick mode — same imperative entry point every
- *  reference surface used before the unification. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function openWikiDocumentPicker(args: OpenPickArgs) {
-  usePaletteStore.getState().openPick(args);
-}
+// State, the two imperative openers and every config type live in
+// wiki-palette-store.ts. That module carries no UI imports, so the seven
+// surfaces that open the palette no longer pull this component — and the ~1 MB
+// of icon-catalog thunk tables DocumentIcon reaches — into their own chunks.
+// wiki-palette-mount.tsx is what loads this file, on first open.
 
 export function WikiCommandPalette() {
   const config = usePaletteStore((s) => s.config);

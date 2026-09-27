@@ -12,7 +12,9 @@ import { useCredentialStore } from "@/stores/credentials"
 import { useDeleteCredential } from "@/graphql/hooks/credentials"
 
 export function DeleteCredentialDialog() {
-  const { deleteDialogOpen, selected, closeDeleteDialog } = useCredentialStore()
+  const deleteDialogOpen = useCredentialStore((s) => s.deleteDialogOpen)
+  const selected = useCredentialStore((s) => s.selected)
+  const closeDeleteDialog = useCredentialStore((s) => s.closeDeleteDialog)
   const deleteCredential = useDeleteCredential()
   const [error, setError] = useState<string | null>(null)
 

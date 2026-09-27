@@ -48,7 +48,8 @@ interface CreateCredentialDialogProps {
 export function CreateCredentialDialog({
   operationId,
 }: CreateCredentialDialogProps) {
-  const { createDialogOpen, closeCreateDialog } = useCredentialStore();
+  const createDialogOpen = useCredentialStore((s) => s.createDialogOpen);
+  const closeCreateDialog = useCredentialStore((s) => s.closeCreateDialog);
   const createCredential = useCreateCredential();
   const [values, setValues] = useState<CredentialFormValues>(emptyValues);
   const [error, setError] = useState<string | null>(null);

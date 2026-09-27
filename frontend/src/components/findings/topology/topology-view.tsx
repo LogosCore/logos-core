@@ -322,7 +322,6 @@ export function TopologyView({ operationId }: TopologyViewProps) {
   // priority. One mechanism for every rebuild source: lens switch, hiding
   // identities, data refresh.
   const visibleTopology = useDeferredValue(targetTopology)
-  const isRebuilding = visibleTopology !== targetTopology
 
   // Live force-directed layout: pre-settled for first paint, re-heated while
   // a node is dragged so neighbors follow. Positions are session-only: any
@@ -335,7 +334,13 @@ export function TopologyView({ operationId }: TopologyViewProps) {
     onNodeDragStart,
     onNodeDrag,
     onNodeDragStop,
+    isSettling,
   } = useTopologySimulation(visibleTopology)
+
+  // Two reasons the map on screen is not yet the map the inputs describe: React
+  // has not re-rendered at deferred priority yet, or the worker has not returned
+  // the first settle for this graph. Both show the same overlay.
+  const isRebuilding = visibleTopology !== targetTopology || isSettling
 
   // Click-to-focus + search emphasis: dims/rings layered over the simulation
   // output. See use-emphasis.ts for the interaction rules.

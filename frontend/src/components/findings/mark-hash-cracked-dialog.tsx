@@ -4,8 +4,9 @@ import { useHashStore } from "@/stores/hashes"
 import { useHash, useMarkHashCracked } from "@/graphql/hooks/hashes"
 
 export function MarkHashCrackedDialog() {
-  const { markCrackedDialogOpen, closeMarkCrackedDialog, selected } =
-    useHashStore()
+  const markCrackedDialogOpen = useHashStore((s) => s.markCrackedDialogOpen)
+  const closeMarkCrackedDialog = useHashStore((s) => s.closeMarkCrackedDialog)
+  const selected = useHashStore((s) => s.selected)
   const mark = useMarkHashCracked()
 
   // The hash row is already cached from the list query, so this is a

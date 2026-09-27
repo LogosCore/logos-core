@@ -7,7 +7,9 @@ import { Permissions } from "@/constants/permissions"
 
 export function UsersToolbar() {
   const hasPermission = useAuthStore((s) => s.hasPermission)
-  const { search, setSearch, openCreateDialog } = useUserStore()
+  const search = useUserStore((s) => s.search)
+  const setSearch = useUserStore((s) => s.setSearch)
+  const openCreateDialog = useUserStore((s) => s.openCreateDialog)
 
   return (
     <div className="flex items-center justify-between gap-3">

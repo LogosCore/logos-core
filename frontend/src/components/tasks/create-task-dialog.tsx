@@ -30,7 +30,9 @@ interface CreateTaskDialogProps {
 }
 
 export function CreateTaskDialog({ operationId }: CreateTaskDialogProps) {
-  const { createDialogOpen, createStage, closeCreateDialog } = useTaskStore()
+  const createDialogOpen = useTaskStore((s) => s.createDialogOpen)
+  const createStage = useTaskStore((s) => s.createStage)
+  const closeCreateDialog = useTaskStore((s) => s.closeCreateDialog)
   const createTask = useCreateTask()
   const [values, setValues] = useState<TaskFormValues>(emptyTaskFormValues)
   const [relations, setRelations] = useState<TaskRelationsValues>(

@@ -38,7 +38,9 @@ type HostFormStep = "form" | "import"
 // carries full interfaces/routes), so the two modes differ only in copy and
 // which mutation fires.
 export function HostFormDialog({ operationId }: HostFormDialogProps) {
-  const { formDialogOpen, selected, closeFormDialog } = useHostStore()
+  const formDialogOpen = useHostStore((s) => s.formDialogOpen)
+  const selected = useHostStore((s) => s.selected)
+  const closeFormDialog = useHostStore((s) => s.closeFormDialog)
   // Step lives here (not in HostForm) so the dialog's close request (X button,
   // Escape, backdrop) can be intercepted: closing from the "Magic" import step
   // returns to the form instead of dismissing the whole dialog.

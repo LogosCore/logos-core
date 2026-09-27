@@ -30,7 +30,9 @@ import {
 import type { CredentialFieldsFragment } from "@/graphql/gql/graphql"
 
 export function EditCredentialDialog() {
-  const { editDialogOpen, selected, closeEditDialog } = useCredentialStore()
+  const editDialogOpen = useCredentialStore((s) => s.editDialogOpen)
+  const selected = useCredentialStore((s) => s.selected)
+  const closeEditDialog = useCredentialStore((s) => s.closeEditDialog)
   const { data, isLoading } = useCredential(selected?.id ?? "")
   const credential = data?.credential
 

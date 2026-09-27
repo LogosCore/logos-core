@@ -1,15 +1,38 @@
 import { useEffect } from "react"
 import type { LucideIcon } from "lucide-react"
 import {
-  ICON_LOOKUP,
-  loadLucideIconAsync,
-} from "@/components/wiki/icon-catalog"
-import {
   STATIC_FAVICON_HREF,
   emojiToSvgDataUrl,
   lucideToSvgDataUrl,
   setFavicon,
 } from "@/lib/favicon"
+
+// icon-catalog is imported dynamically, and only on the `lucide-name` branch.
+//
+// Every page calls this hook, so a static import put the catalog — the curated
+// components plus a 1,940-entry glob thunk table, some 370 KB — in the chunk of
+// each one. The login and enroll routes pay the most for it and use it least:
+// they ask for `{ kind: "static" }` and nothing else, so 95% of what those two
+// routes downloaded was a catalog they never read, in front of the first screen
+// anyone sees.
+//
+// Only wiki documents store an arbitrary icon name, so `lucide-name` is the
+// only branch that needs a lookup — and the wiki page imports the catalog
+// directly anyway, which means the dynamic import resolves against a module
+// already in flight there. Nothing is fetched twice.
+//
+// Resolving the curated name asynchronously costs a frame on the favicon. That
+// was already the shape of this code: lucideToSvgDataUrl is async, so no branch
+// here ever painted synchronously.
+function loadIconCatalog() {
+  return import("@/components/wiki/icon-catalog")
+}
+
+// A failed catalog fetch leaves the fallback favicon painted, which is the
+// correct end state — log it rather than surfacing an unhandled rejection.
+function noteCatalogFailure(error: unknown) {
+  console.error("Favicon icon catalog failed to load:", error)
+}
 
 // `lucide-name` is for wiki documents whose icon string may be outside the
 // curated catalog — those resolve async via the catalog's import-glob map,
@@ -70,21 +93,25 @@ export function usePageMetadata(meta: PageMetadata): void {
         paintLucide(icon.component, icon.color)
         break
       case "lucide-name": {
-        const curated = ICON_LOOKUP[icon.name]
-        if (curated) {
-          paintLucide(curated, icon.color)
-          break
-        }
-        // Uncurated: paint the emoji-or-static fallback, then upgrade when
-        // the async import lands.
+        // Paint the emoji-or-static fallback first, then upgrade once the
+        // catalog — and, for an uncurated name, the icon's own chunk — lands.
+        const { name, color, fallbackEmoji } = icon
         setFavicon(
-          icon.fallbackEmoji
-            ? emojiToSvgDataUrl(icon.fallbackEmoji)
+          fallbackEmoji
+            ? emojiToSvgDataUrl(fallbackEmoji)
             : STATIC_FAVICON_HREF,
         )
-        loadLucideIconAsync(icon.name).then((Icon) => {
-          if (!cancelled && Icon) paintLucide(Icon, icon.color)
-        })
+        loadIconCatalog().then(({ ICON_LOOKUP, loadLucideIconAsync }) => {
+          if (cancelled) return
+          const curated = ICON_LOOKUP[name]
+          if (curated) {
+            paintLucide(curated, color)
+            return
+          }
+          loadLucideIconAsync(name).then((Icon) => {
+            if (!cancelled && Icon) paintLucide(Icon, color)
+          })
+        }, noteCatalogFailure)
         break
       }
       case "emoji":

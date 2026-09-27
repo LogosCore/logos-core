@@ -16,7 +16,8 @@ import { useUserStore } from "@/stores/users"
 import { useCreateUser } from "@/graphql/hooks/users"
 
 export function CreateUserDialog() {
-  const { createDialogOpen, closeDialogs } = useUserStore()
+  const createDialogOpen = useUserStore((s) => s.createDialogOpen)
+  const closeDialogs = useUserStore((s) => s.closeDialogs)
   const createUser = useCreateUser()
   const [error, setError] = useState<string | null>(null)
 

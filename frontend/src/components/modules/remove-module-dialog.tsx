@@ -13,7 +13,9 @@ import { useModuleStore } from "@/stores/modules"
 import { useRemoveModule } from "@/graphql/hooks/modules"
 
 export function RemoveModuleDialog() {
-  const { removeDialogOpen, selectedModule, closeDialogs } = useModuleStore()
+  const removeDialogOpen = useModuleStore((s) => s.removeDialogOpen)
+  const selectedModule = useModuleStore((s) => s.selectedModule)
+  const closeDialogs = useModuleStore((s) => s.closeDialogs)
   const removeModule = useRemoveModule()
   const [error, setError] = useState<string | null>(null)
 

@@ -12,11 +12,9 @@ import { useWikiStore } from "@/stores/wiki"
 import { usePermanentlyDeleteWikiDocument } from "@/graphql/hooks/wiki"
 
 export function PermanentDeleteWikiDocumentDialog() {
-  const {
-    permanentDeleteDialogOpen,
-    permanentDeleteTarget,
-    closePermanentDeleteDialog,
-  } = useWikiStore()
+  const permanentDeleteDialogOpen = useWikiStore((s) => s.permanentDeleteDialogOpen)
+  const permanentDeleteTarget = useWikiStore((s) => s.permanentDeleteTarget)
+  const closePermanentDeleteDialog = useWikiStore((s) => s.closePermanentDeleteDialog)
   const permanentlyDelete = usePermanentlyDeleteWikiDocument()
   const [error, setError] = useState<string | null>(null)
 
