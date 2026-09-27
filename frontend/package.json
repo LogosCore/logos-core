@@ -12,6 +12,7 @@
     "codegen:watch": "graphql-codegen --config codegen.ts --watch",
     "test": "vitest",
     "test:run": "vitest run",
+    "budget": "node scripts/check-bundle-budget.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {

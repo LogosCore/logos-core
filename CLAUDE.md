@@ -49,6 +49,33 @@ Makefile does a hard `include .env` and `.env` is untracked, so any `make`
 target fails in a fresh checkout. Keep the two lists in sync when a new
 required setting is added to `pkg/environment`.
 
+`.github/workflows/ci-frontend.yml` is the same gate for `frontend/**`: vitest,
+eslint, and `npm run build` (which is `tsc -b && vite build`, so it is also the
+typecheck). Like `publish-core.yml`, `publish-frontend.yml` only builds and
+pushes the image. Before this workflow existed nothing ran the frontend suite on
+a push, which is how two tests came to sit failing on `main` — type errors were
+still caught, by the image build, but nothing else was.
+
+Its Node version is pinned in the workflow's `env` and must track
+`NODE_VERSION` in `frontend/Dockerfile`, so CI builds what the image builds.
+
+The third job is a bundle budget: `frontend/scripts/check-bundle-budget.mjs`
+fails the build when the first-paint critical path — the entry plus every
+modulepreload `index.html` names — grows past the ceiling recorded in that file.
+It exists because the expensive regressions in the SPA do not look like
+performance mistakes in a diff: they are a static import added to a module the
+app shell already reaches, which quietly moves a lazy chunk onto first paint.
+Raising a budget is allowed; doing it without saying why in the commit message
+is not.
+
+Frontend lint carries documented debt. `eslint-plugin-react-hooks` v7 applies
+the React Compiler's own analysis and is stricter than the set this code was
+written against, so nine pre-existing errors across seven files are downgraded
+to warnings **per file** in `frontend/eslint.config.js`, with the reasoning for
+each. Scoping them per file rather than per rule keeps every rule at error
+everywhere else, so a new violation still fails; the list is meant to shrink.
+Same policy as `core/.golangci.yml`: fix the code, or stay out with a note.
+
 ### Repository integration tests
 
 `make test-integration` runs the tests in `pkg/repository` that need a real
