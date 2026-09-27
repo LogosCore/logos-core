@@ -6,7 +6,68 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * Base UI's `Select.Value` renders the selected *value*, not the matching
+ * item's text — a closed trigger reads "all" where the open list said "All
+ * agents". The documented fix is to hand `Select.Root` an `items` map, which
+ * every call site would otherwise have to remember to build and keep in step
+ * with the `<SelectItem>`s right beside it. None of ours did, so every select
+ * in the app showed raw values.
+ *
+ * So the map is derived here from the items the caller already wrote. An
+ * explicit `items` prop still wins, for values that are objects or labels that
+ * differ from what the list renders.
+ *
+ * Static inspection of the children rather than registration from the items
+ * themselves: the popup is portalled and only mounted while open, which is
+ * precisely when the trigger's label does not matter. Items rendered by a
+ * nested component are invisible to this and fall back to the old behaviour;
+ * those call sites can pass `items` themselves.
+ */
+function Select<Value, Multiple extends boolean | undefined = false>({
+  items,
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const resolvedItems = React.useMemo(() => {
+    if (items) return items
+    const collected = collectItemLabels(children)
+    return collected.length > 0 ? collected : undefined
+  }, [items, children])
+
+  return (
+    <SelectPrimitive.Root items={resolvedItems} {...props}>
+      {children}
+    </SelectPrimitive.Root>
+  )
+}
+
+/**
+ * Walks the element tree for `<SelectItem>`s and pairs each one's value with
+ * what it renders. Recurses through anything else — content, groups, fragments,
+ * mapped arrays — since the items are always nested a few levels down.
+ */
+function collectItemLabels(
+  node: React.ReactNode,
+  out: { value: unknown; label: React.ReactNode }[] = [],
+): { value: unknown; label: React.ReactNode }[] {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+
+    if (child.type === SelectItem || child.type === SelectPrimitive.Item) {
+      // `undefined` is Base UI's "no value", distinct from a null-valued item
+      // used as a placeholder row, which is worth carrying through.
+      if (props.value !== undefined) {
+        out.push({ value: props.value, label: props.children })
+      }
+      return
+    }
+
+    if (props.children !== undefined) collectItemLabels(props.children, out)
+  })
+  return out
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
