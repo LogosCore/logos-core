@@ -25,14 +25,12 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ActivityIcon, BotIcon, ChevronsUpDownIcon, KeyIcon, LogOutIcon, MonitorIcon, MonitorSmartphoneIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react"
+import { BotIcon, ChevronsUpDownIcon, KeyIcon, LogOutIcon, MonitorIcon, MonitorSmartphoneIcon, MoonIcon, SunIcon, UserIcon } from "lucide-react"
 import { useAuthStore } from "@/stores/auth"
 import { useSessionStore } from "@/stores/sessions"
 import { useAPIKeyStore } from "@/stores/api-keys"
-import { useAgentKeyStore } from "@/stores/agent-keys"
 import { MySessionsDialog } from "@/components/sessions/my-sessions-dialog"
 import { MyAPIKeyDialog } from "@/components/api-keys/my-api-key-dialog"
-import { AgentKeysDialog } from "@/components/keys/agent-keys-dialog"
 import { avatarLabel } from "@/lib/avatar-label"
 
 export function NavUser({
@@ -49,7 +47,6 @@ export function NavUser({
   const logout = useAuthStore((s) => s.logout)
   const openMySessionsDialog = useSessionStore((s) => s.openMySessionsDialog)
   const openAPIKeysDialog = useAPIKeyStore((s) => s.openAPIKeysDialog)
-  const openAgentKeysDialog = useAgentKeyStore((s) => s.openAgentKeysDialog)
   const { setTheme } = useTheme()
 
   async function handleLogout() {
@@ -63,7 +60,6 @@ export function NavUser({
     <>
     <MySessionsDialog />
     <MyAPIKeyDialog />
-    <AgentKeysDialog />
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
@@ -136,19 +132,13 @@ export function NavUser({
               <KeyIcon className="size-4" />
               API Key
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={openAgentKeysDialog}>
+            {/* A personal surface, like Sessions: the agents YOU delegated to
+                and what they did, across every operation. Not part of the
+                operation navigation, because it is not about any one operation
+                and works without a scoped one. */}
+            <DropdownMenuItem render={<Link to="/agents" />}>
               <BotIcon className="size-4" />
-              Agent Keys
-            </DropdownMenuItem>
-            {/* A personal audit surface, like Sessions: what YOUR agents did,
-                across every operation. Not part of the operation navigation,
-                because it is not about any one operation and works without a
-                scoped one. */}
-            <DropdownMenuItem
-              render={<Link to="/agent-activity" />}
-            >
-              <ActivityIcon className="size-4" />
-              Agent Activity
+              Agents
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>

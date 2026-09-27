@@ -31,10 +31,7 @@ const WikiPage = page(() => import("@/pages/wiki"), "WikiPage")
 const WikiPrintPage = page(() => import("@/pages/wiki-print"), "WikiPrintPage")
 const FindingsPage = page(() => import("@/pages/findings"), "FindingsPage")
 const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
-const AgentActivityPage = page(
-  () => import("@/pages/agent-activity"),
-  "AgentActivityPage",
-)
+const AgentsPage = page(() => import("@/pages/agents"), "AgentsPage")
 const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
 
 function App() {
@@ -85,7 +82,16 @@ function App() {
               <Route path="findings" element={<FindingsPage />} />
               <Route path="tasks" element={<TasksPage />} />
               <Route path="timeline" element={<TimelinePage />} />
-              <Route path="agent-activity" element={<AgentActivityPage />} />
+              {/* One route for both tabs: the page reads the tab off the
+                  pathname, and a single element means switching tabs
+                  reconciles rather than remounting, so the filters in the URL
+                  and the sheet on screen survive the navigation. */}
+              <Route path="agents/*" element={<AgentsPage />} />
+              {/* Where agent activity used to live, for anyone's bookmark. */}
+              <Route
+                path="agent-activity"
+                element={<Navigate to="/agents/activity" replace />}
+              />
             </Route>
             {/* Chromeless print view — sits inside ProtectedRoute so the
                 auth guard still applies, but outside AppLayout so it

@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { ShieldAlertIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -144,6 +145,20 @@ export function AgentKeyForm({
           checked={allowWrites}
           onCheckedChange={setAllowWrites}
         />
+      </div>
+
+      {/* At the point of decision, not in a collapsed panel elsewhere. What an
+          agent may read is what leaves the platform, and scope is the only
+          control over it — an operator setting that scope is the one person who
+          can weigh it, and only while they are setting it. */}
+      <div className="flex items-start gap-2 rounded-md border border-yellow-500/40 bg-yellow-500/5 p-3 text-xs">
+        <ShieldAlertIcon className="mt-0.5 size-4 shrink-0 text-yellow-700 dark:text-yellow-400" />
+        <p className="text-muted-foreground">
+          Credentials and hashes are returned to the agent in full, including
+          secret material. That material leaves this platform and reaches your
+          model provider. Narrow the operations, or cap the key at viewer, if
+          that is not what you want.
+        </p>
       </div>
 
       <div className="flex justify-end gap-2">

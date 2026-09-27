@@ -1,13 +1,13 @@
 import { useMemo } from "react"
-import { BotIcon } from "lucide-react"
-import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
 import {
   useInfiniteAgentActions,
-  useMyAgentActionSubscription,
   useMyAgentActivitySummary,
 } from "@/graphql/hooks/agent-actions"
-import { outcomesFor, useAgentActionStore } from "@/stores/agent-actions"
+import {
+  outcomesFor,
+  useAgentActivityParams,
+} from "@/hooks/use-agent-activity-params"
 import { AgentActivityToolbar } from "@/components/agent-activity/agent-activity-toolbar"
 import { AgentActionsTable } from "@/components/agent-activity/agent-actions-table"
 
@@ -15,35 +15,20 @@ import { AgentActionsTable } from "@/components/agent-activity/agent-actions-tab
  * What the operator's own agents have been doing — across every operation they
  * touched.
  *
- * Deliberately a personal page rather than an operation one. You delegate to a
- * key, not to an engagement, and a key can reach several; making an operator
- * visit each operation in turn to find out what they had authorized would be
- * the opposite of an audit. Operation is a filter here, not the frame.
- *
- * It needs no scoped operation to be useful, which is why it lives in the user
- * menu beside sessions and keys rather than in the operation navigation.
+ * Reads are included, which is the point: the timeline shows what an agent
+ * changed, this shows what it looked at. Operation is a filter here, not the
+ * frame — you delegate to a key, not to an engagement, and one key can reach
+ * several.
  */
-export function AgentActivityPage() {
-  usePageMetadata({
-    title: "Agent activity",
-    icon: { kind: "lucide", component: BotIcon },
-  })
-
-  // Live updates: an agent working while this page is open should appear
-  // without a reload, the same way the users and operations tables behave.
-  useMyAgentActionSubscription()
-
-  const agentKeyId = useAgentActionStore((s) => s.agentKeyId)
-  const operationId = useAgentActionStore((s) => s.operationId)
-  const writesOnly = useAgentActionStore((s) => s.writesOnly)
-  const refusedOnly = useAgentActionStore((s) => s.refusedOnly)
+export function AgentActivityTab() {
+  const { filters } = useAgentActivityParams()
 
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useInfiniteAgentActions({
-      agentKeyId,
-      operationId,
-      writesOnly: writesOnly || null,
-      outcomes: outcomesFor(refusedOnly),
+      agentKeyId: filters.agentKeyId,
+      operationId: filters.operationId,
+      writesOnly: filters.writesOnly || null,
+      outcomes: outcomesFor(filters.refusedOnly),
     })
 
   const actions = useConnectionNodes(data, (p) => p.myAgentActions)
@@ -63,7 +48,7 @@ export function AgentActivityPage() {
   }, [actions])
 
   return (
-    <div className="flex flex-1 flex-col gap-2 p-2">
+    <div className="flex flex-1 flex-col gap-2">
       <AgentActivityToolbar
         agents={agents}
         operations={operations}
