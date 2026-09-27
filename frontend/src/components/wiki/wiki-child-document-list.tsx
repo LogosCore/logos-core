@@ -1,8 +1,15 @@
 import { useMemo } from "react"
 import { Link } from "react-router"
-import { ChevronRightIcon, PlusIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronRightIcon } from "lucide-react"
+import {
+  CollapsibleSection,
+  SectionAddButton,
+} from "@/components/ui/collapsible-section"
 import { useWikiStore } from "@/stores/wiki"
+import {
+  useWikiFooterSection,
+  type WikiFooterSurface,
+} from "@/stores/wiki-footer-sections"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { useWikiDocumentChildren } from "@/graphql/hooks/wiki"
 import { sortByOrder } from "@/components/wiki/wiki-tree-helpers"
@@ -11,14 +18,17 @@ interface WikiChildDocumentListProps {
   documentId: string
   operationId: string
   isEditor: boolean
+  surface: WikiFooterSurface
 }
 
 export function WikiChildDocumentList({
   documentId,
   operationId,
   isEditor,
+  surface,
 }: WikiChildDocumentListProps) {
   const openCreateDialog = useWikiStore((s) => s.openCreateDialog)
+  const [open, setOpen] = useWikiFooterSection(surface, "subpages")
 
   // Shares the per-parent cache key with the sidebar's lazy expand for this
   // doc — the second call is a TanStack cache hit, no extra network.
@@ -31,28 +41,22 @@ export function WikiChildDocumentList({
   if (children.length === 0 && !isEditor) return null
 
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Sub-pages
-          {children.length > 0 && (
-            <span className="ml-1.5 text-muted-foreground/70">
-              {children.length}
-            </span>
-          )}
-        </h3>
-        {isEditor && (
-          <Button
-            variant="ghost"
-            size="xs"
+    <CollapsibleSection
+      title="Sub-pages"
+      count={children.length}
+      collapsible
+      open={open}
+      onOpenChange={setOpen}
+      headerAction={
+        isEditor && (
+          <SectionAddButton
+            label="Add sub-page"
+            ariaLabel="Add a sub-page to this document"
             onClick={() => openCreateDialog(documentId)}
-          >
-            <PlusIcon />
-            Add sub-page
-          </Button>
-        )}
-      </div>
-
+          />
+        )
+      }
+    >
       {children.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No sub-pages yet.
@@ -84,6 +88,6 @@ export function WikiChildDocumentList({
           ))}
         </ul>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }

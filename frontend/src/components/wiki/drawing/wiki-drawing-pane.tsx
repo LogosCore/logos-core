@@ -132,6 +132,7 @@ export function WikiDrawingPane({
               documentId={documentId}
               operationId={operationId}
               isEditor={isEditor}
+              surface="drawing"
               className="mt-0"
             />
           </div>

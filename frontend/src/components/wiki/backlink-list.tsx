@@ -1,5 +1,6 @@
 import { Link } from "react-router"
 import { ChevronRightIcon } from "lucide-react"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { WikiAncestorBreadcrumb } from "@/components/wiki/wiki-ancestor-breadcrumb"
 import { cn } from "@/lib/utils"
@@ -27,6 +28,13 @@ interface BacklinkListProps {
   // tree already gives operators that context.
   showFullPath?: boolean
   isLoading?: boolean
+  // When true, the heading becomes a disclosure trigger and the list can be
+  // folded away. The wiki editor footer turns this on and persists the state
+  // per viewer; the dialogs leave it off, since their panels are short-lived
+  // and already scroll.
+  collapsible?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -45,23 +53,21 @@ export function BacklinkList({
   scrollable = false,
   showFullPath = false,
   isLoading = false,
+  collapsible = false,
+  open,
+  onOpenChange,
 }: BacklinkListProps) {
   if (isLoading && documents.length === 0) return null
   if (documents.length === 0 && !showWhenEmpty) return null
 
   return (
-    // min-w-0 lets the section sit inside a flex parent without long row
-    // titles forcing the column wider than the modal.
-    <div className="min-w-0">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {title}
-          <span className="ml-1.5 text-muted-foreground/70">
-            {documents.length}
-          </span>
-        </h3>
-      </div>
-
+    <CollapsibleSection
+      title={title}
+      count={documents.length}
+      collapsible={collapsible}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       {documents.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No wiki documents reference this yet.
@@ -142,6 +148,6 @@ export function BacklinkList({
           })}
         </ul>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }

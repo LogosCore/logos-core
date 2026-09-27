@@ -1,5 +1,6 @@
 import { type ReactNode } from "react"
 import { ChevronRightIcon } from "lucide-react"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { ScoreSwatch, TaskStageBadge, TaskStatusBadge } from "@/components/tasks/task-badges"
 import { cn } from "@/lib/utils"
 import type { TaskBacklinkFieldsFragment } from "@/graphql/gql/graphql"
@@ -28,6 +29,12 @@ interface TaskBacklinkListProps {
   // generic (ReactNode) so other surfaces can wire any inline action
   // without forking the list component.
   headerAction?: ReactNode
+  // Mirrors BacklinkList: when true the heading becomes a disclosure trigger
+  // and the rows fold away. The `headerAction` stays outside the trigger, so
+  // "Add to task" still works while the section is collapsed.
+  collapsible?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
@@ -49,6 +56,9 @@ export function TaskBacklinkList({
   scrollable = false,
   isLoading = false,
   headerAction,
+  collapsible = false,
+  open,
+  onOpenChange,
 }: TaskBacklinkListProps) {
   if (isLoading && tasks.length === 0) return null
   // headerAction needs to surface even on an empty list — that's the whole
@@ -58,15 +68,14 @@ export function TaskBacklinkList({
   if (tasks.length === 0 && !showWhenEmpty && !headerAction) return null
 
   return (
-    <div className="min-w-0">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {title}
-          <span className="ml-1.5 text-muted-foreground/70">{tasks.length}</span>
-        </h3>
-        {headerAction}
-      </div>
-
+    <CollapsibleSection
+      title={title}
+      count={tasks.length}
+      headerAction={headerAction}
+      collapsible={collapsible}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       {tasks.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No tasks reference this yet.
@@ -121,6 +130,6 @@ export function TaskBacklinkList({
           ))}
         </ul>
       )}
-    </div>
+    </CollapsibleSection>
   )
 }

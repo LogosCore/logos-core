@@ -1,8 +1,13 @@
 import { BacklinkList } from "@/components/wiki/backlink-list"
 import { useWikiDocumentBacklinks } from "@/graphql/hooks/wiki"
+import {
+  useWikiFooterSection,
+  type WikiFooterSurface,
+} from "@/stores/wiki-footer-sections"
 
 interface WikiBacklinkListProps {
   documentId: string
+  surface: WikiFooterSurface
 }
 
 /**
@@ -19,9 +24,21 @@ interface WikiBacklinkListProps {
  * empty (no analogue to the sub-page "Add" affordance to show — backlinks
  * are derived from editor activity, not a direct user action on this page).
  */
-export function WikiBacklinkList({ documentId }: WikiBacklinkListProps) {
+export function WikiBacklinkList({
+  documentId,
+  surface,
+}: WikiBacklinkListProps) {
   const { data, isLoading } = useWikiDocumentBacklinks(documentId)
+  const [open, setOpen] = useWikiFooterSection(surface, "backlinks")
   const backlinks = data?.wikiDocumentBacklinks ?? []
 
-  return <BacklinkList documents={backlinks} isLoading={isLoading} />
+  return (
+    <BacklinkList
+      documents={backlinks}
+      isLoading={isLoading}
+      collapsible
+      open={open}
+      onOpenChange={setOpen}
+    />
+  )
 }

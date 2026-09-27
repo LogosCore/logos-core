@@ -1,6 +1,5 @@
-import { PlusIcon } from "lucide-react"
 import { toast } from "sonner"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { SectionAddButton } from "@/components/ui/collapsible-section"
 import { TaskBacklinkList } from "@/components/tasks/task-backlink-list"
 import { openTaskPicker } from "@/components/tasks/task-picker-store"
 import {
@@ -9,10 +8,15 @@ import {
   useAddTaskWikiReference,
 } from "@/graphql/hooks/tasks"
 import { useTaskStore } from "@/stores/tasks"
+import {
+  useWikiFooterSection,
+  type WikiFooterSurface,
+} from "@/stores/wiki-footer-sections"
 
 interface WikiTaskBacklinkListProps {
   documentId: string
   operationId: string
+  surface: WikiFooterSurface
 }
 
 /**
@@ -39,10 +43,12 @@ interface WikiTaskBacklinkListProps {
 export function WikiTaskBacklinkList({
   documentId,
   operationId,
+  surface,
 }: WikiTaskBacklinkListProps) {
   const { data, isLoading } = useTasksReferencingWikiDocument(documentId)
   const openEditDialog = useTaskStore((s) => s.openEditDialog)
   const addRef = useAddTaskWikiReference()
+  const [open, setOpen] = useWikiFooterSection(surface, "tasks")
   const tasks = data?.tasksReferencingWikiDocument ?? []
 
   useTaskChangedSubscription(operationId)
@@ -78,22 +84,12 @@ export function WikiTaskBacklinkList({
   // headerAction as an implicit showWhenEmpty, so an unlinked document
   // still surfaces the affordance.
   const headerAction = (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            onClick={handleAdd}
-            aria-label="Add this document to a task"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-dashed border-border text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-            disabled={addRef.isPending}
-          />
-        }
-      >
-        <PlusIcon className="size-3.5" />
-      </TooltipTrigger>
-      <TooltipContent>Add to task</TooltipContent>
-    </Tooltip>
+    <SectionAddButton
+      label="Add to task"
+      ariaLabel="Add this document to a task"
+      onClick={handleAdd}
+      disabled={addRef.isPending}
+    />
   )
 
   return (
@@ -102,6 +98,9 @@ export function WikiTaskBacklinkList({
       isLoading={isLoading}
       onTaskClick={(task) => openEditDialog({ id: task.id, name: task.name })}
       headerAction={headerAction}
+      collapsible
+      open={open}
+      onOpenChange={setOpen}
     />
   )
 }
