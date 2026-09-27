@@ -10,10 +10,17 @@ describe("scrambleAt", () => {
   })
 
   it("is fully scrambled at the start but keeps spaces and length", () => {
-    const out = scrambleAt("Logos", 0, zero)
-    expect(out).toHaveLength(7)
-    expect(out[4]).toBe(" ")
-    expect(out).not.toBe("Logos")
+    // Two words on purpose. The wordmark this drives is one word today, but
+    // preserving spaces is part of the function's contract — it is what keeps
+    // the word shape legible while the glyphs churn — and a single-word input
+    // cannot check it. With `zero` for random, every scrambled slot is GLYPHS[0].
+    const target = "Logos Core"
+    const out = scrambleAt(target, 0, zero)
+
+    expect(out).toHaveLength(target.length)
+    expect(out[5]).toBe(" ")
+    expect(out).toBe("!!!!! !!!!")
+    expect(out).not.toBe(target)
   })
 
   it("resolves characters from the left as progress grows", () => {

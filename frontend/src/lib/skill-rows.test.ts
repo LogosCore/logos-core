@@ -118,12 +118,18 @@ describe("sortSkillRows", () => {
   ])
 
   it("sorts by name in both directions", () => {
+    // The built-in "logos" row takes its alphabetical place here, between
+    // "aaa-first" and "recon-sweep", rather than anchoring to an end the way it
+    // does for AUTHOR and UPDATED two tests below. That is the rule the whole
+    // field set follows: anchor only where the built-in has no value to compare
+    // (no author, no upload time), and sort it on its merits where it does.
+    // VERSION is the other "has a value" field, and it sorts by value too.
     expect(
       sortSkillRows(rows, { field: "NAME", direction: "ASC" }).map((r) => r.name),
-    ).toEqual(["aaa-first", "recon-sweep", "logos"])
+    ).toEqual(["aaa-first", "logos", "recon-sweep"])
     expect(
       sortSkillRows(rows, { field: "NAME", direction: "DESC" }).map((r) => r.name),
-    ).toEqual(["logos", "recon-sweep", "aaa-first"])
+    ).toEqual(["recon-sweep", "logos", "aaa-first"])
   })
 
   it("sorts by version", () => {
