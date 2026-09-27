@@ -26,7 +26,7 @@
 // # Scope
 //
 // Knowledge layer only: wiki, tasks, hosts, credentials, hashes and the
-// timeline. Nothing here touches implant tasking, sessions, channels or the
+// timeline. Nothing here touches minion tasking, sessions, channels or the
 // module registry. Channels are deliberately plaintext-blind; this package
 // must not become the way around that.
 package mcp

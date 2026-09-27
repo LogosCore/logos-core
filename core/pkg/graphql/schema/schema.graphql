@@ -37,9 +37,9 @@ directive @hasPermission(permission: String!) on FIELD_DEFINITION
 #   - OPERATOR: can manage entities within the operation (future)
 #   - VIEWER: read-only access to the operation
 enum OperationRole {
-  ADMIN
-  OPERATOR
-  VIEWER
+    ADMIN
+    OPERATOR
+    VIEWER
 }
 
 # -----------------------------------------------------------------------------
@@ -51,35 +51,35 @@ enum OperationRole {
 
 # User represents an operator account in the Logos system.
 type User {
-  id: ID!                  # Unique identifier (UUID as string)
-  username: String!        # Login name (unique)
-  roles: [String!]!        # RBAC roles, e.g. ["admin"] or ["user"]
-  active: Boolean!         # Whether this account is enabled
-  # How the account authenticates: "local" (username + password) or "oidc"
-  # (single sign-on). SSO accounts have no password and their username and
-  # roles are re-synced from the identity provider on every login.
-  authSource: String!
-  createdAt: String!       # ISO 8601 timestamp
-  updatedAt: String!       # ISO 8601 timestamp
-  # Usernames this operator hides from the host topology Users lens.
-  # Per-operator, global across operations. Normalized (trimmed, lowercased).
-  hiddenIdentities: [String!]!
-  # The agent skill release this operator last downloaded, and when. Null
-  # when they never have — the SPA then shows no update prompt.
-  skillDownloadedVersion: Int
-  skillDownloadedAt: String
-  # The newest release whose update prompt they dismissed. Null when none.
-  skillUpdateSnoozedVersion: Int
-  # In-app guides this operator has finished or dismissed, by id. A guide that
-  # is not listed is one the SPA will still offer.
-  completedGuides: [String!]!
+    id: ID! # Unique identifier (UUID as string)
+    username: String! # Login name (unique)
+    roles: [String!]! # RBAC roles, e.g. ["admin"] or ["user"]
+    active: Boolean! # Whether this account is enabled
+    # How the account authenticates: "local" (username + password) or "oidc"
+    # (single sign-on). SSO accounts have no password and their username and
+    # roles are re-synced from the identity provider on every login.
+    authSource: String!
+    createdAt: String! # ISO 8601 timestamp
+    updatedAt: String! # ISO 8601 timestamp
+    # Usernames this operator hides from the host topology Users lens.
+    # Per-operator, global across operations. Normalized (trimmed, lowercased).
+    hiddenIdentities: [String!]!
+    # The agent skill release this operator last downloaded, and when. Null
+    # when they never have — the SPA then shows no update prompt.
+    skillDownloadedVersion: Int
+    skillDownloadedAt: String
+    # The newest release whose update prompt they dismissed. Null when none.
+    skillUpdateSnoozedVersion: Int
+    # In-app guides this operator has finished or dismissed, by id. A guide that
+    # is not listed is one the SPA will still offer.
+    completedGuides: [String!]!
 }
 
 # Minimal user info for autocomplete pickers (e.g., adding operation members).
 # Intentionally lightweight — no roles, status, or timestamps.
 type UserSuggestion {
-  id: ID!
-  username: String!
+    id: ID!
+    username: String!
 }
 
 # -----------------------------------------------------------------------------
@@ -98,10 +98,10 @@ type UserSuggestion {
 
 # PageInfo is shared across all connection types.
 type PageInfo {
-  hasNextPage: Boolean!      # True if more items exist after the last edge
-  hasPreviousPage: Boolean!  # True if more items exist before the first edge
-  startCursor: String        # Cursor of the first edge (null if empty)
-  endCursor: String          # Cursor of the last edge (null if empty)
+    hasNextPage: Boolean! # True if more items exist after the last edge
+    hasPreviousPage: Boolean! # True if more items exist before the first edge
+    startCursor: String # Cursor of the first edge (null if empty)
+    endCursor: String # Cursor of the last edge (null if empty)
 }
 
 # Direction for sortable list queries. Shared by every connection that
@@ -110,66 +110,66 @@ type PageInfo {
 # client changes sortBy/sortDirection it must restart pagination from the
 # first page; replaying a cursor from a different sort returns an error.
 enum SortDirection {
-  ASC
-  DESC
+    ASC
+    DESC
 }
 
 # Sortable columns for the `users` query. Only the columns the UI exposes as
 # sortable are listed; the default (and the historical order) is CREATED_AT
 # descending. USERNAME sorts case-insensitively.
 enum UserSortField {
-  USERNAME
-  CREATED_AT
+    USERNAME
+    CREATED_AT
 }
 
 # Sortable columns for the `operations` query. Only the columns the UI exposes
 # as sortable are listed; the default (and the historical order) is CREATED_AT
 # descending. NAME sorts case-insensitively.
 enum OperationSortField {
-  NAME
-  CREATED_AT
+    NAME
+    CREATED_AT
 }
 
 type UserEdge {
-  node: User!                # The actual user object
-  cursor: String!            # Opaque cursor for this user's position
+    node: User! # The actual user object
+    cursor: String! # Opaque cursor for this user's position
 }
 
 type UserConnection {
-  edges: [UserEdge!]!        # The page of users, each wrapped with a cursor
-  pageInfo: PageInfo!        # Pagination metadata
-  totalCount: Int!           # Total users matching the query (for UI counters)
+    edges: [UserEdge!]! # The page of users, each wrapped with a cursor
+    pageInfo: PageInfo! # Pagination metadata
+    totalCount: Int! # Total users matching the query (for UI counters)
 }
 
 # OperationMember represents a user's membership in an operation with their role.
 type OperationMember {
-  user: User!              # The member user
-  role: OperationRole!     # Their role in this operation
+    user: User! # The member user
+    role: OperationRole! # Their role in this operation
 }
 
 # Operation represents an operational context in the Logos system.
-# Operations group users (and later implants, agents, etc.) together.
+# Operations group users together.
 # The relationship between users and operations is many-to-many:
 # a user can belong to multiple operations, and an operation has multiple members.
 # Each member has a role (admin, operator, viewer) that controls their access.
 type Operation {
-  id: ID!                  # Unique identifier (UUID as string)
-  name: String!            # Operation name (unique)
-  description: String!     # What this operation is about
-  members: [OperationMember!]! # Users assigned to this operation with their roles
-  createdAt: String!       # ISO 8601 timestamp
-  updatedAt: String!       # ISO 8601 timestamp
+    id: ID! # Unique identifier (UUID as string)
+    name: String! # Operation name (unique)
+    description: String! # What this operation is about
+    members: [OperationMember!]! # Users assigned to this operation with their roles
+    createdAt: String! # ISO 8601 timestamp
+    updatedAt: String! # ISO 8601 timestamp
 }
 
 type OperationEdge {
-  node: Operation!
-  cursor: String!
+    node: Operation!
+    cursor: String!
 }
 
 type OperationConnection {
-  edges: [OperationEdge!]!
-  pageInfo: PageInfo!
-  totalCount: Int!
+    edges: [OperationEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
 }
 
 # -----------------------------------------------------------------------------
@@ -188,59 +188,59 @@ type OperationConnection {
 #   }
 
 type Query {
-  # me returns the currently authenticated user.
-  # Requires basic auth (any logged-in user).
-  me: User! @hasPermission(permission: "*")
+    # me returns the currently authenticated user.
+    # Requires basic auth (any logged-in user).
+    me: User! @hasPermission(permission: "*")
 
-  # user returns a single user by their ID.
-  # Requires user:read permission (admin only by default).
-  user(id: ID!): User! @hasPermission(permission: "user:read")
+    # user returns a single user by their ID.
+    # Requires user:read permission (admin only by default).
+    user(id: ID!): User! @hasPermission(permission: "user:read")
 
-  # users returns a paginated, searchable list of all users.
-  # Uses cursor-based pagination (Relay Connection spec):
-  # - first/after:  forward pagination (get N items after cursor)
-  # - last/before:  backward pagination (get N items before cursor)
-  # - search: optional text filter (matches username and roles)
-  users(
-    search: String
-    # Sort column + direction. Cursors are minted per sort mode, so
-    # changing the sort restarts pagination (see SortDirection).
-    sortBy: UserSortField = CREATED_AT
-    sortDirection: SortDirection = DESC
-    first: Int = 20
-    after: String
-    last: Int
-    before: String
-  ): UserConnection! @hasPermission(permission: "user:read")
+    # users returns a paginated, searchable list of all users.
+    # Uses cursor-based pagination (Relay Connection spec):
+    # - first/after:  forward pagination (get N items after cursor)
+    # - last/before:  backward pagination (get N items before cursor)
+    # - search: optional text filter (matches username and roles)
+    users(
+        search: String
+        # Sort column + direction. Cursors are minted per sort mode, so
+        # changing the sort restarts pagination (see SortDirection).
+        sortBy: UserSortField = CREATED_AT
+        sortDirection: SortDirection = DESC
+        first: Int = 20
+        after: String
+        last: Int
+        before: String
+    ): UserConnection! @hasPermission(permission: "user:read")
 
-  # userSuggestions returns a lightweight list of users matching a search string.
-  # Designed for autocomplete pickers (e.g., adding operation members).
-  # Returns only id and username — no sensitive data like roles or status.
-  # Requires operation:member permission (available to all authenticated users).
-  userSuggestions(search: String!, first: Int = 10): [UserSuggestion!]!
-    @hasPermission(permission: "operation:member")
+    # userSuggestions returns a lightweight list of users matching a search string.
+    # Designed for autocomplete pickers (e.g., adding operation members).
+    # Returns only id and username — no sensitive data like roles or status.
+    # Requires operation:member permission (available to all authenticated users).
+    userSuggestions(search: String!, first: Int = 10): [UserSuggestion!]!
+        @hasPermission(permission: "operation:member")
 
-  # operation returns a single operation by its ID.
-  operation(id: ID!): Operation! @hasPermission(permission: "operation:read")
+    # operation returns a single operation by its ID.
+    operation(id: ID!): Operation! @hasPermission(permission: "operation:read")
 
-  # operations returns a paginated, searchable list of all operations.
-  operations(
-    search: String
-    # Sort column + direction. Cursors are minted per sort mode, so
-    # changing the sort restarts pagination (see SortDirection).
-    sortBy: OperationSortField = CREATED_AT
-    sortDirection: SortDirection = DESC
-    first: Int = 20
-    after: String
-    last: Int
-    before: String
-  ): OperationConnection! @hasPermission(permission: "operation:read")
+    # operations returns a paginated, searchable list of all operations.
+    operations(
+        search: String
+        # Sort column + direction. Cursors are minted per sort mode, so
+        # changing the sort restarts pagination (see SortDirection).
+        sortBy: OperationSortField = CREATED_AT
+        sortDirection: SortDirection = DESC
+        first: Int = 20
+        after: String
+        last: Int
+        before: String
+    ): OperationConnection! @hasPermission(permission: "operation:read")
 
-  # myOperationRole returns the caller's role in a specific operation,
-  # or null if the caller is not a member of that operation.
-  # Useful for the frontend to know which UI controls to show.
-  myOperationRole(operationId: ID!): OperationRole
-    @hasPermission(permission: "operation:member")
+    # myOperationRole returns the caller's role in a specific operation,
+    # or null if the caller is not a member of that operation.
+    # Useful for the frontend to know which UI controls to show.
+    myOperationRole(operationId: ID!): OperationRole
+        @hasPermission(permission: "operation:member")
 }
 
 # -----------------------------------------------------------------------------
@@ -251,32 +251,32 @@ type Query {
 
 # CreateUserInput — all fields required to create a new user.
 input CreateUserInput {
-  username: String!         # Must be unique
-  password: String!         # Will be bcrypt-hashed before storage
-  roles: [String!]!         # e.g. ["admin"] or ["user"]
-  active: Boolean = true    # Defaults to true if omitted
+    username: String! # Must be unique
+    password: String! # Will be bcrypt-hashed before storage
+    roles: [String!]! # e.g. ["admin"] or ["user"]
+    active: Boolean = true # Defaults to true if omitted
 }
 
 # UpdateUserInput — all fields optional (only send what you want to change).
 # This is a "partial update" pattern — if a field is null/omitted, it is
 # left unchanged on the server.
 input UpdateUserInput {
-  username: String
-  password: String          # If provided, will be re-hashed
-  roles: [String]
-  active: Boolean
+    username: String
+    password: String # If provided, will be re-hashed
+    roles: [String]
+    active: Boolean
 }
 
 # CreateOperationInput — fields needed to create a new operation.
 input CreateOperationInput {
-  name: String!             # Must be unique
-  description: String       # Optional, defaults to empty string
+    name: String! # Must be unique
+    description: String # Optional, defaults to empty string
 }
 
 # UpdateOperationInput — partial update for an operation.
 input UpdateOperationInput {
-  name: String
-  description: String
+    name: String
+    description: String
 }
 
 # -----------------------------------------------------------------------------
@@ -293,71 +293,76 @@ input UpdateOperationInput {
 #   }
 
 type Mutation {
-  # createUser registers a new user account.
-  # Requires user:create permission (admin only).
-  createUser(input: CreateUserInput!): User!
-    @hasPermission(permission: "user:create")
+    # createUser registers a new user account.
+    # Requires user:create permission (admin only).
+    createUser(input: CreateUserInput!): User!
+        @hasPermission(permission: "user:create")
 
-  # updateUser modifies an existing user by ID.
-  # Requires user:update permission (admin only).
-  updateUser(id: ID!, input: UpdateUserInput!): User!
-    @hasPermission(permission: "user:update")
+    # updateUser modifies an existing user by ID.
+    # Requires user:update permission (admin only).
+    updateUser(id: ID!, input: UpdateUserInput!): User!
+        @hasPermission(permission: "user:update")
 
-  # deleteUser removes a user account by ID.
-  # Requires user:delete permission (admin only).
-  deleteUser(id: ID!): Boolean!
-    @hasPermission(permission: "user:delete")
+    # deleteUser removes a user account by ID.
+    # Requires user:delete permission (admin only).
+    deleteUser(id: ID!): Boolean! @hasPermission(permission: "user:delete")
 
-  # updateOwnProfile lets a user modify their own account.
-  # Requires user:update:own permission (any authenticated user).
-  # The server determines which user to update from the JWT token.
-  updateOwnProfile(input: UpdateUserInput!): User!
-    @hasPermission(permission: "user:update:own")
+    # updateOwnProfile lets a user modify their own account.
+    # Requires user:update:own permission (any authenticated user).
+    # The server determines which user to update from the JWT token.
+    updateOwnProfile(input: UpdateUserInput!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # setHiddenIdentities replaces the caller's hidden-identity list (the
-  # usernames hidden from the host topology Users lens). The server determines
-  # which user to update from the JWT token and normalizes the names.
-  # Requires user:update:own permission (any authenticated user).
-  setHiddenIdentities(names: [String!]!): User!
-    @hasPermission(permission: "user:update:own")
+    # setHiddenIdentities replaces the caller's hidden-identity list (the
+    # usernames hidden from the host topology Users lens). The server determines
+    # which user to update from the JWT token and normalizes the names.
+    # Requires user:update:own permission (any authenticated user).
+    setHiddenIdentities(names: [String!]!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # completeGuide records that the caller finished or dismissed one in-app
-  # guide, so it does not come back on their next session. The id must be one
-  # the server knows.
-  #
-  # Idempotent: completing the same guide twice returns the user unchanged, so
-  # two tabs finishing one guide at the same moment is not an error.
-  completeGuide(guide: String!): User!
-    @hasPermission(permission: "user:update:own")
+    # completeGuide records that the caller finished or dismissed one in-app
+    # guide, so it does not come back on their next session. The id must be one
+    # the server knows.
+    #
+    # Idempotent: completing the same guide twice returns the user unchanged, so
+    # two tabs finishing one guide at the same moment is not an error.
+    completeGuide(guide: String!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # createOperation registers a new operation.
-  # Requires operation:create permission (admin only).
-  # The creator is automatically added as an operation admin.
-  createOperation(input: CreateOperationInput!): Operation!
-    @hasPermission(permission: "operation:create")
+    # createOperation registers a new operation.
+    # Requires operation:create permission (admin only).
+    # The creator is automatically added as an operation admin.
+    createOperation(input: CreateOperationInput!): Operation!
+        @hasPermission(permission: "operation:create")
 
-  # updateOperation modifies an existing operation by ID.
-  # App-level gate; resolver checks that caller is an operation admin.
-  updateOperation(id: ID!, input: UpdateOperationInput!): Operation!
-    @hasPermission(permission: "operation:member")
+    # updateOperation modifies an existing operation by ID.
+    # App-level gate; resolver checks that caller is an operation admin.
+    updateOperation(id: ID!, input: UpdateOperationInput!): Operation!
+        @hasPermission(permission: "operation:member")
 
-  # deleteOperation removes an operation by ID.
-  # Requires operation:delete permission (app admin only).
-  deleteOperation(id: ID!): Boolean!
-    @hasPermission(permission: "operation:delete")
+    # deleteOperation removes an operation by ID.
+    # Requires operation:delete permission (app admin only).
+    deleteOperation(id: ID!): Boolean!
+        @hasPermission(permission: "operation:delete")
 
-  # addOperationMember assigns a user to an operation with the given role.
-  # App-level gate; resolver checks that caller is an operation admin.
-  addOperationMember(operationId: ID!, userId: ID!, role: OperationRole!): Operation!
-    @hasPermission(permission: "operation:member")
+    # addOperationMember assigns a user to an operation with the given role.
+    # App-level gate; resolver checks that caller is an operation admin.
+    addOperationMember(
+        operationId: ID!
+        userId: ID!
+        role: OperationRole!
+    ): Operation! @hasPermission(permission: "operation:member")
 
-  # removeOperationMember removes a user from an operation.
-  # App-level gate; resolver checks that caller is an operation admin.
-  removeOperationMember(operationId: ID!, userId: ID!): Operation!
-    @hasPermission(permission: "operation:member")
+    # removeOperationMember removes a user from an operation.
+    # App-level gate; resolver checks that caller is an operation admin.
+    removeOperationMember(operationId: ID!, userId: ID!): Operation!
+        @hasPermission(permission: "operation:member")
 
-  # updateOperationMemberRole changes a member's role in an operation.
-  # App-level gate; resolver checks that caller is an operation admin.
-  updateOperationMemberRole(operationId: ID!, userId: ID!, role: OperationRole!): Operation!
-    @hasPermission(permission: "operation:member")
+    # updateOperationMemberRole changes a member's role in an operation.
+    # App-level gate; resolver checks that caller is an operation admin.
+    updateOperationMemberRole(
+        operationId: ID!
+        userId: ID!
+        role: OperationRole!
+    ): Operation! @hasPermission(permission: "operation:member")
 }

@@ -86,7 +86,7 @@ Phase 2+ will extend coverage by adding topics to the persistence subscriber's s
 - `credential.updated`, `credential.deleted`, `credential.comment.added`
 - `wiki.document.updated`, `wiki.document.soft_deleted`, `wiki.document.moved`, `wiki.document.restored`
 - `operation.member.added`, `operation.member.removed`, `operation.member.updated`
-- Future: scheme network point changes, implant check-ins, host scans, etc.
+- Future: scheme network point changes, minion check-ins, host scans, etc.
 
 ## 4. Data Model
 

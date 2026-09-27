@@ -256,7 +256,7 @@ func TestServer_ToolSurface(t *testing.T) {
 	// Nothing from the offensive surface belongs here. The blast radius is the
 	// knowledge layer; if one of these ever appears, it was not an accident
 	// worth discovering in production.
-	for _, forbidden := range []string{"session", "implant", "channel", "module", "task_agent"} {
+	for _, forbidden := range []string{"session", "minion", "channel", "module", "task_agent"} {
 		if strings.Contains(body, `"name":"`+forbidden) {
 			t.Errorf("a tool touching %q is registered; the agent surface must stay knowledge-layer only", forbidden)
 		}

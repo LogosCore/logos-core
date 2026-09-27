@@ -6920,7 +6920,7 @@ type OperationMember {
 }
 
 # Operation represents an operational context in the Logos system.
-# Operations group users (and later implants, agents, etc.) together.
+# Operations group users together.
 # The relationship between users and operations is many-to-many:
 # a user can belong to multiple operations, and an operation has multiple members.
 # Each member has a role (admin, operator, viewer) that controls their access.
