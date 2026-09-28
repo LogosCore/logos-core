@@ -86,6 +86,7 @@ export function WikiEditorPane({
               documentId={documentId}
               operationId={operationId}
               isEditor={isEditor}
+              rememberScroll
               footer={
                 <WikiDocumentFooterLists
                   documentId={documentId}

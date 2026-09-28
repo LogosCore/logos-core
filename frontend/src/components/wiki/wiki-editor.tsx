@@ -30,6 +30,7 @@ import { WikiCredentialReferenceExtension } from "@/components/wiki/wiki-credent
 import { WikiHashReferenceExtension } from "@/components/wiki/wiki-hash-reference-node"
 import { WikiHostReferenceExtension } from "@/components/wiki/wiki-host-reference-node"
 import { WikiDocumentReferenceExtension } from "@/components/wiki/wiki-document-reference-node"
+import { useWikiScrollMemory } from "@/components/wiki/use-wiki-scroll-memory"
 import { WikiEditorBubbleMenu } from "@/components/wiki/wiki-editor-bubble-menu"
 import { WikiEditorTableMenu } from "@/components/wiki/wiki-editor-table-menu"
 import { WikiEditorTableContextMenu } from "@/components/wiki/wiki-editor-table-context-menu"
@@ -98,6 +99,10 @@ interface WikiEditorProps {
   // the "safe to call window.print()" signal — printing before this fires
   // would capture the skeleton placeholder.
   onReady?: () => void
+  // Reopen the page where the operator last left it (last 10 pages, this
+  // browser). The document pane sets it; the print page must not, or it
+  // would print from wherever the reader had scrolled to.
+  rememberScroll?: boolean
 }
 
 export function WikiEditor({
@@ -106,6 +111,7 @@ export function WikiEditor({
   isEditor,
   footer,
   onReady,
+  rememberScroll = false,
 }: WikiEditorProps) {
   const { ydoc, provider, connectionStatus, isSynced, isReady, schemaOutdated } =
     useHocuspocus(documentId)
@@ -587,6 +593,15 @@ export function WikiEditor({
     setPendingFocusDocId(null)
   }, [isReady, editor, isEditor, pendingFocusDocId, documentId, setPendingFocusDocId])
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useWikiScrollMemory({
+    documentId,
+    scrollRef,
+    editor,
+    isReady,
+    enabled: rememberScroll,
+  })
+
   // Fire the optional ready signal once the editor has its content. Used
   // by the print page to trigger window.print() at the right moment.
   // Guarded on editor too so the callback doesn't fire against a half-built
@@ -617,6 +632,7 @@ export function WikiEditor({
       {isEditor && <WikiInlineCodePopover editor={editor} />}
       {isEditor && <WikiLinkPopover editor={editor} />}
       <div
+        ref={scrollRef}
         className="flex-1 overflow-y-auto px-4 py-2"
         // Anchor for the document guide's "type /" step.
         data-tour="editor-body"
