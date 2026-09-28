@@ -31,6 +31,8 @@ import { WikiHashReferenceExtension } from "@/components/wiki/wiki-hash-referenc
 import { WikiHostReferenceExtension } from "@/components/wiki/wiki-host-reference-node"
 import { WikiDocumentReferenceExtension } from "@/components/wiki/wiki-document-reference-node"
 import { useWikiScrollMemory } from "@/components/wiki/use-wiki-scroll-memory"
+import { WikiHeadingLevel } from "@/components/wiki/wiki-heading-level"
+import { WikiHeadingLevelMenu } from "@/components/wiki/wiki-heading-level-menu"
 import { WikiEditorBubbleMenu } from "@/components/wiki/wiki-editor-bubble-menu"
 import { WikiEditorTableMenu } from "@/components/wiki/wiki-editor-table-menu"
 import { WikiEditorTableContextMenu } from "@/components/wiki/wiki-editor-table-context-menu"
@@ -401,9 +403,13 @@ export function WikiEditor({
         : []),
       // Only rendered while the editor is editable (showOnlyWhenEditable),
       // so it follows setEditable without a rebuild.
+      // An empty heading names its level, so a line just turned into one with
+      // `###` + space reads as a heading before it has any text.
       Placeholder.configure({
-        placeholder: "Start writing...",
+        placeholder: ({ node }) =>
+          node.type.name === "heading" ? `Heading ${node.attrs.level}` : "Start writing...",
       }),
+      WikiHeadingLevel,
       TaskList,
       TaskItem.configure({ nested: true }),
       // WikiTable, not Table: the stock extension derives a column's default
@@ -631,9 +637,13 @@ export function WikiEditor({
       {isEditor && <WikiEditorTableHandles editor={editor} />}
       {isEditor && <WikiInlineCodePopover editor={editor} />}
       {isEditor && <WikiLinkPopover editor={editor} />}
+      {isEditor && <WikiHeadingLevelMenu editor={editor} />}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-2"
+        // pl-6 rather than px-4: the heading level badge sits in the left
+        // margin (wiki-heading-level.ts), and 24px also lines the body up
+        // with the metadata row above it.
+        className="flex-1 overflow-y-auto py-2 pr-4 pl-6"
         // Anchor for the document guide's "type /" step.
         data-tour="editor-body"
         onMouseDown={(e) => {

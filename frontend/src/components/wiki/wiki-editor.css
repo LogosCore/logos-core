@@ -136,6 +136,58 @@
   pointer-events: none;
 }
 
+/* An empty heading under the caret names its level ("Heading 3"), so a line
+   just made into one with `###` + space reads as a heading before it has text.
+   Tiptap's Placeholder puts is-empty and data-placeholder on the current empty
+   node; only headings are styled here, so empty paragraphs stay blank. */
+.tiptap :is(h1, h2, h3, h4, h5, h6).is-empty::before {
+  color: var(--color-muted-foreground);
+  opacity: 0.6;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Heading level badge (wiki-heading-level.ts), in the left margin of the
+   heading the caret is in. Pinned to the heading's top-left corner and pushed
+   out into the margin, so the text does not move when it appears. The wrapper
+   keeps the heading's font so it is exactly one heading line tall (1lh) and
+   centres the label on the first line. The margin is the scroll container's
+   24px left padding. */
+.tiptap :is(h1, h2, h3, h4, h5, h6) {
+  position: relative;
+}
+
+.tiptap .wiki-heading-level {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  height: 1lh;
+  transform: translateX(calc(-100% - 4px));
+  user-select: none;
+}
+
+.tiptap .wiki-heading-level__button {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  padding: 2px 3px;
+  border-radius: 4px;
+  color: var(--color-muted-foreground);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tiptap .wiki-heading-level__button:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
 /* Task list checkboxes */
 .tiptap ul[data-type="taskList"] {
   list-style: none;
