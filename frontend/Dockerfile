@@ -6,6 +6,10 @@ FROM node:${NODE_VERSION}-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+# Before `npm ci`: its postinstall runs patch-package, which applies patches/
+# to node_modules. Without them in the image yet it prints "No patch files
+# found" and exits 0, so the build succeeded and shipped unpatched packages.
+COPY patches ./patches
 RUN npm ci
 
 COPY . .

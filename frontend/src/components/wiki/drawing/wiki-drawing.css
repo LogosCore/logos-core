@@ -14,6 +14,20 @@
   width: 100%;
 }
 
+/* Excalidraw's own presence list — the avatars it stacks in the top-right
+   corner once anyone else is in the room. The wiki page already shows who is
+   here (wiki-presence-menu.tsx), so a second list would say the same thing
+   twice, in a different style. Remote cursors and selection outlines are
+   unaffected.
+
+   The one deliberate exception to the rule below about not reaching into
+   Excalidraw's class names: there is no UIOption for this, and hiding the
+   wrapper covers both its desktop and mobile layouts. If a library bump
+   renames the class, the list simply reappears — nothing breaks. */
+.wiki-drawing-canvas .excalidraw .UserList__wrapper {
+  display: none;
+}
+
 /* Excalidraw's chrome, in this app's design language.
    ---------------------------------------------------------------------------
    Excalidraw themes itself entirely through CSS custom properties defined on
