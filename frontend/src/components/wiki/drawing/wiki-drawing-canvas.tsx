@@ -9,13 +9,16 @@
 // Its stylesheet is imported here for the same reason — Vite emits it as the
 // chunk's own CSS, fetched with the chunk rather than with the app.
 
-import { useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Excalidraw } from "@excalidraw/excalidraw"
+import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types"
+import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 import type { Doc as YDoc } from "yjs"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
 import { useTheme } from "next-themes"
 
 import { useDrawingSync } from "./use-drawing-sync"
+import { readGridPreference, writeGridPreference } from "./drawing-grid-preference"
 import "@excalidraw/excalidraw/index.css"
 import "./wiki-drawing.css"
 
@@ -48,6 +51,23 @@ export default function WikiDrawingCanvas({
     initialFiles,
   } = useDrawingSync({ documentId, ydoc, provider, isEditor, user })
 
+  // Grid on by default, then whatever this browser last chose. Seeded through
+  // initialData rather than the gridModeEnabled prop: the prop makes the grid
+  // controlled, and Excalidraw then hides its own toggle.
+  const [initialGrid] = useState(readGridPreference)
+  const gridRef = useRef(initialGrid)
+  const handleChange = useCallback(
+    (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
+      onChange(elements, appState, files)
+      // onChange fires on every pointer move; write only on an actual toggle.
+      if (appState.gridModeEnabled !== gridRef.current) {
+        gridRef.current = appState.gridModeEnabled
+        writeGridPreference(appState.gridModeEnabled)
+      }
+    },
+    [onChange],
+  )
+
   // Fire once. onReady is a lifecycle signal, not a subscription — a print
   // route that heard it twice would call window.print() twice.
   const readyFiredRef = useRef(false)
@@ -68,13 +88,14 @@ export default function WikiDrawingCanvas({
           files: initialFiles,
           appState: {
             viewBackgroundColor: initialBackgroundColor,
+            gridModeEnabled: initialGrid,
             // Excalidraw persists its own appState to localStorage by default
             // via the host app; we own persistence, so start from the scene.
             collaborators: new Map(),
           },
           scrollToContent: true,
         }}
-        onChange={onChange}
+        onChange={handleChange}
         onPointerUpdate={onPointerUpdate}
         // Tells Excalidraw to render other people's cursors at all. Without it
         // the collaborators map is accepted and silently ignored.
