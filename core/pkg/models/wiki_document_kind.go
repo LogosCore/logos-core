@@ -42,6 +42,34 @@ func (k WikiDocumentKind) Or() WikiDocumentKind {
 // IsDrawing reports whether this page's body is a drawing scene.
 func (k WikiDocumentKind) IsDrawing() bool { return k.Or() == WikiDocumentKindDrawing }
 
+// HasFixedIcon reports whether pages of this kind render a fixed glyph instead
+// of a chosen icon. A drawing always shows the drawing glyph in the default
+// colour, so it stores no emoji, icon or colour at all: the SPA's glyph lock
+// used to be the only thing enforcing that, and a stored icon leaked out
+// wherever a component forgot to check the kind (the browser tab, for one).
+// Create and update refuse an identity for these kinds; every path that copies
+// one from elsewhere (instantiate, duplicate, import) clears it instead.
+func (k WikiDocumentKind) HasFixedIcon() bool { return k.IsDrawing() }
+
+// ErrFixedIcon is what create and update return for an emoji, icon or colour
+// sent for a kind that has a fixed icon.
+var ErrFixedIcon = fmt.Errorf("a drawing has a fixed icon: emoji, icon and color cannot be set on it")
+
+// FixedIconConflict reports whether any of the given identity fields asks to
+// set something on a kind with a fixed icon. nil and "" ask for nothing, so a
+// caller clearing a field is never refused.
+func (k WikiDocumentKind) FixedIconConflict(emoji, icon, color *string) bool {
+	if !k.HasFixedIcon() {
+		return false
+	}
+	for _, v := range []*string{emoji, icon, color} {
+		if v != nil && *v != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // Valid reports whether the kind is one this build knows how to render.
 func (k WikiDocumentKind) Valid() bool {
 	switch k.Or() {

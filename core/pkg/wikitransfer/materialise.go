@@ -376,8 +376,12 @@ func (r *run) newDocument(page *Page, parentID *uuid.UUID, parentPath []uuid.UUI
 		title = title[:maxTitleLength-1] + "…"
 		r.report.warn(humanPath, "title_truncated")
 	}
-	emoji, icon := page.Emoji, page.Icon
-	if emoji == "" && icon == "" {
+	emoji, icon, color := page.Emoji, page.Icon, page.Color
+	if page.Kind.HasFixedIcon() {
+		// A drawing's icon is fixed; an archive from before that rule may still
+		// carry one. Dropped rather than refused — the rest of the page is fine.
+		emoji, icon, color = "", "", ""
+	} else if emoji == "" && icon == "" {
 		icon = DefaultDocumentIcon
 	}
 	var sourceTemplate *uuid.UUID
@@ -401,7 +405,7 @@ func (r *run) newDocument(page *Page, parentID *uuid.UUID, parentPath []uuid.UUI
 		Kind:             page.Kind.Or(),
 		Emoji:            emoji,
 		Icon:             icon,
-		Color:            page.Color,
+		Color:            color,
 		SortOrder:        sortOrder,
 		IsTemplate:       page.IsTemplate,
 		SourceTemplateID: sourceTemplate,

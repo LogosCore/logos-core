@@ -56,6 +56,11 @@ type WikiDocumentFilter struct {
 // IWikiDocumentRepository defines the interface for WikiDocument database operations.
 type IWikiDocumentRepository interface {
 	Create(ctx context.Context, doc *models.WikiDocument) error
+	// ClearFixedIcons empties emoji, icon and color on every page whose kind
+	// has a fixed icon (models.WikiDocumentKind.HasFixedIcon), trashed ones
+	// included, and reports how many it changed. A startup backfill for rows
+	// written before create and update refused an identity for those kinds.
+	ClearFixedIcons(ctx context.Context) (int64, error)
 	FindByID(ctx context.Context, id uuid.UUID) (models.WikiDocument, error)
 	// FindByIDs returns documents matching any id in `ids`, in unspecified
 	// order, without content_state (see wikiNoStateProjection) — the rows
@@ -1336,4 +1341,25 @@ func buildWikiDocumentFilter(opID uuid.UUID, filter WikiDocumentFilter) bson.M {
 	}
 
 	return f
+}
+
+func (r *wikiDocumentRepository) ClearFixedIcons(ctx context.Context) (int64, error) {
+	res, err := r.coll.UpdateAll(ctx, clearFixedIconsFilter(), bson.M{"$set": bson.M{
+		"emoji": "", "icon": "", "color": "",
+	}})
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+// clearFixedIconsFilter matches drawings that still carry any part of an
+// identity. Only drawings have a fixed icon today; the kind is stored
+// explicitly on every one, since a missing kind means prose.
+func clearFixedIconsFilter() bson.M {
+	set := bson.M{"$nin": bson.A{"", nil}}
+	return bson.M{
+		"kind": models.WikiDocumentKindDrawing,
+		"$or":  bson.A{bson.M{"emoji": set}, bson.M{"icon": set}, bson.M{"color": set}},
+	}
 }

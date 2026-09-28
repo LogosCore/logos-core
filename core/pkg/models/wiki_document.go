@@ -164,3 +164,13 @@ type WikiImportOrigin struct {
 	SourceDocumentID uuid.UUID `bson:"source_document_id,omitempty" json:"sourceDocumentId"`
 	ImportedAt       time.Time `bson:"imported_at" json:"importedAt"`
 }
+
+// ClearFixedIcon drops the emoji, icon and colour of a page whose kind has a
+// fixed icon (see WikiDocumentKind.HasFixedIcon). For the paths that copy an
+// identity from somewhere else — a template, a duplicated page, an import
+// archive — where the source may predate the rule.
+func (d *WikiDocument) ClearFixedIcon() {
+	if d.Kind.HasFixedIcon() {
+		d.Emoji, d.Icon, d.Color = "", "", ""
+	}
+}

@@ -297,6 +297,12 @@ func (r *wikiDocumentResolver) CreateWikiDocument(ctx context.Context, operation
 	if kind.IsDrawing() && input.Content != nil && *input.Content != "" {
 		return nil, fmt.Errorf("a drawing page cannot be created with Markdown content")
 	}
+	// Refused rather than dropped for the same reason: a drawing renders a
+	// fixed glyph, so an icon sent for one would be stored and never shown —
+	// except where a reader forgot to check the kind.
+	if kind.FixedIconConflict(input.Emoji, input.Icon, input.Color) {
+		return nil, models.ErrFixedIcon
+	}
 
 	// Validate content size
 	content := ""
@@ -421,6 +427,10 @@ func (r *wikiDocumentResolver) UpdateWikiDocument(ctx context.Context, id string
 
 	if err := r.authorizeForOperation(ctx, doc.OperationID, models.OperationRoleOperator); err != nil {
 		return nil, err
+	}
+
+	if doc.Kind.FixedIconConflict(input.Emoji, input.Icon, input.Color) {
+		return nil, models.ErrFixedIcon
 	}
 
 	updates := make(map[string]interface{})
@@ -945,6 +955,7 @@ func (r *wikiDocumentResolver) DuplicateWikiDocument(ctx context.Context, id str
 		LastUpdatedAt:       &now,
 	}
 
+	rootDup.ClearFixedIcon()
 	if err := r.docRepo.Create(ctx, rootDup); err != nil {
 		return nil, fmt.Errorf("failed to create duplicate: %w", err)
 	}
@@ -997,6 +1008,7 @@ func (r *wikiDocumentResolver) DuplicateWikiDocument(ctx context.Context, id str
 					LastUpdatedAt:       &now,
 				}
 
+				newChild.ClearFixedIcon()
 				if err := r.docRepo.Create(ctx, newChild); err != nil {
 					return nil, fmt.Errorf("failed to clone descendant %s: %w", child.DocumentID, err)
 				}
@@ -1165,6 +1177,12 @@ func (r *wikiDocumentResolver) InstantiateTemplate(ctx context.Context, template
 	// Icon: inherit each glyph from the template unless the operator overrode it
 	// in the create dialog. A non-nil arg wins (including an explicit "" to clear
 	// that glyph), nil inherits — so the forked instance can carry its own icon.
+	// A drawing template forks into a drawing, whose icon is fixed: an explicit
+	// override is refused like on create, and whatever the template itself
+	// carries is cleared below.
+	if template.Kind.FixedIconConflict(emoji, icon, color) {
+		return nil, models.ErrFixedIcon
+	}
 	instanceEmoji := strDerefOr(emoji, template.Emoji)
 	instanceIcon := strDerefOr(icon, template.Icon)
 	instanceColor := strDerefOr(color, template.Color)
@@ -1210,6 +1228,7 @@ func (r *wikiDocumentResolver) InstantiateTemplate(ctx context.Context, template
 		LastUpdatedAt:       &now,
 	}
 
+	instance.ClearFixedIcon()
 	if err := r.docRepo.Create(ctx, instance); err != nil {
 		return nil, fmt.Errorf("failed to create template instance: %w", err)
 	}

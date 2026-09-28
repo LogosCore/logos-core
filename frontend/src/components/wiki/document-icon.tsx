@@ -91,12 +91,15 @@ export function DocumentIcon({
   // Template docs render a fixed glyph regardless of their stored emoji/icon —
   // the marker must be unambiguous and consistent across the tree, header, and
   // picker. Checked first so it overrides every other branch.
+  //
+  // Both fixed glyphs are drawn in the default colour, not the stored one: the
+  // colour is part of the identity they lock, and a drawing has no way to
+  // change it (agents used to set one at creation that nobody could undo).
   if (isTemplate) {
     return (
       <LayoutTemplateIcon
         className={cn("shrink-0", className)}
         size={size}
-        style={style}
         aria-hidden
       />
     )
@@ -111,7 +114,6 @@ export function DocumentIcon({
       <ShapesIcon
         className={cn("shrink-0", className)}
         size={size}
-        style={style}
         aria-hidden
       />
     )

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useParams } from "react-router"
-import { BookOpenIcon } from "lucide-react"
+import { BookOpenIcon, LayoutTemplateIcon, ShapesIcon } from "lucide-react"
 import { useEffectiveWikiOperation } from "@/hooks/use-effective-wiki-operation-id"
 import { useWikiTreeModeStore } from "@/stores/wiki-tree-mode"
 import { isPublicOperation } from "@/lib/public-operation"
@@ -180,6 +180,11 @@ function WikiPageInner({
   const wikiDefaultIcon: PageIcon = { kind: "lucide", component: BookOpenIcon }
   const pageIcon: PageIcon = (() => {
     if (!doc) return wikiDefaultIcon
+    // Same order and glyphs as DocumentIcon: a template, then a drawing,
+    // renders a fixed glyph in the default colour whatever is stored. Reading
+    // doc.icon first is how a drawing's tab showed an icon the tree did not.
+    if (doc.isTemplate) return { kind: "lucide", component: LayoutTemplateIcon }
+    if (doc.kind === "DRAWING") return { kind: "lucide", component: ShapesIcon }
     if (doc.icon === ADAPTIVE_ICON_NAME) {
       // isExpanded=true: the user is viewing this doc, so the branch glyph
       // should match the editor header (open folder, not collapsed).

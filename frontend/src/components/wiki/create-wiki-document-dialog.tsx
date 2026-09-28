@@ -69,6 +69,9 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
   const [iconValue, setIconValue] = useState<DocumentIconValue>(DEFAULT_ICON_VALUE)
   const [iconDirty, setIconDirty] = useState(false)
   const [templateId, setTemplateId] = useState<string | null>(null)
+  // A drawing template forks into a drawing, whose icon is fixed — no picker,
+  // and no identity sent (the server refuses one).
+  const [templateIsDrawing, setTemplateIsDrawing] = useState(false)
   const [templateQuery, setTemplateQuery] = useState("")
   // The operator names the instance. Prefilled from the picked template's title
   // (so it's never blank by default) until the operator edits it themselves.
@@ -113,6 +116,7 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
     setIconDirty(false)
     setMode("regular")
     setTemplateId(null)
+    setTemplateIsDrawing(false)
     setTemplateQuery("")
     setInstanceTitle("")
     setTitleDirty(false)
@@ -125,8 +129,11 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
     setIconDirty(true)
   }
 
-  function selectTemplate(tpl: DocumentIconValue & { id: string; title: string }) {
+  function selectTemplate(
+    tpl: DocumentIconValue & { id: string; title: string; isDrawing: boolean },
+  ) {
     setTemplateId(tpl.id)
+    setTemplateIsDrawing(tpl.isDrawing)
     // Seed the name + icon from the template until the operator overrides them,
     // so the fork defaults to looking like its template but stays editable.
     if (!titleDirty) setInstanceTitle(tpl.title)
@@ -156,10 +163,11 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
           parentDocumentId: createParentId ?? null,
           title: instanceTitle.trim() || null,
           // Send the picker state so the operator's icon (seeded from the
-          // template, possibly overridden) lands on the new instance.
-          emoji: iconValue.emoji,
-          icon: iconValue.icon,
-          color: iconValue.color,
+          // template, possibly overridden) lands on the new instance — except
+          // for a drawing, which takes none.
+          ...(templateIsDrawing
+            ? {}
+            : { emoji: iconValue.emoji, icon: iconValue.icon, color: iconValue.color }),
         })
         if (createParentId) expandNode(createParentId)
         const newId = result.instantiateTemplate.id
@@ -184,9 +192,15 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
         input: {
           title,
           kind: mode === "drawing" ? "DRAWING" : "DOCUMENT",
-          emoji: iconValue.emoji || undefined,
-          icon: iconValue.icon || undefined,
-          color: iconValue.color || undefined,
+          // A drawing's icon is fixed and the server refuses one — including
+          // the Adaptive default the picker state starts with.
+          ...(mode === "drawing"
+            ? {}
+            : {
+                emoji: iconValue.emoji || undefined,
+                icon: iconValue.icon || undefined,
+                color: iconValue.color || undefined,
+              }),
           parentDocumentId: createParentId ?? undefined,
         },
       })
@@ -284,7 +298,13 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
                   and icon are both editable. The icon picker is seeded from the
                   picked template via selectTemplate but can be overridden here. */}
               <div className="flex items-center gap-2">
-                <DocumentIconPicker value={iconValue} onSelect={handleIconSelect} />
+                {templateIsDrawing ? (
+                  <span className="flex size-9 shrink-0 items-center justify-center text-muted-foreground">
+                    <DocumentIcon isDrawing size={18} />
+                  </span>
+                ) : (
+                  <DocumentIconPicker value={iconValue} onSelect={handleIconSelect} />
+                )}
                 <Input
                   value={instanceTitle}
                   onChange={(e) => {
@@ -333,6 +353,7 @@ export function CreateWikiDocumentDialog({ operationId }: CreateWikiDocumentDial
                                 emoji: tpl.emoji,
                                 icon: tpl.icon,
                                 color: tpl.color,
+                                isDrawing: tpl.kind === "DRAWING",
                               })
                             }
                           >

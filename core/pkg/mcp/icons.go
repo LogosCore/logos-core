@@ -205,7 +205,7 @@ func quoteAll(names []string) []string {
 type visualIdentity struct {
 	Emoji string `json:"emoji,omitempty" jsonschema:"One emoji. Usually leave unset."`
 	Icon  string `json:"icon,omitempty"  jsonschema:"Any lucide name, PascalCase (Server, Key), or si:<slug> logo. Exclusive with emoji; misspellings refused. See reference/icons.md. Usually leave unset."`
-	Color string `json:"color,omitempty" jsonschema:"Hex colour for icon."`
+	Color string `json:"color,omitempty" jsonschema:"Hex colour for icon. Drawings take none of these three: their icon is fixed."`
 }
 
 // validate checks the icon name and the mutual exclusivity the client assumes.

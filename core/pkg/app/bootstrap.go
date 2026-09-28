@@ -373,6 +373,14 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		l.Info("task done_at backfill complete", zap.Int64("rows", n))
 	}
 
+	// Drawings render a fixed icon; clear the ones stored before create and
+	// update refused them (the SPA's own dialog used to send "Adaptive").
+	if n, err := repos.WikiDocument.ClearFixedIcons(ctx); err != nil {
+		l.Warn("wiki drawing icon backfill failed", zap.Error(err))
+	} else if n > 0 {
+		l.Info("wiki drawing icon backfill complete", zap.Int64("rows", n))
+	}
+
 	// Give every pre-three-state credential a validity. See BackfillValidity
 	// for why a legacy false becomes UNKNOWN.
 	if n, err := repos.Credential.BackfillValidity(ctx); err != nil {

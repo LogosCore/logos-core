@@ -83,6 +83,15 @@ func handleCreateWikiDocument(ctx context.Context, s *Server, args createWikiDoc
 		return toolResult{}, err
 	}
 	emoji, icon, color := args.applyWithAdaptiveDefault()
+	// A drawing renders a fixed glyph in the default colour, so it takes no
+	// identity — not even the Adaptive default, which is for prose pages.
+	if kind.HasFixedIcon() {
+		if kind.FixedIconConflict(args.apply()) {
+			return toolResult{}, refuse(
+				"a drawing has a fixed icon. Create it without emoji, icon or color.")
+		}
+		emoji, icon, color = nil, nil, nil
+	}
 
 	doc, err := s.deps.WikiDocs.CreateWikiDocument(ctx, opID.String(), model.CreateWikiDocumentInput{
 		Title:            args.Title,
@@ -385,6 +394,9 @@ func handleUpdateWikiDocument(ctx context.Context, s *Server, args updateWikiDoc
 		return toolResult{}, err
 	}
 	emoji, icon, color := args.apply()
+	if doc.Kind.FixedIconConflict(emoji, icon, color) {
+		return toolResult{}, refuse("this page is a drawing, which has a fixed icon: emoji, icon and color cannot be set on it.")
+	}
 
 	// Title and the visual identity go through the resolver; only the body
 	// needs the collaboration path.
