@@ -3,12 +3,14 @@ import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { describe, expect, test } from "vitest"
 
-// patches/@excalidraw+excalidraw+0.18.1.patch makes Excalidraw colour each
-// collaborator with the colour we send (`collaborator.color.background`, from
+// patches/@excalidraw+excalidraw+0.18.1.patch makes two changes. It colours
+// each collaborator with the colour we send (`collaborator.color.background`, from
 // getCursorColor — the same one the presence menu and the prose editor use).
 // Unpatched, 0.18 ignores that field and derives a pale hsl(…, 100%, 83%) from
 // a hash of the collaborator id, which is our per-connection Yjs client id: a
 // pastel, never the person's colour, and a different one after every reload.
+// And it colours your own laser trail, which 0.18 hardcodes red, from your
+// current-user collaborator entry, so it matches what everyone else sees.
 //
 // patch-package applies the patch on install and only warns when it no longer
 // matches, so a version bump can drop it without failing anything. These
@@ -25,6 +27,23 @@ describe("excalidraw collaborator colour patch", () => {
   test("is applied to the production bundle", () => {
     const src = readFileSync(join(dist, "prod/index.js"), "utf8")
     expect(src).toMatch(/=\(\w+,(\w+)\)=>\1\?\.color\?\.background\|\|`hsl\(/)
+  })
+
+  // Excalidraw hardcodes the local laser trail to red. The patch colours it
+  // from the current user's collaborator entry (drawing-collaborators.ts adds
+  // one), so your laser looks to you the way it looks to everyone else.
+  test("colours the local laser trail in the production bundle", () => {
+    const src = readFileSync(join(dist, "prod/index.js"), "utf8")
+    expect(src).toMatch(
+      /this\.localTrail=new \w+\(\w+,(\w+),\{\.\.\.this\.getTrailOptions\(\),fill:\(\)=>\{for\(let c of \1\.state\.collaborators\.values\(\)\)if\(c\.isCurrentUser&&c\.color\?\.background\)return c\.color\.background;/,
+    )
+  })
+
+  test("colours the local laser trail in the development bundle", () => {
+    const src = readFileSync(join(dist, "dev/index.js"), "utf8")
+    expect(src).toContain(
+      "if (collaborator.isCurrentUser && collaborator.color?.background) {\n            return collaborator.color.background;",
+    )
   })
 
   // The development bundle is what the dev server serves.

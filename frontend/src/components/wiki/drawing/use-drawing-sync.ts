@@ -255,13 +255,15 @@ export function useDrawingSync({
     [ydoc, isEditor, lastSeen, adoptImages, publishSelection],
   )
 
+  const color = getCursorColor(user?.userId ?? "anon")
+
   useEffect(() => {
     if (!awareness) return
     awareness.setLocalStateField("user", {
       name: user?.username ?? "Anonymous",
-      color: getCursorColor(user?.userId ?? "anon"),
+      color,
     })
-  }, [awareness, user?.userId, user?.username])
+  }, [awareness, color, user?.username])
 
   // Other people's cursors. Excalidraw takes collaborators through
   // updateScene rather than as a prop, so this is an effect rather than a
@@ -301,11 +303,13 @@ export function useDrawingSync({
       // the `user` field, which setLocalState would otherwise replace.
       awareness.setLocalState({
         ...(awareness.getLocalState() ?? {}),
-        pointer: payload.pointer,
+        // The laser colour rides along so a peer's trail of ours is our
+        // colour whatever Excalidraw would pick — see DrawingAwarenessState.
+        pointer: { ...payload.pointer, laserColor: color },
         button: payload.button,
       })
     },
-    [awareness],
+    [awareness, color],
   )
 
   return useMemo(

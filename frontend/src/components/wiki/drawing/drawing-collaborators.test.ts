@@ -33,18 +33,44 @@ describe("toExcalidrawCollaborators", () => {
     expect(peer?.pointer).toEqual({ x: 10, y: 20, tool: "pointer" })
   })
 
-  // A client that renders its own cursor sees a second pointer lagging its
-  // real one by a round trip, which reads as broken rather than collaborative.
-  test("excludes the local client", () => {
+  // The local client is present as who it is — the patched local laser trail
+  // reads its colour from here — but never with a pointer or a selection: a
+  // client that renders its own cursor sees a second pointer lagging its real
+  // one by a round trip, and would outline its own selection twice.
+  test("includes the local client as the current user, with nothing to draw", () => {
     const result = toExcalidrawCollaborators(
       states({
-        [LOCAL]: { user: { name: "me" }, pointer: { x: 0, y: 0, tool: "pointer" } },
+        [LOCAL]: {
+          user: { name: "me", color: "#2196F3" },
+          pointer: { x: 0, y: 0, tool: "laser" },
+          button: "down",
+          selectedElementIds: { a: true },
+        },
         [PEER]: { user: { name: "them" }, pointer: { x: 1, y: 1, tool: "pointer" } },
       }),
       LOCAL,
     )
 
-    expect([...result.keys()]).toEqual([String(PEER)])
+    expect(result.get(String(LOCAL) as SocketId)).toEqual({
+      id: String(LOCAL),
+      username: "me",
+      color: { background: "#2196F3", stroke: "#2196F3" },
+      isCurrentUser: true,
+    })
+    expect(result.get(String(PEER) as SocketId)?.isCurrentUser).toBeUndefined()
+  })
+
+  test("forwards a peer's laser colour with its pointer", () => {
+    const result = toExcalidrawCollaborators(
+      states({
+        [PEER]: {
+          user: { name: "them", color: "#4CAF50" },
+          pointer: { x: 1, y: 1, tool: "laser", laserColor: "#4CAF50" },
+        },
+      }),
+      LOCAL,
+    )
+    expect(result.get(String(PEER) as SocketId)?.pointer?.laserColor).toBe("#4CAF50")
   })
 
   test("skips a peer that has not published who it is yet", () => {

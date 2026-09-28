@@ -13,7 +13,12 @@ import type { Collaborator, SocketId } from "@excalidraw/excalidraw/types"
  * field exactly; `pointer` is ours. */
 export interface DrawingAwarenessState {
   user?: { name?: string; color?: string }
-  pointer?: { x: number; y: number; tool: "pointer" | "laser" }
+  /**
+   * `laserColor` is the sender's own colour, so a peer draws their laser trail
+   * from it directly rather than from Excalidraw's per-collaborator colour —
+   * which is only ours because of the patch (see excalidraw-patch.test.ts).
+   */
+  pointer?: { x: number; y: number; tool: "pointer" | "laser"; laserColor?: string }
   /**
    * Whether the peer is pressing. Needed for the laser pointer, not for the
    * cursor: Excalidraw draws a remote laser trail only while a collaborator
@@ -33,12 +38,16 @@ export interface DrawingAwarenessState {
 }
 
 /**
- * Build Excalidraw's collaborator map from the awareness states of everyone
- * else in the room.
+ * Build Excalidraw's collaborator map from the awareness states in the room.
  *
- * `localClientID` is excluded rather than filtered by Excalidraw later: a
- * client that renders its own cursor sees a second pointer lagging its real
- * one by a round trip, which reads as broken rather than as collaborative.
+ * The local client is in it too, but only as who it is: `isCurrentUser`, a
+ * name and a colour, with no pointer and no selection. Excalidraw draws a
+ * cursor only for an entry with a pointer and an outline only for one with a
+ * selection, so this entry draws nothing — a client that rendered its own
+ * cursor would see a second pointer lagging its real one by a round trip. It
+ * exists for the patched local laser trail, which Excalidraw hardcodes red and
+ * the patch colours from this entry instead, so your laser looks to you the
+ * way it looks to everyone else.
  *
  * States arrive keyed by Yjs client id, which is a number; Excalidraw keys by
  * its own opaque SocketId. The two never need to correspond — the key only has
@@ -51,13 +60,20 @@ export function toExcalidrawCollaborators(
   const collaborators = new Map<SocketId, Collaborator>()
 
   for (const [clientID, state] of states) {
-    if (clientID === localClientID) continue
-
     // A peer that has connected but not yet published anything about itself
     // would render as an unnamed, uncoloured ghost. Wait for it instead.
     if (!state?.user) continue
 
     const color = state.user.color ?? "#607D8B"
+    if (clientID === localClientID) {
+      collaborators.set(String(clientID) as SocketId, {
+        id: String(clientID),
+        username: state.user.name ?? "Anonymous",
+        color: { background: color, stroke: color },
+        isCurrentUser: true,
+      })
+      continue
+    }
     collaborators.set(String(clientID) as SocketId, {
       id: String(clientID),
       username: state.user.name ?? "Anonymous",
