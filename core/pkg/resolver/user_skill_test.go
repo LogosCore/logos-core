@@ -28,7 +28,7 @@ func snoozeHarness(t *testing.T, stored models.User) (IUserResolver, context.Con
 			return nil
 		},
 	}
-	return NewUserResolver(repo, eventbus.NewNopEventBus()), newCallerCtx(stored.UserID, "user"), &captured
+	return NewUserResolver(repo, eventbus.NewNopEventBus(), nil, nil), newCallerCtx(stored.UserID, "user"), &captured
 }
 
 func TestSnoozeSkillUpdate_PersistsForCaller(t *testing.T) {
@@ -75,7 +75,7 @@ func TestSnoozeSkillUpdate_NeverMovesBackwards(t *testing.T) {
 }
 
 func TestSnoozeSkillUpdate_InvalidToken(t *testing.T) {
-	r := NewUserResolver(&mockUserRepo{}, eventbus.NewNopEventBus())
+	r := NewUserResolver(&mockUserRepo{}, eventbus.NewNopEventBus(), nil, nil)
 	ctx := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{UserID: "not-a-uuid", Roles: []string{"user"}})
 	if _, err := r.SnoozeSkillUpdate(ctx, 1); err == nil {
 		t.Fatal("expected error for invalid user ID in token")

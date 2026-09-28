@@ -7,17 +7,8 @@ export interface ScopedOperation {
   description: string
 }
 
-/** How many recently scoped operations the picker keeps. */
-export const RECENT_OPERATIONS_LIMIT = 8
-
 interface ScopedOperationState {
   scopedOperation: ScopedOperation | null
-  /**
-   * Operations this user scoped most recently, newest first, capped at
-   * RECENT_OPERATIONS_LIMIT. Feeds the picker's "Recent" section. Persisted
-   * per user like the scope itself.
-   */
-  recentOperations: ScopedOperation[]
   isValidating: boolean
   /** True once `hydrate` has been called for the current user (regardless of
    *  whether anything was found in localStorage). Lets the route guard avoid
@@ -81,68 +72,52 @@ function removeFromStorage() {
   localStorage.removeItem(storageKey(activeUserId))
 }
 
-function recentsKey(userId: string) {
+// The picker's "Recent" section used to be kept here, in localStorage under
+// this key. It lives on the server now (`me.recentOperations`, see
+// hooks/use-picker-history.ts); these two read and drop the old copy so it
+// can be imported once.
+function legacyRecentsKey(userId: string) {
   return `recent_operations_${userId}`
 }
 
-function loadRecents(userId: string): ScopedOperation[] {
+/** Operation ids from the old per-user localStorage list, newest first. */
+export function readLegacyRecentOperationIds(userId: string): string[] {
   try {
-    const raw = localStorage.getItem(recentsKey(userId))
+    const raw = localStorage.getItem(legacyRecentsKey(userId))
     const parsed: unknown = raw ? JSON.parse(raw) : []
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (op): op is ScopedOperation =>
-        !!op &&
-        typeof op === "object" &&
-        typeof (op as ScopedOperation).id === "string",
-    )
+    return parsed
+      .map((op) => (op && typeof op === "object" ? (op as { id?: unknown }).id : undefined))
+      .filter((id): id is string => typeof id === "string")
   } catch {
     return []
   }
 }
 
-function saveRecents(recents: ScopedOperation[]) {
-  if (!activeUserId) return
+export function clearLegacyRecentOperations(userId: string) {
   try {
-    localStorage.setItem(recentsKey(activeUserId), JSON.stringify(recents))
+    localStorage.removeItem(legacyRecentsKey(userId))
   } catch {
-    // best-effort; the in-memory list still serves this session
+    // Storage unavailable: nothing to clear either.
   }
 }
 
-/** The list with `op` moved to the front, deduplicated, capped. */
-export function withRecent(
-  recents: ScopedOperation[],
-  op: ScopedOperation,
-): ScopedOperation[] {
-  return [op, ...recents.filter((r) => r.id !== op.id)].slice(
-    0,
-    RECENT_OPERATIONS_LIMIT,
-  )
-}
-
 export const useScopedOperationStore = create<ScopedOperationState>(
-  (set, get) => ({
+  (set) => ({
     scopedOperation: null,
-    recentOperations: [],
     isValidating: false,
     hydrated: false,
     retainedWikiDocumentId: null,
 
     scopeOperation: (op) => {
       saveToStorage(op)
-      const recentOperations = withRecent(get().recentOperations, op)
-      saveRecents(recentOperations)
-      set({ scopedOperation: op, recentOperations, isValidating: false })
+      set({ scopedOperation: op, isValidating: false })
     },
 
     scopeOperationForWikiDocument: (op, documentId) => {
       saveToStorage(op)
-      const recentOperations = withRecent(get().recentOperations, op)
-      saveRecents(recentOperations)
       set({
         scopedOperation: op,
-        recentOperations,
         isValidating: false,
         retainedWikiDocumentId: documentId,
       })
@@ -159,7 +134,6 @@ export const useScopedOperationStore = create<ScopedOperationState>(
       activeUserId = null
       set({
         scopedOperation: null,
-        recentOperations: [],
         isValidating: false,
         hydrated: false,
         retainedWikiDocumentId: null,
@@ -169,16 +143,10 @@ export const useScopedOperationStore = create<ScopedOperationState>(
     hydrate: (userId) => {
       activeUserId = userId
       const stored = loadFromStorage(userId)
-      const recentOperations = loadRecents(userId)
       set(
         stored
-          ? {
-              scopedOperation: stored,
-              recentOperations,
-              isValidating: true,
-              hydrated: true,
-            }
-          : { recentOperations, hydrated: true },
+          ? { scopedOperation: stored, isValidating: true, hydrated: true }
+          : { hydrated: true },
       )
     },
 

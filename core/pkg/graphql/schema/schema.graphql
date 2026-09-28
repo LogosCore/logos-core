@@ -73,6 +73,14 @@ type User {
     # In-app guides this operator has finished or dismissed, by id. A guide that
     # is not listed is one the SPA will still offer.
     completedGuides: [String!]!
+    # The wiki icon picker's "Frequently used" row, most used first: lucide
+    # names, or brand icons as "si:<slug>". Only ever populated on the caller's
+    # own user — empty when read on anyone else's.
+    frequentIcons: [String!]!
+    # Operations the caller scoped most recently, newest first. Deleted
+    # operations and ones the caller can no longer view are left out. Only ever
+    # populated on the caller's own user — empty when read on anyone else's.
+    recentOperations: [Operation!]!
 }
 
 # Minimal user info for autocomplete pickers (e.g., adding operation members).
@@ -267,6 +275,18 @@ input UpdateUserInput {
     active: Boolean
 }
 
+# One icon from the SPA's old localStorage frequency list.
+input IconUsageInput {
+    name: String!
+    count: Int!
+    lastUsedAt: String! # ISO 8601
+}
+
+input ImportLocalPreferencesInput {
+    frequentIcons: [IconUsageInput!]!
+    recentOperationIds: [ID!]! # newest first
+}
+
 # CreateOperationInput — fields needed to create a new operation.
 input CreateOperationInput {
     name: String! # Must be unique
@@ -327,6 +347,24 @@ type Mutation {
     # Idempotent: completing the same guide twice returns the user unchanged, so
     # two tabs finishing one guide at the same moment is not an error.
     completeGuide(guide: String!): User!
+        @hasPermission(permission: "user:update:own")
+
+    # recordIconUse counts one pick of an icon in the caller's icon picker,
+    # for its "Frequently used" row. The server keeps the 32 most used.
+    recordIconUse(name: String!): User!
+        @hasPermission(permission: "user:update:own")
+
+    # touchRecentOperation moves an operation to the front of the caller's
+    # recent operations. Refused for an operation the caller cannot view.
+    touchRecentOperation(operationId: ID!): User!
+        @hasPermission(permission: "user:update:own")
+
+    # importLocalPreferences is the one-time move of the picker history the SPA
+    # used to keep in localStorage. Each list is written only if the caller's
+    # server-side one is still empty, so repeating it — another tab, another
+    # browser — changes nothing. Invalid icon names and operations the caller
+    # cannot view are dropped rather than refused.
+    importLocalPreferences(input: ImportLocalPreferencesInput!): User!
         @hasPermission(permission: "user:update:own")
 
     # createOperation registers a new operation.

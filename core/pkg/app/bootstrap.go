@@ -53,6 +53,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 
 	repos := &Repositories{
 		User:               repository.NewUserRepository(db),
+		UserPreferences:    repository.NewUserPreferencesRepository(db),
 		Operation:          repository.NewOperationRepository(db),
 		Session:            repository.NewSessionRepository(db),
 		WikiDocument:       repository.NewWikiDocumentRepository(db),

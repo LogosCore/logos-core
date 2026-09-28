@@ -156,7 +156,7 @@ func (a *App) buildResolvers() *resolvers {
 	)
 
 	return &resolvers{
-		user: resolver.NewUserResolver(a.repos.User, a.eventBus),
+		user: resolver.NewUserResolver(a.repos.User, a.eventBus, a.repos.UserPreferences, a.repos.Operation),
 		operation: resolver.NewOperationResolver(a.repos.Operation, a.repos.User,
 			resolver.WithWikiDocumentRepo(a.repos.WikiDocument),
 			resolver.WithWikiDocumentBackupRepo(a.repos.WikiDocumentBackup),

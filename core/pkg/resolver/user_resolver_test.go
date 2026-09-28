@@ -97,7 +97,7 @@ func TestSetHiddenIdentities(t *testing.T) {
 		},
 	}
 
-	r := NewUserResolver(repo, eventbus.NewNopEventBus())
+	r := NewUserResolver(repo, eventbus.NewNopEventBus(), nil, nil)
 	ctx := newCallerCtx(callerID, "user")
 
 	got, err := r.SetHiddenIdentities(ctx, []string{" Default ", "ROOT", "default"})
@@ -128,7 +128,7 @@ func TestSetHiddenIdentities(t *testing.T) {
 
 func TestSetHiddenIdentitiesInvalidToken(t *testing.T) {
 	repo := &mockUserRepo{}
-	r := NewUserResolver(repo, eventbus.NewNopEventBus())
+	r := NewUserResolver(repo, eventbus.NewNopEventBus(), nil, nil)
 	ctx := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{
 		UserID: "not-a-uuid",
 		Roles:  []string{"user"},
@@ -158,7 +158,7 @@ func TestUsers_SortByUsername_ThreadsSortAndMintsStringCursors(t *testing.T) {
 			}, nil
 		},
 	}
-	r := NewUserResolver(userRepo, nil)
+	r := NewUserResolver(userRepo, nil, nil, nil)
 
 	sortBy := model.UserSortFieldUsername
 	dir := model.SortDirectionAsc

@@ -222,6 +222,17 @@ type HostEvent struct {
 	Host        *models.Host `json:"host,omitempty"`
 }
 
+type IconUsageInput struct {
+	Name       string `json:"name"`
+	Count      int    `json:"count"`
+	LastUsedAt string `json:"lastUsedAt"`
+}
+
+type ImportLocalPreferencesInput struct {
+	FrequentIcons      []*IconUsageInput `json:"frequentIcons"`
+	RecentOperationIds []string          `json:"recentOperationIds"`
+}
+
 type LoginInput struct {
 	User     string  `json:"user"`
 	From     *string `json:"from,omitempty"`

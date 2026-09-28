@@ -29,6 +29,9 @@ type IUserResolver interface {
 	SetHiddenIdentities(ctx context.Context, names []string) (*models.User, error)
 	SnoozeSkillUpdate(ctx context.Context, version int) (*models.User, error)
 	CompleteGuide(ctx context.Context, guide string) (*models.User, error)
+	RecordIconUse(ctx context.Context, name string) (*models.User, error)
+	TouchRecentOperation(ctx context.Context, operationID string) (*models.User, error)
+	ImportLocalPreferences(ctx context.Context, input model.ImportLocalPreferencesInput) (*models.User, error)
 
 	// Queries
 	Me(ctx context.Context) (*models.User, error)
@@ -41,16 +44,31 @@ type IUserResolver interface {
 	ID(ctx context.Context, obj *models.User) (string, error)
 	CreatedAt(ctx context.Context, obj *models.User) (string, error)
 	UpdatedAt(ctx context.Context, obj *models.User) (string, error)
+	FrequentIcons(ctx context.Context, obj *models.User) ([]string, error)
+	RecentOperations(ctx context.Context, obj *models.User) ([]*models.Operation, error)
 }
 
 type userResolver struct {
-	userRepo repository.IUserRepository
-	eventBus eventbus.IEventBus
+	userRepo        repository.IUserRepository
+	eventBus        eventbus.IEventBus
+	preferencesRepo repository.IUserPreferencesRepository
+	// operationRepo authorizes and resolves the recent operations list.
+	operationRepo repository.IOperationRepository
 }
 
 // NewUserResolver creates a new user resolver with the given dependencies.
-func NewUserResolver(userRepo repository.IUserRepository, eventBus eventbus.IEventBus) IUserResolver {
-	return &userResolver{userRepo: userRepo, eventBus: eventBus}
+func NewUserResolver(
+	userRepo repository.IUserRepository,
+	eventBus eventbus.IEventBus,
+	preferencesRepo repository.IUserPreferencesRepository,
+	operationRepo repository.IOperationRepository,
+) IUserResolver {
+	return &userResolver{
+		userRepo:        userRepo,
+		eventBus:        eventBus,
+		preferencesRepo: preferencesRepo,
+		operationRepo:   operationRepo,
+	}
 }
 
 // CreateUser handles the createUser mutation.

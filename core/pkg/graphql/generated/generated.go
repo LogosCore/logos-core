@@ -334,11 +334,13 @@ type ComplexityRoot struct {
 		DeleteWikiDocumentBackup      func(childComplexity int, id string) int
 		DuplicateWikiDocument         func(childComplexity int, id string, withChildren *bool) int
 		EmptyWikiDocumentTrash        func(childComplexity int, operationID string) int
+		ImportLocalPreferences        func(childComplexity int, input model.ImportLocalPreferencesInput) int
 		InstantiateTemplate           func(childComplexity int, templateID string, targetOperationID string, parentDocumentID *string, title *string, emoji *string, icon *string, color *string) int
 		MarkHashCracked               func(childComplexity int, id string, input model.MarkHashCrackedInput) int
 		PermanentlyDeleteWikiDocument func(childComplexity int, id string) int
 		PublishOperatorFocus          func(childComplexity int, input model.OperatorFocusInput) int
 		PurgeTask                     func(childComplexity int, id string) int
+		RecordIconUse                 func(childComplexity int, name string) int
 		RegenerateAgentKey            func(childComplexity int, id string) int
 		RegenerateMyAPIKey            func(childComplexity int) int
 		RemoveModule                  func(childComplexity int, instance string) int
@@ -359,6 +361,7 @@ type ComplexityRoot struct {
 		SetWikiDocumentTemplate       func(childComplexity int, id string, isTemplate bool) int
 		SnoozeSkill                   func(childComplexity int, name string, version int) int
 		SnoozeSkillUpdate             func(childComplexity int, version int) int
+		TouchRecentOperation          func(childComplexity int, operationID string) int
 		TrackWikiDocumentVisit        func(childComplexity int, documentID string) int
 		TransferSkill                 func(childComplexity int, name string, userID string) int
 		UpdateAgentKey                func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
@@ -700,8 +703,10 @@ type ComplexityRoot struct {
 		AuthSource                func(childComplexity int) int
 		CompletedGuides           func(childComplexity int) int
 		CreatedAt                 func(childComplexity int) int
+		FrequentIcons             func(childComplexity int) int
 		HiddenIdentities          func(childComplexity int) int
 		ID                        func(childComplexity int) int
+		RecentOperations          func(childComplexity int) int
 		Roles                     func(childComplexity int) int
 		SkillDownloadedAt         func(childComplexity int) int
 		SkillDownloadedVersion    func(childComplexity int) int
@@ -962,6 +967,9 @@ type MutationResolver interface {
 	UpdateOwnProfile(ctx context.Context, input model.UpdateUserInput) (*models.User, error)
 	SetHiddenIdentities(ctx context.Context, names []string) (*models.User, error)
 	CompleteGuide(ctx context.Context, guide string) (*models.User, error)
+	RecordIconUse(ctx context.Context, name string) (*models.User, error)
+	TouchRecentOperation(ctx context.Context, operationID string) (*models.User, error)
+	ImportLocalPreferences(ctx context.Context, input model.ImportLocalPreferencesInput) (*models.User, error)
 	CreateOperation(ctx context.Context, input model.CreateOperationInput) (*models.Operation, error)
 	UpdateOperation(ctx context.Context, id string, input model.UpdateOperationInput) (*models.Operation, error)
 	DeleteOperation(ctx context.Context, id string) (bool, error)
@@ -1174,6 +1182,9 @@ type UserResolver interface {
 	SkillDownloadedVersion(ctx context.Context, obj *models.User) (*int, error)
 	SkillDownloadedAt(ctx context.Context, obj *models.User) (*string, error)
 	SkillUpdateSnoozedVersion(ctx context.Context, obj *models.User) (*int, error)
+
+	FrequentIcons(ctx context.Context, obj *models.User) ([]string, error)
+	RecentOperations(ctx context.Context, obj *models.User) ([]*models.Operation, error)
 }
 type WikiDocumentResolver interface {
 	ID(ctx context.Context, obj *models.WikiDocument) (string, error)
@@ -2563,6 +2574,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.EmptyWikiDocumentTrash(childComplexity, args["operationId"].(string)), true
+	case "Mutation.importLocalPreferences":
+		if e.ComplexityRoot.Mutation.ImportLocalPreferences == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_importLocalPreferences_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ImportLocalPreferences(childComplexity, args["input"].(model.ImportLocalPreferencesInput)), true
 	case "Mutation.instantiateTemplate":
 		if e.ComplexityRoot.Mutation.InstantiateTemplate == nil {
 			break
@@ -2618,6 +2640,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PurgeTask(childComplexity, args["id"].(string)), true
+	case "Mutation.recordIconUse":
+		if e.ComplexityRoot.Mutation.RecordIconUse == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_recordIconUse_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RecordIconUse(childComplexity, args["name"].(string)), true
 	case "Mutation.regenerateAgentKey":
 		if e.ComplexityRoot.Mutation.RegenerateAgentKey == nil {
 			break
@@ -2828,6 +2861,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SnoozeSkillUpdate(childComplexity, args["version"].(int)), true
+	case "Mutation.touchRecentOperation":
+		if e.ComplexityRoot.Mutation.TouchRecentOperation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_touchRecentOperation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.TouchRecentOperation(childComplexity, args["operationId"].(string)), true
 	case "Mutation.trackWikiDocumentVisit":
 		if e.ComplexityRoot.Mutation.TrackWikiDocumentVisit == nil {
 			break
@@ -4726,6 +4770,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.CreatedAt(childComplexity), true
+	case "User.frequentIcons":
+		if e.ComplexityRoot.User.FrequentIcons == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.FrequentIcons(childComplexity), true
 	case "User.hiddenIdentities":
 		if e.ComplexityRoot.User.HiddenIdentities == nil {
 			break
@@ -4738,6 +4788,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.ID(childComplexity), true
+	case "User.recentOperations":
+		if e.ComplexityRoot.User.RecentOperations == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.RecentOperations(childComplexity), true
 	case "User.roles":
 		if e.ComplexityRoot.User.Roles == nil {
 			break
@@ -5434,6 +5490,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputCreateWikiDocumentInput,
 		ec.unmarshalInputCredentialKeyInput,
 		ec.unmarshalInputCredentialPropertyInput,
+		ec.unmarshalInputIconUsageInput,
+		ec.unmarshalInputImportLocalPreferencesInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMarkHashCrackedInput,
 		ec.unmarshalInputNetworkInterfaceInput,
@@ -6809,9 +6867,9 @@ directive @hasPermission(permission: String!) on FIELD_DEFINITION
 #   - OPERATOR: can manage entities within the operation (future)
 #   - VIEWER: read-only access to the operation
 enum OperationRole {
-  ADMIN
-  OPERATOR
-  VIEWER
+    ADMIN
+    OPERATOR
+    VIEWER
 }
 
 # -----------------------------------------------------------------------------
@@ -6823,35 +6881,43 @@ enum OperationRole {
 
 # User represents an operator account in the Logos system.
 type User {
-  id: ID!                  # Unique identifier (UUID as string)
-  username: String!        # Login name (unique)
-  roles: [String!]!        # RBAC roles, e.g. ["admin"] or ["user"]
-  active: Boolean!         # Whether this account is enabled
-  # How the account authenticates: "local" (username + password) or "oidc"
-  # (single sign-on). SSO accounts have no password and their username and
-  # roles are re-synced from the identity provider on every login.
-  authSource: String!
-  createdAt: String!       # ISO 8601 timestamp
-  updatedAt: String!       # ISO 8601 timestamp
-  # Usernames this operator hides from the host topology Users lens.
-  # Per-operator, global across operations. Normalized (trimmed, lowercased).
-  hiddenIdentities: [String!]!
-  # The agent skill release this operator last downloaded, and when. Null
-  # when they never have — the SPA then shows no update prompt.
-  skillDownloadedVersion: Int
-  skillDownloadedAt: String
-  # The newest release whose update prompt they dismissed. Null when none.
-  skillUpdateSnoozedVersion: Int
-  # In-app guides this operator has finished or dismissed, by id. A guide that
-  # is not listed is one the SPA will still offer.
-  completedGuides: [String!]!
+    id: ID! # Unique identifier (UUID as string)
+    username: String! # Login name (unique)
+    roles: [String!]! # RBAC roles, e.g. ["admin"] or ["user"]
+    active: Boolean! # Whether this account is enabled
+    # How the account authenticates: "local" (username + password) or "oidc"
+    # (single sign-on). SSO accounts have no password and their username and
+    # roles are re-synced from the identity provider on every login.
+    authSource: String!
+    createdAt: String! # ISO 8601 timestamp
+    updatedAt: String! # ISO 8601 timestamp
+    # Usernames this operator hides from the host topology Users lens.
+    # Per-operator, global across operations. Normalized (trimmed, lowercased).
+    hiddenIdentities: [String!]!
+    # The agent skill release this operator last downloaded, and when. Null
+    # when they never have — the SPA then shows no update prompt.
+    skillDownloadedVersion: Int
+    skillDownloadedAt: String
+    # The newest release whose update prompt they dismissed. Null when none.
+    skillUpdateSnoozedVersion: Int
+    # In-app guides this operator has finished or dismissed, by id. A guide that
+    # is not listed is one the SPA will still offer.
+    completedGuides: [String!]!
+    # The wiki icon picker's "Frequently used" row, most used first: lucide
+    # names, or brand icons as "si:<slug>". Only ever populated on the caller's
+    # own user — empty when read on anyone else's.
+    frequentIcons: [String!]!
+    # Operations the caller scoped most recently, newest first. Deleted
+    # operations and ones the caller can no longer view are left out. Only ever
+    # populated on the caller's own user — empty when read on anyone else's.
+    recentOperations: [Operation!]!
 }
 
 # Minimal user info for autocomplete pickers (e.g., adding operation members).
 # Intentionally lightweight — no roles, status, or timestamps.
 type UserSuggestion {
-  id: ID!
-  username: String!
+    id: ID!
+    username: String!
 }
 
 # -----------------------------------------------------------------------------
@@ -6870,10 +6936,10 @@ type UserSuggestion {
 
 # PageInfo is shared across all connection types.
 type PageInfo {
-  hasNextPage: Boolean!      # True if more items exist after the last edge
-  hasPreviousPage: Boolean!  # True if more items exist before the first edge
-  startCursor: String        # Cursor of the first edge (null if empty)
-  endCursor: String          # Cursor of the last edge (null if empty)
+    hasNextPage: Boolean! # True if more items exist after the last edge
+    hasPreviousPage: Boolean! # True if more items exist before the first edge
+    startCursor: String # Cursor of the first edge (null if empty)
+    endCursor: String # Cursor of the last edge (null if empty)
 }
 
 # Direction for sortable list queries. Shared by every connection that
@@ -6882,41 +6948,41 @@ type PageInfo {
 # client changes sortBy/sortDirection it must restart pagination from the
 # first page; replaying a cursor from a different sort returns an error.
 enum SortDirection {
-  ASC
-  DESC
+    ASC
+    DESC
 }
 
 # Sortable columns for the ` + "`" + `users` + "`" + ` query. Only the columns the UI exposes as
 # sortable are listed; the default (and the historical order) is CREATED_AT
 # descending. USERNAME sorts case-insensitively.
 enum UserSortField {
-  USERNAME
-  CREATED_AT
+    USERNAME
+    CREATED_AT
 }
 
 # Sortable columns for the ` + "`" + `operations` + "`" + ` query. Only the columns the UI exposes
 # as sortable are listed; the default (and the historical order) is CREATED_AT
 # descending. NAME sorts case-insensitively.
 enum OperationSortField {
-  NAME
-  CREATED_AT
+    NAME
+    CREATED_AT
 }
 
 type UserEdge {
-  node: User!                # The actual user object
-  cursor: String!            # Opaque cursor for this user's position
+    node: User! # The actual user object
+    cursor: String! # Opaque cursor for this user's position
 }
 
 type UserConnection {
-  edges: [UserEdge!]!        # The page of users, each wrapped with a cursor
-  pageInfo: PageInfo!        # Pagination metadata
-  totalCount: Int!           # Total users matching the query (for UI counters)
+    edges: [UserEdge!]! # The page of users, each wrapped with a cursor
+    pageInfo: PageInfo! # Pagination metadata
+    totalCount: Int! # Total users matching the query (for UI counters)
 }
 
 # OperationMember represents a user's membership in an operation with their role.
 type OperationMember {
-  user: User!              # The member user
-  role: OperationRole!     # Their role in this operation
+    user: User! # The member user
+    role: OperationRole! # Their role in this operation
 }
 
 # Operation represents an operational context in the Logos system.
@@ -6925,23 +6991,23 @@ type OperationMember {
 # a user can belong to multiple operations, and an operation has multiple members.
 # Each member has a role (admin, operator, viewer) that controls their access.
 type Operation {
-  id: ID!                  # Unique identifier (UUID as string)
-  name: String!            # Operation name (unique)
-  description: String!     # What this operation is about
-  members: [OperationMember!]! # Users assigned to this operation with their roles
-  createdAt: String!       # ISO 8601 timestamp
-  updatedAt: String!       # ISO 8601 timestamp
+    id: ID! # Unique identifier (UUID as string)
+    name: String! # Operation name (unique)
+    description: String! # What this operation is about
+    members: [OperationMember!]! # Users assigned to this operation with their roles
+    createdAt: String! # ISO 8601 timestamp
+    updatedAt: String! # ISO 8601 timestamp
 }
 
 type OperationEdge {
-  node: Operation!
-  cursor: String!
+    node: Operation!
+    cursor: String!
 }
 
 type OperationConnection {
-  edges: [OperationEdge!]!
-  pageInfo: PageInfo!
-  totalCount: Int!
+    edges: [OperationEdge!]!
+    pageInfo: PageInfo!
+    totalCount: Int!
 }
 
 # -----------------------------------------------------------------------------
@@ -6960,59 +7026,59 @@ type OperationConnection {
 #   }
 
 type Query {
-  # me returns the currently authenticated user.
-  # Requires basic auth (any logged-in user).
-  me: User! @hasPermission(permission: "*")
+    # me returns the currently authenticated user.
+    # Requires basic auth (any logged-in user).
+    me: User! @hasPermission(permission: "*")
 
-  # user returns a single user by their ID.
-  # Requires user:read permission (admin only by default).
-  user(id: ID!): User! @hasPermission(permission: "user:read")
+    # user returns a single user by their ID.
+    # Requires user:read permission (admin only by default).
+    user(id: ID!): User! @hasPermission(permission: "user:read")
 
-  # users returns a paginated, searchable list of all users.
-  # Uses cursor-based pagination (Relay Connection spec):
-  # - first/after:  forward pagination (get N items after cursor)
-  # - last/before:  backward pagination (get N items before cursor)
-  # - search: optional text filter (matches username and roles)
-  users(
-    search: String
-    # Sort column + direction. Cursors are minted per sort mode, so
-    # changing the sort restarts pagination (see SortDirection).
-    sortBy: UserSortField = CREATED_AT
-    sortDirection: SortDirection = DESC
-    first: Int = 20
-    after: String
-    last: Int
-    before: String
-  ): UserConnection! @hasPermission(permission: "user:read")
+    # users returns a paginated, searchable list of all users.
+    # Uses cursor-based pagination (Relay Connection spec):
+    # - first/after:  forward pagination (get N items after cursor)
+    # - last/before:  backward pagination (get N items before cursor)
+    # - search: optional text filter (matches username and roles)
+    users(
+        search: String
+        # Sort column + direction. Cursors are minted per sort mode, so
+        # changing the sort restarts pagination (see SortDirection).
+        sortBy: UserSortField = CREATED_AT
+        sortDirection: SortDirection = DESC
+        first: Int = 20
+        after: String
+        last: Int
+        before: String
+    ): UserConnection! @hasPermission(permission: "user:read")
 
-  # userSuggestions returns a lightweight list of users matching a search string.
-  # Designed for autocomplete pickers (e.g., adding operation members).
-  # Returns only id and username — no sensitive data like roles or status.
-  # Requires operation:member permission (available to all authenticated users).
-  userSuggestions(search: String!, first: Int = 10): [UserSuggestion!]!
-    @hasPermission(permission: "operation:member")
+    # userSuggestions returns a lightweight list of users matching a search string.
+    # Designed for autocomplete pickers (e.g., adding operation members).
+    # Returns only id and username — no sensitive data like roles or status.
+    # Requires operation:member permission (available to all authenticated users).
+    userSuggestions(search: String!, first: Int = 10): [UserSuggestion!]!
+        @hasPermission(permission: "operation:member")
 
-  # operation returns a single operation by its ID.
-  operation(id: ID!): Operation! @hasPermission(permission: "operation:read")
+    # operation returns a single operation by its ID.
+    operation(id: ID!): Operation! @hasPermission(permission: "operation:read")
 
-  # operations returns a paginated, searchable list of all operations.
-  operations(
-    search: String
-    # Sort column + direction. Cursors are minted per sort mode, so
-    # changing the sort restarts pagination (see SortDirection).
-    sortBy: OperationSortField = CREATED_AT
-    sortDirection: SortDirection = DESC
-    first: Int = 20
-    after: String
-    last: Int
-    before: String
-  ): OperationConnection! @hasPermission(permission: "operation:read")
+    # operations returns a paginated, searchable list of all operations.
+    operations(
+        search: String
+        # Sort column + direction. Cursors are minted per sort mode, so
+        # changing the sort restarts pagination (see SortDirection).
+        sortBy: OperationSortField = CREATED_AT
+        sortDirection: SortDirection = DESC
+        first: Int = 20
+        after: String
+        last: Int
+        before: String
+    ): OperationConnection! @hasPermission(permission: "operation:read")
 
-  # myOperationRole returns the caller's role in a specific operation,
-  # or null if the caller is not a member of that operation.
-  # Useful for the frontend to know which UI controls to show.
-  myOperationRole(operationId: ID!): OperationRole
-    @hasPermission(permission: "operation:member")
+    # myOperationRole returns the caller's role in a specific operation,
+    # or null if the caller is not a member of that operation.
+    # Useful for the frontend to know which UI controls to show.
+    myOperationRole(operationId: ID!): OperationRole
+        @hasPermission(permission: "operation:member")
 }
 
 # -----------------------------------------------------------------------------
@@ -7023,32 +7089,44 @@ type Query {
 
 # CreateUserInput — all fields required to create a new user.
 input CreateUserInput {
-  username: String!         # Must be unique
-  password: String!         # Will be bcrypt-hashed before storage
-  roles: [String!]!         # e.g. ["admin"] or ["user"]
-  active: Boolean = true    # Defaults to true if omitted
+    username: String! # Must be unique
+    password: String! # Will be bcrypt-hashed before storage
+    roles: [String!]! # e.g. ["admin"] or ["user"]
+    active: Boolean = true # Defaults to true if omitted
 }
 
 # UpdateUserInput — all fields optional (only send what you want to change).
 # This is a "partial update" pattern — if a field is null/omitted, it is
 # left unchanged on the server.
 input UpdateUserInput {
-  username: String
-  password: String          # If provided, will be re-hashed
-  roles: [String]
-  active: Boolean
+    username: String
+    password: String # If provided, will be re-hashed
+    roles: [String]
+    active: Boolean
+}
+
+# One icon from the SPA's old localStorage frequency list.
+input IconUsageInput {
+    name: String!
+    count: Int!
+    lastUsedAt: String! # ISO 8601
+}
+
+input ImportLocalPreferencesInput {
+    frequentIcons: [IconUsageInput!]!
+    recentOperationIds: [ID!]! # newest first
 }
 
 # CreateOperationInput — fields needed to create a new operation.
 input CreateOperationInput {
-  name: String!             # Must be unique
-  description: String       # Optional, defaults to empty string
+    name: String! # Must be unique
+    description: String # Optional, defaults to empty string
 }
 
 # UpdateOperationInput — partial update for an operation.
 input UpdateOperationInput {
-  name: String
-  description: String
+    name: String
+    description: String
 }
 
 # -----------------------------------------------------------------------------
@@ -7065,73 +7143,96 @@ input UpdateOperationInput {
 #   }
 
 type Mutation {
-  # createUser registers a new user account.
-  # Requires user:create permission (admin only).
-  createUser(input: CreateUserInput!): User!
-    @hasPermission(permission: "user:create")
+    # createUser registers a new user account.
+    # Requires user:create permission (admin only).
+    createUser(input: CreateUserInput!): User!
+        @hasPermission(permission: "user:create")
 
-  # updateUser modifies an existing user by ID.
-  # Requires user:update permission (admin only).
-  updateUser(id: ID!, input: UpdateUserInput!): User!
-    @hasPermission(permission: "user:update")
+    # updateUser modifies an existing user by ID.
+    # Requires user:update permission (admin only).
+    updateUser(id: ID!, input: UpdateUserInput!): User!
+        @hasPermission(permission: "user:update")
 
-  # deleteUser removes a user account by ID.
-  # Requires user:delete permission (admin only).
-  deleteUser(id: ID!): Boolean!
-    @hasPermission(permission: "user:delete")
+    # deleteUser removes a user account by ID.
+    # Requires user:delete permission (admin only).
+    deleteUser(id: ID!): Boolean! @hasPermission(permission: "user:delete")
 
-  # updateOwnProfile lets a user modify their own account.
-  # Requires user:update:own permission (any authenticated user).
-  # The server determines which user to update from the JWT token.
-  updateOwnProfile(input: UpdateUserInput!): User!
-    @hasPermission(permission: "user:update:own")
+    # updateOwnProfile lets a user modify their own account.
+    # Requires user:update:own permission (any authenticated user).
+    # The server determines which user to update from the JWT token.
+    updateOwnProfile(input: UpdateUserInput!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # setHiddenIdentities replaces the caller's hidden-identity list (the
-  # usernames hidden from the host topology Users lens). The server determines
-  # which user to update from the JWT token and normalizes the names.
-  # Requires user:update:own permission (any authenticated user).
-  setHiddenIdentities(names: [String!]!): User!
-    @hasPermission(permission: "user:update:own")
+    # setHiddenIdentities replaces the caller's hidden-identity list (the
+    # usernames hidden from the host topology Users lens). The server determines
+    # which user to update from the JWT token and normalizes the names.
+    # Requires user:update:own permission (any authenticated user).
+    setHiddenIdentities(names: [String!]!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # completeGuide records that the caller finished or dismissed one in-app
-  # guide, so it does not come back on their next session. The id must be one
-  # the server knows.
-  #
-  # Idempotent: completing the same guide twice returns the user unchanged, so
-  # two tabs finishing one guide at the same moment is not an error.
-  completeGuide(guide: String!): User!
-    @hasPermission(permission: "user:update:own")
+    # completeGuide records that the caller finished or dismissed one in-app
+    # guide, so it does not come back on their next session. The id must be one
+    # the server knows.
+    #
+    # Idempotent: completing the same guide twice returns the user unchanged, so
+    # two tabs finishing one guide at the same moment is not an error.
+    completeGuide(guide: String!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # createOperation registers a new operation.
-  # Requires operation:create permission (admin only).
-  # The creator is automatically added as an operation admin.
-  createOperation(input: CreateOperationInput!): Operation!
-    @hasPermission(permission: "operation:create")
+    # recordIconUse counts one pick of an icon in the caller's icon picker,
+    # for its "Frequently used" row. The server keeps the 32 most used.
+    recordIconUse(name: String!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # updateOperation modifies an existing operation by ID.
-  # App-level gate; resolver checks that caller is an operation admin.
-  updateOperation(id: ID!, input: UpdateOperationInput!): Operation!
-    @hasPermission(permission: "operation:member")
+    # touchRecentOperation moves an operation to the front of the caller's
+    # recent operations. Refused for an operation the caller cannot view.
+    touchRecentOperation(operationId: ID!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # deleteOperation removes an operation by ID.
-  # Requires operation:delete permission (app admin only).
-  deleteOperation(id: ID!): Boolean!
-    @hasPermission(permission: "operation:delete")
+    # importLocalPreferences is the one-time move of the picker history the SPA
+    # used to keep in localStorage. Each list is written only if the caller's
+    # server-side one is still empty, so repeating it — another tab, another
+    # browser — changes nothing. Invalid icon names and operations the caller
+    # cannot view are dropped rather than refused.
+    importLocalPreferences(input: ImportLocalPreferencesInput!): User!
+        @hasPermission(permission: "user:update:own")
 
-  # addOperationMember assigns a user to an operation with the given role.
-  # App-level gate; resolver checks that caller is an operation admin.
-  addOperationMember(operationId: ID!, userId: ID!, role: OperationRole!): Operation!
-    @hasPermission(permission: "operation:member")
+    # createOperation registers a new operation.
+    # Requires operation:create permission (admin only).
+    # The creator is automatically added as an operation admin.
+    createOperation(input: CreateOperationInput!): Operation!
+        @hasPermission(permission: "operation:create")
 
-  # removeOperationMember removes a user from an operation.
-  # App-level gate; resolver checks that caller is an operation admin.
-  removeOperationMember(operationId: ID!, userId: ID!): Operation!
-    @hasPermission(permission: "operation:member")
+    # updateOperation modifies an existing operation by ID.
+    # App-level gate; resolver checks that caller is an operation admin.
+    updateOperation(id: ID!, input: UpdateOperationInput!): Operation!
+        @hasPermission(permission: "operation:member")
 
-  # updateOperationMemberRole changes a member's role in an operation.
-  # App-level gate; resolver checks that caller is an operation admin.
-  updateOperationMemberRole(operationId: ID!, userId: ID!, role: OperationRole!): Operation!
-    @hasPermission(permission: "operation:member")
+    # deleteOperation removes an operation by ID.
+    # Requires operation:delete permission (app admin only).
+    deleteOperation(id: ID!): Boolean!
+        @hasPermission(permission: "operation:delete")
+
+    # addOperationMember assigns a user to an operation with the given role.
+    # App-level gate; resolver checks that caller is an operation admin.
+    addOperationMember(
+        operationId: ID!
+        userId: ID!
+        role: OperationRole!
+    ): Operation! @hasPermission(permission: "operation:member")
+
+    # removeOperationMember removes a user from an operation.
+    # App-level gate; resolver checks that caller is an operation admin.
+    removeOperationMember(operationId: ID!, userId: ID!): Operation!
+        @hasPermission(permission: "operation:member")
+
+    # updateOperationMemberRole changes a member's role in an operation.
+    # App-level gate; resolver checks that caller is an operation admin.
+    updateOperationMemberRole(
+        operationId: ID!
+        userId: ID!
+        role: OperationRole!
+    ): Operation! @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
 	{Name: "../schema/sessions.graphql", Input: `# =============================================================================
@@ -9000,6 +9101,17 @@ func (ec *executionContext) field_Mutation_emptyWikiDocumentTrash_args(ctx conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_importLocalPreferences_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNImportLocalPreferencesInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐImportLocalPreferencesInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_instantiateTemplate_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9087,6 +9199,17 @@ func (ec *executionContext) field_Mutation_purgeTask_args(ctx context.Context, r
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_recordIconUse_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
 	return args, nil
 }
 
@@ -9330,6 +9453,17 @@ func (ec *executionContext) field_Mutation_snoozeSkill_args(ctx context.Context,
 		return nil, err
 	}
 	args["version"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_touchRecentOperation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
 	return args, nil
 }
 
@@ -13141,6 +13275,10 @@ func (ec *executionContext) fieldContext_Credential_createdBy(_ context.Context,
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -13539,6 +13677,10 @@ func (ec *executionContext) fieldContext_CredentialComment_author(_ context.Cont
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -14475,6 +14617,10 @@ func (ec *executionContext) fieldContext_Hash_createdBy(_ context.Context, field
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -15437,6 +15583,10 @@ func (ec *executionContext) fieldContext_Host_createdBy(_ context.Context, field
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -16516,6 +16666,10 @@ func (ec *executionContext) fieldContext_Mutation_createUser(ctx context.Context
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -16601,6 +16755,10 @@ func (ec *executionContext) fieldContext_Mutation_updateUser(ctx context.Context
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -16745,6 +16903,10 @@ func (ec *executionContext) fieldContext_Mutation_updateOwnProfile(ctx context.C
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -16830,6 +16992,10 @@ func (ec *executionContext) fieldContext_Mutation_setHiddenIdentities(ctx contex
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -16915,6 +17081,10 @@ func (ec *executionContext) fieldContext_Mutation_completeGuide(ctx context.Cont
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -16927,6 +17097,273 @@ func (ec *executionContext) fieldContext_Mutation_completeGuide(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_completeGuide_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_recordIconUse(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_recordIconUse,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RecordIconUse(ctx, fc.Args["name"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *models.User
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *models.User
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNUser2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐUser,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_recordIconUse(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "username":
+				return ec.fieldContext_User_username(ctx, field)
+			case "roles":
+				return ec.fieldContext_User_roles(ctx, field)
+			case "active":
+				return ec.fieldContext_User_active(ctx, field)
+			case "authSource":
+				return ec.fieldContext_User_authSource(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "hiddenIdentities":
+				return ec.fieldContext_User_hiddenIdentities(ctx, field)
+			case "skillDownloadedVersion":
+				return ec.fieldContext_User_skillDownloadedVersion(ctx, field)
+			case "skillDownloadedAt":
+				return ec.fieldContext_User_skillDownloadedAt(ctx, field)
+			case "skillUpdateSnoozedVersion":
+				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
+			case "completedGuides":
+				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_recordIconUse_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_touchRecentOperation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_touchRecentOperation,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().TouchRecentOperation(ctx, fc.Args["operationId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *models.User
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *models.User
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNUser2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐUser,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_touchRecentOperation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "username":
+				return ec.fieldContext_User_username(ctx, field)
+			case "roles":
+				return ec.fieldContext_User_roles(ctx, field)
+			case "active":
+				return ec.fieldContext_User_active(ctx, field)
+			case "authSource":
+				return ec.fieldContext_User_authSource(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "hiddenIdentities":
+				return ec.fieldContext_User_hiddenIdentities(ctx, field)
+			case "skillDownloadedVersion":
+				return ec.fieldContext_User_skillDownloadedVersion(ctx, field)
+			case "skillDownloadedAt":
+				return ec.fieldContext_User_skillDownloadedAt(ctx, field)
+			case "skillUpdateSnoozedVersion":
+				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
+			case "completedGuides":
+				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_touchRecentOperation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_importLocalPreferences(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_importLocalPreferences,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ImportLocalPreferences(ctx, fc.Args["input"].(model.ImportLocalPreferencesInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *models.User
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *models.User
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNUser2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐUser,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_importLocalPreferences(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "username":
+				return ec.fieldContext_User_username(ctx, field)
+			case "roles":
+				return ec.fieldContext_User_roles(ctx, field)
+			case "active":
+				return ec.fieldContext_User_active(ctx, field)
+			case "authSource":
+				return ec.fieldContext_User_authSource(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_User_updatedAt(ctx, field)
+			case "hiddenIdentities":
+				return ec.fieldContext_User_hiddenIdentities(ctx, field)
+			case "skillDownloadedVersion":
+				return ec.fieldContext_User_skillDownloadedVersion(ctx, field)
+			case "skillDownloadedAt":
+				return ec.fieldContext_User_skillDownloadedAt(ctx, field)
+			case "skillUpdateSnoozedVersion":
+				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
+			case "completedGuides":
+				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_importLocalPreferences_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19567,6 +20004,10 @@ func (ec *executionContext) fieldContext_Mutation_snoozeSkillUpdate(ctx context.
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -23017,6 +23458,10 @@ func (ec *executionContext) fieldContext_OperationMember_user(_ context.Context,
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -23728,6 +24173,10 @@ func (ec *executionContext) fieldContext_Query_me(_ context.Context, field graph
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -23802,6 +24251,10 @@ func (ec *executionContext) fieldContext_Query_user(ctx context.Context, field g
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -28520,6 +28973,10 @@ func (ec *executionContext) fieldContext_Session_user(_ context.Context, field g
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -31617,6 +32074,10 @@ func (ec *executionContext) fieldContext_Task_assignees(_ context.Context, field
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -31836,6 +32297,10 @@ func (ec *executionContext) fieldContext_Task_createdBy(_ context.Context, field
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -31891,6 +32356,10 @@ func (ec *executionContext) fieldContext_Task_lastUpdatedBy(_ context.Context, f
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -32735,6 +33204,10 @@ func (ec *executionContext) fieldContext_TimelineEvent_actor(_ context.Context, 
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -33536,6 +34009,78 @@ func (ec *executionContext) fieldContext_User_completedGuides(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _User_frequentIcons(ctx context.Context, field graphql.CollectedField, obj *models.User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_User_frequentIcons,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().FrequentIcons(ctx, obj)
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_User_frequentIcons(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _User_recentOperations(ctx context.Context, field graphql.CollectedField, obj *models.User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_User_recentOperations,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().RecentOperations(ctx, obj)
+		},
+		nil,
+		ec.marshalNOperation2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐOperationᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_User_recentOperations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Operation_id(ctx, field)
+			case "name":
+				return ec.fieldContext_Operation_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Operation_description(ctx, field)
+			case "members":
+				return ec.fieldContext_Operation_members(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Operation_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Operation_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Operation", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _UserConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.UserConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33687,6 +34232,10 @@ func (ec *executionContext) fieldContext_UserEdge_node(_ context.Context, field 
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -33858,6 +34407,10 @@ func (ec *executionContext) fieldContext_UserEvent_user(_ context.Context, field
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -34829,6 +35382,10 @@ func (ec *executionContext) fieldContext_WikiDocument_createdBy(_ context.Contex
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -34884,6 +35441,10 @@ func (ec *executionContext) fieldContext_WikiDocument_lastUpdatedBy(_ context.Co
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -35026,6 +35587,10 @@ func (ec *executionContext) fieldContext_WikiDocument_deletedBy(_ context.Contex
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -35649,6 +36214,10 @@ func (ec *executionContext) fieldContext_WikiDocumentBackup_createdBy(_ context.
 				return ec.fieldContext_User_skillUpdateSnoozedVersion(ctx, field)
 			case "completedGuides":
 				return ec.fieldContext_User_completedGuides(ctx, field)
+			case "frequentIcons":
+				return ec.fieldContext_User_frequentIcons(ctx, field)
+			case "recentOperations":
+				return ec.fieldContext_User_recentOperations(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -39528,6 +40097,87 @@ func (ec *executionContext) unmarshalInputCredentialPropertyInput(ctx context.Co
 				return it, err
 			}
 			it.Value = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputIconUsageInput(ctx context.Context, obj any) (model.IconUsageInput, error) {
+	var it model.IconUsageInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "count", "lastUsedAt"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "count":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("count"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Count = data
+		case "lastUsedAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("lastUsedAt"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.LastUsedAt = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputImportLocalPreferencesInput(ctx context.Context, obj any) (model.ImportLocalPreferencesInput, error) {
+	var it model.ImportLocalPreferencesInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"frequentIcons", "recentOperationIds"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "frequentIcons":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("frequentIcons"))
+			data, err := ec.unmarshalNIconUsageInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐIconUsageInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FrequentIcons = data
+		case "recentOperationIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("recentOperationIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RecentOperationIds = data
 		}
 	}
 	return it, nil
@@ -43832,6 +44482,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "completeGuide":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_completeGuide(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "recordIconUse":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_recordIconUse(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "touchRecentOperation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_touchRecentOperation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "importLocalPreferences":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_importLocalPreferences(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -48789,6 +49460,78 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "frequentIcons":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._User_frequentIcons(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "recentOperations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._User_recentOperations(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -51878,6 +52621,31 @@ func (ec *executionContext) marshalNID2ᚕstringᚄ(ctx context.Context, sel ast
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalNIconUsageInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐIconUsageInputᚄ(ctx context.Context, v any) ([]*model.IconUsageInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.IconUsageInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNIconUsageInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐIconUsageInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNIconUsageInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐIconUsageInput(ctx context.Context, v any) (*model.IconUsageInput, error) {
+	res, err := ec.unmarshalInputIconUsageInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNImportLocalPreferencesInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐImportLocalPreferencesInput(ctx context.Context, v any) (model.ImportLocalPreferencesInput, error) {
+	res, err := ec.unmarshalInputImportLocalPreferencesInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {

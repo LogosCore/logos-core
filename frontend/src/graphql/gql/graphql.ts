@@ -385,6 +385,17 @@ export type HostSortField =
   | 'HOSTNAME'
   | 'OS';
 
+export type IconUsageInput = {
+  count: Scalars['Int']['input'];
+  lastUsedAt: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+};
+
+export type ImportLocalPreferencesInput = {
+  frequentIcons: Array<IconUsageInput>;
+  recentOperationIds: Array<Scalars['ID']['input']>;
+};
+
 export type Login = {
   count: Scalars['Int']['output'];
   from: Scalars['String']['output'];
@@ -461,11 +472,13 @@ export type Mutation = {
   deleteWikiDocumentBackup: Scalars['Boolean']['output'];
   duplicateWikiDocument: WikiDocument;
   emptyWikiDocumentTrash: Scalars['Boolean']['output'];
+  importLocalPreferences: User;
   instantiateTemplate: WikiDocument;
   markHashCracked: Hash;
   permanentlyDeleteWikiDocument: Scalars['Boolean']['output'];
   publishOperatorFocus: Scalars['Boolean']['output'];
   purgeTask: Scalars['Boolean']['output'];
+  recordIconUse: User;
   regenerateAgentKey: AgentKeyWithSecret;
   regenerateMyAPIKey: ApiKeyWithSecret;
   removeModule: Module;
@@ -486,6 +499,7 @@ export type Mutation = {
   setWikiDocumentTemplate: WikiDocument;
   snoozeSkill: Skill;
   snoozeSkillUpdate: User;
+  touchRecentOperation: User;
   trackWikiDocumentVisit: WikiDocumentVisit;
   transferSkill: Skill;
   updateAgentKey: AgentKey;
@@ -671,6 +685,11 @@ export type MutationEmptyWikiDocumentTrashArgs = {
 };
 
 
+export type MutationImportLocalPreferencesArgs = {
+  input: ImportLocalPreferencesInput;
+};
+
+
 export type MutationInstantiateTemplateArgs = {
   color?: InputMaybe<Scalars['String']['input']>;
   emoji?: InputMaybe<Scalars['String']['input']>;
@@ -700,6 +719,11 @@ export type MutationPublishOperatorFocusArgs = {
 
 export type MutationPurgeTaskArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationRecordIconUseArgs = {
+  name: Scalars['String']['input'];
 };
 
 
@@ -799,6 +823,11 @@ export type MutationSnoozeSkillArgs = {
 
 export type MutationSnoozeSkillUpdateArgs = {
   version: Scalars['Int']['input'];
+};
+
+
+export type MutationTouchRecentOperationArgs = {
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -1809,8 +1838,10 @@ export type User = {
   authSource: Scalars['String']['output'];
   completedGuides: Array<Scalars['String']['output']>;
   createdAt: Scalars['String']['output'];
+  frequentIcons: Array<Scalars['String']['output']>;
   hiddenIdentities: Array<Scalars['String']['output']>;
   id: Scalars['ID']['output'];
+  recentOperations: Array<Operation>;
   roles: Array<Scalars['String']['output']>;
   skillDownloadedAt?: Maybe<Scalars['String']['output']>;
   skillDownloadedVersion?: Maybe<Scalars['Int']['output']>;
@@ -2865,7 +2896,7 @@ export type UserFieldsFragment = { id: string, username: string, roles: Array<st
 export type MeQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type MeQuery = { me: { hiddenIdentities: Array<string>, skillDownloadedVersion?: number | null, skillDownloadedAt?: string | null, skillUpdateSnoozedVersion?: number | null, completedGuides: Array<string>, id: string, username: string, roles: Array<string>, active: boolean, authSource: string, createdAt: string, updatedAt: string } };
+export type MeQuery = { me: { hiddenIdentities: Array<string>, skillDownloadedVersion?: number | null, skillDownloadedAt?: string | null, skillUpdateSnoozedVersion?: number | null, completedGuides: Array<string>, frequentIcons: Array<string>, id: string, username: string, roles: Array<string>, active: boolean, authSource: string, createdAt: string, updatedAt: string, recentOperations: Array<{ id: string, name: string, description: string }> } };
 
 export type CompleteGuideMutationVariables = Exact<{
   guide: Scalars['String']['input'];
@@ -2873,6 +2904,27 @@ export type CompleteGuideMutationVariables = Exact<{
 
 
 export type CompleteGuideMutation = { completeGuide: { id: string, completedGuides: Array<string> } };
+
+export type RecordIconUseMutationVariables = Exact<{
+  name: Scalars['String']['input'];
+}>;
+
+
+export type RecordIconUseMutation = { recordIconUse: { id: string, frequentIcons: Array<string> } };
+
+export type TouchRecentOperationMutationVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type TouchRecentOperationMutation = { touchRecentOperation: { id: string, recentOperations: Array<{ id: string, name: string, description: string }> } };
+
+export type ImportLocalPreferencesMutationVariables = Exact<{
+  input: ImportLocalPreferencesInput;
+}>;
+
+
+export type ImportLocalPreferencesMutation = { importLocalPreferences: { id: string, frequentIcons: Array<string>, recentOperations: Array<{ id: string, name: string, description: string }> } };
 
 export type UserQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -6628,6 +6680,12 @@ export const MeDocument = new TypedDocumentString(`
     skillDownloadedAt
     skillUpdateSnoozedVersion
     completedGuides
+    frequentIcons
+    recentOperations {
+      id
+      name
+      description
+    }
   }
 }
     fragment UserFields on User {
@@ -6647,6 +6705,39 @@ export const CompleteGuideDocument = new TypedDocumentString(`
   }
 }
     `) as unknown as TypedDocumentString<CompleteGuideMutation, CompleteGuideMutationVariables>;
+export const RecordIconUseDocument = new TypedDocumentString(`
+    mutation RecordIconUse($name: String!) {
+  recordIconUse(name: $name) {
+    id
+    frequentIcons
+  }
+}
+    `) as unknown as TypedDocumentString<RecordIconUseMutation, RecordIconUseMutationVariables>;
+export const TouchRecentOperationDocument = new TypedDocumentString(`
+    mutation TouchRecentOperation($operationId: ID!) {
+  touchRecentOperation(operationId: $operationId) {
+    id
+    recentOperations {
+      id
+      name
+      description
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<TouchRecentOperationMutation, TouchRecentOperationMutationVariables>;
+export const ImportLocalPreferencesDocument = new TypedDocumentString(`
+    mutation ImportLocalPreferences($input: ImportLocalPreferencesInput!) {
+  importLocalPreferences(input: $input) {
+    id
+    frequentIcons
+    recentOperations {
+      id
+      name
+      description
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<ImportLocalPreferencesMutation, ImportLocalPreferencesMutationVariables>;
 export const UserDocument = new TypedDocumentString(`
     query User($id: ID!) {
   user(id: $id) {

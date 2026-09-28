@@ -61,7 +61,34 @@ type User struct {
 	// would replay every guide on each new browser, private window and cleared
 	// cache — and operators share workstations.
 	CompletedGuides []string `bson:"completed_guides" json:"-"`
+	// FrequentIcons feed the wiki icon picker's "Frequently used" row: at
+	// most MaxFrequentIcons entries, most used first, ties broken by the most
+	// recent use. Server-side for the same reason as CompletedGuides — kept in
+	// the browser, the row emptied on every new browser, origin and cleared
+	// cache, and whenever the browser evicted site data on its own.
+	FrequentIcons []IconUsage `bson:"frequent_icons" json:"-"`
+	// RecentOperations are the operations this operator scoped most recently,
+	// newest first, at most MaxRecentOperations. IDs only: names are resolved
+	// on read, which is also where operations the operator has since lost
+	// access to drop out, so a stored list never leaks one's name.
+	RecentOperations []uuid.UUID `bson:"recent_operations" json:"-"`
 }
+
+// IconUsage is one icon in User.FrequentIcons. Name is what the SPA stores on
+// a document: a lucide name, or a brand icon encoded "si:<slug>".
+type IconUsage struct {
+	Name     string    `bson:"name" json:"name"`
+	Count    int       `bson:"count" json:"count"`
+	LastUsed time.Time `bson:"last_used" json:"last_used"`
+}
+
+const (
+	// MaxFrequentIcons caps User.FrequentIcons. The picker shows 16; the rest
+	// is headroom so an icon used a few times is not evicted by churn.
+	MaxFrequentIcons = 32
+	// MaxRecentOperations caps User.RecentOperations.
+	MaxRecentOperations = 8
+)
 
 // GuideIDs are the in-app guides an operator can complete. The server
 // validates against this set so a typo in the SPA cannot quietly record a

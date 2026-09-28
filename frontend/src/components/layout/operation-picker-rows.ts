@@ -21,7 +21,7 @@ export type PickerOperation = {
  * the server.
  */
 export function buildPickerRows(
-  recents: PickerOperation[],
+  recents: readonly PickerOperation[],
   loaded: PickerOperation[],
   searching: boolean,
 ): PickerRow[] {

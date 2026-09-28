@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectionNodes } from "@/hooks/use-connection-nodes";
+import { useRecentOperations } from "@/hooks/use-picker-history";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import {
   CheckIcon,
@@ -51,7 +52,7 @@ function OperationTooltipBody({
 
 export function OperationSwitcher() {
   const scopedOperation = useScopedOperationStore((s) => s.scopedOperation);
-  const recentOperations = useScopedOperationStore((s) => s.recentOperations);
+  const recentOperations = useRecentOperations();
   const scopeOperation = useScopedOperationStore((s) => s.scopeOperation);
   const unscopeOperation = useScopedOperationStore((s) => s.unscopeOperation);
 

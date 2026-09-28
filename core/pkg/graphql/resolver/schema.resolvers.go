@@ -44,6 +44,21 @@ func (r *mutationResolver) CompleteGuide(ctx context.Context, guide string) (*mo
 	return r.UserResolver.CompleteGuide(ctx, guide)
 }
 
+// RecordIconUse counts one pick of an icon in the caller's icon picker.
+func (r *mutationResolver) RecordIconUse(ctx context.Context, name string) (*models.User, error) {
+	return r.UserResolver.RecordIconUse(ctx, name)
+}
+
+// TouchRecentOperation moves an operation to the front of the caller's recent list.
+func (r *mutationResolver) TouchRecentOperation(ctx context.Context, operationID string) (*models.User, error) {
+	return r.UserResolver.TouchRecentOperation(ctx, operationID)
+}
+
+// ImportLocalPreferences seeds the caller's picker history from the SPA's old localStorage.
+func (r *mutationResolver) ImportLocalPreferences(ctx context.Context, input model.ImportLocalPreferencesInput) (*models.User, error) {
+	return r.UserResolver.ImportLocalPreferences(ctx, input)
+}
+
 // CreateOperation creates a new operation.
 func (r *mutationResolver) CreateOperation(ctx context.Context, input model.CreateOperationInput) (*models.Operation, error) {
 	return r.OperationResolver.CreateOperation(ctx, input)
@@ -181,6 +196,16 @@ func (r *userResolver) SkillUpdateSnoozedVersion(ctx context.Context, obj *model
 	}
 	v := obj.SkillUpdateSnoozedVersion
 	return &v, nil
+}
+
+// FrequentIcons is the caller's icon picker "Frequently used" row.
+func (r *userResolver) FrequentIcons(ctx context.Context, obj *models.User) ([]string, error) {
+	return r.UserResolver.FrequentIcons(ctx, obj)
+}
+
+// RecentOperations are the caller's recently scoped operations they can still view.
+func (r *userResolver) RecentOperations(ctx context.Context, obj *models.User) ([]*models.Operation, error) {
+	return r.UserResolver.RecentOperations(ctx, obj)
 }
 
 // Mutation returns generated.MutationResolver implementation.

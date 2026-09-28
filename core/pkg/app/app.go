@@ -46,6 +46,7 @@ type authConfig struct {
 
 type Repositories struct {
 	User               repository.IUserRepository
+	UserPreferences    repository.IUserPreferencesRepository
 	Operation          repository.IOperationRepository
 	Session            repository.ISessionRepository
 	WikiDocument       repository.IWikiDocumentRepository

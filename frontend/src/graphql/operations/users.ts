@@ -21,6 +21,12 @@ export const MeQuery = graphql(`
       skillDownloadedAt
       skillUpdateSnoozedVersion
       completedGuides
+      frequentIcons
+      recentOperations {
+        id
+        name
+        description
+      }
     }
   }
 `)
@@ -32,6 +38,47 @@ export const CompleteGuideMutation = graphql(`
     completeGuide(guide: $guide) {
       id
       completedGuides
+    }
+  }
+`)
+
+// Counts one icon pick for the icon picker's "Frequently used" row. Returns
+// the re-ranked list so the cache can take it as-is.
+export const RecordIconUseMutation = graphql(`
+  mutation RecordIconUse($name: String!) {
+    recordIconUse(name: $name) {
+      id
+      frequentIcons
+    }
+  }
+`)
+
+// Moves an operation to the front of the caller's recent operations.
+export const TouchRecentOperationMutation = graphql(`
+  mutation TouchRecentOperation($operationId: ID!) {
+    touchRecentOperation(operationId: $operationId) {
+      id
+      recentOperations {
+        id
+        name
+        description
+      }
+    }
+  }
+`)
+
+// One-time move of the picker history older builds kept in localStorage.
+// Each list is written only if the server-side one is still empty.
+export const ImportLocalPreferencesMutation = graphql(`
+  mutation ImportLocalPreferences($input: ImportLocalPreferencesInput!) {
+    importLocalPreferences(input: $input) {
+      id
+      frequentIcons
+      recentOperations {
+        id
+        name
+        description
+      }
     }
   }
 `)

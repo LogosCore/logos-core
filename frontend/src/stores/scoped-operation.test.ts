@@ -10,7 +10,11 @@ vi.stubGlobal("localStorage", {
 })
 vi.stubGlobal("window", { addEventListener: () => {} })
 
-const { useScopedOperationStore } = await import("./scoped-operation")
+const {
+  useScopedOperationStore,
+  readLegacyRecentOperationIds,
+  clearLegacyRecentOperations,
+} = await import("./scoped-operation")
 
 const opA = { id: "op-a", name: "Operation A", description: "" }
 const opB = { id: "op-b", name: "Operation B", description: "" }
@@ -51,31 +55,31 @@ describe("scopeOperationForWikiDocument", () => {
   })
 })
 
-describe("recentOperations", () => {
-  beforeEach(() => {
-    memory.clear()
-    useScopedOperationStore.getState().reset()
-    useScopedOperationStore.getState().hydrate("user-1")
+// The "Recent" list itself moved to the server (hooks/use-picker-history.ts);
+// the store only keeps a reader for the old copy, so it can be imported once.
+describe("legacy recent operations", () => {
+  beforeEach(() => memory.clear())
+
+  it("reads ids newest first, per user, and ignores junk", () => {
+    memory.set(
+      "recent_operations_user-1",
+      JSON.stringify([opB, { name: "no id" }, null, opA]),
+    )
+    expect(readLegacyRecentOperationIds("user-1")).toEqual(["op-b", "op-a"])
+    expect(readLegacyRecentOperationIds("user-2")).toEqual([])
   })
 
-  it("records scoped operations newest first without duplicates", () => {
-    const store = useScopedOperationStore.getState()
-    store.scopeOperation(opA)
-    store.scopeOperation(opB)
-    store.scopeOperationForWikiDocument(opA, "doc-1")
-    expect(
-      useScopedOperationStore.getState().recentOperations.map((o) => o.id),
-    ).toEqual(["op-a", "op-b"])
+  it("treats a corrupt value as empty, and clear removes it", () => {
+    memory.set("recent_operations_user-1", "{not json")
+    expect(readLegacyRecentOperationIds("user-1")).toEqual([])
+    clearLegacyRecentOperations("user-1")
+    expect(memory.has("recent_operations_user-1")).toBe(false)
   })
 
-  it("persists per user and comes back on hydrate", () => {
-    useScopedOperationStore.getState().scopeOperation(opB)
+  it("scoping no longer writes a recents key", () => {
     useScopedOperationStore.getState().reset()
-    expect(useScopedOperationStore.getState().recentOperations).toEqual([])
     useScopedOperationStore.getState().hydrate("user-1")
-    expect(useScopedOperationStore.getState().recentOperations).toEqual([opB])
-    useScopedOperationStore.getState().reset()
-    useScopedOperationStore.getState().hydrate("user-2")
-    expect(useScopedOperationStore.getState().recentOperations).toEqual([])
+    useScopedOperationStore.getState().scopeOperation(opA)
+    expect(memory.has("recent_operations_user-1")).toBe(false)
   })
 })

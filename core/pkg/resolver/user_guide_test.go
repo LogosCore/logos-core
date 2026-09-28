@@ -28,7 +28,7 @@ func guideHarness(t *testing.T, stored models.User) (IUserResolver, context.Cont
 			return nil
 		},
 	}
-	return NewUserResolver(repo, eventbus.NewNopEventBus()), newCallerCtx(stored.UserID, "user"), &captured
+	return NewUserResolver(repo, eventbus.NewNopEventBus(), nil, nil), newCallerCtx(stored.UserID, "user"), &captured
 }
 
 func TestCompleteGuide_RecordsForCaller(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCompleteGuide_RejectsUnknownIDs(t *testing.T) {
 }
 
 func TestCompleteGuide_InvalidToken(t *testing.T) {
-	r := NewUserResolver(&mockUserRepo{}, eventbus.NewNopEventBus())
+	r := NewUserResolver(&mockUserRepo{}, eventbus.NewNopEventBus(), nil, nil)
 	ctx := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{UserID: "not-a-uuid", Roles: []string{"user"}})
 	if _, err := r.CompleteGuide(ctx, "welcome"); err == nil {
 		t.Fatal("expected error for invalid user ID in token")

@@ -38,10 +38,9 @@ import {
   subscribeIconTags,
 } from "@/components/wiki/icon-search";
 import { DocumentIcon } from "@/components/wiki/document-icon";
-import {
-  loadFrequentIconNames,
-  recordFrequentIconUsage,
-} from "@/components/wiki/frequent-icons";
+import { visibleFrequentIconNames } from "@/components/wiki/frequent-icons";
+import { useMe } from "@/graphql/hooks/users";
+import { useRecordIconUse } from "@/hooks/use-picker-history";
 import {
   WIKI_ICON_COLORS,
   type WikiIconColor,
@@ -121,6 +120,7 @@ export function DocumentIconPicker({
 }: DocumentIconPickerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { resolvedTheme } = useTheme();
+  const { mutate: recordIconUse } = useRecordIconUse();
 
   const isOpen = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -142,7 +142,9 @@ export function DocumentIconPicker({
     // Preserve color across icon swaps so users can pick color first or change
     // their icon without losing the chosen color.
     onSelect({ emoji: "", icon: name, color: value.color });
-    recordFrequentIconUsage(name);
+    // The adaptive default has its own section; counting it would have it
+    // compete with concrete icons for the frequently-used slots.
+    if (name !== ADAPTIVE_ICON_NAME) recordIconUse(name);
     setOpen(false);
   }
 
@@ -279,10 +281,11 @@ function IconGrid({
 }: IconGridProps) {
   const [search, setSearch] = useState("");
   // Snapshot frequent icons on mount. The picker remounts each time the
-  // popover opens, so freshly-recorded picks appear on the next open without
-  // needing reactive state during a single open session.
+  // popover opens, so freshly-recorded picks appear on the next open, and the
+  // row does not reshuffle under the pointer if `me` refetches meanwhile.
+  const { data: me } = useMe();
   const [frequentNames] = useState<readonly string[]>(() =>
-    loadFrequentIconNames(),
+    visibleFrequentIconNames(me?.me.frequentIcons ?? []),
   );
 
   const q = search.trim().toLowerCase();

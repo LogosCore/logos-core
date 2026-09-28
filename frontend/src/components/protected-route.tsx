@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/auth"
 import { useConnectivityStore } from "@/stores/connectivity"
 import { useSessionGuard } from "@/hooks/use-session-guard"
 import { useScopedOperationGuard } from "@/hooks/use-scoped-operation-guard"
+import { usePickerHistorySync } from "@/hooks/use-picker-history"
 import { useScopedOperationStore } from "@/stores/scoped-operation"
 import { useWikiTreeModeStore } from "@/stores/wiki-tree-mode"
 import { consumeSsoLoginPending, warnIfMultipleSessions } from "@/lib/post-login-check"
@@ -45,6 +46,10 @@ export function ProtectedRoute({ permission }: { permission?: string }) {
 
   // Validate the restored scope and subscribe to real-time changes.
   useScopedOperationGuard()
+
+  // Record operation choices server-side for the picker's "Recent" section,
+  // and import what older builds kept in localStorage.
+  usePickerHistorySync(userId)
 
   const isValidating = useScopedOperationStore((s) => s.isValidating)
   const scopedId = useScopedOperationStore((s) => s.scopedOperation?.id ?? null)

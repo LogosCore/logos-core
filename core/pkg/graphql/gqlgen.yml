@@ -78,6 +78,10 @@ models:
         resolver: true         # *SkillDownload -> nullable ISO 8601 string
       skillUpdateSnoozedVersion:
         resolver: true         # 0 -> null
+      frequentIcons:
+        resolver: true         # []IconUsage -> names; empty unless it is the caller
+      recentOperations:
+        resolver: true         # []uuid.UUID -> viewable Operations; empty unless it is the caller
 
   # Map the GraphQL "OperationRole" enum to our existing OperationRole type.
   # The Go type implements MarshalGQL/UnmarshalGQL for case conversion.
