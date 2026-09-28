@@ -115,6 +115,8 @@ export function KanbanColumn({
         isLoading={query.isLoading}
         fetchNextPage={query.fetchNextPage}
         emptyMessage="Drop a task here"
+        // Four columns side by side would each spend a scrollbar's width.
+        className="no-scrollbar"
         isOver={isOver}
         groupOf={stage === "DONE" ? groupOf : undefined}
         renderGroupHeader={
