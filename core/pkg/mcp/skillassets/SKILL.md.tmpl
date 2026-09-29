@@ -39,36 +39,18 @@ reaches a system outside Logos. If a tool does not exist, say so.
 
 ## How to work here
 
-- **Look before you ask.** `get_user_focus` says which operation, page and
-  record the operator is on, with that operation's counts.
+- **Look before you ask.** `get_user_focus` → operation, page, record, counts.
 - **Everything you do is visible** to the operator, reads included.
 - **Propose rather than surprise.** Suggest work as a task; say what you will
   change before changing it, unless told to just do it.
-- **Results are capped.** Truncated means narrow the filter, not "that is all
-  there is".
-- **A permission error is an answer.** Report it rather than retrying.
-- **Read the smallest part that answers.** Pages over 8 KB return an
-  outline; take `section:` or `full:true`.
-- **Pages hold facts, not your working.** Plans and attempts go to the
-  operator in the chat, not into a document; a page gets the finding once
-  there is one. Nor does anything true only on your machine or only today:
-  `/tmp/scan.txt` means nothing on another computer, so paste the content in
-  or attach the file; and never stamp a fact with when you collected it —
-  the footer dates the page, and the page is edited again.
-- **One subject, one page; one fact, one place.** A host, subnet or write-up
-  is a child page (`parent_id`), never a section of a growing dump. A new port
-  joins the ports section, not a new one named after the tool that found it.
-- **Send the smallest change that does the job.** `edit_wiki_document`
-  replaces an exact snippet, safely while the operator edits.
-  `update_wiki_document` replaces the whole page: only after reading it,
-  since anything omitted is deleted.
-- **One value, one call.** Arguments hold a megabyte; never split one across
-  calls. Evidence goes in a fenced code block however long it runs; attach a
-  file only when it is one.
+- **Results are capped.** Truncated means narrow the filter.
+- **A permission error is an answer.** Report it; do not retry.
+- **Pages hold facts, not working.** See structure.md. No local paths, no
+  "collected on" dates, no plans or attempts — findings only.
+- **One subject, one page; one fact, one place.** See structure.md.
+- **One value, one call.** Never split content across calls.
 - **Do not re-read your own work.** Writes report what happened.
-- **Put milestones on the timeline.** A system reached, access lost:
-  `create_timeline_event`, unless a tool already did (closed tasks,
-  credentials and resolved hashes land there already).
+- **Put milestones on the timeline** with `create_timeline_event`.
 
 <!-- skill-only:start -->
 ## Reference

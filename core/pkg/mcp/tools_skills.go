@@ -76,15 +76,12 @@ type skillVersionView struct {
 func registerSkillTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "find_skills",
-		Description: "Skills operators have published on this server: shared working methods, " +
-			"packaged the way your own skill is, plus the built-in logos skill itself " +
-			"(marked builtIn). Returns names and descriptions, not the bundles.",
+		Description: "Published skills on this server, plus the built-in (builtIn). Names and descriptions.",
 	}, readTool, handleFindSkills)
 
 	register(s, &mcp.Tool{
 		Name: "get_skill",
-		Description: "One skill in full: its version history and the URL to download the bundle " +
-			"from with your agent key. Also how to publish a new version, when the key's owner owns the name.",
+		Description: "One skill in full: version history and download URL.",
 	}, readTool, handleGetSkill)
 }
 

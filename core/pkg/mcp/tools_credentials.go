@@ -35,7 +35,7 @@ type createCredentialArgs struct {
 		Value string `json:"value"`
 	} `json:"properties,omitempty" jsonschema:"Extra fields."`
 	Tags     []string `json:"tags,omitempty"     jsonschema:"Tags, e.g. the host it belongs to."`
-	Validity string   `json:"validity,omitempty" jsonschema:"VALID if you have used it, INVALID if it was rejected. Omit for UNKNOWN: recorded, untried."`
+	Validity string   `json:"validity,omitempty" jsonschema:"VALID, INVALID or omit for UNKNOWN."`
 }
 
 type getCredentialArgs struct {
@@ -62,7 +62,7 @@ type updateCredentialArgs struct {
 		Value string `json:"value"`
 	} `json:"properties,omitempty" jsonschema:"Replaces every property. Omit to leave them; send [] to clear them."`
 	Tags     []string `json:"tags,omitempty"     jsonschema:"Replaces every tag. Omit to leave them; send [] to clear them."`
-	Validity *string  `json:"validity,omitempty" jsonschema:"VALID once you have used it, INVALID once it has been rejected, UNKNOWN to withdraw a claim."`
+	Validity *string  `json:"validity,omitempty" jsonschema:"VALID, INVALID or UNKNOWN."`
 }
 
 type addCredentialCommentArgs struct {
@@ -84,9 +84,7 @@ func registerCredentialTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "update_credential",
-		Description: "Correct a credential you or somebody else recorded. Send only the fields " +
-			"that change; anything omitted is left alone. Set validity:\"VALID\" once you have " +
-			"actually used it, \"INVALID\" once it was rejected.",
+		Description: "Update a credential. Send only fields that change; omitted fields are kept.",
 	}, writeTool, handleUpdateCredential)
 
 	register(s, &mcp.Tool{

@@ -344,6 +344,13 @@ var releases = []Release{
 			"wiki.md trimmed to fit its budget after the v37 rewrite.",
 		},
 	},
+	{
+		Version: 39,
+		Date:    "2026-09-29",
+		Notes: []string{
+			"Token optimization: trimmed tool descriptions and jsonschema annotations across all tools, removing guidance duplicated in reference docs. Compressed SKILL.md bullets, stripped description echoes from the tool index, and shortened response notes. No functional changes.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

@@ -27,8 +27,7 @@ type userFocusResult struct {
 func registerFocusTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "get_user_focus",
-		Description: "What the operator is looking at now: operation, page, selected record, " +
-			"plus that operation's counts. Other tools default to this operation.",
+		Description: "What the operator is looking at: operation, page, record. Other tools default to this operation.",
 	}, readTool, handleGetUserFocus)
 }
 

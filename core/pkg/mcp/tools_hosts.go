@@ -24,8 +24,8 @@ type createHostArgs struct {
 	IdempotencyKey
 	OperationID string         `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
 	Hostname    string         `json:"hostname"               jsonschema:"Host name."`
-	Description string         `json:"description,omitempty"  jsonschema:"What this machine is to the operation: its role, why it matters. A sentence or two."`
-	OS          string         `json:"os,omitempty"           jsonschema:"OS fingerprint ONLY, e.g. 'Windows Server 2019'. Anything else belongs in description."`
+	Description string         `json:"description,omitempty"  jsonschema:"Role and significance. A sentence or two."`
+	OS          string         `json:"os,omitempty"           jsonschema:"OS fingerprint only, e.g. 'Windows Server 2019'."`
 	Interfaces  []interfaceArg `json:"interfaces,omitempty"   jsonschema:"Interfaces; they place the host on a subnet."`
 	Routes      []routeArg     `json:"routes,omitempty"       jsonschema:"Routing table."`
 	Logins      []loginArg     `json:"logins,omitempty"       jsonschema:"Recorded logins; they draw the users lens."`
@@ -57,14 +57,12 @@ func registerHostTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "create_host",
-		Description: "Record a host. Interfaces, routes and logins are what the " +
-			"topology view draws from; without them the host is an isolated node.",
+		Description: "Record a host with its interfaces, routes and logins.",
 	}, writeTool, handleCreateHost)
 
 	register(s, &mcp.Tool{
 		Name: "update_host",
-		Description: "Change a host. The interface, route and login lists REPLACE what is " +
-			"stored, so read the host first and send the complete set.",
+		Description: "Change a host. Interface/route/login lists REPLACE; read first, send the full set.",
 	}, writeTool, handleUpdateHost)
 }
 

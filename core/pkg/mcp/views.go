@@ -285,7 +285,7 @@ func newWikiWriteResult(doc wikiDocView, watchers int, audit wiki.AttachmentAudi
 	}
 	var notes []string
 	if watchers > 0 {
-		notes = append(notes, "The operator has this page open and saw your edit appear.")
+		notes = append(notes, "The operator saw this edit.")
 	}
 	if n := len(audit.StrayFileLinks); n > 0 {
 		notes = append(notes, fmt.Sprintf(

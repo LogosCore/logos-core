@@ -29,27 +29,24 @@ type getWikiDocumentArgs struct {
 	DocumentID string `json:"document_id" jsonschema:"Page id."`
 	Outline    bool   `json:"outline,omitempty" jsonschema:"Return headings and section sizes instead of text."`
 	Section    string `json:"section,omitempty" jsonschema:"Return only this heading and what nests under it, as the outline names it."`
-	Full       bool   `json:"full,omitempty"    jsonschema:"Return the body even when the page is large; pages over 8 KB otherwise return their outline. A body over 40 KB still comes back truncated with an offset to continue from."`
-	Offset     int    `json:"offset,omitempty"  jsonschema:"Resume a truncated read at this byte offset — the number the previous read reported. Pair with full:true, or with the same section:."`
+	Full       bool   `json:"full,omitempty"    jsonschema:"Return the body even when large. Over 40 KB, truncated with an offset to continue from."`
+	Offset     int    `json:"offset,omitempty"  jsonschema:"Resume a truncated read at this byte offset from the previous read."`
 }
 
 func registerWikiTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "search_wiki",
-		Description: "Search wiki pages by title and body. Each hit carries a snippet of the " +
-			"matching text, usually enough to pick the page without opening it.",
+		Description: "Search wiki pages by title and body. Each hit carries a matching snippet.",
 	}, readTool, handleSearchWiki)
 
 	register(s, &mcp.Tool{
 		Name: "list_wiki_tree",
-		Description: "The page tree, depth-first: titles, parents, icons and child counts. Two " +
-			"levels by default; pass parent_id to descend or depth:-1 for everything.",
+		Description: "The page tree: titles, parents, icons, child counts. parent_id to descend, depth:-1 for all.",
 	}, readTool, handleListWikiTree)
 
 	register(s, &mcp.Tool{
 		Name: "list_wiki_templates",
-		Description: "Page templates to start from: the operation's own plus the shared ones " +
-			"in the Public wiki (marked shared). Check before writing a page from scratch.",
+		Description: "Page templates: the operation's own plus shared ones. Check before writing from scratch.",
 	}, readTool, handleListWikiTemplates)
 
 	register(s, &mcp.Tool{
@@ -60,18 +57,12 @@ func registerWikiTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "get_wiki_document",
-		Description: "One wiki page as Markdown. Small pages return their body; pages over 8 KB " +
-			"return an outline instead, so pass section:\"<heading>\" for the part you need " +
-			"or full:true for everything. A body or section over 40 KB comes back truncated " +
-			"with truncated:true and a byte offset in the text; read the rest by repeating the " +
-			"call with offset: set to that number.",
+		Description: "One wiki page as Markdown. Pages over 8 KB return an outline; use section or full:true. See wiki.md.",
 	}, readTool, handleGetWikiDocument)
 
 	register(s, &mcp.Tool{
 		Name: "get_checklist_status",
-		Description: "Which checklist items a page has, their keys, prompts, and whether each is " +
-			"answered — without fetching the body. Use before set_checklist_answer to see what " +
-			"needs filling.",
+		Description: "Checklist items on a page: keys, prompts, answered state. Use before set_checklist_answer.",
 	}, readTool, handleGetChecklistStatus)
 
 	register(s, &mcp.Tool{
@@ -82,48 +73,37 @@ func registerWikiTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "add_wiki_section",
-		Description: "Add a section for a subject the page does not cover yet. If a section " +
-			"already covers it, put the new facts in that one with edit_wiki_document " +
-			"instead: a second heading on the same subject splits it in two. Adds at the " +
-			"end, or the start with position:\"start\"; safe while the operator edits.",
+		Description: "Append (or prepend with position:\"start\") a section to one or many pages. See wiki.md.",
 	}, writeTool, handleAddWikiSection)
 
 	register(s, &mcp.Tool{
 		Name: "edit_wiki_document",
-		Description: "Replace an exact snippet on a page, like editing a source file. The tool " +
-			"for almost every edit; a non-matching snippet is refused with what differs.",
+		Description: "Replace an exact snippet on a page. The tool for almost every edit.",
 	}, writeTool, handleEditWikiDocument)
 
 	register(s, &mcp.Tool{
 		Name: "update_wiki_document",
-		Description: "Replace a page's whole body. Only for a deliberate end-to-end rewrite: " +
-			"read the page first, because anything omitted is deleted.",
+		Description: "Replace a page's whole body. Read first; anything omitted is deleted.",
 	}, writeTool, handleUpdateWikiDocument)
 
 	register(s, &mcp.Tool{
 		Name: "move_wiki_document",
-		Description: "File a page under a different parent, with everything below it. Omit " +
-			"parent_id to move it to the top level. Reorganise with this; never recreate a " +
-			"page elsewhere and trash the original.",
+		Description: "Move a page under a different parent with its subtree. Omit parent_id for top level.",
 	}, writeTool, handleMoveWikiDocument)
 
 	register(s, &mcp.Tool{
 		Name: "set_checklist_answer",
-		Description: "Fill one or more checklist answers by their key. The answer is Markdown — " +
-			"use fenced code blocks for command output. Returns which keys were filled and " +
-			"the page's checklist coverage. Far cheaper than edit_wiki_document for checklists.",
+		Description: "Fill checklist answers by key. Markdown; fenced code blocks for command output.",
 	}, writeTool, handleSetChecklistAnswer)
 
 	register(s, &mcp.Tool{
 		Name: "set_block_content",
-		Description: "Replace the content of a keyed block (e.g. a notice callout) by its key. " +
-			"The content is Markdown. One or many blocks at once; merge-safe with a connected editor.",
+		Description: "Replace the content of a keyed block (e.g. a notice) by its key. Markdown.",
 	}, writeTool, handleSetBlockContent)
 
 	register(s, &mcp.Tool{
 		Name: "delete_wiki_document",
-		Description: "Move a page to the trash, where an admin can restore it. A page with " +
-			"children is refused unless with_children:true; templates are refused.",
+		Description: "Trash a page. Refused if it has children (unless with_children:true) or is a template.",
 	}, writeTool, handleDeleteWikiDocument)
 }
 

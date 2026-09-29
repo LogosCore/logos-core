@@ -158,7 +158,7 @@ func handleSetChecklistAnswer(ctx context.Context, s *Server, args setChecklistA
 
 	var notes []string
 	if result.Watchers > 0 {
-		notes = append(notes, "The operator has this page open and saw the answers appear.")
+		notes = append(notes, "The operator saw this edit.")
 	}
 	if notFound > 0 {
 		notes = append(notes, fmt.Sprintf(

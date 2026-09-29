@@ -108,7 +108,7 @@ const SkillName = "logos"
 // skillDescription is the one line that stays in the agent's context
 // permanently. It has to say both what the skill covers and when to reach for
 // it, because that sentence alone decides whether the rest is ever loaded.
-const skillDescription = "Work an operation in Logos, a team workspace for tracking one — hosts, credentials, hashes, tasks, wiki notes and the operation timeline — through its MCP tools. Use whenever connected to a Logos MCP endpoint, or when the user mentions an operation, its findings, or its notes."
+const skillDescription = "Work an operation in Logos — hosts, credentials, hashes, tasks, wiki and timeline — through its MCP tools. Use when connected to a Logos MCP endpoint or when the user mentions an operation."
 
 // SkillFile is one file in the generated bundle.
 type SkillFile struct {
@@ -254,9 +254,8 @@ func renderToolsReference(groups []renderedGroup, ungrouped []toolDoc) string {
 
 	b.WriteString(`# Tool index
 
-Grouped by job, in the order you usually need them. Tools marked **(write)**
-change the operation; everything else only reads, though reads are recorded
-too. Full descriptions and arguments are in your tool list.
+Grouped by job. **(write)** tools change the operation; the rest only read.
+Descriptions and arguments are in your tool schema.
 
 `)
 
@@ -282,23 +281,13 @@ too. Full descriptions and arguments are in your tool list.
 	return b.String()
 }
 
-// toolIndexLine is one tool in the index: its name, the write marker, and the
-// first sentence of its description.
+// toolIndexLine is one tool in the index: its name and the write marker.
+// Descriptions are already in the tool schema the client sends each turn,
+// so echoing them here would be pure duplication.
 func toolIndexLine(t toolDoc) string {
 	marker := ""
 	if t.Write {
 		marker = " **(write)**"
 	}
-	return fmt.Sprintf("- `%s`%s — %s\n", t.Name, marker, firstSentence(t.Description))
-}
-
-// firstSentence cuts at the first sentence end. Descriptions are written so
-// the first sentence says what the tool does and the rest qualifies it.
-func firstSentence(s string) string {
-	for i := 0; i < len(s); i++ {
-		if s[i] == '.' && (i+1 == len(s) || s[i+1] == ' ') {
-			return s[:i+1]
-		}
-	}
-	return s
+	return fmt.Sprintf("- `%s`%s\n", t.Name, marker)
 }

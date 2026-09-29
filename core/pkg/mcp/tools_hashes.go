@@ -43,7 +43,7 @@ type importHashesArgs struct {
 type updateHashArgs struct {
 	IdempotencyKey
 	HashID  string   `json:"hash_id"           jsonschema:"Hash id."`
-	Status  string   `json:"status,omitempty"  jsonschema:"NOT_PROCESSED, QUEUED, CRACKING, CRACKED or FAILED. When you have the plaintext use mark_hash_cracked instead."`
+	Status  string   `json:"status,omitempty"  jsonschema:"NOT_PROCESSED, QUEUED, CRACKING, CRACKED or FAILED."`
 	Comment string   `json:"comment,omitempty" jsonschema:"New comment."`
 	Tags    []string `json:"tags,omitempty"    jsonschema:"REPLACES the tag list."`
 }
@@ -63,8 +63,7 @@ type markHashCrackedArgs struct {
 func registerHashTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "find_hashes",
-		Description: "Search recorded hashes. Long values are clipped in listings; get_hash " +
-			"returns one whole. Resolved hashes carry the id of the credential they produced.",
+		Description: "Search recorded hashes. Resolved ones carry their credential id.",
 	}, readTool, handleFindHashes)
 
 	register(s, &mcp.Tool{
@@ -89,8 +88,7 @@ func registerHashTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "mark_hash_cracked",
-		Description: "Record the plaintext for a hash: creates (or links) the credential and sets " +
-			"the hash to CRACKED. Prefer it over update_hash, which leaves the plaintext nowhere.",
+		Description: "Record the plaintext: creates or links a credential and sets CRACKED.",
 	}, writeTool, handleMarkHashCracked)
 }
 

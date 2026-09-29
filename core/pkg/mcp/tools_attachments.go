@@ -119,8 +119,7 @@ type attachTextArgs struct {
 func registerAttachmentTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "list_wiki_attachments",
-		Description: "Files attached to a page, each marked readable or not and whether the page " +
-			"shows it as an attachment card (placed).",
+		Description: "Files attached to a page with readable and placed status.",
 	}, readTool, handleListWikiAttachments)
 
 	register(s, &mcp.Tool{
@@ -131,19 +130,12 @@ func registerAttachmentTools(s *Server) {
 
 	register(s, &mcp.Tool{
 		Name: "attach_text_to_wiki_document",
-		Description: "Attach text as a file. Prefer a fenced code block in the page for " +
-			"command output, configs and logs: it reads inline and is searchable, an " +
-			"attachment is neither. Use this for a real file format, or a dump too long " +
-			"for a page. The result's markdown line, pasted alone on its own line, shows " +
-			"the file on the page.",
+		Description: "Attach text as a file. Prefer fenced code blocks for command output. See attachments.md.",
 	}, writeTool, handleAttachTextToWikiDocument)
 
 	register(s, &mcp.Tool{
 		Name: "attach_file_to_wiki_document",
-		Description: "Attach a binary file to a page from base64 bytes, or with as:\"image\" a " +
-			"screenshot shown inline. Placed at the end of the page unless place says " +
-			"otherwise. Prefer POST /api/v1/mcp/upload (multipart, same bearer token, same " +
-			"fields and result) when you can send raw bytes: no base64 overhead.",
+		Description: "Attach a binary file from base64, or as:\"image\" for inline display. See attachments.md.",
 	}, writeTool, handleAttachFileToWikiDocument)
 }
 

@@ -25,7 +25,7 @@ import (
 
 type getWikiDrawingArgs struct {
 	DocumentID string `json:"document_id" jsonschema:"Page id of a drawing."`
-	View       string `json:"view,omitempty" jsonschema:"outline (default) for one line per shape — ids, kinds, labels and positions, which is what you need to edit; full for the complete element JSON."`
+	View       string `json:"view,omitempty" jsonschema:"outline (default) or full for complete element JSON."`
 }
 
 type editWikiDrawingArgs struct {
@@ -35,7 +35,7 @@ type editWikiDrawingArgs struct {
 	// Elements is Excalidraw's own element shape. Every field but `type` is
 	// optional — the server fills in the bookkeeping (seed, nonce, group ids)
 	// that nobody composing a diagram should have to supply.
-	Elements   []map[string]any `json:"elements,omitempty"    jsonschema:"Excalidraw elements. Only 'type' is required per element (rectangle, ellipse, diamond, text, arrow, line, freedraw, image, frame); x, y, width, height, strokeColor and the rest are optional and defaulted. Put words on a shape with 'label' — the shape is sized to fit it unless you set width. Layer with 'z': higher covers lower, 0 is where hand-drawn shapes sit, so z:-1 puts arrows under the boxes. Connect an arrow with 'startBinding'/'endBinding' set to a shape id, or it will not follow that shape when it moves. Not used with mode:delete."`
+	Elements   []map[string]any `json:"elements,omitempty"    jsonschema:"Excalidraw elements; type is required. See drawings.md for label, z, bindings. Not used with mode:delete."`
 	ElementIDs []string         `json:"element_ids,omitempty" jsonschema:"Ids to erase, from get_wiki_drawing. Only for mode:delete."`
 }
 
@@ -307,8 +307,7 @@ func handleEditWikiDrawing(ctx context.Context, s *Server, args editWikiDrawingA
 		view.Notes = append(view.Notes, result.Warning)
 	}
 	if result.Watchers > 0 {
-		view.Notes = append(view.Notes,
-			"The operator has this drawing open and saw your edit appear.")
+		view.Notes = append(view.Notes, "The operator saw this edit.")
 	}
 	// An update or delete that matched nothing is the one outcome that looks
 	// like success and is not: the usual cause is ids from a read taken before

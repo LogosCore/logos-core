@@ -1,9 +1,9 @@
 ==================== logos/SKILL.md
 ---
 name: logos
-description: Work an operation in Logos, a team workspace for tracking one — hosts, credentials, hashes, tasks, wiki notes and the operation timeline — through its MCP tools. Use whenever connected to a Logos MCP endpoint, or when the user mentions an operation, its findings, or its notes.
+description: Work an operation in Logos — hosts, credentials, hashes, tasks, wiki and timeline — through its MCP tools. Use when connected to a Logos MCP endpoint or when the user mentions an operation.
 metadata:
-  version: "38"
+  version: "39"
 ---
 
 # Logos
@@ -40,36 +40,18 @@ reaches a system outside Logos. If a tool does not exist, say so.
 
 ## How to work here
 
-- **Look before you ask.** `get_user_focus` says which operation, page and
-  record the operator is on, with that operation's counts.
+- **Look before you ask.** `get_user_focus` → operation, page, record, counts.
 - **Everything you do is visible** to the operator, reads included.
 - **Propose rather than surprise.** Suggest work as a task; say what you will
   change before changing it, unless told to just do it.
-- **Results are capped.** Truncated means narrow the filter, not "that is all
-  there is".
-- **A permission error is an answer.** Report it rather than retrying.
-- **Read the smallest part that answers.** Pages over 8 KB return an
-  outline; take `section:` or `full:true`.
-- **Pages hold facts, not your working.** Plans and attempts go to the
-  operator in the chat, not into a document; a page gets the finding once
-  there is one. Nor does anything true only on your machine or only today:
-  `/tmp/scan.txt` means nothing on another computer, so paste the content in
-  or attach the file; and never stamp a fact with when you collected it —
-  the footer dates the page, and the page is edited again.
-- **One subject, one page; one fact, one place.** A host, subnet or write-up
-  is a child page (`parent_id`), never a section of a growing dump. A new port
-  joins the ports section, not a new one named after the tool that found it.
-- **Send the smallest change that does the job.** `edit_wiki_document`
-  replaces an exact snippet, safely while the operator edits.
-  `update_wiki_document` replaces the whole page: only after reading it,
-  since anything omitted is deleted.
-- **One value, one call.** Arguments hold a megabyte; never split one across
-  calls. Evidence goes in a fenced code block however long it runs; attach a
-  file only when it is one.
+- **Results are capped.** Truncated means narrow the filter.
+- **A permission error is an answer.** Report it; do not retry.
+- **Pages hold facts, not working.** See structure.md. No local paths, no
+  "collected on" dates, no plans or attempts — findings only.
+- **One subject, one page; one fact, one place.** See structure.md.
+- **One value, one call.** Never split content across calls.
 - **Do not re-read your own work.** Writes report what happened.
-- **Put milestones on the timeline.** A system reached, access lost:
-  `create_timeline_event`, unless a tool already did (closed tasks,
-  credentials and resolved hashes land there already).
+- **Put milestones on the timeline** with `create_timeline_event`.
 
 ## Reference
 
@@ -85,98 +67,97 @@ reaches a system outside Logos. If a tool does not exist, say so.
 ==================== logos/reference/tools.md
 # Tool index
 
-Grouped by job, in the order you usually need them. Tools marked **(write)**
-change the operation; everything else only reads, though reads are recorded
-too. Full descriptions and arguments are in your tool list.
+Grouped by job. **(write)** tools change the operation; the rest only read.
+Descriptions and arguments are in your tool schema.
 
 ## Orientation
 
 Where you are and what you can reach.
 
-- `list_operations` — The operations this key can act in, with your capped role in each.
-- `get_operation_summary` — Counts of hosts, credentials, hashes, open tasks and wiki pages.
-- `get_user_focus` — What the operator is looking at now: operation, page, selected record, plus that operation's counts.
+- `list_operations`
+- `get_operation_summary`
+- `get_user_focus`
 
 ## Hosts and the network
 
 Interfaces, routes and logins are what the topology view draws from.
 
-- `find_hosts` — Search hosts.
-- `get_host` — One host in full: interfaces, routes and recorded logins.
-- `create_host` **(write)** — Record a host.
-- `update_host` **(write)** — Change a host.
+- `find_hosts`
+- `get_host`
+- `create_host` **(write)**
+- `update_host` **(write)**
 
 ## Credentials
 
 Recovered secrets, returned in full.
 
-- `find_credentials` — Search recorded credentials.
-- `get_credential` — One credential in full: keys, properties and comment history.
-- `create_credential` **(write)** — Record a credential: a password, an SSH key, a token.
-- `update_credential` **(write)** — Correct a credential you or somebody else recorded.
-- `add_credential_comment` **(write)** — Append a comment to a credential: where found, what it opens, if it works.
+- `find_credentials`
+- `get_credential`
+- `create_credential` **(write)**
+- `update_credential` **(write)**
+- `add_credential_comment` **(write)**
 
 ## Hashes
 
 Captured hashes and what became of them.
 
-- `find_hashes` — Search recorded hashes.
-- `get_hash` — One hash with its full value and, if resolved, its credential.
-- `create_hash` **(write)** — Record a single hash.
-- `import_hashes` **(write)** — Import a list, one hash per line.
-- `update_hash` **(write)** — Change a hash's status, comment or tags.
-- `mark_hash_cracked` **(write)** — Record the plaintext for a hash: creates (or links) the credential and sets the hash to CRACKED.
+- `find_hashes`
+- `get_hash`
+- `create_hash` **(write)**
+- `import_hashes` **(write)**
+- `update_hash` **(write)**
+- `mark_hash_cracked` **(write)**
 
 ## Tasks
 
 The operator's board. Propose work here rather than doing something nobody asked for. You see tasks assigned to the operator you act for and unassigned ones; tasks another operator has taken are withheld. Link every task to the pages and credentials it relates to (`wiki_ids`/`credential_ids` on `create_task`, or `link_task` later).
 
-- `find_tasks` — Search the task board.
-- `get_task` — One task in full, with its rationale and linked pages and credentials.
-- `create_task` **(write)** — Add a task to the board, the way to propose work.
-- `update_task` **(write)** — Change a task's name, description or risk/profit scoring.
-- `change_task_stage` **(write)** — Move a task between board columns.
-- `set_task_assignment` **(write)** — Put the operator you act for on a task, or take them off.
-- `link_task` **(write)** — Link wiki pages and credentials to a task.
+- `find_tasks`
+- `get_task`
+- `create_task` **(write)**
+- `update_task` **(write)**
+- `change_task_stage` **(write)**
+- `set_task_assignment` **(write)**
+- `link_task` **(write)**
 
 ## Wiki
 
 Engagement notes, collaboratively edited, with file attachments. Some pages are drawings instead of prose. See wiki.md, drawings.md and attachments.md.
 
-- `search_wiki` — Search wiki pages by title and body.
-- `list_wiki_tree` — The page tree, depth-first: titles, parents, icons and child counts.
-- `get_wiki_document` — One wiki page as Markdown.
-- `list_wiki_templates` — Page templates to start from: the operation's own plus the shared ones in the Public wiki (marked shared).
-- `set_wiki_template` **(write)** — Mark a page as a reusable template, or unmark it.
-- `create_wiki_document` **(write)** — Create a wiki page, from Markdown content or from a template (template_id).
-- `add_wiki_section` **(write)** — Add a section for a subject the page does not cover yet.
-- `edit_wiki_document` **(write)** — Replace an exact snippet on a page, like editing a source file.
-- `update_wiki_document` **(write)** — Replace a page's whole body.
-- `move_wiki_document` **(write)** — File a page under a different parent, with everything below it.
-- `delete_wiki_document` **(write)** — Move a page to the trash, where an admin can restore it.
-- `get_wiki_drawing` — Read a drawing page's canvas: every shape with its id, position and label.
-- `edit_wiki_drawing` **(write)** — Draw on a drawing page.
-- `get_checklist_status` — Which checklist items a page has, their keys, prompts, and whether each is answered — without fetching the body.
-- `set_checklist_answer` **(write)** — Fill one or more checklist answers by their key.
-- `set_block_content` **(write)** — Replace the content of a keyed block (e.g.
-- `list_wiki_attachments` — Files attached to a page, each marked readable or not and whether the page shows it as an attachment card (placed).
-- `read_wiki_attachment` — Read an attachment: text formats directly, Word and Excel as text, images as images.
-- `attach_text_to_wiki_document` **(write)** — Attach text as a file.
-- `attach_file_to_wiki_document` **(write)** — Attach a binary file to a page from base64 bytes, or with as:"image" a screenshot shown inline.
+- `search_wiki`
+- `list_wiki_tree`
+- `get_wiki_document`
+- `list_wiki_templates`
+- `set_wiki_template` **(write)**
+- `create_wiki_document` **(write)**
+- `add_wiki_section` **(write)**
+- `edit_wiki_document` **(write)**
+- `update_wiki_document` **(write)**
+- `move_wiki_document` **(write)**
+- `delete_wiki_document` **(write)**
+- `get_wiki_drawing`
+- `edit_wiki_drawing` **(write)**
+- `get_checklist_status`
+- `set_checklist_answer` **(write)**
+- `set_block_content` **(write)**
+- `list_wiki_attachments`
+- `read_wiki_attachment`
+- `attach_text_to_wiki_document` **(write)**
+- `attach_file_to_wiki_document` **(write)**
 
 ## Timeline
 
 Milestones only: a task closed, a credential recovered, a hash cracked, and whatever you record with create_timeline_event — a DC owned, a foothold lost. Wiki edits and task bookkeeping do not appear.
 
-- `get_timeline` — The operation's milestones for one day, and who did them.
-- `create_timeline_event` **(write)** — Add a milestone to the timeline: a system reached, a service brought back, a change rolled out, access lost.
+- `get_timeline`
+- `create_timeline_event` **(write)**
 
 ## Skills
 
 Working methods other operators have published, packaged the way this skill is. See skills.md.
 
-- `find_skills` — Skills operators have published on this server: shared working methods, packaged the way your own skill is, plus the built-in logos skill itself (marked builtIn).
-- `get_skill` — One skill in full: its version history and the URL to download the bundle from with your agent key.
+- `find_skills`
+- `get_skill`
 
 ==================== logos/reference/structure.md
 # Wiki: where a page goes
