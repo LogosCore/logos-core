@@ -41,17 +41,17 @@ type getWikiDocumentArgs struct {
 
 func registerWikiTools(s *Server) {
 	register(s, &mcp.Tool{
-		Name: "search_wiki",
+		Name:        "search_wiki",
 		Description: "Search wiki pages by title and body. Each hit carries a matching snippet.",
 	}, readTool, handleSearchWiki)
 
 	register(s, &mcp.Tool{
-		Name: "list_wiki_tree",
+		Name:        "list_wiki_tree",
 		Description: "The page tree: titles, parents, icons, child counts. parent_id to descend, depth:-1 for all.",
 	}, readTool, handleListWikiTree)
 
 	register(s, &mcp.Tool{
-		Name: "list_wiki_templates",
+		Name:        "list_wiki_templates",
 		Description: "Page templates: the operation's own plus shared ones. Check before writing from scratch.",
 	}, readTool, handleListWikiTemplates)
 
@@ -62,12 +62,12 @@ func registerWikiTools(s *Server) {
 	}, writeTool, handleSetWikiTemplate)
 
 	register(s, &mcp.Tool{
-		Name: "get_wiki_document",
+		Name:        "get_wiki_document",
 		Description: "One wiki page as Markdown. Pages over 8 KB return an outline; use section or full:true. See wiki.md.",
 	}, readTool, handleGetWikiDocument)
 
 	register(s, &mcp.Tool{
-		Name: "get_checklist_status",
+		Name:        "get_checklist_status",
 		Description: "Checklist items on a page: keys, prompts, answered state. Use before set_checklist_answer.",
 	}, readTool, handleGetChecklistStatus)
 
@@ -78,37 +78,37 @@ func registerWikiTools(s *Server) {
 	}, writeTool, handleCreateWikiDocument)
 
 	register(s, &mcp.Tool{
-		Name: "add_wiki_section",
+		Name:        "add_wiki_section",
 		Description: "Append (or prepend with position:\"start\") a section to one or many pages. See wiki.md.",
 	}, writeTool, handleAddWikiSection)
 
 	register(s, &mcp.Tool{
-		Name: "edit_wiki_document",
+		Name:        "edit_wiki_document",
 		Description: "Replace an exact snippet on a page. The tool for almost every edit.",
 	}, writeTool, handleEditWikiDocument)
 
 	register(s, &mcp.Tool{
-		Name: "update_wiki_document",
+		Name:        "update_wiki_document",
 		Description: "Replace a page's whole body. Read first; anything omitted is deleted.",
 	}, writeTool, handleUpdateWikiDocument)
 
 	register(s, &mcp.Tool{
-		Name: "move_wiki_document",
+		Name:        "move_wiki_document",
 		Description: "Move a page under a different parent with its subtree. Omit parent_id for top level.",
 	}, writeTool, handleMoveWikiDocument)
 
 	register(s, &mcp.Tool{
-		Name: "set_checklist_answer",
+		Name:        "set_checklist_answer",
 		Description: "Fill checklist answers by key. Markdown; fenced code blocks for command output.",
 	}, writeTool, handleSetChecklistAnswer)
 
 	register(s, &mcp.Tool{
-		Name: "set_block_content",
+		Name:        "set_block_content",
 		Description: "Replace the content of a keyed block (e.g. a notice) by its key. Markdown.",
 	}, writeTool, handleSetBlockContent)
 
 	register(s, &mcp.Tool{
-		Name: "delete_wiki_document",
+		Name:        "delete_wiki_document",
 		Description: "Trash a page. Refused if it has children (unless with_children:true) or is a template.",
 	}, writeTool, handleDeleteWikiDocument)
 }

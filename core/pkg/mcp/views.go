@@ -258,10 +258,10 @@ type wikiWriteResultView struct {
 	// after this write; FileLinksNotPlaced lists file links that stayed plain
 	// links. A page reads back as the same markdown either way, so this is
 	// where an agent learns its file line did not become a card.
-	AttachmentCards    int                      `json:"attachmentCards"`
-	FileLinksNotPlaced []wiki.StrayFileLink     `json:"fileLinksNotPlaced,omitempty"`
-	Checklist          *wikiWriteChecklistView  `json:"checklist,omitempty"`
-	Note               string                   `json:"note,omitempty"`
+	AttachmentCards    int                     `json:"attachmentCards"`
+	FileLinksNotPlaced []wiki.StrayFileLink    `json:"fileLinksNotPlaced,omitempty"`
+	Checklist          *wikiWriteChecklistView `json:"checklist,omitempty"`
+	Note               string                  `json:"note,omitempty"`
 }
 
 // wikiWriteChecklistView is the coverage snapshot included on every write to
