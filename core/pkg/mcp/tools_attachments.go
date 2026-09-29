@@ -118,7 +118,7 @@ type attachTextArgs struct {
 
 func registerAttachmentTools(s *Server) {
 	register(s, &mcp.Tool{
-		Name: "list_wiki_attachments",
+		Name:        "list_wiki_attachments",
 		Description: "Files attached to a page with readable and placed status.",
 	}, readTool, handleListWikiAttachments)
 
@@ -129,12 +129,12 @@ func registerAttachmentTools(s *Server) {
 	}, readTool, handleReadWikiAttachment)
 
 	register(s, &mcp.Tool{
-		Name: "attach_text_to_wiki_document",
+		Name:        "attach_text_to_wiki_document",
 		Description: "Attach text as a file. Prefer fenced code blocks for command output. See attachments.md.",
 	}, writeTool, handleAttachTextToWikiDocument)
 
 	register(s, &mcp.Tool{
-		Name: "attach_file_to_wiki_document",
+		Name:        "attach_file_to_wiki_document",
 		Description: "Attach a binary file from base64, or as:\"image\" for inline display. See attachments.md.",
 	}, writeTool, handleAttachFileToWikiDocument)
 }

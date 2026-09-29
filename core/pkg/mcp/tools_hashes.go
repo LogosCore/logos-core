@@ -62,7 +62,7 @@ type markHashCrackedArgs struct {
 
 func registerHashTools(s *Server) {
 	register(s, &mcp.Tool{
-		Name: "find_hashes",
+		Name:        "find_hashes",
 		Description: "Search recorded hashes. Resolved ones carry their credential id.",
 	}, readTool, handleFindHashes)
 
@@ -87,7 +87,7 @@ func registerHashTools(s *Server) {
 	}, writeTool, handleUpdateHash)
 
 	register(s, &mcp.Tool{
-		Name: "mark_hash_cracked",
+		Name:        "mark_hash_cracked",
 		Description: "Record the plaintext: creates or links a credential and sets CRACKED.",
 	}, writeTool, handleMarkHashCracked)
 }

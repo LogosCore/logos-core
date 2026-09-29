@@ -83,7 +83,7 @@ func registerCredentialTools(s *Server) {
 	}, writeTool, handleCreateCredential)
 
 	register(s, &mcp.Tool{
-		Name: "update_credential",
+		Name:        "update_credential",
 		Description: "Update a credential. Send only fields that change; omitted fields are kept.",
 	}, writeTool, handleUpdateCredential)
 

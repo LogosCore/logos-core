@@ -34,7 +34,7 @@ func registerTimelineTools(s *Server) {
 	}, readTool, handleGetTimeline)
 
 	register(s, &mcp.Tool{
-		Name: "create_timeline_event",
+		Name:        "create_timeline_event",
 		Description: "Add a milestone to the timeline. For events no other tool records.",
 	}, writeTool, handleCreateTimelineEvent)
 }

@@ -75,12 +75,12 @@ type skillVersionView struct {
 
 func registerSkillTools(s *Server) {
 	register(s, &mcp.Tool{
-		Name: "find_skills",
+		Name:        "find_skills",
 		Description: "Published skills on this server, plus the built-in (builtIn). Names and descriptions.",
 	}, readTool, handleFindSkills)
 
 	register(s, &mcp.Tool{
-		Name: "get_skill",
+		Name:        "get_skill",
 		Description: "One skill in full: version history and download URL.",
 	}, readTool, handleGetSkill)
 }

@@ -12,10 +12,10 @@ import (
 
 type setChecklistAnswerArgs struct {
 	IdempotencyKey
-	DocumentID string                   `json:"document_id"            jsonschema:"Page id."`
-	Key        string                   `json:"key,omitempty"          jsonschema:"Checklist item key (UUID). Use for a single answer."`
-	Answer     string                   `json:"answer,omitempty"       jsonschema:"Markdown answer for the single key. Use fenced code blocks for command output."`
-	Answers    []checklistAnswerEntry   `json:"answers,omitempty"      jsonschema:"Batch: several answers at once. Each has a key and answer."`
+	DocumentID string                 `json:"document_id"            jsonschema:"Page id."`
+	Key        string                 `json:"key,omitempty"          jsonschema:"Checklist item key (UUID). Use for a single answer."`
+	Answer     string                 `json:"answer,omitempty"       jsonschema:"Markdown answer for the single key. Use fenced code blocks for command output."`
+	Answers    []checklistAnswerEntry `json:"answers,omitempty"      jsonschema:"Batch: several answers at once. Each has a key and answer."`
 }
 
 type checklistAnswerEntry struct {
@@ -60,13 +60,13 @@ func (a setChecklistAnswerArgs) mergedAnswers() ([]wiki.ChecklistAnswerInput, er
 // checklistWriteResultView is what set_checklist_answer returns.
 type checklistWriteResultView struct {
 	wikiDocView
-	Filled   int                    `json:"filled"`
-	NotFound int                    `json:"notFound,omitempty"`
-	Errors   int                    `json:"errors,omitempty"`
-	Results  []checklistAnswerResultView `json:"results,omitempty"`
-	Checklist *checklistStatusView  `json:"checklist,omitempty"`
-	Watchers int                    `json:"watchers"`
-	Notes    []string               `json:"notes,omitempty"`
+	Filled    int                         `json:"filled"`
+	NotFound  int                         `json:"notFound,omitempty"`
+	Errors    int                         `json:"errors,omitempty"`
+	Results   []checklistAnswerResultView `json:"results,omitempty"`
+	Checklist *checklistStatusView        `json:"checklist,omitempty"`
+	Watchers  int                         `json:"watchers"`
+	Notes     []string                    `json:"notes,omitempty"`
 }
 
 type checklistAnswerResultView struct {
@@ -186,9 +186,9 @@ type getChecklistStatusArgs struct {
 // checklistStatusResultView is what get_checklist_status returns.
 type checklistStatusResultView struct {
 	wikiDocView
-	Items    []checklistItemView  `json:"items"`
-	Coverage checklistStatusView  `json:"coverage"`
-	Notes    []string             `json:"notes,omitempty"`
+	Items    []checklistItemView `json:"items"`
+	Coverage checklistStatusView `json:"coverage"`
+	Notes    []string            `json:"notes,omitempty"`
 }
 
 type checklistItemView struct {

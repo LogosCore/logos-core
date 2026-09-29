@@ -12,9 +12,9 @@ import (
 
 type setBlockContentArgs struct {
 	IdempotencyKey
-	DocumentID string             `json:"document_id"       jsonschema:"Page id."`
-	Key        string             `json:"key,omitempty"      jsonschema:"Block key (UUID). Use for a single block."`
-	Markdown   string             `json:"markdown,omitempty" jsonschema:"Markdown content for the single key."`
+	DocumentID string              `json:"document_id"       jsonschema:"Page id."`
+	Key        string              `json:"key,omitempty"      jsonschema:"Block key (UUID). Use for a single block."`
+	Markdown   string              `json:"markdown,omitempty" jsonschema:"Markdown content for the single key."`
 	Blocks     []blockContentEntry `json:"blocks,omitempty"  jsonschema:"Batch: several blocks at once. Each has a key and markdown."`
 }
 
@@ -57,12 +57,12 @@ func (a setBlockContentArgs) mergedBlocks() ([]wiki.BlockContentInput, error) {
 
 type blockWriteResultView struct {
 	wikiDocView
-	Filled   int                    `json:"filled"`
-	NotFound int                    `json:"notFound,omitempty"`
-	Errors   int                    `json:"errors,omitempty"`
-	Results  []blockResultView      `json:"results,omitempty"`
-	Watchers int                    `json:"watchers"`
-	Notes    []string               `json:"notes,omitempty"`
+	Filled   int               `json:"filled"`
+	NotFound int               `json:"notFound,omitempty"`
+	Errors   int               `json:"errors,omitempty"`
+	Results  []blockResultView `json:"results,omitempty"`
+	Watchers int               `json:"watchers"`
+	Notes    []string          `json:"notes,omitempty"`
 }
 
 type blockResultView struct {

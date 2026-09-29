@@ -56,12 +56,12 @@ func registerHostTools(s *Server) {
 	}, readTool, handleGetHost)
 
 	register(s, &mcp.Tool{
-		Name: "create_host",
+		Name:        "create_host",
 		Description: "Record a host with its interfaces, routes and logins.",
 	}, writeTool, handleCreateHost)
 
 	register(s, &mcp.Tool{
-		Name: "update_host",
+		Name:        "update_host",
 		Description: "Change a host. Interface/route/login lists REPLACE; read first, send the full set.",
 	}, writeTool, handleUpdateHost)
 }
