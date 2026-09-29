@@ -199,8 +199,11 @@ export type CreateWikiDocumentInput = {
   emoji?: InputMaybe<Scalars['String']['input']>;
   icon?: InputMaybe<Scalars['String']['input']>;
   kind?: InputMaybe<WikiDocumentKind>;
+  pageType?: InputMaybe<Scalars['String']['input']>;
   parentDocumentId?: InputMaybe<Scalars['ID']['input']>;
   sortOrder?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<WikiDocumentStatus>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
   title: Scalars['String']['input'];
 };
 
@@ -1064,7 +1067,9 @@ export type Query = {
   wikiDocumentDescendantIds: Array<Scalars['ID']['output']>;
   wikiDocumentHistory: WikiDocumentVisitConnection;
   wikiDocumentMarkdown: Scalars['String']['output'];
+  wikiDocumentPageTypes: Array<WikiPageTypeCount>;
   wikiDocumentPresence: WikiDocumentPresence;
+  wikiDocumentTags: Array<WikiTagCount>;
   wikiDocumentTrash: WikiDocumentConnection;
   wikiDocumentTrashCount: Scalars['Int']['output'];
   wikiDocumentTrashedDescendants: Array<WikiDocument>;
@@ -1386,8 +1391,18 @@ export type QueryWikiDocumentMarkdownArgs = {
 };
 
 
+export type QueryWikiDocumentPageTypesArgs = {
+  operationId: Scalars['ID']['input'];
+};
+
+
 export type QueryWikiDocumentPresenceArgs = {
   documentId: Scalars['ID']['input'];
+};
+
+
+export type QueryWikiDocumentTagsArgs = {
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -1828,8 +1843,11 @@ export type UpdateWikiDocumentInput = {
   color?: InputMaybe<Scalars['String']['input']>;
   emoji?: InputMaybe<Scalars['String']['input']>;
   icon?: InputMaybe<Scalars['String']['input']>;
+  pageType?: InputMaybe<Scalars['String']['input']>;
   parentDocumentId?: InputMaybe<Scalars['ID']['input']>;
   sortOrder?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<WikiDocumentStatus>;
+  tags?: InputMaybe<Array<Scalars['String']['input']>>;
   title?: InputMaybe<Scalars['String']['input']>;
 };
 
@@ -1902,10 +1920,13 @@ export type WikiDocument = {
   lastUpdatedAt?: Maybe<Scalars['String']['output']>;
   lastUpdatedBy?: Maybe<User>;
   operationId: Scalars['ID']['output'];
+  pageType?: Maybe<Scalars['String']['output']>;
   parentDocument?: Maybe<WikiDocument>;
   parentDocumentId?: Maybe<Scalars['ID']['output']>;
   sortOrder: Scalars['String']['output'];
   sourceTemplateId?: Maybe<Scalars['ID']['output']>;
+  status: WikiDocumentStatus;
+  tags: Array<Scalars['String']['output']>;
   taskBacklinks: Array<Task>;
   title: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
@@ -2001,6 +2022,11 @@ export type WikiDocumentSort =
   | 'RECENTLY_CREATED'
   | 'RECENTLY_UPDATED';
 
+export type WikiDocumentStatus =
+  | 'DEPRECATED'
+  | 'DRAFT'
+  | 'STABLE';
+
 export type WikiDocumentVisit = {
   document: WikiDocument;
   id: Scalars['ID']['output'];
@@ -2016,6 +2042,11 @@ export type WikiDocumentVisitConnection = {
 export type WikiDocumentVisitEdge = {
   cursor: Scalars['String']['output'];
   node: WikiDocumentVisit;
+};
+
+export type WikiPageTypeCount = {
+  count: Scalars['Int']['output'];
+  pageType: Scalars['String']['output'];
 };
 
 export type WikiSearchConnection = {
@@ -2034,6 +2065,11 @@ export type WikiSearchHit = {
 export type WikiSearchMatchRange = {
   end: Scalars['Int']['output'];
   start: Scalars['Int']['output'];
+};
+
+export type WikiTagCount = {
+  count: Scalars['Int']['output'];
+  tag: Scalars['String']['output'];
 };
 
 export type AgentActionFieldsFragment = { id: string, agentKeyId: string, agentName: string, tool: string, write: boolean, outcome: AgentActionOutcome, error?: string | null, arguments: string, durationMs: number, occurredAt: string, operation?: { id: string, name: string } | null };
@@ -2985,13 +3021,13 @@ export type UserChangedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 export type UserChangedSubscription = { userChanged: { action: EventAction, userId: string, username?: string | null, user?: { id: string, username: string, roles: Array<string>, active: boolean, authSource: string, createdAt: string, updatedAt: string } | null } };
 
-export type WikiDocumentTreeFieldsFragment = { id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, updatedAt: string };
+export type WikiDocumentTreeFieldsFragment = { id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, updatedAt: string };
 
 export type WikiDocumentLiteFieldsFragment = { id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isTemplate: boolean, deletedAt?: string | null };
 
 export type WikiDocumentBacklinkFieldsFragment = { id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, updatedAt: string, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }> };
 
-export type WikiDocumentFieldsFragment = { id: string, operationId: string, parentDocumentId?: string | null, title: string, kind: WikiDocumentKind, content: string, emoji: string, color: string, icon: string, sortOrder: string, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, lastBackupAt?: string | null, createdAt: string, updatedAt: string, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }>, createdBy: { id: string, username: string }, lastUpdatedBy?: { id: string, username: string } | null };
+export type WikiDocumentFieldsFragment = { id: string, operationId: string, parentDocumentId?: string | null, title: string, kind: WikiDocumentKind, content: string, emoji: string, color: string, icon: string, sortOrder: string, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, lastBackupAt?: string | null, createdAt: string, updatedAt: string, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }>, createdBy: { id: string, username: string }, lastUpdatedBy?: { id: string, username: string } | null };
 
 export type WikiDocumentBackupListFieldsFragment = { id: string, documentId: string, title: string, trigger: WikiDocumentBackupTrigger, description: string, contentLength: number, createdAt: string, createdBy?: { id: string, username: string } | null };
 
@@ -3004,14 +3040,14 @@ export type WikiDocumentTreeQueryVariables = Exact<{
 }>;
 
 
-export type WikiDocumentTreeQuery = { wikiDocumentTree: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, updatedAt: string }> };
+export type WikiDocumentTreeQuery = { wikiDocumentTree: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, updatedAt: string }> };
 
 export type WikiTemplatesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type WikiTemplatesQuery = { wikiTemplates: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, updatedAt: string }> };
+export type WikiTemplatesQuery = { wikiTemplates: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, updatedAt: string }> };
 
 export type WikiDocumentMarkdownQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3033,14 +3069,14 @@ export type WikiDocumentChildrenQueryVariables = Exact<{
 }>;
 
 
-export type WikiDocumentChildrenQuery = { wikiDocumentChildren: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, updatedAt: string }> };
+export type WikiDocumentChildrenQuery = { wikiDocumentChildren: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, updatedAt: string }> };
 
 export type WikiDocumentTreeRevealPathQueryVariables = Exact<{
   documentId: Scalars['ID']['input'];
 }>;
 
 
-export type WikiDocumentTreeRevealPathQuery = { wikiDocumentTreeRevealPath: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, updatedAt: string }> };
+export type WikiDocumentTreeRevealPathQuery = { wikiDocumentTreeRevealPath: Array<{ id: string, operationId: string, parentDocumentId?: string | null, title: string, emoji: string, icon: string, color: string, sortOrder: string, childCount: number, hasContent: boolean, kind: WikiDocumentKind, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, updatedAt: string }> };
 
 export type WikiDocumentDescendantIdsQueryVariables = Exact<{
   documentId: Scalars['ID']['input'];
@@ -3061,7 +3097,7 @@ export type WikiDocumentQueryVariables = Exact<{
 }>;
 
 
-export type WikiDocumentQuery = { wikiDocument: { id: string, operationId: string, parentDocumentId?: string | null, title: string, kind: WikiDocumentKind, content: string, emoji: string, color: string, icon: string, sortOrder: string, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, lastUpdatedAt?: string | null, lastBackupAt?: string | null, createdAt: string, updatedAt: string, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }>, createdBy: { id: string, username: string }, lastUpdatedBy?: { id: string, username: string } | null } };
+export type WikiDocumentQuery = { wikiDocument: { id: string, operationId: string, parentDocumentId?: string | null, title: string, kind: WikiDocumentKind, content: string, emoji: string, color: string, icon: string, sortOrder: string, isTemplate: boolean, sourceTemplateId?: string | null, checklistTotal: number, checklistRequired: number, checklistAnswered: number, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, lastUpdatedAt?: string | null, lastBackupAt?: string | null, createdAt: string, updatedAt: string, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }>, createdBy: { id: string, username: string }, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type WikiRecentDocumentsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3154,13 +3190,27 @@ export type WikiDocumentHistoryQueryVariables = Exact<{
 
 export type WikiDocumentHistoryQuery = { wikiDocumentHistory: { totalCount: number, edges: Array<{ node: { id: string, visitedAt: string, document: { id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, ancestors: Array<{ id: string, title: string, emoji: string, icon: string, color: string, kind: WikiDocumentKind, isDeleted: boolean }> } } }> } };
 
+export type WikiDocumentTagsQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type WikiDocumentTagsQuery = { wikiDocumentTags: Array<{ tag: string, count: number }> };
+
+export type WikiDocumentPageTypesQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type WikiDocumentPageTypesQuery = { wikiDocumentPageTypes: Array<{ pageType: string, count: number }> };
+
 export type CreateWikiDocumentMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
   input: CreateWikiDocumentInput;
 }>;
 
 
-export type CreateWikiDocumentMutation = { createWikiDocument: { id: string, operationId: string, title: string, emoji: string, color: string, icon: string, sortOrder: string, parentDocumentId?: string | null, createdAt: string, updatedAt: string, createdBy: { id: string, username: string } } };
+export type CreateWikiDocumentMutation = { createWikiDocument: { id: string, operationId: string, title: string, emoji: string, color: string, icon: string, sortOrder: string, parentDocumentId?: string | null, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, createdAt: string, updatedAt: string, createdBy: { id: string, username: string } } };
 
 export type UpdateWikiDocumentMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3168,7 +3218,7 @@ export type UpdateWikiDocumentMutationVariables = Exact<{
 }>;
 
 
-export type UpdateWikiDocumentMutation = { updateWikiDocument: { id: string, title: string, emoji: string, color: string, icon: string, sortOrder: string, parentDocumentId?: string | null, updatedAt: string } };
+export type UpdateWikiDocumentMutation = { updateWikiDocument: { id: string, title: string, emoji: string, color: string, icon: string, sortOrder: string, parentDocumentId?: string | null, pageType?: string | null, tags: Array<string>, status: WikiDocumentStatus, updatedAt: string } };
 
 export type ReorderWikiDocumentSiblingsMutationVariables = Exact<{
   input: ReorderWikiDocumentSiblingsInput;
@@ -3751,6 +3801,9 @@ export const WikiDocumentTreeFieldsFragmentDoc = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   lastUpdatedAt
   updatedAt
 }
@@ -3813,6 +3866,9 @@ export const WikiDocumentFieldsFragmentDoc = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   createdBy {
     id
     username
@@ -6887,6 +6943,9 @@ export const WikiDocumentTreeDocument = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   lastUpdatedAt
   updatedAt
 }`) as unknown as TypedDocumentString<WikiDocumentTreeQuery, WikiDocumentTreeQueryVariables>;
@@ -6913,6 +6972,9 @@ export const WikiTemplatesDocument = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   lastUpdatedAt
   updatedAt
 }`) as unknown as TypedDocumentString<WikiTemplatesQuery, WikiTemplatesQueryVariables>;
@@ -6952,6 +7014,9 @@ export const WikiDocumentChildrenDocument = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   lastUpdatedAt
   updatedAt
 }`) as unknown as TypedDocumentString<WikiDocumentChildrenQuery, WikiDocumentChildrenQueryVariables>;
@@ -6978,6 +7043,9 @@ export const WikiDocumentTreeRevealPathDocument = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   lastUpdatedAt
   updatedAt
 }`) as unknown as TypedDocumentString<WikiDocumentTreeRevealPathQuery, WikiDocumentTreeRevealPathQueryVariables>;
@@ -7022,6 +7090,9 @@ export const WikiDocumentDocument = new TypedDocumentString(`
   checklistTotal
   checklistRequired
   checklistAnswered
+  pageType
+  tags
+  status
   createdBy {
     id
     username
@@ -7339,6 +7410,22 @@ export const WikiDocumentHistoryDocument = new TypedDocumentString(`
     }
   }
 }`) as unknown as TypedDocumentString<WikiDocumentHistoryQuery, WikiDocumentHistoryQueryVariables>;
+export const WikiDocumentTagsDocument = new TypedDocumentString(`
+    query WikiDocumentTags($operationId: ID!) {
+  wikiDocumentTags(operationId: $operationId) {
+    tag
+    count
+  }
+}
+    `) as unknown as TypedDocumentString<WikiDocumentTagsQuery, WikiDocumentTagsQueryVariables>;
+export const WikiDocumentPageTypesDocument = new TypedDocumentString(`
+    query WikiDocumentPageTypes($operationId: ID!) {
+  wikiDocumentPageTypes(operationId: $operationId) {
+    pageType
+    count
+  }
+}
+    `) as unknown as TypedDocumentString<WikiDocumentPageTypesQuery, WikiDocumentPageTypesQueryVariables>;
 export const CreateWikiDocumentDocument = new TypedDocumentString(`
     mutation CreateWikiDocument($operationId: ID!, $input: CreateWikiDocumentInput!) {
   createWikiDocument(operationId: $operationId, input: $input) {
@@ -7350,6 +7437,9 @@ export const CreateWikiDocumentDocument = new TypedDocumentString(`
     icon
     sortOrder
     parentDocumentId
+    pageType
+    tags
+    status
     createdBy {
       id
       username
@@ -7369,6 +7459,9 @@ export const UpdateWikiDocumentDocument = new TypedDocumentString(`
     icon
     sortOrder
     parentDocumentId
+    pageType
+    tags
+    status
     updatedAt
   }
 }

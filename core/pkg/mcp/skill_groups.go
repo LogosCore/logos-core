@@ -48,6 +48,7 @@ var toolGroups = []toolGroup{
 			"create_wiki_document", "add_wiki_section",
 			"edit_wiki_document", "update_wiki_document",
 			"move_wiki_document", "delete_wiki_document",
+			"set_wiki_tags", "list_wiki_tags", "list_wiki_page_types",
 			"get_wiki_drawing", "edit_wiki_drawing",
 			"get_checklist_status", "set_checklist_answer", "set_block_content",
 			"list_wiki_attachments", "read_wiki_attachment",

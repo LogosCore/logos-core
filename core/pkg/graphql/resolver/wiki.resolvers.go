@@ -133,6 +133,16 @@ func (r *queryResolver) WikiDocumentTrashCount(ctx context.Context, operationID 
 	return r.WikiDocumentResolver.WikiDocumentTrashCount(ctx, operationID)
 }
 
+// WikiDocumentTags is the resolver for the wikiDocumentTags field.
+func (r *queryResolver) WikiDocumentTags(ctx context.Context, operationID string) ([]*model.WikiTagCount, error) {
+	return r.WikiDocumentResolver.WikiDocumentTags(ctx, operationID)
+}
+
+// WikiDocumentPageTypes is the resolver for the wikiDocumentPageTypes field.
+func (r *queryResolver) WikiDocumentPageTypes(ctx context.Context, operationID string) ([]*model.WikiPageTypeCount, error) {
+	return r.WikiDocumentResolver.WikiDocumentPageTypes(ctx, operationID)
+}
+
 // WikiSearch is the resolver for the wikiSearch field.
 func (r *queryResolver) WikiSearch(ctx context.Context, operationID string, scope *string, query string, offset *int, limit *int) (*model.WikiSearchConnection, error) {
 	return r.WikiDocumentResolver.WikiSearch(ctx, operationID, scope, query, offset, limit)

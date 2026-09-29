@@ -215,6 +215,13 @@ type IWikiDocumentRepository interface {
 	// FilterReferencedFileIDs is the wikiFile-attachment sibling of
 	// FilterReferencedImageIDs. Same active+trashed liveness semantics.
 	FilterReferencedFileIDs(ctx context.Context, opID uuid.UUID, fileIDs []uuid.UUID) (map[uuid.UUID]struct{}, error)
+	// AggregateTagCounts returns distinct tags in use across active documents
+	// in the operation, each with its document count, sorted alphabetically.
+	AggregateTagCounts(ctx context.Context, opID uuid.UUID) ([]TagCount, error)
+	// AggregatePageTypeCounts returns distinct page_type values in use across
+	// active documents in the operation, each with its document count, sorted
+	// alphabetically.
+	AggregatePageTypeCounts(ctx context.Context, opID uuid.UUID) ([]PageTypeCount, error)
 }
 
 type wikiDocumentRepository struct {
@@ -289,6 +296,11 @@ func NewWikiDocumentRepository(db database.Database) IWikiDocumentRepository {
 		// materialized ancestor chain — one index probe replaces the previous
 		// O(depth) FindDescendants BFS in SearchByOperationID.
 		{Key: []string{"operation_id", "path_ids"}},
+		// Page metadata: tag aggregation and tag-filtered queries. Multikey
+		// on the tags array; deleted_at trails so aggregations skip trashed docs.
+		{Key: []string{"operation_id", "tags", "deleted_at"}},
+		// Page metadata: status-filtered queries and status aggregation.
+		{Key: []string{"operation_id", "status", "deleted_at"}},
 		// Create-from-template picker (FindTemplatesByOperationID). Partial index
 		// on flagged, active templates only, keyed to the {operation_id,
 		// is_template, deleted_at} query with title_lower trailing so the sorted
@@ -1351,6 +1363,59 @@ func (r *wikiDocumentRepository) ClearFixedIcons(ctx context.Context) (int64, er
 		return 0, err
 	}
 	return res.ModifiedCount, nil
+}
+
+// TagCount is one tag and how many active documents carry it.
+type TagCount struct {
+	Tag   string `bson:"_id"`
+	Count int    `bson:"count"`
+}
+
+// PageTypeCount is one page_type value and how many active documents use it.
+type PageTypeCount struct {
+	PageType string `bson:"_id"`
+	Count    int    `bson:"count"`
+}
+
+func (r *wikiDocumentRepository) AggregateTagCounts(ctx context.Context, opID uuid.UUID) ([]TagCount, error) {
+	pipeline := bson.A{
+		bson.M{"$match": bson.M{
+			"operation_id": opID,
+			"deleted_at":   nil,
+			"tags":         bson.M{"$exists": true, "$ne": bson.A{}},
+		}},
+		bson.M{"$unwind": "$tags"},
+		bson.M{"$group": bson.M{
+			"_id":   "$tags",
+			"count": bson.M{"$sum": 1},
+		}},
+		bson.M{"$sort": bson.M{"_id": 1}},
+	}
+	var rows []TagCount
+	if err := r.coll.Aggregate(ctx, pipeline).All(&rows); err != nil {
+		return nil, fmt.Errorf("failed to aggregate tags: %w", err)
+	}
+	return rows, nil
+}
+
+func (r *wikiDocumentRepository) AggregatePageTypeCounts(ctx context.Context, opID uuid.UUID) ([]PageTypeCount, error) {
+	pipeline := bson.A{
+		bson.M{"$match": bson.M{
+			"operation_id": opID,
+			"deleted_at":   nil,
+			"page_type":    bson.M{"$exists": true, "$nin": bson.A{"", nil}},
+		}},
+		bson.M{"$group": bson.M{
+			"_id":   "$page_type",
+			"count": bson.M{"$sum": 1},
+		}},
+		bson.M{"$sort": bson.M{"_id": 1}},
+	}
+	var rows []PageTypeCount
+	if err := r.coll.Aggregate(ctx, pipeline).All(&rows); err != nil {
+		return nil, fmt.Errorf("failed to aggregate page types: %w", err)
+	}
+	return rows, nil
 }
 
 // clearFixedIconsFilter matches drawings that still carry any part of an

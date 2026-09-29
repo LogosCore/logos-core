@@ -15,12 +15,15 @@ import (
 
 type createWikiDocumentArgs struct {
 	IdempotencyKey
-	OperationID string `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Title       string `json:"title,omitempty"        jsonschema:"Page title. Required unless template_id is given."`
-	Kind        string `json:"kind,omitempty"         jsonschema:"document (default) for a Markdown page, or drawing for an Excalidraw canvas you then fill in with edit_wiki_drawing."`
-	Content     string `json:"content,omitempty"      jsonschema:"Markdown body, up to 1 MB in one call. Ignored with template_id."`
-	ParentID    string `json:"parent_id,omitempty"    jsonschema:"Parent page id."`
-	TemplateID  string `json:"template_id,omitempty"  jsonschema:"Copy this template's structure and content, from list_wiki_templates."`
+	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
+	Title       string   `json:"title,omitempty"        jsonschema:"Page title. Required unless template_id is given."`
+	Kind        string   `json:"kind,omitempty"         jsonschema:"document (default) for a Markdown page, or drawing for an Excalidraw canvas you then fill in with edit_wiki_drawing."`
+	Content     string   `json:"content,omitempty"      jsonschema:"Markdown body, up to 1 MB in one call. Ignored with template_id."`
+	ParentID    string   `json:"parent_id,omitempty"    jsonschema:"Parent page id."`
+	TemplateID  string   `json:"template_id,omitempty"  jsonschema:"Copy this template's structure and content, from list_wiki_templates."`
+	PageType    string   `json:"page_type,omitempty"    jsonschema:"Semantic type: Finding, Playbook, Recon Notes, etc. Check list_wiki_page_types first."`
+	Tags        []string `json:"tags,omitempty"         jsonschema:"Labels for filtering. Check list_wiki_tags first."`
+	Status      string   `json:"status,omitempty"       jsonschema:"draft, stable (default) or deprecated."`
 	visualIdentity
 }
 
@@ -36,9 +39,12 @@ type sectionWriteArgs struct {
 
 type updateWikiDocumentArgs struct {
 	IdempotencyKey
-	DocumentID string `json:"document_id"       jsonschema:"Page id."`
-	Content    string `json:"content"           jsonschema:"The complete new body as Markdown, up to 1 MB in one call. Anything omitted is deleted."`
-	Title      string `json:"title,omitempty"   jsonschema:"New title."`
+	DocumentID string   `json:"document_id"            jsonschema:"Page id."`
+	Content    string   `json:"content"                jsonschema:"The complete new body as Markdown, up to 1 MB in one call. Anything omitted is deleted."`
+	Title      string   `json:"title,omitempty"        jsonschema:"New title."`
+	PageType   string   `json:"page_type,omitempty"    jsonschema:"Semantic type: Finding, Playbook, Recon Notes, etc."`
+	Tags       []string `json:"tags,omitempty"         jsonschema:"Replace all tags. Check list_wiki_tags first."`
+	Status     string   `json:"status,omitempty"       jsonschema:"draft, stable or deprecated."`
 	visualIdentity
 }
 
@@ -93,14 +99,25 @@ func handleCreateWikiDocument(ctx context.Context, s *Server, args createWikiDoc
 		emoji, icon, color = nil, nil, nil
 	}
 
-	doc, err := s.deps.WikiDocs.CreateWikiDocument(ctx, opID.String(), model.CreateWikiDocumentInput{
+	input := model.CreateWikiDocumentInput{
 		Title:            args.Title,
 		Kind:             &kind,
 		ParentDocumentID: optionalString(args.ParentID),
 		Emoji:            emoji,
 		Icon:             icon,
 		Color:            color,
-	})
+	}
+	if args.PageType != "" {
+		input.PageType = &args.PageType
+	}
+	if len(args.Tags) > 0 {
+		input.Tags = args.Tags
+	}
+	if args.Status != "" {
+		s := model.WikiDocumentStatus(strings.ToUpper(args.Status))
+		input.Status = &s
+	}
+	doc, err := s.deps.WikiDocs.CreateWikiDocument(ctx, opID.String(), input)
 	if err != nil {
 		return toolResult{}, fmt.Errorf("failed to create wiki page: %w", err)
 	}
@@ -399,13 +416,28 @@ func handleUpdateWikiDocument(ctx context.Context, s *Server, args updateWikiDoc
 		return toolResult{}, refuse("this page is a drawing, which has a fixed icon: emoji, icon and color cannot be set on it.")
 	}
 
-	// Title and the visual identity go through the resolver; only the body
-	// needs the collaboration path.
-	if (args.Title != "" && args.Title != doc.Title) || emoji != nil || icon != nil || color != nil {
-		input := model.UpdateWikiDocumentInput{Emoji: emoji, Icon: icon, Color: color}
-		if args.Title != "" && args.Title != doc.Title {
-			input.Title = &args.Title
-		}
+	// Title, metadata and the visual identity go through the resolver; only
+	// the body needs the collaboration path.
+	input := model.UpdateWikiDocumentInput{Emoji: emoji, Icon: icon, Color: color}
+	needsUpdate := emoji != nil || icon != nil || color != nil
+	if args.Title != "" && args.Title != doc.Title {
+		input.Title = &args.Title
+		needsUpdate = true
+	}
+	if args.PageType != "" {
+		input.PageType = &args.PageType
+		needsUpdate = true
+	}
+	if args.Tags != nil {
+		input.Tags = args.Tags
+		needsUpdate = true
+	}
+	if args.Status != "" {
+		s := model.WikiDocumentStatus(strings.ToUpper(args.Status))
+		input.Status = &s
+		needsUpdate = true
+	}
+	if needsUpdate {
 		if _, err := s.deps.WikiDocs.UpdateWikiDocument(ctx, args.DocumentID, input); err != nil {
 			return toolResult{}, fmt.Errorf("failed to update the wiki page: %w", err)
 		}

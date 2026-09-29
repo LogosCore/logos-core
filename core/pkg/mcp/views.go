@@ -165,6 +165,10 @@ type wikiDocView struct {
 	// of a hundred is noise that hides the one row that matters.
 	Kind string `json:"kind,omitempty"`
 
+	PageType string   `json:"pageType,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	Status   string   `json:"status,omitempty"`
+
 	// Emoji and Icon travel with every row so an agent can see what the
 	// operator's pages already use without opening them one by one. Choosing
 	// an icon is a style decision, and style is only visible in aggregate —
@@ -431,10 +435,17 @@ func toWikiDocView(d *models.WikiDocument) wikiDocView {
 		ID:         d.DocumentID.String(),
 		Title:      d.Title,
 		IsTemplate: d.IsTemplate,
+		PageType:   d.PageType,
+		Tags:       d.Tags,
 		Emoji:      d.Emoji,
 	}
 	if d.Kind.IsDrawing() {
 		view.Kind = string(models.WikiDocumentKindDrawing)
+	}
+	// Status is omitted when stable (the default), so the field only appears
+	// on pages where it carries signal.
+	if s := d.Status.Or(); s != models.WikiDocumentStatusStable {
+		view.Status = string(s)
 	}
 	// The adaptive icon is the default every page gets when nobody chose
 	// anything, so reporting it would drown the handful of deliberate choices

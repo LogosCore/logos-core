@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { Badge } from "@/components/ui/badge"
 import { useAuthStore } from "@/stores/auth"
+import { useUpdateWikiDocument } from "@/graphql/hooks/wiki"
 import { WikiChecklistCoverageBar } from "@/components/wiki/wiki-checklist-coverage-bar"
-import type { WikiDocumentFieldsFragment } from "@/graphql/gql/graphql"
+import type { WikiDocumentFieldsFragment, WikiDocumentStatus } from "@/graphql/gql/graphql"
 
 interface WikiDocumentMetaProps {
   document: WikiDocumentFieldsFragment
+  isEditor?: boolean
 }
 
 interface Actor {
@@ -21,11 +32,10 @@ const JUST_NOW_THRESHOLD_MS = 30_000
 // server. At one-minute ticks it's imperceptible for anything over an hour old.
 const REFRESH_INTERVAL_MS = 60_000
 
-export function WikiDocumentMeta({ document }: WikiDocumentMetaProps) {
+export function WikiDocumentMeta({ document, isEditor }: WikiDocumentMetaProps) {
   const currentUserId = useAuthStore((s) => s.user?.userId)
+  const updateDocument = useUpdateWikiDocument()
 
-  // useState + interval re-render so "2 minutes ago" becomes "3 minutes ago"
-  // without waiting for another GraphQL invalidation.
   const [, setTick] = useState(0)
   useEffect(() => {
     const id = window.setInterval(
@@ -35,12 +45,49 @@ export function WikiDocumentMeta({ document }: WikiDocumentMetaProps) {
     return () => window.clearInterval(id)
   }, [])
 
-  // Last-updated attribution is null on legacy rows (pre-feature) and on docs
-  // that haven't been edited since creation — only render it when present.
   const hasUpdate = !!(document.lastUpdatedAt && document.lastUpdatedBy)
 
+  // Inline editing state — initialized from props when entering edit mode,
+  // so no sync effects needed.
+  const [editingPageType, setEditingPageType] = useState(false)
+  const [pageTypeValue, setPageTypeValue] = useState("")
+  const [editingTags, setEditingTags] = useState(false)
+  const [tagsValue, setTagsValue] = useState("")
+  function startEditPageType() {
+    setPageTypeValue(document.pageType ?? "")
+    setEditingPageType(true)
+  }
+
+  function startEditTags() {
+    setTagsValue(document.tags.join(", "))
+    setEditingTags(true)
+  }
+
+  function savePageType() {
+    const trimmed = pageTypeValue.trim()
+    if (trimmed !== (document.pageType ?? "")) {
+      updateDocument.mutate({ id: document.id, input: { pageType: trimmed || "" } })
+    }
+    setEditingPageType(false)
+  }
+
+  function saveTags() {
+    const parsed = tagsValue.split(",").map((t) => t.trim()).filter(Boolean)
+    const changed = parsed.length !== document.tags.length || parsed.some((t, i) => t !== document.tags[i])
+    if (changed) {
+      updateDocument.mutate({ id: document.id, input: { tags: parsed } })
+    }
+    setEditingTags(false)
+  }
+
+  function handleStatusChange(value: string | null) {
+    if (value && value !== document.status) {
+      updateDocument.mutate({ id: document.id, input: { status: value as WikiDocumentStatus } })
+    }
+  }
+
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-6 pt-4 pb-1 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-6 pt-4 pb-1 text-xs text-muted-foreground">
       <MetaEntry
         verb="Created"
         actor={document.createdBy}
@@ -55,7 +102,89 @@ export function WikiDocumentMeta({ document }: WikiDocumentMetaProps) {
           currentUserId={currentUserId}
         />
       )}
-      {/* Renders only when the doc contains checklist items (total > 0). */}
+
+      {/* Status */}
+      {isEditor ? (
+        <Select value={document.status} onValueChange={handleStatusChange}>
+          <SelectTrigger className="h-5 w-auto gap-1 rounded-none border-none bg-transparent px-0 py-0 text-xs text-muted-foreground shadow-none dark:bg-transparent dark:hover:bg-transparent">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="STABLE">Stable</SelectItem>
+            <SelectItem value="DRAFT">Draft</SelectItem>
+            <SelectItem value="DEPRECATED">Deprecated</SelectItem>
+          </SelectContent>
+        </Select>
+      ) : document.status !== "STABLE" ? (
+        <WikiStatusBadge status={document.status} />
+      ) : null}
+
+      {/* Page type */}
+      {editingPageType ? (
+        <Input
+          value={pageTypeValue}
+          onChange={(e) => setPageTypeValue(e.target.value)}
+          onBlur={savePageType}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+            if (e.key === "Escape") { setPageTypeValue(document.pageType ?? ""); setEditingPageType(false) }
+          }}
+          autoFocus
+          placeholder="Page type"
+          className="h-5 w-28 text-xs"
+        />
+      ) : document.pageType ? (
+        <button
+          className="text-muted-foreground/70 hover:text-foreground transition-colors"
+          onClick={() => isEditor && startEditPageType()}
+          disabled={!isEditor}
+        >
+          {document.pageType}
+        </button>
+      ) : isEditor ? (
+        <button
+          className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+          onClick={startEditPageType}
+        >
+          + type
+        </button>
+      ) : null}
+
+      {/* Tags */}
+      {editingTags ? (
+        <Input
+          value={tagsValue}
+          onChange={(e) => setTagsValue(e.target.value)}
+          onBlur={saveTags}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+            if (e.key === "Escape") { setTagsValue(document.tags.join(", ")); setEditingTags(false) }
+          }}
+          autoFocus
+          placeholder="tag1, tag2, ..."
+          className="h-5 w-44 text-xs"
+        />
+      ) : document.tags.length > 0 ? (
+        <button
+          className="flex flex-wrap gap-1"
+          onClick={() => isEditor && startEditTags()}
+          disabled={!isEditor}
+        >
+          {document.tags.map((tag) => (
+            <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+              {tag}
+            </Badge>
+          ))}
+        </button>
+      ) : isEditor ? (
+        <button
+          className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+          onClick={startEditTags}
+        >
+          + tags
+        </button>
+      ) : null}
+
       <WikiChecklistCoverageBar
         total={document.checklistTotal}
         required={document.checklistRequired}
@@ -88,6 +217,22 @@ function MetaEntry({ verb, actor, timestamp, currentUserId }: MetaEntryProps) {
         <FormattedDateTimeText date={parsed} />
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+const statusConfig: Record<WikiDocumentStatus, { label: string; variant: "secondary" | "destructive" | "outline" }> = {
+  DRAFT: { label: "Draft", variant: "outline" },
+  STABLE: { label: "Stable", variant: "secondary" },
+  DEPRECATED: { label: "Deprecated", variant: "destructive" },
+}
+
+export function WikiStatusBadge({ status }: { status: WikiDocumentStatus }) {
+  const config = statusConfig[status]
+  if (!config || status === "STABLE") return null
+  return (
+    <Badge variant={config.variant} className="text-[10px] px-1.5 py-0">
+      {config.label}
+    </Badge>
   )
 }
 

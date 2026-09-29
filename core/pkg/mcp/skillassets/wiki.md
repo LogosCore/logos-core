@@ -2,15 +2,14 @@
 
 ## Finding the right page
 
-`search_wiki` returns a `snippet` with every hit — read them before opening a
-page. `list_wiki_tree` shows how the notes are organised: two levels by
-default, `childCount` per page, `parent_id` to descend, `depth:-1` for all.
+`search_wiki` returns a `snippet` per hit — read snippets before opening pages.
+`list_wiki_tree`: two levels by default, `parent_id` to descend, `depth:-1`
+for all.
 
 ## Reading only part of a page
 
-`get_wiki_document` returns a small page's body. A page over 8 KB comes back as
-an **outline** (headings, nesting, bytes under each) unless you pass
-`full:true`. From the outline:
+`get_wiki_document` returns a small page's body. Over 8 KB it returns an
+**outline** unless you pass `full:true`. From the outline:
 
 - `section:"<heading>"` returns that heading and everything nested under it.
 - Section sizes include children, so they do not sum to the page.
@@ -20,10 +19,8 @@ an **outline** (headings, nesting, bytes under each) unless you pass
   `update_wiki_document` would replace the page with the fragment.
 - Section text is exact, so it is the cheapest source of `old_text`.
 
-One read returns at most 40 KB. A longer body or section is cut and
-`truncated` is set, with the byte offset to resume from on the last line:
-repeat with that `offset:` (still `full:true`, or the same `section:`) until
-`truncated` is false. Check the bytes read against the outline's size.
+One read returns at most 40 KB. Longer bodies are truncated with a byte
+offset; repeat with that `offset:` until `truncated` is false.
 
 ## Changing a page
 
@@ -35,22 +32,20 @@ repeat with that `offset:` (still `full:true`, or the same `section:`) until
 - `update_wiki_document` replaces the whole body. Read the page first and put
   back every construct you are not changing.
 
-Copy `old_text` verbatim, whitespace and list markers included. It must be
-unique; if it repeats, add a line either side rather than `replace_all` (which
-is for renaming throughout).
+Copy `old_text` verbatim, whitespace included. It must be unique; if it
+repeats, add context rather than `replace_all` (which is for renaming).
 
 Edits are live; a write's `watchers` count says whether the operator saw it.
 
 ## Moving a page
 
-`move_wiki_document` files a page under a different parent, with everything
-below it; omit `parent_id` for the top level. Don't rebuild-and-trash instead:
-that loses the page's history, attachments and links.
+`move_wiki_document` reparents a page with its subtree; omit `parent_id` for
+top level. Don't rebuild-and-trash — that loses history and attachments.
 
 ## Deleting a page
 
-`delete_wiki_document` trashes a page (an admin can restore it). One with
-children is refused unless you pass `with_children:true`; templates always.
+`delete_wiki_document` trashes a page (restorable). Refused with children
+unless `with_children:true`; templates always refused.
 
 ## What a page can contain
 
@@ -78,6 +73,17 @@ shared ones in Public (marked `shared`). Create from one with
 
 Editing an `isTemplate` page changes every page made from it; `set_wiki_template`
 is a team decision — propose it.
+
+## Page metadata
+
+Pages carry `page_type`, `tags` and `status`. Set on create or update.
+
+- **page_type** — "Finding", "Recon Notes", "Playbook", etc. Check
+  `list_wiki_page_types` first; reuse the operation's vocabulary.
+- **tags** — cross-cutting labels. Check `list_wiki_tags` first. Bulk-set
+  with `set_wiki_tags`. `search_wiki` and `list_wiki_tree` accept filters.
+- **status** — `draft`, `stable` (default) or `deprecated`. Agents skip
+  deprecated pages and flag drafts as unverified.
 
 ## Long content
 

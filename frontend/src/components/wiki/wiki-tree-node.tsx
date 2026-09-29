@@ -47,6 +47,12 @@ function rowKindLabel(node: TreeNode): string | null {
   return null
 }
 
+function rowStatusLabel(node: TreeNode): string | null {
+  if (node.status === "DRAFT") return "Draft"
+  if (node.status === "DEPRECATED") return "Deprecated"
+  return null
+}
+
 interface WikiTreeRowProps {
   node: TreeNode
   /** Depth in the tree, supplied by the flattening controller (no recursion). */
@@ -116,6 +122,7 @@ function WikiTreeRowImpl({
   const isDropBefore = dropPosition === "before"
   const isDropAfter = dropPosition === "after"
   const kindLabel = rowKindLabel(node)
+  const statusLabel = rowStatusLabel(node)
 
   function handleRenameSubmit() {
     const trimmed = renameValue.trim()
@@ -305,16 +312,19 @@ function WikiTreeRowImpl({
               </Link>
             )}
 
-            {kindLabel && (
+            {(kindLabel || statusLabel) && (
               // Hidden on hover, where the row's ⋯ button takes this space —
               // the same trade the icon slot makes with its chevron. Losing
               // the label on the one row under the pointer is cheap; it is
               // there on every row you are actually scanning.
               <span
                 aria-hidden
-                className="shrink-0 px-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase group-hover:hidden"
+                className={cn(
+                  "shrink-0 px-1 text-[10px] font-medium tracking-wide uppercase group-hover:hidden",
+                  statusLabel === "Deprecated" ? "text-destructive" : "text-muted-foreground",
+                )}
               >
-                {kindLabel}
+                {statusLabel ?? kindLabel}
               </span>
             )}
 

@@ -182,6 +182,9 @@ export function rowToTreeNode(row: WikiDocumentTreeFieldsFragment): TreeNode {
     childCount: row.childCount,
     isTemplate: row.isTemplate,
     kind: row.kind,
+    pageType: row.pageType,
+    tags: row.tags,
+    status: row.status,
     children: [],
   }
 }

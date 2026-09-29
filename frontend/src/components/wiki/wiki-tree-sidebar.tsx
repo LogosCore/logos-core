@@ -36,6 +36,7 @@ import {
 import type {
   WikiDocumentChildrenQuery,
   WikiDocumentKind,
+  WikiDocumentStatus,
   WikiDocumentTreeFieldsFragment,
 } from "@/graphql/gql/graphql"
 
@@ -53,6 +54,12 @@ export interface TreeNode {
   /** What the page's body is. Carried so a row can mark a drawing without
    * overriding the icon the operator chose for it. */
   kind: WikiDocumentKind
+  /** Semantic classification. */
+  pageType: string | null | undefined
+  /** Cross-cutting labels. */
+  tags: readonly string[]
+  /** Lifecycle state — DRAFT, STABLE, DEPRECATED. */
+  status: WikiDocumentStatus
   // Children are lazy — empty until the branch is expanded and its
   // useWikiDocumentChildren query returns. `childCount` drives the expand
   // caret independently so leaves can be distinguished without a fetch.

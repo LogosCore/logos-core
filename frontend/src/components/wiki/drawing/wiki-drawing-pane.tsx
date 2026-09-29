@@ -90,7 +90,7 @@ export function WikiDrawingPane({
             isEditor={isEditor}
           />
           <WikiForeignOperationBanner document={document} />
-          <WikiDocumentMeta document={document} />
+          <WikiDocumentMeta document={document} isEditor={isEditor} />
           <ConnectionBanner
             connectionStatus={connectionStatus}
             isSynced={isSynced}

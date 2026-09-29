@@ -146,6 +146,19 @@ type WikiDocument struct {
 	// host" lookup. Hosts are operation-private, so the sidecar drops these on
 	// Public-tree documents (same boundary as credentials/hashes).
 	HostReferences []uuid.UUID `bson:"host_references,omitempty" json:"-"`
+	// PageType classifies the page semantically: "Finding", "Playbook",
+	// "Recon Notes", "Host Profile", etc. Distinct from Kind, which is
+	// structural (document vs drawing). Free-form string; agents are guided
+	// to reuse existing types via list_wiki_page_types.
+	PageType string `bson:"page_type,omitempty" json:"pageType,omitempty"`
+	// Tags are cross-cutting labels for filtering and grouping.
+	// Free-form strings; agents are guided to reuse existing tags via
+	// list_wiki_tags.
+	Tags []string `bson:"tags,omitempty" json:"tags,omitempty"`
+	// Status is the page's lifecycle state: draft, stable, or deprecated.
+	// Absent or empty means stable (the default). Agents deprioritize
+	// deprecated pages and flag drafts as unverified.
+	Status WikiDocumentStatus `bson:"status,omitempty" json:"status,omitempty"`
 	// ImportOrigin records where a document came from when it was created by
 	// a wiki transfer (bundle or markdown import) rather than authored here.
 	// Nil for every other document. Provenance only: nothing reads it on the

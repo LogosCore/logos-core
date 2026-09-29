@@ -152,6 +152,9 @@ type CreateWikiDocumentInput struct {
 	Title            string                   `json:"title"`
 	Kind             *models.WikiDocumentKind `json:"kind,omitempty"`
 	Content          *string                  `json:"content,omitempty"`
+	PageType         *string                  `json:"pageType,omitempty"`
+	Tags             []string                 `json:"tags,omitempty"`
+	Status           *WikiDocumentStatus      `json:"status,omitempty"`
 	Emoji            *string                  `json:"emoji,omitempty"`
 	Color            *string                  `json:"color,omitempty"`
 	Icon             *string                  `json:"icon,omitempty"`
@@ -513,12 +516,15 @@ type UpdateUserInput struct {
 }
 
 type UpdateWikiDocumentInput struct {
-	Title            *string `json:"title,omitempty"`
-	Emoji            *string `json:"emoji,omitempty"`
-	Color            *string `json:"color,omitempty"`
-	Icon             *string `json:"icon,omitempty"`
-	ParentDocumentID *string `json:"parentDocumentId,omitempty"`
-	SortOrder        *string `json:"sortOrder,omitempty"`
+	Title            *string             `json:"title,omitempty"`
+	PageType         *string             `json:"pageType,omitempty"`
+	Tags             []string            `json:"tags,omitempty"`
+	Status           *WikiDocumentStatus `json:"status,omitempty"`
+	Emoji            *string             `json:"emoji,omitempty"`
+	Color            *string             `json:"color,omitempty"`
+	Icon             *string             `json:"icon,omitempty"`
+	ParentDocumentID *string             `json:"parentDocumentId,omitempty"`
+	SortOrder        *string             `json:"sortOrder,omitempty"`
 }
 
 type UserConnection struct {
@@ -615,6 +621,11 @@ type WikiDocumentVisitEdge struct {
 	Cursor string                    `json:"cursor"`
 }
 
+type WikiPageTypeCount struct {
+	PageType string `json:"pageType"`
+	Count    int    `json:"count"`
+}
+
 type WikiSearchConnection struct {
 	Hits    []*WikiSearchHit `json:"hits"`
 	Total   int              `json:"total"`
@@ -631,6 +642,11 @@ type WikiSearchHit struct {
 type WikiSearchMatchRange struct {
 	Start int `json:"start"`
 	End   int `json:"end"`
+}
+
+type WikiTagCount struct {
+	Tag   string `json:"tag"`
+	Count int    `json:"count"`
 }
 
 type AgentActionOutcome string
@@ -1190,6 +1206,63 @@ func (e *WikiDocumentSort) UnmarshalJSON(b []byte) error {
 }
 
 func (e WikiDocumentSort) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type WikiDocumentStatus string
+
+const (
+	WikiDocumentStatusDraft      WikiDocumentStatus = "DRAFT"
+	WikiDocumentStatusStable     WikiDocumentStatus = "STABLE"
+	WikiDocumentStatusDeprecated WikiDocumentStatus = "DEPRECATED"
+)
+
+var AllWikiDocumentStatus = []WikiDocumentStatus{
+	WikiDocumentStatusDraft,
+	WikiDocumentStatusStable,
+	WikiDocumentStatusDeprecated,
+}
+
+func (e WikiDocumentStatus) IsValid() bool {
+	switch e {
+	case WikiDocumentStatusDraft, WikiDocumentStatusStable, WikiDocumentStatusDeprecated:
+		return true
+	}
+	return false
+}
+
+func (e WikiDocumentStatus) String() string {
+	return string(e)
+}
+
+func (e *WikiDocumentStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = WikiDocumentStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid WikiDocumentStatus", str)
+	}
+	return nil
+}
+
+func (e WikiDocumentStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *WikiDocumentStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e WikiDocumentStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

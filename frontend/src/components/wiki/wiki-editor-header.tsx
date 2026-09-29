@@ -31,6 +31,7 @@ import { WikiExportMenu } from "@/components/wiki/wiki-export-menu"
 import { WikiEditorToc } from "@/components/wiki/wiki-editor-toc"
 import { WikiPresenceMenu } from "@/components/wiki/wiki-presence-menu"
 import { useActiveWikiEditor } from "@/components/wiki/wiki-active-editor"
+import { WikiStatusBadge } from "@/components/wiki/wiki-document-meta"
 import type { WikiDocumentFieldsFragment } from "@/graphql/gql/graphql"
 
 interface WikiEditorHeaderProps {
@@ -328,6 +329,9 @@ export function WikiEditorHeader({
             <TooltipContent>Backup History</TooltipContent>
           </Tooltip>
         )}
+
+        {/* Status badge — only draft or deprecated */}
+        <WikiStatusBadge status={doc.status} />
 
         {/* Read-only badge */}
         {!isEditor && <Badge variant="secondary">Read-only</Badge>}

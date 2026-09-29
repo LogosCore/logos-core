@@ -43,6 +43,9 @@ export const WikiDocumentTreeFields = graphql(`
     checklistTotal
     checklistRequired
     checklistAnswered
+    pageType
+    tags
+    status
     lastUpdatedAt
     updatedAt
   }
@@ -102,6 +105,9 @@ export const WikiDocumentFields = graphql(`
     checklistTotal
     checklistRequired
     checklistAnswered
+    pageType
+    tags
+    status
     createdBy { id username }
     lastUpdatedBy { id username }
     lastUpdatedAt
@@ -453,6 +459,26 @@ export const WikiDocumentHistoryQuery = graphql(`
   }
 `)
 
+// --- Vocabulary ---
+
+export const WikiDocumentTagsQuery = graphql(`
+  query WikiDocumentTags($operationId: ID!) {
+    wikiDocumentTags(operationId: $operationId) {
+      tag
+      count
+    }
+  }
+`)
+
+export const WikiDocumentPageTypesQuery = graphql(`
+  query WikiDocumentPageTypes($operationId: ID!) {
+    wikiDocumentPageTypes(operationId: $operationId) {
+      pageType
+      count
+    }
+  }
+`)
+
 // --- Mutations ---
 
 export const CreateWikiDocumentMutation = graphql(`
@@ -460,6 +486,7 @@ export const CreateWikiDocumentMutation = graphql(`
     createWikiDocument(operationId: $operationId, input: $input) {
       id operationId title emoji color icon sortOrder
       parentDocumentId
+      pageType tags status
       createdBy { id username }
       createdAt updatedAt
     }
@@ -471,6 +498,7 @@ export const UpdateWikiDocumentMutation = graphql(`
     updateWikiDocument(id: $id, input: $input) {
       id title emoji color icon sortOrder
       parentDocumentId
+      pageType tags status
       updatedAt
     }
   }

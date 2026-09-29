@@ -11,18 +11,24 @@ import (
 )
 
 type searchWikiArgs struct {
-	OperationID string `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Search      string `json:"search,omitempty"       jsonschema:"Free-text match against title and body."`
-	Limit       int    `json:"limit,omitempty"        jsonschema:"Page size, max 50."`
-	Cursor      string `json:"cursor,omitempty"       jsonschema:"nextCursor from the previous page."`
+	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
+	Search      string   `json:"search,omitempty"       jsonschema:"Free-text match against title and body."`
+	Tags        []string `json:"tags,omitempty"         jsonschema:"Only pages carrying all of these tags."`
+	Status      string   `json:"status,omitempty"       jsonschema:"Only pages with this status (draft, stable, deprecated)."`
+	PageType    string   `json:"page_type,omitempty"    jsonschema:"Only pages of this type."`
+	Limit       int      `json:"limit,omitempty"        jsonschema:"Page size, max 50."`
+	Cursor      string   `json:"cursor,omitempty"       jsonschema:"nextCursor from the previous page."`
 }
 
 type listWikiTreeArgs struct {
-	OperationID string `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	ParentID    string `json:"parent_id,omitempty"    jsonschema:"Only this page's subtree."`
-	Depth       int    `json:"depth,omitempty"        jsonschema:"Levels to include below the root or parent_id; default 2, -1 for all."`
-	Limit       int    `json:"limit,omitempty"        jsonschema:"Page size, max 250."`
-	Cursor      string `json:"cursor,omitempty"       jsonschema:"nextCursor from the previous page."`
+	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
+	ParentID    string   `json:"parent_id,omitempty"    jsonschema:"Only this page's subtree."`
+	Tags        []string `json:"tags,omitempty"         jsonschema:"Only pages carrying all of these tags."`
+	Status      string   `json:"status,omitempty"       jsonschema:"Only pages with this status (draft, stable, deprecated)."`
+	PageType    string   `json:"page_type,omitempty"    jsonschema:"Only pages of this type."`
+	Depth       int      `json:"depth,omitempty"        jsonschema:"Levels to include below the root or parent_id; default 2, -1 for all."`
+	Limit       int      `json:"limit,omitempty"        jsonschema:"Page size, max 250."`
+	Cursor      string   `json:"cursor,omitempty"       jsonschema:"nextCursor from the previous page."`
 }
 
 type getWikiDocumentArgs struct {
@@ -122,6 +128,9 @@ func handleSearchWiki(ctx context.Context, s *Server, args searchWikiArgs) (tool
 
 	views := make([]wikiSearchHitView, 0, len(conn.Edges))
 	for _, edge := range conn.Edges {
+		if !matchesWikiFilter(edge.Node, args.Tags, args.Status, args.PageType) {
+			continue
+		}
 		views = append(views, wikiSearchHitView{
 			wikiDocView: toWikiDocView(edge.Node),
 			// From the already-loaded search projection, so this costs no
@@ -161,10 +170,12 @@ func handleListWikiTree(ctx context.Context, s *Server, args listWikiTreeArgs) (
 		depth = 0
 	}
 
-	docs, err := s.wikiSummaries(ctx, opID, false)
+	allDocs, err := s.wikiSummaries(ctx, opID, false)
 	if err != nil {
 		return toolResult{}, fmt.Errorf("failed to read wiki tree: %w", err)
 	}
+
+	docs := filterWikiDocs(allDocs, args.Tags, args.Status, args.PageType)
 
 	var root *uuid.UUID
 	if args.ParentID != "" {

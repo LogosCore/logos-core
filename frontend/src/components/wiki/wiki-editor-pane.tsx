@@ -80,7 +80,7 @@ export function WikiEditorPane({
             isEditor={isEditor}
           />
           <WikiForeignOperationBanner document={document} />
-          <WikiDocumentMeta document={document} />
+          <WikiDocumentMeta document={document} isEditor={isEditor} />
           <EditorErrorBoundary documentId={documentId}>
             <WikiEditor
               documentId={documentId}

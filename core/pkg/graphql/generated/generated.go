@@ -493,7 +493,9 @@ type ComplexityRoot struct {
 		WikiDocumentDescendantIds          func(childComplexity int, documentID string) int
 		WikiDocumentHistory                func(childComplexity int, operationID string, offset *int, limit *int) int
 		WikiDocumentMarkdown               func(childComplexity int, id string) int
+		WikiDocumentPageTypes              func(childComplexity int, operationID string) int
 		WikiDocumentPresence               func(childComplexity int, documentID string) int
+		WikiDocumentTags                   func(childComplexity int, operationID string) int
 		WikiDocumentTrash                  func(childComplexity int, operationID string, first *int, after *string, last *int, before *string) int
 		WikiDocumentTrashCount             func(childComplexity int, operationID string) int
 		WikiDocumentTrashedDescendants     func(childComplexity int, documentID string) int
@@ -763,10 +765,13 @@ type ComplexityRoot struct {
 		LastUpdatedAt     func(childComplexity int) int
 		LastUpdatedBy     func(childComplexity int) int
 		OperationID       func(childComplexity int) int
+		PageType          func(childComplexity int) int
 		ParentDocument    func(childComplexity int) int
 		ParentDocumentID  func(childComplexity int) int
 		SortOrder         func(childComplexity int) int
 		SourceTemplateID  func(childComplexity int) int
+		Status            func(childComplexity int) int
+		Tags              func(childComplexity int) int
 		TaskBacklinks     func(childComplexity int) int
 		Title             func(childComplexity int) int
 		UpdatedAt         func(childComplexity int) int
@@ -862,6 +867,11 @@ type ComplexityRoot struct {
 		Node   func(childComplexity int) int
 	}
 
+	WikiPageTypeCount struct {
+		Count    func(childComplexity int) int
+		PageType func(childComplexity int) int
+	}
+
 	WikiSearchConnection struct {
 		HasMore func(childComplexity int) int
 		Hits    func(childComplexity int) int
@@ -878,6 +888,11 @@ type ComplexityRoot struct {
 	WikiSearchMatchRange struct {
 		End   func(childComplexity int) int
 		Start func(childComplexity int) int
+	}
+
+	WikiTagCount struct {
+		Count func(childComplexity int) int
+		Tag   func(childComplexity int) int
 	}
 }
 
@@ -1097,6 +1112,8 @@ type QueryResolver interface {
 	WikiDocumentTreeRevealPath(ctx context.Context, documentID string) ([]*models.WikiDocument, error)
 	WikiDocumentDescendantIds(ctx context.Context, documentID string) ([]string, error)
 	WikiDocumentTrashCount(ctx context.Context, operationID string) (int, error)
+	WikiDocumentTags(ctx context.Context, operationID string) ([]*model.WikiTagCount, error)
+	WikiDocumentPageTypes(ctx context.Context, operationID string) ([]*model.WikiPageTypeCount, error)
 	WikiSearch(ctx context.Context, operationID string, scope *string, query string, offset *int, limit *int) (*model.WikiSearchConnection, error)
 	WikiDocumentTrash(ctx context.Context, operationID string, first *int, after *string, last *int, before *string) (*model.WikiDocumentConnection, error)
 	WikiDocumentTrashedDescendants(ctx context.Context, documentID string) ([]*models.WikiDocument, error)
@@ -3754,6 +3771,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.WikiDocumentMarkdown(childComplexity, args["id"].(string)), true
+	case "Query.wikiDocumentPageTypes":
+		if e.ComplexityRoot.Query.WikiDocumentPageTypes == nil {
+			break
+		}
+
+		args, err := ec.field_Query_wikiDocumentPageTypes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.WikiDocumentPageTypes(childComplexity, args["operationId"].(string)), true
 	case "Query.wikiDocumentPresence":
 		if e.ComplexityRoot.Query.WikiDocumentPresence == nil {
 			break
@@ -3765,6 +3793,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.WikiDocumentPresence(childComplexity, args["documentId"].(string)), true
+	case "Query.wikiDocumentTags":
+		if e.ComplexityRoot.Query.WikiDocumentTags == nil {
+			break
+		}
+
+		args, err := ec.field_Query_wikiDocumentTags_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.WikiDocumentTags(childComplexity, args["operationId"].(string)), true
 	case "Query.wikiDocumentTrash":
 		if e.ComplexityRoot.Query.WikiDocumentTrash == nil {
 			break
@@ -5050,6 +5089,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.WikiDocument.OperationID(childComplexity), true
+	case "WikiDocument.pageType":
+		if e.ComplexityRoot.WikiDocument.PageType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiDocument.PageType(childComplexity), true
 	case "WikiDocument.parentDocument":
 		if e.ComplexityRoot.WikiDocument.ParentDocument == nil {
 			break
@@ -5074,6 +5119,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.WikiDocument.SourceTemplateID(childComplexity), true
+	case "WikiDocument.status":
+		if e.ComplexityRoot.WikiDocument.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiDocument.Status(childComplexity), true
+	case "WikiDocument.tags":
+		if e.ComplexityRoot.WikiDocument.Tags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiDocument.Tags(childComplexity), true
 	case "WikiDocument.taskBacklinks":
 		if e.ComplexityRoot.WikiDocument.TaskBacklinks == nil {
 			break
@@ -5412,6 +5469,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.WikiDocumentVisitEdge.Node(childComplexity), true
 
+	case "WikiPageTypeCount.count":
+		if e.ComplexityRoot.WikiPageTypeCount.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiPageTypeCount.Count(childComplexity), true
+	case "WikiPageTypeCount.pageType":
+		if e.ComplexityRoot.WikiPageTypeCount.PageType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiPageTypeCount.PageType(childComplexity), true
+
 	case "WikiSearchConnection.hasMore":
 		if e.ComplexityRoot.WikiSearchConnection.HasMore == nil {
 			break
@@ -5468,6 +5538,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.WikiSearchMatchRange.Start(childComplexity), true
+
+	case "WikiTagCount.count":
+		if e.ComplexityRoot.WikiTagCount.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiTagCount.Count(childComplexity), true
+	case "WikiTagCount.tag":
+		if e.ComplexityRoot.WikiTagCount.Tag == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WikiTagCount.Tag(childComplexity), true
 
 	}
 	return 0, false
@@ -8139,6 +8222,12 @@ enum WikiDocumentKind {
   DRAWING
 }
 
+enum WikiDocumentStatus {
+  DRAFT
+  STABLE
+  DEPRECATED
+}
+
 enum PresenceAction {
   JOINED
   LEFT
@@ -8187,6 +8276,14 @@ type WikiDocument {
   # with an ellipsis, and the length is counted in characters (default 280,
   # capped at 1000). Empty for pages with no body.
   excerpt(maxLength: Int): String!
+  # Semantic classification: "Finding", "Playbook", "Recon Notes", etc.
+  # Free-form; distinct from ` + "`" + `kind` + "`" + ` which is structural (DOCUMENT/DRAWING).
+  pageType: String
+  # Cross-cutting labels for filtering and grouping.
+  tags: [String!]!
+  # Lifecycle state. Absent or STABLE is the default. DRAFT marks unverified
+  # content; DEPRECATED marks superseded pages.
+  status: WikiDocumentStatus!
   # True when this document is flagged as a reusable template. Any document
   # (in an operation or the Public tree) can be a template; the flag is toggled
   # by anyone with edit access via setWikiDocumentTemplate. Template documents
@@ -8369,6 +8466,16 @@ type WikiDocumentVisitConnection {
   totalCount: Int!
 }
 
+type WikiTagCount {
+  tag: String!
+  count: Int!
+}
+
+type WikiPageTypeCount {
+  pageType: String!
+  count: Int!
+}
+
 # --- Inputs ---
 
 input CreateWikiDocumentInput {
@@ -8379,6 +8486,9 @@ input CreateWikiDocumentInput {
   # refused rather than silently dropped.
   kind: WikiDocumentKind
   content: String
+  pageType: String
+  tags: [String!]
+  status: WikiDocumentStatus
   emoji: String
   color: String
   icon: String
@@ -8387,6 +8497,9 @@ input CreateWikiDocumentInput {
 
 input UpdateWikiDocumentInput {
   title: String
+  pageType: String
+  tags: [String!]
+  status: WikiDocumentStatus
   emoji: String
   color: String
   icon: String
@@ -8497,6 +8610,14 @@ extend type Query {
   # for the sidebar; avoids fetching the full trash list just to read its
   # totalCount.
   wikiDocumentTrashCount(operationId: ID!): Int!
+    @hasPermission(permission: "operation:member")
+
+  # Distinct tags in use across the operation's active wiki pages, with counts.
+  wikiDocumentTags(operationId: ID!): [WikiTagCount!]!
+    @hasPermission(permission: "operation:member")
+
+  # Distinct page types in use across the operation's active wiki pages, with counts.
+  wikiDocumentPageTypes(operationId: ID!): [WikiPageTypeCount!]!
     @hasPermission(permission: "operation:member")
 
   # Ranked, snippet-returning search over wiki documents within an operation.
@@ -10675,6 +10796,17 @@ func (ec *executionContext) field_Query_wikiDocumentMarkdown_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_wikiDocumentPageTypes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_wikiDocumentPresence_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10683,6 +10815,17 @@ func (ec *executionContext) field_Query_wikiDocumentPresence_args(ctx context.Co
 		return nil, err
 	}
 	args["documentId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_wikiDocumentTags_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
 	return args, nil
 }
 
@@ -13369,6 +13512,12 @@ func (ec *executionContext) fieldContext_Credential_backlinks(_ context.Context,
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -14711,6 +14860,12 @@ func (ec *executionContext) fieldContext_Hash_backlinks(_ context.Context, field
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -21543,6 +21698,12 @@ func (ec *executionContext) fieldContext_Mutation_createWikiDocument(ctx context
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -21666,6 +21827,12 @@ func (ec *executionContext) fieldContext_Mutation_updateWikiDocument(ctx context
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -21789,6 +21956,12 @@ func (ec *executionContext) fieldContext_Mutation_reorderWikiDocumentSiblings(ct
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -21971,6 +22144,12 @@ func (ec *executionContext) fieldContext_Mutation_duplicateWikiDocument(ctx cont
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -22094,6 +22273,12 @@ func (ec *executionContext) fieldContext_Mutation_setWikiDocumentTemplate(ctx co
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -22217,6 +22402,12 @@ func (ec *executionContext) fieldContext_Mutation_instantiateTemplate(ctx contex
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -22340,6 +22531,12 @@ func (ec *executionContext) fieldContext_Mutation_restoreWikiDocument(ctx contex
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -22662,6 +22859,12 @@ func (ec *executionContext) fieldContext_Mutation_restoreWikiDocumentBackup(ctx 
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -25632,6 +25835,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentsReferencingHash(ctx 
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -26979,6 +27188,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocument(ctx context.Context,
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -27169,6 +27384,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentTree(ctx context.Cont
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -27292,6 +27513,12 @@ func (ec *executionContext) fieldContext_Query_wikiTemplates(ctx context.Context
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -27533,6 +27760,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentChildren(ctx context.
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -27656,6 +27889,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentTreeRevealPath(ctx co
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -27818,6 +28057,136 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentTrashCount(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_wikiDocumentTrashCount_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_wikiDocumentTags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_wikiDocumentTags,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().WikiDocumentTags(ctx, fc.Args["operationId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal []*model.WikiTagCount
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.WikiTagCount
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNWikiTagCount2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiTagCountᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_wikiDocumentTags(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "tag":
+				return ec.fieldContext_WikiTagCount_tag(ctx, field)
+			case "count":
+				return ec.fieldContext_WikiTagCount_count(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type WikiTagCount", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_wikiDocumentTags_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_wikiDocumentPageTypes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_wikiDocumentPageTypes,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().WikiDocumentPageTypes(ctx, fc.Args["operationId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal []*model.WikiPageTypeCount
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.WikiPageTypeCount
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNWikiPageTypeCount2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiPageTypeCountᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_wikiDocumentPageTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "pageType":
+				return ec.fieldContext_WikiPageTypeCount_pageType(ctx, field)
+			case "count":
+				return ec.fieldContext_WikiPageTypeCount_count(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type WikiPageTypeCount", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_wikiDocumentPageTypes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -28031,6 +28400,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentTrashedDescendants(ct
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -28154,6 +28529,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentBacklinks(ctx context
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -28277,6 +28658,12 @@ func (ec *executionContext) fieldContext_Query_wikiDocumentsReferencingCredentia
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -32139,6 +32526,12 @@ func (ec *executionContext) fieldContext_Task_wikiReferences(_ context.Context, 
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -34588,6 +34981,12 @@ func (ec *executionContext) fieldContext_WikiDocument_parentDocument(_ context.C
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -34710,6 +35109,12 @@ func (ec *executionContext) fieldContext_WikiDocument_childDocuments(_ context.C
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -35051,6 +35456,93 @@ func (ec *executionContext) fieldContext_WikiDocument_excerpt(ctx context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _WikiDocument_pageType(ctx context.Context, field graphql.CollectedField, obj *models.WikiDocument) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiDocument_pageType,
+		func(ctx context.Context) (any, error) {
+			return obj.PageType, nil
+		},
+		nil,
+		ec.marshalOString2string,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiDocument_pageType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WikiDocument_tags(ctx context.Context, field graphql.CollectedField, obj *models.WikiDocument) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiDocument_tags,
+		func(ctx context.Context) (any, error) {
+			return obj.Tags, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiDocument_tags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WikiDocument_status(ctx context.Context, field graphql.CollectedField, obj *models.WikiDocument) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiDocument_status,
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		ec.marshalNWikiDocumentStatus2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐWikiDocumentStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiDocument_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type WikiDocumentStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _WikiDocument_isTemplate(ctx context.Context, field graphql.CollectedField, obj *models.WikiDocument) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -35250,6 +35742,12 @@ func (ec *executionContext) fieldContext_WikiDocument_backlinks(_ context.Contex
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -36594,6 +37092,12 @@ func (ec *executionContext) fieldContext_WikiDocumentEdge_node(_ context.Context
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -36948,6 +37452,12 @@ func (ec *executionContext) fieldContext_WikiDocumentEvent_document(_ context.Co
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -37281,6 +37791,12 @@ func (ec *executionContext) fieldContext_WikiDocumentVisit_document(_ context.Co
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -37518,6 +38034,64 @@ func (ec *executionContext) fieldContext_WikiDocumentVisitEdge_cursor(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _WikiPageTypeCount_pageType(ctx context.Context, field graphql.CollectedField, obj *model.WikiPageTypeCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiPageTypeCount_pageType,
+		func(ctx context.Context) (any, error) {
+			return obj.PageType, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiPageTypeCount_pageType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiPageTypeCount",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WikiPageTypeCount_count(ctx context.Context, field graphql.CollectedField, obj *model.WikiPageTypeCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiPageTypeCount_count,
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiPageTypeCount_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiPageTypeCount",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _WikiSearchConnection_hits(ctx context.Context, field graphql.CollectedField, obj *model.WikiSearchConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37669,6 +38243,12 @@ func (ec *executionContext) fieldContext_WikiSearchHit_document(_ context.Contex
 				return ec.fieldContext_WikiDocument_hasContent(ctx, field)
 			case "excerpt":
 				return ec.fieldContext_WikiDocument_excerpt(ctx, field)
+			case "pageType":
+				return ec.fieldContext_WikiDocument_pageType(ctx, field)
+			case "tags":
+				return ec.fieldContext_WikiDocument_tags(ctx, field)
+			case "status":
+				return ec.fieldContext_WikiDocument_status(ctx, field)
 			case "isTemplate":
 				return ec.fieldContext_WikiDocument_isTemplate(ctx, field)
 			case "sourceTemplateId":
@@ -37849,6 +38429,64 @@ func (ec *executionContext) _WikiSearchMatchRange_end(ctx context.Context, field
 func (ec *executionContext) fieldContext_WikiSearchMatchRange_end(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "WikiSearchMatchRange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WikiTagCount_tag(ctx context.Context, field graphql.CollectedField, obj *model.WikiTagCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiTagCount_tag,
+		func(ctx context.Context) (any, error) {
+			return obj.Tag, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiTagCount_tag(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiTagCount",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WikiTagCount_count(ctx context.Context, field graphql.CollectedField, obj *model.WikiTagCount) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WikiTagCount_count,
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WikiTagCount_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WikiTagCount",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -39960,7 +40598,7 @@ func (ec *executionContext) unmarshalInputCreateWikiDocumentInput(ctx context.Co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"parentDocumentId", "title", "kind", "content", "emoji", "color", "icon", "sortOrder"}
+	fieldsInOrder := [...]string{"parentDocumentId", "title", "kind", "content", "pageType", "tags", "status", "emoji", "color", "icon", "sortOrder"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -39995,6 +40633,27 @@ func (ec *executionContext) unmarshalInputCreateWikiDocumentInput(ctx context.Co
 				return it, err
 			}
 			it.Content = data
+		case "pageType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("pageType"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PageType = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
+		case "status":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("status"))
+			data, err := ec.unmarshalOWikiDocumentStatus2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiDocumentStatus(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Status = data
 		case "emoji":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("emoji"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -41027,7 +41686,7 @@ func (ec *executionContext) unmarshalInputUpdateWikiDocumentInput(ctx context.Co
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"title", "emoji", "color", "icon", "parentDocumentId", "sortOrder"}
+	fieldsInOrder := [...]string{"title", "pageType", "tags", "status", "emoji", "color", "icon", "parentDocumentId", "sortOrder"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -41041,6 +41700,27 @@ func (ec *executionContext) unmarshalInputUpdateWikiDocumentInput(ctx context.Co
 				return it, err
 			}
 			it.Title = data
+		case "pageType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("pageType"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PageType = data
+		case "tags":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tags"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Tags = data
+		case "status":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("status"))
+			data, err := ec.unmarshalOWikiDocumentStatus2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiDocumentStatus(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Status = data
 		case "emoji":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("emoji"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -46695,6 +47375,50 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "wikiDocumentTags":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_wikiDocumentTags(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "wikiDocumentPageTypes":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_wikiDocumentPageTypes(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "wikiSearch":
 			field := field
 
@@ -50068,6 +50792,18 @@ func (ec *executionContext) _WikiDocument(ctx context.Context, sel ast.Selection
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "pageType":
+			out.Values[i] = ec._WikiDocument_pageType(ctx, field, obj)
+		case "tags":
+			out.Values[i] = ec._WikiDocument_tags(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "status":
+			out.Values[i] = ec._WikiDocument_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "isTemplate":
 			out.Values[i] = ec._WikiDocument_isTemplate(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -51458,6 +52194,50 @@ func (ec *executionContext) _WikiDocumentVisitEdge(ctx context.Context, sel ast.
 	return out
 }
 
+var wikiPageTypeCountImplementors = []string{"WikiPageTypeCount"}
+
+func (ec *executionContext) _WikiPageTypeCount(ctx context.Context, sel ast.SelectionSet, obj *model.WikiPageTypeCount) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, wikiPageTypeCountImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("WikiPageTypeCount")
+		case "pageType":
+			out.Values[i] = ec._WikiPageTypeCount_pageType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._WikiPageTypeCount_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var wikiSearchConnectionImplementors = []string{"WikiSearchConnection"}
 
 func (ec *executionContext) _WikiSearchConnection(ctx context.Context, sel ast.SelectionSet, obj *model.WikiSearchConnection) graphql.Marshaler {
@@ -51576,6 +52356,50 @@ func (ec *executionContext) _WikiSearchMatchRange(ctx context.Context, sel ast.S
 			}
 		case "end":
 			out.Values[i] = ec._WikiSearchMatchRange_end(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var wikiTagCountImplementors = []string{"WikiTagCount"}
+
+func (ec *executionContext) _WikiTagCount(ctx context.Context, sel ast.SelectionSet, obj *model.WikiTagCount) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, wikiTagCountImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("WikiTagCount")
+		case "tag":
+			out.Values[i] = ec._WikiTagCount_tag(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._WikiTagCount_count(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -53833,6 +54657,16 @@ func (ec *executionContext) marshalNWikiDocumentPresenceEvent2ᚖgithubᚗcomᚋ
 	return ec._WikiDocumentPresenceEvent(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNWikiDocumentStatus2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐWikiDocumentStatus(ctx context.Context, v any) (models.WikiDocumentStatus, error) {
+	var res models.WikiDocumentStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNWikiDocumentStatus2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐWikiDocumentStatus(ctx context.Context, sel ast.SelectionSet, v models.WikiDocumentStatus) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNWikiDocumentVisit2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐWikiDocumentVisit(ctx context.Context, sel ast.SelectionSet, v models.WikiDocumentVisit) graphql.Marshaler {
 	return ec._WikiDocumentVisit(ctx, sel, &v)
 }
@@ -53885,6 +54719,32 @@ func (ec *executionContext) marshalNWikiDocumentVisitEdge2ᚖgithubᚗcomᚋlogo
 		return graphql.Null
 	}
 	return ec._WikiDocumentVisitEdge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNWikiPageTypeCount2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiPageTypeCountᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.WikiPageTypeCount) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNWikiPageTypeCount2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiPageTypeCount(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNWikiPageTypeCount2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiPageTypeCount(ctx context.Context, sel ast.SelectionSet, v *model.WikiPageTypeCount) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._WikiPageTypeCount(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNWikiSearchConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiSearchConnection(ctx context.Context, sel ast.SelectionSet, v model.WikiSearchConnection) graphql.Marshaler {
@@ -53951,6 +54811,32 @@ func (ec *executionContext) marshalNWikiSearchMatchRange2ᚖgithubᚗcomᚋlogos
 		return graphql.Null
 	}
 	return ec._WikiSearchMatchRange(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNWikiTagCount2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiTagCountᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.WikiTagCount) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNWikiTagCount2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiTagCount(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNWikiTagCount2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiTagCount(ctx context.Context, sel ast.SelectionSet, v *model.WikiTagCount) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._WikiTagCount(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
@@ -54652,6 +55538,18 @@ func (ec *executionContext) marshalOSortDirection2ᚖgithubᚗcomᚋlogoscoreᚋ
 	return v
 }
 
+func (ec *executionContext) unmarshalOString2string(ctx context.Context, v any) (string, error) {
+	res, err := graphql.UnmarshalString(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOString2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalString(v)
+	return res
+}
+
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -54906,6 +55804,22 @@ func (ec *executionContext) unmarshalOWikiDocumentSort2ᚖgithubᚗcomᚋlogosco
 }
 
 func (ec *executionContext) marshalOWikiDocumentSort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiDocumentSort(ctx context.Context, sel ast.SelectionSet, v *model.WikiDocumentSort) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOWikiDocumentStatus2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiDocumentStatus(ctx context.Context, v any) (*model.WikiDocumentStatus, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.WikiDocumentStatus)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOWikiDocumentStatus2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐWikiDocumentStatus(ctx context.Context, sel ast.SelectionSet, v *model.WikiDocumentStatus) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

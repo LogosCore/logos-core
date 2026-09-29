@@ -351,6 +351,13 @@ var releases = []Release{
 			"Token optimization: trimmed tool descriptions and jsonschema annotations across all tools, removing guidance duplicated in reference docs. Compressed SKILL.md bullets, stripped description echoes from the tool index, and shortened response notes. No functional changes.",
 		},
 	},
+	{
+		Version: 40,
+		Date:    "2026-09-30",
+		Notes: []string{
+			"Page metadata: every wiki page now carries page_type, tags and status (draft/stable/deprecated). Three new tools: set_wiki_tags, list_wiki_tags, list_wiki_page_types. search_wiki and list_wiki_tree accept tags, status and page_type filters. Inspired by the Open Knowledge Format spec.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

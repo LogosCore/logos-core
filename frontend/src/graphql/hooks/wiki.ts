@@ -44,6 +44,8 @@ import {
   TrackWikiDocumentVisitDocument,
   WikiDocumentChangedDocument,
   WikiDocumentPresenceChangedDocument,
+  WikiDocumentTagsDocument,
+  WikiDocumentPageTypesDocument,
   type WikiDocumentTreeFieldsFragment,
   type WikiDocumentChildrenQuery,
   type WikiDocumentSort,
@@ -113,6 +115,8 @@ export const wikiKeys = {
   preview: (id: string) => [...wikiKeys.all, "preview", id] as const,
   backlinks: (documentId: string) =>
     [...wikiKeys.all, "backlinks", documentId] as const,
+  tags: (operationId: string) => [...wikiKeys.all, "tags", operationId] as const,
+  pageTypes: (operationId: string) => [...wikiKeys.all, "pageTypes", operationId] as const,
 }
 
 // --- Queries ---
@@ -480,6 +484,22 @@ export function useWikiDocumentBacklinks(documentId: string) {
     queryFn: () =>
       graphqlClient(WikiDocumentBacklinksDocument, { documentId }),
     enabled: !!documentId,
+  })
+}
+
+export function useWikiDocumentTags(operationId: string) {
+  return useQuery({
+    queryKey: wikiKeys.tags(operationId),
+    queryFn: () => graphqlClient(WikiDocumentTagsDocument, { operationId }),
+    enabled: !!operationId,
+  })
+}
+
+export function useWikiDocumentPageTypes(operationId: string) {
+  return useQuery({
+    queryKey: wikiKeys.pageTypes(operationId),
+    queryFn: () => graphqlClient(WikiDocumentPageTypesDocument, { operationId }),
+    enabled: !!operationId,
   })
 }
 
@@ -894,6 +914,12 @@ export function useWikiDocumentChangedSubscription(operationId: string) {
       // set. A rename also reorders it, so refresh on any CRUD — no-op when the
       // create dialog isn't mounted.
       queryClient.invalidateQueries({ queryKey: wikiKeys.templates(operationId) })
+
+      // Tag and page-type vocabulary caches. A create, update or delete can
+      // shift the set of tags/types in use. No-op when no vocabulary consumer
+      // is mounted.
+      queryClient.invalidateQueries({ queryKey: wikiKeys.tags(operationId) })
+      queryClient.invalidateQueries({ queryKey: wikiKeys.pageTypes(operationId) })
 
       // Move dialog's exclusion set. A reparent (UPDATED) changes the
       // descendant set of both parents' ancestor chains; create/delete shift

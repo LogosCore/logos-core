@@ -115,6 +115,10 @@ type IWikiDocumentResolver interface {
 	CleanupCredentialReferences(ctx context.Context, operationID, credentialID uuid.UUID) error
 	WikiSearch(ctx context.Context, operationID string, scope *string, query string, offset *int, limit *int) (*model.WikiSearchConnection, error)
 
+	// Metadata aggregation queries
+	WikiDocumentTags(ctx context.Context, operationID string) ([]*model.WikiTagCount, error)
+	WikiDocumentPageTypes(ctx context.Context, operationID string) ([]*model.WikiPageTypeCount, error)
+
 	// Backup queries
 	WikiDocumentBackups(ctx context.Context, documentID string, trigger *models.WikiDocumentBackupTrigger, first *int, after *string, last *int, before *string) (*model.WikiDocumentBackupConnection, error)
 	WikiDocumentBackup(ctx context.Context, id string) (*models.WikiDocumentBackup, error)
@@ -379,6 +383,24 @@ func (r *wikiDocumentResolver) CreateWikiDocument(ctx context.Context, operation
 		icon = *input.Icon
 	}
 
+	pageType := ""
+	if input.PageType != nil {
+		pageType = *input.PageType
+	}
+
+	var tags []string
+	if len(input.Tags) > 0 {
+		tags = input.Tags
+	}
+
+	var status models.WikiDocumentStatus
+	if input.Status != nil {
+		status = models.WikiDocumentStatus(strings.ToLower(string(*input.Status)))
+		if !status.Valid() {
+			return nil, fmt.Errorf("invalid status %q: must be draft, stable or deprecated", *input.Status)
+		}
+	}
+
 	now := time.Now().UTC()
 	doc := &models.WikiDocument{
 		DocumentID:       uuid.New(),
@@ -389,6 +411,9 @@ func (r *wikiDocumentResolver) CreateWikiDocument(ctx context.Context, operation
 		TitleLower:       strings.ToLower(input.Title),
 		Kind:             kind,
 		Content:          content,
+		PageType:         pageType,
+		Tags:             tags,
+		Status:           status,
 		Emoji:            emoji,
 		Color:            color,
 		Icon:             icon,
@@ -455,6 +480,19 @@ func (r *wikiDocumentResolver) UpdateWikiDocument(ctx context.Context, id string
 	}
 	if input.SortOrder != nil {
 		updates["sort_order"] = *input.SortOrder
+	}
+	if input.PageType != nil {
+		updates["page_type"] = *input.PageType
+	}
+	if input.Tags != nil {
+		updates["tags"] = input.Tags
+	}
+	if input.Status != nil {
+		status := models.WikiDocumentStatus(strings.ToLower(string(*input.Status)))
+		if !status.Valid() {
+			return nil, fmt.Errorf("invalid status %q: must be draft, stable or deprecated", *input.Status)
+		}
+		updates["status"] = string(status)
 	}
 
 	// Reparent — only treated as a "move" if the new parent actually differs
@@ -1223,6 +1261,9 @@ func (r *wikiDocumentResolver) InstantiateTemplate(ctx context.Context, template
 		// it a forked drawing reads as an empty page until somebody opens it.
 		DrawingElementCount: template.DrawingElementCount,
 		DrawingVersionSum:   template.DrawingVersionSum,
+		PageType:            template.PageType,
+		Tags:                append([]string(nil), template.Tags...),
+		Status:              template.Status,
 		CreatedByID:         callerUID,
 		LastUpdatedByID:     &callerUID,
 		LastUpdatedAt:       &now,
@@ -1848,6 +1889,44 @@ func (r *wikiDocumentResolver) WikiSearch(
 		Total:   int(total),
 		HasMore: hasMore,
 	}, nil
+}
+
+func (r *wikiDocumentResolver) WikiDocumentTags(ctx context.Context, operationID string) ([]*model.WikiTagCount, error) {
+	opUID, err := uuid.Parse(operationID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid operation ID: %w", err)
+	}
+	if err := r.authorizeForOperation(ctx, opUID, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	rows, err := r.docRepo.AggregateTagCounts(ctx, opUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate tags: %w", err)
+	}
+	out := make([]*model.WikiTagCount, len(rows))
+	for i, row := range rows {
+		out[i] = &model.WikiTagCount{Tag: row.Tag, Count: row.Count}
+	}
+	return out, nil
+}
+
+func (r *wikiDocumentResolver) WikiDocumentPageTypes(ctx context.Context, operationID string) ([]*model.WikiPageTypeCount, error) {
+	opUID, err := uuid.Parse(operationID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid operation ID: %w", err)
+	}
+	if err := r.authorizeForOperation(ctx, opUID, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	rows, err := r.docRepo.AggregatePageTypeCounts(ctx, opUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate page types: %w", err)
+	}
+	out := make([]*model.WikiPageTypeCount, len(rows))
+	for i, row := range rows {
+		out[i] = &model.WikiPageTypeCount{PageType: row.PageType, Count: row.Count}
+	}
+	return out, nil
 }
 
 func (r *wikiDocumentResolver) WikiDocumentTree(ctx context.Context, operationID string) ([]*models.WikiDocument, error) {

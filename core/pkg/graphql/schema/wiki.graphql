@@ -29,6 +29,12 @@ enum WikiDocumentKind {
   DRAWING
 }
 
+enum WikiDocumentStatus {
+  DRAFT
+  STABLE
+  DEPRECATED
+}
+
 enum PresenceAction {
   JOINED
   LEFT
@@ -77,6 +83,14 @@ type WikiDocument {
   # with an ellipsis, and the length is counted in characters (default 280,
   # capped at 1000). Empty for pages with no body.
   excerpt(maxLength: Int): String!
+  # Semantic classification: "Finding", "Playbook", "Recon Notes", etc.
+  # Free-form; distinct from `kind` which is structural (DOCUMENT/DRAWING).
+  pageType: String
+  # Cross-cutting labels for filtering and grouping.
+  tags: [String!]!
+  # Lifecycle state. Absent or STABLE is the default. DRAFT marks unverified
+  # content; DEPRECATED marks superseded pages.
+  status: WikiDocumentStatus!
   # True when this document is flagged as a reusable template. Any document
   # (in an operation or the Public tree) can be a template; the flag is toggled
   # by anyone with edit access via setWikiDocumentTemplate. Template documents
@@ -259,6 +273,16 @@ type WikiDocumentVisitConnection {
   totalCount: Int!
 }
 
+type WikiTagCount {
+  tag: String!
+  count: Int!
+}
+
+type WikiPageTypeCount {
+  pageType: String!
+  count: Int!
+}
+
 # --- Inputs ---
 
 input CreateWikiDocumentInput {
@@ -269,6 +293,9 @@ input CreateWikiDocumentInput {
   # refused rather than silently dropped.
   kind: WikiDocumentKind
   content: String
+  pageType: String
+  tags: [String!]
+  status: WikiDocumentStatus
   emoji: String
   color: String
   icon: String
@@ -277,6 +304,9 @@ input CreateWikiDocumentInput {
 
 input UpdateWikiDocumentInput {
   title: String
+  pageType: String
+  tags: [String!]
+  status: WikiDocumentStatus
   emoji: String
   color: String
   icon: String
@@ -387,6 +417,14 @@ extend type Query {
   # for the sidebar; avoids fetching the full trash list just to read its
   # totalCount.
   wikiDocumentTrashCount(operationId: ID!): Int!
+    @hasPermission(permission: "operation:member")
+
+  # Distinct tags in use across the operation's active wiki pages, with counts.
+  wikiDocumentTags(operationId: ID!): [WikiTagCount!]!
+    @hasPermission(permission: "operation:member")
+
+  # Distinct page types in use across the operation's active wiki pages, with counts.
+  wikiDocumentPageTypes(operationId: ID!): [WikiPageTypeCount!]!
     @hasPermission(permission: "operation:member")
 
   # Ranked, snippet-returning search over wiki documents within an operation.
