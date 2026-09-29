@@ -25,6 +25,7 @@ import { wikiSchema } from "./wiki-schema.js";
 import { parseOutlineMarkdown } from "./markdown-parser.js";
 import { auditAttachments, type AttachmentAudit } from "./attachment-audit.js";
 import { serializeWikiDocument } from "./markdown-serializer.js";
+import { collectChecklistCoverage, type ChecklistCoverage } from "./references.js";
 import { Y_FRAGMENT_FIELD } from "./markdown-to-yjs.js";
 import { WIKI_SCHEMA_VERSION } from "./wiki-schema-version.js";
 import { readRawBody, requireSignature } from "./internal-auth.js";
@@ -438,6 +439,7 @@ export function setupApplyApi(app: Express, server: Hocuspocus): void {
         // How the page's file links stand after the write. Read inside the
         // transaction so it describes exactly the state this write produced.
         let attachments: AttachmentAudit = { attachmentCards: 0, strayFileLinks: [] };
+        let checklist: ChecklistCoverage = { total: 0, required: 0, answered: 0 };
 
         await connection.transact((document) => {
           const fragment = document.getXmlFragment(Y_FRAGMENT_FIELD);
@@ -445,6 +447,7 @@ export function setupApplyApi(app: Express, server: Hocuspocus): void {
             applyTo(fragment);
           } finally {
             attachments = auditAttachments(fragment);
+            checklist = collectChecklistCoverage(fragment);
           }
         });
 
@@ -510,11 +513,12 @@ export function setupApplyApi(app: Express, server: Hocuspocus): void {
             matches: edit.matches,
             replacements: edit.replacements,
             ...attachments,
+            checklist,
           });
           return;
         }
 
-        res.status(200).json({ ok: true, mode, nodes: appliedNodes, watchers: connections, ...attachments });
+        res.status(200).json({ ok: true, mode, nodes: appliedNodes, watchers: connections, ...attachments, checklist });
       } catch (err) {
         const message = err instanceof Error ? err.message : "apply failed";
         console.error("apply-markdown error:", err);

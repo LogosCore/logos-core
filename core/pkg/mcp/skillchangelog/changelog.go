@@ -314,6 +314,36 @@ var releases = []Release{
 			"Quote the URI in backticks or a code fence when you mean to write about it: code is not checked.",
 		},
 	},
+	{
+		Version: 35,
+		Date:    "2026-09-29",
+		Notes: []string{
+			"New set_checklist_answer fills checklist items by key, one or many at a time. It writes markdown into each item's content region as a Y.js transaction, so it merges with a connected editor and the result is immediate — no string-matching against the page body. The result reports which keys were filled and which were not found, plus checklist coverage.",
+			"New get_checklist_status returns every checklist item's key, prompt, required flag, answered state and answer size without reading the page body. Use it to see what a checklist asks for and what has been filled before writing.",
+			"Every wiki write tool now reports checklist coverage (total, required, answered) when the page has checklist items, so progress is visible without a follow-up read.",
+		},
+	},
+	{
+		Version: 36,
+		Date:    "2026-09-29",
+		Notes: []string{
+			"New set_block_content replaces the content of a keyed block node — currently notice callouts — by its stable UUID key. Same transactional merge as the checklist tool: one call, one Y.js transaction, safe while the operator edits. Notice blocks created from now on carry a key; existing ones get one on their next edit.",
+		},
+	},
+	{
+		Version: 37,
+		Date:    "2026-09-29",
+		Notes: []string{
+			"wiki.md now directs you to set_checklist_answer and get_checklist_status for checklist items, and to set_block_content for notices, instead of edit_wiki_document. The old path string-matched directive syntax and broke when the page was edited concurrently; the new tools address blocks by key.",
+		},
+	},
+	{
+		Version: 38,
+		Date:    "2026-09-29",
+		Notes: []string{
+			"wiki.md trimmed to fit its budget after the v37 rewrite.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

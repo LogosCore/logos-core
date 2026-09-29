@@ -3,7 +3,7 @@
 name: logos
 description: Work an operation in Logos, a team workspace for tracking one — hosts, credentials, hashes, tasks, wiki notes and the operation timeline — through its MCP tools. Use whenever connected to a Logos MCP endpoint, or when the user mentions an operation, its findings, or its notes.
 metadata:
-  version: "34"
+  version: "38"
 ---
 
 # Logos
@@ -156,6 +156,9 @@ Engagement notes, collaboratively edited, with file attachments. Some pages are 
 - `delete_wiki_document` **(write)** — Move a page to the trash, where an admin can restore it.
 - `get_wiki_drawing` — Read a drawing page's canvas: every shape with its id, position and label.
 - `edit_wiki_drawing` **(write)** — Draw on a drawing page.
+- `get_checklist_status` — Which checklist items a page has, their keys, prompts, and whether each is answered — without fetching the body.
+- `set_checklist_answer` **(write)** — Fill one or more checklist answers by their key.
+- `set_block_content` **(write)** — Replace the content of a keyed block (e.g.
 - `list_wiki_attachments` — Files attached to a page, each marked readable or not and whether the page shows it as an attachment card (placed).
 - `read_wiki_attachment` — Read an attachment: text formats directly, Word and Excel as text, images as images.
 - `attach_text_to_wiki_document` **(write)** — Attach text as a file.
@@ -327,27 +330,17 @@ children is refused unless you pass `with_children:true`; templates always.
 
 Preserve these:
 
-- **Checklist items** drive a coverage bar the operator watches:
-
-  ````
-  :::checklist {"prompt":"SMB shares enumerated?","state":"answered"}
-  Two shares, one writable:
-
-  ```text
-  Backups  READ, WRITE
-  ```
-  :::
-  ````
-
-  The body is the answer; `state` is `answered`, `not_applicable`, `flagged`
-  or absent. Edit the `state` and the body in one `edit_wiki_document` call;
-  multi-line answers go in a fenced code block.
-- **References.** Only three kinds are links: `[host](logos://host/<id>)`,
+- **Checklist items** drive a coverage bar. `get_checklist_status` lists
+  every item's key, prompt and state; `set_checklist_answer` fills one or
+  many by key — do not use `edit_wiki_document` on checklists. Multi-line
+  answers go in a fenced code block. Write tools report checklist coverage
+  when the page has items.
+- **References.** Three link kinds: `[host](logos://host/<id>)`,
   `[hash](logos://hash/<id>)`, `[page](logos://doc/<id>)`. A credential is a
-  block instead: fence it `logos-credential`, body `{"id":"<uuid>"}`, not in a
-  table cell. Any other `logos://` URI is one you read through, not a link:
-  dead text on a page, and refused.
-- **Notices**: `:::info`, `:::success`, `:::warning`, `:::tip`, closed `:::`.
+  block: fence `logos-credential`, body `{"id":"<uuid>"}`, not in a table
+  cell. Any other `logos://` URI is refused.
+- **Notices** (`:::info`, `:::success`, `:::warning`, `:::tip`) carry a key.
+  Use `set_block_content` to replace a notice's content by key.
 - Attachments as `[name bytes](/api/v1/wiki/files/<id>)` alone in a paragraph;
   `attach_text_to_wiki_document` returns the exact line.
 

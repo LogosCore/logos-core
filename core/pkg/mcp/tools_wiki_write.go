@@ -124,7 +124,7 @@ func handleCreateWikiDocument(ctx context.Context, s *Server, args createWikiDoc
 	}
 
 	return toolResult{
-		Payload:     newWikiWriteResult(toWikiDocView(doc), written.Watchers, written.AttachmentAudit),
+		Payload:     newWikiWriteResult(toWikiDocView(doc), written.Watchers, written.AttachmentAudit, written.Checklist),
 		OperationID: &opID,
 		Summary:     fmt.Sprintf("created wiki page %s", doc.Title),
 	}, nil
@@ -240,7 +240,7 @@ func (s *Server) writeSection(ctx context.Context, args sectionWriteArgs, mode w
 	// gratuitous break.
 	if len(ids) == 1 {
 		return toolResult{
-			Payload:     newWikiWriteResult(wikiDocView{ID: results[0].ID, Title: results[0].Title}, results[0].Watchers, results[0].audit),
+			Payload:     newWikiWriteResult(wikiDocView{ID: results[0].ID, Title: results[0].Title}, results[0].Watchers, results[0].audit, results[0].checklist),
 			OperationID: opID,
 			Summary:     fmt.Sprintf("%s %s", verb, results[0].Title),
 		}, nil
@@ -291,6 +291,7 @@ func (s *Server) writeSectionOne(ctx context.Context, id, content string, mode w
 	result.OK = true
 	result.Watchers = written.Watchers
 	result.audit = written.AttachmentAudit
+	result.checklist = written.Checklist
 	return result, &doc.OperationID, nil
 }
 
@@ -373,7 +374,7 @@ func handleEditWikiDocument(ctx context.Context, s *Server, args editWikiDocumen
 		wikiWriteResultView
 		Replacements int `json:"replacements"`
 	}{
-		wikiWriteResultView: newWikiWriteResult(toWikiDocView(doc), result.Watchers, result.AttachmentAudit),
+		wikiWriteResultView: newWikiWriteResult(toWikiDocView(doc), result.Watchers, result.AttachmentAudit, result.Checklist),
 		Replacements:        result.Replacements,
 	}
 
@@ -416,7 +417,7 @@ func handleUpdateWikiDocument(ctx context.Context, s *Server, args updateWikiDoc
 	}
 
 	return toolResult{
-		Payload:     newWikiWriteResult(toWikiDocView(doc), written.Watchers, written.AttachmentAudit),
+		Payload:     newWikiWriteResult(toWikiDocView(doc), written.Watchers, written.AttachmentAudit, written.Checklist),
 		OperationID: &doc.OperationID,
 		Summary:     fmt.Sprintf("rewrote wiki page %s", doc.Title),
 	}, nil

@@ -244,7 +244,7 @@ export const wikiSchema = new Schema({
       group: "block",
       content: "block+",
       defining: true,
-      attrs: { variant: { default: "info" } },
+      attrs: { key: { default: null }, variant: { default: "info" } },
       parseDOM: [{ tag: 'div[data-type="wiki-notice"]' }],
       toDOM: (node) => [
         "div",

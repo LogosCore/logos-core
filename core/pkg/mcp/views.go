@@ -220,12 +220,13 @@ type wikiOutlineView struct {
 
 // sectionTargetResult is what happened to one page in a multi-page write.
 type sectionTargetResult struct {
-	ID       string `json:"id"`
-	Title    string `json:"title,omitempty"`
-	OK       bool   `json:"ok"`
-	Watchers int    `json:"watchers,omitempty"`
-	Error    string `json:"error,omitempty"`
-	audit    wiki.AttachmentAudit
+	ID        string `json:"id"`
+	Title     string `json:"title,omitempty"`
+	OK        bool   `json:"ok"`
+	Watchers  int    `json:"watchers,omitempty"`
+	Error     string `json:"error,omitempty"`
+	audit     wiki.AttachmentAudit
+	checklist wiki.ChecklistCoverage
 }
 
 // sectionWriteResultView reports a write that spanned several pages.
@@ -253,17 +254,34 @@ type wikiWriteResultView struct {
 	// after this write; FileLinksNotPlaced lists file links that stayed plain
 	// links. A page reads back as the same markdown either way, so this is
 	// where an agent learns its file line did not become a card.
-	AttachmentCards    int                  `json:"attachmentCards"`
-	FileLinksNotPlaced []wiki.StrayFileLink `json:"fileLinksNotPlaced,omitempty"`
-	Note               string               `json:"note,omitempty"`
+	AttachmentCards    int                      `json:"attachmentCards"`
+	FileLinksNotPlaced []wiki.StrayFileLink     `json:"fileLinksNotPlaced,omitempty"`
+	Checklist          *wikiWriteChecklistView  `json:"checklist,omitempty"`
+	Note               string                   `json:"note,omitempty"`
 }
 
-func newWikiWriteResult(doc wikiDocView, watchers int, audit wiki.AttachmentAudit) wikiWriteResultView {
+// wikiWriteChecklistView is the coverage snapshot included on every write to
+// a page that has checklist items, so the agent knows its progress without a
+// follow-up read.
+type wikiWriteChecklistView struct {
+	Total    int `json:"total"`
+	Required int `json:"required"`
+	Answered int `json:"answered"`
+}
+
+func newWikiWriteResult(doc wikiDocView, watchers int, audit wiki.AttachmentAudit, checklist wiki.ChecklistCoverage) wikiWriteResultView {
 	view := wikiWriteResultView{
 		wikiDocView:        doc,
 		Watchers:           watchers,
 		AttachmentCards:    audit.AttachmentCards,
 		FileLinksNotPlaced: audit.StrayFileLinks,
+	}
+	if checklist.Total > 0 {
+		view.Checklist = &wikiWriteChecklistView{
+			Total:    checklist.Total,
+			Required: checklist.Required,
+			Answered: checklist.Answered,
+		}
 	}
 	var notes []string
 	if watchers > 0 {

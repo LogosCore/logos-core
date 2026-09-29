@@ -8,6 +8,9 @@ import { setupApplyApi } from "./apply-markdown.js";
 import { setupDrawingApi } from "./apply-drawing.js";
 import { setupExtractApi } from "./extract-text.js";
 import { setupRebaseApi } from "./rebase-api.js";
+import { setupSetChecklistAnswersApi } from "./set-checklist-answers.js";
+import { setupGetChecklistStatusApi } from "./get-checklist-status.js";
+import { setupSetBlockContentApi } from "./set-block-content.js";
 
 const port = parseInt(process.env.PORT || "1234", 10);
 const maxActiveRooms = parseInt(process.env.MAX_ACTIVE_ROOMS || "100", 10);
@@ -133,6 +136,9 @@ setupExtractApi(app);
 // Id rebasing + projection for pages the Go transfer materialiser creates.
 // Raw-body HMAC like the routes above.
 setupRebaseApi(app);
+setupSetChecklistAnswersApi(app, server);
+setupGetChecklistStatusApi(app, server);
+setupSetBlockContentApi(app, server);
 app.use(express.json());
 setupDisconnectApi(app, server);
 

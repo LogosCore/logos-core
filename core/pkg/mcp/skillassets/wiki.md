@@ -56,27 +56,17 @@ children is refused unless you pass `with_children:true`; templates always.
 
 Preserve these:
 
-- **Checklist items** drive a coverage bar the operator watches:
-
-  ````
-  :::checklist {"prompt":"SMB shares enumerated?","state":"answered"}
-  Two shares, one writable:
-
-  ```text
-  Backups  READ, WRITE
-  ```
-  :::
-  ````
-
-  The body is the answer; `state` is `answered`, `not_applicable`, `flagged`
-  or absent. Edit the `state` and the body in one `edit_wiki_document` call;
-  multi-line answers go in a fenced code block.
-- **References.** Only three kinds are links: `[host](logos://host/<id>)`,
+- **Checklist items** drive a coverage bar. `get_checklist_status` lists
+  every item's key, prompt and state; `set_checklist_answer` fills one or
+  many by key — do not use `edit_wiki_document` on checklists. Multi-line
+  answers go in a fenced code block. Write tools report checklist coverage
+  when the page has items.
+- **References.** Three link kinds: `[host](logos://host/<id>)`,
   `[hash](logos://hash/<id>)`, `[page](logos://doc/<id>)`. A credential is a
-  block instead: fence it `logos-credential`, body `{"id":"<uuid>"}`, not in a
-  table cell. Any other `logos://` URI is one you read through, not a link:
-  dead text on a page, and refused.
-- **Notices**: `:::info`, `:::success`, `:::warning`, `:::tip`, closed `:::`.
+  block: fence `logos-credential`, body `{"id":"<uuid>"}`, not in a table
+  cell. Any other `logos://` URI is refused.
+- **Notices** (`:::info`, `:::success`, `:::warning`, `:::tip`) carry a key.
+  Use `set_block_content` to replace a notice's content by key.
 - Attachments as `[name bytes](/api/v1/wiki/files/<id>)` alone in a paragraph;
   `attach_text_to_wiki_document` returns the exact line.
 

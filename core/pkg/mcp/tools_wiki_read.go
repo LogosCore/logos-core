@@ -68,6 +68,13 @@ func registerWikiTools(s *Server) {
 	}, readTool, handleGetWikiDocument)
 
 	register(s, &mcp.Tool{
+		Name: "get_checklist_status",
+		Description: "Which checklist items a page has, their keys, prompts, and whether each is " +
+			"answered — without fetching the body. Use before set_checklist_answer to see what " +
+			"needs filling.",
+	}, readTool, handleGetChecklistStatus)
+
+	register(s, &mcp.Tool{
 		Name: "create_wiki_document",
 		Description: "Create a wiki page, from Markdown content or from a template " +
 			"(template_id).",
@@ -99,6 +106,19 @@ func registerWikiTools(s *Server) {
 			"parent_id to move it to the top level. Reorganise with this; never recreate a " +
 			"page elsewhere and trash the original.",
 	}, writeTool, handleMoveWikiDocument)
+
+	register(s, &mcp.Tool{
+		Name: "set_checklist_answer",
+		Description: "Fill one or more checklist answers by their key. The answer is Markdown — " +
+			"use fenced code blocks for command output. Returns which keys were filled and " +
+			"the page's checklist coverage. Far cheaper than edit_wiki_document for checklists.",
+	}, writeTool, handleSetChecklistAnswer)
+
+	register(s, &mcp.Tool{
+		Name: "set_block_content",
+		Description: "Replace the content of a keyed block (e.g. a notice callout) by its key. " +
+			"The content is Markdown. One or many blocks at once; merge-safe with a connected editor.",
+	}, writeTool, handleSetBlockContent)
 
 	register(s, &mcp.Tool{
 		Name: "delete_wiki_document",

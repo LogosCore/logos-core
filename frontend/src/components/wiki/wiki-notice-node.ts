@@ -28,6 +28,14 @@ export const WikiNoticeExtension = Node.create({
 
   addAttributes() {
     return {
+      key: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute("data-key") || null,
+        renderHTML: (attrs: Record<string, unknown>) => {
+          if (!attrs.key) return {}
+          return { "data-key": attrs.key as string }
+        },
+      },
       variant: {
         default: DEFAULT_NOTICE_VARIANT,
         parseHTML: (el) => {
@@ -66,7 +74,7 @@ export const WikiNoticeExtension = Node.create({
           chain()
             .insertContent({
               type: this.name,
-              attrs: { variant: variant ?? DEFAULT_NOTICE_VARIANT },
+              attrs: { key: crypto.randomUUID(), variant: variant ?? DEFAULT_NOTICE_VARIANT },
               content: [{ type: "paragraph" }],
             })
             .run(),

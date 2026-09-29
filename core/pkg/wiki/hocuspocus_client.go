@@ -288,8 +288,9 @@ type applyMarkdownRequest struct {
 // people had the document open, which is the difference between an edit
 // somebody watched appear and one that happened quietly.
 type ApplyMarkdownResult struct {
-	Nodes    int `json:"nodes"`
-	Watchers int `json:"watchers"`
+	Nodes     int               `json:"nodes"`
+	Watchers  int               `json:"watchers"`
+	Checklist ChecklistCoverage `json:"checklist"`
 	AttachmentAudit
 }
 
@@ -393,10 +394,11 @@ const applyEdit ApplyMode = "edit"
 
 // EditMarkdownResult reports a snippet edit.
 type EditMarkdownResult struct {
-	Nodes        int `json:"nodes"`
-	Watchers     int `json:"watchers"`
-	Matches      int `json:"matches"`
-	Replacements int `json:"replacements"`
+	Nodes        int               `json:"nodes"`
+	Watchers     int               `json:"watchers"`
+	Matches      int               `json:"matches"`
+	Replacements int               `json:"replacements"`
+	Checklist    ChecklistCoverage `json:"checklist"`
 	AttachmentAudit
 }
 
@@ -707,4 +709,233 @@ func (c *HocuspocusClient) RebaseDocument(ctx context.Context, req RebaseRequest
 		return out, fmt.Errorf("decode rebased content_state: %w", err)
 	}
 	return out, nil
+}
+
+// ChecklistAnswerInput is one answer to set by checklist item key.
+type ChecklistAnswerInput struct {
+	Key      string `json:"key"`
+	Markdown string `json:"markdown"`
+}
+
+// ChecklistAnswerResult reports what happened to one answer.
+type ChecklistAnswerResult struct {
+	Key    string `json:"key"`
+	Status string `json:"status"` // "ok", "not_found", "parse_error"
+}
+
+// SetChecklistAnswersResult reports the batch outcome.
+type SetChecklistAnswersResult struct {
+	Results   []ChecklistAnswerResult `json:"results"`
+	Checklist ChecklistCoverage       `json:"checklist"`
+	Watchers  int                     `json:"watchers"`
+}
+
+type setChecklistAnswersRequest struct {
+	DocumentID string                 `json:"documentId"`
+	UserID     string                 `json:"userId,omitempty"`
+	Answers    []ChecklistAnswerInput `json:"answers"`
+}
+
+// SetChecklistAnswers fills one or more checklist items by their stable UUID
+// key in a single Y.js transaction. The sidecar walks the document tree,
+// finds each wikiChecklistItem by its key attribute, and replaces its content
+// region with the parsed markdown.
+func (c *HocuspocusClient) SetChecklistAnswers(
+	ctx context.Context,
+	documentID string,
+	answers []ChecklistAnswerInput,
+	userID string,
+) (SetChecklistAnswersResult, error) {
+	var result SetChecklistAnswersResult
+
+	if c.internalSecret == "" {
+		return result, fmt.Errorf("set-checklist-answers: no internal secret configured")
+	}
+
+	body, err := json.Marshal(setChecklistAnswersRequest{
+		DocumentID: documentID,
+		UserID:     userID,
+		Answers:    answers,
+	})
+	if err != nil {
+		return result, fmt.Errorf("marshal set-checklist-answers payload: %w", err)
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.internalSecret))
+	mac.Write(body)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	url := c.baseURL + "/internal/set-checklist-answers"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return result, fmt.Errorf("build set-checklist-answers request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Signature-256", signature)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return result, fmt.Errorf("call hocuspocus set-checklist-answers: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return result, fmt.Errorf("set-checklist-answers returned %d: %s",
+			resp.StatusCode, string(errBody))
+	}
+
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&result); err != nil {
+		return result, fmt.Errorf("read set-checklist-answers response: %w", err)
+	}
+	return result, nil
+}
+
+// ChecklistItemStatus is one checklist item's metadata as returned by
+// GetChecklistStatus.
+type ChecklistItemStatus struct {
+	Key         string `json:"key"`
+	Prompt      string `json:"prompt"`
+	Required    bool   `json:"required"`
+	Answered    bool   `json:"answered"`
+	State       string `json:"state"`
+	AnswerBytes int    `json:"answerBytes"`
+}
+
+// GetChecklistStatusResult is the full checklist status for a document.
+type GetChecklistStatusResult struct {
+	Items    []ChecklistItemStatus `json:"items"`
+	Coverage ChecklistCoverage     `json:"coverage"`
+}
+
+type getChecklistStatusRequest struct {
+	DocumentID string `json:"documentId"`
+}
+
+// GetChecklistStatus returns per-item checklist metadata without rendering
+// the full markdown body. Agents use it to see which keys exist, which are
+// answered, and how large each answer is.
+func (c *HocuspocusClient) GetChecklistStatus(
+	ctx context.Context,
+	documentID string,
+) (GetChecklistStatusResult, error) {
+	var result GetChecklistStatusResult
+
+	if c.internalSecret == "" {
+		return result, fmt.Errorf("get-checklist-status: no internal secret configured")
+	}
+
+	body, err := json.Marshal(getChecklistStatusRequest{
+		DocumentID: documentID,
+	})
+	if err != nil {
+		return result, fmt.Errorf("marshal get-checklist-status payload: %w", err)
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.internalSecret))
+	mac.Write(body)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	url := c.baseURL + "/internal/get-checklist-status"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return result, fmt.Errorf("build get-checklist-status request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Signature-256", signature)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return result, fmt.Errorf("call hocuspocus get-checklist-status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return result, fmt.Errorf("get-checklist-status returned %d: %s",
+			resp.StatusCode, string(errBody))
+	}
+
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result); err != nil {
+		return result, fmt.Errorf("read get-checklist-status response: %w", err)
+	}
+	return result, nil
+}
+
+// BlockContentInput is one keyed block whose content should be replaced.
+type BlockContentInput struct {
+	Key      string `json:"key"`
+	Markdown string `json:"markdown"`
+}
+
+// BlockContentResult reports what happened to one block write.
+type BlockContentResult struct {
+	Key      string `json:"key"`
+	NodeType string `json:"nodeType"`
+	Status   string `json:"status"` // "ok", "not_found", "parse_error"
+}
+
+// SetBlockContentResult reports the batch outcome.
+type SetBlockContentResult struct {
+	Results  []BlockContentResult `json:"results"`
+	Watchers int                  `json:"watchers"`
+}
+
+type setBlockContentRequest struct {
+	DocumentID string              `json:"documentId"`
+	UserID     string              `json:"userId,omitempty"`
+	Blocks     []BlockContentInput `json:"blocks"`
+}
+
+// SetBlockContent replaces the content of one or more keyed block nodes
+// (e.g. wikiNotice) in a single Y.js transaction.
+func (c *HocuspocusClient) SetBlockContent(
+	ctx context.Context,
+	documentID string,
+	blocks []BlockContentInput,
+	userID string,
+) (SetBlockContentResult, error) {
+	var result SetBlockContentResult
+
+	if c.internalSecret == "" {
+		return result, fmt.Errorf("set-block-content: no internal secret configured")
+	}
+
+	body, err := json.Marshal(setBlockContentRequest{
+		DocumentID: documentID,
+		UserID:     userID,
+		Blocks:     blocks,
+	})
+	if err != nil {
+		return result, fmt.Errorf("marshal set-block-content payload: %w", err)
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.internalSecret))
+	mac.Write(body)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	url := c.baseURL + "/internal/set-block-content"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return result, fmt.Errorf("build set-block-content request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Signature-256", signature)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return result, fmt.Errorf("call hocuspocus set-block-content: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return result, fmt.Errorf("set-block-content returned %d: %s",
+			resp.StatusCode, string(errBody))
+	}
+
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4096)).Decode(&result); err != nil {
+		return result, fmt.Errorf("read set-block-content response: %w", err)
+	}
+	return result, nil
 }
