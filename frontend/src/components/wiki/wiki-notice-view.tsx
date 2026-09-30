@@ -68,7 +68,7 @@ export function WikiNoticeView({
       data-cursor-inside={cursorInside ? "true" : "false"}
     >
       <span className="wiki-notice__icon" contentEditable={false} aria-hidden="true">
-        <Icon size={18} fill="currentColor" strokeWidth={2.4} />
+        <Icon size={18} fill="none" strokeWidth={2.4} />
       </span>
       <NodeViewContent className="wiki-notice__body" />
       {isEditable && (

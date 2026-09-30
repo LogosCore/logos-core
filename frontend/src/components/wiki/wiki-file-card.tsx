@@ -36,6 +36,11 @@ import "yet-another-react-lightbox/styles.css"
 import "yet-another-react-lightbox/plugins/counter.css"
 
 import { usePrintMode } from "@/hooks/use-print-mode"
+import {
+  loadFilePreviewState,
+  saveFilePreviewState,
+  removeFilePreviewState,
+} from "@/lib/wiki-file-preview-state"
 import { useFocusRestoreWithoutScroll } from "@/hooks/use-focus-restore-without-scroll"
 import { PreviewResizeHandle } from "./wiki-file-preview-resize"
 import { isPreviewableImage } from "./wiki-file-preview-image"
@@ -146,9 +151,13 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   const { resolvedTheme } = useTheme()
   const previewTheme = resolvedTheme === "dark" ? "dark" : "light"
 
+  // Restore saved preview state (expanded + height) from localStorage.
+  const fileId = attrs.fileId
+  const savedPreview = canPreviewInline && fileId ? loadFilePreviewState(fileId) : null
+
   // Whether the inline preview panel is open. The frame is only mounted while
   // expanded, so collapsed cards never fetch the file bytes.
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(savedPreview !== null)
   // Whether the image lightbox is open. Mounted only while open, so a document
   // full of image attachments pays nothing for the ones nobody opens.
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -169,10 +178,20 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
     captureFocusTarget()
     setLightboxOpen(true)
   }
-  // User-dragged preview height in px, or null to fall back to the CSS default
-  // (min(75vh, 720px)). Held on the card — not the panel — so a resize survives
-  // collapsing and re-expanding the same attachment.
-  const [previewHeight, setPreviewHeight] = useState<number | null>(null)
+  // Preview height in px, or null for the CSS default. Restored from
+  // localStorage if a saved state exists; otherwise computed on first open
+  // by fitPreviewToViewport, and updated by the drag handle.
+  const [previewHeight, setPreviewHeightRaw] = useState<number | null>(
+    savedPreview?.height ?? null,
+  )
+  function setPreviewHeight(h: number | null) {
+    setPreviewHeightRaw(h)
+    if (fileId && h !== null) {
+      saveFilePreviewState({ fileId, height: h })
+    }
+  }
+  // The file card — used to scroll it into view when the preview opens.
+  const cardRef = useRef<HTMLDivElement>(null)
   // The preview panel — target of the native Fullscreen request.
   const previewRef = useRef<HTMLDivElement>(null)
   // Set when Fullscreen is triggered from a collapsed card: the panel must
@@ -208,10 +227,84 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
     window.open(previewUrl, "_blank", "noopener,noreferrer")
   }
 
+  const pendingScrollRef = useRef(false)
+
   function toggleInlinePreview() {
     if (!canPreviewInline) return
-    setExpanded((prev) => !prev)
+    const opening = !expanded
+    if (opening && !pendingFullscreenRef.current) {
+      pendingScrollRef.current = true
+      if (previewHeight === null) {
+        fitPreviewToViewport()
+      }
+    }
+    setExpanded(opening)
+    if (fileId) {
+      if (opening) {
+        // fitPreviewToViewport already saves when it sets the height; this
+        // covers the reopen case where the height was carried over in state.
+        if (previewHeight !== null) {
+          saveFilePreviewState({ fileId, height: previewHeight })
+        }
+      } else {
+        removeFilePreviewState(fileId)
+      }
+    }
   }
+
+  // Set the preview height to fill the remaining viewport space below the card
+  // header, so the operator sees the full preview without scrolling past it.
+  // Only runs on first open when the user hasn't manually dragged a height.
+  function fitPreviewToViewport() {
+    const card = cardRef.current
+    if (!card) return
+    // Walk up to the nearest overflow container — the element whose visible
+    // height bounds the preview. Unlike findScrollParent (which requires
+    // scrollHeight > clientHeight), we accept one that doesn't scroll yet,
+    // because the preview we're about to open is what will make it scroll.
+    let scroller: HTMLElement | null = card.parentElement
+    while (scroller) {
+      const ov = getComputedStyle(scroller).overflowY
+      if (ov === "auto" || ov === "scroll") break
+      scroller = scroller.parentElement
+    }
+    const visibleHeight = scroller
+      ? scroller.clientHeight
+      : window.innerHeight
+    // After scrollIntoView the card's top aligns with the scroller's top,
+    // so available height = visible viewport − card height − panel chrome
+    // (8px margin-top + 2px border + 12px resize handle).
+    const cardHeight = card.getBoundingClientRect().height
+    const overhead = 22
+    const available = visibleHeight - cardHeight - overhead
+    if (available > 160) {
+      setPreviewHeight(Math.round(available))
+    }
+  }
+
+  // Scroll the card into view once the preview panel has real content. For
+  // converted formats this fires when `rendered.content` arrives; for PDFs and
+  // media the panel mounts with its iframe/player immediately so the effect
+  // fires on the `expanded` transition. A ResizeObserver on the card waits for
+  // the layout to settle before scrolling — without it the scrollable area
+  // hasn't grown yet when the card is near the bottom of the page.
+  useEffect(() => {
+    if (!pendingScrollRef.current) return
+    if (!expanded) return
+    if (renderedKind !== null && rendered.content === null && rendered.error === null) return
+
+    pendingScrollRef.current = false
+    const card = cardRef.current
+    if (!card) return
+
+    const observer = new ResizeObserver(() => {
+      observer.disconnect()
+      card.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+    observer.observe(card)
+
+    return () => observer.disconnect()
+  }, [expanded, rendered.content, rendered.error, renderedKind])
 
   // Maximize the preview via the native Fullscreen API. Toggles back out if
   // already on. When the card is collapsed we first open the panel and defer
@@ -264,7 +357,7 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
 
   return (
     <NodeViewWrapper className="wiki-file-wrapper" as="figure">
-      <div className="wiki-file-card" contentEditable={false}>
+      <div ref={cardRef} className="wiki-file-card" contentEditable={false}>
         {showThumbnail ? (
           <button
             type="button"
@@ -428,6 +521,9 @@ function FilePreviewPanel({
   const frameRef = useRef<HTMLIFrameElement>(null)
   // Media sizes itself to its own aspect ratio, so no drag handle.
   const hasFrame = mediaKind === null && (isPdf || rendered.content !== null)
+  // The iframe starts with pointer-events disabled so wheel events pass
+  // through to the wiki page. Clicking the preview activates the iframe.
+  const [frameActive, setFrameActive] = useState(false)
 
   return (
     <div className="wiki-file-preview" contentEditable={false} ref={containerRef}>
@@ -449,12 +545,21 @@ function FilePreviewPanel({
           title={filename}
         />
       ) : isPdf ? (
-        <iframe
-          ref={frameRef}
-          className="wiki-file-preview-frame"
-          src={previewUrl}
-          title={`Preview of ${filename}`}
-        />
+        <div className="wiki-file-preview-frame-wrap">
+          <iframe
+            ref={frameRef}
+            className="wiki-file-preview-frame"
+            src={previewUrl}
+            title={`Preview of ${filename}`}
+            style={frameActive ? undefined : { pointerEvents: "none" }}
+          />
+          {!frameActive && (
+            <div
+              className="wiki-file-preview-frame-overlay"
+              onClick={() => setFrameActive(true)}
+            />
+          )}
+        </div>
       ) : rendered.error !== null ? (
         <p className="wiki-file-preview-status wiki-file-preview-status--error">
           {rendered.error}
@@ -462,13 +567,22 @@ function FilePreviewPanel({
       ) : rendered.content === null ? (
         <p className="wiki-file-preview-status">Loading preview…</p>
       ) : (
-        <iframe
-          ref={frameRef}
-          className="wiki-file-preview-frame"
-          sandbox=""
-          srcDoc={rendered.content}
-          title={`Preview of ${filename}`}
-        />
+        <div className="wiki-file-preview-frame-wrap">
+          <iframe
+            ref={frameRef}
+            className="wiki-file-preview-frame"
+            sandbox=""
+            srcDoc={rendered.content}
+            title={`Preview of ${filename}`}
+            style={frameActive ? undefined : { pointerEvents: "none" }}
+          />
+          {!frameActive && (
+            <div
+              className="wiki-file-preview-frame-overlay"
+              onClick={() => setFrameActive(true)}
+            />
+          )}
+        </div>
       )}
       {hasFrame ? (
         <PreviewResizeHandle

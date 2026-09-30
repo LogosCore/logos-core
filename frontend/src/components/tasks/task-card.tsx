@@ -83,7 +83,7 @@ export function TaskCard({ task, draggable = true, onClick }: TaskCardProps) {
       data-task-id={task.id}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="line-clamp-2 text-sm font-medium leading-snug">
+        <span className="line-clamp-2 font-heading text-sm font-medium leading-snug">
           {task.name}
         </span>
         <TaskStatusBadge status={task.status} />

@@ -17,6 +17,7 @@
 /* Break extremely long tokens (file paths, URLs, code) that would
    otherwise force the editor wider than its flex allocation. */
 .tiptap {
+  --wiki-code-font: 'Space Mono', ui-monospace, monospace;
   overflow-wrap: anywhere;
 }
 
@@ -157,6 +158,7 @@
    24px left padding. */
 .tiptap :is(h1, h2, h3, h4, h5, h6) {
   position: relative;
+  font-family: var(--font-heading);
 }
 
 .tiptap .wiki-heading-level {
@@ -312,9 +314,8 @@
    don't fight prose's default `:where(code)` rule. */
 .tiptap code.wiki-inline-code {
   background: var(--wiki-code-bg);
-  color: var(--hljs-keyword);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
+  color: var(--wiki-code-fg);
+  font-family: var(--wiki-code-font);
   font-size: 0.875em;
   font-weight: 500;
   padding: 0.15em 0.4em;
@@ -676,7 +677,7 @@
   flex: 0 0 auto;
   min-width: 2.25rem;
   padding: 12px 8px 12px 12px;
-  font-family: var(--font-mono);
+  font-family: var(--wiki-code-font);
   font-size: 0.8125rem;
   color: var(--muted-foreground);
   text-align: right;
@@ -710,7 +711,7 @@
 .tiptap .wiki-code-block__pre code,
 .tiptap .wiki-code-block__pre code.hljs {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--wiki-code-font);
   font-size: 0.8125rem;
   line-height: 1.55;
   color: var(--wiki-code-fg);
@@ -1182,6 +1183,16 @@
   background: transparent;
 }
 
+.tiptap .wiki-file-preview-frame-wrap {
+  position: relative;
+}
+
+.tiptap .wiki-file-preview-frame-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
 .tiptap .wiki-file-preview-frame {
   display: block;
   width: 100%;
@@ -1189,7 +1200,7 @@
      --wiki-preview-height on the panel. */
   height: var(--wiki-preview-height, min(75vh, 720px));
   border: 0;
-  background: #fff;
+  background: var(--background);
 }
 
 /* Drag handle along the bottom edge — lets the reader grow or shrink the frame.
@@ -1342,16 +1353,14 @@ body.wiki-preview-resizing .wiki-file-preview-frame {
   flex-shrink: 0;
 }
 
-/* Filled-icon styling. lucide ships stroke-only paths with `fill="none"` at
-   the SVG root, which we override per-element via JSX (`fill="currentColor"`):
-   - circle  → outer disk, fully filled with the accent color (no halo, so the
-               stroke is forced back to currentColor too)
-   - path/line → inner glyph (i / check / !), drawn as a white stroke against
-               the chip
-   For the tip variant only a single <path> exists (the star) — keep its
-   stroke matching the fill so it reads as one solid filled shape. */
+/* Outline-icon styling. The JSX passes `fill="currentColor"` on the SVG
+   root, so we override per-element to get unfilled icons:
+   - circle  → outline only (stroke from accent, fill transparent)
+   - path/line → inner glyph uses the accent color as stroke
+   For the tip variant (star) the single <path> keeps its fill. */
 .tiptap .wiki-notice__icon svg circle {
   stroke: currentColor;
+  fill: none;
 }
 
 .tiptap .wiki-notice[data-variant="info"] .wiki-notice__icon svg :is(path, line),
@@ -1363,6 +1372,7 @@ body.wiki-preview-resizing .wiki-file-preview-frame {
 
 .tiptap .wiki-notice[data-variant="tip"] .wiki-notice__icon svg path {
   stroke: currentColor;
+  fill: currentColor;
 }
 
 .tiptap .wiki-notice__body {
@@ -1387,62 +1397,62 @@ body.wiki-preview-resizing .wiki-file-preview-frame {
   margin-bottom: 0 !important;
 }
 
-/* Variant tokens — accent (rail + chip), surface (band bg), on-accent (glyph
-   color inside the chip). White glyph reads cleanly on every accent. */
+/* Variant tokens — soft signal: neutral surface, desaturated rail, icon
+   carries the variant color as an outline (unfilled). */
 .tiptap .wiki-notice[data-variant="info"] {
-  --wiki-notice-rail: oklch(0.55 0.22 268);
+  --wiki-notice-rail: oklch(0.7 0.08 268);
   --wiki-notice-accent: oklch(0.52 0.24 268);
-  --wiki-notice-surface: oklch(0.965 0.025 268);
-  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-surface: var(--secondary);
+  --wiki-notice-on-accent: oklch(0.52 0.24 268);
   --wiki-notice-fg: var(--foreground);
 }
 
 .tiptap .wiki-notice[data-variant="success"] {
-  --wiki-notice-rail: oklch(0.62 0.16 152);
+  --wiki-notice-rail: oklch(0.7 0.06 152);
   --wiki-notice-accent: oklch(0.58 0.18 152);
-  --wiki-notice-surface: oklch(0.965 0.045 152);
-  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-surface: var(--secondary);
+  --wiki-notice-on-accent: oklch(0.58 0.18 152);
   --wiki-notice-fg: var(--foreground);
 }
 
 .tiptap .wiki-notice[data-variant="warning"] {
-  --wiki-notice-rail: oklch(0.58 0.22 22);
+  --wiki-notice-rail: oklch(0.65 0.08 22);
   --wiki-notice-accent: oklch(0.55 0.24 22);
-  --wiki-notice-surface: oklch(0.965 0.03 22);
-  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-surface: var(--secondary);
+  --wiki-notice-on-accent: oklch(0.55 0.24 22);
   --wiki-notice-fg: var(--foreground);
 }
 
 .tiptap .wiki-notice[data-variant="tip"] {
-  --wiki-notice-rail: oklch(0.78 0.17 85);
-  --wiki-notice-accent: oklch(0.78 0.17 85);
-  --wiki-notice-surface: oklch(0.965 0.06 95);
-  --wiki-notice-on-accent: oklch(1 0 0);
+  --wiki-notice-rail: oklch(0.75 0.06 85);
+  --wiki-notice-accent: oklch(0.72 0.17 85);
+  --wiki-notice-surface: var(--secondary);
+  --wiki-notice-on-accent: oklch(0.72 0.17 85);
   --wiki-notice-fg: var(--foreground);
 }
 
 .dark .tiptap .wiki-notice[data-variant="info"] {
-  --wiki-notice-rail: oklch(0.65 0.20 268);
-  --wiki-notice-accent: oklch(0.62 0.22 268);
-  --wiki-notice-surface: oklch(0.27 0.06 268);
+  --wiki-notice-rail: oklch(0.5 0.08 268);
+  --wiki-notice-accent: oklch(0.65 0.20 268);
+  --wiki-notice-on-accent: oklch(0.65 0.20 268);
 }
 
 .dark .tiptap .wiki-notice[data-variant="success"] {
-  --wiki-notice-rail: oklch(0.68 0.16 152);
-  --wiki-notice-accent: oklch(0.62 0.18 152);
-  --wiki-notice-surface: oklch(0.26 0.05 152);
+  --wiki-notice-rail: oklch(0.5 0.06 152);
+  --wiki-notice-accent: oklch(0.65 0.16 152);
+  --wiki-notice-on-accent: oklch(0.65 0.16 152);
 }
 
 .dark .tiptap .wiki-notice[data-variant="warning"] {
-  --wiki-notice-rail: oklch(0.65 0.22 22);
-  --wiki-notice-accent: oklch(0.60 0.24 22);
-  --wiki-notice-surface: oklch(0.27 0.07 22);
+  --wiki-notice-rail: oklch(0.5 0.08 22);
+  --wiki-notice-accent: oklch(0.65 0.20 22);
+  --wiki-notice-on-accent: oklch(0.65 0.20 22);
 }
 
 .dark .tiptap .wiki-notice[data-variant="tip"] {
-  --wiki-notice-rail: oklch(0.78 0.17 85);
-  --wiki-notice-accent: oklch(0.80 0.17 85);
-  --wiki-notice-surface: oklch(0.27 0.06 80);
+  --wiki-notice-rail: oklch(0.55 0.06 85);
+  --wiki-notice-accent: oklch(0.78 0.17 85);
+  --wiki-notice-on-accent: oklch(0.78 0.17 85);
 }
 
 /* Variant picker — same layering pattern as the code-block toolbar.
@@ -1626,7 +1636,7 @@ body.wiki-preview-resizing .wiki-file-preview-frame {
   border-radius: var(--radius-md);
   background: var(--wiki-code-bg, var(--muted));
   color: var(--wiki-code-fg, var(--foreground));
-  font-family: var(--font-mono);
+  font-family: var(--wiki-code-font);
   font-size: 0.82em;
   line-height: 1.5;
   white-space: pre;

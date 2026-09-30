@@ -27,6 +27,7 @@ export type InlinePreviewKind =
   | "csv"
   | "json"
   | "yaml"
+  | "script"
 
 /** HTML types we preview by fetching the bytes and rendering them in a
  *  sandboxed <iframe srcdoc>. These stay in the backend's dangerous-types list —
@@ -68,6 +69,18 @@ const YAML_CONTENT_TYPES = new Set<string>([
  *  text/plain — the extension fallback covers that. */
 const MARKDOWN_CONTENT_TYPES = new Set<string>(["text/markdown", "text/x-markdown"])
 
+/** Shell scripts, batch files, and PowerShell. Most servers label these as
+ *  application/octet-stream or text/plain, so the extension fallback does most
+ *  of the work — these catch the minority that sniff correctly. */
+const SCRIPT_CONTENT_TYPES = new Set<string>([
+  "application/x-sh",
+  "application/x-shellscript",
+  "text/x-shellscript",
+  "application/x-bat",
+  "application/x-msdos-program",
+  "application/x-powershell",
+])
+
 /** Largest HTML attachment pulled fully into memory for a srcdoc. Self-contained
  *  reports (inlined CSS + data-URI assets) get large quickly, so this sits well
  *  above the typical single-file report; only genuinely huge files fall back to
@@ -105,6 +118,16 @@ const EXTENSION_KINDS: Record<string, InlinePreviewKind> = {
   json: "json",
   yaml: "yaml",
   yml: "yaml",
+  sh: "script",
+  bash: "script",
+  zsh: "script",
+  fish: "script",
+  ksh: "script",
+  bat: "script",
+  cmd: "script",
+  ps1: "script",
+  psm1: "script",
+  psd1: "script",
 }
 
 function extensionOf(filename: string): string {
@@ -150,6 +173,7 @@ function kindFromContentType(contentType: string): InlinePreviewKind | undefined
   if (JSON_CONTENT_TYPES.has(contentType)) return "json"
   if (YAML_CONTENT_TYPES.has(contentType)) return "yaml"
   if (MARKDOWN_CONTENT_TYPES.has(contentType)) return "markdown"
+  if (SCRIPT_CONTENT_TYPES.has(contentType)) return "script"
   // text/plain is checked last and deliberately does not short-circuit the
   // extension fallback: sniffers routinely label .md and .csv as text/plain,
   // and those deserve their richer renderer rather than a raw <pre>.
@@ -242,7 +266,8 @@ async function renderByKind(
     kind === "markdown" ||
     kind === "csv" ||
     kind === "json" ||
-    kind === "yaml"
+    kind === "yaml" ||
+    kind === "script"
   ) {
     return renderTextual(await res.text(), kind)
   }
@@ -266,8 +291,13 @@ async function renderByKind(
 
 async function renderTextual(
   text: string,
-  kind: "text" | "markdown" | "csv" | "json" | "yaml",
+  kind: "text" | "markdown" | "csv" | "json" | "yaml" | "script",
 ): Promise<PreviewBody> {
+  if (kind === "script") {
+    const { renderScriptPreview } = await import("./wiki-file-preview-script")
+    return renderScriptPreview(text)
+  }
+
   if (kind === "yaml") {
     // Nothing to fail: the file is highlighted where it stands rather than
     // parsed, so there is no conversion error to wrap.

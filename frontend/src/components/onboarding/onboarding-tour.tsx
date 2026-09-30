@@ -330,7 +330,7 @@ function TourOverlay({ guide }: { guide: GuideID }) {
           </button>
         </div>
 
-        <h2 id="tour-title" className="mt-1.5 text-base font-semibold tracking-tight">
+        <h2 id="tour-title" className="mt-1.5 font-heading text-base font-semibold tracking-tight">
           {step.title}
         </h2>
         <p id="tour-body" className="mt-1 text-sm text-muted-foreground">

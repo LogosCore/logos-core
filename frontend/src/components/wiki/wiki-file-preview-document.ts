@@ -97,7 +97,7 @@ function stylesheet(theme: PreviewTheme): string {
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  padding: 24px 28px 40px;
+  padding: 0;
   background: ${c.bg};
   color: ${c.fg};
   font: 14px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -114,7 +114,7 @@ blockquote {
   border-left: 3px solid ${c.border}; color: ${c.muted};
 }
 pre, code { font-family: ui-monospace, "Geist Mono", SFMono-Regular, monospace; font-size: 0.92em; }
-pre { overflow-x: auto; padding: 12px; background: ${c.headerBg}; border-radius: 6px; }
+pre { overflow-x: auto; padding: 12px; margin: 0; background: ${c.headerBg}; border-radius: 6px; }
 /* Structured-data tokens, shared by the JSON and YAML renderers. Colour is the
    only signal, so each stays legible against the pre background in both themes
    rather than relying on weight or background. */
@@ -125,6 +125,20 @@ pre { overflow-x: auto; padding: 12px; background: ${c.headerBg}; border-radius:
 .yaml-comment { color: ${c.codeComment}; font-style: italic; }
 .yaml-anchor { color: ${c.codeLiteral}; }
 .yaml-marker { color: ${c.muted}; }
+/* Script preview tokens */
+.sc-keyword { color: ${c.codeLiteral}; font-weight: 500; }
+.sc-string { color: ${c.codeString}; }
+.sc-variable { color: ${c.codeNumber}; }
+.sc-comment { color: ${c.codeComment}; font-style: italic; }
+.sc-operator { color: ${c.muted}; }
+.sc-line-num {
+  display: inline-block; width: 3.5em; text-align: right;
+  padding-right: 1em; margin-right: 0.75em;
+  color: ${c.muted}; opacity: 0.55; user-select: none;
+  border-right: 1px solid ${c.border};
+}
+.script-pre { padding: 12px 0 12px 0; }
+.script-line { display: block; padding: 0 12px; }
 hr { border: 0; border-top: 1px solid ${c.border}; margin: 1.6em 0; }
 
 /* Tables: shared by docx tables and the sheet renderer.
