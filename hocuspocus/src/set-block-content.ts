@@ -151,20 +151,24 @@ export function setupSetBlockContentApi(app: Express, server: Hocuspocus): void 
         await connection.transact((document) => {
           const fragment = document.getXmlFragment(Y_FRAGMENT_FIELD);
 
-          for (const block of blocks) {
-            const node = findKeyedBlock(fragment, block.key);
-            if (!node) {
-              results.push({ key: block.key, nodeType: "", status: "not_found" });
-              continue;
+          // Wrap in a Y.js transaction so connected browsers receive one
+          // atomic update (same rationale as set-checklist-answers).
+          document.transact(() => {
+            for (const block of blocks) {
+              const node = findKeyedBlock(fragment, block.key);
+              if (!node) {
+                results.push({ key: block.key, nodeType: "", status: "not_found" });
+                continue;
+              }
+              try {
+                replaceBlockContent(node, block.markdown);
+                results.push({ key: block.key, nodeType: node.nodeName, status: "ok" });
+              } catch (err) {
+                console.error(`set-block-content: parse error for key ${block.key}:`, err);
+                results.push({ key: block.key, nodeType: node.nodeName, status: "parse_error" });
+              }
             }
-            try {
-              replaceBlockContent(node, block.markdown);
-              results.push({ key: block.key, nodeType: node.nodeName, status: "ok" });
-            } catch (err) {
-              console.error(`set-block-content: parse error for key ${block.key}:`, err);
-              results.push({ key: block.key, nodeType: node.nodeName, status: "parse_error" });
-            }
-          }
+          });
         });
 
         const connections =

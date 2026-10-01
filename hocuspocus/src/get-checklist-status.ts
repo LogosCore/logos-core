@@ -13,6 +13,7 @@ import {
   isTruthyAttr,
   type ChecklistCoverage,
 } from "./references.js";
+import { WIKI_SCHEMA_VERSION } from "./wiki-schema-version.js";
 import { readRawBody, requireSignature } from "./internal-auth.js";
 
 const CHECKLIST_ITEM_NODE = "wikiChecklistItem";
@@ -127,6 +128,7 @@ export function setupGetChecklistStatusApi(app: Express, server: Hocuspocus): vo
       try {
         connection = await server.openDirectConnection(roomName(documentId), {
           agent: true,
+          schemaVersion: WIKI_SCHEMA_VERSION,
         });
 
         let items: ChecklistItemStatus[] = [];
