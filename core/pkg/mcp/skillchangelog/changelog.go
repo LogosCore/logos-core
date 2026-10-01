@@ -358,6 +358,13 @@ var releases = []Release{
 			"Page metadata: every wiki page now carries page_type, tags and status (draft/stable/deprecated). Three new tools: set_wiki_tags, list_wiki_tags, list_wiki_page_types. search_wiki and list_wiki_tree accept tags, status and page_type filters. Inspired by the Open Knowledge Format spec.",
 		},
 	},
+	{
+		Version: 41,
+		Date:    "2026-10-01",
+		Notes: []string{
+			"New get_block_status lists every keyed block (notices) on a page: key, node type, variant, whether it has content and content size. Use it before set_block_content to discover valid keys.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

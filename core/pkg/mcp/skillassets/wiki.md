@@ -61,8 +61,7 @@ Preserve these:
   block: fence `logos-credential`, body `{"id":"<uuid>"}`, not in a table
   cell. Any other `logos://` URI is refused.
 - **Notices** (`:::info`, `:::success`, `:::warning`, `:::tip`) carry a key.
-  `get_block_status` lists every notice's key, variant and content state;
-  `set_block_content` replaces a notice's content by key.
+  `get_block_status` lists keys; `set_block_content` writes by key.
 - Attachments as `[name bytes](/api/v1/wiki/files/<id>)` alone in a paragraph;
   `attach_text_to_wiki_document` returns the exact line.
 
