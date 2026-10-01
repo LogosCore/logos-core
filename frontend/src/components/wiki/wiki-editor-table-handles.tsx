@@ -113,11 +113,11 @@ export function WikiEditorTableHandles({ editor }: WikiEditorTableHandlesProps) 
     }
     const bump = () => setTick((t) => t + 1)
     const onScroll = () => {
+      setTarget(null)
       setScrolling(true)
       clearTimeout(scrollTimer)
       scrollTimer = setTimeout(() => {
         setScrolling(false)
-        bump()
       }, 120)
     }
 
