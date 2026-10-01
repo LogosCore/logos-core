@@ -453,7 +453,10 @@ function buildTokenMap() {
   for (const variant of NOTICE_VARIANTS) {
     map[`container_${variant}`] = {
       block: "wikiNotice",
-      getAttrs: () => ({ variant }),
+      getAttrs: (tok: { info: string }) => ({
+        variant,
+        ...parseNoticeInfo(tok.info),
+      }),
     };
   }
 
@@ -502,6 +505,30 @@ function parseChecklistInfo(info: string): Attrs {
         : source[name];
   }
   return attrs as Attrs;
+}
+
+/**
+ * Read a notice container's marker line back into node attributes.
+ *
+ * The info string is `<variant> {json}`. Only `key` is extracted — the
+ * variant is already determined by which container matched. Malformed or
+ * absent JSON degrades gracefully (no key).
+ */
+function parseNoticeInfo(info: string): Attrs {
+  const brace = info.indexOf("{");
+  if (brace === -1) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(info.slice(brace));
+  } catch {
+    return {};
+  }
+  if (typeof parsed !== "object" || parsed === null) return {};
+  const source = parsed as Record<string, unknown>;
+  if (typeof source.key === "string" && source.key.length > 0) {
+    return { key: source.key };
+  }
+  return {};
 }
 
 // Attribute names wikiChecklistItem declares. Kept beside the parser because

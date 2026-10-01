@@ -267,7 +267,9 @@ function buildSerializer(): MarkdownSerializer {
       const variant = NOTICE_VARIANTS.has(node.attrs.variant)
         ? node.attrs.variant
         : "info";
-      state.write(":::" + variant + "\n");
+      const key = node.attrs.key;
+      const attrs = key ? " " + JSON.stringify({ key }) : "";
+      state.write(":::" + variant + attrs + "\n");
       state.renderContent(node);
       state.ensureNewLine();
       state.write(":::");

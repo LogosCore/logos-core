@@ -939,3 +939,72 @@ func (c *HocuspocusClient) SetBlockContent(
 	}
 	return result, nil
 }
+
+// BlockStatusItem is one keyed block's metadata as returned by GetBlockStatus.
+type BlockStatusItem struct {
+	Key          string `json:"key"`
+	NodeType     string `json:"nodeType"`
+	Variant      string `json:"variant"`
+	HasContent   bool   `json:"hasContent"`
+	ContentBytes int    `json:"contentBytes"`
+}
+
+// GetBlockStatusResult is the full block status for a document.
+type GetBlockStatusResult struct {
+	Blocks []BlockStatusItem `json:"blocks"`
+	Total  int               `json:"total"`
+}
+
+type getBlockStatusRequest struct {
+	DocumentID string `json:"documentId"`
+}
+
+// GetBlockStatus returns per-block metadata for keyed block nodes (e.g.
+// notices). Agents use it to discover which keys exist and whether each
+// block has content, then write via SetBlockContent.
+func (c *HocuspocusClient) GetBlockStatus(
+	ctx context.Context,
+	documentID string,
+) (GetBlockStatusResult, error) {
+	var result GetBlockStatusResult
+
+	if c.internalSecret == "" {
+		return result, fmt.Errorf("get-block-status: no internal secret configured")
+	}
+
+	body, err := json.Marshal(getBlockStatusRequest{
+		DocumentID: documentID,
+	})
+	if err != nil {
+		return result, fmt.Errorf("marshal get-block-status payload: %w", err)
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.internalSecret))
+	mac.Write(body)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	url := c.baseURL + "/internal/get-block-status"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return result, fmt.Errorf("build get-block-status request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Signature-256", signature)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return result, fmt.Errorf("call hocuspocus get-block-status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return result, fmt.Errorf("get-block-status returned %d: %s",
+			resp.StatusCode, string(errBody))
+	}
+
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result); err != nil {
+		return result, fmt.Errorf("read get-block-status response: %w", err)
+	}
+	return result, nil
+}

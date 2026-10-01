@@ -76,6 +76,27 @@ test("notice block round-trips", () => {
   assert.ok(structurallyEqual(md, out));
 });
 
+test("notice block key round-trips", () => {
+  const md = ':::tip {"key":"abc-def-123"}\nsome advice\n:::';
+  const out = roundTripDirect(md);
+  assert.match(out, /^:::tip {"key":"abc-def-123"}/);
+  assert.ok(out.includes("some advice"));
+});
+
+test("notice block without key omits attrs", () => {
+  const md = ":::warning\nbe careful\n:::";
+  const out = roundTripDirect(md);
+  assert.match(out, /^:::warning\n/);
+  assert.ok(!out.includes("{"));
+});
+
+test("notice block key survives the yjs pipeline", () => {
+  const md = ':::info {"key":"550e8400-e29b-41d4-a716-446655440000"}\ncritical info\n:::';
+  const out = roundTripViaYjs(md);
+  assert.ok(out.includes('"key":"550e8400-e29b-41d4-a716-446655440000"'), `key missing from: ${out}`);
+  assert.ok(out.includes("critical info"));
+});
+
 test("image with size hint round-trips", () => {
   const md = '![](/api/v1/wiki/images/abc " =640x480")';
   const out = roundTripDirect(md);

@@ -145,7 +145,7 @@ func handleSetBlockContent(ctx context.Context, s *Server, args setBlockContentA
 	}
 	if notFound > 0 {
 		notes = append(notes, fmt.Sprintf(
-			"%d key(s) were not found on the page. Read the page to find block keys.", notFound))
+			"%d key(s) were not found on the page. Use get_block_status to see the valid keys.", notFound))
 	}
 	payload.Notes = notes
 
@@ -158,5 +158,73 @@ func handleSetBlockContent(ctx context.Context, s *Server, args setBlockContentA
 		Payload:     payload,
 		OperationID: &doc.OperationID,
 		Summary:     summary,
+	}, nil
+}
+
+// getBlockStatusArgs is the input for get_block_status.
+type getBlockStatusArgs struct {
+	DocumentID string `json:"document_id" jsonschema:"Page id."`
+}
+
+// blockStatusResultView is what get_block_status returns.
+type blockStatusResultView struct {
+	wikiDocView
+	Blocks []blockStatusItemView `json:"blocks"`
+	Total  int                   `json:"total"`
+}
+
+type blockStatusItemView struct {
+	Key          string `json:"key"`
+	NodeType     string `json:"nodeType"`
+	Variant      string `json:"variant"`
+	HasContent   bool   `json:"hasContent"`
+	ContentBytes int    `json:"contentBytes"`
+}
+
+func handleGetBlockStatus(ctx context.Context, s *Server, args getBlockStatusArgs) (toolResult, error) {
+	doc, err := s.loadWikiDocument(ctx, args.DocumentID, models.OperationRoleViewer)
+	if err != nil {
+		return toolResult{}, err
+	}
+	if err := requireProse(doc, "read block status of"); err != nil {
+		return toolResult{}, err
+	}
+
+	if s.deps.Hocuspocus == nil {
+		return toolResult{}, fmt.Errorf("wiki writing is unavailable: the collaboration service is not configured")
+	}
+
+	result, err := s.deps.Hocuspocus.GetBlockStatus(ctx, doc.DocumentID.String())
+	if err != nil {
+		s.deps.Logger.Warn("mcp: failed to get block status",
+			zap.String("document_id", doc.DocumentID.String()), zap.Error(err))
+		return toolResult{}, fmt.Errorf("failed to read block status: %w", err)
+	}
+
+	if result.Total == 0 {
+		return toolResult{}, refuse("%q has no keyed blocks (notices).", doc.Title)
+	}
+
+	items := make([]blockStatusItemView, 0, len(result.Blocks))
+	for _, b := range result.Blocks {
+		items = append(items, blockStatusItemView{
+			Key:          b.Key,
+			NodeType:     b.NodeType,
+			Variant:      b.Variant,
+			HasContent:   b.HasContent,
+			ContentBytes: b.ContentBytes,
+		})
+	}
+
+	payload := blockStatusResultView{
+		wikiDocView: toWikiDocView(doc),
+		Blocks:      items,
+		Total:       result.Total,
+	}
+
+	return toolResult{
+		Payload:     payload,
+		OperationID: &doc.OperationID,
+		Summary:     fmt.Sprintf("block status for %s (%d keyed blocks)", doc.Title, result.Total),
 	}, nil
 }

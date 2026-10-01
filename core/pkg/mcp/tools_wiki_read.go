@@ -103,6 +103,11 @@ func registerWikiTools(s *Server) {
 	}, writeTool, handleSetChecklistAnswer)
 
 	register(s, &mcp.Tool{
+		Name:        "get_block_status",
+		Description: "Keyed blocks (notices) on a page: keys, types, variants, content state. Use before set_block_content.",
+	}, readTool, handleGetBlockStatus)
+
+	register(s, &mcp.Tool{
 		Name:        "set_block_content",
 		Description: "Replace the content of a keyed block (e.g. a notice) by its key. Markdown.",
 	}, writeTool, handleSetBlockContent)
