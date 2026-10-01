@@ -114,7 +114,7 @@ blockquote {
   border-left: 3px solid ${c.border}; color: ${c.muted};
 }
 pre, code { font-family: ui-monospace, "Geist Mono", SFMono-Regular, monospace; font-size: 0.92em; }
-pre { overflow-x: auto; padding: 12px; margin: 0; background: ${c.headerBg}; border-radius: 6px; }
+pre { overflow-x: auto; padding: 12px; margin: 0; min-height: 100vh; background: ${c.headerBg}; border-radius: 6px; }
 /* Structured-data tokens, shared by the JSON and YAML renderers. Colour is the
    only signal, so each stays legible against the pre background in both themes
    rather than relying on weight or background. */
