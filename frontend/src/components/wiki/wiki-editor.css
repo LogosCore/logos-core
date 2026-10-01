@@ -316,7 +316,7 @@
   background: var(--wiki-code-bg);
   color: var(--wiki-code-fg);
   font-family: var(--wiki-code-font);
-  font-size: 0.875em;
+  font-size: 1em;
   font-weight: 500;
   padding: 0.15em 0.4em;
   border-radius: 4px;
