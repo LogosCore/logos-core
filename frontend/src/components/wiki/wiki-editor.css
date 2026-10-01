@@ -1544,6 +1544,7 @@ body.wiki-preview-resizing .wiki-file-preview-frame {
 
 .tiptap .wiki-checklist-item__prompt {
   margin: 0;
+  font-family: var(--font-heading);
   font-weight: 600;
   /* Wrap long prompts (including unbroken strings) instead of overflowing
      behind the controls. */
@@ -1565,6 +1566,7 @@ body.wiki-preview-resizing .wiki-file-preview-frame {
   font: inherit;
 }
 .tiptap .wiki-checklist-item__prompt-input {
+  font-family: var(--font-heading);
   font-weight: 600;
   /* Textarea behaves like a growing single field: no manual resize handle,
      hidden scrollbar (JS sizes it), and long prompts wrap rather than scroll. */
