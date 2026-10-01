@@ -757,7 +757,7 @@
 }
 
 .dark {
-  --wiki-code-bg: oklch(0.22 0 0);
+  --wiki-code-bg: oklch(0.27 0 0);
   --wiki-code-chrome: oklch(0.16 0 0);
   --wiki-code-fg: #f0f0f0;
   --hljs-comment: #8b949e;
