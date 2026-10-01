@@ -64,12 +64,16 @@ export function WikiEditorTableHandles({ editor }: WikiEditorTableHandlesProps) 
   const [highlight, setHighlight] = useState<Axis | null>(null)
   // Bumped on scroll/resize/transaction so rects are re-read from the DOM.
   const [, setTick] = useState(0)
+  // True while the scroll container is actively scrolling — handles are
+  // hidden during scroll so they don't float at stale fixed positions.
+  const [scrolling, setScrolling] = useState(false)
 
   useEffect(() => {
     if (!editor) return
     const view = editor.view
     let frame = 0
     let pending: MouseEvent | null = null
+    let scrollTimer: ReturnType<typeof setTimeout> | undefined
 
     const resolve = (event: MouseEvent) => {
       // Keep the current target while a menu is open — closing it via the
@@ -108,21 +112,30 @@ export function WikiEditorTableHandles({ editor }: WikiEditorTableHandlesProps) 
       })
     }
     const bump = () => setTick((t) => t + 1)
+    const onScroll = () => {
+      setScrolling(true)
+      clearTimeout(scrollTimer)
+      scrollTimer = setTimeout(() => {
+        setScrolling(false)
+        bump()
+      }, 120)
+    }
 
     document.addEventListener("mousemove", onMouseMove)
-    document.addEventListener("scroll", bump, { capture: true, passive: true })
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true })
     window.addEventListener("resize", bump)
     editor.on("transaction", bump)
     return () => {
       document.removeEventListener("mousemove", onMouseMove)
-      document.removeEventListener("scroll", bump, { capture: true })
+      document.removeEventListener("scroll", onScroll, { capture: true })
       window.removeEventListener("resize", bump)
       editor.off("transaction", bump)
       if (frame) cancelAnimationFrame(frame)
+      clearTimeout(scrollTimer)
     }
   }, [editor, openMenu])
 
-  if (!editor || !editor.isEditable || !target) return null
+  if (!editor || !editor.isEditable || !target || scrolling) return null
   // The table may have been deleted or re-rendered since the last hover.
   if (!target.table.isConnected) return null
 
