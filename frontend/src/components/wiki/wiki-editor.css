@@ -265,6 +265,7 @@
   vertical-align: top;
   position: relative;
   min-width: 1em;
+  line-height: 2;
 }
 
 .tiptap th {
