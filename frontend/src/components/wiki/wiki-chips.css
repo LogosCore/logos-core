@@ -29,17 +29,17 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  vertical-align: baseline;
+  vertical-align: -0.11em;
   /* Wrap gracefully when the chip stretches past the column edge — the
      username/password + multiple key hash segments can easily make the chip
      wider than the prose container. */
   flex-wrap: wrap;
   max-width: 100%;
   font-family: inherit;
-  font-size: 0.875em;
+  font-size: 1em;
   font-weight: 500;
-  line-height: 1.2;
-  padding: 0.32em 0.7em;
+  line-height: 1.5;
+  padding: 0.15em 0.5em;
   margin: 0 0.15em;
   border-radius: 6px;
   color: var(--chip-fg);
@@ -207,14 +207,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  vertical-align: baseline;
+  vertical-align: -0.11em;
   flex-wrap: wrap;
   max-width: 100%;
   font-family: inherit;
-  font-size: 0.875em;
+  font-size: 1em;
   font-weight: 500;
-  line-height: 1.2;
-  padding: 0.32em 0.7em;
+  line-height: 1.5;
+  padding: 0.15em 0.5em;
   margin: 0 0.15em;
   border-radius: 6px;
   color: var(--chip-fg);
@@ -282,7 +282,6 @@
   text-overflow: ellipsis;
   max-width: 28ch;
   font-family: var(--font-mono);
-  font-size: 0.9em;
 }
 
 .wiki-hash-chip__status--cracked {
@@ -331,14 +330,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  vertical-align: baseline;
+  vertical-align: -0.11em;
   flex-wrap: wrap;
   max-width: 100%;
   font-family: inherit;
-  font-size: 0.875em;
+  font-size: 1em;
   font-weight: 500;
-  line-height: 1.2;
-  padding: 0.32em 0.7em;
+  line-height: 1.5;
+  padding: 0.15em 0.5em;
   margin: 0 0.15em;
   border-radius: 6px;
   color: var(--chip-fg);
@@ -391,7 +390,6 @@
   text-overflow: ellipsis;
   max-width: 28ch;
   font-family: var(--font-mono);
-  font-size: 0.9em;
 }
 
 .wiki-host-chip__skel {
@@ -425,14 +423,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  vertical-align: baseline;
+  vertical-align: -0.11em;
   flex-wrap: wrap;
   max-width: 100%;
   font-family: inherit;
-  font-size: 0.875em;
+  font-size: 1em;
   font-weight: 500;
-  line-height: 1.2;
-  padding: 0.28em 0.65em;
+  line-height: 1.5;
+  padding: 0.15em 0.5em;
   margin: 0 0.15em;
   border-radius: 6px;
   color: var(--chip-fg);
@@ -525,14 +523,14 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  vertical-align: baseline;
+  vertical-align: -0.11em;
   flex-wrap: wrap;
   max-width: 100%;
   font-family: inherit;
-  font-size: 0.875em;
+  font-size: 1em;
   font-weight: 500;
-  line-height: 1.2;
-  padding: 0.28em 0.65em;
+  line-height: 1.5;
+  padding: 0.15em 0.5em;
   margin: 0 0.15em;
   border-radius: 6px;
   color: var(--foreground);
@@ -621,3 +619,4 @@
   width: 0.85em;
   height: 0.85em;
 }
+
