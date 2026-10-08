@@ -24,7 +24,6 @@
     "@excalidraw/excalidraw": "^0.18.1",
     "@fontsource-variable/geist": "^5.2.8",
     "@fontsource-variable/geist-mono": "^5.2.7",
-    "@fontsource-variable/space-grotesk": "^5.3.0",
     "@fontsource/space-mono": "^5.3.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@hocuspocus/provider": "^3.4.4",

@@ -80,7 +80,7 @@ export function KanbanColumn({
           the DONE column (which has no button) matches the others' height. */}
       <header className="flex min-h-10 items-center justify-between border-b px-3 py-2">
         <div className="flex items-center gap-2">
-          <h3 className="font-heading text-sm font-semibold">{stageLabel(stage)}</h3>
+          <h3 className="text-sm font-semibold">{stageLabel(stage)}</h3>
           <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono tabular-nums text-muted-foreground">
             {total}
           </span>

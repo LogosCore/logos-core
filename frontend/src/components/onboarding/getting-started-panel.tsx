@@ -178,7 +178,7 @@ function PanelHeading({ variant }: { variant: GettingStartedVariant }) {
 
   return (
     <header className="flex flex-col gap-1.5">
-      <h1 className="font-heading text-xl font-semibold tracking-tight">{copy[variant].title}</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{copy[variant].title}</h1>
       <p className="text-sm text-muted-foreground">{copy[variant].body}</p>
     </header>
   )
