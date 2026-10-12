@@ -3,7 +3,7 @@
 name: logos
 description: Work an operation in Logos — hosts, credentials, hashes, tasks, wiki and timeline — through its MCP tools. Use when connected to a Logos MCP endpoint or when the user mentions an operation.
 metadata:
-  version: "41"
+  version: "42"
 ---
 
 # Logos
@@ -49,7 +49,8 @@ reaches a system outside Logos. If a tool does not exist, say so.
 - **Pages hold facts, not working.** See structure.md. No local paths, no
   "collected on" dates, no plans or attempts — findings only.
 - **One subject, one page; one fact, one place.** See structure.md.
-- **One value, one call.** Never split content across calls.
+- **One value, one write.** Never spread it over several edits; too big for
+  one call, stage it (`stage_text`, wiki.md). Never trim it to fit.
 - **Do not re-read your own work.** Writes report what happened.
 - **Classify what you write.** Set page_type, tags and status on create.
   Check existing vocabulary first (`list_wiki_tags`, `list_wiki_page_types`).
@@ -150,6 +151,7 @@ Engagement notes, collaboratively edited, with file attachments. Some pages are 
 - `read_wiki_attachment`
 - `attach_text_to_wiki_document` **(write)**
 - `attach_file_to_wiki_document` **(write)**
+- `stage_text`
 
 ## Timeline
 
@@ -263,7 +265,7 @@ the finding a host page came out of, a page in another branch.
 
 ## Finding the right page
 
-`search_wiki` returns a `snippet` per hit — read snippets before opening pages.
+`search_wiki` returns a `snippet` per hit; read them before opening pages.
 `list_wiki_tree`: two levels by default, `parent_id` to descend, `depth:-1`
 for all.
 
@@ -275,33 +277,32 @@ for all.
 - `section:"<heading>"` returns that heading and everything nested under it.
 - Section sizes include children, so they do not sum to the page.
 - Text above the first heading is in **no** section; only `full:true` reaches
-  it (the outline reports its size as bytes above the first heading).
+  it.
 - A section is **part** of the page. Change it with `edit_wiki_document`;
   `update_wiki_document` would replace the page with the fragment.
-- Section text is exact, so it is the cheapest source of `old_text`.
+- Section text is exact: the cheapest source of `old_text`.
 
-One read returns at most 40 KB. Longer bodies are truncated with a byte
-offset; repeat with that `offset:` until `truncated` is false.
+One read returns at most 40 KB; repeat with the `offset:` it names until
+`truncated` is false. `read_wiki_attachment` pages the same way.
 
 ## Changing a page
 
 - `edit_wiki_document` replaces an exact snippet. Almost every edit.
 - `add_wiki_section` adds to the end (or start with `position:"start"`) for a
-  subject the page lacks; enrich one it has with `edit_wiki_document`.
-  `document_ids` adds the same content to up to 25 pages at once; retry only
-  the failures the result names.
+  subject the page lacks. `document_ids` writes up to 25 pages at once; retry
+  only the failures the result names.
 - `update_wiki_document` replaces the whole body. Read the page first and put
   back every construct you are not changing.
 
 Copy `old_text` verbatim, whitespace included. It must be unique; if it
-repeats, add context rather than `replace_all` (which is for renaming).
+repeats, add context (`replace_all` is for renaming).
 
 Edits are live; a write's `watchers` count says whether the operator saw it.
 
 ## Moving a page
 
 `move_wiki_document` reparents a page with its subtree; omit `parent_id` for
-top level. Don't rebuild-and-trash — that loses history and attachments.
+top level. Never rebuild-and-trash: it loses history and attachments.
 
 ## Deleting a page
 
@@ -314,9 +315,8 @@ Preserve these:
 
 - **Checklist items** drive a coverage bar. `get_checklist_status` lists
   every item's key, prompt and state; `set_checklist_answer` fills one or
-  many by key — do not use `edit_wiki_document` on checklists. Multi-line
-  answers go in a fenced code block. Write tools report checklist coverage
-  when the page has items.
+  many by key — never `edit_wiki_document` on checklists. Multi-line
+  answers go in a fenced code block.
 - **References.** Three link kinds: `[host](logos://host/<id>)`,
   `[hash](logos://hash/<id>)`, `[page](logos://doc/<id>)`. A credential is a
   block: fence `logos-credential`, body `{"id":"<uuid>"}`, not in a table
@@ -332,8 +332,8 @@ Check `list_wiki_templates` first. It spans this operation's templates and the
 shared ones in Public (marked `shared`). Create from one with
 `create_wiki_document` and `template_id`; your `title` wins.
 
-Editing an `isTemplate` page changes every page made from it; `set_wiki_template`
-is a team decision — propose it.
+Editing an `isTemplate` page changes every page made from it;
+`set_wiki_template` is a team decision: propose it.
 
 ## Page metadata
 
@@ -341,17 +341,22 @@ Pages carry `page_type`, `tags` and `status`. Set on create or update.
 
 - **page_type** — "Finding", "Recon Notes", "Playbook", etc. Check
   `list_wiki_page_types` first; reuse the operation's vocabulary.
-- **tags** — cross-cutting labels. Check `list_wiki_tags` first. Bulk-set
-  with `set_wiki_tags`. `search_wiki` and `list_wiki_tree` accept filters.
+- **tags** — check `list_wiki_tags` first; bulk-set with `set_wiki_tags`.
+  `search_wiki` and `list_wiki_tree` filter by them.
 - **status** — `draft`, `stable` (default) or `deprecated`. Agents skip
   deprecated pages and flag drafts as unverified.
 
 ## Long content
 
-Prose and evidence — a scan, a config, a log — go in the body whole, in one
-call (up to 1 MB), in a fenced code block: it reads inline and stays
-searchable. Attach a file only when it is a real file (JSON, CSV, PDF, image)
-or would bury the page. See attachments.md.
+Evidence (a scan, a config, a log) goes in whole, in a fenced code block: it
+reads inline and stays searchable. Attach only a real file (JSON, CSV, image)
+or one that would bury the page; see attachments.md.
+
+Too big for one call? Stage it; never cut or skip it. From a shell (URL and
+token as in attachments.md):
+`curl --data-binary @out.txt -H "Authorization: Bearer $TOKEN" $URL/api/v1/mcp/stage`.
+Otherwise `stage_text` in chunks, each with the last `bytes` as `offset`. Pass
+the `stage_id` to the write tool instead of its content.
 ==================== logos/reference/findings.md
 # Findings: hosts, credentials, hashes
 
@@ -609,8 +614,8 @@ inside it can be found.
 
 `attach_text_to_wiki_document` is for the rest: a real file format somebody
 would open on its own (JSON, YAML, CSV), or a dump so long it would bury the
-page — thousands of lines, not dozens. Whole content, one call; the cap is
-megabytes.
+page — thousands of lines, not dozens. Whole content; the cap is megabytes.
+Too big for one call: stage it (wiki.md).
 
 Attaching stores the file; it does not put it on the page. The result carries
 `markdown`, the line that does:

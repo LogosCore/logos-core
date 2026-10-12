@@ -63,7 +63,7 @@ test-integration: ## Run the repository, token-store and object-store integratio
 	INTEGRATION_S3_ENDPOINT=$(SEAWEEDFS_S3_ENDPOINT) \
 	INTEGRATION_S3_ACCESS_KEY=$(SEAWEEDFS_S3_ACCESS_KEY) \
 	INTEGRATION_S3_SECRET_KEY=$(SEAWEEDFS_S3_SECRET_KEY) \
-	go test -count=1 -v ./pkg/repository/ ./pkg/auth/ ./pkg/blob/ -run 'TestIntegration|TestBSONRoundTrip'
+	go test -count=1 -v ./pkg/repository/ ./pkg/auth/ ./pkg/blob/ ./pkg/cache/ -run 'TestIntegration|TestBSONRoundTrip'
 
 swag: ## swag: Generates or updates the Swagger/OpenAPI documentation files.
 	@echo "Generating API documentation"

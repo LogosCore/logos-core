@@ -31,9 +31,10 @@ type attachFileArgs struct {
 	IdempotencyKey
 	DocumentID    string `json:"document_id"        jsonschema:"Page id."`
 	Filename      string `json:"filename"           jsonschema:"With an extension: screenshot.png, diagram.svg, report.pdf."`
-	ContentBase64 string `json:"content_base64"     jsonschema:"The file's bytes, base64. A data: URL prefix is accepted."`
+	ContentBase64 string `json:"content_base64,omitempty" jsonschema:"The file's bytes, base64. A data: URL prefix is accepted."`
 	As            string `json:"as,omitempty"       jsonschema:"image for inline display or attachment (default) for a file card."`
 	Place         string `json:"place,omitempty"    jsonschema:"end (default), start or none. See attachments.md."`
+	StageRef
 }
 
 // inlineImageView is what placing an inline image returns: the id, its
@@ -110,11 +111,15 @@ func decodeBase64Payload(raw string) ([]byte, error) {
 // bytes raw and runs this same code. This tool stays for clients that can
 // only speak MCP.
 func handleAttachFileToWikiDocument(ctx context.Context, s *Server, args attachFileArgs) (toolResult, error) {
-	raw, err := decodeBase64Payload(args.ContentBase64)
+	encoded, err := s.stagedText(ctx, args.ContentBase64, args.StageID, "content_base64")
+	if err != nil {
+		return toolResult{}, err
+	}
+	raw, err := decodeBase64Payload(encoded)
 	if err != nil {
 		return toolResult{}, refuse(
-			"content_base64 is not valid base64 (%s). Send the file's bytes base64-encoded, whole, in one call, "+
-				"or POST them raw as multipart to /api/v1/mcp/upload.", err)
+			"content_base64 is not valid base64 (%s). Send the file's bytes base64-encoded and whole "+
+				"(staged with stage_text if large), or POST them raw as multipart to /api/v1/mcp/upload.", err)
 	}
 	return attachBytes(ctx, s, attachBytesArgs{
 		DocumentID: args.DocumentID,

@@ -25,8 +25,8 @@ inside it can be found.
 
 `attach_text_to_wiki_document` is for the rest: a real file format somebody
 would open on its own (JSON, YAML, CSV), or a dump so long it would bury the
-page — thousands of lines, not dozens. Whole content, one call; the cap is
-megabytes.
+page — thousands of lines, not dozens. Whole content; the cap is megabytes.
+Too big for one call: stage it (wiki.md).
 
 Attaching stores the file; it does not put it on the page. The result carries
 `markdown`, the line that does:

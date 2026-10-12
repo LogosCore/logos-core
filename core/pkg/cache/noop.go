@@ -40,6 +40,12 @@ func (n *noopCache) IncrWithTTL(ctx context.Context, key string, expiration time
 	return 1, nil
 }
 
+// AppendAt fails: there is nowhere to accumulate the value, and pretending to
+// would lose the data the caller is relying on being kept.
+func (n *noopCache) AppendAt(ctx context.Context, key string, offset int64, chunk string, maxBytes int64, expiration time.Duration) (int64, error) {
+	return 0, ErrCacheDisabled
+}
+
 func (n *noopCache) SetWithTags(ctx context.Context, key string, value interface{}, tags []string, expiration time.Duration) error {
 	return nil
 }

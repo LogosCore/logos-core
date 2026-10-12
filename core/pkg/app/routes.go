@@ -98,6 +98,9 @@ func (a *App) mountAgentRoutes(v1 *gin.RouterGroup, c *controllers, res *resolve
 	// Raw-bytes form of attach_file_to_wiki_document. Agent-only like /mcp,
 	// and audited as the same tool.
 	v1.POST("/mcp/upload", mcpServer.UploadHandler())
+	// Raw-body form of stage_text, so a shell can stage a file's text without
+	// it passing through the model. Agent-only, audited as the same tool.
+	v1.POST("/mcp/stage", mcpServer.StageHandler())
 	// The community skill registry, for agents. Publishing and downloading
 	// move a zip, so both are plain HTTP rather than tool calls; they are
 	// audited under the tool names publish_skill and download_skill.

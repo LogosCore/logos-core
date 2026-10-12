@@ -38,6 +38,11 @@ func (m *memCache) SetNX(_ context.Context, key string, value any, _ time.Durati
 	return true, nil
 }
 
+// AppendAt is unused by this package; present to satisfy cache.Cache.
+func (m *memCache) AppendAt(_ context.Context, _ string, _ int64, _ string, _ int64, _ time.Duration) (int64, error) {
+	return 0, nil
+}
+
 // IncrWithTTL is unused by this package; present to satisfy cache.Cache.
 func (m *memCache) IncrWithTTL(_ context.Context, _ string, _ time.Duration) (int64, error) {
 	return 0, nil

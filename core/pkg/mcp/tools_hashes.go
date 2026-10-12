@@ -35,9 +35,10 @@ type createHashArgs struct {
 type importHashesArgs struct {
 	IdempotencyKey
 	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Text        string   `json:"text"                   jsonschema:"One hash per line; known ones are skipped."`
+	Text        string   `json:"text,omitempty"         jsonschema:"One hash per line; known ones are skipped."`
 	Comment     string   `json:"comment,omitempty"      jsonschema:"Applied to every imported hash."`
 	Tags        []string `json:"tags,omitempty"         jsonschema:"Applied to every imported hash."`
+	StageRef
 }
 
 type updateHashArgs struct {
@@ -146,6 +147,15 @@ func handleCreateHash(ctx context.Context, s *Server, args createHashArgs) (tool
 }
 
 func handleImportHashes(ctx context.Context, s *Server, args importHashesArgs) (toolResult, error) {
+	text, err := s.stagedText(ctx, args.Text, args.StageID, "text")
+	if err != nil {
+		return toolResult{}, err
+	}
+	if strings.TrimSpace(text) == "" {
+		return toolResult{}, refuse("text is empty: give one hash per line, or a stage_id.")
+	}
+	args.Text = text
+
 	opID, err := s.scopedOperation(ctx, args.OperationID, models.OperationRoleOperator)
 	if err != nil {
 		return toolResult{}, err

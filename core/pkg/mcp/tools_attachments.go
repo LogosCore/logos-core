@@ -59,6 +59,7 @@ type listWikiAttachmentsArgs struct {
 
 type readWikiAttachmentArgs struct {
 	AttachmentID string `json:"attachment_id" jsonschema:"Attachment id."`
+	Offset       int    `json:"offset,omitempty" jsonschema:"Resume a truncated read at the offset the previous read named."`
 }
 
 type attachmentView struct {
@@ -113,7 +114,8 @@ type attachTextArgs struct {
 	IdempotencyKey
 	DocumentID string `json:"document_id" jsonschema:"Page id."`
 	Filename   string `json:"filename"    jsonschema:"With an extension: notes.txt, hosts.csv."`
-	Content    string `json:"content"     jsonschema:"The text, whole, in one call; the cap is megabytes."`
+	Content    string `json:"content,omitempty" jsonschema:"The text, whole; the cap is megabytes."`
+	StageRef
 }
 
 func registerAttachmentTools(s *Server) {
@@ -152,6 +154,12 @@ func registerAttachmentTools(s *Server) {
 // same content-type sniffing, same deny-list. An agent's attachment is not a
 // second class of file.
 func handleAttachTextToWikiDocument(ctx context.Context, s *Server, args attachTextArgs) (toolResult, error) {
+	content, err := s.stagedText(ctx, args.Content, args.StageID, "content")
+	if err != nil {
+		return toolResult{}, err
+	}
+	args.Content = content
+
 	if s.deps.Files == nil {
 		return toolResult{}, fmt.Errorf("attachments are unavailable: file storage is not configured")
 	}
@@ -278,16 +286,16 @@ func handleReadWikiAttachment(ctx context.Context, s *Server, args readWikiAttac
 		}, nil
 
 	case attachmentOffice:
-		return s.readOfficeAttachment(ctx, file, raw)
+		return s.readOfficeAttachment(ctx, file, raw, args.Offset)
 
 	default:
-		return s.textAttachmentResult(file, string(raw), string(kind), false)
+		return s.textAttachmentResult(file, string(raw), string(kind), false, args.Offset)
 	}
 }
 
 // readOfficeAttachment converts through the sidecar, which owns the docx and
 // xlsx converters the browser preview already uses.
-func (s *Server) readOfficeAttachment(ctx context.Context, file *models.WikiFile, raw []byte) (toolResult, error) {
+func (s *Server) readOfficeAttachment(ctx context.Context, file *models.WikiFile, raw []byte, offset int) (toolResult, error) {
 	if s.deps.Hocuspocus == nil {
 		return toolResult{}, fmt.Errorf(
 			"reading Office attachments is unavailable: the collaboration service is not configured")
@@ -305,33 +313,50 @@ func (s *Server) readOfficeAttachment(ctx context.Context, file *models.WikiFile
 			file.Filename, err)
 	}
 
-	return s.textAttachmentResult(file, extracted.Text, extracted.Kind, extracted.Truncated)
+	return s.textAttachmentResult(file, extracted.Text, extracted.Kind, extracted.Truncated, offset)
 }
 
 // textAttachmentResult trims, flags, and packages any text-shaped result.
-func (s *Server) textAttachmentResult(file *models.WikiFile, text, kind string, alreadyTruncated bool) (toolResult, error) {
-	truncated := alreadyTruncated
+//
+// A long file is read in windows: each result names the offset the next one
+// starts at, the way get_wiki_document pages a long body. Without it the
+// first 200 KB was all an agent could ever see of a file.
+//
+// alreadyTruncated means the converter stopped early (Office files), so the
+// text ends there however far an agent pages.
+func (s *Server) textAttachmentResult(file *models.WikiFile, text, kind string, alreadyTruncated bool, offset int) (toolResult, error) {
+	total := len(text)
+	start := clampBodyOffset(text, offset)
+	text = text[start:]
+	more := false
 	if len(text) > maxAttachmentTextBytes {
 		text = truncateUTF8(text, maxAttachmentTextBytes)
-		truncated = true
+		more = true
 	}
 
 	payload := struct {
-		ID        string `json:"id"`
-		Filename  string `json:"filename"`
-		Kind      string `json:"kind"`
-		Text      string `json:"text"`
-		Truncated bool   `json:"truncated,omitempty"`
-		Note      string `json:"note,omitempty"`
+		ID         string `json:"id"`
+		Filename   string `json:"filename"`
+		Kind       string `json:"kind"`
+		Text       string `json:"text"`
+		Truncated  bool   `json:"truncated,omitempty"`
+		NextOffset int    `json:"nextOffset,omitempty"`
+		Note       string `json:"note,omitempty"`
 	}{
 		ID:        file.FileID.String(),
 		Filename:  file.Filename,
 		Kind:      kind,
 		Text:      text,
-		Truncated: truncated,
+		Truncated: more || alreadyTruncated,
 	}
-	if truncated {
-		payload.Note = "Only the beginning of this file is shown. Do not treat it as the whole document."
+	switch {
+	case more:
+		payload.NextOffset = start + len(text)
+		payload.Note = fmt.Sprintf("Bytes %d–%d of %d shown. Read the rest with offset:%d.",
+			start, payload.NextOffset, total, payload.NextOffset)
+	case alreadyTruncated:
+		payload.Note = "The converter stopped before the end of this document; the text ends here. " +
+			"Do not treat it as the whole document."
 	}
 
 	return toolResult{

@@ -124,6 +124,12 @@ token store's Lua error replies reach Go: Redis 7 turns
 `redis.error_reply('NOTFOUND')` into `ERR NOTFOUND`, which an exact string
 match missed, so a stale refresh token surfaced as a 500 and the SPA looped.
 
+It also runs `TestIntegrationAppendAt` in `pkg/cache`, the Lua behind MCP text
+staging (`stage_text`, `POST /api/v1/mcp/stage`): ordered chunks, a resent
+chunk not duplicated, a gap refused with the length to resume from. The mcp
+tests use an in-memory fake that mirrors those rules, so only this test checks
+the script itself.
+
 `core/.golangci.yml` is kept green: a linter that fires on existing code gets
 the code fixed, or stays out with a note in the config saying why. `nilerr`
 and `contextcheck` are currently out and documented there — `nilerr` should be

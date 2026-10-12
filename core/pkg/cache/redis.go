@@ -100,6 +100,60 @@ func (r *redisCache) IncrWithTTL(ctx context.Context, key string, expiration tim
 	return incrWithTTLScript.Run(ctx, r.client, []string{key}, expiration.Milliseconds()).Int64()
 }
 
+// appendAtScript appends ARGV[2] to KEYS[1] when its length is ARGV[1].
+//
+// Lua so the length check and the append are one step: checked from Go, two
+// retries of the same chunk racing each other would both see the old length
+// and both append. A retry of the chunk that already landed (it ends exactly
+// at the current length and the bytes match) succeeds without appending, so
+// a client that lost the first reply can resend safely.
+//
+// Returns {status, length}: status 1 appended or already there, 0 offset
+// mismatch, -1 over the cap ARGV[3]. ARGV[4] is the TTL in milliseconds.
+var appendAtScript = redis.NewScript(`
+local cur = redis.call('STRLEN', KEYS[1])
+local off = tonumber(ARGV[1])
+local chunk = ARGV[2]
+local len = string.len(chunk)
+if off ~= cur then
+  if len > 0 and off < cur and off + len == cur and redis.call('GETRANGE', KEYS[1], off, cur - 1) == chunk then
+    redis.call('PEXPIRE', KEYS[1], ARGV[4])
+    return {1, cur}
+  end
+  return {0, cur}
+end
+if cur + len > tonumber(ARGV[3]) then
+  return {-1, cur}
+end
+local n = cur
+if len > 0 then
+  n = redis.call('APPEND', KEYS[1], chunk)
+end
+if n > 0 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[4])
+end
+return {1, n}
+`)
+
+func (r *redisCache) AppendAt(ctx context.Context, key string, offset int64, chunk string, maxBytes int64, expiration time.Duration) (int64, error) {
+	res, err := appendAtScript.Run(ctx, r.client, []string{key},
+		offset, chunk, maxBytes, expiration.Milliseconds()).Int64Slice()
+	if err != nil {
+		return 0, err
+	}
+	if len(res) != 2 {
+		return 0, fmt.Errorf("append: unexpected reply %v", res)
+	}
+	switch res[0] {
+	case 1:
+		return res[1], nil
+	case 0:
+		return 0, &OffsetMismatchError{Have: res[1]}
+	default:
+		return 0, ErrTooLarge
+	}
+}
+
 func (r *redisCache) SetWithTags(ctx context.Context, key string, value interface{}, tags []string, expiration time.Duration) error {
 	if err := r.client.Set(ctx, key, value, expiration).Err(); err != nil {
 		return err

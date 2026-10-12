@@ -16,24 +16,39 @@ type setChecklistAnswerArgs struct {
 	Key        string                 `json:"key,omitempty"          jsonschema:"Checklist item key (UUID). Use for a single answer."`
 	Answer     string                 `json:"answer,omitempty"       jsonschema:"Markdown answer for the single key. Use fenced code blocks for command output."`
 	Answers    []checklistAnswerEntry `json:"answers,omitempty"      jsonschema:"Batch: several answers at once. Each has a key and answer."`
+	StageRef
 }
 
 type checklistAnswerEntry struct {
 	Key    string `json:"key"    jsonschema:"Checklist item key (UUID)."`
-	Answer string `json:"answer" jsonschema:"Markdown answer content."`
+	Answer string `json:"answer,omitempty" jsonschema:"Markdown answer content."`
+	StageRef
+}
+
+func (a setChecklistAnswerArgs) stageIDs() []string {
+	ids := a.StageRef.stageIDs()
+	for _, entry := range a.Answers {
+		ids = append(ids, entry.stageIDs()...)
+	}
+	return ids
 }
 
 // mergedAnswers resolves the one-or-many input into a single list, same
-// pattern as sectionWriteArgs.targets().
-func (a setChecklistAnswerArgs) mergedAnswers() ([]wiki.ChecklistAnswerInput, error) {
+// pattern as sectionWriteArgs.targets(). An answer given as a stage_id is
+// read from the stage here, so everything downstream sees plain markdown.
+func (a setChecklistAnswerArgs) mergedAnswers(ctx context.Context, s *Server) ([]wiki.ChecklistAnswerInput, error) {
 	seen := make(map[string]bool)
 	var out []wiki.ChecklistAnswerInput
 
 	if a.Key != "" {
+		answer, err := s.stagedText(ctx, a.Answer, a.StageID, "answer")
+		if err != nil {
+			return nil, err
+		}
 		seen[a.Key] = true
 		out = append(out, wiki.ChecklistAnswerInput{
 			Key:      a.Key,
-			Markdown: a.Answer,
+			Markdown: answer,
 		})
 	}
 	for _, entry := range a.Answers {
@@ -41,10 +56,14 @@ func (a setChecklistAnswerArgs) mergedAnswers() ([]wiki.ChecklistAnswerInput, er
 		if key == "" || seen[key] {
 			continue
 		}
+		answer, err := s.stagedText(ctx, entry.Answer, entry.StageID, "answer")
+		if err != nil {
+			return nil, err
+		}
 		seen[key] = true
 		out = append(out, wiki.ChecklistAnswerInput{
 			Key:      key,
-			Markdown: entry.Answer,
+			Markdown: answer,
 		})
 	}
 
@@ -89,7 +108,7 @@ func handleSetChecklistAnswer(ctx context.Context, s *Server, args setChecklistA
 		return toolResult{}, err
 	}
 
-	answers, err := args.mergedAnswers()
+	answers, err := args.mergedAnswers(ctx, s)
 	if err != nil {
 		return toolResult{}, err
 	}

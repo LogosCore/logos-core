@@ -25,6 +25,7 @@ type createWikiDocumentArgs struct {
 	Tags        []string `json:"tags,omitempty"         jsonschema:"Labels for filtering. Check list_wiki_tags first."`
 	Status      string   `json:"status,omitempty"       jsonschema:"draft, stable (default) or deprecated."`
 	visualIdentity
+	StageRef
 }
 
 // sectionWriteArgs is add_wiki_section's input: the same content, one or
@@ -33,30 +34,39 @@ type sectionWriteArgs struct {
 	IdempotencyKey
 	DocumentID  string   `json:"document_id,omitempty"  jsonschema:"Page id."`
 	DocumentIDs []string `json:"document_ids,omitempty" jsonschema:"Several page ids to add the same content to in one call."`
-	Content     string   `json:"content"                jsonschema:"Markdown to add, whole, up to 1 MB. Existing content is untouched."`
+	Content     string   `json:"content,omitempty"      jsonschema:"Markdown to add, whole, up to 1 MB. Existing content is untouched."`
 	Position    string   `json:"position,omitempty"     jsonschema:"end (default) or start."`
+	StageRef
 }
 
 type updateWikiDocumentArgs struct {
 	IdempotencyKey
 	DocumentID string   `json:"document_id"            jsonschema:"Page id."`
-	Content    string   `json:"content"                jsonschema:"The complete new body as Markdown, up to 1 MB in one call. Anything omitted is deleted."`
+	Content    string   `json:"content"                jsonschema:"The complete new body as Markdown, up to 1 MB in one call. Anything omitted is deleted. Empty with stage_id."`
 	Title      string   `json:"title,omitempty"        jsonschema:"New title."`
 	PageType   string   `json:"page_type,omitempty"    jsonschema:"Semantic type: Finding, Playbook, Recon Notes, etc."`
 	Tags       []string `json:"tags,omitempty"         jsonschema:"Replace all tags. Check list_wiki_tags first."`
 	Status     string   `json:"status,omitempty"       jsonschema:"draft, stable or deprecated."`
 	visualIdentity
+	StageRef
 }
 
 type editWikiDocumentArgs struct {
 	IdempotencyKey
 	DocumentID string `json:"document_id"          jsonschema:"Page id."`
 	OldText    string `json:"old_text"             jsonschema:"Exact text to replace, copied verbatim; must be unique on the page."`
-	NewText    string `json:"new_text"             jsonschema:"Replacement; empty deletes the match."`
+	NewText    string `json:"new_text"             jsonschema:"Replacement; empty deletes the match, or takes stage_id's text."`
 	ReplaceAll bool   `json:"replace_all,omitempty" jsonschema:"Replace every occurrence."`
+	StageRef
 }
 
 func handleCreateWikiDocument(ctx context.Context, s *Server, args createWikiDocumentArgs) (toolResult, error) {
+	content, err := s.stagedText(ctx, args.Content, args.StageID, "content")
+	if err != nil {
+		return toolResult{}, err
+	}
+	args.Content = content
+
 	opID, err := s.scopedOperation(ctx, args.OperationID, models.OperationRoleOperator)
 	if err != nil {
 		return toolResult{}, err
@@ -189,6 +199,12 @@ func (a sectionWriteArgs) targets() ([]string, error) {
 // identical but for the insertion point, and every tool definition is paid
 // for on every turn.
 func handleAddWikiSection(ctx context.Context, s *Server, args sectionWriteArgs) (toolResult, error) {
+	content, err := s.stagedText(ctx, args.Content, args.StageID, "content")
+	if err != nil {
+		return toolResult{}, err
+	}
+	args.Content = content
+
 	switch strings.ToLower(strings.TrimSpace(args.Position)) {
 	case "", "end":
 		return s.writeSection(ctx, args, wiki.ApplyAppend)
@@ -327,6 +343,12 @@ func (s *Server) writeSectionOne(ctx context.Context, id, content string, mode w
 // the page than a genuine intent to change all of them, so it is refused with
 // the count rather than guessed at.
 func handleEditWikiDocument(ctx context.Context, s *Server, args editWikiDocumentArgs) (toolResult, error) {
+	newText, err := s.stagedText(ctx, args.NewText, args.StageID, "new_text")
+	if err != nil {
+		return toolResult{}, err
+	}
+	args.NewText = newText
+
 	doc, err := s.loadWikiDocument(ctx, args.DocumentID, models.OperationRoleOperator)
 	if err != nil {
 		return toolResult{}, err
@@ -403,6 +425,12 @@ func handleEditWikiDocument(ctx context.Context, s *Server, args editWikiDocumen
 }
 
 func handleUpdateWikiDocument(ctx context.Context, s *Server, args updateWikiDocumentArgs) (toolResult, error) {
+	content, err := s.stagedText(ctx, args.Content, args.StageID, "content")
+	if err != nil {
+		return toolResult{}, err
+	}
+	args.Content = content
+
 	doc, err := s.loadWikiDocument(ctx, args.DocumentID, models.OperationRoleOperator)
 	if err != nil {
 		return toolResult{}, err

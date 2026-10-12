@@ -365,6 +365,16 @@ var releases = []Release{
 			"New get_block_status lists every keyed block (notices) on a page: key, node type, variant, whether it has content and content size. Use it before set_block_content to discover valid keys.",
 		},
 	},
+	{
+		Version: 42,
+		Date:    "2026-10-12",
+		Notes: []string{
+			"Text too large to send in one call can now be staged and then used by any write tool. New stage_text takes it in chunks: send each with the bytes value the previous chunk returned as offset; a resent chunk is recognised, not duplicated. With a shell, POST the file raw to /api/v1/mcp/stage instead, so the text never passes through your context. Either way you get a stage_id.",
+			"stage_id is accepted in place of the content by set_checklist_answer (also per entry in answers[]), set_block_content (also per entry in blocks[]), create_wiki_document, add_wiki_section, update_wiki_document, edit_wiki_document (for new_text), attach_text_to_wiki_document, attach_file_to_wiki_document (staged base64) and import_hashes. The same validation and size limits apply as for inline text. A stage lasts an hour after its last chunk and is used up by the first successful write.",
+			"read_wiki_attachment now pages through long text files: past 200 KB the result names nextOffset, and offset continues from there. Before, only the beginning of a long attachment could be read at all.",
+			"SKILL.md's rule \"one value, one call\" is now \"one value, one write\": still never spread content over several edits, but when it is too big for one call, stage it rather than trimming it to fit. Full command output is never something to trim or skip because it is large.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

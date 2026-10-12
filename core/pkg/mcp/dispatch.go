@@ -153,7 +153,11 @@ func invoke[A any](
 		}
 	}
 
-	return fn(ctx, s, args)
+	result, err = fn(ctx, s, args)
+	if err == nil {
+		s.releaseStages(ctx, args)
+	}
+	return result, err
 }
 
 type auditEntry struct {
@@ -199,7 +203,7 @@ func (s *Server) record(ctx context.Context, e auditEntry) {
 		OperationID: e.result.OperationID,
 		Tool:        e.tool,
 		Write:       e.kind == writeTool,
-		Arguments:   encodeArgs(e.args),
+		Arguments:   encodeArgs(auditForm(e.args)),
 		Outcome:     outcome,
 		Error:       errText,
 		DurationMs:  e.duration.Milliseconds(),
@@ -303,6 +307,19 @@ func (s *Server) publishActivity(action *models.AgentAction, agent *gqlctx.Agent
 		eventbus.AgentActor(agent.AgentKeyID, agent.Name, action.OwnerUserID.String()),
 		payload,
 	))
+}
+
+// auditable is implemented by args that should be recorded in another form
+// than they arrived in — chiefly to keep bulk text out of the trail.
+type auditable interface {
+	auditArgs() any
+}
+
+func auditForm(args any) any {
+	if a, ok := args.(auditable); ok {
+		return a.auditArgs()
+	}
+	return args
 }
 
 // encodeArgs renders the tool input for the audit row, bounded so one call

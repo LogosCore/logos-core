@@ -55,6 +55,27 @@ func (m *memCache) IncrWithTTL(_ context.Context, key string, _ time.Duration) (
 	return n, nil
 }
 
+// AppendAt mirrors the Redis script's rules, so the staging tests exercise
+// the same offset and retry semantics production has.
+func (m *memCache) AppendAt(_ context.Context, key string, offset int64, chunk string, maxBytes int64, _ time.Duration) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cur := m.data[key]
+	have := int64(len(cur))
+	if offset != have {
+		end := offset + int64(len(chunk))
+		if len(chunk) > 0 && offset < have && end == have && cur[offset:] == chunk {
+			return have, nil
+		}
+		return 0, &cache.OffsetMismatchError{Have: have}
+	}
+	if have+int64(len(chunk)) > maxBytes {
+		return 0, cache.ErrTooLarge
+	}
+	m.data[key] = cur + chunk
+	return int64(len(m.data[key])), nil
+}
+
 func (m *memCache) SetWithTags(context.Context, string, any, []string, time.Duration) error {
 	return nil
 }

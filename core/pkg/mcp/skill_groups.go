@@ -53,7 +53,8 @@ var toolGroups = []toolGroup{
 			"get_checklist_status", "set_checklist_answer",
 			"get_block_status", "set_block_content",
 			"list_wiki_attachments", "read_wiki_attachment",
-			"attach_text_to_wiki_document", "attach_file_to_wiki_document"},
+			"attach_text_to_wiki_document", "attach_file_to_wiki_document",
+			"stage_text"},
 	},
 	{
 		Title: "Timeline",

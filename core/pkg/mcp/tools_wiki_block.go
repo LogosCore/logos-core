@@ -16,22 +16,38 @@ type setBlockContentArgs struct {
 	Key        string              `json:"key,omitempty"      jsonschema:"Block key (UUID). Use for a single block."`
 	Markdown   string              `json:"markdown,omitempty" jsonschema:"Markdown content for the single key."`
 	Blocks     []blockContentEntry `json:"blocks,omitempty"  jsonschema:"Batch: several blocks at once. Each has a key and markdown."`
+	StageRef
 }
 
 type blockContentEntry struct {
 	Key      string `json:"key"      jsonschema:"Block key (UUID)."`
-	Markdown string `json:"markdown" jsonschema:"Markdown content."`
+	Markdown string `json:"markdown,omitempty" jsonschema:"Markdown content."`
+	StageRef
 }
 
-func (a setBlockContentArgs) mergedBlocks() ([]wiki.BlockContentInput, error) {
+func (a setBlockContentArgs) stageIDs() []string {
+	ids := a.StageRef.stageIDs()
+	for _, entry := range a.Blocks {
+		ids = append(ids, entry.stageIDs()...)
+	}
+	return ids
+}
+
+// mergedBlocks resolves the one-or-many input into a single list, reading
+// any stage_id into plain markdown on the way.
+func (a setBlockContentArgs) mergedBlocks(ctx context.Context, s *Server) ([]wiki.BlockContentInput, error) {
 	seen := make(map[string]bool)
 	var out []wiki.BlockContentInput
 
 	if a.Key != "" {
+		markdown, err := s.stagedText(ctx, a.Markdown, a.StageID, "markdown")
+		if err != nil {
+			return nil, err
+		}
 		seen[a.Key] = true
 		out = append(out, wiki.BlockContentInput{
 			Key:      a.Key,
-			Markdown: a.Markdown,
+			Markdown: markdown,
 		})
 	}
 	for _, entry := range a.Blocks {
@@ -39,10 +55,14 @@ func (a setBlockContentArgs) mergedBlocks() ([]wiki.BlockContentInput, error) {
 		if key == "" || seen[key] {
 			continue
 		}
+		markdown, err := s.stagedText(ctx, entry.Markdown, entry.StageID, "markdown")
+		if err != nil {
+			return nil, err
+		}
 		seen[key] = true
 		out = append(out, wiki.BlockContentInput{
 			Key:      key,
-			Markdown: entry.Markdown,
+			Markdown: markdown,
 		})
 	}
 
@@ -80,7 +100,7 @@ func handleSetBlockContent(ctx context.Context, s *Server, args setBlockContentA
 		return toolResult{}, err
 	}
 
-	blocks, err := args.mergedBlocks()
+	blocks, err := args.mergedBlocks(ctx, s)
 	if err != nil {
 		return toolResult{}, err
 	}
