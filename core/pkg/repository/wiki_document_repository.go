@@ -1299,6 +1299,13 @@ func (r *wikiDocumentRepository) FilterReferencedFileIDs(ctx context.Context, op
 // second (post-$unwind) discards any other ids those docs happen to reference
 // so the result is scoped to the input set.
 func (r *wikiDocumentRepository) filterReferencedAttachmentIDs(ctx context.Context, opID uuid.UUID, field string, ids []uuid.UUID) (map[uuid.UUID]struct{}, error) {
+	return filterReferencedIDs(ctx, r.coll, opID, field, ids)
+}
+
+// filterReferencedIDs runs the liveness query against any collection whose
+// rows carry operation_id and the named reference array — documents, and the
+// backups taken of them.
+func filterReferencedIDs(ctx context.Context, coll database.Collection, opID uuid.UUID, field string, ids []uuid.UUID) (map[uuid.UUID]struct{}, error) {
 	if len(ids) == 0 {
 		return map[uuid.UUID]struct{}{}, nil
 	}
@@ -1316,7 +1323,7 @@ func (r *wikiDocumentRepository) filterReferencedAttachmentIDs(ctx context.Conte
 	var rows []struct {
 		ID uuid.UUID `bson:"_id"`
 	}
-	if err := r.coll.Aggregate(ctx, pipeline).All(&rows); err != nil {
+	if err := coll.Aggregate(ctx, pipeline).All(&rows); err != nil {
 		return nil, fmt.Errorf("failed to filter referenced %s: %w", field, err)
 	}
 	out := make(map[uuid.UUID]struct{}, len(rows))

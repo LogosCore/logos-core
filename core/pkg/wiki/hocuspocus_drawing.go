@@ -296,6 +296,10 @@ type RestoreDrawingResult struct {
 	// window behind what was on screen.
 	PreviousState   []byte `json:"-"`
 	PreviousContent string `json:"previousContent"`
+	// PreviousImageReferences and PreviousFileReferences are the attachments
+	// that pre-restore page used, for indexing the safety backup.
+	PreviousImageReferences []string `json:"previousImageReferences"`
+	PreviousFileReferences  []string `json:"previousFileReferences"`
 }
 
 type drawingRestoreWireResponse struct {

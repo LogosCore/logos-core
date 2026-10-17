@@ -30,6 +30,7 @@ import {
   type DetachedBlock,
 } from "./apply-markdown.js";
 import { extractTextFromFragment } from "./projection.js";
+import { attachmentReferencesOf, type AttachmentReferences } from "./attachment-references.js";
 import { Y_FRAGMENT_FIELD } from "./markdown-to-yjs.js";
 import { WIKI_SCHEMA_VERSION } from "./wiki-schema-version.js";
 import { readRawBody, requireSignature } from "./internal-auth.js";
@@ -145,7 +146,8 @@ export function setupRestoreDocumentApi(app: Express, server: Hocuspocus): void 
   //   Request  { documentId, contentState: <base64 backup state>,
   //              markdown?: <backup's stored content>, userId? }
   //   Response { ok, blocks, source, watchers,
-  //              previousState: <base64>, previousContent }
+  //              previousState: <base64>, previousContent,
+  //              previousImageReferences, previousFileReferences }
   //
   // previousState is the room as it stood just before the restore, for the
   // caller's pre-restore safety backup — see the drawing route.
@@ -199,10 +201,12 @@ export function setupRestoreDocumentApi(app: Express, server: Hocuspocus): void 
 
         let previousState: Uint8Array = new Uint8Array();
         let previousContent = "";
+        let previousRefs: AttachmentReferences = { imageReferences: [], fileReferences: [] };
         let result: RestoreDocumentResult = { blocks: 0, source: "empty" };
         await connection.transact((document) => {
           previousState = Y.encodeStateAsUpdate(document);
           previousContent = contentOf(document);
+          previousRefs = attachmentReferencesOf(document, "document");
           result = restoreDocumentInto(document, backupState, markdown);
         });
 
@@ -212,6 +216,8 @@ export function setupRestoreDocumentApi(app: Express, server: Hocuspocus): void 
           watchers: server.documents.get(`wiki/${documentId}`)?.getConnections().length ?? 0,
           previousState: Buffer.from(previousState).toString("base64"),
           previousContent,
+          previousImageReferences: previousRefs.imageReferences,
+          previousFileReferences: previousRefs.fileReferences,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "restore failed";

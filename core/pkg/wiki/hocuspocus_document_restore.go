@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/logoscore/logos-core/core/pkg/models"
 )
 
 type documentRestoreRequest struct {
@@ -28,6 +31,10 @@ type RestoreDocumentResult struct {
 	// the restore — the pre-restore safety backup. See RestoreDrawingResult.
 	PreviousState   []byte `json:"-"`
 	PreviousContent string `json:"previousContent"`
+	// PreviousImageReferences and PreviousFileReferences are the attachments
+	// that pre-restore page used, for indexing the safety backup.
+	PreviousImageReferences []string `json:"previousImageReferences"`
+	PreviousFileReferences  []string `json:"previousFileReferences"`
 }
 
 type documentRestoreWireResponse struct {
@@ -72,4 +79,59 @@ func (c *HocuspocusClient) RestoreDocument(ctx context.Context, documentID strin
 		return result, fmt.Errorf("decode document restore previous state: %w", err)
 	}
 	return result, nil
+}
+
+// ErrStateUndecodable is the sidecar refusing stored bytes as not a Y.js
+// update. Distinct from a transport failure: retrying will not change it.
+var ErrStateUndecodable = errors.New("stored state is not a valid Y.js update")
+
+type attachmentReferencesRequest struct {
+	ContentState string `json:"contentState"`
+	Kind         string `json:"kind"`
+	Text         string `json:"text,omitempty"`
+}
+
+// AttachmentReferences are the images and files a stored body uses.
+type AttachmentReferences struct {
+	ImageReferences []string `json:"imageReferences"`
+	FileReferences  []string `json:"fileReferences"`
+}
+
+// AttachmentReferences derives the attachments a stored body uses — by the
+// rules the sidecar's store() applies to a live page, since only the sidecar
+// can read the bytes. text is the plain body stored beside the state (a
+// backup's Content), matched for attachment URLs when the state holds no
+// editor content.
+//
+// An error means the answer is unknown, and must never be read as "none":
+// that is the answer that lets the sweeper delete.
+func (c *HocuspocusClient) AttachmentReferences(ctx context.Context, contentState []byte, kind models.WikiDocumentKind, text string) (AttachmentReferences, error) {
+	var refs AttachmentReferences
+
+	body, err := json.Marshal(attachmentReferencesRequest{
+		ContentState: base64.StdEncoding.EncodeToString(contentState),
+		Kind:         string(kind.Or()),
+		Text:         text,
+	})
+	if err != nil {
+		return refs, fmt.Errorf("marshal attachment references payload: %w", err)
+	}
+
+	resp, err := c.postInternal(ctx, "/internal/attachment-references", body)
+	if err != nil {
+		return refs, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnprocessableEntity {
+		return refs, ErrStateUndecodable
+	}
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return refs, fmt.Errorf("attachment references returned %d: %s", resp.StatusCode, string(errBody))
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&refs); err != nil {
+		return refs, fmt.Errorf("read attachment references response: %w", err)
+	}
+	return refs, nil
 }

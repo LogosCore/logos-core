@@ -9,6 +9,7 @@ import { setupDrawingApi } from "./apply-drawing.js";
 import { setupExtractApi } from "./extract-text.js";
 import { setupRebaseApi } from "./rebase-api.js";
 import { setupRestoreDocumentApi } from "./restore-document.js";
+import { setupAttachmentReferencesApi } from "./attachment-references.js";
 import { setupSetChecklistAnswersApi } from "./set-checklist-answers.js";
 import { setupGetChecklistStatusApi } from "./get-checklist-status.js";
 import { setupSetBlockContentApi } from "./set-block-content.js";
@@ -136,6 +137,9 @@ setupDrawingApi(app, server);
 // survives open tabs (see restore-document.ts). Raw-body HMAC, so before
 // express.json() like the rest.
 setupRestoreDocumentApi(app, server);
+// Attachment references of a stored body, so backups can keep the images and
+// files they would put back. Raw-body HMAC like the rest.
+setupAttachmentReferencesApi(app);
 // Office-attachment text extraction for the MCP agent surface. Same raw-body
 // HMAC path as the routes above, so it mounts before express.json() too.
 setupExtractApi(app);

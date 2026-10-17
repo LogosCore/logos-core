@@ -54,4 +54,26 @@ type WikiDocumentBackup struct {
 	Trigger      WikiDocumentBackupTrigger `bson:"trigger" json:"trigger"`
 	Description  string                    `bson:"description" json:"description"` // user-provided label for manual, system label for safety backups
 	CreatedByID  uuid.UUID                 `bson:"created_by_id" json:"createdById"`
+
+	// ImageReferences and FileReferences are the attachments this snapshot's
+	// body uses — the same two arrays a live document carries, and read by
+	// the attachment sweepers for the same reason. Restoring a backup puts
+	// its pictures back on the page, so a blob a backup references must
+	// outlive the live page's use of it, or the restore brings back an empty
+	// frame.
+	ImageReferences []uuid.UUID `bson:"image_references,omitempty" json:"-"`
+	FileReferences  []uuid.UUID `bson:"file_references,omitempty" json:"-"`
+	// ReferencesIndexed says the two arrays above were filled in. Backups
+	// written before they existed have neither, and an absent array cannot be
+	// told from "references nothing" — which is the answer that lets the
+	// sweeper delete. Until every backup in an operation is indexed, the
+	// sweepers delete nothing there.
+	ReferencesIndexed bool `bson:"references_indexed" json:"-"`
+}
+
+// IndexReferences records the attachments the snapshot's body uses.
+func (b *WikiDocumentBackup) IndexReferences(images, files []uuid.UUID) {
+	b.ImageReferences = images
+	b.FileReferences = files
+	b.ReferencesIndexed = true
 }

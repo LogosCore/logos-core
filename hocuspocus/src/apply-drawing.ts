@@ -21,6 +21,7 @@ import { readRawBody, requireSignature } from "./internal-auth.js";
 import { inPaintOrder, layerOf } from "./drawing-order.js";
 import { DRAWING_ROOT_KEY, deriveDrawingProjection } from "./drawing-projection.js";
 import { restoreDrawingInto } from "./restore-drawing.js";
+import { attachmentReferencesOf, type AttachmentReferences } from "./attachment-references.js";
 import {
   DrawingElementError,
   normalizeElements,
@@ -588,7 +589,8 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
   //
   //   Request  { documentId, contentState: <base64 backup state>, userId? }
   //   Response { ok, restored, removed, watchers,
-  //              previousState: <base64>, previousContent }
+  //              previousState: <base64>, previousContent,
+  //              previousImageReferences, previousFileReferences }
   //
   // previousState is the room as it stood just before the restore — what the
   // caller files as the pre-restore safety backup. Taken here, inside the same
@@ -639,10 +641,12 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
 
         let previousState: Uint8Array = new Uint8Array();
         let previousContent = "";
+        let previousRefs: AttachmentReferences = { imageReferences: [], fileReferences: [] };
         let result = { restored: 0, removed: 0 };
         await connection.transact((document) => {
           previousState = Y.encodeStateAsUpdate(document);
           previousContent = deriveDrawingProjection(document).content;
+          previousRefs = attachmentReferencesOf(document, "drawing");
           result = restoreDrawingInto(document, backupState);
         });
 
@@ -652,6 +656,8 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
           watchers: watcherCount(server, documentId),
           previousState: Buffer.from(previousState).toString("base64"),
           previousContent,
+          previousImageReferences: previousRefs.imageReferences,
+          previousFileReferences: previousRefs.fileReferences,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "restore failed";

@@ -10,12 +10,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// FileSweeper garbage-collects wiki_files rows whose bytes no document
-// references any more. See attachmentSweeper for how, and why it is safe.
+// FileSweeper garbage-collects wiki_files rows whose bytes no document, and no
+// backup of one, references any more. See attachmentSweeper for how, and why it is safe.
 type FileSweeper = attachmentSweeper[models.WikiFile]
 
 func NewFileSweeper(
 	docRepo repository.IWikiDocumentRepository,
+	backupRepo repository.IWikiDocumentBackupRepository,
 	fileRepo repository.IWikiFileRepository,
 	store blob.ObjectStore,
 	logger *zap.Logger,
@@ -25,7 +26,8 @@ func NewFileSweeper(
 ) *FileSweeper {
 	return newAttachmentSweeper(attachmentKind[models.WikiFile]{
 		repo:       fileRepo,
-		referenced: docRepo.FilterReferencedFileIDs,
+		referenced: liveInDocumentsOrBackups(docRepo.FilterReferencedFileIDs, backupRepo.FilterReferencedFileIDs),
+		held:       backupRepo.HasUnindexed,
 		id:         func(f models.WikiFile) uuid.UUID { return f.FileID },
 		operation:  func(f models.WikiFile) uuid.UUID { return f.OperationID },
 		objectKey:  func(f models.WikiFile) string { return f.ObjectKey },

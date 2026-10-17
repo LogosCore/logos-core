@@ -78,8 +78,10 @@ func (f restoreRoom) RestoreDrawing(_ context.Context, documentID string, state 
 func (f restoreRoom) RestoreDocument(_ context.Context, documentID string, state []byte, markdown, userID string) (wiki.RestoreDocumentResult, error) {
 	f.w.roomRestores = append(f.w.roomRestores, restoreCall{"document", documentID, state, markdown, userID})
 	return wiki.RestoreDocumentResult{
-		PreviousState:   f.w.roomResult.PreviousState,
-		PreviousContent: f.w.roomResult.PreviousContent,
+		PreviousState:           f.w.roomResult.PreviousState,
+		PreviousContent:         f.w.roomResult.PreviousContent,
+		PreviousImageReferences: f.w.roomResult.PreviousImageReferences,
+		PreviousFileReferences:  f.w.roomResult.PreviousFileReferences,
 	}, f.w.roomErr
 }
 
@@ -152,6 +154,38 @@ func TestRestoreWikiDocumentBackup_DrawingSafetyCopyIsTheLiveRoom(t *testing.T) 
 	}
 	if safety.Kind != models.WikiDocumentKindDrawing {
 		t.Errorf("safety copy kind = %q, want drawing", safety.Kind)
+	}
+}
+
+// The safety copy is indexed for the attachment sweepers, from the room's own
+// answer plus the row's: the room can hold an image the row has not heard of
+// yet, and a backup that missed it would let the sweeper reclaim it.
+func TestRestoreWikiDocumentBackup_SafetyCopyIndexesRoomAndRowReferences(t *testing.T) {
+	for _, kind := range []models.WikiDocumentKind{models.WikiDocumentKindDrawing, models.WikiDocumentKindDocument} {
+		t.Run(string(kind.Or()), func(t *testing.T) {
+			r, w, ctx, _ := newRestoreWorld(t, kind)
+			inRow, inRoom := uuid.New(), uuid.New()
+			w.doc.ImageReferences = []uuid.UUID{inRow}
+			w.roomResult.PreviousImageReferences = []string{inRoom.String(), inRow.String()}
+			w.roomResult.PreviousFileReferences = []string{"not-a-uuid"}
+
+			if _, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String()); err != nil {
+				t.Fatalf("RestoreWikiDocumentBackup: %v", err)
+			}
+			if len(w.safetyCopies) != 1 {
+				t.Fatalf("safety copies = %d, want 1", len(w.safetyCopies))
+			}
+			safety := w.safetyCopies[0]
+			if !safety.ReferencesIndexed {
+				t.Error("safety copy is not marked indexed")
+			}
+			if len(safety.ImageReferences) != 2 || safety.ImageReferences[0] != inRow || safety.ImageReferences[1] != inRoom {
+				t.Errorf("images = %v, want [%s %s]", safety.ImageReferences, inRow, inRoom)
+			}
+			if len(safety.FileReferences) != 0 {
+				t.Errorf("files = %v, want none (the malformed id dropped)", safety.FileReferences)
+			}
+		})
 	}
 }
 

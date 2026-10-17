@@ -94,6 +94,7 @@ type App struct {
 	imageSweeper    *wiki.ImageSweeper
 	fileStore       blob.ObjectStore
 	fileSweeper     *wiki.FileSweeper
+	backupIndexer   *wiki.BackupReferenceIndexer
 	// skillService is the community skill registry: publish and download of
 	// operator-authored skill bundles, stored as opaque zips.
 	skillService    *skills.Service
@@ -196,6 +197,7 @@ func NewApp() (*App, error) {
 		imageSweeper:    wikiSvc.imageSweeper,
 		fileStore:       wikiSvc.fileStore,
 		fileSweeper:     wikiSvc.fileSweeper,
+		backupIndexer:   wikiSvc.backupIndexer,
 		skillService:    wikiSvc.skillService,
 		transferRunner:  transfer.runner,
 		wikiImageCtrl:   transfer.imageCtrl,
@@ -269,6 +271,10 @@ func initLifecycle(
 // running them before those arrays are populated would delete live
 // attachments — the flag is the guard against that.
 func (a *App) startSweepers() {
+	// Indexing runs whether or not the sweepers do: it only writes the
+	// reference arrays the sweepers read, and having them in place is what
+	// lets the sweepers delete anything once enabled.
+	a.backupIndexer.Start()
 	if !a.sweepersEnabled {
 		a.logger.Warn("Wiki attachment sweepers are DISABLED (WIKI_SWEEPER_ENABLED=false); orphaned blobs will accumulate until enabled")
 		return
@@ -359,6 +365,7 @@ func (a *App) StartServerWithGracefulShutdown() {
 		a.transferRunner.Stop()
 		a.imageSweeper.Stop()
 		a.fileSweeper.Stop()
+		a.backupIndexer.Stop()
 		a.stopLifecycle()
 
 		ctxTimeout, cancel := context.WithTimeout(context.Background(), 5*time.Second)

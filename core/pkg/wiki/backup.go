@@ -125,6 +125,9 @@ func (s *BackupScheduler) backupDocument(ctx context.Context, doc *models.WikiDo
 		Trigger:      models.WikiDocumentBackupTriggerAuto,
 		CreatedByID:  uuid.Nil, // system-created
 	}
+	// The row's own reference arrays describe exactly the content_state
+	// copied above, since store() writes them together.
+	backup.IndexReferences(doc.ImageReferences, doc.FileReferences)
 
 	if err := s.backupRepo.Create(ctx, backup); err != nil {
 		return err

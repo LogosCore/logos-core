@@ -187,6 +187,7 @@ type wikiStack struct {
 	imageSweeper    *wiki.ImageSweeper
 	fileStore       blob.ObjectStore
 	fileSweeper     *wiki.FileSweeper
+	backupIndexer   *wiki.BackupReferenceIndexer
 	skillService    *skills.Service
 }
 
@@ -210,6 +211,7 @@ func newWikiStack(
 		backupInterval = 30 * time.Minute
 	}
 	s.backupScheduler = wiki.NewBackupScheduler(repos.WikiDocument, repos.WikiDocumentBackup, l, backupInterval)
+	s.backupIndexer = wiki.NewBackupReferenceIndexer(repos.WikiDocumentBackup, s.hpClient, l)
 
 	// Image storage: SeaweedFS S3 gateway. Bucket is created on first run.
 	s.imageStore, err = blob.NewS3Store(ctx, blob.S3Config{
@@ -223,7 +225,7 @@ func newWikiStack(
 	}
 	s.imageProcessor = wiki.NewImageProcessor(e.WikiImageMaxDimension)
 	s.imageSweeper = wiki.NewImageSweeper(
-		repos.WikiDocument, repos.WikiImage, s.imageStore, l,
+		repos.WikiDocument, repos.WikiDocumentBackup, repos.WikiImage, s.imageStore, l,
 		e.WikiImageSweeperInterval, e.WikiImageSweeperGrace, e.WikiSweeperDryRun,
 	)
 
@@ -239,7 +241,7 @@ func newWikiStack(
 		return nil, fmt.Errorf("failed to initialize wiki file store: %w", err)
 	}
 	s.fileSweeper = wiki.NewFileSweeper(
-		repos.WikiDocument, repos.WikiFile, s.fileStore, l,
+		repos.WikiDocument, repos.WikiDocumentBackup, repos.WikiFile, s.fileStore, l,
 		e.WikiFileSweeperInterval, e.WikiFileSweeperGrace, e.WikiSweeperDryRun,
 	)
 

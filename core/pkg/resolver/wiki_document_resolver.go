@@ -1641,6 +1641,7 @@ func (r *wikiDocumentResolver) CreateWikiDocumentBackup(ctx context.Context, doc
 		Description:  desc,
 		CreatedByID:  callerUID,
 	}
+	backup.IndexReferences(doc.ImageReferences, doc.FileReferences)
 
 	if err := r.backupRepo.Create(ctx, backup); err != nil {
 		return nil, fmt.Errorf("failed to create backup: %w", err)
@@ -1698,18 +1699,21 @@ func (r *wikiDocumentResolver) RestoreWikiDocumentBackup(ctx context.Context, do
 		// stick.
 		var before []byte
 		var beforeContent string
+		var beforeImages, beforeFiles []string
 		if doc.Kind.IsDrawing() {
 			restored, err := r.restorer.RestoreDrawing(ctx, documentID, backup.ContentState, callerUID.String())
 			if err != nil {
 				return nil, fmt.Errorf("failed to restore the drawing from backup: %w", err)
 			}
 			before, beforeContent = restored.PreviousState, restored.PreviousContent
+			beforeImages, beforeFiles = restored.PreviousImageReferences, restored.PreviousFileReferences
 		} else {
 			restored, err := r.restorer.RestoreDocument(ctx, documentID, backup.ContentState, backup.Content, callerUID.String())
 			if err != nil {
 				return nil, fmt.Errorf("failed to restore the page from backup: %w", err)
 			}
 			before, beforeContent = restored.PreviousState, restored.PreviousContent
+			beforeImages, beforeFiles = restored.PreviousImageReferences, restored.PreviousFileReferences
 		}
 		// The safety copy is the room as it stood just before the restore,
 		// which the sidecar read inside the same transaction. The row would
@@ -1717,6 +1721,12 @@ func (r *wikiDocumentResolver) RestoreWikiDocumentBackup(ctx context.Context, do
 		snapshot := doc
 		snapshot.ContentState = before
 		snapshot.Content = beforeContent
+		// The room's own answer, with the row's added: the room may hold an
+		// image the row has not been told about yet, and keeping one the
+		// snapshot does not use costs a blob, where missing one costs the
+		// picture on a later restore.
+		snapshot.ImageReferences = unionIDs(doc.ImageReferences, beforeImages)
+		snapshot.FileReferences = unionIDs(doc.FileReferences, beforeFiles)
 		r.createSafetyBackup(ctx, &snapshot, callerUID, "Pre-restore snapshot")
 	} else {
 		// Create pre-restore safety backup
@@ -3064,6 +3074,30 @@ func (r *wikiDocumentResolver) createSafetyBackup(ctx context.Context, doc *mode
 		Description:  description,
 		CreatedByID:  createdByID,
 	}
+	backup.IndexReferences(doc.ImageReferences, doc.FileReferences)
 	// Best-effort — don't fail the parent operation if backup creation fails
 	_ = r.backupRepo.Create(ctx, backup)
+}
+
+// unionIDs merges reference ids, dropping any that do not parse — the
+// sidecar's are strings, and one malformed id must not lose the rest.
+func unionIDs(have []uuid.UUID, more []string) []uuid.UUID {
+	seen := make(map[uuid.UUID]struct{}, len(have)+len(more))
+	out := make([]uuid.UUID, 0, len(have)+len(more))
+	add := func(id uuid.UUID) {
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	for _, id := range have {
+		add(id)
+	}
+	for _, raw := range more {
+		if id, err := uuid.Parse(raw); err == nil {
+			add(id)
+		}
+	}
+	return out
 }

@@ -75,7 +75,7 @@ func TestFileSweeper_DeletesOnlyUnreferenced(t *testing.T) {
 	fileRepo := &stubFileRepo{candidates: []models.WikiFile{live, dead}}
 	store := &stubStore{}
 
-	s := NewFileSweeper(docRepo, fileRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
+	s := NewFileSweeper(docRepo, noBackups{}, fileRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
 	s.runTick()
 
 	if len(fileRepo.deleted) != 1 || fileRepo.deleted[0] != dead.FileID {
@@ -94,7 +94,7 @@ func TestFileSweeper_DryRunDeletesNothing(t *testing.T) {
 	fileRepo := &stubFileRepo{candidates: []models.WikiFile{dead}}
 	store := &stubStore{}
 
-	s := NewFileSweeper(docRepo, fileRepo, store, zap.NewNop(), time.Hour, time.Hour, true)
+	s := NewFileSweeper(docRepo, noBackups{}, fileRepo, store, zap.NewNop(), time.Hour, time.Hour, true)
 	s.runTick()
 
 	if len(fileRepo.deleted) != 0 || len(store.deleted) != 0 {
@@ -110,7 +110,7 @@ func TestFileSweeper_FailSafeOnQueryError(t *testing.T) {
 	fileRepo := &stubFileRepo{candidates: []models.WikiFile{dead}}
 	store := &stubStore{}
 
-	s := NewFileSweeper(docRepo, fileRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
+	s := NewFileSweeper(docRepo, noBackups{}, fileRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
 	s.runTick()
 
 	if len(fileRepo.deleted) != 0 || len(store.deleted) != 0 {

@@ -10,12 +10,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// ImageSweeper garbage-collects wiki_images rows whose bytes no document
-// references any more. See attachmentSweeper for how, and why it is safe.
+// ImageSweeper garbage-collects wiki_images rows whose bytes no document, and no
+// backup of one, references any more. See attachmentSweeper for how, and why it is safe.
 type ImageSweeper = attachmentSweeper[models.WikiImage]
 
 func NewImageSweeper(
 	docRepo repository.IWikiDocumentRepository,
+	backupRepo repository.IWikiDocumentBackupRepository,
 	imageRepo repository.IWikiImageRepository,
 	store blob.ObjectStore,
 	logger *zap.Logger,
@@ -25,7 +26,8 @@ func NewImageSweeper(
 ) *ImageSweeper {
 	return newAttachmentSweeper(attachmentKind[models.WikiImage]{
 		repo:       imageRepo,
-		referenced: docRepo.FilterReferencedImageIDs,
+		referenced: liveInDocumentsOrBackups(docRepo.FilterReferencedImageIDs, backupRepo.FilterReferencedImageIDs),
+		held:       backupRepo.HasUnindexed,
 		id:         func(img models.WikiImage) uuid.UUID { return img.ImageID },
 		operation:  func(img models.WikiImage) uuid.UUID { return img.OperationID },
 		objectKey:  func(img models.WikiImage) string { return img.ObjectKey },

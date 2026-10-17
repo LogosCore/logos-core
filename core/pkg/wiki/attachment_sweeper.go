@@ -46,11 +46,16 @@ type attachmentSweeper[T any] struct {
 // logs use for it.
 type attachmentKind[T any] struct {
 	repo attachmentRows[T]
-	// referenced returns the subset of ids some document in opID references.
+	// referenced returns the subset of ids some document — or some backup of
+	// one — in opID references.
 	referenced func(ctx context.Context, opID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]struct{}, error)
-	id         func(T) uuid.UUID
-	operation  func(T) uuid.UUID
-	objectKey  func(T) string
+	// held reports that nothing in opID can be ruled unreferenced yet: some
+	// backup there predates reference indexing, and what it would put back
+	// on restore is unknown. Nil means never held.
+	held      func(ctx context.Context, opID uuid.UUID) (bool, error)
+	id        func(T) uuid.UUID
+	operation func(T) uuid.UUID
+	objectKey func(T) string
 	// name is the kind in lower case ("image"), title is the capitalised
 	// form ("Image"), idKey the log field for the row id ("image_id").
 	name, title, idKey string
@@ -143,6 +148,24 @@ func (s *attachmentSweeper[T]) runTick() {
 			ids[i] = s.kind.id(a)
 		}
 
+		if s.kind.held != nil {
+			held, err := s.kind.held(tickCtx, opID)
+			if err != nil {
+				s.logger.Warn(s.kind.title+" sweeper: backup index check failed, skipping operation",
+					zap.String("operation_id", opID.String()),
+					zap.Error(err))
+				continue
+			}
+			if held {
+				// Not a failure: BackupReferenceIndexer clears this as it
+				// indexes old backups, and the next tick after that sweeps.
+				s.logger.Info(s.kind.title+" sweeper: operation has backups not yet indexed, deleting nothing there",
+					zap.String("operation_id", opID.String()),
+					zap.Int("candidates", len(rows)))
+				continue
+			}
+		}
+
 		referenced, err := s.kind.referenced(tickCtx, opID, ids)
 		if err != nil {
 			// Fail safe: on any query error we must NOT delete — skip this
@@ -202,4 +225,29 @@ func (s *attachmentSweeper[T]) hardDelete(ctx context.Context, a T) bool {
 		return false
 	}
 	return true
+}
+
+// referencedFn is the shape of a liveness lookup.
+type referencedFn = func(ctx context.Context, opID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]struct{}, error)
+
+// liveInDocumentsOrBackups is an attachment's liveness: referenced by some
+// document, or by some backup of one. A backup restores its body as it was,
+// pictures included, so a blob it references must outlive the page's own use
+// of it. Either lookup failing fails the whole answer — the sweeper then
+// skips the operation, which is the only safe reading of "unknown".
+func liveInDocumentsOrBackups(docs, backups referencedFn) referencedFn {
+	return func(ctx context.Context, opID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]struct{}, error) {
+		live, err := docs(ctx, opID, ids)
+		if err != nil {
+			return nil, err
+		}
+		inBackups, err := backups(ctx, opID, ids)
+		if err != nil {
+			return nil, err
+		}
+		for id := range inBackups {
+			live[id] = struct{}{}
+		}
+		return live, nil
+	}
 }

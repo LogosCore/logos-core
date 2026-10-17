@@ -92,7 +92,7 @@ func TestImageSweeper_DeletesOnlyUnreferenced(t *testing.T) {
 	imgRepo := &stubImageRepo{candidates: []models.WikiImage{live, dead}}
 	store := &stubStore{}
 
-	s := NewImageSweeper(docRepo, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
+	s := NewImageSweeper(docRepo, noBackups{}, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
 	s.runTick()
 
 	if len(imgRepo.deleted) != 1 || imgRepo.deleted[0] != dead.ImageID {
@@ -111,7 +111,7 @@ func TestImageSweeper_DryRunDeletesNothing(t *testing.T) {
 	imgRepo := &stubImageRepo{candidates: []models.WikiImage{dead}}
 	store := &stubStore{}
 
-	s := NewImageSweeper(docRepo, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, true)
+	s := NewImageSweeper(docRepo, noBackups{}, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, true)
 	s.runTick()
 
 	if len(imgRepo.deleted) != 0 || len(store.deleted) != 0 {
@@ -127,7 +127,7 @@ func TestImageSweeper_FailSafeOnQueryError(t *testing.T) {
 	imgRepo := &stubImageRepo{candidates: []models.WikiImage{dead}}
 	store := &stubStore{}
 
-	s := NewImageSweeper(docRepo, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
+	s := NewImageSweeper(docRepo, noBackups{}, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
 	s.runTick()
 
 	if len(imgRepo.deleted) != 0 || len(store.deleted) != 0 {
@@ -150,7 +150,7 @@ func TestImageSweeper_ScopesReferencesPerOperation(t *testing.T) {
 	imgRepo := &stubImageRepo{candidates: []models.WikiImage{imgA, imgB}}
 	store := &stubStore{}
 
-	s := NewImageSweeper(docRepo, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
+	s := NewImageSweeper(docRepo, noBackups{}, imgRepo, store, zap.NewNop(), time.Hour, time.Hour, false)
 	s.runTick()
 
 	if len(imgRepo.deleted) != 1 || imgRepo.deleted[0] != imgB.ImageID {
