@@ -391,6 +391,14 @@ var releases = []Release{
 			"Arrowheads: head= and tail= inside the brackets, e.g. a -- b [head=crowfoot-many tail=crowfoot-one] for an entity relationship. get_wiki_drawing reads routes and heads back in the same words.",
 			"Long labels are now wrapped to fit their shape, and edit_wiki_drawing routes an element sent with elbowed: true instead of drawing it as a diagonal line.",
 		},
+	}, {
+		Version: 45,
+		Date:    "2026-10-18",
+		Notes: []string{
+			"draw_wiki_diagram now takes Mermaid: a flowchart or a sequenceDiagram. Our card kinds, badges and colours are classes (dc01[\"DC01<br/>10.0.5.10\"]:::domain-controller, class dc01 compromised), subgraphs are zones, link ids carry styles (e1@--> with class e1 lateral). The server lays it out with the app's cards and routes the arrows.",
+			"Sequence diagrams are drawn as real sequence diagrams: participants as cards, a row per message, notes, activations and alt/loop frames. Send the same title again to redraw one in place.",
+			"get_wiki_drawing returns the drawing as Mermaid by default (mermaid and sequences); view:\"diagram\" still gives the older language, which draw_wiki_diagram still accepts.",
+		},
 	},
 }
 

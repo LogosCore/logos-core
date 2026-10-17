@@ -38,7 +38,7 @@ import {
   type ShapeTag,
   type ZoneKind,
 } from "./drawing-catalogue.js";
-import { DiagramError, defaultHeads, type ArrowKind, type Diagram, type DiagramProblem, type Route } from "./diagram-language.js";
+import { DiagramError, defaultHeads, type ArrowKind, type Diagram, type DiagramProblem, type Route, type Stroke } from "./diagram-language.js";
 import { layoutArrows, pathCrosses, type Obstacle } from "./arrow-layout.js";
 import { readScene, unionBox, type Box, type Scene, type SceneNode, type SceneZone } from "./diagram-read.js";
 import { boundTextFields, measureText, normalizeElement, type NormalizedElement } from "./drawing-elements.js";
@@ -316,13 +316,15 @@ export function applyDiagram(
       const wantRoute = edge.route ?? diagram.arrows ?? match.route;
       const wantHead = edge.head ?? (edge.arrow === match.arrow ? match.head : implied.head);
       const wantTail = edge.tail ?? (edge.arrow === match.arrow ? match.tail : implied.tail);
+      const wantStroke = edge.stroke ?? match.stroke;
       if (
         wantStyle === match.style &&
         wantLabel === match.label &&
         edge.arrow === match.arrow &&
         wantRoute === match.route &&
         wantHead === match.head &&
-        wantTail === match.tail
+        wantTail === match.tail &&
+        wantStroke === match.stroke
       ) {
         continue;
       }
@@ -334,7 +336,7 @@ export function applyDiagram(
       elements.set(match.id, {
         ...arrow,
         strokeColor: look.strokeColor,
-        strokeStyle: look.strokeStyle,
+        ...strokeFields(look, wantStroke),
         customData: look.customData,
         ...excalidrawHeads(heads.head, heads.tail),
         ...routeFields(wantRoute),
@@ -352,8 +354,7 @@ export function applyDiagram(
     const arrow = normalizeElement({
       type: "arrow",
       strokeColor: look.strokeColor,
-      strokeStyle: look.strokeStyle,
-      strokeWidth: look.strokeWidth,
+      ...strokeFields(look, edge.stroke),
       roughness: look.roughness,
       startBinding: from,
       endBinding: to,
@@ -779,6 +780,14 @@ function frameIdOf(elements: Y.Map<NormalizedElement>, nodeId: string): string |
 function excalidrawHeads(head: string, tail: string): { startArrowhead: string | null; endArrowhead: string | null } {
   const name = (h: string) => (h === "none" ? null : h.replace(/-/g, "_"));
   return { startArrowhead: name(tail), endArrowhead: name(head) };
+}
+
+/** A style's line, made dotted or thick when asked. */
+function strokeFields(look: { strokeStyle: string; strokeWidth: number }, stroke: Stroke | undefined) {
+  return {
+    strokeStyle: stroke === "dotted" ? (look.strokeStyle === "solid" ? "dashed" : look.strokeStyle) : look.strokeStyle,
+    strokeWidth: stroke === "thick" ? 4 : look.strokeWidth,
+  };
 }
 
 /** The fields that make an arrow elbow, curved or straight. */

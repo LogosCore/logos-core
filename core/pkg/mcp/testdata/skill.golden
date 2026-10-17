@@ -3,7 +3,7 @@
 name: logos
 description: Work an operation in Logos — hosts, credentials, hashes, tasks, wiki and timeline — through its MCP tools. Use when connected to a Logos MCP endpoint or when the user mentions an operation.
 metadata:
-  version: "44"
+  version: "45"
 ---
 
 # Logos
@@ -500,88 +500,74 @@ operator you act for.
 ==================== logos/reference/drawings.md
 # Drawings
 
-Some wiki pages are an Excalidraw canvas — network maps, attack paths.
+Some wiki pages are an Excalidraw canvas — network maps, attack paths, flows.
 Listing rows carry `kind:"drawing"`; create one with `create_wiki_document`
 and `kind:"drawing"`. Draw when asked; otherwise write the page.
 
-## Draw with diagram text
+## Draw with Mermaid
 
-`draw_wiki_diagram` takes what the diagram is, one statement per line. No
-coordinates, ids or bindings: the server lays it out, draws each node as a
-card with its icon, and attaches the arrows.
+`draw_wiki_diagram` takes a Mermaid `flowchart` or `sequenceDiagram`. The
+server lays it out and draws it with the app's cards; nothing already drawn
+moves.
 
 ```
-zone internal "Internal — 10.0.0.0/24" network {
-  ws142: workstation "WS-0142" "Windows 11"
-  dc01: domain-controller "DC01" "10.0.5.10"
-}
-attacker: attacker "Operator"
-attacker -> ws142 "phishing" [exploit]
-ws142 -> dc01 "pass-the-hash" [lateral]
-dc01 +compromised
+flowchart LR
+  subgraph lan["Internal — 10.0.0.0/24"]
+    ws1["WS-0142<br/>Windows 11"]:::workstation
+    dc01["DC01<br/>10.0.5.10"]:::domain-controller
+  end
+  op["Operator"]:::attacker
+  op e1@-->|phishing| ws1
+  ws1 e2@-->|pass-the-hash| dc01
+  kms["HSM"]
+  kms@{ icon: "key-round" }
+  class dc01 compromised
+  class e1 exploit
+  class e2 lateral,curved
 ```
 
-- `id: kind "title" "detail"` a node; both texts optional
-- `… color=red icon=key-round` on any node line; `color=default`, `icon=none` undo
-- `id: "new title"` retitle one already drawn
-- `id +badge -badge` add or remove badges
-- `a -> b "label" [style]` a connection; `<->` both ways, `--` no head
-- `[lateral curved head=triangle tail=circle]` route and arrowheads
-- `zone id "title" kind { … }` a region around the nodes inside; nests
-- `remove id`, `remove a -> b`
-- `direction right|down`, `style sketch|clean`, `arrows elbow|curved|straight`, `# comment`
-
-Pick short ids (`dc01`); later edits use them.
+A label's first line is the title, after `<br/>` the detail. Classes give a
+node its kind, badges and colour (`class kms red,target`), a subgraph its
+zone kind, a link (`e1@-->`) its style, route and `head-`/`tail-` arrowhead.
+Links: `-->` `---` `<-->` `-.->` (dotted) `==>` (thick) `--o` `--x`.
+`%%` lines take what Mermaid cannot say: `%% remove ws1`, `%% dc01
+-compromised`, `%% style clean`, `%% arrows curved`.
 
 **Kinds:** `server` `workstation` `laptop` `mobile` `ot-device` `file-share`
 `domain-controller` `user` `admin` `database` `web-app` `mail-server`
 `internet` `cloud` `router` `switch` `vpn` `firewall` `edr` `attacker`
-`c2-server` `shell` `credential` `hash` `vulnerability` `finding`; otherwise
-`box` `ellipse` `diamond` `note`. A `box` with an `icon=` is a card of your own.
-**Colours:** `gray` `red` `pink` `grape` `violet` `indigo` `blue` `cyan`
-`teal` `green` `lime` `yellow` `orange` `black`, or `#rrggbb`. **Icons:**
-lucide names (`lock`, `shield`, `cloud`, `bug`…); an unknown one is refused
-with icons that fit.
-**Badges** (cards): `compromised` `credentials` `privileged` `flag`
-`has-finding` `monitored` `out-of-scope` `target`.
-**Styles:** `plain` `traffic` `exploit` `lateral` `creds` `c2`.
-**Routes:** `elbow` (default: horizontal and vertical, around other shapes)
-`curved` `straight`. **Heads:** `arrow` `triangle` `circle` `diamond` `bar`
-`crowfoot-one` `crowfoot-many` `crowfoot-one-or-many` (`-outline` for
-hollow), `none`.
-**Zones:** `network` `dmz` `cloud` `trust`.
+`c2-server` `shell` `credential` `hash` `vulnerability` `finding`; a plain
+`box`, `ellipse`, `diamond`, `note`. A box with an icon is a card.
+**Badges:** `compromised` `credentials` `privileged` `flag` `has-finding`
+`monitored` `out-of-scope` `target`. **Colours:** `gray` `red` `pink`
+`grape` `violet` `indigo` `blue` `cyan` `teal` `green` `lime` `yellow`
+`orange` `black`. **Link styles:** `plain` `traffic` `exploit` `lateral`
+`creds` `c2`; routes `elbow` (default) `curved` `straight`. **Zones:**
+`network` `dmz` `cloud` `trust`. Icons are lucide names; a wrong one is
+refused with icons that fit.
 
-A write merges: what the text names is added or changed, the rest stays,
-and nothing already drawn moves. Send only the change — `dc01 +compromised`
-is a whole call. Re-sending a node by id updates it in place. A text with
-problems draws nothing and lists each by line; fix all and resend.
-`mode:"replace"` clears the canvas first. The response is the drawing as it
-now reads.
+**Sequences:** a `title` names one; send the same title again to redraw it
+in place. Participants, actors, `box`, notes, `alt`/`opt`/`loop`/`par`,
+`autonumber` and `+`/`-` activations all work. `%% spa: web-app "Logos
+SPA"` gives a participant a card.
+
+A write merges: what it names is added or changed, the rest stays.
+Re-sending a node by id updates it. A text with problems draws nothing and
+lists each by line. `mode:"replace"` clears the canvas first.
 
 ## Read first
 
-`get_wiki_drawing` returns the same language, so you can edit a line and send
-it back. Cards placed from the panel and labelled boxes drawn by hand are
-nodes under their element ids. Free text, freehand and loose arrows come back
-as `otherShapes`; diagram writes leave them alone.
+`get_wiki_drawing` returns `mermaid` (the flowchart) and `sequences`; change
+lines and send them back. Shapes with no id of their own read as
+`n_<element id>`. Free text, freehand and loose arrows come back as
+`otherShapes`.
 
 ## Exact shapes
 
-`edit_wiki_drawing` takes Excalidraw elements, for geometry or shapes the
-language cannot name. Read with `view:"outline"` for ids and positions.
-Modes: `add` (default), `update` (only the fields sent; `label` retitles),
-`delete` (by `element_ids`), `replace`. Only `type` is required.
-
-```json
-{"type":"rectangle","id":"dc","x":100,"y":200,"label":"DC"}
-{"type":"arrow","startBinding":"dc","endBinding":"jump","z":-1}
-```
-
-A bound arrow without `points` is drawn between its shapes. Higher `z`
-covers lower. An update matching no id changes nothing — read again.
-
-Both tools merge with what the operator is doing; `watchers` says whether
-anyone was looking.
+`edit_wiki_drawing` takes Excalidraw elements for geometry Mermaid cannot
+express. Read with `view:"outline"` for ids and positions. Modes `add`,
+`update` (fields sent; `label` retitles), `delete`, `replace`; only `type`
+is required. Both tools merge with what the operator is doing.
 ==================== logos/reference/attachments.md
 # Attachments
 

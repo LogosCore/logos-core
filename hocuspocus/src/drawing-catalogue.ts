@@ -74,6 +74,11 @@ export interface ShapeTag {
   color?: string
   /** A lucide icon an agent chose, when it overrides the shape's own. */
   icon?: string
+  /** The sequence diagram this part belongs to (sequence-layout.ts in the
+   * sidecar). Its parts are read as that diagram, not as nodes. */
+  seq?: string
+  /** On a sequence diagram's lifelines: the Mermaid it was drawn from. */
+  source?: string
 }
 
 export function tagOf(element: object): ShapeTag | null {

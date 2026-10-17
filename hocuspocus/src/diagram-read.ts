@@ -29,6 +29,7 @@ import {
   writeDiagram,
   type ArrowKind,
   type Route,
+  type Stroke,
   type SerializedEdge,
   type SerializedNode,
   type SerializedZone,
@@ -87,6 +88,7 @@ export interface SceneEdge {
    * swap that made `from` the start. */
   head: string;
   tail: string;
+  stroke?: Stroke;
 }
 
 export interface SceneOther {
@@ -97,8 +99,20 @@ export interface SceneOther {
   y: number;
 }
 
+/** A sequence diagram on the canvas (sequence-layout.ts). */
+export interface SceneSequence {
+  id: string;
+  elementIds: string[];
+  box: Box;
+  /** The Mermaid it was drawn from. */
+  source: string;
+  /** Where it was drawn, so a redraw replaces it in place. */
+  origin?: { x: number; y: number };
+}
+
 export interface Scene {
   nodes: Map<string, SceneNode>;
+  sequences: Map<string, SceneSequence>;
   zones: Map<string, SceneZone>;
   edges: SceneEdge[];
   others: SceneOther[];
@@ -146,13 +160,42 @@ function unitKey(el: NormalizedElement): string | null {
 
 export function readScene(live: readonly NormalizedElement[]): Scene {
   const byId = new Map(live.map((el) => [el.id, el]));
-  const scene: Scene = { nodes: new Map(), zones: new Map(), edges: [], others: [], owner: new Map(), bounds: null };
+  const scene: Scene = { nodes: new Map(), sequences: new Map(), zones: new Map(), edges: [], others: [], owner: new Map(), bounds: null };
   scene.bounds = unionBox(live.map(boxOf));
+
+  // Sequence diagrams first: their parts are read as the diagram they belong
+  // to, never as nodes or loose shapes. A label belongs with its container.
+  const seqOf = (el: NormalizedElement) => {
+    const own = tagOf(el)?.seq;
+    if (own) return own;
+    const container = typeof el.containerId === "string" ? byId.get(el.containerId) : undefined;
+    return container ? tagOf(container)?.seq : undefined;
+  };
+  const rest: NormalizedElement[] = [];
+  for (const el of live) {
+    const seq = seqOf(el);
+    if (!seq) {
+      rest.push(el);
+      continue;
+    }
+    let entry = scene.sequences.get(seq);
+    if (!entry) {
+      entry = { id: seq, elementIds: [], box: boxOf(el), source: "" };
+      scene.sequences.set(seq, entry);
+    }
+    entry.elementIds.push(el.id);
+    entry.box = unionBox([entry.box, boxOf(el)]) as Box;
+    const source = tagOf(el)?.source;
+    if (source && !entry.source) entry.source = source;
+    const origin = (tagOf(el) as { origin?: unknown } | null)?.origin;
+    if (!entry.origin && Array.isArray(origin) && origin.length === 2) entry.origin = { x: Number(origin[0]), y: Number(origin[1]) };
+    scene.owner.set(el.id, `sequence:${seq}`);
+  }
 
   // Group the elements into units: a built-in shape's parts, a shape and its
   // label, or a lone element.
   const units = new Map<string, NormalizedElement[]>();
-  for (const el of live) {
+  for (const el of rest) {
     const container = typeof el.containerId === "string" ? byId.get(el.containerId) : undefined;
     const key = (container ? unitKey(container) ?? `e:${container.id}` : null) ?? unitKey(el) ?? `e:${el.id}`;
     if (!units.has(key)) units.set(key, []);
@@ -310,7 +353,11 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
     const styleTag = tagOf(arrow)?.shape;
     const style = styleTag?.startsWith("edge:") && styleTag.slice(5) in EDGE_STYLES ? (styleTag.slice(5) as EdgeStyle) : "plain";
     const route: Route = arrow.elbowed === true ? "elbow" : arrow.roundness ? "curved" : "straight";
-    scene.edges.push({ id: arrow.id, from, to, arrow: kind, label: wordsOf(label), labelId: label?.id, style, route, head, tail });
+    // A line drawn thicker than its style's, or dashed where the style is
+    // solid, was asked for as thick or dotted.
+    const stroke: Stroke | undefined =
+      Number(arrow.strokeWidth) >= 4 ? "thick" : arrow.strokeStyle !== EDGE_STYLES[style].dash && arrow.strokeStyle !== "solid" ? "dotted" : undefined;
+    scene.edges.push({ id: arrow.id, from, to, arrow: kind, label: wordsOf(label), labelId: label?.id, style, route, head, tail, ...(stroke ? { stroke } : {}) });
     scene.owner.set(arrow.id, arrow.id);
     if (label) scene.owner.set(label.id, arrow.id);
   }
@@ -406,6 +453,7 @@ export function sceneToText(scene: Scene): string {
       ...(e.route !== usual ? { route: e.route } : {}),
       ...(e.head !== implied.head ? { head: e.head } : {}),
       ...(e.tail !== implied.tail ? { tail: e.tail } : {}),
+      ...(e.stroke ? { stroke: e.stroke } : {}),
     };
   });
   return writeDiagram({

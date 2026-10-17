@@ -34,13 +34,13 @@ import (
 
 type getWikiDrawingArgs struct {
 	DocumentID string `json:"document_id" jsonschema:"Page id of a drawing."`
-	View       string `json:"view,omitempty" jsonschema:"diagram (default): the drawing as diagram text, the format draw_wiki_diagram takes. outline: every shape with its id and geometry. full: complete element JSON."`
+	View       string `json:"view,omitempty" jsonschema:"mermaid (default): the drawing as Mermaid, the format draw_wiki_diagram takes. diagram: the older diagram language. outline: every shape with its id and geometry. full: complete element JSON."`
 }
 
 type drawWikiDiagramArgs struct {
 	IdempotencyKey
 	DocumentID string `json:"document_id"    jsonschema:"Page id of a drawing."`
-	Diagram    string `json:"diagram"        jsonschema:"Diagram text, one statement per line. See drawings.md. Example: dc01: domain-controller \"DC01\" \"10.0.5.10\""`
+	Diagram    string `json:"diagram"        jsonschema:"A Mermaid flowchart or sequenceDiagram, with our card kinds as classes; see drawings.md. The older diagram language is still accepted."`
 	Mode       string `json:"mode,omitempty" jsonschema:"merge (default): add and change what the text names, leave the rest. replace: clear the canvas first."`
 }
 
@@ -58,17 +58,18 @@ type editWikiDrawingArgs struct {
 func registerWikiDrawingTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "get_wiki_drawing",
-		Description: "Read a drawing page as a diagram: its nodes, zones and connections as text, in the " +
-			"format draw_wiki_diagram takes, plus any loose shapes. Read before changing one, because " +
-			"changes refer to nodes by the ids this returns. view:\"outline\" lists every shape with " +
-			"its geometry instead, for edit_wiki_drawing.",
+		Description: "Read a drawing page as Mermaid: its nodes, zones and connections as a flowchart, " +
+			"each sequence diagram as the Mermaid it was drawn from, plus any loose shapes. Read before " +
+			"changing one, because changes refer to nodes by the ids this returns. view:\"outline\" lists " +
+			"every shape with its geometry instead, for edit_wiki_drawing.",
 	}, readTool, handleGetWikiDrawing)
 
 	register(s, &mcp.Tool{
 		Name: "draw_wiki_diagram",
-		Description: "Draw on a drawing page with diagram text: nodes, zones and connections, one per line. " +
-			"The server lays them out, draws the cards and binds the arrows; nothing already on the " +
-			"canvas moves. Re-sending a node by id changes it. Safe while the operator is drawing.",
+		Description: "Draw on a drawing page from Mermaid: a flowchart (nodes, subgraphs as zones, links) " +
+			"or a sequenceDiagram. Our card kinds, badges and colours are classes (:::server). The server " +
+			"lays it out and draws it; nothing already on the canvas moves, re-sending a node by id " +
+			"changes it, and re-sending a sequence with the same title redraws it in place.",
 	}, writeTool, handleDrawWikiDiagram)
 
 	register(s, &mcp.Tool{
@@ -159,11 +160,11 @@ func handleGetWikiDrawing(ctx context.Context, s *Server, args getWikiDrawingArg
 	}
 
 	switch args.View {
-	case "", "diagram":
-		return readWikiDiagram(ctx, s, doc)
+	case "", "mermaid", "diagram":
+		return readWikiDiagram(ctx, s, doc, args.View == "diagram")
 	case "outline", "full":
 	default:
-		return toolResult{}, refuse("unknown view %q. Use diagram (the default), outline or full.", args.View)
+		return toolResult{}, refuse("unknown view %q. Use mermaid (the default), diagram, outline or full.", args.View)
 	}
 
 	scene, err := s.deps.Hocuspocus.ReadDrawing(ctx, doc.DocumentID.String())
@@ -361,8 +362,14 @@ func handleEditWikiDrawing(ctx context.Context, s *Server, args editWikiDrawingA
 
 type drawingDiagramView struct {
 	wikiDocView
-	// Diagram is the drawing in the language draw_wiki_diagram takes.
-	Diagram string `json:"diagram"`
+	// Mermaid is the drawing's nodes, zones and connections as a flowchart,
+	// in the form draw_wiki_diagram takes.
+	Mermaid string `json:"mermaid,omitempty"`
+	// Sequences are its sequence diagrams, each as the Mermaid it was drawn
+	// from: send one back changed, same title, to redraw it in place.
+	Sequences []wiki.DiagramSequence `json:"sequences,omitempty"`
+	// Diagram is the same graph in the older diagram language, on request.
+	Diagram string `json:"diagram,omitempty"`
 	Nodes   int    `json:"nodes"`
 	Edges   int    `json:"connections"`
 	Zones   int    `json:"zones,omitempty"`
@@ -373,17 +380,23 @@ type drawingDiagramView struct {
 	Notes    []string            `json:"notes,omitempty"`
 }
 
-func diagramView(doc *models.WikiDocument, d wiki.DrawingDiagram) drawingDiagramView {
+func diagramView(doc *models.WikiDocument, d wiki.DrawingDiagram, older bool) drawingDiagramView {
 	view := drawingDiagramView{
 		wikiDocView: toWikiDocView(doc),
-		Diagram:     d.Diagram,
+		Mermaid:     d.Mermaid,
+		Sequences:   d.Sequences,
 		Nodes:       d.Nodes,
 		Edges:       d.Edges,
 		Zones:       d.Zones,
 		Others:      d.Others,
 		Watchers:    d.Watchers,
 	}
-	if d.Nodes == 0 && d.Zones == 0 && d.OthersTotal == 0 {
+	if older {
+		view.Mermaid = ""
+		view.Sequences = nil
+		view.Diagram = d.Diagram
+	}
+	if d.Nodes == 0 && d.Zones == 0 && d.OthersTotal == 0 && len(d.Sequences) == 0 {
 		view.Notes = append(view.Notes, "This canvas is empty.")
 	}
 	if d.OthersTotal > 0 {
@@ -398,7 +411,7 @@ func diagramView(doc *models.WikiDocument, d wiki.DrawingDiagram) drawingDiagram
 	return view
 }
 
-func readWikiDiagram(ctx context.Context, s *Server, doc *models.WikiDocument) (toolResult, error) {
+func readWikiDiagram(ctx context.Context, s *Server, doc *models.WikiDocument, older bool) (toolResult, error) {
 	d, err := s.deps.Hocuspocus.ReadDrawingDiagram(ctx, doc.DocumentID.String())
 	if err != nil {
 		s.deps.Logger.Warn("mcp: failed to read wiki drawing as a diagram",
@@ -406,7 +419,7 @@ func readWikiDiagram(ctx context.Context, s *Server, doc *models.WikiDocument) (
 		return toolResult{}, fmt.Errorf("failed to read the drawing: %w", err)
 	}
 	return toolResult{
-		Payload:     diagramView(doc, d),
+		Payload:     diagramView(doc, d, older),
 		OperationID: &doc.OperationID,
 		Summary:     fmt.Sprintf("read wiki drawing %s", doc.Title),
 	}, nil
@@ -414,11 +427,16 @@ func readWikiDiagram(ctx context.Context, s *Server, doc *models.WikiDocument) (
 
 type diagramWriteView struct {
 	drawingDiagramView
-	Mode      string `json:"mode"`
-	Created   int    `json:"created"`
-	Updated   int    `json:"updated"`
-	Removed   int    `json:"removed,omitempty"`
-	Connected int    `json:"connected"`
+	Mode string `json:"mode"`
+	// Kind is what was drawn: flowchart, sequence or diagram.
+	Kind         string `json:"kind,omitempty"`
+	Sequence     string `json:"sequence,omitempty"`
+	Participants int    `json:"participants,omitempty"`
+	Messages     int    `json:"messages,omitempty"`
+	Created      int    `json:"created"`
+	Updated      int    `json:"updated"`
+	Removed      int    `json:"removed,omitempty"`
+	Connected    int    `json:"connected"`
 }
 
 func handleDrawWikiDiagram(ctx context.Context, s *Server, args drawWikiDiagramArgs) (toolResult, error) {
@@ -442,10 +460,9 @@ func handleDrawWikiDiagram(ctx context.Context, s *Server, args drawWikiDiagramA
 	}
 	if strings.TrimSpace(args.Diagram) == "" {
 		return toolResult{}, refuse(
-			"diagram is required: one statement per line, for example\n" +
-				"dc01: domain-controller \"DC01\" \"10.0.5.10\"\n" +
-				"ws01: workstation \"WS01\"\n" +
-				"ws01 -> dc01 \"RDP\" [lateral]")
+			"diagram is required: Mermaid, for example\n" +
+				"flowchart LR\n" +
+				"  ws01[\"WS01\"]:::workstation -->|RDP| dc01[\"DC01<br/>10.0.5.10\"]:::domain-controller")
 	}
 
 	// Attributed to the key's owner, not to the key: a page records which
@@ -463,8 +480,12 @@ func handleDrawWikiDiagram(ctx context.Context, s *Server, args drawWikiDiagramA
 	}
 
 	view := diagramWriteView{
-		drawingDiagramView: diagramView(doc, result.DrawingDiagram),
+		drawingDiagramView: diagramView(doc, result.DrawingDiagram, result.Kind == "diagram"),
 		Mode:               string(mode),
+		Kind:               result.Kind,
+		Sequence:           result.Sequence,
+		Participants:       result.Participants,
+		Messages:           result.Messages,
 		Created:            result.Created,
 		Updated:            result.Updated,
 		Removed:            result.Removed,

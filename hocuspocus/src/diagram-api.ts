@@ -23,7 +23,10 @@ import type * as Y from "yjs";
 
 import { readRawBody, requireSignature } from "./internal-auth.js";
 import { elementsOf, release, roomName, watcherCount } from "./apply-drawing.js";
-import { DiagramError, parseDiagram } from "./diagram-language.js";
+import { DiagramError, parseDiagram, type Diagram } from "./diagram-language.js";
+import { isMermaid } from "./mermaid-parse.js";
+import { aliasesOf, flowchartToDiagram, writeMermaid } from "./mermaid-flowchart.js";
+import { drawSequence, parseSequence } from "./sequence-layout.js";
 import { applyDiagram, type DiagramMode } from "./diagram-apply.js";
 import { readScene, sceneToText, type Scene } from "./diagram-read.js";
 import type { NormalizedElement } from "./drawing-elements.js";
@@ -37,7 +40,13 @@ function liveElements(document: Y.Doc): NormalizedElement[] {
 }
 
 function describe(scene: Scene) {
+  const hasGraph = scene.nodes.size > 0 || scene.zones.size > 0;
   return {
+    // The drawing's nodes, zones and connections as a Mermaid flowchart, and
+    // each sequence diagram as the Mermaid it was drawn from.
+    mermaid: hasGraph ? writeMermaid(scene) : "",
+    sequences: [...scene.sequences.values()].map((s) => ({ id: s.id, mermaid: s.source })),
+    // The same graph in the older diagram language.
     diagram: sceneToText(scene),
     nodes: scene.nodes.size,
     edges: scene.edges.length,
@@ -104,9 +113,18 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
 
     // Parsed before a seat is taken: a text with problems never touches the
     // room.
-    let diagram;
+    const text = body.diagram;
+    const mermaid = isMermaid(text);
+    const sequence = mermaid && /^\s*(?:%%[^\n]*\n\s*)*sequenceDiagram\b/.test(text);
+
+    // Everything that can be checked without the room is checked before a
+    // seat is taken: a text with problems never touches it.
+    let parsed: Awaited<ReturnType<typeof parseSequence>> | null = null;
+    let diagram: Diagram | null = null;
+    const warnings: string[] = [];
     try {
-      diagram = parseDiagram(body.diagram);
+      if (sequence) parsed = await parseSequence(text);
+      else if (!mermaid) diagram = parseDiagram(text);
     } catch (err) {
       if (err instanceof DiagramError) {
         res.status(422).json({ error: err.message, problems: err.problems });
@@ -122,7 +140,25 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
         // Read back in persistence.ts, which attributes the save.
         userId: body.userId,
       });
-      let result;
+      // A flowchart needs the drawing first: a read named the nodes that have
+      // no id of their own by aliases, and those map back to element ids.
+      if (mermaid && !sequence) {
+        const room = (connection as unknown as { document: Y.Doc | null }).document;
+        const before = room ? readScene(liveElements(room)) : readScene([]);
+        try {
+          const converted = await flowchartToDiagram(text, aliasesOf(before));
+          diagram = converted.diagram;
+          warnings.push(...converted.warnings);
+        } catch (err) {
+          if (err instanceof DiagramError) {
+            res.status(422).json({ error: err.message, problems: err.problems });
+            return;
+          }
+          throw err;
+        }
+      }
+
+      let result: Record<string, unknown> = {};
       let after: Scene | null = null;
       try {
         await connection.transact((document) => {
@@ -132,7 +168,19 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
           // an open canvas saw arrows before they were routed and could
           // write those copies back over the routed ones.
           document.transact(() => {
-            result = applyDiagram(elementsOf(document), diagram, mode);
+            const elements = elementsOf(document);
+            if (parsed) {
+              if (mode === "replace") {
+                for (const el of liveElements(document)) {
+                  elements.set(el.id, { ...el, isDeleted: true, version: (el.version ?? 1) + 1, updated: Date.now() });
+                }
+              }
+              const drawn = drawSequence(elements, readScene(liveElements(document)), text, parsed);
+              result = { kind: "sequence", sequence: drawn.id, participants: drawn.participants, messages: drawn.messages, warnings: drawn.warnings };
+            } else {
+              const applied = applyDiagram(elements, diagram as Diagram, mode);
+              result = { kind: mermaid ? "flowchart" : "diagram", ...applied, warnings: [...warnings, ...applied.warnings] };
+            }
           });
           after = readScene(liveElements(document));
         });
@@ -148,7 +196,7 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
       }
       res.status(200).json({
         ok: true,
-        ...(result as unknown as object),
+        ...result,
         ...describe(after as unknown as Scene),
         watchers: watcherCount(server, documentId),
       });

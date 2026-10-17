@@ -116,8 +116,13 @@ export interface DiagramEdge {
   head?: string;
   /** The arrowhead at the start. */
   tail?: string;
+  /** Mermaid's dotted (-.->) and thick (==>) lines, over the style's own. */
+  stroke?: Stroke;
   line: number;
 }
+
+export const STROKES = ["dotted", "thick"] as const;
+export type Stroke = (typeof STROKES)[number];
 
 export type DiagramRemoval =
   | { kind: "item"; id: string; line: number }
@@ -388,6 +393,7 @@ export function parseDiagram(source: string): Diagram {
         }
         if (w in EDGE_STYLES) edge.style = w as EdgeStyle;
         else if ((ROUTES as readonly string[]).includes(w)) edge.route = w as Route;
+        else if ((STROKES as readonly string[]).includes(w)) edge.stroke = w as Stroke;
         else return `unknown word "${word}" for a connection. Styles: ${Object.keys(EDGE_STYLES).join(", ")}. Routes: ${ROUTES.join(", ")}.`;
         return null;
       };
@@ -563,6 +569,7 @@ export interface SerializedEdge {
   /** Written when they differ from what the arrow kind implies. */
   head?: string;
   tail?: string;
+  stroke?: Stroke;
 }
 
 export function nodeLine(node: SerializedNode): string {
@@ -581,6 +588,7 @@ export function edgeLine(edge: SerializedEdge): string {
   const words = [
     ...(edge.style !== "plain" ? [edge.style] : []),
     ...(edge.route ? [edge.route] : []),
+    ...(edge.stroke ? [edge.stroke] : []),
     ...(edge.head ? [`head=${edge.head}`] : []),
     ...(edge.tail ? [`tail=${edge.tail}`] : []),
   ];

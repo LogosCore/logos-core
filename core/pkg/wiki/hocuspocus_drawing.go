@@ -408,25 +408,43 @@ type DiagramOther struct {
 	Y    float64 `json:"y"`
 }
 
-// DrawingDiagram is a drawing as the diagram language reads it.
+// DiagramSequence is a sequence diagram on a drawing, as the Mermaid it was
+// drawn from.
+type DiagramSequence struct {
+	ID      string `json:"id"`
+	Mermaid string `json:"mermaid"`
+}
+
+// DrawingDiagram is a drawing read as diagrams: its nodes, zones and
+// connections as a Mermaid flowchart (and in the older diagram language), and
+// each sequence diagram as its Mermaid.
 type DrawingDiagram struct {
-	Diagram     string         `json:"diagram"`
-	Nodes       int            `json:"nodes"`
-	Edges       int            `json:"edges"`
-	Zones       int            `json:"zones"`
-	Others      []DiagramOther `json:"others"`
-	OthersTotal int            `json:"othersTotal"`
-	Watchers    int            `json:"watchers"`
+	Mermaid     string            `json:"mermaid"`
+	Sequences   []DiagramSequence `json:"sequences"`
+	Diagram     string            `json:"diagram"`
+	Nodes       int               `json:"nodes"`
+	Edges       int               `json:"edges"`
+	Zones       int               `json:"zones"`
+	Others      []DiagramOther    `json:"others"`
+	OthersTotal int               `json:"othersTotal"`
+	Watchers    int               `json:"watchers"`
 }
 
 // ApplyDiagramResult is what a diagram write did, and the drawing after it.
 type ApplyDiagramResult struct {
 	DrawingDiagram
-	Created   int      `json:"created"`
-	Updated   int      `json:"updated"`
-	Removed   int      `json:"removed"`
-	Connected int      `json:"connected"`
-	Warnings  []string `json:"warnings"`
+	// Kind is what was drawn: flowchart, sequence, or diagram (the older
+	// language).
+	Kind string `json:"kind"`
+	// Sequence, Participants and Messages describe a sequence diagram.
+	Sequence     string   `json:"sequence,omitempty"`
+	Participants int      `json:"participants,omitempty"`
+	Messages     int      `json:"messages,omitempty"`
+	Created      int      `json:"created"`
+	Updated      int      `json:"updated"`
+	Removed      int      `json:"removed"`
+	Connected    int      `json:"connected"`
+	Warnings     []string `json:"warnings"`
 }
 
 // ReadDrawingDiagram returns the drawing as diagram text.
