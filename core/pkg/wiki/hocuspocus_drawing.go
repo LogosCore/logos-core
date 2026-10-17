@@ -275,3 +275,74 @@ func (c *HocuspocusClient) RebaseDrawing(ctx context.Context, req RebaseDrawingR
 	result.ContentState = state
 	return result, nil
 }
+
+type drawingRestoreRequest struct {
+	DocumentID   string `json:"documentId"`
+	ContentState string `json:"contentState"`
+	UserID       string `json:"userId,omitempty"`
+}
+
+// RestoreDrawingResult reports what a restore did to the live scene.
+type RestoreDrawingResult struct {
+	// Restored is how many elements were put back to their backup copy.
+	Restored int `json:"restored"`
+	// Removed is how many live elements were erased because the backup did
+	// not have them.
+	Removed  int `json:"removed"`
+	Watchers int `json:"watchers"`
+	// PreviousState is the room as it stood immediately before the restore,
+	// and PreviousContent its search text: together, the pre-restore safety
+	// backup. Read from the room because the Mongo row can be a debounce
+	// window behind what was on screen.
+	PreviousState   []byte `json:"-"`
+	PreviousContent string `json:"previousContent"`
+}
+
+type drawingRestoreWireResponse struct {
+	RestoreDrawingResult
+	PreviousState string `json:"previousState"`
+}
+
+// RestoreDrawing puts a backup's scene back on a drawing page, as a
+// transaction in the live room.
+//
+// Not a write over content_state: a loaded room overwrites that on its next
+// store, and a browser that reconnects holding newer state merges every shape
+// drawn since the backup straight back in. The sidecar instead writes the
+// backup's elements at versions above what every canvas holds, so the restore
+// lands on screen and persists like any other edit.
+func (c *HocuspocusClient) RestoreDrawing(ctx context.Context, documentID string, contentState []byte, userID string) (RestoreDrawingResult, error) {
+	var result RestoreDrawingResult
+
+	body, err := json.Marshal(drawingRestoreRequest{
+		DocumentID:   documentID,
+		ContentState: base64.StdEncoding.EncodeToString(contentState),
+		UserID:       userID,
+	})
+	if err != nil {
+		return result, fmt.Errorf("marshal drawing restore payload: %w", err)
+	}
+
+	resp, err := c.postInternal(ctx, "/internal/drawing/restore", body)
+	if err != nil {
+		return result, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return result, fmt.Errorf("drawing restore returned %d: %s", resp.StatusCode, string(errBody))
+	}
+
+	// The previous state is a whole scene, base64'd: bounded the same way the
+	// request body is on the sidecar side.
+	var wire drawingRestoreWireResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&wire); err != nil {
+		return result, fmt.Errorf("read drawing restore response: %w", err)
+	}
+	result = wire.RestoreDrawingResult
+	if result.PreviousState, err = base64.StdEncoding.DecodeString(wire.PreviousState); err != nil {
+		return result, fmt.Errorf("decode drawing restore previous state: %w", err)
+	}
+	return result, nil
+}

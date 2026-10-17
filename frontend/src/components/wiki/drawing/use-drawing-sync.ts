@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { getCursorColor } from "@/lib/cursor-colors"
 import {
   LOCAL_ORIGIN,
+  getAppStateMap,
   getElementsMap,
   locallyEditingIDs,
   mergeRemoteElements,
@@ -160,6 +161,30 @@ export function useDrawingSync({
     shared.observe(handler)
     return () => shared.unobserve(handler)
   }, [ydoc, api, lastSeen])
+
+  // Shared appState to canvas. Without this a peer's background change never
+  // reached this canvas — and worse, this canvas's next onChange compared its
+  // own stale background with the shared one, found them different, and wrote
+  // its own back over the peer's. A restored backup's background was undone
+  // the same way by whoever had the page open.
+  useEffect(() => {
+    if (!api) return
+    const shared = getAppStateMap(ydoc)
+
+    const handler = (_event: unknown, transaction: { origin: unknown }) => {
+      if (transaction.origin === LOCAL_ORIGIN) return
+      const { viewBackgroundColor, gridSize } = readSharedAppState(ydoc)
+      // Only fields the room actually holds. One that is absent was never
+      // chosen, and the canvas's own default is the right thing to keep.
+      const next: Partial<AppState> = {}
+      if (viewBackgroundColor !== undefined) next.viewBackgroundColor = viewBackgroundColor
+      if (typeof gridSize === "number") next.gridSize = gridSize
+      if (Object.keys(next).length > 0) api.updateScene({ appState: next as AppState })
+    }
+
+    shared.observe(handler)
+    return () => shared.unobserve(handler)
+  }, [ydoc, api])
 
   // Images the canvas has taken on but not yet stored. Tracked so a slow
   // upload is not started again by every subsequent change event — onChange

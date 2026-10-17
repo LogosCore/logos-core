@@ -15,11 +15,12 @@
 
 import type { Express, Request, Response } from "express";
 import type { Hocuspocus } from "@hocuspocus/server";
-import type * as Y from "yjs";
+import * as Y from "yjs";
 
 import { readRawBody, requireSignature } from "./internal-auth.js";
 import { inPaintOrder, layerOf } from "./drawing-order.js";
-import { DRAWING_ROOT_KEY } from "./drawing-projection.js";
+import { DRAWING_ROOT_KEY, deriveDrawingProjection } from "./drawing-projection.js";
+import { restoreDrawingInto } from "./restore-drawing.js";
 import {
   DrawingElementError,
   normalizeElements,
@@ -573,6 +574,90 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
         res.status(500).json({ error: message });
       } finally {
         await release(connection, "drawing apply");
+      }
+    },
+  );
+
+  // --- Restore ----------------------------------------------------------
+  //
+  // Put a backup back on the canvas. Through the room rather than over the
+  // Mongo row, for the reasons in restore-drawing.ts: a row write is
+  // overwritten by a loaded room, and merged away by any browser that
+  // reconnects holding newer state.
+  //
+  //   Request  { documentId, contentState: <base64 backup state>, userId? }
+  //   Response { ok, restored, removed, watchers,
+  //              previousState: <base64>, previousContent }
+  //
+  // previousState is the room as it stood just before the restore — what the
+  // caller files as the pre-restore safety backup. Taken here, inside the same
+  // transaction, because the Mongo row can be a debounce window behind what
+  // is on screen, and a safety copy missing the last strokes is not one.
+
+  app.post(
+    "/internal/drawing/restore",
+    readRawBody(MAX_BODY_BYTES),
+    async (req: Request, res: Response) => {
+      const rawBody = requireSignature(req, res);
+      if (!rawBody) return;
+
+      let body: { documentId?: unknown; contentState?: unknown; userId?: unknown };
+      try {
+        body = JSON.parse(rawBody.toString("utf8"));
+      } catch {
+        res.status(400).json({ error: "malformed JSON" });
+        return;
+      }
+
+      const documentId = body.documentId;
+      if (typeof documentId !== "string" || documentId === "") {
+        res.status(400).json({ error: "documentId field required" });
+        return;
+      }
+      if (typeof body.contentState !== "string") {
+        res.status(400).json({ error: "contentState field required" });
+        return;
+      }
+      const backupState = new Uint8Array(Buffer.from(body.contentState, "base64"));
+
+      // Decoded before a seat is taken, so a corrupt backup is refused without
+      // touching the room at all. An empty state is a valid empty canvas.
+      try {
+        Y.applyUpdate(new Y.Doc(), backupState);
+      } catch {
+        res.status(422).json({ error: "contentState is not a valid Y.js update" });
+        return;
+      }
+
+      let connection;
+      try {
+        connection = await server.openDirectConnection(roomName(documentId), {
+          agent: true,
+          userId: body.userId,
+        });
+
+        let previousState: Uint8Array = new Uint8Array();
+        let previousContent = "";
+        let result = { restored: 0, removed: 0 };
+        await connection.transact((document) => {
+          previousState = Y.encodeStateAsUpdate(document);
+          previousContent = deriveDrawingProjection(document).content;
+          result = restoreDrawingInto(document, backupState);
+        });
+
+        res.status(200).json({
+          ok: true,
+          ...result,
+          watchers: watcherCount(server, documentId),
+          previousState: Buffer.from(previousState).toString("base64"),
+          previousContent,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "restore failed";
+        console.error("drawing restore error:", err);
+        res.status(500).json({ error: message });
+      } finally {
+        await release(connection, "drawing restore");
       }
     },
   );

@@ -132,6 +132,7 @@ func (a *App) buildResolvers() *resolvers {
 		a.eventBus, a.presenceTracker,
 		a.hpClient,
 		wiki.NewDrawingFileRenderer(a.hpClient, a.repos.WikiImage, a.imageStore),
+		a.hpClient,
 	)
 
 	// credential depends on wikiDoc for the backlinks field resolvers — the
