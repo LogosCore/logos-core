@@ -29,8 +29,10 @@ type restoreWorld struct {
 }
 
 type restoreCall struct {
+	kind       string
 	documentID string
 	state      []byte
+	markdown   string
 	userID     string
 }
 
@@ -69,8 +71,16 @@ func (f restoreBackups) Create(_ context.Context, b *models.WikiDocumentBackup) 
 type restoreRoom struct{ w *restoreWorld }
 
 func (f restoreRoom) RestoreDrawing(_ context.Context, documentID string, state []byte, userID string) (wiki.RestoreDrawingResult, error) {
-	f.w.roomRestores = append(f.w.roomRestores, restoreCall{documentID, state, userID})
+	f.w.roomRestores = append(f.w.roomRestores, restoreCall{"drawing", documentID, state, "", userID})
 	return f.w.roomResult, f.w.roomErr
+}
+
+func (f restoreRoom) RestoreDocument(_ context.Context, documentID string, state []byte, markdown, userID string) (wiki.RestoreDocumentResult, error) {
+	f.w.roomRestores = append(f.w.roomRestores, restoreCall{"document", documentID, state, markdown, userID})
+	return wiki.RestoreDocumentResult{
+		PreviousState:   f.w.roomResult.PreviousState,
+		PreviousContent: f.w.roomResult.PreviousContent,
+	}, f.w.roomErr
 }
 
 func newRestoreWorld(t *testing.T, kind models.WikiDocumentKind) (*wikiDocumentResolver, *restoreWorld, context.Context, uuid.UUID) {
@@ -83,7 +93,7 @@ func newRestoreWorld(t *testing.T, kind models.WikiDocumentKind) (*wikiDocumentR
 		},
 		backup: models.WikiDocumentBackup{
 			BackupID: uuid.New(), DocumentID: docID, OperationID: opID, Title: "Network map",
-			Kind: kind, ContentState: []byte("backup state"),
+			Kind: kind, ContentState: []byte("backup state"), Content: "backup text",
 		},
 		roomResult: wiki.RestoreDrawingResult{
 			Restored: 3, Removed: 1,
@@ -119,7 +129,7 @@ func TestRestoreWikiDocumentBackup_DrawingGoesThroughTheRoom(t *testing.T) {
 		t.Fatalf("room restores = %d, want 1", len(w.roomRestores))
 	}
 	got := w.roomRestores[0]
-	if got.documentID != w.doc.DocumentID.String() || string(got.state) != "backup state" || got.userID != caller.String() {
+	if got.kind != "drawing" || got.documentID != w.doc.DocumentID.String() || string(got.state) != "backup state" || got.userID != caller.String() {
 		t.Errorf("room restore called with %+v", got)
 	}
 }
@@ -160,14 +170,54 @@ func TestRestoreWikiDocumentBackup_DrawingFailsWhenTheRoomCannot(t *testing.T) {
 	}
 }
 
-// Prose is untouched by this change.
-func TestRestoreWikiDocumentBackup_ProseStillWritesTheRow(t *testing.T) {
+// Prose pages have the same bug and get the same fix. The backup's stored
+// text travels too: it is the body of a backup taken before the page was
+// ever opened, which has no state to restore from.
+func TestRestoreWikiDocumentBackup_ProseGoesThroughTheRoom(t *testing.T) {
+	r, w, ctx, caller := newRestoreWorld(t, models.WikiDocumentKindDocument)
+
+	if _, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String()); err != nil {
+		t.Fatalf("RestoreWikiDocumentBackup: %v", err)
+	}
+
+	if w.rowRestores != 0 {
+		t.Errorf("a prose restore wrote the row %d times; it must only go through the room", w.rowRestores)
+	}
+	if len(w.roomRestores) != 1 {
+		t.Fatalf("room restores = %d, want 1", len(w.roomRestores))
+	}
+	got := w.roomRestores[0]
+	want := restoreCall{"document", w.doc.DocumentID.String(), []byte("backup state"), "backup text", caller.String()}
+	if got.kind != want.kind || got.documentID != want.documentID || string(got.state) != string(want.state) ||
+		got.markdown != want.markdown || got.userID != want.userID {
+		t.Errorf("room restore called with %+v, want %+v", got, want)
+	}
+	if len(w.safetyCopies) != 1 || string(w.safetyCopies[0].ContentState) != "live room state" {
+		t.Errorf("safety copies = %+v, want one holding the live room's state", w.safetyCopies)
+	}
+}
+
+func TestRestoreWikiDocumentBackup_ProseFailsWhenTheRoomCannot(t *testing.T) {
 	r, w, ctx, _ := newRestoreWorld(t, models.WikiDocumentKindDocument)
+	w.roomErr = errors.New("connection refused")
+
+	if _, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String()); err == nil {
+		t.Fatal("a failed room restore reported success")
+	}
+	if w.rowRestores != 0 || len(w.safetyCopies) != 0 {
+		t.Errorf("a failed room restore still wrote: rows=%d safety=%d", w.rowRestores, len(w.safetyCopies))
+	}
+}
+
+// Without a sidecar wired the row write is all there is, for either kind.
+func TestRestoreWikiDocumentBackup_NoRestorerWritesTheRow(t *testing.T) {
+	r, w, ctx, _ := newRestoreWorld(t, models.WikiDocumentKindDocument)
+	r.restorer = nil
 
 	if _, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String()); err != nil {
 		t.Fatalf("RestoreWikiDocumentBackup: %v", err)
 	}
 	if w.rowRestores != 1 || len(w.roomRestores) != 0 {
-		t.Errorf("prose restore: rows=%d room=%d, want 1/0", w.rowRestores, len(w.roomRestores))
+		t.Errorf("rows=%d room=%d, want 1/0", w.rowRestores, len(w.roomRestores))
 	}
 }

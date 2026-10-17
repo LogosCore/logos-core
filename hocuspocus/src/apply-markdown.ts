@@ -198,8 +198,14 @@ function roomName(documentId: string): string {
  * last one still rewrites everything between them. It is the cheap 90% case,
  * and the expensive case is no worse than the old behaviour.
  */
-function spliceFragment(fragment: XmlFragment, blocks: DetachedBlock[]): void {
-  const existing = fragment.toArray().map(nodeKey);
+export function spliceFragment(
+  fragment: XmlFragment,
+  blocks: DetachedBlock[],
+  // How blocks are compared. The default is lenient on purpose — see nodeKey —
+  // and a caller that needs an exact copy (a backup restore) passes its own.
+  key: (node: unknown) => string = nodeKey,
+): void {
+  const existing = fragment.toArray().map(key);
   const incoming = blocks.map((block) => block.key);
 
   let prefix = 0;
@@ -309,7 +315,7 @@ function markdownToDetachedNodes(markdown: string): (XmlElement | XmlText)[] {
 }
 
 /** One top-level block: the detached node, and its identity for splicing. */
-interface DetachedBlock {
+export interface DetachedBlock {
   node: XmlElement | XmlText;
   key: string;
 }
@@ -322,21 +328,24 @@ interface DetachedBlock {
  * to a document before reading data" — so there is no second chance to
  * compute it after the clone.
  */
-function markdownToDetachedBlocks(markdown: string): DetachedBlock[] {
+export function markdownToDetachedBlocks(
+  markdown: string,
+  key: (node: unknown) => string = nodeKey,
+): DetachedBlock[] {
   const pmDoc = parseOutlineMarkdown(markdown);
   const scratch = prosemirrorJSONToYDoc(wikiSchema, pmDoc.toJSON(), Y_FRAGMENT_FIELD);
   try {
     const fragment = scratch.getXmlFragment(Y_FRAGMENT_FIELD);
     return fragment.toArray().map((node) => ({
       node: cloneNode(node),
-      key: nodeKey(node),
+      key: key(node),
     }));
   } finally {
     scratch.destroy();
   }
 }
 
-function cloneNode(node: unknown): XmlElement | XmlText {
+export function cloneNode(node: unknown): XmlElement | XmlText {
   if (node instanceof XmlText) {
     const copy = new XmlText();
     // Deltas carry the inline marks (bold, code, links) alongside the text, so

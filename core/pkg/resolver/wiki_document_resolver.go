@@ -192,17 +192,18 @@ type wikiDocumentResolver struct {
 	// an export of the tree cannot disagree about what the scene is. Nil is
 	// acceptable — WikiDrawingScene is the only caller and says so.
 	drawings *wiki.DrawingFileRenderer
-	// restorer puts a drawing backup back through its live room. Nil is
+	// restorer puts a backup back through the page's live room. Nil is
 	// acceptable for tests and wiring without a sidecar: the restore then
 	// falls back to writing the row, which is all a room that cannot be
 	// loaded leaves.
-	restorer DrawingRestorer
+	restorer BackupRestorer
 }
 
-// DrawingRestorer restores a drawing page's scene inside its live room.
+// BackupRestorer restores a page's body inside its live room, as an edit.
 // Satisfied by *wiki.HocuspocusClient.
-type DrawingRestorer interface {
+type BackupRestorer interface {
 	RestoreDrawing(ctx context.Context, documentID string, contentState []byte, userID string) (wiki.RestoreDrawingResult, error)
+	RestoreDocument(ctx context.Context, documentID string, contentState []byte, markdown, userID string) (wiki.RestoreDocumentResult, error)
 }
 
 // MarkdownRenderer converts a document's Y.js binary state back to Markdown.
@@ -227,7 +228,7 @@ func NewWikiDocumentResolver(
 	presence *wiki.PresenceTracker,
 	renderer MarkdownRenderer,
 	drawings *wiki.DrawingFileRenderer,
-	restorer DrawingRestorer,
+	restorer BackupRestorer,
 ) IWikiDocumentResolver {
 	return &wikiDocumentResolver{
 		docRepo:       docRepo,
@@ -1687,24 +1688,36 @@ func (r *wikiDocumentResolver) RestoreWikiDocumentBackup(ctx context.Context, do
 		return nil, fmt.Errorf("invalid caller ID: %w", err)
 	}
 
-	if doc.Kind.IsDrawing() && r.restorer != nil {
+	if r.restorer != nil {
 		// Through the live room, never over the row: a loaded room writes its
-		// own scene back on the next store, and a browser reconnecting with
-		// newer state merges every shape drawn since the backup back in. See
-		// RestoreDrawing. A sidecar that cannot be reached fails the restore
-		// rather than falling back to the row write, which would report
-		// success for a restore that does not stick.
-		restored, err := r.restorer.RestoreDrawing(ctx, documentID, backup.ContentState, callerUID.String())
-		if err != nil {
-			return nil, fmt.Errorf("failed to restore the drawing from backup: %w", err)
+		// own state back on the next store, and a browser reconnecting with
+		// newer state merges everything written since the backup back in.
+		// See RestoreDrawing and RestoreDocument. A sidecar that cannot be
+		// reached fails the restore rather than falling back to the row
+		// write, which would report success for a restore that does not
+		// stick.
+		var before []byte
+		var beforeContent string
+		if doc.Kind.IsDrawing() {
+			restored, err := r.restorer.RestoreDrawing(ctx, documentID, backup.ContentState, callerUID.String())
+			if err != nil {
+				return nil, fmt.Errorf("failed to restore the drawing from backup: %w", err)
+			}
+			before, beforeContent = restored.PreviousState, restored.PreviousContent
+		} else {
+			restored, err := r.restorer.RestoreDocument(ctx, documentID, backup.ContentState, backup.Content, callerUID.String())
+			if err != nil {
+				return nil, fmt.Errorf("failed to restore the page from backup: %w", err)
+			}
+			before, beforeContent = restored.PreviousState, restored.PreviousContent
 		}
 		// The safety copy is the room as it stood just before the restore,
 		// which the sidecar read inside the same transaction. The row would
 		// do too, but it can be a debounce window behind the screen.
-		before := doc
-		before.ContentState = restored.PreviousState
-		before.Content = restored.PreviousContent
-		r.createSafetyBackup(ctx, &before, callerUID, "Pre-restore snapshot")
+		snapshot := doc
+		snapshot.ContentState = before
+		snapshot.Content = beforeContent
+		r.createSafetyBackup(ctx, &snapshot, callerUID, "Pre-restore snapshot")
 	} else {
 		// Create pre-restore safety backup
 		r.createSafetyBackup(ctx, &doc, callerUID, "Pre-restore snapshot")
