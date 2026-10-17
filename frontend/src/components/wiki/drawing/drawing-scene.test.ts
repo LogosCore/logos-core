@@ -6,8 +6,11 @@ import {
   DRAWING_ROOT_KEY,
   LOCAL_ORIGIN,
   getElementsMap,
+  hideRemovedElements,
+  isGestureActive,
   locallyEditingIDs,
   mergeRemoteElements,
+  rebaseFinishedEdits,
   readElements,
   seedLastSeen,
   shouldKeepLocal,
@@ -384,5 +387,213 @@ describe("paint order", () => {
       new Map(),
     )
     expect(readElements(doc).map((el) => el.id)).toEqual(["aaa", "bbb", "ccc"])
+  })
+})
+
+/**
+ * One browser: its own Y.Doc, the canvas it shows, and what it has published.
+ * `merge` and `write` are what use-drawing-sync does on a room update and on a
+ * local change, minus React and Excalidraw.
+ */
+function client(clientID: number, canvas: ExcalidrawElement[]) {
+  const doc = new YDoc()
+  doc.clientID = clientID
+  const c = {
+    doc,
+    canvas,
+    seen: seedLastSeen(canvas),
+    merge(editing: ReadonlySet<string> = new Set()) {
+      const result = mergeRemoteElements(c.canvas, readElements(doc), editing)
+      for (const [id, version] of result.accepted) c.seen.set(id, version)
+      for (const id of result.contested) c.seen.delete(id)
+      c.canvas = result.elements
+      return result
+    },
+    write() {
+      writeLocalElements(doc, c.canvas, c.seen)
+    },
+    edit(el: ExcalidrawElement) {
+      c.canvas = c.canvas.map((old) => (old.id === el.id ? el : old))
+    },
+  }
+  writeLocalElements(doc, canvas, new Map())
+  return c
+}
+
+function sync(...clients: { doc: YDoc }[]) {
+  for (const from of clients) {
+    for (const to of clients) if (from !== to) applyUpdate(to.doc, encodeStateAsUpdate(from.doc))
+  }
+}
+
+describe("convergence when two people change one shape at once", () => {
+  // Two writes to one key, made at the same moment. Y.Map keeps one of them
+  // by client id; Excalidraw's rule keeps the lower nonce. Arranged here so
+  // the two disagree: the room keeps A's copy, the rule says B's.
+  function concurrentEdit() {
+    const a = client(2, [element("x", 1, 50)])
+    const b = client(1, [element("x", 1, 50)])
+    sync(a, b)
+    a.edit(element("x", 2, 900))
+    b.edit(element("x", 2, 5))
+    a.write()
+    b.write()
+    sync(a, b)
+    return { a, b }
+  }
+
+  test("the room can hold the copy the merge rule rejects", () => {
+    const { a } = concurrentEdit()
+    expect(getElementsMap(a.doc).get("x")?.versionNonce).toBe(900)
+  })
+
+  test("the canvas holding the rule's winner is told to republish it", () => {
+    const { a, b } = concurrentEdit()
+
+    expect(a.merge().contested.size).toBe(0)
+    expect([...b.merge().contested]).toEqual(["x"])
+  })
+
+  // Before: B kept its own copy, A kept the room's, and the two screens showed
+  // different shapes until somebody edited it again.
+  test("after the republish every canvas and the room agree", () => {
+    const { a, b } = concurrentEdit()
+    a.merge()
+    b.merge()
+
+    b.write()
+    sync(a, b)
+    a.merge()
+    b.merge()
+
+    expect(a.canvas[0].versionNonce).toBe(5)
+    expect(b.canvas[0].versionNonce).toBe(5)
+    expect(getElementsMap(a.doc).get("x")?.versionNonce).toBe(5)
+  })
+
+  test("once they agree nobody republishes again", () => {
+    const { a, b } = concurrentEdit()
+    a.merge()
+    b.merge()
+    b.write()
+    sync(a, b)
+
+    expect(a.merge().contested.size).toBe(0)
+    expect(b.merge().contested.size).toBe(0)
+  })
+
+  // A copy that is the same write as the room's is not a disagreement, and
+  // republishing it would echo every element on every merge.
+  test("the room holding this client's own write is not contested", () => {
+    const a = client(1, [element("x", 3, 10)])
+    expect(a.merge().contested.size).toBe(0)
+  })
+})
+
+describe("a gesture that overlaps someone else's change", () => {
+  // A resizes x; meanwhile B changes it several times, reaching version 10.
+  // A's canvas drops B's copy while the pointer is down, and finishes at 7.
+  function resizeOverRecolour() {
+    const a = client(1, [element("x", 5, 1)])
+    const b = client(2, [element("x", 5, 1)])
+    sync(a, b)
+    b.edit(element("x", 10, 2))
+    b.write()
+    sync(a, b)
+    const during = a.merge(new Set(["x"]))
+    a.edit(element("x", 7, 3))
+    return { a, b, during }
+  }
+
+  test("the dropped copy is remembered while the pointer is down", () => {
+    const { a, during } = resizeOverRecolour()
+    expect([...during.deferred]).toEqual(["x"])
+    expect(a.canvas[0].version).toBe(7)
+  })
+
+  test("nothing is rebased while the gesture is still going", () => {
+    const { a, during } = resizeOverRecolour()
+    const { rebased, settled } = rebaseFinishedEdits(
+      a.canvas,
+      getElementsMap(a.doc),
+      during.deferred,
+      new Set(["x"]),
+    )
+    expect(rebased).toEqual([])
+    expect(settled).toEqual([])
+  })
+
+  // Before: A published version 7, every other canvas kept B's 10, and A kept
+  // its own resize. The screens disagreed from then on.
+  test("when it ends, the result outranks the dropped copy and reaches everyone", () => {
+    const { a, b, during } = resizeOverRecolour()
+
+    const { rebased, settled } = rebaseFinishedEdits(
+      a.canvas,
+      getElementsMap(a.doc),
+      during.deferred,
+      new Set(),
+    )
+    expect(settled).toEqual(["x"])
+    expect(rebased.map((el) => el.version)).toEqual([11])
+
+    a.canvas = rebased
+    a.write()
+    sync(a, b)
+    b.merge()
+    expect(b.canvas[0].version).toBe(11)
+    expect(b.canvas[0].versionNonce).toBe(rebased[0].versionNonce)
+  })
+
+  test("a result that already outranks the room is left as it is", () => {
+    const { a, during } = resizeOverRecolour()
+    a.edit(element("x", 12, 3))
+
+    const { rebased, settled } = rebaseFinishedEdits(
+      a.canvas,
+      getElementsMap(a.doc),
+      during.deferred,
+      new Set(),
+    )
+    expect(rebased).toEqual([])
+    expect(settled).toEqual(["x"])
+  })
+})
+
+describe("hideRemovedElements", () => {
+  test("a shape whose key left the room is hidden", () => {
+    const shown = hideRemovedElements([element("x", 3)], new Map([["x", element("x", 3)]]))
+    expect(shown[0].isDeleted).toBe(true)
+  })
+
+  test("a change made here after the removed copy is kept", () => {
+    const shown = hideRemovedElements([element("x", 4)], new Map([["x", element("x", 3)]]))
+    expect(shown[0].isDeleted).toBeFalsy()
+  })
+
+  test("other shapes are untouched", () => {
+    const y = element("y", 1)
+    const shown = hideRemovedElements([y], new Map([["x", element("x", 3)]]))
+    expect(shown[0]).toBe(y)
+  })
+})
+
+describe("isGestureActive", () => {
+  test("a stroke, a drag, a resize and a rotation are gestures", () => {
+    expect(isGestureActive({ newElement: { id: "a" } })).toBe(true)
+    expect(isGestureActive({ selectedElementsAreBeingDragged: true })).toBe(true)
+    expect(isGestureActive({ isResizing: true })).toBe(true)
+    expect(isGestureActive({ isRotating: true })).toBe(true)
+  })
+
+  test("an idle canvas is not", () => {
+    expect(
+      isGestureActive({
+        newElement: null,
+        selectedElementsAreBeingDragged: false,
+        isResizing: false,
+        isRotating: false,
+      }),
+    ).toBe(false)
   })
 })

@@ -22,14 +22,23 @@ import {
   LOCAL_ORIGIN,
   getAppStateMap,
   getElementsMap,
+  hideRemovedElements,
+  isGestureActive,
   locallyEditingIDs,
   mergeRemoteElements,
   readElements,
   readSharedAppState,
+  rebaseFinishedEdits,
   seedLastSeen,
   writeLocalElements,
   writeSharedAppState,
 } from "./drawing-scene"
+import {
+  POINTER_WRITE_INTERVAL_MS,
+  SCENE_WRITE_INTERVAL_MS,
+  createThrottle,
+  type Throttle,
+} from "./drawing-throttle"
 import {
   toExcalidrawCollaborators,
   type DrawingAwarenessState,
@@ -57,17 +66,21 @@ interface UseDrawingSyncArgs {
   user: { userId: string; username: string } | null
 }
 
+interface PointerPayload {
+  pointer: { x: number; y: number; tool: "pointer" | "laser" }
+  button: "up" | "down"
+}
+
 interface UseDrawingSyncReturn {
+  /** The canvas's API once it has mounted, for hooks of the canvas's own. */
+  api: ExcalidrawImperativeAPI | null
   onExcalidrawAPI: (api: ExcalidrawImperativeAPI) => void
   onChange: (
     elements: readonly ExcalidrawElement[],
     appState: AppState,
     files: BinaryFiles,
   ) => void
-  onPointerUpdate: (payload: {
-    pointer: { x: number; y: number; tool: "pointer" | "laser" }
-    button: "up" | "down"
-  }) => void
+  onPointerUpdate: (payload: PointerPayload) => void
   /** The scene as it stood when the canvas mounted. Read once — Excalidraw
    * takes initialData at mount and everything after that arrives by
    * updateScene. */
@@ -121,16 +134,86 @@ export function useDrawingSync({
     setApi(next)
   }, [])
 
+  // Elements this canvas kept through a gesture over a newer copy from the
+  // room. Checked when the gesture ends; see rebaseFinishedEdits.
+  const deferredRef = useRef<Set<string>>(new Set())
+  // The scene as Excalidraw last reported it. The writer reads the live scene
+  // from the API; this copy is only for the last flush on unmount, when the
+  // canvas may already have discarded its scene.
+  const latestRef = useRef<readonly ExcalidrawElement[] | null>(null)
+  // The scene writer, once the canvas is up and this client may write. A ref
+  // because both onChange and the room observer ask it for a write.
+  const writerRef = useRef<Throttle | null>(null)
+
+  // Canvas to shared scene, rate-limited while a gesture is in progress (see
+  // drawing-throttle.ts). Every run publishes whatever the canvas holds at
+  // that moment, never a copy captured earlier, so a write that waited cannot
+  // put something staler than the canvas into the room.
+  useEffect(() => {
+    if (!api || !isEditor) return
+    let unmounting = false
+
+    const write = () => {
+      let elements = unmounting ? latestRef.current : api.getSceneElementsIncludingDeleted()
+      if (!elements) return
+      const seen = lastSeen()
+
+      if (!unmounting && deferredRef.current.size > 0) {
+        const editing = locallyEditingIDs(api.getAppState())
+        const { rebased, settled } = rebaseFinishedEdits(
+          elements,
+          getElementsMap(ydoc),
+          deferredRef.current,
+          editing,
+        )
+        for (const id of settled) deferredRef.current.delete(id)
+        if (rebased.length > 0) {
+          const byID = new Map(rebased.map((el) => [el.id, el]))
+          api.updateScene({ elements: elements.map((el) => byID.get(el.id) ?? el) })
+          elements = api.getSceneElementsIncludingDeleted()
+        }
+      }
+
+      // Images still uploading stay on this canvas until they are stored;
+      // see publishableElements. adoptImages rewrites them to their wiki id,
+      // which bumps their version, and the write after that publishes them.
+      writeLocalElements(ydoc, publishableElements(elements, seen), seen)
+    }
+
+    const writer = createThrottle(write, SCENE_WRITE_INTERVAL_MS)
+    writerRef.current = writer
+    // A write still waiting when the tab goes away would be lost, so it is
+    // sent right away. Both events, because a closed mobile tab never fires
+    // pagehide.
+    const onPageHide = () => writer.flush()
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") writer.flush()
+    }
+    window.addEventListener("pagehide", onPageHide)
+    document.addEventListener("visibilitychange", onVisibility)
+    return () => {
+      window.removeEventListener("pagehide", onPageHide)
+      document.removeEventListener("visibilitychange", onVisibility)
+      unmounting = true
+      writer.flush()
+      writerRef.current = null
+    }
+  }, [ydoc, api, isEditor, lastSeen])
+
   // Shared scene to canvas.
   useEffect(() => {
     if (!api) return
     const shared = getElementsMap(ydoc)
+    // Ids whose key left the room since the last merge, with the value the
+    // room held. See hideRemovedElements.
+    const removed = new Map<string, ExcalidrawElement | undefined>()
+    let frame = 0
 
-    const handler = (_event: unknown, transaction: { origin: unknown }) => {
-      // Our own writes come back through here too. Applying them would at best
-      // waste a render and at worst fight the user's pointer mid-drag.
-      if (transaction.origin === LOCAL_ORIGIN) return
-
+    // At most once per frame. A peer mid-gesture sends up to twenty updates
+    // a second, and each merge reads, sorts and re-renders the whole scene.
+    // Doing that more often than the screen can show is work nobody sees.
+    const apply = () => {
+      frame = 0
       // Including deleted: tombstones are how Excalidraw learns that somebody
       // else erased a shape. Merging against the non-deleted view would keep
       // resurrecting it.
@@ -138,7 +221,7 @@ export function useDrawingSync({
       // The appState is read at merge time rather than captured: what the
       // pointer is holding changes between one remote update and the next, and
       // this handler outlives any one gesture.
-      const { elements, accepted } = mergeRemoteElements(
+      const { elements, accepted, contested, deferred } = mergeRemoteElements(
         api.getSceneElementsIncludingDeleted(),
         readElements(ydoc),
         locallyEditingIDs(api.getAppState()),
@@ -150,17 +233,42 @@ export function useDrawingSync({
       // at its local version, and marking it seen would strand it here.
       const seen = lastSeen()
       for (const [id, version] of accepted) seen.set(id, version)
+      // A local copy that beats the room's by the merge rule, but lost to it
+      // in the room, is republished: forgetting it was published is what
+      // makes the next write send it.
+      for (const id of contested) seen.delete(id)
+      for (const id of deferred) deferredRef.current.add(id)
+
+      const shown = hideRemovedElements(elements, removed)
+      removed.clear()
 
       // A peer's image arrives as an element carrying a wiki image id, with no
       // file entry on this client — the canvas would render an empty frame.
       // Register the ones we do not have; the bytes come from the URL.
-      registerWikiImages(api, elements)
+      registerWikiImages(api, shown)
 
-      api.updateScene({ elements })
+      api.updateScene({ elements: shown })
+      if (contested.size > 0) writerRef.current?.request(true)
+    }
+
+    const handler = (
+      event: { changes: { keys: Map<string, { action: string; oldValue?: unknown }> } },
+      transaction: { origin: unknown },
+    ) => {
+      // Our own writes come back through here too. Applying them would at best
+      // waste a render and at worst fight the user's pointer mid-drag.
+      if (transaction.origin === LOCAL_ORIGIN) return
+      for (const [id, change] of event.changes.keys) {
+        if (change.action === "delete") removed.set(id, change.oldValue as ExcalidrawElement | undefined)
+      }
+      frame ||= requestAnimationFrame(apply)
     }
 
     shared.observe(handler)
-    return () => shared.unobserve(handler)
+    return () => {
+      shared.unobserve(handler)
+      cancelAnimationFrame(frame)
+    }
   }, [ydoc, api, lastSeen])
 
   // Shared appState to canvas. Without this a peer's background change never
@@ -296,19 +404,17 @@ export function useDrawingSync({
       publishSelection(appState)
 
       if (!isEditor) return
-      // Images still uploading stay on this canvas until they are stored —
-      // see publishableElements. adoptImages below rewrites them to their
-      // wiki id, which bumps their version, and the onChange that rewrite
-      // fires is the one that publishes them.
-      const seen = lastSeen()
-      writeLocalElements(ydoc, publishableElements(elements, seen), seen)
+      latestRef.current = elements
+      // Mid-gesture changes wait for the throttle; anything else, including
+      // the change that ends a gesture, goes out at once.
+      writerRef.current?.request(!isGestureActive(appState))
       writeSharedAppState(ydoc, {
         viewBackgroundColor: appState.viewBackgroundColor,
         gridSize: appState.gridSize,
       })
       void adoptImages(elements, files)
     },
-    [ydoc, isEditor, lastSeen, adoptImages, publishSelection],
+    [ydoc, isEditor, adoptImages, publishSelection],
   )
 
   const color = getCursorColor(user?.userId ?? "anon")
@@ -327,7 +433,9 @@ export function useDrawingSync({
   useEffect(() => {
     if (!awareness || !api) return
 
+    let frame = 0
     const update = () => {
+      frame = 0
       api.updateScene({
         collaborators: toExcalidrawCollaborators(
           awareness.getStates() as Map<number, DrawingAwarenessState>,
@@ -335,18 +443,30 @@ export function useDrawingSync({
         ),
       })
     }
+    // Once per frame at most: every peer's cursor moves are a change event
+    // each, and each re-renders the canvas.
+    const onChange = () => {
+      frame ||= requestAnimationFrame(update)
+    }
 
     update()
-    awareness.on("change", update)
-    return () => awareness.off("change", update)
+    awareness.on("change", onChange)
+    return () => {
+      awareness.off("change", onChange)
+      cancelAnimationFrame(frame)
+    }
   }, [awareness, api])
 
-  const onPointerUpdate = useCallback(
-    (payload: {
-      pointer: { x: number; y: number; tool: "pointer" | "laser" }
-      button: "up" | "down"
-    }) => {
-      if (!awareness) return
+  // The pointer as last reported, and the press state last broadcast.
+  const pointerRef = useRef<PointerPayload | null>(null)
+  const sentButtonRef = useRef<PointerPayload["button"] | null>(null)
+  const pointerWriterRef = useRef<Throttle | null>(null)
+  useEffect(() => {
+    if (!awareness) return
+    const writer = createThrottle(() => {
+      const payload = pointerRef.current
+      if (!payload) return
+      sentButtonRef.current = payload.button
       // Pointer position is presence, not content: it rides on awareness and
       // is never persisted. Someone's cursor should not survive their session.
       //
@@ -354,9 +474,9 @@ export function useDrawingSync({
       // only while the peer is pressing — see DrawingAwarenessState.button.
       //
       // Both go in a single setLocalState rather than two setLocalStateField
-      // calls: each field write broadcasts an awareness update of its own, and
-      // this fires on every pointermove. Merging over the current state keeps
-      // the `user` field, which setLocalState would otherwise replace.
+      // calls: each field write broadcasts an awareness update of its own.
+      // Merging over the current state keeps the `user` field, which
+      // setLocalState would otherwise replace.
       awareness.setLocalState({
         ...(awareness.getLocalState() ?? {}),
         // The laser colour rides along so a peer's trail of ours is our
@@ -364,12 +484,27 @@ export function useDrawingSync({
         pointer: { ...payload.pointer, laserColor: color },
         button: payload.button,
       })
+    }, POINTER_WRITE_INTERVAL_MS)
+    pointerWriterRef.current = writer
+    return () => {
+      writer.cancel()
+      pointerWriterRef.current = null
+    }
+  }, [awareness, color])
+
+  const onPointerUpdate = useCallback(
+    (payload: PointerPayload) => {
+      pointerRef.current = payload
+      // A press or release goes out at once: a peer draws our laser trail only
+      // while we are pressing, so a delayed release leaves it hanging.
+      pointerWriterRef.current?.request(payload.button !== sentButtonRef.current)
     },
-    [awareness, color],
+    [],
   )
 
   return useMemo(
     () => ({
+      api,
       onExcalidrawAPI,
       onChange,
       onPointerUpdate,
@@ -377,7 +512,7 @@ export function useDrawingSync({
       initialBackgroundColor: initial.appState.viewBackgroundColor,
       initialFiles: wikiImageFiles(initial.elements),
     }),
-    [onExcalidrawAPI, onChange, onPointerUpdate, initial],
+    [api, onExcalidrawAPI, onChange, onPointerUpdate, initial],
   )
 }
 

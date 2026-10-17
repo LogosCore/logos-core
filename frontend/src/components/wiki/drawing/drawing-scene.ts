@@ -240,6 +240,38 @@ export interface MergeResult {
    * one screen it was drawn on, forever.
    */
   accepted: Map<string, number>
+  /**
+   * Ids where this canvas kept its own copy and the room holds a different
+   * one, with no gesture involved.
+   *
+   * The room is a Y.Map, and Y.Map settles two concurrent writes to one key by
+   * client id — not by Excalidraw's version rule. So when two people change the
+   * same shape at the same moment, the room can end up holding the copy the
+   * version rule says should lose. Every canvas that holds the rule's winner
+   * then keeps it, and every other canvas takes the room's: two screens show
+   * different shapes and stay that way until somebody edits it again.
+   *
+   * Republishing the local copy fixes that. It puts the rule's winner in the
+   * room, every canvas that holds the loser takes it by the same rule, and
+   * nothing republishes after that, because the room no longer differs from
+   * anyone's copy.
+   */
+  contested: Set<string>
+  /**
+   * Ids kept only because they are under this client's pointer, where the
+   * room's copy would otherwise have won. A gesture must not be interrupted,
+   * so the room's copy is dropped. When the gesture ends, the result has to
+   * outrank the dropped copy or it never shows on any other screen — see
+   * rebaseFinishedEdits.
+   */
+  deferred: Set<string>
+}
+
+/** Whether two copies of an element are the same write. Versions and nonces
+ * are what every merge decision reads, so two copies that match on both are
+ * interchangeable for convergence. */
+function sameWrite(a: ExcalidrawElement, b: ExcalidrawElement): boolean {
+  return a.version === b.version && a.versionNonce === b.versionNonce
 }
 
 /**
@@ -261,12 +293,17 @@ export function mergeRemoteElements(
   const localByID = new Map(local.map((el) => [el.id, el]))
   const merged: ExcalidrawElement[] = []
   const accepted = new Map<string, number>()
+  const contested = new Set<string>()
+  const deferred = new Set<string>()
   const taken = new Set<string>()
 
   for (const remoteEl of remote) {
     const localEl = localByID.get(remoteEl.id)
     if (shouldKeepLocal(localEl, remoteEl, locallyEditing)) {
-      merged.push(localEl as ExcalidrawElement)
+      const kept = localEl as ExcalidrawElement
+      merged.push(kept)
+      if (!shouldKeepLocal(kept, remoteEl)) deferred.add(kept.id)
+      else if (!sameWrite(kept, remoteEl) && !locallyEditing?.has(kept.id)) contested.add(kept.id)
     } else {
       merged.push(remoteEl)
       accepted.set(remoteEl.id, remoteEl.version)
@@ -279,7 +316,108 @@ export function mergeRemoteElements(
   // Sorted rather than left in arrival order: the merged array is the z-order,
   // and taking it from whichever peer's update happened to arrive first is how
   // two canvases end up disagreeing about what is on top.
-  return { elements: merged.sort(compareElements), accepted }
+  return { elements: merged.sort(compareElements), accepted, contested, deferred }
+}
+
+/** A fresh nonce for a version this client mints itself. */
+function randomNonce(): number {
+  return Math.floor(Math.random() * 2 ** 31)
+}
+
+/**
+ * The elements whose gesture has ended and whose result the room would reject.
+ *
+ * The case: while one person resizes a shape, somebody else recolours it. The
+ * resizing canvas drops the recolour (mergeRemoteElements' `deferred`), which
+ * is right while the pointer is down. But if the recolour's version is above
+ * the version the resize finishes at, every other canvas keeps the recolour
+ * and rejects the resize, while the resizing canvas never re-reads the room
+ * and keeps its own. The two screens disagree from then on.
+ *
+ * The person who just let go wins. Their copy is given a version above the
+ * room's, and is then published like any other change. Losing a resize you
+ * just made because of a colour change you never saw would be the worse
+ * surprise. The colour change is visible to the person who made it until
+ * the resize lands, so they can see it was overwritten.
+ *
+ * Returns the replacement copies, plus the ids that are settled and no longer
+ * need watching. An id still under the pointer is neither.
+ */
+export function rebaseFinishedEdits(
+  local: readonly ExcalidrawElement[],
+  room: { get(id: string): ExcalidrawElement | undefined },
+  deferred: ReadonlySet<string>,
+  locallyEditing: ReadonlySet<string>,
+): { rebased: ExcalidrawElement[]; settled: string[] } {
+  const rebased: ExcalidrawElement[] = []
+  const settled: string[] = []
+  const localByID = new Map(local.map((el) => [el.id, el]))
+  for (const id of deferred) {
+    if (locallyEditing.has(id)) continue
+    settled.push(id)
+    const mine = localByID.get(id)
+    const theirs = room.get(id)
+    if (!mine || !theirs || shouldKeepLocal(mine, theirs)) continue
+    rebased.push({
+      ...mine,
+      version: theirs.version + 1,
+      versionNonce: randomNonce(),
+      updated: Date.now(),
+    } as ExcalidrawElement)
+  }
+  return { rebased, settled }
+}
+
+/**
+ * Hide elements whose key was removed from the room.
+ *
+ * The sidecar removes tombstones of shapes erased long ago (see
+ * hocuspocus/src/drawing-tombstones.ts). A canvas still holding the
+ * tombstone loses nothing. A canvas that never received the erase, such as
+ * a tab left open from before it, still shows the shape. A merge that only
+ * looks at what the room *has* would never take it away, because a local
+ * element with no room counterpart is kept. So the removal itself is the
+ * signal: the shape is marked deleted here unless this canvas has changed it
+ * since the copy that was removed. A change made after the removal is newer
+ * work and is kept, and it is published like any other.
+ *
+ * `removed` maps each removed id to the value the room held, which is what
+ * Y.js reports as a deleted key's old value.
+ */
+export function hideRemovedElements(
+  elements: readonly ExcalidrawElement[],
+  removed: ReadonlyMap<string, ExcalidrawElement | undefined>,
+): ExcalidrawElement[] {
+  if (removed.size === 0) return elements as ExcalidrawElement[]
+  return elements.map((el) => {
+    if (el.isDeleted || !removed.has(el.id)) return el
+    const last = removed.get(el.id)
+    if (last && el.version > last.version) return el
+    return { ...el, isDeleted: true } as ExcalidrawElement
+  })
+}
+
+/** The appState slots that say a continuous gesture is in progress. */
+export interface GestureAppState extends LocalEditingAppState {
+  selectedElementsAreBeingDragged?: boolean
+  isResizing?: boolean
+  isRotating?: boolean
+}
+
+/**
+ * Whether the pointer is in the middle of something that changes the scene
+ * on every frame: a stroke, a drag, a resize, a rotation or a line being
+ * drawn. Writes are throttled only while this holds. A discrete change, such
+ * as a colour, a deletion or a paste, is published at once, and so is the
+ * final state of every gesture.
+ */
+export function isGestureActive(appState: GestureAppState): boolean {
+  return (
+    locallyEditingIDs(appState).size > 0 ||
+    appState.selectedElementsAreBeingDragged === true ||
+    appState.isResizing === true ||
+    appState.isRotating === true
+  )
 }
 
 /**

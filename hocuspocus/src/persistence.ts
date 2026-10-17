@@ -7,6 +7,7 @@ import {
   EMPTY_DRAWING_PROJECTION,
   type DrawingProjection,
 } from "./drawing-projection.js";
+import { pruneStoredDrawing } from "./drawing-tombstones.js";
 import {
   collectChecklistCoverage,
   collectCredentialReferenceIds,
@@ -148,14 +149,29 @@ export function createDatabaseExtension(): Database {
 
       const doc = await collection.findOne(
         { document_id: uuidToBinary(docId) },
-        { projection: { content_state: 1 } }
+        { projection: { content_state: 1, kind: 1 } }
       );
 
       if (!doc?.content_state?.buffer) {
         return null;
       }
 
-      return new Uint8Array(doc.content_state.buffer);
+      const state = new Uint8Array(doc.content_state.buffer);
+      if (doc.kind !== "drawing") return state;
+
+      // Old tombstones are dropped as the room loads; see drawing-tombstones.ts.
+      // A failure here must never keep a drawing from opening, so the stored
+      // state is served as it is.
+      try {
+        const pruned = pruneStoredDrawing(state);
+        if (pruned.removed > 0) {
+          console.log(`Wiki ${docId}: removed ${pruned.removed} old drawing tombstones on load`);
+        }
+        return pruned.state;
+      } catch (err) {
+        console.warn(`Wiki ${docId}: tombstone cleanup skipped:`, err);
+        return state;
+      }
     },
 
     store: async ({ documentName, state, context }) => {
