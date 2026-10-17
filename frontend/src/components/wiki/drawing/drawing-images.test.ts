@@ -6,6 +6,7 @@ import {
   applyImageIDs,
   isWikiImageID,
   pendingImages,
+  publishableElements,
   wikiImageFiles,
   wikiImageIDs,
   wikiImageURL,
@@ -138,5 +139,35 @@ describe("applyImageIDs", () => {
 
     expect(result[0]).toBe(rect)
     expect(result[1]).toBe(other)
+  })
+})
+
+describe("publishableElements", () => {
+  const ids = (els: readonly ExcalidrawElement[]) => els.map((el) => el.id)
+
+  // The fix: published before it was stored, an image reached every peer
+  // pointing at bytes only the uploader had, and stayed an empty frame for
+  // everyone if that upload never finished.
+  test("holds back a new image until it carries a wiki id", () => {
+    const scene = [rectangle("r"), imageElement("local", LOCAL_ID), imageElement("stored", WIKI_ID)]
+    expect(ids(publishableElements(scene, new Map()))).toEqual(["r", "stored"])
+  })
+
+  // Excalidraw inserts the element before it has worked the file's id out.
+  test("holds back an image that has no fileId yet", () => {
+    const scene = [imageElement("placing", undefined), imageElement("null", null as unknown as string)]
+    expect(publishableElements(scene, new Map())).toEqual([])
+  })
+
+  // Once the room has an element, it must keep syncing: an old image whose
+  // upload never completed can still be moved or erased by anyone.
+  test("keeps publishing an image the room already has", () => {
+    const scene = [imageElement("legacy", LOCAL_ID, { isDeleted: true })]
+    expect(ids(publishableElements(scene, new Map([["legacy", 1]])))).toEqual(["legacy"])
+  })
+
+  test("the rewrite to a wiki id is what releases it", () => {
+    const [rewritten] = applyImageIDs([imageElement("img", LOCAL_ID)], new Map([[LOCAL_ID, WIKI_ID]]))
+    expect(ids(publishableElements([rewritten], new Map()))).toEqual(["img"])
   })
 })

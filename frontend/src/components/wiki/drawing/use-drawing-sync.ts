@@ -37,6 +37,7 @@ import {
 import {
   applyImageIDs,
   pendingImages,
+  publishableElements,
   uploadPendingImages,
   wikiImageFiles,
   wikiImageIDs,
@@ -186,30 +187,45 @@ export function useDrawingSync({
     return () => shared.unobserve(handler)
   }, [ydoc, api])
 
-  // Images the canvas has taken on but not yet stored. Tracked so a slow
-  // upload is not started again by every subsequent change event — onChange
-  // fires continuously while the user keeps drawing.
+  // Images whose upload is in flight. Tracked so a slow upload is not started
+  // again by every subsequent change event — onChange fires continuously while
+  // the user keeps drawing — and so leaving the page mid-upload can be caught.
   const uploadingRef = useRef<Set<string>>(new Set())
+  // Local fileId to the wiki id it was stored as. An undo can hand back an
+  // element carrying the local id after it was rewritten; this puts the
+  // stored id back on it instead of uploading the same bytes a second time.
+  const adoptedRef = useRef<Map<string, string>>(new Map())
 
   const adoptImages = useCallback(
     async (elements: readonly ExcalidrawElement[], files: BinaryFiles) => {
       if (!api || !isEditor) return
 
-      const pending = pendingImages(elements, files).filter(
+      const waiting = pendingImages(elements, files).filter(
         (image) => !uploadingRef.current.has(image.fileId),
       )
-      if (pending.length === 0) return
+      const known = waiting.filter((image) => adoptedRef.current.has(image.fileId))
+      const pending = waiting.filter((image) => !adoptedRef.current.has(image.fileId))
+      if (known.length === 0 && pending.length === 0) return
       for (const image of pending) uploadingRef.current.add(image.fileId)
 
       const mapping = await uploadPendingImages(documentId, pending, (fileId, error) => {
         // Released so the next change retries. The image keeps rendering
-        // locally in the meantime, which is why this is a warning rather than
-        // something that removes it from under the person who added it.
+        // locally in the meantime — but only locally, since it is not
+        // published until it is stored — so the message says so.
         uploadingRef.current.delete(fileId)
         toast.error("Could not store an image on this drawing.", {
-          description: error instanceof Error ? error.message : undefined,
+          description:
+            "Only you can see it until it is stored; it will be retried on your next change. " +
+            (error instanceof Error ? error.message : ""),
         })
       })
+      for (const [fileId, id] of mapping) {
+        uploadingRef.current.delete(fileId)
+        adoptedRef.current.set(fileId, id)
+      }
+      for (const image of known) {
+        mapping.set(image.fileId, adoptedRef.current.get(image.fileId) as string)
+      }
       if (mapping.size === 0) return
 
       // Register the stored copies before rewriting the elements, so there is
@@ -231,6 +247,21 @@ export function useDrawingSync({
     },
     [api, documentId, isEditor],
   )
+
+  // An image only exists on this canvas until its upload finishes, so leaving
+  // mid-upload loses it. Ask first, the way an unsaved form would. The handler
+  // is always attached and checks at the moment of leaving, because uploads
+  // start and finish without a render to re-run an effect on.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (uploadingRef.current.size === 0) return
+      e.preventDefault()
+      // Still required by some browsers to show the prompt at all.
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [])
 
   // What this client has selected, as last published. Selection changes far
   // less often than the scene does, and onChange fires on every mutation —
@@ -265,16 +296,16 @@ export function useDrawingSync({
       publishSelection(appState)
 
       if (!isEditor) return
-      writeLocalElements(ydoc, elements, lastSeen())
+      // Images still uploading stay on this canvas until they are stored —
+      // see publishableElements. adoptImages below rewrites them to their
+      // wiki id, which bumps their version, and the onChange that rewrite
+      // fires is the one that publishes them.
+      const seen = lastSeen()
+      writeLocalElements(ydoc, publishableElements(elements, seen), seen)
       writeSharedAppState(ydoc, {
         viewBackgroundColor: appState.viewBackgroundColor,
         gridSize: appState.gridSize,
       })
-      // Deliberately after the write: the element referencing the not-yet-
-      // uploaded image is still published, so a peer sees the shape appear
-      // immediately and the picture fills in a moment later when the rewrite
-      // lands. Withholding it until the upload finished would make a large
-      // paste look like nothing had happened.
       void adoptImages(elements, files)
     },
     [ydoc, isEditor, lastSeen, adoptImages, publishSelection],

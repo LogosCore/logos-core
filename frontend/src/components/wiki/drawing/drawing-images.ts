@@ -116,6 +116,34 @@ export function pendingImages(
 }
 
 /**
+ * The elements this canvas may publish to the room right now.
+ *
+ * An image element is held back until its upload has finished and its fileId
+ * is a wiki image id. Published earlier, it reached every peer pointing at
+ * bytes that exist only in the uploader's browser — and if that tab closed or
+ * the upload failed for good before the rewrite landed, the element stayed in
+ * the room for good, drawn as an empty frame on every screen with nothing
+ * anyone could do to fill it. Withheld, the worst a lost upload can do is lose
+ * the image for the one person who was adding it, who is told.
+ *
+ * That covers Excalidraw's own null fileId too: it inserts the element before
+ * it has worked out the file's id.
+ *
+ * Only elements this client has never published are held. One already in the
+ * room — including an old image whose upload never completed — keeps
+ * syncing, so moving or erasing it still reaches everyone.
+ */
+export function publishableElements(
+  elements: readonly ExcalidrawElement[],
+  published: ReadonlyMap<string, number>,
+): readonly ExcalidrawElement[] {
+  return elements.filter((el) => {
+    if (el.type !== "image" || published.has(el.id)) return true
+    return isWikiImageID((el as { fileId?: string | null }).fileId)
+  })
+}
+
+/**
  * Rewrite elements to point at uploaded images.
  *
  * Versions are bumped deliberately. The rewrite has to propagate to everyone
