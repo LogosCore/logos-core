@@ -10,8 +10,8 @@
 // chunk's own CSS, fetched with the chunk rather than with the app.
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Excalidraw } from "@excalidraw/excalidraw"
-import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types"
+import { Excalidraw, useHandleLibrary } from "@excalidraw/excalidraw"
+import type { AppState, BinaryFiles, LibraryItems, NormalizedZoomValue } from "@excalidraw/excalidraw/types"
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 import type { Doc as YDoc } from "yjs"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
@@ -19,6 +19,9 @@ import { useTheme } from "next-themes"
 
 import { useDrawingSync } from "./use-drawing-sync"
 import { readGridPreference, writeGridPreference } from "./drawing-grid-preference"
+import { loadDrawingView, saveDrawingView, type DrawingView } from "./drawing-view-memory"
+import { drawingLibraryAdapter } from "./drawing-library"
+import { ShapesSidebar, ShapesTrigger } from "./drawing-shapes-panel"
 import "@excalidraw/excalidraw/index.css"
 import "./wiki-drawing.css"
 
@@ -43,6 +46,7 @@ export default function WikiDrawingCanvas({
 }: WikiDrawingCanvasProps) {
   const { resolvedTheme } = useTheme()
   const {
+    api,
     onExcalidrawAPI,
     onChange,
     onPointerUpdate,
@@ -68,6 +72,17 @@ export default function WikiDrawingCanvas({
     [onChange],
   )
 
+  // The operator's own shapes survive a reload (drawing-library.ts), and the
+  // Shapes panel lists them next to the built-ins.
+  useHandleLibrary({ excalidrawAPI: api, adapter: drawingLibraryAdapter })
+  const [personalShapes, setPersonalShapes] = useState<LibraryItems>([])
+  const dark = resolvedTheme === "dark"
+
+  // Reopen where this browser last left the drawing, rather than fitted to
+  // its content every time. Fitting is still the first visit's view.
+  const [initialView] = useState(() => loadDrawingView(documentId))
+  const onScrollChange = useDrawingViewMemory(documentId)
+
   // Fire once. onReady is a lifecycle signal, not a subscription — a print
   // route that heard it twice would call window.print() twice.
   const readyFiredRef = useRef(false)
@@ -89,13 +104,19 @@ export default function WikiDrawingCanvas({
           appState: {
             viewBackgroundColor: initialBackgroundColor,
             gridModeEnabled: initialGrid,
+            ...(initialView && {
+              scrollX: initialView.scrollX,
+              scrollY: initialView.scrollY,
+              zoom: { value: initialView.zoom as NormalizedZoomValue },
+            }),
             // Excalidraw persists its own appState to localStorage by default
             // via the host app; we own persistence, so start from the scene.
             collaborators: new Map(),
           },
-          scrollToContent: true,
+          scrollToContent: !initialView,
         }}
         onChange={handleChange}
+        onScrollChange={onScrollChange}
         onPointerUpdate={onPointerUpdate}
         // Tells Excalidraw to render other people's cursors at all. Without it
         // the collaborators map is accepted and silently ignored.
@@ -104,7 +125,11 @@ export default function WikiDrawingCanvas({
         // (the collab ticket flags the connection read-only), so this is about
         // not offering tools that would do nothing.
         viewModeEnabled={!isEditor}
-        theme={resolvedTheme === "dark" ? "dark" : "light"}
+        theme={dark ? "dark" : "light"}
+        onLibraryChange={setPersonalShapes}
+        // The Shapes panel's button, beside Excalidraw's own Library one.
+        // Editors only: a viewer cannot place anything.
+        renderTopRightUI={() => (isEditor ? <ShapesTrigger /> : null)}
         UIOptions={{
           canvasActions: {
             // Excalidraw's own load/save act on local files and its own
@@ -116,7 +141,44 @@ export default function WikiDrawingCanvas({
             saveAsImage: true,
           },
         }}
-      />
+      >
+        {isEditor && <ShapesSidebar api={api} personal={personalShapes} dark={dark} />}
+      </Excalidraw>
     </div>
+  )
+}
+
+// How long the view has to stay put before it is written. A pan fires a scroll
+// change per frame; the write is the one at the end.
+const VIEW_WRITE_DELAY_MS = 250
+
+/** Record the view as the operator pans and zooms. A write still waiting is
+ * sent when the page is left or the drawing closes. */
+function useDrawingViewMemory(documentId: string) {
+  const pendingRef = useRef<DrawingView | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  const flush = useCallback(() => {
+    clearTimeout(timerRef.current)
+    timerRef.current = undefined
+    if (pendingRef.current) saveDrawingView(pendingRef.current)
+    pendingRef.current = null
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener("pagehide", flush)
+    return () => {
+      window.removeEventListener("pagehide", flush)
+      flush()
+    }
+  }, [flush])
+
+  return useCallback(
+    (scrollX: number, scrollY: number, zoom: { value: number }) => {
+      pendingRef.current = { documentId, scrollX, scrollY, zoom: zoom.value }
+      clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(flush, VIEW_WRITE_DELAY_MS)
+    },
+    [documentId, flush],
   )
 }

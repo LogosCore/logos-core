@@ -14,6 +14,7 @@
     "test:run": "vitest run",
     "budget": "node scripts/check-bundle-budget.mjs",
     "gen:icon-tags": "node scripts/generate-lucide-tags.mjs",
+    "gen:drawing-icons": "node scripts/generate-drawing-icons.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {
