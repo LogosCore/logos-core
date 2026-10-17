@@ -58,6 +58,26 @@ export function layoutArrows(
 
   const avoid = (job: Job) => obstacles.filter((o) => o.id !== job.fromId && o.id !== job.toId).map((o) => o.box);
 
+  // A shape connected to itself: a loop off its top-right corner, each
+  // further loop on the same shape a little wider. Drawn as a plain path,
+  // not an elbow: Excalidraw's elbow router has no notion of a loop.
+  const loops = new Map<string, number>();
+  for (const job of jobs.filter((j) => j.fromId === j.toId)) {
+    const n = loops.get(job.fromId) ?? 0;
+    loops.set(job.fromId, n + 1);
+    const b = job.from;
+    const reach = 34 + n * 16;
+    const gap = 4;
+    const start: Point = [b.x + b.width * (0.78 - n * 0.06), b.y - gap];
+    writePath(
+      elements,
+      job.id,
+      [start, [start[0], b.y - reach], [b.x + b.width + reach, b.y - reach], [b.x + b.width + reach, b.y + b.height * (0.3 + n * 0.1)], [b.x + b.width + gap, b.y + b.height * (0.3 + n * 0.1)]],
+      { elbowed: false, roundness: null, ...plainBindings(job.arrow) },
+    );
+  }
+  jobs.splice(0, jobs.length, ...jobs.filter((j) => j.fromId !== j.toId));
+
   // Elbows: route each, then spread arrows sharing a side and route again
   // with their ends fixed where they were spread to.
   const elbows = jobs.filter((j) => j.arrow.elbowed === true);

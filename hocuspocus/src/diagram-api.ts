@@ -24,7 +24,11 @@ import type * as Y from "yjs";
 import { readRawBody, requireSignature } from "./internal-auth.js";
 import { elementsOf, release, roomName, watcherCount } from "./apply-drawing.js";
 import { DiagramError, parseDiagram, type Diagram } from "./diagram-language.js";
-import { isMermaid } from "./mermaid-parse.js";
+import { parseMermaidText } from "./mermaid-parse.js";
+import { DRAWN_TYPES, commentExtras, mermaidProblems, mermaidType } from "./mermaid-common.js";
+import { mindmapToDiagram, stateToDiagram } from "./mermaid-graphs.js";
+import { drawTimeline } from "./timeline-layout.js";
+import { drawGantt } from "./gantt-layout.js";
 import { aliasesOf, flowchartToDiagram, writeMermaid } from "./mermaid-flowchart.js";
 import { drawSequence, parseSequence } from "./sequence-layout.js";
 import { applyDiagram, type DiagramMode } from "./diagram-apply.js";
@@ -45,7 +49,10 @@ function describe(scene: Scene) {
     // The drawing's nodes, zones and connections as a Mermaid flowchart, and
     // each sequence diagram as the Mermaid it was drawn from.
     mermaid: hasGraph ? writeMermaid(scene) : "",
-    sequences: [...scene.sequences.values()].map((s) => ({ id: s.id, mermaid: s.source })),
+    // Every fixed diagram (sequence, timeline, gantt) with its type, and the
+    // sequences alone under their old name, for skills that know only that.
+    diagrams: [...scene.sequences.values()].map((s) => ({ id: s.id, type: s.type, mermaid: s.source })),
+    sequences: [...scene.sequences.values()].filter((s) => s.type === "sequence").map((s) => ({ id: s.id, mermaid: s.source })),
     // The same graph in the older diagram language.
     diagram: sceneToText(scene),
     nodes: scene.nodes.size,
@@ -114,17 +121,34 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
     // Parsed before a seat is taken: a text with problems never touches the
     // room.
     const text = body.diagram;
-    const mermaid = isMermaid(text);
-    const sequence = mermaid && /^\s*(?:%%[^\n]*\n\s*)*sequenceDiagram\b/.test(text);
+    const type = mermaidType(text);
+    const mermaid = type !== null;
+    const fixed = type === "sequence" || type === "timeline" || type === "gantt";
 
     // Everything that can be checked without the room is checked before a
     // seat is taken: a text with problems never touches it.
-    let parsed: Awaited<ReturnType<typeof parseSequence>> | null = null;
+    if (mermaid && !(DRAWN_TYPES as readonly string[]).includes(type)) {
+      res.status(422).json({
+        error: `Mermaid ${type} diagrams cannot be drawn here yet`,
+        problems: [{ line: 1, message: `Mermaid ${type} diagrams cannot be drawn here yet. These can: ${DRAWN_TYPES.join(", ")}.` }],
+      });
+      return;
+    }
+    let parsedDb: unknown = null;
+    let sequenceParse: Awaited<ReturnType<typeof parseSequence>> | null = null;
     let diagram: Diagram | null = null;
     const warnings: string[] = [];
     try {
-      if (sequence) parsed = await parseSequence(text);
-      else if (!mermaid) diagram = parseDiagram(text);
+      if (type === "sequence") sequenceParse = await parseSequence(text);
+      else if (mermaid) {
+        try {
+          parsedDb = (await parseMermaidText(text)).db;
+        } catch (err) {
+          throw new DiagramError(mermaidProblems(err));
+        }
+        // Checked now, though drawn later: the %% lines.
+        commentExtras(text);
+      } else diagram = parseDiagram(text);
     } catch (err) {
       if (err instanceof DiagramError) {
         res.status(422).json({ error: err.message, problems: err.problems });
@@ -140,13 +164,18 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
         // Read back in persistence.ts, which attributes the save.
         userId: body.userId,
       });
-      // A flowchart needs the drawing first: a read named the nodes that have
-      // no id of their own by aliases, and those map back to element ids.
-      if (mermaid && !sequence) {
+      // A graph needs the drawing first: a read named the nodes that have no
+      // id of their own by aliases, and those map back to element ids.
+      if (mermaid && !fixed) {
         const room = (connection as unknown as { document: Y.Doc | null }).document;
         const before = room ? readScene(liveElements(room)) : readScene([]);
         try {
-          const converted = await flowchartToDiagram(text, aliasesOf(before));
+          const converted =
+            type === "state"
+              ? stateToDiagram(text, parsedDb)
+              : type === "mindmap"
+                ? mindmapToDiagram(text, parsedDb)
+                : await flowchartToDiagram(text, aliasesOf(before), parsedDb);
           diagram = converted.diagram;
           warnings.push(...converted.warnings);
         } catch (err) {
@@ -169,17 +198,26 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
           // write those copies back over the routed ones.
           document.transact(() => {
             const elements = elementsOf(document);
-            if (parsed) {
+            if (fixed) {
               if (mode === "replace") {
                 for (const el of liveElements(document)) {
                   elements.set(el.id, { ...el, isDeleted: true, version: (el.version ?? 1) + 1, updated: Date.now() });
                 }
               }
-              const drawn = drawSequence(elements, readScene(liveElements(document)), text, parsed);
-              result = { kind: "sequence", sequence: drawn.id, participants: drawn.participants, messages: drawn.messages, warnings: drawn.warnings };
+              const scene = readScene(liveElements(document));
+              if (type === "sequence") {
+                const drawn = drawSequence(elements, scene, text, sequenceParse as NonNullable<typeof sequenceParse>);
+                result = { kind: "sequence", sequence: drawn.id, participants: drawn.participants, messages: drawn.messages, warnings: drawn.warnings };
+              } else if (type === "timeline") {
+                const drawn = drawTimeline(elements, scene, text, parsedDb);
+                result = { kind: "timeline", sequence: drawn.id, periods: drawn.periods, events: drawn.events, warnings: [] };
+              } else {
+                const drawn = drawGantt(elements, scene, text, parsedDb);
+                result = { kind: "gantt", sequence: drawn.id, tasks: drawn.tasks, warnings: [] };
+              }
             } else {
               const applied = applyDiagram(elements, diagram as Diagram, mode);
-              result = { kind: mermaid ? "flowchart" : "diagram", ...applied, warnings: [...warnings, ...applied.warnings] };
+              result = { kind: type ?? "diagram", ...applied, warnings: [...warnings, ...applied.warnings] };
             }
           });
           after = readScene(liveElements(document));

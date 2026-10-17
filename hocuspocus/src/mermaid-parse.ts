@@ -20,6 +20,8 @@
 
 import DOMPurify from "dompurify";
 
+import { mermaidType } from "./mermaid-common.js";
+
 type MermaidAPI = {
   initialize(config: Record<string, unknown>): void;
   mermaidAPI: { getDiagramFromText(text: string): Promise<{ type: string; db: unknown }> };
@@ -75,11 +77,7 @@ export async function parseMermaidText(text: string): Promise<{ type: string; db
 }
 
 /** Whether a text is Mermaid rather than the diagram language: its first
- * line that is not a comment names a Mermaid diagram type. */
+ * line that is not a comment names a Mermaid diagram type, drawn or not. */
 export function isMermaid(text: string): boolean {
-  const first = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line !== "" && !line.startsWith("%%") && !line.startsWith("#"));
-  return !!first && /^(flowchart|graph|sequenceDiagram)\b/.test(first);
+  return mermaidType(text) !== null;
 }

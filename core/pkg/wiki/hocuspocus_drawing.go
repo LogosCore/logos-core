@@ -408,6 +408,15 @@ type DiagramOther struct {
 	Y    float64 `json:"y"`
 }
 
+// FixedDiagram is a diagram drawn whole from its Mermaid (a sequence,
+// timeline or gantt), as that Mermaid. Sending it back changed, with the same
+// title, redraws it in place.
+type FixedDiagram struct {
+	ID      string `json:"id"`
+	Type    string `json:"type"`
+	Mermaid string `json:"mermaid"`
+}
+
 // DiagramSequence is a sequence diagram on a drawing, as the Mermaid it was
 // drawn from.
 type DiagramSequence struct {
@@ -420,6 +429,7 @@ type DiagramSequence struct {
 // each sequence diagram as its Mermaid.
 type DrawingDiagram struct {
 	Mermaid     string            `json:"mermaid"`
+	Diagrams    []FixedDiagram    `json:"diagrams"`
 	Sequences   []DiagramSequence `json:"sequences"`
 	Diagram     string            `json:"diagram"`
 	Nodes       int               `json:"nodes"`
@@ -433,13 +443,17 @@ type DrawingDiagram struct {
 // ApplyDiagramResult is what a diagram write did, and the drawing after it.
 type ApplyDiagramResult struct {
 	DrawingDiagram
-	// Kind is what was drawn: flowchart, sequence, or diagram (the older
-	// language).
+	// Kind is what was drawn: flowchart, sequence, state, mindmap,
+	// timeline, gantt, or diagram (the older language).
 	Kind string `json:"kind"`
-	// Sequence, Participants and Messages describe a sequence diagram.
+	// Sequence is the id of a fixed diagram drawn (sequence, timeline,
+	// gantt); the counts describe it.
 	Sequence     string   `json:"sequence,omitempty"`
 	Participants int      `json:"participants,omitempty"`
 	Messages     int      `json:"messages,omitempty"`
+	Periods      int      `json:"periods,omitempty"`
+	Events       int      `json:"events,omitempty"`
+	Tasks        int      `json:"tasks,omitempty"`
 	Created      int      `json:"created"`
 	Updated      int      `json:"updated"`
 	Removed      int      `json:"removed"`

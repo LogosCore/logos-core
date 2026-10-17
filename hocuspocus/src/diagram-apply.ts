@@ -26,6 +26,7 @@ import type * as Y from "yjs";
 import {
   CARD_KINDS,
   ZONE_TITLE_SPACE,
+  buildBadgeOnCard,
   buildCard,
   buildZone,
   cardWidth,
@@ -184,14 +185,14 @@ export function applyDiagram(
     }
     const card = asCard(kind, icon);
     const badges = [...new Set([...(prior?.badges ?? []), ...node.addBadges])].filter((b) => !node.removeBadges.includes(b));
-    if (badges.length > 0 && !card) {
+    if (badges.length > 0 && !card && kind !== "box") {
       result.warnings.push(
-        `line ${node.line}: only cards carry badges, and "${node.id}" is a ${kind}; its badges were left off ` +
-          `(a box with an icon= is a card)`,
+        `line ${node.line}: only cards and boxes carry badges, and "${node.id}" is a ${kind}; its badges were left off`,
       );
       badges.length = 0;
     }
-    const title = node.title ?? prior?.title ?? node.id;
+    // A start or end marker is a dot: it has no words to compare.
+    const title = kind === "start" || kind === "end" ? "" : (node.title ?? prior?.title ?? node.id);
     const detail = card ? (node.detail ?? prior?.detail ?? "") : "";
     const size = nodeSize(kind, title, detail, icon);
     if (prior?.existing) {
@@ -205,7 +206,7 @@ export function applyDiagram(
         );
       }
       if (!changed) continue;
-      const rebuild = card || restyled || kind !== prior.kind || prior.existing.builtin;
+      const rebuild = card || restyled || kind !== prior.kind || prior.existing.builtin || badges.join() !== prior.badges.join();
       plans.set(node.id, {
         ...prior,
         kind,
@@ -232,7 +233,7 @@ export function applyDiagram(
   }
 
   // --- Layout of new nodes ----------------------------------------------------
-  const edges = finalEdges(diagram, scene);
+  const edges = finalEdges(diagram, scene, plans);
   const fresh = [...plans.values()].filter((p) => !p.box);
   if (fresh.length > 0) layout(plans, zoneParents, edges, scene, diagram.direction ?? "right");
 
@@ -298,6 +299,8 @@ export function applyDiagram(
   // --- Connections --------------------------------------------------------------
   const frames = new Map<string, string>();
   for (const plan of plans.values()) frames.set(plan.id, plan.existing?.frameId ?? frameIdOf(elements, plan.id) ?? "");
+  // Zones can be ends too; their outline is what an arrow binds to.
+  for (const id of zoneParents.keys()) frames.set(id, scene.zones.get(id)?.frameId ?? frameIdOf(elements, id) ?? "");
   const rebuilt = new Set([...plans.values()].filter((p) => p.rebuild && p.existing).map((p) => p.id));
 
   // Arrows whose geometry is drawn at the end, once every shape is in place.
@@ -418,13 +421,13 @@ function check(diagram: Diagram, scene: Scene, result: DiagramResult): void {
     if (scene.nodes.has(zone.id)) problems.push({ line: zone.line, message: `"${zone.id}" is a node on the canvas, not a zone` });
   }
   for (const edge of diagram.edges) {
+    // A zone can be an end: a state diagram's transitions go into and out of
+    // composite states, which are zones here.
     for (const end of [edge.from, edge.to]) {
-      if (isNode(end)) continue;
+      if (isNode(end) || isZone(end)) continue;
       problems.push({
         line: edge.line,
-        message: isZone(end)
-          ? `"${end}" is a zone; connect the nodes inside it instead`
-          : `no node "${end}". Declare it (${end}: server "${end}") or use an id from the drawing`,
+        message: `no node "${end}". Declare it (${end}: server "${end}") or use an id from the drawing`,
       });
     }
   }
@@ -442,16 +445,32 @@ interface LayoutEdge {
   to: string;
 }
 
-function finalEdges(diagram: Diagram, scene: Scene): LayoutEdge[] {
-  return [
-    ...scene.edges.map((e) => ({ from: e.from, to: e.to })),
-    ...diagram.edges.map((e) => ({ from: e.from, to: e.to })),
-  ];
+/**
+ * The connections layout should know about. dagre cannot take an edge to a
+ * group, so a connection to a zone stands in as one to a node inside it,
+ * which puts the zone where the connection wants it.
+ */
+function finalEdges(diagram: Diagram, scene: Scene, plans: Map<string, Plan>): LayoutEdge[] {
+  const insideOf = (id: string, depth = 0): string | undefined => {
+    if (plans.has(id) || depth > 20) return plans.has(id) ? id : undefined;
+    const member = [...plans.values()].find((p) => p.zone === id);
+    if (member) return member.id;
+    const child = [...diagram.zones.values(), ...scene.zones.values()].find((z) => z.parent === id);
+    return child ? insideOf(child.id, depth + 1) : undefined;
+  };
+  const out: LayoutEdge[] = [];
+  for (const e of [...scene.edges, ...diagram.edges]) {
+    const from = insideOf(e.from);
+    const to = insideOf(e.to);
+    if (from && to && from !== to) out.push({ from, to });
+  }
+  return out;
 }
 
 function nodeSize(kind: string, title: string, detail: string, icon?: string): { width: number; height: number } {
   if (asCard(kind, icon)) return { width: cardWidth(title, detail), height: CARD_HEIGHT };
   if (kind === "note") return { width: 220, height: Math.max(130, measureText(title, 16, 200).height + 32) };
+  if (kind === "start" || kind === "end") return { width: MARKER, height: MARKER };
   const measured = measureText(title, 16);
   return { width: Math.max(140, Math.ceil(measured.width) + 40), height: Math.max(60, Math.ceil(measured.height) + 28) };
 }
@@ -694,7 +713,32 @@ function buildNode(plan: Plan, x: number, y: number, style: ShapeStyle, frameId?
 }
 
 /** A plain labelled shape or a note, for what the catalogue has no card for. */
+/** A state diagram's start and end: a filled dot, and a dot in a ring. */
+const MARKER = 30;
+
+function markerShape(plan: Plan): Skeleton[] {
+  const tag = { shape: `shape:${plan.kind}`, style: "clean" as ShapeStyle, node: plan.id };
+  const groupIds = [`marker-${plan.id}`];
+  const dot = (inset: number, part: string): Skeleton => ({
+    type: "ellipse",
+    x: inset,
+    y: inset,
+    width: MARKER - 2 * inset,
+    height: MARKER - 2 * inset,
+    backgroundColor: "#1e1e1e",
+    fillStyle: "solid",
+    strokeColor: "#1e1e1e",
+    strokeWidth: 2,
+    roughness: 0,
+    groupIds,
+    customData: { logos: { ...tag, part } },
+  });
+  if (plan.kind === "start") return [dot(3, "frame")];
+  return [{ ...dot(0, "frame"), backgroundColor: "transparent" }, dot(7, "dot")];
+}
+
 function genericShape(plan: Plan, style: ShapeStyle): Skeleton[] {
+  if (plan.kind === "start" || plan.kind === "end") return markerShape(plan);
   const tag: ShapeTag = {
     shape: plan.kind === "note" ? "note" : `shape:${plan.kind}`,
     part: "frame",
@@ -705,8 +749,14 @@ function genericShape(plan: Plan, style: ShapeStyle): Skeleton[] {
   const clean = style === "clean";
   const note = plan.kind === "note";
   const colors = plan.color ? plainShapeColors(plan.color) : null;
+  // A box with badges is grouped with them, so they move as one.
+  const groupIds = plan.badges.length > 0 ? [`shape-${plan.id}`] : [];
+  const badges = plan.badges.flatMap((key, i) =>
+    buildBadgeOnCard(key, plan.width, i, groupIds, { shape: tag.shape, style, node: plan.id, ...(plan.color ? { color: plan.color } : {}) }),
+  );
   return [
     {
+      groupIds,
       type: note ? "rectangle" : (plan.kind === "box" ? "rectangle" : plan.kind) as Skeleton["type"],
       x: 0,
       y: 0,
@@ -728,6 +778,7 @@ function genericShape(plan: Plan, style: ShapeStyle): Skeleton[] {
         customData: { logos: { ...tag, part: "label" } },
       },
     },
+    ...badges,
   ];
 }
 

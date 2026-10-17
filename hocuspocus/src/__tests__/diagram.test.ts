@@ -397,12 +397,22 @@ describe("colours and icons", () => {
     assert.equal(scene.edges.length, 1);
   });
 
-  test("taking the icon off a box makes it a plain box again, and its badges go with it", () => {
+  // Boxes carry badges too (a state diagram marks a state compromised), so
+  // a box that loses its icon keeps them; only shapes with no corner to put
+  // them on refuse them.
+  test("taking the icon off a box makes it a plain box again, badges and all", () => {
     const { map } = room();
     apply(map, 'a: box "A" "detail" icon=lock +flag');
     const result = apply(map, "a icon=none");
-    assert.equal(read(map), 'a: box "A"');
-    assert.match(result.warnings.join(), /only cards carry badges/);
+    assert.equal(read(map), 'a: box "A" +flag');
+    assert.deepEqual(result.warnings, []);
+  });
+
+  test("an ellipse refuses badges, with a warning", () => {
+    const { map } = room();
+    const result = apply(map, 'a: ellipse "A" +flag');
+    assert.equal(read(map), 'a: ellipse "A"');
+    assert.match(result.warnings.join(), /only cards and boxes carry badges/);
   });
 
   test("color=default puts a card's own colour back", () => {

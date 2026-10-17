@@ -54,7 +54,7 @@ import {
 } from "./drawing-catalogue.js";
 
 /** Kinds that are not cards: a plain labelled shape, and a sticky note. */
-export const GENERIC_KINDS = ["box", "ellipse", "diamond", "note"] as const;
+export const GENERIC_KINDS = ["box", "ellipse", "diamond", "note", "start", "end"] as const;
 export type GenericKind = (typeof GENERIC_KINDS)[number];
 
 export type ArrowKind = "->" | "<->" | "--";
@@ -411,7 +411,6 @@ export function parseDiagram(source: string): Diagram {
           return fail("one connection per line: write a -> b and b -> c on separate lines");
         } else return fail(`a connection is: ${first.v} ${second.v} ${target.v} "label" [style]`);
       }
-      if (edge.from === edge.to) return fail("a connection needs two different ends");
       diagram.edges.push(edge);
       return;
     }

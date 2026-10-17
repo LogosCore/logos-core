@@ -40,7 +40,7 @@ type getWikiDrawingArgs struct {
 type drawWikiDiagramArgs struct {
 	IdempotencyKey
 	DocumentID string `json:"document_id"    jsonschema:"Page id of a drawing."`
-	Diagram    string `json:"diagram"        jsonschema:"A Mermaid flowchart or sequenceDiagram, with our card kinds as classes; see drawings.md. The older diagram language is still accepted."`
+	Diagram    string `json:"diagram"        jsonschema:"Mermaid: flowchart, sequenceDiagram, stateDiagram-v2, mindmap, timeline or gantt, with our card kinds as classes; see drawings.md. The older diagram language is still accepted."`
 	Mode       string `json:"mode,omitempty" jsonschema:"merge (default): add and change what the text names, leave the rest. replace: clear the canvas first."`
 }
 
@@ -59,17 +59,17 @@ func registerWikiDrawingTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "get_wiki_drawing",
 		Description: "Read a drawing page as Mermaid: its nodes, zones and connections as a flowchart, " +
-			"each sequence diagram as the Mermaid it was drawn from, plus any loose shapes. Read before " +
+			"each sequence, timeline and gantt as the Mermaid it was drawn from, plus any loose shapes. Read before " +
 			"changing one, because changes refer to nodes by the ids this returns. view:\"outline\" lists " +
 			"every shape with its geometry instead, for edit_wiki_drawing.",
 	}, readTool, handleGetWikiDrawing)
 
 	register(s, &mcp.Tool{
 		Name: "draw_wiki_diagram",
-		Description: "Draw on a drawing page from Mermaid: a flowchart (nodes, subgraphs as zones, links) " +
-			"or a sequenceDiagram. Our card kinds, badges and colours are classes (:::server). The server " +
-			"lays it out and draws it; nothing already on the canvas moves, re-sending a node by id " +
-			"changes it, and re-sending a sequence with the same title redraws it in place.",
+		Description: "Draw on a drawing page from Mermaid: flowchart, sequenceDiagram, stateDiagram-v2, " +
+			"mindmap, timeline or gantt. Our card kinds, badges and colours are classes (:::server). The " +
+			"server lays it out and draws it; nothing already on the canvas moves. Re-sending a node by " +
+			"id changes it; re-sending a sequence, timeline or gantt with the same title redraws it in place.",
 	}, writeTool, handleDrawWikiDiagram)
 
 	register(s, &mcp.Tool{
@@ -365,7 +365,12 @@ type drawingDiagramView struct {
 	// Mermaid is the drawing's nodes, zones and connections as a flowchart,
 	// in the form draw_wiki_diagram takes.
 	Mermaid string `json:"mermaid,omitempty"`
-	// Sequences are its sequence diagrams, each as the Mermaid it was drawn
+	// Diagrams are its sequence, timeline and gantt diagrams, each as the
+	// Mermaid it was drawn from: send one back changed, same title, to
+	// redraw it in place.
+	Diagrams []wiki.FixedDiagram `json:"diagrams,omitempty"`
+	// Sequences are its sequence diagrams alone, under the name skills
+	// before v46 know. Each is the Mermaid it was drawn
 	// from: send one back changed, same title, to redraw it in place.
 	Sequences []wiki.DiagramSequence `json:"sequences,omitempty"`
 	// Diagram is the same graph in the older diagram language, on request.
@@ -384,6 +389,7 @@ func diagramView(doc *models.WikiDocument, d wiki.DrawingDiagram, older bool) dr
 	view := drawingDiagramView{
 		wikiDocView: toWikiDocView(doc),
 		Mermaid:     d.Mermaid,
+		Diagrams:    d.Diagrams,
 		Sequences:   d.Sequences,
 		Nodes:       d.Nodes,
 		Edges:       d.Edges,
@@ -393,10 +399,11 @@ func diagramView(doc *models.WikiDocument, d wiki.DrawingDiagram, older bool) dr
 	}
 	if older {
 		view.Mermaid = ""
+		view.Diagrams = nil
 		view.Sequences = nil
 		view.Diagram = d.Diagram
 	}
-	if d.Nodes == 0 && d.Zones == 0 && d.OthersTotal == 0 && len(d.Sequences) == 0 {
+	if d.Nodes == 0 && d.Zones == 0 && d.OthersTotal == 0 && len(d.Diagrams) == 0 {
 		view.Notes = append(view.Notes, "This canvas is empty.")
 	}
 	if d.OthersTotal > 0 {
@@ -428,10 +435,14 @@ func readWikiDiagram(ctx context.Context, s *Server, doc *models.WikiDocument, o
 type diagramWriteView struct {
 	drawingDiagramView
 	Mode string `json:"mode"`
-	// Kind is what was drawn: flowchart, sequence or diagram.
+	// Kind is what was drawn: flowchart, sequence, state, mindmap,
+	// timeline, gantt or diagram.
 	Kind         string `json:"kind,omitempty"`
 	Sequence     string `json:"sequence,omitempty"`
 	Participants int    `json:"participants,omitempty"`
+	Periods      int    `json:"periods,omitempty"`
+	Events       int    `json:"events,omitempty"`
+	Tasks        int    `json:"tasks,omitempty"`
 	Messages     int    `json:"messages,omitempty"`
 	Created      int    `json:"created"`
 	Updated      int    `json:"updated"`
@@ -485,6 +496,9 @@ func handleDrawWikiDiagram(ctx context.Context, s *Server, args drawWikiDiagramA
 		Kind:               result.Kind,
 		Sequence:           result.Sequence,
 		Participants:       result.Participants,
+		Periods:            result.Periods,
+		Events:             result.Events,
+		Tasks:              result.Tasks,
 		Messages:           result.Messages,
 		Created:            result.Created,
 		Updated:            result.Updated,

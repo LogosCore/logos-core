@@ -142,10 +142,11 @@ function mermaidProblems(err: unknown): DiagramProblem[] {
 export async function flowchartToDiagram(
   source: string,
   aliases: ReadonlyMap<string, string> = new Map(),
+  parsed?: unknown,
 ): Promise<{ diagram: Diagram; warnings: string[] }> {
   let db: FlowDb;
   try {
-    db = (await parseMermaidText(source)).db as FlowDb;
+    db = (parsed ?? (await parseMermaidText(source)).db) as FlowDb;
   } catch (err) {
     throw new DiagramError(mermaidProblems(err));
   }
@@ -317,8 +318,9 @@ export function writeMermaid(scene: Scene, direction: "right" | "down" = "right"
   const nodeLine = (n: SceneNode, pad: string) => {
     const id = mermaidId(n.id);
     const text = n.detail ? `${n.title}\n${n.detail}` : n.title;
-    const open = n.kind === "ellipse" ? "([" : n.kind === "diamond" ? "{" : "[";
-    const close = n.kind === "ellipse" ? "])" : n.kind === "diamond" ? "}" : "]";
+    const marker = n.kind === "start" || n.kind === "end";
+    const open = marker ? "((" : n.kind === "ellipse" ? "([" : n.kind === "diamond" ? "{" : "[";
+    const close = marker ? "))" : n.kind === "ellipse" ? "])" : n.kind === "diamond" ? "}" : "]";
     // Plain boxes, ellipses and diamonds are said by their shape; anything
     // else names its kind.
     const kindClass = n.kind === "ellipse" || n.kind === "diamond" || n.kind === "box" ? "" : `:::${n.kind}`;

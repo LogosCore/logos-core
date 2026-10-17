@@ -399,6 +399,14 @@ var releases = []Release{
 			"Sequence diagrams are drawn as real sequence diagrams: participants as cards, a row per message, notes, activations and alt/loop frames. Send the same title again to redraw one in place.",
 			"get_wiki_drawing returns the drawing as Mermaid by default (mermaid and sequences); view:\"diagram\" still gives the older language, which draw_wiki_diagram still accepts.",
 		},
+	}, {
+		Version: 46,
+		Date:    "2026-10-18",
+		Notes: []string{
+			"draw_wiki_diagram now also draws Mermaid stateDiagram-v2, mindmap, timeline and gantt. States (composite states as zones, [*] as start and end markers) and mindmaps (each branch in its own colour) are drawn like flowcharts: classes, ids and merging apply. Timelines and gantts are drawn whole, like sequences: send the same title again to redraw one in place.",
+			"get_wiki_drawing returns sequence, timeline and gantt diagrams as diagrams, each with its type and the Mermaid it was drawn from. sequences is still there, for the sequence diagrams alone.",
+			"Connections can now end on a zone, a node can connect to itself (drawn as a loop), and plain boxes carry badges as cards do. Mermaid types that cannot be drawn yet (class, ER, pie and others) are refused by name.",
+		},
 	},
 }
 

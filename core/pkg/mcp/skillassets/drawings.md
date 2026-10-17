@@ -6,9 +6,9 @@ and `kind:"drawing"`. Draw when asked; otherwise write the page.
 
 ## Draw with Mermaid
 
-`draw_wiki_diagram` takes a Mermaid `flowchart` or `sequenceDiagram`. The
-server lays it out and draws it with the app's cards; nothing already drawn
-moves.
+`draw_wiki_diagram` takes Mermaid — `flowchart`, `sequenceDiagram`,
+`stateDiagram-v2`, `mindmap`, `timeline` or `gantt` — and draws it with the
+app's cards; nothing already drawn moves.
 
 ```
 flowchart LR
@@ -46,10 +46,10 @@ Links: `-->` `---` `<-->` `-.->` (dotted) `==>` (thick) `--o` `--x`.
 `network` `dmz` `cloud` `trust`. Icons are lucide names; a wrong one is
 refused with icons that fit.
 
-**Sequences:** a `title` names one; send the same title again to redraw it
-in place. Participants, actors, `box`, notes, `alt`/`opt`/`loop`/`par`,
-`autonumber` and `+`/`-` activations all work. `%% spa: web-app "Logos
-SPA"` gives a participant a card.
+States and mindmaps are drawn like flowcharts: classes, ids and merging
+apply. Sequences, timelines and gantts are drawn whole; a `title` names one,
+and sending the same title redraws it in place. `%% spa: web-app` gives a
+sequence participant a card.
 
 A write merges: what it names is added or changed, the rest stays.
 Re-sending a node by id updates it. A text with problems draws nothing and
@@ -57,8 +57,8 @@ lists each by line. `mode:"replace"` clears the canvas first.
 
 ## Read first
 
-`get_wiki_drawing` returns `mermaid` (the flowchart) and `sequences`; change
-lines and send them back. Shapes with no id of their own read as
+`get_wiki_drawing` returns `mermaid` (the graph) and `diagrams` (the rest,
+as sent); change lines and send them back. Shapes with no id of their own read as
 `n_<element id>`. Free text, freehand and loose arrows come back as
 `otherShapes`.
 

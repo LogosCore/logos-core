@@ -102,6 +102,8 @@ export interface SceneOther {
 /** A sequence diagram on the canvas (sequence-layout.ts). */
 export interface SceneSequence {
   id: string;
+  /** sequence, timeline or gantt. */
+  type: string;
   elementIds: string[];
   box: Box;
   /** The Mermaid it was drawn from. */
@@ -180,13 +182,15 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
     }
     let entry = scene.sequences.get(seq);
     if (!entry) {
-      entry = { id: seq, elementIds: [], box: boxOf(el), source: "" };
+      entry = { id: seq, type: "sequence", elementIds: [], box: boxOf(el), source: "" };
       scene.sequences.set(seq, entry);
     }
     entry.elementIds.push(el.id);
     entry.box = unionBox([entry.box, boxOf(el)]) as Box;
     const source = tagOf(el)?.source;
     if (source && !entry.source) entry.source = source;
+    const shape = tagOf(el)?.shape ?? "";
+    if (shape.endsWith("-part")) entry.type = shape.slice(0, -5);
     const origin = (tagOf(el) as { origin?: unknown } | null)?.origin;
     if (!entry.origin && Array.isArray(origin) && origin.length === 2) entry.origin = { x: Number(origin[0]), y: Number(origin[1]) };
     scene.owner.set(el.id, `sequence:${seq}`);
@@ -264,7 +268,7 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
     }
 
     // A note, or a plain shape the diagram language drew: a node whose title
-    // is its text.
+    // is its text. A state diagram's start and end markers have none.
     if (tag?.shape === "note" || tag?.shape.startsWith("shape:")) {
       const frame = frames[0];
       const label = elements.find((el) => el.type === "text");
@@ -273,7 +277,14 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
         kind: tag.shape === "note" ? "note" : tag.shape.slice(6),
         title: wordsOf(label),
         detail: "",
-        badges: [],
+        badges: [
+          ...new Set(
+            elements
+              .map((el) => tagOf(el)?.part ?? "")
+              .filter((p) => p.startsWith("badge:"))
+              .map((p) => p.slice(6)),
+          ),
+        ],
         frameId: frame.id,
         elementIds: elements.map((el) => el.id),
         box: boxOf(frame),
@@ -330,12 +341,13 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
     const ownerOf = (end: "startBinding" | "endBinding") => {
       const id = (arrow[end] as { elementId?: string } | null)?.elementId;
       const owner = id ? scene.owner.get(id) : undefined;
-      return owner && scene.nodes.has(owner) ? owner : undefined;
+      return owner && (scene.nodes.has(owner) || scene.zones.has(owner)) ? owner : undefined;
     };
     let from = ownerOf("startBinding");
     let to = ownerOf("endBinding");
     const label = live.find((el) => el.type === "text" && el.containerId === arrow.id);
-    if (!from || !to || from === to) {
+    // A shape connected to itself is a loop, and a connection like any other.
+    if (!from || !to) {
       addOther(arrow);
       if (label) addOther(label);
       continue;

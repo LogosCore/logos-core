@@ -25,6 +25,7 @@ import { DiagramError, parseDiagram, type DiagramNode } from "./diagram-language
 import { boundTextFields, measureText, normalizeElement, type NormalizedElement } from "./drawing-elements.js";
 import { skeletonsToElements } from "./drawing-skeleton.js";
 import { parseMermaidText } from "./mermaid-parse.js";
+import { fixedTagger, placeFixed, sourceTag } from "./fixed-diagram.js";
 import type { Box, Scene } from "./diagram-read.js";
 
 interface Actor {
@@ -116,24 +117,8 @@ export function drawSequence(
   const warnings: string[] = [];
 
   // Where it goes: where the last drawing of this id stood, or beside the rest.
-  const prior = scene.sequences.get(id);
-  const others = scene.bounds;
-  // Its own stored origin, not its outer box: the box takes in the group
-  // frames and the title above the participants, and starting from it would
-  // move the diagram down on every redraw.
-  const origin = prior
-    ? (prior.origin ?? { x: prior.box.x, y: prior.box.y })
-    : others
-      ? { x: others.x + others.width + 160, y: others.y }
-      : { x: 0, y: 0 };
-  if (prior) {
-    for (const elId of prior.elementIds) {
-      const el = elements.get(elId);
-      if (el && !el.isDeleted) elements.set(elId, { ...el, isDeleted: true, version: (el.version ?? 1) + 1, updated: Date.now() });
-    }
-  }
-
-  const tag = (part: string, extra: Partial<ShapeTag> = {}) => ({ logos: { shape: "sequence-part", part, seq: id, style, ...extra } });
+  const origin = placeFixed(elements, scene, id);
+  const tag = fixedTagger("sequence", id, style);
   const out: NormalizedElement[] = [];
   let z = -30;
   const push = (el: NormalizedElement) => {
@@ -414,7 +399,7 @@ export function drawSequence(
       strokeStyle: "dashed",
       strokeWidth: 1,
       roughness: 0,
-      customData: { logos: { ...tag("lifeline").logos, source, origin: [origin.x, origin.y] } },
+      customData: sourceTag(tag, "lifeline", source, origin),
     }));
   });
 

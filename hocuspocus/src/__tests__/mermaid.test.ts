@@ -205,3 +205,164 @@ describe("parsing", () => {
     assert.equal(typeof (globalThis as { window?: unknown }).window, "undefined");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Timeline, gantt, state, mindmap
+
+import { DRAWN_TYPES, mermaidType } from "../mermaid-common.js";
+import { drawTimeline } from "../timeline-layout.js";
+import { drawGantt } from "../gantt-layout.js";
+import { mindmapToDiagram, stateToDiagram } from "../mermaid-graphs.js";
+
+const textOf = (el: NormalizedElement) => String(el.originalText ?? el.text ?? "");
+const tagPart = (el: NormalizedElement) => (el.customData as { logos?: { part?: string; shape?: string } } | undefined)?.logos;
+
+async function drawFixed(map: Y.Map<NormalizedElement>, source: string, draw: typeof drawTimeline | typeof drawGantt) {
+  const db = (await parseMermaidText(source)).db;
+  let result!: ReturnType<typeof draw>;
+  map.doc!.transact(() => {
+    result = draw(map, readScene(live(map)), source, db);
+  });
+  return result;
+}
+
+async function drawGraph(map: Y.Map<NormalizedElement>, source: string, convert: typeof stateToDiagram) {
+  const db = (await parseMermaidText(source)).db;
+  const { diagram, warnings } = convert(source, db);
+  let result!: ReturnType<typeof applyDiagram>;
+  map.doc!.transact(() => {
+    result = applyDiagram(map, diagram, "merge");
+  });
+  return { ...result, warnings: [...warnings, ...result.warnings] };
+}
+
+const TIMELINE = `timeline
+  title Operation Nightjar
+  section Week 1
+    3 Mar : Kick-off : scope signed
+    5 Mar : External scan
+  section Week 2
+    12 Mar : Foothold
+`;
+
+describe("Mermaid timelines", () => {
+  test("periods on an axis, events beneath, sections above", async () => {
+    const { map } = room();
+    const result = await drawFixed(map, TIMELINE, drawTimeline);
+    assert.deepEqual([result.id, result.periods, result.events], ["operation-nightjar", 3, 4]);
+    const texts = live(map).map(textOf);
+    for (const word of ["3 Mar", "Kick-off", "scope signed", "Week 1", "Week 2", "Foothold"]) assert.ok(texts.includes(word), word);
+    assert.equal(live(map).filter((el) => tagPart(el)?.part === "section").length, 2);
+  });
+
+  test("read back as its source, and redrawn in place", async () => {
+    const { map } = room();
+    await drawFixed(map, TIMELINE, drawTimeline);
+    const first = readScene(live(map)).sequences.get("operation-nightjar")!;
+    assert.deepEqual([first.type, first.source], ["timeline", TIMELINE]);
+    await drawFixed(map, TIMELINE.replace("Foothold", "Foothold on WS-0142"), drawTimeline);
+    const second = readScene(live(map)).sequences.get("operation-nightjar")!;
+    assert.equal(Math.round(second.box.x), Math.round(first.box.x));
+    assert.ok(live(map).map(textOf).includes("Foothold on WS-0142"));
+    assert.ok(!live(map).map(textOf).includes("Foothold"), "the old version is gone");
+  });
+});
+
+describe("Mermaid gantt charts", () => {
+  const GANTT = `gantt
+  title Plan
+  dateFormat YYYY-MM-DD
+  section Recon
+  OSINT :done, osint, 2026-03-03, 3d
+  Scan :active, scan, after osint, 2d
+  section Access
+  Phishing :crit, phish, 2026-03-10, 5d
+  Report :milestone, rep, 2026-03-20, 0d
+`;
+
+  test("a bar per task at its dates, a diamond per milestone", async () => {
+    const { map } = room();
+    const result = await drawFixed(map, GANTT, drawGantt);
+    assert.equal(result.tasks, 4);
+    const bars = live(map).filter((el) => tagPart(el)?.part === "bar");
+    assert.equal(bars.length, 3);
+    assert.equal(live(map).filter((el) => tagPart(el)?.part === "milestone").length, 1);
+    const [osint, scan, phish] = ["osint", "scan", "phish"].map((id) => bars.find((b) => (b.customData as { logos: { node?: string } }).logos.node === id)!);
+    // Scan starts where OSINT ends, and is two thirds as long.
+    assert.ok(Math.abs(Number(scan.x) - (Number(osint.x) + Number(osint.width))) < 0.5);
+    assert.ok(Math.abs(Number(scan.width) / Number(osint.width) - 2 / 3) < 0.01);
+    assert.equal(phish.strokeColor, "#e03131", "critical is red");
+    assert.ok(live(map).map(textOf).includes("3 Mar – 5 Mar"));
+    assert.equal(readScene(live(map)).sequences.get("plan")?.type, "gantt");
+  });
+});
+
+describe("Mermaid state diagrams", () => {
+  const STATE = `stateDiagram-v2
+  [*] --> Recon
+  Recon --> Access : target found
+  state Access {
+    [*] --> Phish
+    Phish --> Phish : blocked, retry
+    Phish --> Foothold
+  }
+  Access --> [*]
+  note right of Recon : passive only
+  class Foothold compromised
+`;
+
+  test("states, a composite as a zone, markers, a loop, a note and a badge", async () => {
+    const { map } = room();
+    const result = await drawGraph(map, STATE, stateToDiagram);
+    assert.deepEqual(result.warnings, []);
+    const scene = readScene(live(map));
+    assert.ok(scene.zones.has("Access"));
+    assert.equal(scene.nodes.get("Phish")?.zone, "Access");
+    assert.deepEqual(scene.nodes.get("Foothold")?.badges, ["compromised"]);
+    assert.deepEqual([...scene.nodes.values()].filter((n) => n.kind === "start").length, 2);
+    assert.ok(scene.edges.some((e) => e.from === "Recon" && e.to === "Access" && e.label === "target found"), "into the composite");
+    assert.ok(scene.edges.some((e) => e.from === "Phish" && e.to === "Phish"), "the loop");
+    assert.ok([...scene.nodes.values()].some((n) => n.kind === "note" && n.title === "passive only"));
+    assert.deepEqual(scene.others, []);
+  });
+});
+
+describe("Mermaid mindmaps", () => {
+  const MINDMAP = `mindmap
+  root((Attack surface))
+    External
+      VPN portal
+      Web apps
+        ::icon(fa fa-globe)
+    People
+      Helpdesk
+`;
+
+  test("a tree, each branch in its own colour, joined without arrowheads", async () => {
+    const { map } = room();
+    await drawGraph(map, MINDMAP, mindmapToDiagram);
+    const scene = readScene(live(map));
+    assert.equal(scene.nodes.size, 6);
+    assert.equal(scene.nodes.get("vpn_portal")?.color, scene.nodes.get("external")?.color);
+    assert.notEqual(scene.nodes.get("external")?.color, scene.nodes.get("people")?.color);
+    assert.equal(scene.nodes.get("web_apps")?.icon, "globe");
+    assert.ok(scene.edges.every((e) => e.arrow === "--" && e.route === "curved"));
+  });
+
+  test("sent twice, changes nothing the second time", async () => {
+    const { map } = room();
+    await drawGraph(map, MINDMAP, mindmapToDiagram);
+    const again = await drawGraph(map, MINDMAP, mindmapToDiagram);
+    assert.deepEqual([again.created, again.updated, again.connected], [0, 0, 0]);
+  });
+});
+
+describe("diagram types", () => {
+  test("are recognised by name, drawn or not", () => {
+    assert.equal(mermaidType("gantt\n  title x"), "gantt");
+    assert.equal(mermaidType("stateDiagram-v2\n  [*] --> a"), "state");
+    assert.equal(mermaidType("classDiagram\n  A <|-- B"), "class");
+    assert.equal(mermaidType('dc01: server "DC01"'), null);
+    assert.deepEqual([...DRAWN_TYPES], ["flowchart", "sequence", "state", "mindmap", "timeline", "gantt"]);
+  });
+});
