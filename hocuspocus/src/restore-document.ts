@@ -33,6 +33,7 @@ import { extractTextFromFragment } from "./projection.js";
 import { Y_FRAGMENT_FIELD } from "./markdown-to-yjs.js";
 import { WIKI_SCHEMA_VERSION } from "./wiki-schema-version.js";
 import { readRawBody, requireSignature } from "./internal-auth.js";
+import { applyStoredState } from "./stored-state.js";
 
 /** The textarea-era body: plain text under its own root key, from before the
  * rich editor. The editor migrates it into the fragment when it opens a page
@@ -114,7 +115,7 @@ export function restoreDocumentInto(
 ): RestoreDocumentResult {
   const backup = new Y.Doc();
   try {
-    Y.applyUpdate(backup, backupState);
+    applyStoredState(backup, backupState);
     const { blocks, source } = backupBlocks(backup, fallbackMarkdown);
 
     const fragment = target.getXmlFragment(Y_FRAGMENT_FIELD);
@@ -178,7 +179,7 @@ export function setupRestoreDocumentApi(app: Express, server: Hocuspocus): void 
       // Decoded before a seat is taken, so a corrupt backup is refused
       // without touching the room.
       try {
-        Y.applyUpdate(new Y.Doc(), backupState);
+        applyStoredState(new Y.Doc(), backupState);
       } catch {
         res.status(422).json({ error: "contentState is not a valid Y.js update" });
         return;

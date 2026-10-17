@@ -24,6 +24,7 @@ import * as Y from "yjs";
 
 import { DRAWING_ROOT_KEY } from "./drawing-projection.js";
 import { DRAWING_APP_STATE_KEY } from "./yjs-to-excalidraw.js";
+import { applyStoredState } from "./stored-state.js";
 
 type SceneElement = Record<string, unknown> & { version?: unknown; isDeleted?: unknown };
 
@@ -66,7 +67,7 @@ export function restoreDrawingInto(
 ): RestoreDrawingResult {
   const backup = new Y.Doc();
   try {
-    Y.applyUpdate(backup, backupState);
+    applyStoredState(backup, backupState);
 
     const wanted = new Map<string, SceneElement>();
     for (const [id, el] of backup.getMap<SceneElement>(DRAWING_ROOT_KEY).entries()) {

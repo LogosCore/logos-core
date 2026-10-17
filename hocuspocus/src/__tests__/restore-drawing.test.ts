@@ -111,3 +111,12 @@ test("an empty backup erases the canvas", () => {
   assert.deepEqual(live(room), []);
   assert.deepEqual(result, { restored: 0, removed: 2 });
 });
+
+test("a backup stored with no state at all is an empty canvas", () => {
+  const { room } = editedSinceBackup();
+
+  const result = room.transact(() => restoreDrawingInto(room, new Uint8Array()));
+
+  assert.deepEqual(live(room), []);
+  assert.deepEqual(result, { restored: 0, removed: 2 });
+});

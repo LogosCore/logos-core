@@ -165,3 +165,15 @@ test("an empty backup empties the page", () => {
   assert.deepEqual(texts(room), []);
   assert.deepEqual(result, { blocks: 0, source: "empty" });
 });
+
+// What Go actually sends for a backup that has no content_state: zero bytes,
+// not an encoded empty document. Y.applyUpdate rejects zero bytes outright,
+// which made exactly the backups the Markdown fallback exists for fail.
+test("a backup stored with no state at all falls back to its Markdown", () => {
+  const { room } = editedSinceBackup();
+
+  const result = room.transact(() => restoreDocumentInto(room, new Uint8Array(), "Only text"));
+
+  assert.deepEqual(texts(room), ["Only text"]);
+  assert.equal(result.source, "markdown");
+});

@@ -28,6 +28,7 @@ import {
   type ElementPatch,
   type NormalizedElement,
 } from "./drawing-elements.js";
+import { applyStoredState } from "./stored-state.js";
 
 /** Bounds one call. A scene far past this stops being a diagram and starts
  * being a dataset, and the whole thing rides in one Y.js transaction. */
@@ -623,7 +624,7 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
       // Decoded before a seat is taken, so a corrupt backup is refused without
       // touching the room at all. An empty state is a valid empty canvas.
       try {
-        Y.applyUpdate(new Y.Doc(), backupState);
+        applyStoredState(new Y.Doc(), backupState);
       } catch {
         res.status(422).json({ error: "contentState is not a valid Y.js update" });
         return;
