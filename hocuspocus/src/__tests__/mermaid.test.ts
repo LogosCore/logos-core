@@ -217,9 +217,13 @@ import { mindmapToDiagram, stateToDiagram } from "../mermaid-graphs.js";
 const textOf = (el: NormalizedElement) => String(el.originalText ?? el.text ?? "");
 const tagPart = (el: NormalizedElement) => (el.customData as { logos?: { part?: string; shape?: string } } | undefined)?.logos;
 
-async function drawFixed(map: Y.Map<NormalizedElement>, source: string, draw: typeof drawTimeline | typeof drawGantt) {
+async function drawFixed<R>(
+  map: Y.Map<NormalizedElement>,
+  source: string,
+  draw: (elements: Y.Map<NormalizedElement>, scene: ReturnType<typeof readScene>, source: string, db: unknown) => R,
+): Promise<R> {
   const db = (await parseMermaidText(source)).db;
-  let result!: ReturnType<typeof draw>;
+  let result!: R;
   map.doc!.transact(() => {
     result = draw(map, readScene(live(map)), source, db);
   });
