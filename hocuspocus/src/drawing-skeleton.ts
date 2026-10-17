@@ -12,7 +12,7 @@
 // from it would otherwise be one group, and select and move together.
 
 import type { Skeleton } from "./drawing-catalogue.js";
-import { measureText, normalizeElement, randomID, type NormalizedElement } from "./drawing-elements.js";
+import { boundTextFields, normalizeElement, randomID, type NormalizedElement } from "./drawing-elements.js";
 
 export interface BuildOptions {
   /** Where the shape's origin goes. */
@@ -21,7 +21,9 @@ export interface BuildOptions {
   /** Id for the first element, the shape's frame. A rebuilt card keeps its
    * frame's id, so the arrows bound to it stay bound. */
   frameId?: string;
-  /** Layer for every element; see drawing-order.ts. */
+  /** Layer for the shape; see drawing-order.ts. Each part is placed a
+   * hair above the one before it, so the shape paints in the order the
+   * catalogue lists its parts. */
   z?: number;
 }
 
@@ -32,7 +34,14 @@ export function skeletonsToElements(skeletons: readonly Skeleton[], opts: BuildO
     return groups.get(id) as string;
   };
   const regroup = (ids: unknown) => (Array.isArray(ids) ? ids.map((id) => group(String(id))) : []);
-  const z = opts.z !== undefined ? { z: opts.z } : {};
+  // Paint order is z, then Excalidraw's fractional index, then element id
+  // (drawing-order.ts). Elements written here have no index, so parts on one
+  // z were painted in id order, which is random: a card's white frame could
+  // cover its own title and icon. A step per part keeps the catalogue's
+  // order; it is far below 1, the gap between layers.
+  const PART_STEP = 1e-4;
+  let part = 0;
+  const z = () => (opts.z !== undefined ? { z: opts.z + PART_STEP * part++ } : {});
 
   const out: NormalizedElement[] = [];
   skeletons.forEach((skeleton, i) => {
@@ -46,14 +55,14 @@ export function skeletonsToElements(skeletons: readonly Skeleton[], opts: BuildO
       // Catalogue text is laid out from its top-left, like Excalidraw's
       // own free text.
       ...(skeleton.type === "text" ? { textAlign: skeleton.textAlign ?? "left", verticalAlign: "top" } : {}),
-      ...z,
+      ...z(),
     });
     out.push(element);
 
     if (label && typeof label === "object") {
       const text = boundLabel(element, label as Record<string, unknown>, regroup);
       element.boundElements = [...((element.boundElements as unknown[]) ?? []), { id: text.id, type: "text" }];
-      out.push({ ...text, ...z });
+      out.push({ ...text, ...z() });
     }
   });
   return out;
@@ -76,11 +85,12 @@ function boundLabel(
     height: Number(container.height),
   };
   const pad = 8;
-  const measured = measureText(text, fontSize, Math.max(box.width - 2 * pad, 16));
-  const width = Math.min(Math.ceil(measured.width), Math.max(box.width - 2 * pad, 16));
+  const fields = boundTextFields(text, fontSize, box.width);
+  const width = fields.width;
   return normalizeElement({
     type: "text",
-    text,
+    text: fields.text,
+    originalText: fields.originalText,
     fontSize,
     fontFamily: label.fontFamily,
     strokeColor: label.strokeColor ?? container.strokeColor,
@@ -92,8 +102,8 @@ function boundLabel(
     // Excalidraw re-lays a bound label out on load; these are a sane
     // starting box so nothing jumps on first render.
     x: textAlign === "left" ? box.x + pad : box.x + (box.width - width) / 2,
-    y: verticalAlign === "top" ? box.y + pad : box.y + (box.height - measured.height) / 2,
+    y: verticalAlign === "top" ? box.y + pad : box.y + (box.height - fields.height) / 2,
     width,
-    height: Math.ceil(measured.height),
+    height: fields.height,
   });
 }

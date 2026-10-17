@@ -28,10 +28,12 @@
 //   ID: "title"                          retitle a node that exists
 //   ID +badge -badge                     add or remove badges
 //   A -> B "label" [style]               a connection; also <-> and --
+//   A -> B [lateral curved head=triangle] route and arrowheads, in the brackets
 //   zone ID "title" KIND { ... }         a region holding the nodes inside it
 //   remove ID | remove A -> B            erase a node, zone or connection
 //   direction right|down                 layout direction for new shapes
 //   style sketch|clean                   the look of new shapes
+//   arrows elbow|curved|straight         how new connections are drawn
 //   # comment
 //
 // Parsing is all-or-nothing: a text with problems changes nothing, and every
@@ -56,6 +58,28 @@ export const GENERIC_KINDS = ["box", "ellipse", "diamond", "note"] as const;
 export type GenericKind = (typeof GENERIC_KINDS)[number];
 
 export type ArrowKind = "->" | "<->" | "--";
+
+/** How a connection is drawn. Elbow runs horizontally and vertically around
+ * other shapes; it is the default. */
+export const ROUTES = ["elbow", "curved", "straight"] as const;
+export type Route = (typeof ROUTES)[number];
+
+/** Arrowheads, as the language names them; Excalidraw's own names use _ for
+ * the - here. */
+export const HEADS = [
+  "arrow",
+  "triangle",
+  "triangle-outline",
+  "circle",
+  "circle-outline",
+  "diamond",
+  "diamond-outline",
+  "bar",
+  "crowfoot-one",
+  "crowfoot-many",
+  "crowfoot-one-or-many",
+  "none",
+] as const;
 
 export interface DiagramNode {
   id: string;
@@ -87,6 +111,11 @@ export interface DiagramEdge {
   arrow: ArrowKind;
   label?: string;
   style?: EdgeStyle;
+  route?: Route;
+  /** The arrowhead at the end; "none" for none. */
+  head?: string;
+  /** The arrowhead at the start. */
+  tail?: string;
   line: number;
 }
 
@@ -97,6 +126,8 @@ export type DiagramRemoval =
 export interface Diagram {
   direction?: "right" | "down";
   style?: ShapeStyle;
+  /** How connections this text adds are drawn, unless one says otherwise. */
+  arrows?: Route;
   nodes: Map<string, DiagramNode>;
   zones: Map<string, DiagramZone>;
   edges: DiagramEdge[];
@@ -293,6 +324,14 @@ export function parseDiagram(source: string): Diagram {
       return;
     }
 
+    // arrows elbow|curved|straight
+    if (word === "arrows" && second?.t === "id" && tokens.length === 2) {
+      const route = second.v.toLowerCase();
+      if (!(ROUTES as readonly string[]).includes(route)) return fail(`arrows is ${ROUTES.join(", ")}, not "${second.v}"`);
+      diagram.arrows = route as Route;
+      return;
+    }
+
     // remove ID | remove A -> B
     if (word === "remove" && second?.t === "id") {
       if (tokens.length === 2) {
@@ -334,14 +373,34 @@ export function parseDiagram(source: string): Diagram {
       const target = tokens[2];
       if (target?.t !== "id") return fail(`a connection is: ${first.v} ${second.v} other_id "label" [style]`);
       const edge: DiagramEdge = { from: first.v, to: target.v, arrow: second.v, line };
+      // Words that describe a connection, inside [ ] or bare: its style, its
+      // route, and head= / tail= for its arrowheads.
+      const describe = (word: string): string | null => {
+        const w = word.toLowerCase();
+        const eq = w.indexOf("=");
+        if (eq > 0) {
+          const k = w.slice(0, eq);
+          const v = w.slice(eq + 1);
+          if (k !== "head" && k !== "tail") return `unknown setting "${k}=". Connections take head= and tail=.`;
+          if (!(HEADS as readonly string[]).includes(v)) return `unknown arrowhead "${v}". Arrowheads: ${HEADS.join(", ")}.`;
+          edge[k] = v;
+          return null;
+        }
+        if (w in EDGE_STYLES) edge.style = w as EdgeStyle;
+        else if ((ROUTES as readonly string[]).includes(w)) edge.route = w as Route;
+        else return `unknown word "${word}" for a connection. Styles: ${Object.keys(EDGE_STYLES).join(", ")}. Routes: ${ROUTES.join(", ")}.`;
+        return null;
+      };
       for (const tok of tokens.slice(3)) {
         if (tok.t === "str" && edge.label === undefined) edge.label = tok.v;
         else if (tok.t === "style" || tok.t === "id") {
-          const style = tok.v.toLowerCase();
-          if (!(style in EDGE_STYLES)) {
-            return fail(`unknown connection style "${tok.v}". Styles: ${Object.keys(EDGE_STYLES).join(", ")}.`);
+          for (const word of tok.v.split(/[\s,]+/).filter(Boolean)) {
+            const problem = describe(word);
+            if (problem) return fail(problem);
           }
-          edge.style = style as EdgeStyle;
+        } else if (tok.t === "attr") {
+          const problem = describe(`${tok.k}=${tok.v}`);
+          if (problem) return fail(problem);
         } else if (tok.t === "arrow") {
           return fail("one connection per line: write a -> b and b -> c on separate lines");
         } else return fail(`a connection is: ${first.v} ${second.v} ${target.v} "label" [style]`);
@@ -499,6 +558,11 @@ export interface SerializedEdge {
   arrow: ArrowKind;
   label: string;
   style: EdgeStyle;
+  /** Written when it differs from the text's `arrows` line. */
+  route?: Route;
+  /** Written when they differ from what the arrow kind implies. */
+  head?: string;
+  tail?: string;
 }
 
 export function nodeLine(node: SerializedNode): string {
@@ -514,19 +578,32 @@ export function nodeLine(node: SerializedNode): string {
 export function edgeLine(edge: SerializedEdge): string {
   const parts = [`${edge.from} ${edge.arrow} ${edge.to}`];
   if (edge.label) parts.push(quote(edge.label));
-  if (edge.style !== "plain") parts.push(`[${edge.style}]`);
+  const words = [
+    ...(edge.style !== "plain" ? [edge.style] : []),
+    ...(edge.route ? [edge.route] : []),
+    ...(edge.head ? [`head=${edge.head}`] : []),
+    ...(edge.tail ? [`tail=${edge.tail}`] : []),
+  ];
+  if (words.length > 0) parts.push(`[${words.join(" ")}]`);
   return parts.join(" ");
+}
+
+/** The arrowheads an arrow kind implies, before any head= or tail=. */
+export function defaultHeads(arrow: ArrowKind): { head: string; tail: string } {
+  return { head: arrow === "--" ? "none" : "arrow", tail: arrow === "<->" ? "arrow" : "none" };
 }
 
 /** Write a diagram out as text, zones first with their contents indented. */
 export function writeDiagram(input: {
   style?: ShapeStyle;
+  arrows?: Route;
   zones: SerializedZone[];
   nodes: SerializedNode[];
   edges: SerializedEdge[];
 }): string {
   const lines: string[] = [];
   if (input.style === "clean") lines.push("style clean");
+  if (input.arrows && input.arrows !== "elbow") lines.push(`arrows ${input.arrows}`);
   const writeZone = (zone: SerializedZone, depth: number) => {
     const pad = "  ".repeat(depth);
     lines.push(`${pad}zone ${zone.id} ${quote(zone.title)} ${zone.kind} {`);

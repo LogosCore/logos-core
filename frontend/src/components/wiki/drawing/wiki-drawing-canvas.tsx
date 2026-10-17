@@ -11,11 +11,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Excalidraw, useHandleLibrary } from "@excalidraw/excalidraw"
-import type { AppState, BinaryFiles, LibraryItems, NormalizedZoomValue } from "@excalidraw/excalidraw/types"
+import type {
+  AppState,
+  BinaryFiles,
+  ExcalidrawImperativeAPI,
+  LibraryItems,
+  NormalizedZoomValue,
+} from "@excalidraw/excalidraw/types"
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 import type { Doc as YDoc } from "yjs"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
 import { useTheme } from "next-themes"
+import { Maximize } from "lucide-react"
 
 import { useDrawingSync } from "./use-drawing-sync"
 import { readGridPreference, writeGridPreference } from "./drawing-grid-preference"
@@ -81,6 +88,29 @@ export default function WikiDrawingCanvas({
   // Reopen where this browser last left the drawing, rather than fitted to
   // its content every time. Fitting is still the first visit's view.
   const [initialView] = useState(() => loadDrawingView(documentId))
+
+  // Without a remembered view, open fitted to the whole drawing, zoomed out
+  // as far as it takes. Excalidraw's own scrollToContent on load only centres
+  // the content at 100%, which shows a corner of any drawing larger than the
+  // screen. Waits for the canvas to have a size and the scene to be loaded:
+  // fitting before either measures nothing.
+  const fittedRef = useRef(false)
+  useEffect(() => {
+    if (!api || initialView || fittedRef.current) return
+    let frame = 0
+    let tries = 0
+    const attempt = () => {
+      const ready = api.getAppState().width > 0 && api.getSceneElements().length > 0
+      if (ready || tries++ > 30) {
+        fittedRef.current = true
+        fitToContent(api, false)
+        return
+      }
+      frame = requestAnimationFrame(attempt)
+    }
+    frame = requestAnimationFrame(attempt)
+    return () => cancelAnimationFrame(frame)
+  }, [api, initialView])
   const onScrollChange = useDrawingViewMemory(documentId)
 
   // Fire once. onReady is a lifecycle signal, not a subscription — a print
@@ -129,7 +159,13 @@ export default function WikiDrawingCanvas({
         onLibraryChange={setPersonalShapes}
         // The Shapes panel's button, beside Excalidraw's own Library one.
         // Editors only: a viewer cannot place anything.
-        renderTopRightUI={() => (isEditor ? <ShapesTrigger /> : null)}
+        renderTopRightUI={() => (
+          <>
+            {/* For viewers too: anyone can lose their place in a big map. */}
+            <FitButton api={api} />
+            {isEditor && <ShapesTrigger />}
+          </>
+        )}
         UIOptions={{
           canvasActions: {
             // Excalidraw's own load/save act on local files and its own
@@ -180,5 +216,43 @@ function useDrawingViewMemory(documentId: string) {
       timerRef.current = setTimeout(flush, VIEW_WRITE_DELAY_MS)
     },
     [documentId, flush],
+  )
+}
+
+/**
+ * Zoom and scroll so the whole drawing fills the canvas. Never zooms in past
+ * 100%: a drawing of two shapes fitted to a large screen would otherwise come
+ * out enormous. Excalidraw has the same as Shift+1; this is for those who do
+ * not know that.
+ */
+function fitToContent(api: ExcalidrawImperativeAPI, animate: boolean) {
+  const elements = api.getSceneElements()
+  if (elements.length === 0) return
+  api.scrollToContent(elements, {
+    fitToViewport: true,
+    viewportZoomFactor: 0.92,
+    maxZoom: 1,
+    animate,
+    duration: 350,
+  })
+}
+
+/** Styled with Excalidraw's own class for its top-right buttons, so it sits
+ * beside Library and Shapes as one of them. */
+function FitButton({ api }: { api: ExcalidrawImperativeAPI | null }) {
+  return (
+    <button
+      type="button"
+      className="sidebar-trigger"
+      title="Fit the whole drawing on screen (Shift+1)"
+      aria-label="Fit the whole drawing on screen"
+      disabled={!api}
+      onClick={() => api && fitToContent(api, true)}
+    >
+      <div>
+        <Maximize className="size-4" />
+      </div>
+      Fit
+    </button>
   )
 }

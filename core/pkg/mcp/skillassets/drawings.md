@@ -26,9 +26,10 @@ dc01 +compromised
 - `id: "new title"` retitle one already drawn
 - `id +badge -badge` add or remove badges
 - `a -> b "label" [style]` a connection; `<->` both ways, `--` no head
+- `[lateral curved head=triangle tail=circle]` route and arrowheads
 - `zone id "title" kind { … }` a region around the nodes inside; nests
 - `remove id`, `remove a -> b`
-- `direction right|down`, `style sketch|clean`, `# comment`
+- `direction right|down`, `style sketch|clean`, `arrows elbow|curved|straight`, `# comment`
 
 Pick short ids (`dc01`); later edits use them.
 
@@ -44,6 +45,10 @@ with icons that fit.
 **Badges** (cards): `compromised` `credentials` `privileged` `flag`
 `has-finding` `monitored` `out-of-scope` `target`.
 **Styles:** `plain` `traffic` `exploit` `lateral` `creds` `c2`.
+**Routes:** `elbow` (default: horizontal and vertical, around other shapes)
+`curved` `straight`. **Heads:** `arrow` `triangle` `circle` `diamond` `bar`
+`crowfoot-one` `crowfoot-many` `crowfoot-one-or-many` (`-outline` for
+hollow), `none`.
 **Zones:** `network` `dmz` `cloud` `trust`.
 
 A write merges: what the text names is added or changed, the rest stays,

@@ -383,6 +383,14 @@ var releases = []Release{
 			"Any node can take color= (a palette name or #rrggbb) and icon= (a lucide name: lock, shield, cloud, bug…). A box with an icon is a card of your own, so things the built-in kinds do not cover (an HSM, a SIEM) still look like the rest of the map. An unknown icon is refused with icons that fit it.",
 			"edit_wiki_drawing is unchanged, and is now for exact geometry and shapes the diagram language has no word for. drawings.md leads with the diagram language and keeps the element reference below it.",
 		},
+	}, {
+		Version: 44,
+		Date:    "2026-10-18",
+		Notes: []string{
+			"Connections drawn by draw_wiki_diagram are now elbow arrows by default: horizontal and vertical runs that go around other shapes, and leave a shape from separate points when several share a side. [curved] and [straight] pick the other routes per connection, and an arrows elbow|curved|straight line sets them for the whole text.",
+			"Arrowheads: head= and tail= inside the brackets, e.g. a -- b [head=crowfoot-many tail=crowfoot-one] for an entity relationship. get_wiki_drawing reads routes and heads back in the same words.",
+			"Long labels are now wrapped to fit their shape, and edit_wiki_drawing routes an element sent with elbowed: true instead of drawing it as a diagonal line.",
+		},
 	},
 }
 

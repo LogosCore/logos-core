@@ -453,7 +453,9 @@ export function setupApplyApi(app: Express, server: Hocuspocus): void {
         await connection.transact((document) => {
           const fragment = document.getXmlFragment(Y_FRAGMENT_FIELD);
           try {
-            applyTo(fragment);
+            // One Y.js transaction: collaborators see the edit land whole,
+            // not each node of it as it is spliced in.
+            document.transact(() => applyTo(fragment));
           } finally {
             attachments = auditAttachments(fragment);
             checklist = collectChecklistCoverage(fragment);

@@ -25,8 +25,10 @@
 import { CARD_HEIGHT, ZONE_KINDS, tagOf, type EdgeStyle, type ShapeStyle, type ShapeTag, type ZoneKind } from "./drawing-catalogue.js";
 import { EDGE_STYLES } from "./drawing-catalogue.js";
 import {
+  defaultHeads,
   writeDiagram,
   type ArrowKind,
+  type Route,
   type SerializedEdge,
   type SerializedNode,
   type SerializedZone,
@@ -80,6 +82,11 @@ export interface SceneEdge {
   label: string;
   labelId?: string;
   style: EdgeStyle;
+  route: Route;
+  /** Arrowheads in the language's names ("none" for none), after any
+   * swap that made `from` the start. */
+  head: string;
+  tail: string;
 }
 
 export interface SceneOther {
@@ -159,7 +166,7 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
     const frames = elements.filter((el) => tagOf(el)?.part === "frame");
     const tag = frames.length > 0 ? (tagOf(frames[0]) as ShapeTag) : null;
     const textOf = (partName: string) =>
-      String(elements.find((el) => tagOf(el)?.part === partName && el.type === "text")?.text ?? "");
+      wordsOf(elements.find((el) => tagOf(el)?.part === partName && el.type === "text"));
 
     // A card.
     if (tag?.shape.startsWith("card:")) {
@@ -221,7 +228,7 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
       addNode({
         id: tag.node ?? frame.id,
         kind: tag.shape === "note" ? "note" : tag.shape.slice(6),
-        title: String(label?.text ?? ""),
+        title: wordsOf(label),
         detail: "",
         badges: [],
         frameId: frame.id,
@@ -248,7 +255,7 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
       addNode({
         id: shape.id,
         kind: shape.type === "rectangle" ? "box" : shape.type,
-        title: String(label.text ?? ""),
+        title: wordsOf(label),
         detail: "",
         badges: [],
         frameId: shape.id,
@@ -290,14 +297,20 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
       if (label) addOther(label);
       continue;
     }
-    const startHead = arrow.startArrowhead != null;
-    const endHead = arrow.endArrowhead != null;
-    let kind: ArrowKind = startHead && endHead ? "<->" : endHead ? "->" : startHead ? "->" : "--";
-    if (startHead && !endHead) [from, to] = [to, from];
-    if (arrow.type === "line" && !startHead && !endHead) kind = "--";
+    const headName = (v: unknown) => (typeof v === "string" && v !== "" ? v.replace(/_/g, "-") : "none");
+    let head = headName(arrow.endArrowhead);
+    let tail = headName(arrow.startArrowhead);
+    const startHead = tail !== "none";
+    const endHead = head !== "none";
+    const kind: ArrowKind = startHead && endHead ? "<->" : endHead || startHead ? "->" : "--";
+    if (startHead && !endHead) {
+      [from, to] = [to, from];
+      [head, tail] = [tail, head];
+    }
     const styleTag = tagOf(arrow)?.shape;
     const style = styleTag?.startsWith("edge:") && styleTag.slice(5) in EDGE_STYLES ? (styleTag.slice(5) as EdgeStyle) : "plain";
-    scene.edges.push({ id: arrow.id, from, to, arrow: kind, label: String(label?.text ?? ""), labelId: label?.id, style });
+    const route: Route = arrow.elbowed === true ? "elbow" : arrow.roundness ? "curved" : "straight";
+    scene.edges.push({ id: arrow.id, from, to, arrow: kind, label: wordsOf(label), labelId: label?.id, style, route, head, tail });
     scene.owner.set(arrow.id, arrow.id);
     if (label) scene.owner.set(label.id, arrow.id);
   }
@@ -329,11 +342,21 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
     scene.others.push({
       id: el.id,
       type: el.type,
-      ...(typeof el.text === "string" && el.text !== "" ? { text: el.text } : {}),
+      ...(wordsOf(el) !== "" ? { text: wordsOf(el) } : {}),
       x: Math.round(Number(el.x) || 0),
       y: Math.round(Number(el.y) || 0),
     });
   }
+}
+
+/** A text element's words as written. A label is stored wrapped to its
+ * shape, with the unwrapped words in originalText; reading the wrapped copy
+ * would report line breaks nobody typed, and re-sending a read unchanged would
+ * look like an edit. */
+function wordsOf(el: NormalizedElement | undefined): string {
+  if (!el) return "";
+  const words = typeof el.originalText === "string" && el.originalText !== "" ? el.originalText : el.text;
+  return typeof words === "string" ? words : "";
 }
 
 function overlaps(a: Box, b: Box): boolean {
@@ -366,9 +389,28 @@ export function sceneToText(scene: Scene): string {
     nodes: nodes.filter((n) => n.zone === zone.id).map(serial),
   });
   const allClean = nodes.length > 0 && nodes.every((n) => n.style === "clean");
-  const edges: SerializedEdge[] = scene.edges.map((e) => ({ from: e.from, to: e.to, arrow: e.arrow, label: e.label, style: e.style }));
+  // The route most connections use goes in an `arrows` line; only the others
+  // say theirs. Without it a drawing of straight arrows would repeat
+  // [straight] on every line.
+  const counts = new Map<Route, number>();
+  for (const e of scene.edges) counts.set(e.route, (counts.get(e.route) ?? 0) + 1);
+  const usual: Route = [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] === "elbow" ? -1 : 1))[0]?.[0] ?? "elbow";
+  const edges: SerializedEdge[] = scene.edges.map((e) => {
+    const implied = defaultHeads(e.arrow);
+    return {
+      from: e.from,
+      to: e.to,
+      arrow: e.arrow,
+      label: e.label,
+      style: e.style,
+      ...(e.route !== usual ? { route: e.route } : {}),
+      ...(e.head !== implied.head ? { head: e.head } : {}),
+      ...(e.tail !== implied.tail ? { tail: e.tail } : {}),
+    };
+  });
   return writeDiagram({
     style: allClean ? "clean" : undefined,
+    arrows: usual,
     zones: [...scene.zones.values()].filter((z) => !z.parent).sort(readingOrder).map(zoneOut),
     nodes: nodes.filter((n) => !n.zone).map(serial),
     edges,

@@ -126,7 +126,14 @@ export function setupDiagramApi(app: Express, server: Hocuspocus): void {
       let after: Scene | null = null;
       try {
         await connection.transact((document) => {
-          result = applyDiagram(elementsOf(document), diagram, mode);
+          // One Y.js transaction, so everyone in the room receives the
+          // finished change as one update. A direct connection's transact()
+          // does not open one, and every write in it went out on its own:
+          // an open canvas saw arrows before they were routed and could
+          // write those copies back over the routed ones.
+          document.transact(() => {
+            result = applyDiagram(elementsOf(document), diagram, mode);
+          });
           after = readScene(liveElements(document));
         });
       } catch (err) {

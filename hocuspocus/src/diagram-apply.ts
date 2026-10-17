@@ -38,9 +38,10 @@ import {
   type ShapeTag,
   type ZoneKind,
 } from "./drawing-catalogue.js";
-import { DiagramError, type ArrowKind, type Diagram, type DiagramProblem } from "./diagram-language.js";
+import { DiagramError, defaultHeads, type ArrowKind, type Diagram, type DiagramProblem, type Route } from "./diagram-language.js";
+import { layoutArrows, pathCrosses, type Obstacle } from "./arrow-layout.js";
 import { readScene, unionBox, type Box, type Scene, type SceneNode, type SceneZone } from "./diagram-read.js";
-import { measureText, normalizeElement, type NormalizedElement } from "./drawing-elements.js";
+import { boundTextFields, measureText, normalizeElement, type NormalizedElement } from "./drawing-elements.js";
 import { placeBoundArrow, wireBindings } from "./apply-drawing.js";
 import { skeletonsToElements } from "./drawing-skeleton.js";
 
@@ -61,6 +62,8 @@ const EDGE_Z = -1;
 const NODE_Z = 0;
 
 const ZONE_PAD = 32;
+/** How wide an arrow's label may run before it wraps. */
+const EDGE_LABEL_WIDTH = 216;
 const NODE_GAP = 90;
 const RANK_GAP = 150;
 const CLEARANCE = 40;
@@ -297,24 +300,48 @@ export function applyDiagram(
   for (const plan of plans.values()) frames.set(plan.id, plan.existing?.frameId ?? frameIdOf(elements, plan.id) ?? "");
   const rebuilt = new Set([...plans.values()].filter((p) => p.rebuild && p.existing).map((p) => p.id));
 
+  // Arrows whose geometry is drawn at the end, once every shape is in place.
+  const toLayout: string[] = [];
+
   for (const edge of diagram.edges) {
     const match = findEdge(scene, edge.from, edge.to, edge.arrow, edge.label);
+    const implied = defaultHeads(edge.arrow);
     if (match) {
       const arrow = elements.get(match.id);
       if (!arrow) continue;
       const wantStyle = edge.style ?? match.style;
       const wantLabel = edge.label ?? match.label;
-      if (wantStyle === match.style && wantLabel === match.label && edge.arrow === match.arrow) continue;
+      // An existing connection keeps its route unless this text names one,
+      // for it or for all of its connections.
+      const wantRoute = edge.route ?? diagram.arrows ?? match.route;
+      const wantHead = edge.head ?? (edge.arrow === match.arrow ? match.head : implied.head);
+      const wantTail = edge.tail ?? (edge.arrow === match.arrow ? match.tail : implied.tail);
+      if (
+        wantStyle === match.style &&
+        wantLabel === match.label &&
+        edge.arrow === match.arrow &&
+        wantRoute === match.route &&
+        wantHead === match.head &&
+        wantTail === match.tail
+      ) {
+        continue;
+      }
       const look = edgeLook(wantStyle, style);
+      // A read reports a connection drawn end-to-start the right way round;
+      // writing its heads back has to put them on the ends they are on.
+      const reversed = endOwner(arrow, "startBinding", scene) === edge.to;
+      const heads = reversed ? { head: wantTail, tail: wantHead } : { head: wantHead, tail: wantTail };
       elements.set(match.id, {
         ...arrow,
         strokeColor: look.strokeColor,
         strokeStyle: look.strokeStyle,
         customData: look.customData,
-        ...arrowheads(edge.arrow),
+        ...excalidrawHeads(heads.head, heads.tail),
+        ...routeFields(wantRoute),
         version: (arrow.version ?? 1) + 1,
       });
       setEdgeLabel(elements, match.id, wantLabel, look.strokeColor, look.fontFamily, look.customData.logos);
+      if (wantRoute !== match.route) toLayout.push(match.id);
       result.updated++;
       continue;
     }
@@ -333,23 +360,38 @@ export function applyDiagram(
       customData: look.customData,
       z: EDGE_Z,
     });
-    Object.assign(arrow, arrowheads(edge.arrow));
+    Object.assign(arrow, excalidrawHeads(edge.head ?? implied.head, edge.tail ?? implied.tail), routeFields(edge.route ?? diagram.arrows ?? "elbow"));
     elements.set(arrow.id, arrow);
     elements.set(arrow.id, placeBoundArrow(elements, arrow));
     wireBindings(elements, [arrow]);
     if (edge.label) setEdgeLabel(elements, arrow.id, edge.label, look.strokeColor, look.fontFamily, look.customData.logos);
+    toLayout.push(arrow.id);
     result.connected++;
   }
 
   // Arrows into a card that was rebuilt start from its old outline; redraw
   // them against the new one.
   for (const edge of scene.edges) {
-    if (!rebuilt.has(edge.from) && !rebuilt.has(edge.to)) continue;
-    const arrow = elements.get(edge.id);
-    if (!arrow || arrow.isDeleted) continue;
-    elements.set(edge.id, { ...placeBoundArrow(elements, { ...arrow, points: [] }), version: (arrow.version ?? 1) + 1 });
-    placeEdgeLabel(elements, edge.id);
+    if (rebuilt.has(edge.from) || rebuilt.has(edge.to)) toLayout.push(edge.id);
   }
+
+  // Everything is in place: draw the arrows, around every shape but their own
+  // two ends. An elbow already on the canvas that a new node now sits on is
+  // redrawn too; one that crosses nothing new keeps the route it has, which
+  // may be one an operator adjusted by hand.
+  const after = readScene(live());
+  const obstacles: Obstacle[] = [
+    ...[...after.nodes.values()].map((n) => ({ id: n.frameId, box: n.box })),
+    ...[...after.zones.values()].map((z) => ({ id: `${z.frameId}:title`, box: zoneTitleBox(z) })),
+  ];
+  const added = [...plans.values()].filter((p) => !p.existing && p.box).map((p) => p.box as Box);
+  for (const edge of after.edges) {
+    const arrow = elements.get(edge.id);
+    if (!arrow || arrow.elbowed !== true || toLayout.includes(edge.id)) continue;
+    const points = arrow.points as [number, number][];
+    if (added.some((box) => pathCrosses(points, [Number(arrow.x), Number(arrow.y)], box))) toLayout.push(edge.id);
+  }
+  layoutArrows(elements, toLayout, obstacles);
 
   return result;
 }
@@ -430,20 +472,7 @@ function layout(
   scene: Scene,
   direction: "right" | "down",
 ): void {
-  const g = new dagre.graphlib.Graph({ compound: true, multigraph: true });
-  g.setGraph({ rankdir: direction === "right" ? "LR" : "TB", nodesep: NODE_GAP, ranksep: RANK_GAP, marginx: 0, marginy: 0 });
-  g.setDefaultEdgeLabel(() => ({}));
-  for (const zone of zoneParents.keys()) g.setNode(`zone:${zone}`, {});
-  for (const [zone, parent] of zoneParents) if (parent) g.setParent(`zone:${zone}`, `zone:${parent}`);
-  for (const plan of plans.values()) {
-    g.setNode(plan.id, { width: plan.width, height: plan.height });
-    if (plan.zone && zoneParents.has(plan.zone)) g.setParent(plan.id, `zone:${plan.zone}`);
-  }
-  edges.forEach((e, i) => {
-    if (plans.has(e.from) && plans.has(e.to)) g.setEdge(e.from, e.to, {}, `e${i}`);
-  });
-  dagre.layout(g);
-
+  const g = layoutGraph(plans, zoneParents, edges, direction);
   const laid = (id: string) => g.node(id) as { x: number; y: number };
   const placed = [...plans.values()].filter((p) => p.box);
   const obstacles: Box[] = [
@@ -528,6 +557,66 @@ function layout(
     const zone = plans.get(id)?.zone;
     return zone ? ([...plans.values()].find((p) => p.zone === zone && p.box) ?? null) : null;
   }
+}
+
+/**
+ * Run dagre over the diagram, and never fail.
+ *
+ * dagre gets one edge per pair of nodes, whichever way and however many
+ * connections the pair has, weighted by the count. It only needs to know
+ * what is connected, since the arrows themselves are drawn elsewhere
+ * (arrow-layout.ts). Repeated connections inside zones made it throw ("Not
+ * possible to find intersection inside of the rectangle"), and an
+ * interaction diagram is full of them: browser to server and back, three
+ * times. If it throws anyway, it is run again without zones, and as a last
+ * resort the nodes go in a grid. A layout problem must not fail the write.
+ */
+function layoutGraph(
+  plans: Map<string, Plan>,
+  zoneParents: Map<string, string | undefined>,
+  edges: readonly LayoutEdge[],
+  direction: "right" | "down",
+): { node(id: string): { x: number; y: number } } {
+  const weights = new Map<string, { from: string; to: string; weight: number }>();
+  for (const e of edges) {
+    if (e.from === e.to || !plans.has(e.from) || !plans.has(e.to)) continue;
+    const key = [e.from, e.to].sort().join("\u0000");
+    const prior = weights.get(key);
+    if (prior) prior.weight++;
+    else weights.set(key, { from: e.from, to: e.to, weight: 1 });
+  }
+
+  const run = (withZones: boolean) => {
+    const g = new dagre.graphlib.Graph({ compound: withZones });
+    g.setGraph({ rankdir: direction === "right" ? "LR" : "TB", nodesep: NODE_GAP, ranksep: RANK_GAP, marginx: 0, marginy: 0 });
+    g.setDefaultEdgeLabel(() => ({}));
+    if (withZones) {
+      for (const zone of zoneParents.keys()) g.setNode(`zone:${zone}`, {});
+      for (const [zone, parent] of zoneParents) if (parent) g.setParent(`zone:${zone}`, `zone:${parent}`);
+    }
+    for (const plan of plans.values()) {
+      g.setNode(plan.id, { width: plan.width, height: plan.height });
+      if (withZones && plan.zone && zoneParents.has(plan.zone)) g.setParent(plan.id, `zone:${plan.zone}`);
+    }
+    for (const e of weights.values()) g.setEdge(e.from, e.to, { weight: e.weight });
+    dagre.layout(g);
+    return { node: (id: string) => g.node(id) as { x: number; y: number } };
+  };
+
+  for (const withZones of [true, false]) {
+    try {
+      return run(withZones);
+    } catch (err) {
+      console.warn(`diagram layout failed${withZones ? " with zones" : ""}; ${withZones ? "retrying without" : "using a grid"}:`, err);
+    }
+  }
+  // A grid, in the order the nodes were declared.
+  const ids = [...plans.keys()];
+  const columns = Math.max(1, Math.ceil(Math.sqrt(ids.length)));
+  const at = new Map(
+    ids.map((id, i) => [id, { x: (i % columns) * (260 + NODE_GAP), y: Math.floor(i / columns) * (CARD_HEIGHT + NODE_GAP) }]),
+  );
+  return { node: (id: string) => at.get(id) as { x: number; y: number } };
 }
 
 /** Move a box along the cross-axis until it overlaps nothing. */
@@ -671,7 +760,9 @@ function retitle(elements: Y.Map<NormalizedElement>, existing: SceneNode, title:
   for (const id of existing.elementIds) {
     const el = elements.get(id);
     if (el?.type !== "text") continue;
-    elements.set(id, { ...el, text: title, originalText: title, version: (el.version ?? 1) + 1 });
+    const container = typeof el.containerId === "string" ? elements.get(el.containerId) : undefined;
+    const fields = boundTextFields(title, Number(el.fontSize) || 16, Number(container?.width) || 100);
+    elements.set(id, { ...el, text: fields.text, originalText: fields.originalText, height: fields.height, version: (el.version ?? 1) + 1 });
   }
 }
 
@@ -684,8 +775,33 @@ function frameIdOf(elements: Y.Map<NormalizedElement>, nodeId: string): string |
   return undefined;
 }
 
-function arrowheads(kind: ArrowKind): { startArrowhead: string | null; endArrowhead: string | null } {
-  return { startArrowhead: kind === "<->" ? "arrow" : null, endArrowhead: kind === "--" ? null : "arrow" };
+/** Arrowheads in Excalidraw's names; the language's "none" is null. */
+function excalidrawHeads(head: string, tail: string): { startArrowhead: string | null; endArrowhead: string | null } {
+  const name = (h: string) => (h === "none" ? null : h.replace(/-/g, "_"));
+  return { startArrowhead: name(tail), endArrowhead: name(head) };
+}
+
+/** The fields that make an arrow elbow, curved or straight. */
+function routeFields(route: Route): Record<string, unknown> {
+  switch (route) {
+    case "elbow":
+      return { elbowed: true, roundness: null };
+    case "curved":
+      return { elbowed: false, roundness: { type: 2 }, fixedSegments: null };
+    case "straight":
+      return { elbowed: false, roundness: null, fixedSegments: null };
+  }
+}
+
+/** Which node an arrow's end is attached to. */
+function endOwner(arrow: NormalizedElement, end: "startBinding" | "endBinding", scene: Scene): string | undefined {
+  const id = (arrow[end] as { elementId?: string } | null)?.elementId;
+  return id ? scene.owner.get(id) : undefined;
+}
+
+/** The corner of a zone its title sits in, which arrows should not cross. */
+function zoneTitleBox(zone: SceneZone): Box {
+  return { x: zone.box.x + 8, y: zone.box.y + 4, width: Math.min(zone.box.width - 16, 60 + zone.title.length * 9), height: 32 };
 }
 
 function findEdge(scene: Scene, from: string, to: string, arrow: ArrowKind, label?: string) {
@@ -713,25 +829,28 @@ function setEdgeLabel(
       tombstone(elements, current.id);
       return;
     }
-    elements.set(current.id, { ...current, text, originalText: text, strokeColor: color, version: (current.version ?? 1) + 1 });
+    const fields = boundTextFields(text, 16, EDGE_LABEL_WIDTH);
+    elements.set(current.id, { ...current, ...fields, strokeColor: color, version: (current.version ?? 1) + 1 });
     placeEdgeLabel(elements, arrowId);
     return;
   }
   if (!text) return;
-  const measured = measureText(text, 16, 200);
+  const fields = boundTextFields(text, 16, EDGE_LABEL_WIDTH);
   const label = normalizeElement({
     type: "text",
-    text,
+    text: fields.text,
+    originalText: fields.originalText,
     fontSize: 16,
     fontFamily,
     strokeColor: color,
     textAlign: "center",
     verticalAlign: "middle",
     containerId: arrowId,
-    width: Math.ceil(measured.width),
-    height: Math.ceil(measured.height),
+    width: fields.width,
+    height: fields.height,
     customData: { logos: { ...tag, part: "label" } },
-    z: EDGE_Z,
+    // Over its own arrow, still under the cards.
+    z: EDGE_Z + 0.5,
   });
   elements.set(label.id, label);
   elements.set(arrowId, {

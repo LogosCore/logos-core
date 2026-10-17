@@ -597,3 +597,24 @@ describe("isGestureActive", () => {
     ).toBe(false)
   })
 })
+
+// A canvas can hold an older copy for a moment: the room took a newer one
+// (a server-side write, another person) and the merge has not reached the
+// canvas yet. Publishing it then put the older copy back over the newer one
+// for everybody, which is how server-routed arrows came back unrouted.
+describe("writeLocalElements never publishes a copy older than the room's", () => {
+  test("an older local copy is held back", () => {
+    const doc = new YDoc()
+    getElementsMap(doc).set("a", element("a", 4, 99))
+    const written = writeLocalElements(doc, [element("a", 3, 1)], new Map())
+    expect(written).toBe(0)
+    expect(getElementsMap(doc).get("a")?.version).toBe(4)
+  })
+
+  test("a newer or new local copy is still published", () => {
+    const doc = new YDoc()
+    getElementsMap(doc).set("a", element("a", 4, 99))
+    expect(writeLocalElements(doc, [element("a", 5, 1), element("b", 1, 1)], new Map())).toBe(2)
+    expect(getElementsMap(doc).get("a")?.version).toBe(5)
+  })
+})

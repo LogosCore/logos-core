@@ -139,45 +139,64 @@ function lineWidth(line: string, fontSize: number): number {
 }
 
 /**
- * Measure a string as it would be laid out, wrapping greedily at maxWidth.
+ * Break a string into lines no wider than maxWidth, greedily at spaces, and
+ * keep the line breaks it already has. A single word wider than the line is
+ * left whole rather than split mid-word.
  *
- * The wrap is counted, never inserted: Excalidraw re-wraps bound text to its
- * container on open, so a newline written in here would fight that and render
- * differently from what was measured. Only the line *count* is needed, to know
- * how tall the box must be.
+ * Bound text has to be stored wrapped. Excalidraw draws a label's `text`
+ * exactly as stored and only re-wraps it from `originalText` when somebody
+ * edits or resizes the shape, so a long label written as one line ran out
+ * of its note on one line until then.
  */
-export function measureText(
-  text: string,
-  fontSize: number,
-  maxWidth = LABEL_MAX_TEXT_WIDTH,
-): { width: number; height: number } {
-  let widest = 0;
-  let lines = 0;
-
+export function wrapText(text: string, fontSize: number, maxWidth = LABEL_MAX_TEXT_WIDTH): string {
+  const lines: string[] = [];
   for (const paragraph of text.split("\n")) {
     const words = paragraph.split(/\s+/).filter(Boolean);
-    if (words.length === 0) {
-      lines += 1;
-      continue;
-    }
-
     let current = "";
     for (const word of words) {
       const candidate = current === "" ? word : `${current} ${word}`;
       if (current !== "" && lineWidth(candidate, fontSize) > maxWidth) {
-        widest = Math.max(widest, lineWidth(current, fontSize));
-        lines += 1;
+        lines.push(current);
         current = word;
       } else {
         current = candidate;
       }
     }
-    widest = Math.max(widest, lineWidth(current, fontSize));
-    lines += 1;
+    lines.push(current);
   }
-
-  return { width: widest, height: Math.max(1, lines) * fontSize * LINE_HEIGHT };
+  return lines.join("\n");
 }
+
+/** Measure a string as wrapText lays it out. */
+export function measureText(
+  text: string,
+  fontSize: number,
+  maxWidth = LABEL_MAX_TEXT_WIDTH,
+): { width: number; height: number } {
+  const lines = wrapText(text, fontSize, maxWidth).split("\n");
+  const widest = Math.max(0, ...lines.map((line) => lineWidth(line, fontSize)));
+  return { width: widest, height: Math.max(1, lines.length) * fontSize * LINE_HEIGHT };
+}
+
+/** The fields of a bound label holding `text`, wrapped to fit inside a
+ * container `containerWidth` wide. */
+export function boundTextFields(
+  text: string,
+  fontSize: number,
+  containerWidth: number,
+): { text: string; originalText: string; width: number; height: number } {
+  const maxWidth = Math.max(containerWidth - 2 * BOUND_TEXT_PAD, 16);
+  const measured = measureText(text, fontSize, maxWidth);
+  return {
+    text: wrapText(text, fontSize, maxWidth),
+    originalText: text,
+    width: Math.min(Math.ceil(measured.width), maxWidth),
+    height: Math.ceil(measured.height),
+  };
+}
+
+/** Space between a bound label and its container's sides. */
+const BOUND_TEXT_PAD = 8;
 
 function randomInteger(): number {
   return Math.floor(Math.random() * 2 ** 31);
@@ -398,12 +417,14 @@ function labelFor(container: NormalizedElement, text: string): NormalizedElement
   const fontSize = 16;
   const width = Number(container.width) || 100;
   const height = Number(container.height) || 100;
-  const lines = text.split("\n").length;
+  const fields = boundTextFields(text, fontSize, width);
+  const lines = fields.text.split("\n").length;
 
   return normalizeElement({
     type: "text",
     id: `${container.id}-label`,
-    text,
+    text: fields.text,
+    originalText: fields.originalText,
     fontSize,
     containerId: container.id,
     textAlign: "center",

@@ -438,7 +438,14 @@ export function writeLocalElements(
   lastSeen: Map<string, number>,
 ): number {
   const shared = getElementsMap(ydoc)
-  const changed = elements.filter((el) => lastSeen.get(el.id) !== el.version)
+  // Never a copy older than the room's. This canvas can hold one for a
+  // moment, between the room taking a newer copy and the merge reaching the
+  // canvas, and publishing it then would put the older copy back over the
+  // newer one for everybody. The room's copy reaches this canvas with the
+  // next merge.
+  const changed = elements.filter(
+    (el) => lastSeen.get(el.id) !== el.version && !((shared.get(el.id)?.version ?? -Infinity) > el.version),
+  )
   if (changed.length === 0) return 0
 
   ydoc.transact(() => {

@@ -23,6 +23,7 @@ import { DRAWING_ROOT_KEY, deriveDrawingProjection } from "./drawing-projection.
 import { restoreDrawingInto } from "./restore-drawing.js";
 import { attachmentReferencesOf, type AttachmentReferences } from "./attachment-references.js";
 import {
+  boundTextFields,
   DrawingElementError,
   normalizeElements,
   normalizePatches,
@@ -30,6 +31,7 @@ import {
   type NormalizedElement,
 } from "./drawing-elements.js";
 import { applyStoredState } from "./stored-state.js";
+import { layoutArrows, type Obstacle } from "./arrow-layout.js";
 
 /** Bounds one call. A scene far past this stops being a diagram and starts
  * being a dataset, and the whole thing rides in one Y.js transaction. */
@@ -175,18 +177,37 @@ export function placeBoundArrow(
 }
 
 /** Place every bound arrow in a batch, once the shapes they name are all in
- * the scene. */
+ * the scene. An elbow arrow with both ends bound and no points of its own
+ * is routed around the other shapes (arrow-layout.ts): written with
+ * `elbowed: true` and a straight stroke, it would be a diagonal line marked
+ * as an elbow, which Excalidraw draws as given. */
 function placeBoundArrows(
   elements: Y.Map<NormalizedElement>,
   batch: readonly NormalizedElement[],
 ): void {
+  const elbows: string[] = [];
   for (const el of batch) {
     if (el.type !== "arrow" && el.type !== "line") continue;
     const current = elements.get(el.id);
     if (!current) continue;
+    const sentPoints = Array.isArray(el.points) && el.points.length >= 2;
+    if (current.elbowed === true && !sentPoints && current.startBinding && current.endBinding) elbows.push(el.id);
     const placed = placeBoundArrow(elements, current);
     if (placed !== current) elements.set(el.id, placed);
   }
+  if (elbows.length > 0) layoutArrows(elements, elbows, shapeObstacles(elements));
+}
+
+/** Every shape an arrow could be routed around: the boxes, not their
+ * labels, arrows or freehand. */
+function shapeObstacles(elements: Y.Map<NormalizedElement>): Obstacle[] {
+  const out: Obstacle[] = [];
+  for (const el of elements.values()) {
+    if (!el || el.isDeleted) continue;
+    if (!["rectangle", "ellipse", "diamond", "image", "frame"].includes(el.type)) continue;
+    out.push({ id: el.id, box: { x: Number(el.x), y: Number(el.y), width: Number(el.width), height: Number(el.height) } });
+  }
+  return out;
 }
 
 /**
@@ -365,12 +386,15 @@ function retitleLabel(
   const text = elements.get(textID);
   if (!text) return;
 
+  // Stored wrapped to the box, with the words as written in originalText,
+  // which is what Excalidraw re-wraps from when the box is resized; leaving
+  // it behind makes the label revert to the old words.
+  const fields = boundTextFields(label, Number(text.fontSize) || 16, Number(container.width) || 100);
   elements.set(textID, {
     ...text,
-    text: label,
-    // originalText is what Excalidraw re-wraps from when the container is
-    // resized; leaving it behind makes the label revert to the old words.
-    originalText: label,
+    text: fields.text,
+    originalText: fields.originalText,
+    height: fields.height,
     version: (text.version ?? 1) + 1,
   });
 }
@@ -552,7 +576,14 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
         let warning: string | null = null;
         await connection.transact((document) => {
           const elements = elementsOf(document);
-          applied = applyMode(elements, mode, incoming, patches, elementIDs);
+          // One Y.js transaction, so everyone in the room receives the
+          // finished change as one update. A direct connection's transact()
+          // does not open one, and every write in it went out on its own:
+          // an open canvas saw arrows before they were routed and could
+          // write those copies back over the routed ones.
+          document.transact(() => {
+            applied = applyMode(elements, mode, incoming, patches, elementIDs);
+          });
           // Read back after the write, so the check describes what is on the
           // canvas rather than what was asked for — geometry the server placed
           // from bindings is included, and a stacked pile that survived is
@@ -647,7 +678,10 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
           previousState = Y.encodeStateAsUpdate(document);
           previousContent = deriveDrawingProjection(document).content;
           previousRefs = attachmentReferencesOf(document, "drawing");
-          result = restoreDrawingInto(document, backupState);
+          // One Y.js transaction: collaborators see the restore land whole.
+          document.transact(() => {
+            result = restoreDrawingInto(document, backupState);
+          });
         });
 
         res.status(200).json({

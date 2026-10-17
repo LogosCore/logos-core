@@ -9,6 +9,9 @@ import { buildCard, BUILTIN_SHAPES, ICON_NAMES } from "../drawing-catalogue.js";
 import { skeletonsToElements } from "../drawing-skeleton.js";
 import { normalizeElements, type NormalizedElement } from "../drawing-elements.js";
 import { DRAWING_ROOT_KEY } from "../drawing-projection.js";
+import { inPaintOrder } from "../drawing-order.js";
+import { tagOf } from "../drawing-catalogue.js";
+import { routeElbow } from "../arrow-routing.js";
 
 function room(): { doc: Y.Doc; map: Y.Map<NormalizedElement> } {
   const doc = new Y.Doc();
@@ -153,7 +156,8 @@ describe("reading a drawing as a diagram", () => {
     map.set(note.id, note);
 
     const scene = readScene(live(map));
-    assert.equal(read(map), 'boxA: box "Jump host"\nboxB: ellipse "Target"\nboxA -> boxB');
+    // A person's arrow is straight; the read says so once, for all of them.
+    assert.equal(read(map), 'arrows straight\nboxA: box "Jump host"\nboxB: ellipse "Target"\nboxA -> boxB');
     assert.deepEqual(scene.others.map((o) => [o.type, o.text]), [["text", "TODO: scope"]]);
   });
 
@@ -427,5 +431,205 @@ describe("colours and icons", () => {
     for (const name of ICON_NAMES) {
       assert.doesNotThrow(() => buildCard({ kind: "box", title: "t", detail: "", style: "sketch", icon: name }), name);
     }
+  });
+});
+
+// Elements written by the server carry no Excalidraw index, so paint order
+// falls to z and then to element id. With one z for a whole card that was id
+// order, which is random, and a card's white frame painted over its own title
+// and icon: the card showed up blank.
+describe("paint order", () => {
+  test("a card paints its frame first and its words last, whatever its ids", () => {
+    for (let run = 0; run < 20; run++) {
+      const { map } = room();
+      apply(map, 'a: box "Title" "detail" icon=key-round color=red +flag');
+      const parts = inPaintOrder(live(map)).map((el) => tagOf(el)?.part);
+      assert.equal(parts[0], "frame");
+      assert.ok(parts.indexOf("tile") < parts.indexOf("icon"), "tile under icon");
+      assert.ok(parts.indexOf("icon") < parts.indexOf("title"), "icon under title");
+    }
+  });
+
+  test("an arrow's label paints over its arrow, and under the cards", () => {
+    const { map } = room();
+    apply(map, 'a: server "A"\nb: server "B"\na -> b "link"');
+    const order = inPaintOrder(live(map));
+    const arrow = order.findIndex((el) => el.type === "arrow");
+    const label = order.findIndex((el) => el.type === "text" && el.text === "link");
+    const firstCard = order.findIndex((el) => tagOf(el)?.part === "frame" && tagOf(el)?.shape === "card:server");
+    assert.ok(arrow < label && label < firstCard, `${arrow} ${label} ${firstCard}`);
+  });
+});
+
+// Excalidraw draws a label exactly as stored and only re-wraps it when the
+// shape is edited or resized, so a long note written as one line ran out of
+// the note on one line.
+describe("long labels", () => {
+  const LONG = "Root causes: macro-enabled mail allowed, helpdesk is local admin on all workstations, Veeam stores domain creds.";
+
+  test("are stored wrapped to fit their shape", () => {
+    const { map } = room();
+    apply(map, `n1: note ${JSON.stringify(LONG)}`);
+    const note = live(map).find((el) => el.type === "rectangle")!;
+    const label = live(map).find((el) => el.type === "text")!;
+    const lines = String(label.text).split("\n");
+    assert.ok(lines.length > 3, `${lines.length} lines`);
+    for (const line of lines) assert.ok(line.length * 16 * 0.6 <= Number(note.width), line);
+    assert.equal(label.originalText, LONG);
+    assert.ok(Number(label.height) <= Number(note.height), "the text fits in the note");
+  });
+
+  test("read back as written, so sending them again changes nothing", () => {
+    const { map } = room();
+    apply(map, `n1: note ${JSON.stringify(LONG)}\na: server "A"\nn1 -> a "a fairly long connection label that has to wrap somewhere"`);
+    assert.match(read(map), /n1: note "Root causes: macro-enabled mail allowed, helpdesk/);
+    const again = apply(map, read(map));
+    assert.deepEqual([again.created, again.updated, again.connected], [0, 0, 0]);
+  });
+
+  test("an element label from edit_wiki_drawing is wrapped too", () => {
+    const [box, label] = normalizeElements([{ type: "rectangle", width: 120, height: 80, label: LONG }]);
+    assert.ok(String(label.text).includes("\n"));
+    assert.equal(label.originalText, LONG);
+    assert.equal(box.width, 120);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+describe("arrow routes and heads", () => {
+  type Pt = [number, number];
+  const arrowOf = (map: Y.Map<NormalizedElement>) => live(map).find((el) => el.type === "arrow")!;
+  const globalPoints = (el: NormalizedElement) => (el.points as Pt[]).map(([x, y]) => [Number(el.x) + x, Number(el.y) + y] as Pt);
+  const orthogonal = (pts: Pt[]) => pts.slice(1).every((p, i) => p[0] === pts[i][0] || p[1] === pts[i][1]);
+
+  test("the language reads routes, heads and the arrows default", () => {
+    const d = parseDiagram("arrows curved\na -> b [lateral straight head=triangle tail=circle-outline]\na -> c head=diamond");
+    assert.equal(d.arrows, "curved");
+    assert.deepEqual([d.edges[0].style, d.edges[0].route, d.edges[0].head, d.edges[0].tail], ["lateral", "straight", "triangle", "circle-outline"]);
+    assert.equal(d.edges[1].head, "diamond");
+    assert.throws(() => parseDiagram("a -> b [zigzag]"), /Routes: elbow, curved, straight/);
+    assert.throws(() => parseDiagram("a -> b head=spear"), /Arrowheads: arrow, triangle/);
+  });
+
+  test("a new connection is an elbow: only horizontal and vertical runs, bound with fixed points", () => {
+    const { map } = room();
+    apply(map, 'a: server "A"\nb: server "B"\nc: server "C"\na -> b\na -> c');
+    for (const arrow of live(map).filter((el) => el.type === "arrow")) {
+      assert.equal(arrow.elbowed, true);
+      assert.ok(orthogonal(globalPoints(arrow)), JSON.stringify(arrow.points));
+      for (const end of ["startBinding", "endBinding"] as const) {
+        const fp = (arrow[end] as { fixedPoint?: number[] }).fixedPoint;
+        assert.ok(Array.isArray(fp) && fp.every((v) => v >= 0 && v <= 1), `${end} ${JSON.stringify(fp)}`);
+      }
+    }
+    assert.match(read(map), /^a -> b$/m);
+  });
+
+  test("an elbow goes around a shape in its way", () => {
+    const from = { x: 0, y: 0, width: 200, height: 76 };
+    const to = { x: 700, y: 0, width: 200, height: 76 };
+    const wall = { x: 350, y: -60, width: 200, height: 200 };
+    const route = routeElbow({ from, to, obstacles: [wall] });
+    assert.ok(orthogonal(route.points));
+    for (let i = 1; i < route.points.length; i++) {
+      const [ax, ay] = route.points[i - 1];
+      const [bx, by] = route.points[i];
+      for (let t = 0; t <= 1; t += 0.1) {
+        const x = ax + (bx - ax) * t;
+        const y = ay + (by - ay) * t;
+        assert.ok(!(x > wall.x && x < wall.x + wall.width && y > wall.y && y < wall.y + wall.height), `crosses at ${x},${y}`);
+      }
+    }
+  });
+
+  test("arrows sharing a side leave from different points", () => {
+    const { map } = room();
+    apply(map, 'direction down\nhub: server "Hub"\na: server "A"\nb: server "B"\nc: server "C"\nhub -> a\nhub -> b\nhub -> c');
+    const starts = live(map).filter((el) => el.type === "arrow").map((el) => globalPoints(el)[0].join());
+    assert.equal(new Set(starts).size, 3);
+  });
+
+  test("curved and straight connections, and both read back", () => {
+    const { map } = room();
+    apply(map, 'a: server "A"\nb: server "B"\na -> b "one" [curved]\nb -> a "two" [straight]');
+    const [one, two] = ["one", "two"].map((t) => {
+      const label = live(map).find((el) => el.text === t)!;
+      return map.get(String(label.containerId))!;
+    });
+    assert.deepEqual(one.roundness, { type: 2 });
+    assert.equal((one.points as Pt[]).length, 3);
+    assert.equal(two.elbowed, false);
+    assert.equal(two.roundness, null);
+    // One of each: the read names one route as the default and the other on
+    // its line, and sending the read back changes nothing.
+    assert.equal(read(map), 'arrows curved\na: server "A"\nb: server "B"\na -> b "one"\nb -> a "two" [straight]');
+    const again = apply(map, read(map));
+    assert.deepEqual([again.updated, again.connected], [0, 0]);
+  });
+
+  test("arrowheads are written in Excalidraw's names and read back in ours", () => {
+    const { map } = room();
+    apply(map, 'a: database "A"\nb: database "B"\na -- b [head=crowfoot-many tail=crowfoot-one]');
+    const arrow = arrowOf(map);
+    assert.deepEqual([arrow.startArrowhead, arrow.endArrowhead], ["crowfoot_one", "crowfoot_many"]);
+    assert.match(read(map), /a <-> b \[head=crowfoot-many tail=crowfoot-one\]/);
+    const again = apply(map, read(map));
+    assert.deepEqual([again.updated, again.connected], [0, 0]);
+  });
+
+  test("re-routing a connection redraws it as the new kind", () => {
+    const { map } = room();
+    apply(map, 'a: server "A"\nb: server "B"\na -> b');
+    apply(map, "a -> b [curved]");
+    const arrow = arrowOf(map);
+    assert.equal(arrow.elbowed, false);
+    assert.deepEqual(arrow.roundness, { type: 2 });
+    assert.equal((arrow.startBinding as { fixedPoint?: unknown }).fixedPoint, undefined);
+  });
+
+  test("an elbow a new node lands on is routed around it", () => {
+    const { map } = room();
+    apply(map, 'a: server "A"\nb: server "B"\na -> b');
+    const before = JSON.stringify(arrowOf(map).points);
+    // Placed beside a, which is where the existing arrow runs.
+    apply(map, 'c: server "C"\na -> c');
+    const scene = readScene(live(map));
+    const c = scene.nodes.get("c")!.box;
+    const ab = live(map).find((el) => el.type === "arrow" && (el.endBinding as { elementId: string }).elementId === scene.nodes.get("b")!.frameId)!;
+    const pts = globalPoints(ab);
+    for (let i = 1; i < pts.length; i++) {
+      const mx = (pts[i - 1][0] + pts[i][0]) / 2;
+      const my = (pts[i - 1][1] + pts[i][1]) / 2;
+      assert.ok(!(mx > c.x && mx < c.x + c.width && my > c.y && my < c.y + c.height), `a -> b crosses c (was ${before})`);
+    }
+  });
+});
+
+// An interaction diagram says the same pair talks several times: browser to
+// server, server back, browser again. Inside zones that made dagre throw
+// "Not possible to find intersection inside of the rectangle", and the whole
+// write failed with a 500.
+describe("repeated connections between the same two nodes", () => {
+  test("lay out, inside zones, and every one is drawn", () => {
+    const { map } = room();
+    const text = [
+      'zone a "Browser" network {',
+      '  spa: web-app "SPA"',
+      "}",
+      'zone b "Servers" trust {',
+      '  core: server "Core"',
+      '  db: database "DB"',
+      "}",
+      'spa -> core "1"',
+      'core -> spa "2"',
+      'spa -> core "3"',
+      'core -> db "4"',
+      'core -> db "5"',
+      'spa -> core "6"',
+    ].join("\n");
+    const result = apply(map, text);
+    assert.equal(result.connected, 6);
+    assert.equal(readScene(live(map)).edges.length, 6);
   });
 });

@@ -207,7 +207,10 @@ export function setupRestoreDocumentApi(app: Express, server: Hocuspocus): void 
           previousState = Y.encodeStateAsUpdate(document);
           previousContent = contentOf(document);
           previousRefs = attachmentReferencesOf(document, "document");
-          result = restoreDocumentInto(document, backupState, markdown);
+          // One Y.js transaction: collaborators see the restore land whole.
+          document.transact(() => {
+            result = restoreDocumentInto(document, backupState, markdown);
+          });
         });
 
         res.status(200).json({
