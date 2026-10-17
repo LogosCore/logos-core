@@ -41,7 +41,7 @@ func TestRequireProse(t *testing.T) {
 			}
 			// An agent that gets a bare "not allowed" retries the same call,
 			// so the refusal has to name the tool that does work.
-			if !strings.Contains(err.Error(), "edit_wiki_drawing") {
+			if !strings.Contains(err.Error(), "draw_wiki_diagram") {
 				t.Fatalf("refusal does not point at the drawing tools: %v", err)
 			}
 		})

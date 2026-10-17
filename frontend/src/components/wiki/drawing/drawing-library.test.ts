@@ -15,7 +15,7 @@ vi.stubGlobal("localStorage", {
 })
 
 const { drawingLibraryAdapter } = await import("./drawing-library")
-const { BUILTIN_SHAPES, SHAPE_CATEGORIES, matchesShape } = await import("./drawing-builtin-library")
+const { BUILTIN_SHAPES, SHAPE_CATEGORIES, matchesShape } = await import("./drawing-catalogue")
 
 const item = { id: "lib1", status: "unpublished", elements: [], created: 1 }
 

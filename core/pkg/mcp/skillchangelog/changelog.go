@@ -374,6 +374,15 @@ var releases = []Release{
 			"read_wiki_attachment now pages through long text files: past 200 KB the result names nextOffset, and offset continues from there. Before, only the beginning of a long attachment could be read at all.",
 			"SKILL.md's rule \"one value, one call\" is now \"one value, one write\": still never spread content over several edits, but when it is too big for one call, stage it rather than trimming it to fit. Full command output is never something to trim or skip because it is large.",
 		},
+	}, {
+		Version: 43,
+		Date:    "2026-10-17",
+		Notes: []string{
+			"New draw_wiki_diagram draws on a drawing from a few lines of text: nodes (dc01: domain-controller \"DC01\" \"10.0.5.10\"), connections (ws01 -> dc01 \"RDP\" [lateral]), zones and badges. The server lays everything out, draws each node as a card with its icon and attaches the arrows, so you never send coordinates, ids or bindings. Nothing already on the canvas moves; re-sending a node by id changes it.",
+			"get_wiki_drawing now reads a drawing as that same diagram text by default, so you can change a line of what it returns and send it back. Shapes the operator placed or drew by hand appear as nodes under their element ids; loose shapes are listed apart as otherShapes. view:\"outline\" gives the old shape-by-shape list.",
+			"Any node can take color= (a palette name or #rrggbb) and icon= (a lucide name: lock, shield, cloud, bug…). A box with an icon is a card of your own, so things the built-in kinds do not cover (an HSM, a SIEM) still look like the rest of the map. An unknown icon is refused with icons that fit it.",
+			"edit_wiki_drawing is unchanged, and is now for exact geometry and shapes the diagram language has no word for. drawings.md leads with the diagram language and keeps the element reference below it.",
+		},
 	},
 }
 

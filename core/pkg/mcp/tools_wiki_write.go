@@ -17,7 +17,7 @@ type createWikiDocumentArgs struct {
 	IdempotencyKey
 	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
 	Title       string   `json:"title,omitempty"        jsonschema:"Page title. Required unless template_id is given."`
-	Kind        string   `json:"kind,omitempty"         jsonschema:"document (default) for a Markdown page, or drawing for an Excalidraw canvas you then fill in with edit_wiki_drawing."`
+	Kind        string   `json:"kind,omitempty"         jsonschema:"document (default) for a Markdown page, or drawing for an Excalidraw canvas you then fill in with draw_wiki_diagram."`
 	Content     string   `json:"content,omitempty"      jsonschema:"Markdown body, up to 1 MB in one call. Ignored with template_id."`
 	ParentID    string   `json:"parent_id,omitempty"    jsonschema:"Parent page id."`
 	TemplateID  string   `json:"template_id,omitempty"  jsonschema:"Copy this template's structure and content, from list_wiki_templates."`
@@ -83,12 +83,12 @@ func handleCreateWikiDocument(ctx context.Context, s *Server, args createWikiDoc
 		return toolResult{}, refuse(
 			"unknown kind %q. Use document for a Markdown page or drawing for a canvas.", args.Kind)
 	}
-	// A drawing is filled in through edit_wiki_drawing, so Markdown handed to
+	// A drawing is filled in through draw_wiki_diagram, so Markdown handed to
 	// this call has nowhere to go. Refusing beats dropping it silently and
 	// leaving the agent to wonder where its content went.
 	if kind.IsDrawing() && args.Content != "" {
 		return toolResult{}, refuse(
-			"a drawing page has no Markdown body. Create it without content, then draw on it with edit_wiki_drawing.")
+			"a drawing page has no Markdown body. Create it without content, then draw on it with draw_wiki_diagram.")
 	}
 
 	// Create through the resolver so nesting depth, title limits, the ancestor

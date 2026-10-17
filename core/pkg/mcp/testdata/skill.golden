@@ -3,7 +3,7 @@
 name: logos
 description: Work an operation in Logos — hosts, credentials, hashes, tasks, wiki and timeline — through its MCP tools. Use when connected to a Logos MCP endpoint or when the user mentions an operation.
 metadata:
-  version: "42"
+  version: "43"
 ---
 
 # Logos
@@ -63,7 +63,7 @@ reaches a system outside Logos. If a tool does not exist, say so.
 - `reference/wiki.md` — reading, editing and templating pages.
 - `reference/findings.md` — recording hosts, credentials and hashes.
 - `reference/tasks.md` — proposing, linking and closing tasks.
-- `reference/drawings.md` — editing a drawing page.
+- `reference/drawings.md` — drawing pages: draw with a few lines of diagram text, no coordinates.
 - `reference/attachments.md` — reading and adding files on a page.
 - `reference/icons.md` — when and how to give a page an icon.
 - `reference/skills.md` — finding, installing and publishing skills.
@@ -142,6 +142,7 @@ Engagement notes, collaboratively edited, with file attachments. Some pages are 
 - `list_wiki_tags`
 - `list_wiki_page_types`
 - `get_wiki_drawing`
+- `draw_wiki_diagram` **(write)**
 - `edit_wiki_drawing` **(write)**
 - `get_checklist_status`
 - `set_checklist_answer` **(write)**
@@ -497,95 +498,85 @@ are withheld: `find_tasks` leaves them out and says how many, and reading or
 changing one by id is refused. On a shared task you may add or remove only the
 operator you act for.
 ==================== logos/reference/drawings.md
-# Drawings: reading and editing a canvas
+# Drawings
 
-Some wiki pages are an Excalidraw canvas rather than prose — network maps,
-attack paths, infrastructure sketches. A drawing has no Markdown body, so the
-Markdown tools refuse one and these refuse a prose page; both name the tool
-that works.
+Some wiki pages are an Excalidraw canvas — network maps, attack paths.
+Listing rows carry `kind:"drawing"`; create one with `create_wiki_document`
+and `kind:"drawing"`. Draw when asked; otherwise write the page.
 
-A drawing is for the operator, not for you: they read a topology far faster
-as a picture, while you read a canvas as a list of shapes. So draw when asked
-and otherwise write the page — a diagram nobody asked for hands them shapes
-when they wanted sentences.
+## Draw with diagram text
 
-Pages are marked: a row in `list_wiki_tree` or `search_wiki` carrying
-`kind:"drawing"` is a canvas. Rows without it are prose.
+`draw_wiki_diagram` takes what the diagram is, one statement per line. No
+coordinates, ids or bindings: the server lays it out, draws each node as a
+card with its icon, and attaches the arrows.
 
-## Reading
+```
+zone internal "Internal — 10.0.0.0/24" network {
+  ws142: workstation "WS-0142" "Windows 11"
+  dc01: domain-controller "DC01" "10.0.5.10"
+}
+attacker: attacker "Operator"
+attacker -> ws142 "phishing" [exploit]
+ws142 -> dc01 "pass-the-hash" [lateral]
+dc01 +compromised
+```
 
-`get_wiki_drawing` lists every shape back-to-front: id, type, position, label,
-layer, and for arrows their points and bindings. Read before editing — edits
-address shapes by these ids, and the points are how you see two arrows drawn
-on top of each other rather than side by side. Over 120 shapes it summarises.
+- `id: kind "title" "detail"` a node; both texts optional
+- `… color=red icon=key-round` on any node line; `color=default`, `icon=none` undo
+- `id: "new title"` retitle one already drawn
+- `id +badge -badge` add or remove badges
+- `a -> b "label" [style]` a connection; `<->` both ways, `--` no head
+- `zone id "title" kind { … }` a region around the nodes inside; nests
+- `remove id`, `remove a -> b`
+- `direction right|down`, `style sketch|clean`, `# comment`
 
-## Drawing
+Pick short ids (`dc01`); later edits use them.
 
-`edit_wiki_drawing` changes the canvas.
+**Kinds:** `server` `workstation` `laptop` `mobile` `ot-device` `file-share`
+`domain-controller` `user` `admin` `database` `web-app` `mail-server`
+`internet` `cloud` `router` `switch` `vpn` `firewall` `edr` `attacker`
+`c2-server` `shell` `credential` `hash` `vulnerability` `finding`; otherwise
+`box` `ellipse` `diamond` `note`. A `box` with an `icon=` is a card of your own.
+**Colours:** `gray` `red` `pink` `grape` `violet` `indigo` `blue` `cyan`
+`teal` `green` `lime` `yellow` `orange` `black`, or `#rrggbb`. **Icons:**
+lucide names (`lock`, `shield`, `cloud`, `bug`…); an unknown one is refused
+with icons that fit.
+**Badges** (cards): `compromised` `credentials` `privileged` `flag`
+`has-finding` `monitored` `out-of-scope` `target`.
+**Styles:** `plain` `traffic` `exploit` `lateral` `creds` `c2`.
+**Zones:** `network` `dmz` `cloud` `trust`.
 
-- `mode:"add"` (default) puts new shapes on it.
-- `mode:"update"` patches existing shapes by id: only the fields you send
-  change, the rest is left alone. Send `label` to retitle a bound label.
-- `mode:"delete"` erases them, by `element_ids`.
-- `mode:"replace"` swaps the whole scene in one transaction.
+A write merges: what the text names is added or changed, the rest stays,
+and nothing already drawn moves. Send only the change — `dc01 +compromised`
+is a whole call. Re-sending a node by id updates it in place. A text with
+problems draws nothing and lists each by line; fix all and resend.
+`mode:"replace"` clears the canvas first. The response is the drawing as it
+now reads.
 
-Elements are Excalidraw's own shape; only `type` is required: `rectangle`,
-`ellipse`, `diamond`, `text`, `arrow`, `line`, `freedraw`, `image`, `frame`.
-A labelled shape is sized to fit its label, so give `width` only when you want
-a particular one — and make it big enough. Never send `seed` or
-`versionNonce`.
+## Read first
+
+`get_wiki_drawing` returns the same language, so you can edit a line and send
+it back. Cards placed from the panel and labelled boxes drawn by hand are
+nodes under their element ids. Free text, freehand and loose arrows come back
+as `otherShapes`; diagram writes leave them alone.
+
+## Exact shapes
+
+`edit_wiki_drawing` takes Excalidraw elements, for geometry or shapes the
+language cannot name. Read with `view:"outline"` for ids and positions.
+Modes: `add` (default), `update` (only the fields sent; `label` retitles),
+`delete` (by `element_ids`), `replace`. Only `type` is required.
 
 ```json
-{"type":"rectangle","id":"dc","x":100,"y":200,"label":"Domain Controller"}
-{"type":"rectangle","id":"jump","x":400,"y":200,"label":"Jump host"}
+{"type":"rectangle","id":"dc","x":100,"y":200,"label":"DC"}
 {"type":"arrow","startBinding":"dc","endBinding":"jump","z":-1}
 ```
 
-**Label a shape with `label`.** Excalidraw models a labelled box as a shape
-plus a `text` whose `containerId` names it, holding only if the shape lists
-the text back. `label` builds and wires both; by hand, wire both halves or the
-words stay behind when the box moves.
+A bound arrow without `points` is drawn between its shapes. Higher `z`
+covers lower. An update matching no id changes nothing — read again.
 
-**Connect arrows with `startBinding` / `endBinding`,** each the id of the
-shape to attach to. Two things follow, easily confused:
-
-- It glues the ends, so the arrow follows those shapes when somebody drags
-  them. An unbound arrow is decoration and falls behind on first edit.
-- Give a bound arrow no `points` and the server draws a straight stroke
-  between the two shapes' edges. That is the easy way to draw a tree: name the
-  ends, send no geometry.
-
-It is not a routing engine: a straight line, nothing avoiding siblings. Send
-`points` for an elbow.
-
-An arrow is drawn from its points, not its box, and identical points draw
-identical strokes: twenty arrows sharing geometry are one visible line and a
-result saying `applied: 20`. The response warns when shapes land exactly on
-top of each other; the habit that avoids it is to let bindings place them.
-
-Coordinates grow right and down, with no canvas edge. A shape at x: 3000 is
-real and off the screen of anyone at the origin, so an empty-looking canvas is
-worth a read before a redraw.
-
-**Layer with `z`** — higher covers lower. Hand-drawn shapes sit at 0, so
-`z: -1` puts your arrows under their boxes. Shapes sent without one stack on
-top in the order you sent them. Reads come back back-to-front, so the list is
-the layering.
-
-## Working alongside the operator
-
-Edits merge as the operator draws and appear on their screen as they land.
-`watchers` says whether anyone was looking.
-
-When a layout has gone wrong in several places, `mode:"replace"` with the
-whole scene beats a run of patches: one coherent change rather than a sequence
-that must be right about its starting state each time. Replace means "this is
-the entire canvas now" — anything left out is gone.
-
-An `update` or `delete` matching no shape changes nothing and says so rather
-than creating one — usually stale ids. Read it again.
-
-Create one with `create_wiki_document` and `kind:"drawing"`.
+Both tools merge with what the operator is doing; `watchers` says whether
+anyone was looking.
 ==================== logos/reference/attachments.md
 # Attachments
 

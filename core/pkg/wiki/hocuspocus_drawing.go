@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // Drawing scenes, read and written through the sidecar.
@@ -349,4 +350,157 @@ func (c *HocuspocusClient) RestoreDrawing(ctx context.Context, documentID string
 		return result, fmt.Errorf("decode drawing restore previous state: %w", err)
 	}
 	return result, nil
+}
+
+// Diagrams: a drawing read and written as text (hocuspocus/src/diagram-*.ts).
+//
+// The element tools above ask an agent for Excalidraw's own JSON: coordinates,
+// ids and bindings. A diagram asks for nodes, zones and connections in a few
+// lines, and the sidecar lays them out, builds the cards and binds the arrows.
+// Reading returns the same text, so an agent can change a line and send it
+// back.
+
+// DiagramMode is what a diagram write does to what is already drawn.
+type DiagramMode string
+
+const (
+	// DiagramMerge adds and changes what the text names and leaves
+	// everything else on the canvas alone.
+	DiagramMerge DiagramMode = "merge"
+	// DiagramReplace clears the canvas first.
+	DiagramReplace DiagramMode = "replace"
+)
+
+// ErrDrawingDiagramInvalid is a caller error: the diagram text was understood
+// and rejected. Problems carries each one with its line.
+var ErrDrawingDiagramInvalid = errors.New("invalid diagram")
+
+// DiagramProblem is one thing wrong with a diagram text.
+type DiagramProblem struct {
+	Line    int    `json:"line"`
+	Message string `json:"message"`
+}
+
+// DiagramInvalidError carries the sidecar's problems through to the caller.
+// It wraps ErrDrawingDiagramInvalid for errors.Is.
+type DiagramInvalidError struct {
+	Problems []DiagramProblem
+}
+
+func (e *DiagramInvalidError) Error() string {
+	lines := make([]string, 0, len(e.Problems))
+	for _, p := range e.Problems {
+		lines = append(lines, fmt.Sprintf("line %d: %s", p.Line, p.Message))
+	}
+	return fmt.Sprintf("%s:\n%s", ErrDrawingDiagramInvalid.Error(), strings.Join(lines, "\n"))
+}
+
+func (e *DiagramInvalidError) Unwrap() error { return ErrDrawingDiagramInvalid }
+
+// DiagramOther is a shape outside the diagram: free text, a freehand stroke,
+// an arrow with a loose end. Listed so a read mentions everything on the
+// canvas, with the id the element tools take.
+type DiagramOther struct {
+	ID   string  `json:"id"`
+	Type string  `json:"type"`
+	Text string  `json:"text,omitempty"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+}
+
+// DrawingDiagram is a drawing as the diagram language reads it.
+type DrawingDiagram struct {
+	Diagram     string         `json:"diagram"`
+	Nodes       int            `json:"nodes"`
+	Edges       int            `json:"edges"`
+	Zones       int            `json:"zones"`
+	Others      []DiagramOther `json:"others"`
+	OthersTotal int            `json:"othersTotal"`
+	Watchers    int            `json:"watchers"`
+}
+
+// ApplyDiagramResult is what a diagram write did, and the drawing after it.
+type ApplyDiagramResult struct {
+	DrawingDiagram
+	Created   int      `json:"created"`
+	Updated   int      `json:"updated"`
+	Removed   int      `json:"removed"`
+	Connected int      `json:"connected"`
+	Warnings  []string `json:"warnings"`
+}
+
+// ReadDrawingDiagram returns the drawing as diagram text.
+func (c *HocuspocusClient) ReadDrawingDiagram(ctx context.Context, documentID string) (DrawingDiagram, error) {
+	var out DrawingDiagram
+	body, err := json.Marshal(drawingReadRequest{DocumentID: documentID})
+	if err != nil {
+		return out, fmt.Errorf("marshal diagram read payload: %w", err)
+	}
+	resp, err := c.postInternal(ctx, "/internal/drawing/diagram/read", body)
+	if err != nil {
+		return out, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return out, fmt.Errorf("diagram read returned %d: %s", resp.StatusCode, string(errBody))
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&out); err != nil {
+		return out, fmt.Errorf("read diagram response: %w", err)
+	}
+	return out, nil
+}
+
+type diagramApplyRequest struct {
+	DocumentID string      `json:"documentId"`
+	Diagram    string      `json:"diagram"`
+	Mode       DiagramMode `json:"mode"`
+	UserID     string      `json:"userId,omitempty"`
+}
+
+// ApplyDrawingDiagram writes a diagram to the drawing, in the live room.
+func (c *HocuspocusClient) ApplyDrawingDiagram(
+	ctx context.Context,
+	documentID string,
+	diagram string,
+	mode DiagramMode,
+	userID string,
+) (ApplyDiagramResult, error) {
+	var out ApplyDiagramResult
+	switch mode {
+	case DiagramMerge, DiagramReplace:
+	default:
+		return out, fmt.Errorf("apply-diagram: unknown mode %q", mode)
+	}
+	body, err := json.Marshal(diagramApplyRequest{DocumentID: documentID, Diagram: diagram, Mode: mode, UserID: userID})
+	if err != nil {
+		return out, fmt.Errorf("marshal diagram apply payload: %w", err)
+	}
+	resp, err := c.postInternal(ctx, "/internal/drawing/diagram/apply", body)
+	if err != nil {
+		return out, err
+	}
+	defer resp.Body.Close()
+
+	// 422: the text is wrong, and every problem is named with its line. That
+	// is the agent's to fix, so the problems are carried through whole.
+	if resp.StatusCode == http.StatusUnprocessableEntity {
+		var payload struct {
+			Error    string           `json:"error"`
+			Problems []DiagramProblem `json:"problems"`
+		}
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&payload)
+		if len(payload.Problems) == 0 {
+			payload.Problems = []DiagramProblem{{Message: payload.Error}}
+		}
+		return out, &DiagramInvalidError{Problems: payload.Problems}
+	}
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return out, fmt.Errorf("apply-diagram returned %d: %s", resp.StatusCode, string(errBody))
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&out); err != nil {
+		return out, fmt.Errorf("read apply-diagram response: %w", err)
+	}
+	return out, nil
 }

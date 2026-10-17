@@ -5,6 +5,7 @@ import { createDatabaseExtension, debounceMs } from "./persistence.js";
 import { setupDisconnectApi } from "./disconnect.js";
 import { setupInternalApi } from "./internal-api.js";
 import { setupApplyApi } from "./apply-markdown.js";
+import { setupDiagramApi } from "./diagram-api.js";
 import { setupDrawingApi } from "./apply-drawing.js";
 import { setupExtractApi } from "./extract-text.js";
 import { setupRebaseApi } from "./rebase-api.js";
@@ -133,6 +134,9 @@ setupApplyApi(app, server);
 // the canvas open rather than around them. Same raw-body HMAC path, so it
 // mounts before express.json() too.
 setupDrawingApi(app, server);
+// The same drawings read and written as diagram text rather than elements,
+// for agents (diagram-language.ts). Raw-body HMAC, so before express.json().
+setupDiagramApi(app, server);
 // Backup restore for prose pages, applied as an edit in the live room so it
 // survives open tabs (see restore-document.ts). Raw-body HMAC, so before
 // express.json() like the rest.

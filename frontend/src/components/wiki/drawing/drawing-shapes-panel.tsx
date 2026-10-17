@@ -29,6 +29,7 @@ import {
 } from "@excalidraw/excalidraw"
 import type { ExcalidrawImperativeAPI, LibraryItem, LibraryItems } from "@excalidraw/excalidraw/types"
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
+import type { ExcalidrawElementSkeleton } from "@excalidraw/excalidraw/data/transform"
 import { ChevronDown, Search, Shapes, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -38,7 +39,7 @@ import {
   matchesShape,
   type BuiltinShape,
   type ShapeStyle,
-} from "./drawing-builtin-library"
+} from "./drawing-catalogue"
 import { centeredAt, randomId, viewportCenter, withFreshIds } from "./drawing-insert"
 
 export const SHAPES_SIDEBAR = "logos-shapes"
@@ -84,7 +85,9 @@ function writePrefs(prefs: Prefs) {
  * insert, after the canvas has loaded its fonts, so labels are measured in
  * the font they are drawn in. */
 function buildShape(shape: BuiltinShape, style: ShapeStyle): ExcalidrawElement[] {
-  return convertToExcalidrawElements(shape.build(style), { regenerateIds: true })
+  // The catalogue builds Excalidraw skeletons without importing Excalidraw
+  // (it is shared with the sidecar), so its type is a loose version of this.
+  return convertToExcalidrawElements(shape.build(style) as unknown as ExcalidrawElementSkeleton[], { regenerateIds: true })
 }
 
 /** Previews are converted once per shape and style and kept: the panel

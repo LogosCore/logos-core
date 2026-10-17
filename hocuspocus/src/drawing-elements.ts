@@ -183,7 +183,7 @@ function randomInteger(): number {
   return Math.floor(Math.random() * 2 ** 31);
 }
 
-function randomID(): string {
+export function randomID(): string {
   // Excalidraw ids are opaque; any stable unique string works. Hex keeps them
   // recognisable alongside the ones it mints itself.
   return Array.from({ length: 5 }, () =>
@@ -270,6 +270,10 @@ export function normalizeElement(input: unknown): NormalizedElement {
     // opaque fractional key. Absent here and assigned on write, so that a
     // shape with no opinion lands on top of what is already there.
     ...(typeof el.z === "number" && Number.isFinite(el.z) ? { z: el.z } : {}),
+    // Excalidraw's field for host data, kept through every edit and copy. The
+    // built-in shapes tag their parts here (drawing-catalogue.ts), which is how
+    // a read tells a card from loose lines and text.
+    ...(typeof el.customData === "object" && el.customData !== null ? { customData: el.customData } : {}),
   };
 
   switch (type) {

@@ -45,11 +45,11 @@ const MODES: ReadonlySet<string> = new Set<DrawingMode>([
   "replace",
 ]);
 
-function roomName(documentId: string): string {
+export function roomName(documentId: string): string {
   return `wiki/${documentId}`;
 }
 
-function elementsOf(document: Y.Doc): Y.Map<NormalizedElement> {
+export function elementsOf(document: Y.Doc): Y.Map<NormalizedElement> {
   return document.getMap<NormalizedElement>(DRAWING_ROOT_KEY);
 }
 
@@ -62,7 +62,7 @@ function elementsOf(document: Y.Doc): Y.Map<NormalizedElement> {
  * "the operator saw your edit appear" about an empty room. getConnections()
  * returns only the real WebSocket clients, which is the question being asked.
  */
-function watcherCount(server: Hocuspocus, documentId: string): number {
+export function watcherCount(server: Hocuspocus, documentId: string): number {
   return server.documents.get(roomName(documentId))?.getConnections().length ?? 0;
 }
 
@@ -143,7 +143,7 @@ function edgePoint(box: Box, to: { x: number; y: number }, gap: number): { x: nu
  * a sibling or bends round a frame — but correct and, crucially, different for
  * every pair, which is the property that was missing.
  */
-function placeBoundArrow(
+export function placeBoundArrow(
   elements: Y.Map<NormalizedElement>,
   arrow: NormalizedElement,
 ): NormalizedElement {
@@ -205,7 +205,7 @@ function placeBoundArrows(
  * that is not there is a caller mistake the arrow already records, and
  * inventing a shape to satisfy it would be worse.
  */
-function wireBindings(
+export function wireBindings(
   elements: Y.Map<NormalizedElement>,
   incoming: NormalizedElement[],
 ): void {
@@ -672,7 +672,7 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
 
 /** Always release the server-side seat. Leaving it open keeps the room alive
  * forever and defeats the idle-unload the debounced store relies on. */
-async function release(
+export async function release(
   connection: { disconnect: () => Promise<unknown> } | undefined,
   label: string,
 ): Promise<void> {

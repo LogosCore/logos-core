@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -13,10 +14,18 @@ import (
 
 // The drawing half of the wiki tool surface.
 //
-// Two tools, not eight. Every tool definition is paid for on every turn (see
+// Three tools, not eight. Every tool definition is paid for on every turn (see
 // the note on add_wiki_section), so the read collapses its variants into a
-// `view` argument and the write collapses add/update/delete/replace into a
-// `mode` — the same shape the Markdown tools settled on, for the same reason.
+// `view` argument and the element write collapses add/update/delete/replace
+// into a `mode` — the same shape the Markdown tools settled on, for the same
+// reason.
+//
+// Two ways to write. draw_wiki_diagram takes a few lines of diagram text
+// (nodes, zones, connections) and the sidecar lays them out and builds the
+// shapes; the default read returns the same text. That is the way in for
+// every model: no coordinates, no ids to invent, no bindings to wire.
+// edit_wiki_drawing takes Excalidraw elements, for exact geometry and for
+// anything the diagram language has no word for.
 //
 // Both go through the sidecar's live room rather than the database, which is
 // what lets an agent work on a diagram while the operator has it open: the
@@ -25,7 +34,14 @@ import (
 
 type getWikiDrawingArgs struct {
 	DocumentID string `json:"document_id" jsonschema:"Page id of a drawing."`
-	View       string `json:"view,omitempty" jsonschema:"outline (default) or full for complete element JSON."`
+	View       string `json:"view,omitempty" jsonschema:"diagram (default): the drawing as diagram text, the format draw_wiki_diagram takes. outline: every shape with its id and geometry. full: complete element JSON."`
+}
+
+type drawWikiDiagramArgs struct {
+	IdempotencyKey
+	DocumentID string `json:"document_id"    jsonschema:"Page id of a drawing."`
+	Diagram    string `json:"diagram"        jsonschema:"Diagram text, one statement per line. See drawings.md. Example: dc01: domain-controller \"DC01\" \"10.0.5.10\""`
+	Mode       string `json:"mode,omitempty" jsonschema:"merge (default): add and change what the text names, leave the rest. replace: clear the canvas first."`
 }
 
 type editWikiDrawingArgs struct {
@@ -42,17 +58,25 @@ type editWikiDrawingArgs struct {
 func registerWikiDrawingTools(s *Server) {
 	register(s, &mcp.Tool{
 		Name: "get_wiki_drawing",
-		Description: "Read a drawing page's canvas: every shape with its id, position and label. " +
-			"Use it before editing one, because edits address shapes by the ids this returns. " +
-			"A canvas over 120 shapes comes back summarised, with its labels; pass " +
-			"view:\"full\" for the complete element JSON.",
+		Description: "Read a drawing page as a diagram: its nodes, zones and connections as text, in the " +
+			"format draw_wiki_diagram takes, plus any loose shapes. Read before changing one, because " +
+			"changes refer to nodes by the ids this returns. view:\"outline\" lists every shape with " +
+			"its geometry instead, for edit_wiki_drawing.",
 	}, readTool, handleGetWikiDrawing)
 
 	register(s, &mcp.Tool{
+		Name: "draw_wiki_diagram",
+		Description: "Draw on a drawing page with diagram text: nodes, zones and connections, one per line. " +
+			"The server lays them out, draws the cards and binds the arrows; nothing already on the " +
+			"canvas moves. Re-sending a node by id changes it. Safe while the operator is drawing.",
+	}, writeTool, handleDrawWikiDiagram)
+
+	register(s, &mcp.Tool{
 		Name: "edit_wiki_drawing",
-		Description: "Draw on a drawing page. Adds shapes by default; mode:update changes ones " +
-			"that exist, mode:delete erases them, mode:replace swaps the whole canvas. Safe " +
-			"while the operator is drawing — edits merge and appear on their screen.",
+		Description: "Change a drawing's shapes as Excalidraw elements, for exact geometry or shapes the " +
+			"diagram language has no word for; draw_wiki_diagram is simpler for nodes and connections. " +
+			"Adds by default; mode:update changes shapes by id, mode:delete erases them, mode:replace " +
+			"swaps the whole canvas. Safe while the operator is drawing.",
 	}, writeTool, handleEditWikiDrawing)
 }
 
@@ -132,6 +156,14 @@ func handleGetWikiDrawing(ctx context.Context, s *Server, args getWikiDrawingArg
 	}
 	if s.deps.Hocuspocus == nil {
 		return toolResult{}, fmt.Errorf("reading drawings is unavailable: the collaboration service is not configured")
+	}
+
+	switch args.View {
+	case "", "diagram":
+		return readWikiDiagram(ctx, s, doc)
+	case "outline", "full":
+	default:
+		return toolResult{}, refuse("unknown view %q. Use diagram (the default), outline or full.", args.View)
 	}
 
 	scene, err := s.deps.Hocuspocus.ReadDrawing(ctx, doc.DocumentID.String())
@@ -322,5 +354,129 @@ func handleEditWikiDrawing(ctx context.Context, s *Server, args editWikiDrawingA
 		Payload:     view,
 		OperationID: &doc.OperationID,
 		Summary:     fmt.Sprintf("edited wiki drawing %s", doc.Title),
+	}, nil
+}
+
+// --- Diagrams -----------------------------------------------------------
+
+type drawingDiagramView struct {
+	wikiDocView
+	// Diagram is the drawing in the language draw_wiki_diagram takes.
+	Diagram string `json:"diagram"`
+	Nodes   int    `json:"nodes"`
+	Edges   int    `json:"connections"`
+	Zones   int    `json:"zones,omitempty"`
+	// Others are shapes outside the diagram: free text, freehand, loose
+	// arrows. Listed with ids for edit_wiki_drawing.
+	Others   []wiki.DiagramOther `json:"otherShapes,omitempty"`
+	Watchers int                 `json:"watchers,omitempty"`
+	Notes    []string            `json:"notes,omitempty"`
+}
+
+func diagramView(doc *models.WikiDocument, d wiki.DrawingDiagram) drawingDiagramView {
+	view := drawingDiagramView{
+		wikiDocView: toWikiDocView(doc),
+		Diagram:     d.Diagram,
+		Nodes:       d.Nodes,
+		Edges:       d.Edges,
+		Zones:       d.Zones,
+		Others:      d.Others,
+		Watchers:    d.Watchers,
+	}
+	if d.Nodes == 0 && d.Zones == 0 && d.OthersTotal == 0 {
+		view.Notes = append(view.Notes, "This canvas is empty.")
+	}
+	if d.OthersTotal > 0 {
+		view.Notes = append(view.Notes,
+			"otherShapes are on the canvas but not part of the diagram (free text, freehand, loose arrows). "+
+				"draw_wiki_diagram leaves them alone; edit_wiki_drawing changes them by id.")
+	}
+	if more := d.OthersTotal - len(d.Others); more > 0 {
+		view.Notes = append(view.Notes, fmt.Sprintf(
+			"%d more loose shapes are not listed; view:\"outline\" lists every shape.", more))
+	}
+	return view
+}
+
+func readWikiDiagram(ctx context.Context, s *Server, doc *models.WikiDocument) (toolResult, error) {
+	d, err := s.deps.Hocuspocus.ReadDrawingDiagram(ctx, doc.DocumentID.String())
+	if err != nil {
+		s.deps.Logger.Warn("mcp: failed to read wiki drawing as a diagram",
+			zap.String("document_id", doc.DocumentID.String()), zap.Error(err))
+		return toolResult{}, fmt.Errorf("failed to read the drawing: %w", err)
+	}
+	return toolResult{
+		Payload:     diagramView(doc, d),
+		OperationID: &doc.OperationID,
+		Summary:     fmt.Sprintf("read wiki drawing %s", doc.Title),
+	}, nil
+}
+
+type diagramWriteView struct {
+	drawingDiagramView
+	Mode      string `json:"mode"`
+	Created   int    `json:"created"`
+	Updated   int    `json:"updated"`
+	Removed   int    `json:"removed,omitempty"`
+	Connected int    `json:"connected"`
+}
+
+func handleDrawWikiDiagram(ctx context.Context, s *Server, args drawWikiDiagramArgs) (toolResult, error) {
+	doc, err := s.loadWikiDocument(ctx, args.DocumentID, models.OperationRoleOperator)
+	if err != nil {
+		return toolResult{}, err
+	}
+	if err := requireDrawing(doc, "draw on"); err != nil {
+		return toolResult{}, err
+	}
+	if s.deps.Hocuspocus == nil {
+		return toolResult{}, fmt.Errorf("drawing is unavailable: the collaboration service is not configured")
+	}
+
+	mode := wiki.DiagramMode(args.Mode)
+	if args.Mode == "" {
+		mode = wiki.DiagramMerge
+	}
+	if mode != wiki.DiagramMerge && mode != wiki.DiagramReplace {
+		return toolResult{}, refuse("unknown mode %q. Use merge (the default) or replace.", args.Mode)
+	}
+	if strings.TrimSpace(args.Diagram) == "" {
+		return toolResult{}, refuse(
+			"diagram is required: one statement per line, for example\n" +
+				"dc01: domain-controller \"DC01\" \"10.0.5.10\"\n" +
+				"ws01: workstation \"WS01\"\n" +
+				"ws01 -> dc01 \"RDP\" [lateral]")
+	}
+
+	// Attributed to the key's owner, not to the key: a page records which
+	// person last changed it, and an agent acts for one.
+	result, err := s.deps.Hocuspocus.ApplyDrawingDiagram(ctx, doc.DocumentID.String(), args.Diagram, mode, viewerID(ctx))
+	if errors.Is(err, wiki.ErrDrawingDiagramInvalid) {
+		// Every problem at once, with its line: one round trip fixes them all.
+		// Nothing was drawn.
+		return toolResult{}, refuse("%s\nNothing was drawn. Fix these and send the whole text again.", err.Error())
+	}
+	if err != nil {
+		s.deps.Logger.Warn("mcp: failed to apply wiki diagram",
+			zap.String("document_id", doc.DocumentID.String()), zap.Error(err))
+		return toolResult{}, fmt.Errorf("failed to save the drawing: %w", err)
+	}
+
+	view := diagramWriteView{
+		drawingDiagramView: diagramView(doc, result.DrawingDiagram),
+		Mode:               string(mode),
+		Created:            result.Created,
+		Updated:            result.Updated,
+		Removed:            result.Removed,
+		Connected:          result.Connected,
+	}
+	view.Notes = append(result.Warnings, view.Notes...)
+	if result.Watchers > 0 {
+		view.Notes = append(view.Notes, "The operator saw this edit.")
+	}
+	return toolResult{
+		Payload:     view,
+		OperationID: &doc.OperationID,
+		Summary:     fmt.Sprintf("drew on wiki drawing %s", doc.Title),
 	}, nil
 }

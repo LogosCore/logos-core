@@ -26,7 +26,7 @@ func requireProse(doc *models.WikiDocument, action string) error {
 	}
 	return refuse(
 		"%q is a drawing, so it has no Markdown body to %s. "+
-			"Use edit_wiki_drawing to change its contents, or get_wiki_drawing to read it.",
+			"Use get_wiki_drawing to read it and draw_wiki_diagram to change it.",
 		doc.Title, action)
 }
 
