@@ -4,6 +4,7 @@ import type { BinaryFiles } from "@excalidraw/excalidraw/types"
 
 import {
   applyImageIDs,
+  embedWikiImages,
   isWikiImageID,
   pendingImages,
   publishableElements,
@@ -191,5 +192,33 @@ describe("uploadRetryDelay", () => {
 
   test("caps the delay", () => {
     expect(uploadRetryDelay(new Error("offline"), 50)).toBe(UPLOAD_RETRY_MAX_MS)
+  })
+})
+
+describe("embedWikiImages", () => {
+  test("puts each wiki image's bytes in its entry, and the URL back on restore", async () => {
+    const entries = files({ [WIKI_ID]: wikiImageURL(WIKI_ID), [OTHER_WIKI_ID]: wikiImageURL(OTHER_WIKI_ID) })
+    const restore = await embedWikiImages(entries, async (url) => `data:image/png;base64,${btoa(url)}`)
+
+    const dataURL = (id: string) => (entries[id as keyof BinaryFiles] as unknown as { dataURL: string }).dataURL
+    expect(dataURL(WIKI_ID)).toBe(`data:image/png;base64,${btoa(wikiImageURL(WIKI_ID))}`)
+    expect(dataURL(OTHER_WIKI_ID).startsWith("data:")).toBe(true)
+
+    restore()
+    expect(dataURL(WIKI_ID)).toBe(wikiImageURL(WIKI_ID))
+    expect(dataURL(OTHER_WIKI_ID)).toBe(wikiImageURL(OTHER_WIKI_ID))
+  })
+
+  test("leaves local images and failed fetches alone", async () => {
+    const entries = files({ [LOCAL_ID]: "data:image/png;base64,AAAA", [WIKI_ID]: wikiImageURL(WIKI_ID) })
+    const fetched: string[] = []
+    await embedWikiImages(entries, async (url) => {
+      fetched.push(url)
+      throw new Error("offline")
+    })
+    expect(fetched).toEqual([wikiImageURL(WIKI_ID)])
+    const dataURL = (id: string) => (entries[id as keyof BinaryFiles] as unknown as { dataURL: string }).dataURL
+    expect(dataURL(LOCAL_ID)).toBe("data:image/png;base64,AAAA")
+    expect(dataURL(WIKI_ID)).toBe(wikiImageURL(WIKI_ID))
   })
 })

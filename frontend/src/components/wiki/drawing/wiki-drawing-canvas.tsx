@@ -28,6 +28,7 @@ import { useDrawingSync } from "./use-drawing-sync"
 import { readGridPreference, writeGridPreference } from "./drawing-grid-preference"
 import { loadDrawingView, saveDrawingView, type DrawingView } from "./drawing-view-memory"
 import { drawingLibraryAdapter } from "./drawing-library"
+import { embedWikiImages } from "./drawing-images"
 import { ShapesSidebar, ShapesTrigger } from "./drawing-shapes-panel"
 import "@excalidraw/excalidraw/index.css"
 import "./wiki-drawing.css"
@@ -67,16 +68,18 @@ export default function WikiDrawingCanvas({
   // controlled, and Excalidraw then hides its own toggle.
   const [initialGrid] = useState(readGridPreference)
   const gridRef = useRef(initialGrid)
+  const trackExportDialog = useEmbeddedImagesForExport(api)
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       onChange(elements, appState, files)
+      trackExportDialog(appState)
       // onChange fires on every pointer move; write only on an actual toggle.
       if (appState.gridModeEnabled !== gridRef.current) {
         gridRef.current = appState.gridModeEnabled
         writeGridPreference(appState.gridModeEnabled)
       }
     },
-    [onChange],
+    [onChange, trackExportDialog],
   )
 
   // The operator's own shapes survive a reload (drawing-library.ts), and the
@@ -181,6 +184,44 @@ export default function WikiDrawingCanvas({
         {isEditor && <ShapesSidebar api={api} personal={personalShapes} dark={dark} />}
       </Excalidraw>
     </div>
+  )
+}
+
+/**
+ * Embed the drawing's pictures while Excalidraw's image export dialog is
+ * open, so a downloaded SVG carries them instead of links that only work
+ * inside the app. See embedWikiImages.
+ *
+ * Returns a function for onChange, which is where the dialog's opening and
+ * closing can be seen. The bytes are fetched once the dialog opens, from the
+ * browser cache in the usual case, so an SVG saved the instant the dialog
+ * appears can still go out with links.
+ */
+function useEmbeddedImagesForExport(api: ExcalidrawImperativeAPI | null) {
+  const openRef = useRef(false)
+  const restoreRef = useRef<Promise<() => void> | null>(null)
+
+  const close = useCallback(() => {
+    const pending = restoreRef.current
+    restoreRef.current = null
+    void pending?.then((restore) => restore())
+  }, [])
+
+  // Not left embedded if the canvas goes away with the dialog open.
+  useEffect(() => close, [close])
+
+  return useCallback(
+    (appState: AppState) => {
+      const open = appState.openDialog?.name === "imageExport"
+      if (open === openRef.current) return
+      openRef.current = open
+      if (open && api) {
+        restoreRef.current = embedWikiImages(api.getFiles())
+      } else {
+        close()
+      }
+    },
+    [api, close],
   )
 }
 

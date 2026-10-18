@@ -193,6 +193,65 @@ export function uploadRetryDelay(error: unknown, attempts: number): number | nul
   return Math.min(UPLOAD_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), UPLOAD_RETRY_MAX_MS)
 }
 
+/** Fetch an image and encode it as a data: URL. */
+export async function fetchAsDataURL(url: string): Promise<string> {
+  const response = await fetch(url, { credentials: "same-origin" })
+  if (!response.ok) throw new Error(`image fetch returned ${response.status}`)
+  const blob = await response.blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+/**
+ * Put the bytes of every wiki image into its file entry, in place, and return
+ * a function that puts the URLs back.
+ *
+ * For Excalidraw's own image export. Its SVG copies each file's `dataURL`
+ * into the `href` of an `<image>` verbatim, and ours is the wiki URL (see
+ * wikiImageFiles) — relative and behind the session cookie, so every picture
+ * in a downloaded SVG was broken outside the app. Excalidraw offers no hook
+ * before an export, and addFiles ignores an id it already has, so the entries
+ * it holds are changed in place for as long as the export dialog is open.
+ * PNG export draws from the images already loaded and is unaffected either
+ * way.
+ *
+ * In place rather than permanently: the bytes are only needed for an export,
+ * and holding every image base64'd for as long as the drawing is open is the
+ * memory cost the URL design exists to avoid.
+ */
+export async function embedWikiImages(
+  files: BinaryFiles,
+  fetchDataURL: (url: string) => Promise<string> = fetchAsDataURL,
+): Promise<() => void> {
+  const swapped: { file: { dataURL: string }; url: string; data: string }[] = []
+
+  await Promise.all(
+    Object.entries(files).map(async ([id, entry]) => {
+      const file = entry as unknown as { dataURL: string } | undefined
+      if (!file || !isWikiImageID(id) || file.dataURL.startsWith("data:")) return
+      const url = file.dataURL
+      try {
+        const data = await fetchDataURL(url)
+        file.dataURL = data
+        swapped.push({ file, url, data })
+      } catch {
+        // That picture exports as a link, as before; the rest still embed.
+      }
+    }),
+  )
+
+  return () => {
+    for (const { file, url, data } of swapped) {
+      // Only if it is still ours: anything else has been put there since.
+      if (file.dataURL === data) file.dataURL = url
+    }
+  }
+}
+
 /** Decode a data: URL into bytes for upload. */
 export async function dataURLToBlob(dataURL: string): Promise<Blob> {
   const response = await fetch(dataURL)

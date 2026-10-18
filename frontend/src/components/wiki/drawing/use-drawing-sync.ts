@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Doc as YDoc } from "yjs"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
-import { CaptureUpdateAction } from "@excalidraw/excalidraw"
+import { CaptureUpdateAction, hashElementsVersion } from "@excalidraw/excalidraw"
 import type {
   ExcalidrawImperativeAPI,
   AppState,
@@ -458,6 +458,11 @@ export function useDrawingSync({
     [awareness],
   )
 
+  // The scene's version hash and gesture state at the last onChange, to tell
+  // a change to the drawing from one to anything else.
+  const lastHashRef = useRef<number | null>(null)
+  const lastImmediateRef = useRef(false)
+
   // Canvas to shared scene.
   const onChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
@@ -468,14 +473,31 @@ export function useDrawingSync({
 
       if (!isEditor) return
       latestRef.current = elements
-      // Mid-gesture changes wait for the throttle; anything else, including
-      // the change that ends a gesture, goes out at once.
-      writerRef.current?.request(!isGestureActive(appState))
       writeSharedAppState(ydoc, {
         viewBackgroundColor: appState.viewBackgroundColor,
         gridSize: appState.gridSize,
       })
-      void adoptImages(elements, files)
+
+      // Excalidraw calls this on every render — a scroll, a hover, a peer's
+      // cursor — not only when the drawing changes, and a write scans the
+      // whole scene several times to find it has nothing to publish. Skipped
+      // when no element changed, unless a gesture just ended (its last write
+      // may still be waiting on the throttle), an edit is waiting to be
+      // rebased, or an image upload is due a retry.
+      const immediate = !isGestureActive(appState)
+      const hash = hashElementsVersion(elements)
+      const changed =
+        hash !== lastHashRef.current ||
+        (immediate && !lastImmediateRef.current) ||
+        deferredRef.current.size > 0
+      lastHashRef.current = hash
+      lastImmediateRef.current = immediate
+
+      // Mid-gesture changes wait for the throttle; anything else, including
+      // the change that ends a gesture, goes out at once.
+      if (changed) writerRef.current?.request(immediate)
+      const retryDue = [...failedRef.current.values()].some((f) => f.retryAt !== Infinity)
+      if (changed || retryDue) void adoptImages(elements, files)
     },
     [ydoc, isEditor, adoptImages, publishSelection],
   )
@@ -506,9 +528,22 @@ export function useDrawingSync({
         ),
       })
     }
+    // This client's own entry only contributes who it is (see
+    // toExcalidrawCollaborators), so a change to nothing but our own cursor
+    // or selection — 30 a second while the mouse moves — changes nothing on
+    // screen. Each used to re-render the canvas, and every re-render runs
+    // onChange and its scans of the whole scene.
+    const userKey = () => JSON.stringify(awareness.getLocalState()?.user ?? null)
+    let localUser = userKey()
     // Once per frame at most: every peer's cursor moves are a change event
     // each, and each re-renders the canvas.
-    const onChange = () => {
+    const onChange = ({ added, updated, removed }: { added: number[]; updated: number[]; removed: number[] }) => {
+      const onlyLocal = [...added, ...updated, ...removed].every((id) => id === awareness.clientID)
+      if (onlyLocal) {
+        const next = userKey()
+        if (next === localUser) return
+        localUser = next
+      }
       frame ||= requestAnimationFrame(update)
     }
 
