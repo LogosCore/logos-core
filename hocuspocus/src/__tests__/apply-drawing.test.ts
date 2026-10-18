@@ -68,3 +68,55 @@ test("replace stamps every tombstone with the time of deletion", () => {
   applyMode(map, "replace", normalizeElements([rect("b")]), [], []);
   assert.ok(Number(map.get("a")!.updated) >= before);
 });
+
+/** Two labelled boxes joined by an arrow, written the way an agent writes them. */
+function connected(): Y.Map<NormalizedElement> {
+  const map = sceneWith();
+  applyMode(
+    map,
+    "add",
+    normalizeElements([
+      rect("a", { label: "Web" } as Partial<NormalizedElement>),
+      rect("b", { x: 300, label: "DB" } as Partial<NormalizedElement>),
+      { id: "arr", type: "arrow", startBinding: "a", endBinding: "b" },
+    ]),
+    [],
+    [],
+  );
+  return map;
+}
+
+test("deleting a labelled shape deletes its label", () => {
+  const map = connected();
+  assert.equal(map.get("a-label")?.isDeleted, false, "fixture: the label is live");
+  applyMode(map, "delete", [], [], ["a"]);
+  assert.equal(map.get("a-label")!.isDeleted, true);
+  assert.equal(map.get("b-label")!.isDeleted, false, "only the deleted shape's label goes");
+});
+
+test("deleting a shape detaches the arrows bound to it", () => {
+  const map = connected();
+  const before = map.get("arr")!.version;
+  applyMode(map, "delete", [], [], ["a"]);
+  const arrow = map.get("arr")!;
+  assert.equal(arrow.isDeleted, false);
+  assert.equal(arrow.startBinding, null);
+  assert.equal((arrow.endBinding as { elementId: string }).elementId, "b");
+  assert.ok(arrow.version > before, "the detach must bump the version or no canvas takes it");
+});
+
+test("deleting an arrow drops it from the shapes it was bound to", () => {
+  const map = connected();
+  const ids = (el: NormalizedElement) => ((el.boundElements as { id: string }[] | null) ?? []).map((b) => b.id);
+  assert.ok(ids(map.get("b")!).includes("arr"), "fixture: the shape lists the arrow");
+  applyMode(map, "delete", [], [], ["arr"]);
+  assert.ok(!ids(map.get("a")!).includes("arr"));
+  assert.ok(!ids(map.get("b")!).includes("arr"));
+  assert.ok(ids(map.get("b")!).includes("b-label"), "the label stays bound");
+});
+
+test("a label found only by its containerId is deleted too", () => {
+  const map = sceneWith(rect("box"), { id: "t", type: "text", text: "hi", containerId: "box" });
+  applyMode(map, "delete", [], [], ["box"]);
+  assert.equal(map.get("t")!.isDeleted, true);
+});

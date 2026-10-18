@@ -339,10 +339,12 @@ func (c *HocuspocusClient) RestoreDrawing(ctx context.Context, documentID string
 		return result, fmt.Errorf("drawing restore returned %d: %s", resp.StatusCode, string(errBody))
 	}
 
-	// The previous state is a whole scene, base64'd: bounded the same way the
-	// request body is on the sidecar side.
+	// The previous state is a whole scene, base64'd, so the response is about
+	// 4/3 of the request the sidecar accepts (16 MB): the same 32 MB bound as
+	// RestoreDocument. At 16 MB a large drawing's restore was applied in the
+	// room and then reported as failed here.
 	var wire drawingRestoreWireResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&wire); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&wire); err != nil {
 		return result, fmt.Errorf("read drawing restore response: %w", err)
 	}
 	result = wire.RestoreDrawingResult

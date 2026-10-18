@@ -22,6 +22,7 @@ type restoreWorld struct {
 
 	rowRestores  int
 	safetyCopies []models.WikiDocumentBackup
+	createErr    error
 
 	roomRestores []restoreCall
 	roomResult   wiki.RestoreDrawingResult
@@ -64,7 +65,21 @@ func (f restoreBackups) FindByID(context.Context, uuid.UUID) (models.WikiDocumen
 }
 
 func (f restoreBackups) Create(_ context.Context, b *models.WikiDocumentBackup) error {
+	if f.w.createErr != nil {
+		return f.w.createErr
+	}
 	f.w.safetyCopies = append(f.w.safetyCopies, *b)
+	return nil
+}
+
+func (f restoreBackups) Delete(_ context.Context, b *models.WikiDocumentBackup) error {
+	kept := f.w.safetyCopies[:0]
+	for _, c := range f.w.safetyCopies {
+		if c.BackupID != b.BackupID {
+			kept = append(kept, c)
+		}
+	}
+	f.w.safetyCopies = kept
 	return nil
 }
 
@@ -199,9 +214,10 @@ func TestRestoreWikiDocumentBackup_DrawingFailsWhenTheRoomCannot(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "connection refused") {
 		t.Fatalf("err = %v, want the sidecar failure", err)
 	}
-	if w.rowRestores != 0 || len(w.safetyCopies) != 0 {
-		t.Errorf("a failed room restore still wrote: rows=%d safety=%d", w.rowRestores, len(w.safetyCopies))
+	if w.rowRestores != 0 {
+		t.Errorf("a failed room restore still wrote the row %d times", w.rowRestores)
 	}
+	assertKeptRowCopy(t, w)
 }
 
 // Prose pages have the same bug and get the same fix. The backup's stored
@@ -238,9 +254,10 @@ func TestRestoreWikiDocumentBackup_ProseFailsWhenTheRoomCannot(t *testing.T) {
 	if _, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String()); err == nil {
 		t.Fatal("a failed room restore reported success")
 	}
-	if w.rowRestores != 0 || len(w.safetyCopies) != 0 {
-		t.Errorf("a failed room restore still wrote: rows=%d safety=%d", w.rowRestores, len(w.safetyCopies))
+	if w.rowRestores != 0 {
+		t.Errorf("a failed room restore still wrote the row %d times", w.rowRestores)
 	}
+	assertKeptRowCopy(t, w)
 }
 
 // Without a sidecar wired the row write is all there is, for either kind.
@@ -254,4 +271,43 @@ func TestRestoreWikiDocumentBackup_NoRestorerWritesTheRow(t *testing.T) {
 	if w.rowRestores != 1 || len(w.roomRestores) != 0 {
 		t.Errorf("rows=%d room=%d, want 1/0", w.rowRestores, len(w.roomRestores))
 	}
+}
+
+// A failed room restore keeps the copy of the row taken before it: the
+// sidecar may have overwritten the room before failing (a response too large
+// to read, say), and without that copy there would be no way back.
+func assertKeptRowCopy(t *testing.T, w *restoreWorld) {
+	t.Helper()
+	if len(w.safetyCopies) != 1 || string(w.safetyCopies[0].ContentState) != "stale row state" {
+		t.Errorf("safety copies = %+v, want the row's copy kept", w.safetyCopies)
+	}
+}
+
+// Nothing is overwritten when the pre-restore copy cannot be saved.
+func TestRestoreWikiDocumentBackup_RefusesWithoutASafetyCopy(t *testing.T) {
+	for _, kind := range []models.WikiDocumentKind{models.WikiDocumentKindDrawing, models.WikiDocumentKindDocument} {
+		t.Run(string(kind.Or()), func(t *testing.T) {
+			r, w, ctx, _ := newRestoreWorld(t, kind)
+			w.createErr = errors.New("mongo unavailable")
+
+			_, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String())
+			if err == nil || !strings.Contains(err.Error(), "mongo unavailable") {
+				t.Fatalf("err = %v, want the backup failure", err)
+			}
+			if len(w.roomRestores) != 0 || w.rowRestores != 0 {
+				t.Errorf("restored without a safety copy: room=%d rows=%d", len(w.roomRestores), w.rowRestores)
+			}
+		})
+	}
+}
+
+// Without a sidecar, the row copy is the safety copy, taken before the write.
+func TestRestoreWikiDocumentBackup_NoRestorerKeepsTheRowCopy(t *testing.T) {
+	r, w, ctx, _ := newRestoreWorld(t, models.WikiDocumentKindDocument)
+	r.restorer = nil
+
+	if _, err := r.RestoreWikiDocumentBackup(ctx, w.doc.DocumentID.String(), w.backup.BackupID.String()); err != nil {
+		t.Fatalf("RestoreWikiDocumentBackup: %v", err)
+	}
+	assertKeptRowCopy(t, w)
 }

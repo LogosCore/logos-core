@@ -436,6 +436,15 @@ func handleUpdateWikiDocument(ctx context.Context, s *Server, args updateWikiDoc
 		return toolResult{}, err
 	}
 
+	// A drawing has no Markdown body, but its title, tags, status and page type
+	// are a page's like any other, and this is the tool that sets them. A body
+	// is refused here, before anything is written: checked only in writeBody,
+	// it came after the metadata update, so the agent was told the call failed
+	// for a change that had already been made.
+	if doc.Kind.IsDrawing() && args.Content != "" {
+		return toolResult{}, requireProse(doc, "write")
+	}
+
 	if err := args.validate(); err != nil {
 		return toolResult{}, err
 	}
@@ -465,9 +474,23 @@ func handleUpdateWikiDocument(ctx context.Context, s *Server, args updateWikiDoc
 		input.Status = &s
 		needsUpdate = true
 	}
+	if doc.Kind.IsDrawing() && !needsUpdate {
+		return toolResult{}, refuse(
+			"%q is a drawing, so it has no Markdown body to write and this call changes nothing. "+
+				"Pass title, tags, status or page_type to change those, or use draw_wiki_diagram "+
+				"to change the drawing itself.", doc.Title)
+	}
 	if needsUpdate {
-		if _, err := s.deps.WikiDocs.UpdateWikiDocument(ctx, args.DocumentID, input); err != nil {
+		updated, err := s.deps.WikiDocs.UpdateWikiDocument(ctx, args.DocumentID, input)
+		if err != nil {
 			return toolResult{}, fmt.Errorf("failed to update the wiki page: %w", err)
+		}
+		if doc.Kind.IsDrawing() {
+			return toolResult{
+				Payload:     newWikiWriteResult(toWikiDocView(updated), 0, wiki.AttachmentAudit{}, wiki.ChecklistCoverage{}),
+				OperationID: &updated.OperationID,
+				Summary:     fmt.Sprintf("updated wiki drawing %s", updated.Title),
+			}, nil
 		}
 	}
 

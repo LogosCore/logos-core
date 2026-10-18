@@ -116,3 +116,54 @@ func TestUpdateWikiDocument_RefusesAnIconForADrawing(t *testing.T) {
 		t.Error("the icon was written anyway")
 	}
 }
+
+// A drawing's metadata is set through update_wiki_document like any page's,
+// and succeeds: there is no body to write, so none is attempted.
+func TestUpdateWikiDocument_SetsADrawingsMetadata(t *testing.T) {
+	s, docs, ctx := fixedIconServer()
+	docs.doc = models.WikiDocument{
+		DocumentID: uuid.New(), OperationID: models.PublicOperationID, Title: "Map", Kind: models.WikiDocumentKindDrawing,
+	}
+	res, err := handleUpdateWikiDocument(ctx, s, updateWikiDocumentArgs{
+		DocumentID: docs.doc.DocumentID.String(), Title: "Network map", Tags: []string{"infra"},
+	})
+	if err != nil {
+		t.Fatalf("err = %v, want the metadata update to succeed", err)
+	}
+	if docs.updated == nil || docs.updated.Title == nil || *docs.updated.Title != "Network map" {
+		t.Errorf("update = %+v, want the new title", docs.updated)
+	}
+	if res.Payload == nil {
+		t.Error("no result payload")
+	}
+}
+
+// A body for a drawing is refused before the metadata is touched, so the
+// refusal is true: nothing changed.
+func TestUpdateWikiDocument_RefusesADrawingBodyBeforeWriting(t *testing.T) {
+	s, docs, ctx := fixedIconServer()
+	docs.doc = models.WikiDocument{
+		DocumentID: uuid.New(), OperationID: models.PublicOperationID, Title: "Map", Kind: models.WikiDocumentKindDrawing,
+	}
+	_, err := handleUpdateWikiDocument(ctx, s, updateWikiDocumentArgs{
+		DocumentID: docs.doc.DocumentID.String(), Title: "Network map", Content: "# Hosts",
+	})
+	if err == nil || !strings.Contains(err.Error(), "is a drawing") {
+		t.Fatalf("err = %v, want the drawing refusal", err)
+	}
+	if docs.updated != nil {
+		t.Error("the title was written before the refusal")
+	}
+}
+
+// Nothing to set on a drawing is refused rather than reported as a success.
+func TestUpdateWikiDocument_RefusesANoOpOnADrawing(t *testing.T) {
+	s, docs, ctx := fixedIconServer()
+	docs.doc = models.WikiDocument{
+		DocumentID: uuid.New(), OperationID: models.PublicOperationID, Title: "Map", Kind: models.WikiDocumentKindDrawing,
+	}
+	_, err := handleUpdateWikiDocument(ctx, s, updateWikiDocumentArgs{DocumentID: docs.doc.DocumentID.String()})
+	if err == nil || !strings.Contains(err.Error(), "changes nothing") {
+		t.Fatalf("err = %v, want a no-op refusal", err)
+	}
+}

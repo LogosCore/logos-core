@@ -37,6 +37,10 @@ import { layoutArrows, type Obstacle } from "./arrow-layout.js";
  * being a dataset, and the whole thing rides in one Y.js transaction. */
 const MAX_ELEMENTS_PER_CALL = 1000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
+/** A restore carries a whole backed-up scene, base64'd. Same bound as a page
+ * restore (restore-document.ts); at 8 MB a drawing backup over ~6 MB could
+ * never be restored. */
+const MAX_RESTORE_BODY_BYTES = 16 * 1024 * 1024;
 
 export type DrawingMode = "add" | "update" | "delete" | "replace";
 
@@ -374,6 +378,7 @@ export function applyMode(
 
     case "delete": {
       let applied = 0;
+      const deleted = new Set<string>();
       for (const id of elementIDs) {
         const existing = elements.get(id);
         if (!existing) continue;
@@ -381,8 +386,10 @@ export function applyMode(
         // flagging the element; dropping the key instead would let a peer
         // that still holds the element write it straight back.
         elements.set(id, tombstoneOf(existing));
+        deleted.add(id);
         applied++;
       }
+      detachDeleted(elements, deleted);
       return applied;
     }
 
@@ -404,6 +411,69 @@ export function applyMode(
       placeBoundArrows(elements, layered);
       wireBindings(elements, layered);
       return layered.length;
+    }
+  }
+}
+
+/**
+ * Clean up after a delete: what the deleted elements held, and what held them.
+ *
+ * Deleting a labelled box used to leave its label live — floating on the
+ * canvas, and still in the page's search text, since the projection counts it
+ * as live text — and leave every arrow bound to it pointing at a tombstone.
+ * Excalidraw's own eraser does all of this; an agent's delete now does too:
+ *
+ *   - a deleted container's bound text is tombstoned with it;
+ *   - an arrow bound to a deleted element drops that binding;
+ *   - a shape that listed a deleted element in boundElements drops it.
+ *
+ * Each element changed here gets a version bump, or no canvas takes it.
+ */
+function detachDeleted(elements: Y.Map<NormalizedElement>, deleted: Set<string>): void {
+  if (deleted.size === 0) return;
+
+  // Labels first, so the passes below also see them as gone. Found from both
+  // sides of the pair: the container's boundElements, and the text's own
+  // containerId, since either can be missing on a scene a person drew.
+  for (const id of [...deleted]) {
+    const container = elements.get(id);
+    const bound = Array.isArray(container?.boundElements)
+      ? (container.boundElements as { id?: string; type?: string }[])
+      : [];
+    for (const b of bound) {
+      if (b?.type === "text" && b.id) deleted.add(b.id);
+    }
+  }
+  for (const [id, el] of elements.entries()) {
+    if (el && typeof el.containerId === "string" && deleted.has(el.containerId)) deleted.add(id);
+  }
+  for (const id of deleted) {
+    const el = elements.get(id);
+    if (el && !el.isDeleted) elements.set(id, tombstoneOf(el));
+  }
+
+  for (const [id, el] of elements.entries()) {
+    if (!el || el.isDeleted) continue;
+    let next: NormalizedElement | null = null;
+
+    for (const end of ["startBinding", "endBinding"] as const) {
+      const target = (el[end] as { elementId?: string } | null | undefined)?.elementId;
+      if (target && deleted.has(target)) next = { ...(next ?? el), [end]: null };
+    }
+
+    if (Array.isArray(el.boundElements)) {
+      const bound = el.boundElements as { id?: string }[];
+      const kept = bound.filter((b) => !(b?.id && deleted.has(b.id)));
+      if (kept.length !== bound.length) next = { ...(next ?? el), boundElements: kept.length > 0 ? kept : null };
+    }
+
+    if (next) {
+      elements.set(id, {
+        ...next,
+        version: (el.version ?? 1) + 1,
+        versionNonce: freshNonce(),
+        updated: Date.now(),
+      });
     }
   }
 }
@@ -682,7 +752,7 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
 
   app.post(
     "/internal/drawing/restore",
-    readRawBody(MAX_BODY_BYTES),
+    readRawBody(MAX_RESTORE_BODY_BYTES),
     async (req: Request, res: Response) => {
       const rawBody = requireSignature(req, res);
       if (!rawBody) return;

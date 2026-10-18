@@ -1689,6 +1689,16 @@ func (r *wikiDocumentResolver) RestoreWikiDocumentBackup(ctx context.Context, do
 		return nil, fmt.Errorf("invalid caller ID: %w", err)
 	}
 
+	// A copy of the row is saved before anything is overwritten, and the
+	// restore is refused if it cannot be. The safety copy used to be built
+	// only afterwards, from the sidecar's answer, and saved best-effort — so
+	// a response that failed to decode, or a backup insert that failed, left
+	// a restored page with no way back and an error saying nothing happened.
+	guard, err := r.saveSafetyBackup(ctx, &doc, callerUID, "Pre-restore snapshot")
+	if err != nil {
+		return nil, fmt.Errorf("failed to save a pre-restore snapshot, so nothing was restored: %w", err)
+	}
+
 	if r.restorer != nil {
 		// Through the live room, never over the row: a loaded room writes its
 		// own state back on the next store, and a browser reconnecting with
@@ -1727,11 +1737,12 @@ func (r *wikiDocumentResolver) RestoreWikiDocumentBackup(ctx context.Context, do
 		// picture on a later restore.
 		snapshot.ImageReferences = unionIDs(doc.ImageReferences, beforeImages)
 		snapshot.FileReferences = unionIDs(doc.FileReferences, beforeFiles)
-		r.createSafetyBackup(ctx, &snapshot, callerUID, "Pre-restore snapshot")
+		// The room's copy supersedes the row's, which is dropped once the
+		// room's is safely stored. If it cannot be stored, the row's stays.
+		if _, err := r.saveSafetyBackup(ctx, &snapshot, callerUID, "Pre-restore snapshot"); err == nil {
+			_ = r.backupRepo.Delete(ctx, guard)
+		}
 	} else {
-		// Create pre-restore safety backup
-		r.createSafetyBackup(ctx, &doc, callerUID, "Pre-restore snapshot")
-
 		// Restore content from backup (writes both content and content_state)
 		if err := r.docRepo.RestoreFromBackup(ctx, docUID, backup.Content, backup.ContentState); err != nil {
 			return nil, fmt.Errorf("failed to restore from backup: %w", err)
@@ -3062,6 +3073,13 @@ func (r *wikiDocumentResolver) WikiDocumentBackupCreatedAt(ctx context.Context, 
 
 // createSafetyBackup creates an automatic safety backup before destructive operations.
 func (r *wikiDocumentResolver) createSafetyBackup(ctx context.Context, doc *models.WikiDocument, createdByID uuid.UUID, description string) {
+	// Best-effort — don't fail the parent operation if backup creation fails
+	_, _ = r.saveSafetyBackup(ctx, doc, createdByID, description)
+}
+
+// saveSafetyBackup is createSafetyBackup for a caller that must know whether
+// the copy was stored.
+func (r *wikiDocumentResolver) saveSafetyBackup(ctx context.Context, doc *models.WikiDocument, createdByID uuid.UUID, description string) (*models.WikiDocumentBackup, error) {
 	backup := &models.WikiDocumentBackup{
 		BackupID:     uuid.New(),
 		DocumentID:   doc.DocumentID,
@@ -3075,8 +3093,10 @@ func (r *wikiDocumentResolver) createSafetyBackup(ctx context.Context, doc *mode
 		CreatedByID:  createdByID,
 	}
 	backup.IndexReferences(doc.ImageReferences, doc.FileReferences)
-	// Best-effort — don't fail the parent operation if backup creation fails
-	_ = r.backupRepo.Create(ctx, backup)
+	if err := r.backupRepo.Create(ctx, backup); err != nil {
+		return nil, err
+	}
+	return backup, nil
 }
 
 // unionIDs merges reference ids, dropping any that do not parse — the
