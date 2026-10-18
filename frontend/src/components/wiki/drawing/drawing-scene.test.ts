@@ -100,6 +100,19 @@ describe("locallyEditingIDs", () => {
 })
 
 describe("mergeRemoteElements", () => {
+  test("hands the canvas copies of the room's elements, never the room's own objects", () => {
+    const doc = new YDoc()
+    const room = getElementsMap(doc)
+    room.set("a", element("a", 3))
+
+    const { elements } = mergeRemoteElements([], readElements(doc))
+    expect(elements[0]).not.toBe(room.get("a"))
+
+    // What Excalidraw does to the elements it holds: change them in place.
+    ;(elements[0] as unknown as { index: string }).index = "a0"
+    expect((room.get("a") as unknown as { index?: string }).index).toBeUndefined()
+  })
+
   test("takes newer remote elements and keeps newer local ones", () => {
     const local = [element("a", 5), element("b", 1)]
     const remote = [element("a", 2), element("b", 9)]

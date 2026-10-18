@@ -305,7 +305,14 @@ export function mergeRemoteElements(
       if (!shouldKeepLocal(kept, remoteEl)) deferred.add(kept.id)
       else if (!sameWrite(kept, remoteEl) && !locallyEditing?.has(kept.id)) contested.add(kept.id)
     } else {
-      merged.push(remoteEl)
+      // A copy, never the room's own object. Y.Map hands back the stored
+      // value itself, and Excalidraw changes the elements it holds in place
+      // (an index fix-up on updateScene, every mutateElement after). Shared,
+      // those writes landed in the local Y.Doc without ever being sent as an
+      // update, so the room here no longer matched the room on the server —
+      // and a later tombstone sweep read this canvas's own edit back as the
+      // room's old value and hid a shape the user had just changed.
+      merged.push({ ...remoteEl })
       accepted.set(remoteEl.id, remoteEl.version)
     }
     taken.add(remoteEl.id)

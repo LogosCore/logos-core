@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,7 +35,9 @@ import (
 
 type getWikiDrawingArgs struct {
 	DocumentID string `json:"document_id" jsonschema:"Page id of a drawing."`
-	View       string `json:"view,omitempty" jsonschema:"mermaid (default): the drawing as Mermaid, the format draw_wiki_diagram takes. diagram: the older diagram language. outline: every shape with its id and geometry. full: complete element JSON."`
+	View       string `json:"view,omitempty" jsonschema:"mermaid (default): the drawing as Mermaid, the format draw_wiki_diagram takes. diagram: the older diagram language. outline: every shape with its id and geometry, a page at a time. full: complete element JSON, a page at a time."`
+	Offset     int    `json:"offset,omitempty" jsonschema:"outline and full: skip this many shapes, to read the next page. A paged read says where to continue."`
+	Limit      int    `json:"limit,omitempty"  jsonschema:"outline and full: at most this many shapes. Default and maximum 200 for outline, 50 for full."`
 }
 
 type drawWikiDiagramArgs struct {
@@ -123,29 +126,31 @@ type drawingSceneView struct {
 	Elements []drawingElementView `json:"elements,omitempty"`
 	// Full is populated only for view:"full".
 	Full []map[string]any `json:"fullElements,omitempty"`
-	// Shapes counts the scene by element type, and is what a large drawing
-	// returns instead of listing every shape.
+	// Shapes counts the whole scene by element type, when a read returns
+	// only a page of it.
 	Shapes map[string]int `json:"shapes,omitempty"`
-	// Labels is every piece of text on a large canvas. A diagram is navigated
-	// by its words, so these are what survive when the shapes are summarised.
-	Labels   []drawingElementView `json:"labels,omitempty"`
-	Count    int                  `json:"elementCount"`
-	Watchers int                  `json:"watchers,omitempty"`
-	Notes    []string             `json:"notes,omitempty"`
+	Count  int            `json:"elementCount"`
+	// NextOffset is where the next page starts, when there is one.
+	NextOffset int      `json:"nextOffset,omitempty"`
+	Watchers   int      `json:"watchers,omitempty"`
+	Notes      []string `json:"notes,omitempty"`
 }
 
-// summaryAboveElements is where a plain read stops listing every shape.
+// Page sizes for the element views.
 //
-// The Markdown side has had this since it existed: a page over 8 KB answers a
-// default read with its outline, because the alternative is spending an
-// agent's context on a body it did not ask for. A canvas needs the same
-// backstop and did not have one — a few hundred shapes is an ordinary diagram
-// and an extraordinary response.
+// Both used to be unbounded in practice. Over 120 shapes the outline turned
+// into a summary of labels and counts, with no ids — the one thing an agent
+// reads it for, and what drawings.md sends it there to get — and its note said
+// to ask for view:"full", which returned every element whole: seeds, nonces
+// and every point of every freehand stroke, megabytes on a busy canvas.
 //
-// The summary keeps every label, because the words are how a diagram is
-// navigated, and counts the rest by type. An agent that needs a specific
-// shape's id asks for view:"full".
-const summaryAboveElements = 120
+// Now each is a page. An outline row is small, so pages are large; a full
+// element can be large, so pages are small and also stop at a byte budget.
+const (
+	outlinePageSize = 200
+	fullPageSize    = 50
+	fullPageBytes   = 256 << 10
+)
 
 func handleGetWikiDrawing(ctx context.Context, s *Server, args getWikiDrawingArgs) (toolResult, error) {
 	doc, err := s.loadWikiDocument(ctx, args.DocumentID, models.OperationRoleViewer)
@@ -174,53 +179,95 @@ func handleGetWikiDrawing(ctx context.Context, s *Server, args getWikiDrawingArg
 		return toolResult{}, fmt.Errorf("failed to read the drawing: %w", err)
 	}
 
-	view := drawingSceneView{
-		wikiDocView: toWikiDocView(doc),
-		Count:       len(scene.Elements),
-		Watchers:    scene.Watchers,
-	}
-	switch {
-	case args.View == "full":
-		view.Full = make([]map[string]any, 0, len(scene.Elements))
-		for _, el := range scene.Elements {
-			view.Full = append(view.Full, el)
-		}
-
-	case len(scene.Elements) > summaryAboveElements:
-		view.Shapes = map[string]int{}
-		for _, el := range scene.Elements {
-			kind := stringField(el, "type")
-			view.Shapes[kind]++
-			if kind == "text" {
-				view.Labels = append(view.Labels, summariseElement(el))
-			}
-		}
-		view.Notes = append(view.Notes, fmt.Sprintf(
-			"This canvas has %d shapes, so it is summarised rather than listed. "+
-				"Every label is above; ask for view:\"full\" if you need a particular "+
-				"shape's id or geometry.", len(scene.Elements)))
-
-	default:
-		view.Elements = make([]drawingElementView, 0, len(scene.Elements))
-		for _, el := range scene.Elements {
-			view.Elements = append(view.Elements, summariseElement(el))
-		}
-	}
-	if len(scene.Elements) == 0 {
-		view.Notes = append(view.Notes, "This canvas is empty.")
-	}
-
 	return toolResult{
-		Payload:     view,
+		Payload:     drawingPage(toWikiDocView(doc), scene, args),
 		OperationID: &doc.OperationID,
 		Summary:     fmt.Sprintf("read wiki drawing %s", doc.Title),
 	}, nil
 }
 
+// drawingPage is one page of a drawing's elements, as the outline or the
+// full view, with a note saying where the next page starts.
+func drawingPage(doc wikiDocView, scene wiki.DrawingScene, args getWikiDrawingArgs) drawingSceneView {
+	total := len(scene.Elements)
+	view := drawingSceneView{wikiDocView: doc, Count: total, Watchers: scene.Watchers}
+	if total == 0 {
+		view.Notes = append(view.Notes, "This canvas is empty.")
+		return view
+	}
+
+	full := args.View == "full"
+	pageSize := outlinePageSize
+	if full {
+		pageSize = fullPageSize
+	}
+	limit := args.Limit
+	if limit <= 0 || limit > pageSize {
+		limit = pageSize
+	}
+	offset := max(args.Offset, 0)
+	if offset >= total {
+		view.Notes = append(view.Notes, fmt.Sprintf(
+			"offset %d is past the last shape; this canvas has %d.", offset, total))
+		return view
+	}
+
+	end := min(offset+limit, total)
+	if full {
+		budget := 0
+		view.Full = make([]map[string]any, 0, end-offset)
+		for i := offset; i < end; i++ {
+			size := approxJSONSize(scene.Elements[i])
+			// Always at least one, or one oversized stroke would stall the
+			// reader on the same offset for ever.
+			if len(view.Full) > 0 && budget+size > fullPageBytes {
+				end = i
+				break
+			}
+			budget += size
+			view.Full = append(view.Full, scene.Elements[i])
+		}
+	} else {
+		view.Elements = make([]drawingElementView, 0, end-offset)
+		for _, el := range scene.Elements[offset:end] {
+			view.Elements = append(view.Elements, summariseElement(el))
+		}
+	}
+
+	if offset > 0 || end < total {
+		view.Shapes = map[string]int{}
+		for _, el := range scene.Elements {
+			view.Shapes[stringField(el, "type")]++
+		}
+	}
+	if end < total {
+		view.NextOffset = end
+		view.Notes = append(view.Notes, fmt.Sprintf(
+			"Shapes %d–%d of %d, back to front. Read on with offset:%d.", offset+1, end, total, end))
+	}
+	return view
+}
+
+// approxJSONSize is an element's encoded size, for the full view's budget.
+func approxJSONSize(el wiki.DrawingElement) int {
+	b, err := json.Marshal(el)
+	if err != nil {
+		return 0
+	}
+	return len(b)
+}
+
 func summariseElement(el wiki.DrawingElement) drawingElementView {
+	kind := stringField(el, "type")
+	// Points only where they say where a line goes. A freehand stroke carries
+	// hundreds, which its box describes well enough for an outline.
+	var points []any
+	if kind == "arrow" || kind == "line" {
+		points = sliceField(el, "points")
+	}
 	return drawingElementView{
 		ID:          stringField(el, "id"),
-		Type:        stringField(el, "type"),
+		Type:        kind,
 		X:           floatField(el, "x"),
 		Y:           floatField(el, "y"),
 		Width:       floatField(el, "width"),
@@ -229,7 +276,7 @@ func summariseElement(el wiki.DrawingElement) drawingElementView {
 		Z:           floatField(el, "z"),
 		ContainerID: stringField(el, "containerId"),
 
-		Points:       sliceField(el, "points"),
+		Points:       points,
 		StartBinding: bindingTarget(el, "startBinding"),
 		EndBinding:   bindingTarget(el, "endBinding"),
 	}

@@ -115,7 +115,9 @@ export function useDrawingSync({
   // Read once, at mount. The pane only renders the canvas after the room has
   // synced, so by the time this runs the scene is whatever the server had.
   const [initial] = useState(() => ({
-    elements: readElements(ydoc),
+    // Copies, for the same reason mergeRemoteElements copies: the canvas
+    // changes what it is handed in place, and these are the room's objects.
+    elements: readElements(ydoc).map((el) => ({ ...el })),
     appState: readSharedAppState(ydoc),
   }))
 
