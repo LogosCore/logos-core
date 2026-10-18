@@ -120,3 +120,58 @@ test("a label found only by its containerId is deleted too", () => {
   applyMode(map, "delete", [], [], ["box"]);
   assert.equal(map.get("t")!.isDeleted, true);
 });
+
+/** Three boxes in a row, and an arrow from a to b. */
+function rebindable(): Y.Map<NormalizedElement> {
+  const map = sceneWith();
+  applyMode(
+    map,
+    "add",
+    normalizeElements([
+      rect("a"),
+      rect("b", { x: 300 }),
+      rect("c", { x: 0, y: 400 }),
+      { id: "arr", type: "arrow", startBinding: "a", endBinding: "b" },
+    ]),
+    [],
+    [],
+  );
+  return map;
+}
+
+const boundIDs = (el: NormalizedElement | undefined) =>
+  ((el?.boundElements as { id: string }[] | null) ?? []).map((b) => b.id);
+
+test("rebinding an arrow by update wires the new shape, even from a patch without type", () => {
+  const map = rebindable();
+  // What an agent sends: just the field it changes.
+  applyMode(map, "update", [], [{ id: "arr", endBinding: { elementId: "c", focus: 0, gap: 4 } }], []);
+  assert.equal((map.get("arr")!.endBinding as { elementId: string }).elementId, "c");
+  assert.ok(boundIDs(map.get("c")).includes("arr"), "the new target lists the arrow");
+});
+
+test("rebinding an arrow by update unwires the old shape", () => {
+  const map = rebindable();
+  assert.ok(boundIDs(map.get("b")).includes("arr"), "fixture: b lists the arrow");
+  applyMode(map, "update", [], [{ id: "arr", endBinding: { elementId: "c", focus: 0, gap: 4 } }], []);
+  assert.ok(!boundIDs(map.get("b")).includes("arr"));
+  assert.ok(boundIDs(map.get("a")).includes("arr"), "the unchanged end stays wired");
+});
+
+test("rebinding an arrow by update re-routes its stroke to the new shape", () => {
+  const map = rebindable();
+  const before = map.get("arr")!.points as number[][];
+  applyMode(map, "update", [], [{ id: "arr", endBinding: { elementId: "c", focus: 0, gap: 4 } }], []);
+  const after = map.get("arr")!.points as number[][];
+  assert.notDeepEqual(after, before);
+  // c is below a, so the stroke now heads down rather than across.
+  const [dx, dy] = after[after.length - 1];
+  assert.ok(dy > Math.abs(dx), `stroke ends at ${dx},${dy}; expected it to point down at c`);
+});
+
+test("an update that sends its own points keeps them when rebinding", () => {
+  const map = rebindable();
+  const points = [[0, 0], [10, 10]];
+  applyMode(map, "update", [], [{ id: "arr", endBinding: { elementId: "c", focus: 0, gap: 4 }, points }], []);
+  assert.deepEqual(map.get("arr")!.points, points);
+});

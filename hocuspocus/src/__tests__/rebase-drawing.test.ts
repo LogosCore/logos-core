@@ -119,3 +119,32 @@ test("the result is a fresh document, not the source's state", () => {
   // ...and it still decodes to the same scene.
   assert.equal(elementsOf(result.contentState).length, 1);
 });
+
+test("the drawing's background and grid survive the rebase", () => {
+  const doc = new Y.Doc();
+  doc.getMap<SceneElement>(DRAWING_ROOT_KEY).set("a", { id: "a", type: "rectangle", version: 1 });
+  const appState = doc.getMap("excalidraw:appState");
+  appState.set("viewBackgroundColor", "#1e1e2e");
+  appState.set("gridSize", 20);
+  // Per-viewer state is not shared and is not carried.
+  appState.set("zoom", 2);
+
+  const result = rebaseDrawing({ contentState: Y.encodeStateAsUpdate(doc), idMap: {} });
+
+  const out = new Y.Doc();
+  Y.applyUpdate(out, result.contentState);
+  const got = out.getMap("excalidraw:appState");
+  assert.equal(got.get("viewBackgroundColor"), "#1e1e2e");
+  assert.equal(got.get("gridSize"), 20);
+  assert.equal(got.has("zoom"), false);
+});
+
+test("a drawing that never chose a background gets none from the rebase", () => {
+  const result = rebaseDrawing({
+    contentState: stateOf([{ id: "a", type: "rectangle", version: 1 }]),
+    idMap: {},
+  });
+  const out = new Y.Doc();
+  Y.applyUpdate(out, result.contentState);
+  assert.equal(out.getMap("excalidraw:appState").size, 0);
+});

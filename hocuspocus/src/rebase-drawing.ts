@@ -21,6 +21,8 @@ import {
   deriveDrawingProjection,
   type DrawingProjection,
 } from "./drawing-projection.js";
+import { SHARED_APP_STATE_FIELDS } from "./restore-drawing.js";
+import { DRAWING_APP_STATE_KEY } from "./yjs-to-excalidraw.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -90,6 +92,16 @@ export function rebaseDrawing(req: RebaseDrawingRequest): RebaseDrawingResult {
       }
 
       targetElements.set(key, element);
+    }
+
+    // The canvas settings the drawing shares — its background and grid. Only
+    // the scene used to be carried over, so an imported drawing came up on
+    // the default background with no grid. Nothing in them is an id, so they
+    // travel as they are.
+    const sourceAppState = source.getMap(DRAWING_APP_STATE_KEY);
+    const targetAppState = target.getMap(DRAWING_APP_STATE_KEY);
+    for (const field of SHARED_APP_STATE_FIELDS) {
+      if (sourceAppState.has(field)) targetAppState.set(field, sourceAppState.get(field));
     }
   });
 

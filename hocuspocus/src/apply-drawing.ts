@@ -263,6 +263,31 @@ function shapeObstacles(elements: Y.Map<NormalizedElement>): Obstacle[] {
   return out;
 }
 
+const BINDING_ENDS = ["startBinding", "endBinding"] as const;
+
+/** The id a binding points at, or null for none. */
+function bindingTarget(value: unknown): string | null {
+  const id = (value as { elementId?: unknown } | null | undefined)?.elementId;
+  return typeof id === "string" && id !== "" ? id : null;
+}
+
+/** Remove an arrow from a shape's boundElements, the half of a binding that
+ * lives on the shape. */
+function unwireArrow(elements: Y.Map<NormalizedElement>, arrowID: string, targetID: string): void {
+  const target = elements.get(targetID);
+  if (!target || !Array.isArray(target.boundElements)) return;
+  const bound = target.boundElements as { id?: string }[];
+  const kept = bound.filter((b) => b?.id !== arrowID);
+  if (kept.length === bound.length) return;
+  elements.set(targetID, {
+    ...target,
+    boundElements: kept.length > 0 ? kept : null,
+    version: (target.version ?? 1) + 1,
+    versionNonce: freshNonce(),
+    updated: Date.now(),
+  });
+}
+
 /**
  * Wire the other half of every arrow binding.
  *
@@ -341,6 +366,8 @@ export function applyMode(
 
     case "update": {
       let applied = 0;
+      // Arrows as they stand after this call, for wiring their bindings.
+      const arrows: NormalizedElement[] = [];
       for (const patch of patches) {
         const existing = elements.get(patch.id);
         // An update naming an element that is not there is a mistake worth
@@ -360,9 +387,33 @@ export function applyMode(
           updated: Date.now(),
         };
         if (next.type === "arrow" || next.type === "line") {
-          next = placeBoundArrow(elements, next);
+          const rebound = BINDING_ENDS.filter(
+            (end) => end in patch && bindingTarget(patch[end]) !== bindingTarget(existing[end]),
+          );
+          // The old shape's back-reference goes, or it keeps dragging an arrow
+          // that no longer points at it.
+          for (const end of rebound) {
+            const old = bindingTarget(existing[end]);
+            if (old && old !== bindingTarget(next.startBinding) && old !== bindingTarget(next.endBinding)) {
+              unwireArrow(elements, next.id, old);
+            }
+          }
+          // A rebound arrow keeps the stroke it had to the old shape unless
+          // it is re-placed, so the stored points are dropped — unless the
+          // caller sent its own, or an end is now loose and there is nothing
+          // to measure the new stroke against.
+          const sentPoints = Array.isArray(patch.points) && patch.points.length >= 2;
+          if (rebound.length > 0 && !sentPoints && bindingTarget(next.startBinding) && bindingTarget(next.endBinding)) {
+            const { points: _stale, ...rest } = next;
+            next = rest as NormalizedElement;
+          }
+          elements.set(patch.id, next);
+          placeBoundArrows(elements, [next]);
+          next = elements.get(patch.id) ?? next;
+          arrows.push(next);
+        } else {
+          elements.set(patch.id, next);
         }
-        elements.set(patch.id, next);
 
         if (typeof label === "string") {
           retitleLabel(elements, next, label);
@@ -372,7 +423,10 @@ export function applyMode(
       // Bindings are wired here too: an arrow that gains a binding by update
       // needs the same reciprocal entry on the shape as one that arrived with
       // it, or the connection is half-made and the shape drags away from it.
-      wireBindings(elements, patches as unknown as NormalizedElement[]);
+      // From the merged arrows, not the patches: a patch carries only the
+      // fields that were sent, so `{id, endBinding}` has no type, and wiring
+      // skipped it as not an arrow.
+      wireBindings(elements, arrows);
       return applied;
     }
 

@@ -30,7 +30,7 @@ type SceneElement = Record<string, unknown> & { version?: unknown; isDeleted?: u
 
 /** The appState fields a drawing shares. Mirrors SharedAppState in the
  * frontend's drawing-scene.ts; everything else in appState is per viewer. */
-const SHARED_APP_STATE_FIELDS = ["viewBackgroundColor", "gridSize"] as const;
+export const SHARED_APP_STATE_FIELDS = ["viewBackgroundColor", "gridSize"] as const;
 
 export interface RestoreDrawingResult {
   /** Elements put back to their backup copy, including ones that had been

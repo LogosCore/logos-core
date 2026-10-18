@@ -299,6 +299,27 @@ async function waitForRender(): Promise<void> {
         }
       }),
     )
+
+    // Images inside an inline SVG — a drawing's pictures, which exportToSvg
+    // writes as <image href="/api/v1/wiki/images/…">. They are not <img>, so
+    // the pass above never waited for them, and on a cold cache the PDF
+    // printed empty frames. An SVG <image> has no complete/decode() of its
+    // own, so the same URL is decoded through an Image: the wiki serves
+    // images as immutable, so the SVG's own request is answered from that.
+    const svgImages = Array.from(root.querySelectorAll<SVGImageElement>("svg image"))
+    await Promise.all(
+      svgImages.map(async (el) => {
+        const href = el.href?.baseVal || el.getAttribute("href") || el.getAttribute("xlink:href")
+        if (!href) return
+        const img = new Image()
+        img.src = href
+        try {
+          await img.decode()
+        } catch {
+          // As above: one broken picture does not hold up the PDF.
+        }
+      }),
+    )
   }
 
   // Two frames so React/PM commit any layout changes the image decode
