@@ -373,37 +373,88 @@ function ShapeTile({
   )
 }
 
+/**
+ * Finished preview SVGs, per element list and theme.
+ *
+ * Only the elements used to be cached, so every tile ran exportToSvg again on
+ * every mount — opening the panel, expanding a category, clearing a search,
+ * switching sketch/clean or the theme — about sixty exports at a time, and in
+ * the sketch style each one redraws dozens of hand-drawn points. Keyed by the
+ * list itself: previewElements hands out one per shape and style, and a
+ * library item keeps its list for as long as it is unchanged, so a changed
+ * item is a new key and the old one is collected with it.
+ */
+const svgCache = new WeakMap<readonly ExcalidrawElement[], Map<boolean, Promise<SVGSVGElement>>>()
+
+function previewSvg(elements: readonly ExcalidrawElement[], dark: boolean): Promise<SVGSVGElement> {
+  let byTheme = svgCache.get(elements)
+  if (!byTheme) {
+    byTheme = new Map()
+    svgCache.set(elements, byTheme)
+  }
+  const hit = byTheme.get(dark)
+  if (hit) return hit
+
+  const svg = exportToSvg({
+    elements,
+    appState: { exportBackground: false, exportWithDarkMode: dark },
+    // A saved shape can hold a picture; without its file the tile drew an
+    // empty frame. Wiki images are served by URL, so this is just their ids.
+    files: wikiImageFiles(elements),
+    exportPadding: 4,
+    skipInliningFonts: true,
+  }).then((out: SVGSVGElement) => {
+    out.removeAttribute("width")
+    out.removeAttribute("height")
+    out.setAttribute("preserveAspectRatio", "xMidYMid meet")
+    out.style.width = "100%"
+    out.style.height = "100%"
+    return out
+  })
+  // A failed export is not kept, so the next mount tries again.
+  svg.catch(() => byTheme.delete(dark))
+  byTheme.set(dark, svg)
+  return svg
+}
+
 /** A shape drawn by Excalidraw's own SVG export, so the preview is exactly
  * what gets inserted. Fonts are not inlined: the canvas has already loaded
- * them into the page, and inlining would subset a font for every tile. */
+ * them into the page, and inlining would subset a font for every tile.
+ * Drawn once the tile is on screen, from previewSvg's cache. */
 function Preview({ elements, dark }: { elements: readonly ExcalidrawElement[]; dark: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
+    const host = ref.current
+    if (!host) return
     let cancelled = false
-    exportToSvg({
-      elements,
-      appState: { exportBackground: false, exportWithDarkMode: dark },
-      // A saved shape can hold a picture; without its file the tile drew an
-      // empty frame. Wiki images are served by URL, so this is just their ids.
-      files: wikiImageFiles(elements),
-      exportPadding: 4,
-      skipInliningFonts: true,
+
+    const draw = () => {
+      previewSvg(elements, dark)
+        .then((svg) => {
+          // A copy: the cached element is shared by every tile showing it.
+          if (!cancelled) host.replaceChildren(svg.cloneNode(true))
+        })
+        .catch(() => {
+          // A preview that cannot be drawn leaves an empty tile; the name and
+          // the insert still work.
+        })
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      draw()
+      return () => {
+        cancelled = true
+      }
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return
+      observer.disconnect()
+      draw()
     })
-      .then((svg: SVGSVGElement) => {
-        if (cancelled || !ref.current) return
-        svg.removeAttribute("width")
-        svg.removeAttribute("height")
-        svg.setAttribute("preserveAspectRatio", "xMidYMid meet")
-        svg.style.width = "100%"
-        svg.style.height = "100%"
-        ref.current.replaceChildren(svg)
-      })
-      .catch(() => {
-        // A preview that cannot be drawn leaves an empty tile; the name and
-        // the insert still work.
-      })
+    observer.observe(host)
     return () => {
       cancelled = true
+      observer.disconnect()
     }
   }, [elements, dark])
   return <div ref={ref} aria-hidden className="h-full w-full p-1" />

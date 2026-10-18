@@ -126,6 +126,9 @@ type DrawingFileResult struct {
 	Bytes int64
 	// Skips names every image that did not make it, and why.
 	Skips []DrawingImageSkip
+	// ImageIDs is every wiki image the scene places, embedded or not — the
+	// scene's own answer, which the stored image index can lag behind.
+	ImageIDs []string
 }
 
 // File renders one drawing page's stored state into an Excalidraw file with
@@ -162,6 +165,7 @@ func (d *DrawingFileRenderer) File(ctx context.Context, doc models.WikiDocument,
 	}
 
 	file.Files, result = d.embedImages(ctx, doc.OperationID, scene.ImageIDs, opts)
+	result.ImageIDs = scene.ImageIDs
 	return file, result, nil
 }
 

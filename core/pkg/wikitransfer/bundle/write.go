@@ -235,7 +235,11 @@ func (r *writeRun) writeDocument(ctx context.Context, doc models.WikiDocument, d
 		// can open, which is the only reason these files exist.
 		switch {
 		case doc.Kind.IsDrawing():
-			r.writeSceneCopy(ctx, doc, state, path)
+			// As with markdown below: the stored index can lag the body, and
+			// an image the scene places but the index misses was left out of
+			// attachments/, so on import it rendered as an empty frame. The
+			// scene is the truth, so union its images in.
+			entry.References.Images = union(entry.References.Images, r.writeSceneCopy(ctx, doc, state, path))
 		case r.w.renderer != nil:
 			if md, err := r.w.renderer.YjsToMarkdown(ctx, state); err == nil {
 				_ = writeBytes(r.zw, documentsDir+doc.DocumentID.String()+".md", []byte(md))
@@ -270,24 +274,35 @@ func (r *writeRun) writeDocument(ctx context.Context, doc models.WikiDocument, d
 // A failure here is a warning, not a skip. The `.ystate` is the bundle's
 // authoritative copy and has already been written — the page re-imports
 // intact whether or not anyone can read the companion.
-func (r *writeRun) writeSceneCopy(ctx context.Context, doc models.WikiDocument, state []byte, path string) {
+//
+// Returns the wiki images the scene places, for the attachment list.
+func (r *writeRun) writeSceneCopy(ctx context.Context, doc models.WikiDocument, state []byte, path string) []uuid.UUID {
 	if r.w.drawings == nil {
-		return
+		return nil
 	}
 	file, result, err := r.w.drawings.File(ctx, doc, state, wiki.DrawingFileOptions{})
 	if err != nil {
 		r.report.Warn(path, "scene_copy_failed: "+err.Error())
-		return
+		return nil
+	}
+	images := make([]uuid.UUID, 0, len(result.ImageIDs))
+	for _, raw := range result.ImageIDs {
+		// A fileId that is not a uuid was never stored; embedImages has
+		// already reported it.
+		if id, err := uuid.Parse(raw); err == nil {
+			images = append(images, id)
+		}
 	}
 	for _, skip := range result.Skips {
 		r.report.Warn(path, skip.Reason+": "+skip.ImageID)
 	}
 	if file.IsEmpty() {
-		return
+		return images
 	}
 	if err := writeJSON(r.zw, documentsDir+doc.DocumentID.String()+wiki.ExcalidrawExtension, file); err != nil {
 		r.report.Warn(path, "scene_copy_failed: "+err.Error())
 	}
+	return images
 }
 
 // streamAttachments copies every attachment the document's index names.

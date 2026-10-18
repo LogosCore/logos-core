@@ -216,6 +216,35 @@ func TestWriter_DrawingCompanionIsTheScene(t *testing.T) {
 	}
 }
 
+// A drawing's stored image index can lag its scene: here it is empty, as on a
+// page last saved before indexing. The image the scene places must still be
+// in attachments/, or the import renders it as an empty frame.
+func TestWriter_DrawingAttachmentsComeFromTheScene(t *testing.T) {
+	f := newFixture(t)
+
+	drawingID := uuid.New()
+	scene := `{"elements":[{"id":"b","type":"image","fileId":"` + f.img.ImageID.String() +
+		`"}],"imageIds":["` + f.img.ImageID.String() + `","not-a-uuid"]}`
+	f.docs = transfertest.NewDocRepo(models.WikiDocument{
+		DocumentID: drawingID, OperationID: f.op, Title: "Topology", SortOrder: "d",
+		PathIDs: []uuid.UUID{}, Kind: models.WikiDocumentKindDrawing,
+		ContentState: []byte(scene),
+	})
+	zr, _ := f.export(t, nil, false)
+
+	m, err := bundle.ReadManifest(zr)
+	if err != nil {
+		t.Fatalf("ReadManifest: %v", err)
+	}
+	if len(m.Attachments) != 1 || m.Attachments[0].ID != f.img.ImageID {
+		t.Fatalf("attachments = %+v, want the scene's image", m.Attachments)
+	}
+	readEntry(t, zr, "attachments/"+f.img.ImageID.String())
+	if len(m.Documents) != 1 || len(m.Documents[0].References.Images) != 1 {
+		t.Errorf("references = %+v, want the scene's image indexed", m.Documents)
+	}
+}
+
 func TestWriter_TreeScopeAndCredentialsOptOut(t *testing.T) {
 	f := newFixture(t)
 	zr, report := f.export(t, nil, false)
