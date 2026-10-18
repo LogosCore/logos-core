@@ -204,7 +204,7 @@ func (d *DrawingFileRenderer) embedImages(ctx context.Context, operationID uuid.
 			result.Skips = append(result.Skips, DrawingImageSkip{raw, "attachment_budget_exhausted"})
 			continue
 		}
-		data, err := d.readBlob(ctx, img.ObjectKey)
+		data, err := d.readBlob(ctx, img.ObjectKey, img.SizeBytes)
 		if err != nil {
 			result.Skips = append(result.Skips, DrawingImageSkip{raw, "blob_get_failed: " + err.Error()})
 			continue
@@ -221,16 +221,34 @@ func (d *DrawingFileRenderer) embedImages(ctx context.Context, operationID uuid.
 	return out, result
 }
 
+// blobCeiling bounds an image whose record carries no size.
+const blobCeiling = 64 << 20
+
 // readBlob pulls one image into memory. Everything else an export copies is
 // streamed through to the zip without ever being whole in memory, but a data
 // URL has to be built from the complete bytes.
-func (d *DrawingFileRenderer) readBlob(ctx context.Context, objectKey string) ([]byte, error) {
+//
+// Bounded by the size the image's record states. The budget check above
+// trusts that size, so a blob larger than its record — a re-uploaded object,
+// a bad row — would otherwise be read whole past any budget.
+func (d *DrawingFileRenderer) readBlob(ctx context.Context, objectKey string, size int64) ([]byte, error) {
 	reader, _, err := d.store.Get(ctx, objectKey)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
-	return io.ReadAll(reader)
+	limit := size
+	if limit <= 0 {
+		limit = blobCeiling
+	}
+	data, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("blob is larger than its recorded %d bytes", limit)
+	}
+	return data, nil
 }
 
 func dataURL(contentType string, data []byte) string {

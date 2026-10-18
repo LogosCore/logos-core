@@ -580,15 +580,40 @@ function retitleLabel(
  * tool that guesses at intent and blocks the write is worse than one that
  * says what it saw.
  */
-function stackedGeometry(written: readonly NormalizedElement[]): string | null {
-  const seen = new Map<string, number>();
-  for (const el of written) {
-    if (el.isDeleted) continue;
-    const signature = JSON.stringify([el.type, el.x, el.y, el.width, el.height, el.points ?? null]);
-    seen.set(signature, (seen.get(signature) ?? 0) + 1);
+export function stackedGeometry(
+  scene: Iterable<NormalizedElement | undefined>,
+  writtenIDs: ReadonlySet<string>,
+): string | null {
+  if (writtenIDs.size === 0) return null;
+
+  // Only piles that include something this call wrote. The whole scene used
+  // to be serialised on every add or replace — one JSON.stringify per
+  // element, points and all — and a stack already on the canvas was reported
+  // against whichever write happened to come next.
+  //
+  // A cheap key without the points first, so only shapes that already agree
+  // with a written one on type, position and size are serialised in full.
+  const box = (el: NormalizedElement) => `${el.type}|${el.x}|${el.y}|${el.width}|${el.height}`;
+  const live: NormalizedElement[] = [];
+  const writtenBoxes = new Set<string>();
+  for (const el of scene) {
+    if (!el || el.isDeleted) continue;
+    live.push(el);
+    if (writtenIDs.has(el.id)) writtenBoxes.add(box(el));
   }
 
-  const worst = [...seen.values()].reduce((a, b) => Math.max(a, b), 0);
+  const counts = new Map<string, { n: number; written: boolean }>();
+  for (const el of live) {
+    if (!writtenBoxes.has(box(el))) continue;
+    const signature = JSON.stringify([el.type, el.x, el.y, el.width, el.height, el.points ?? null]);
+    const entry = counts.get(signature) ?? { n: 0, written: false };
+    entry.n++;
+    entry.written ||= writtenIDs.has(el.id);
+    counts.set(signature, entry);
+  }
+
+  let worst = 0;
+  for (const { n, written } of counts.values()) if (written) worst = Math.max(worst, n);
   if (worst < 2) return null;
   return (
     `${worst} of these shapes share identical position and geometry, so they are ` +
@@ -604,6 +629,8 @@ interface WireRequest {
   elements?: unknown;
   elementIds?: unknown;
   userId?: unknown;
+  /** Read only: return the room's Y.js state instead of its elements. */
+  state?: unknown;
 }
 
 export function setupDrawingApi(app: Express, server: Hocuspocus): void {
@@ -635,6 +662,22 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
         connection = await server.openDirectConnection(roomName(documentId), {
           agent: true,
         });
+
+        // The room's state rather than its elements, for a caller that
+        // renders the drawing itself — the editor's Export, which used to
+        // render the Mongo row and so missed whatever was drawn in the last
+        // debounce window before the click.
+        if (body.state === true) {
+          let state: Uint8Array = new Uint8Array();
+          await connection.transact((document) => {
+            state = Y.encodeStateAsUpdate(document);
+          });
+          res.status(200).json({
+            state: Buffer.from(state).toString("base64"),
+            watchers: watcherCount(server, documentId),
+          });
+          return;
+        }
 
         let elements: NormalizedElement[] = [];
         await connection.transact((document) => {
@@ -774,12 +817,12 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
           });
           // Read back after the write, so the check describes what is on the
           // canvas rather than what was asked for — geometry the server placed
-          // from bindings is included, and a stacked pile that survived is
-          // reported whichever way it got there.
-          warning = stackedGeometry(
-            (mode === "update" ? patches.map((p) => elements.get(p.id)) : [...elements.values()])
-              .filter((el): el is NormalizedElement => Boolean(el)),
+          // from bindings is included. Checked against the whole scene, so a
+          // shape written exactly on top of one already there is reported.
+          const written = new Set(
+            mode === "update" ? patches.map((p) => p.id) : mode === "delete" ? [] : incoming.map((el) => el.id),
           );
+          warning = stackedGeometry(elements.values(), written);
         });
 
         res.status(200).json({

@@ -57,6 +57,8 @@ type DrawingElement map[string]any
 
 type drawingReadRequest struct {
 	DocumentID string `json:"documentId"`
+	// State asks for the room's Y.js state instead of its elements.
+	State bool `json:"state,omitempty"`
 }
 
 // DrawingScene is the live scene, with deleted elements already filtered out.
@@ -115,6 +117,40 @@ func (c *HocuspocusClient) ReadDrawing(ctx context.Context, documentID string) (
 		return scene, fmt.Errorf("read drawing response: %w", err)
 	}
 	return scene, nil
+}
+
+// ReadDrawingState returns the drawing's Y.js state as it stands in the live
+// room — what is on screen, which the stored row can be a debounce window
+// behind.
+func (c *HocuspocusClient) ReadDrawingState(ctx context.Context, documentID string) ([]byte, error) {
+	body, err := json.Marshal(drawingReadRequest{DocumentID: documentID, State: true})
+	if err != nil {
+		return nil, fmt.Errorf("marshal drawing state read payload: %w", err)
+	}
+
+	resp, err := c.postInternal(ctx, "/internal/drawing/read", body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("drawing state read returned %d: %s", resp.StatusCode, string(errBody))
+	}
+
+	// Base64 of a whole room: bounded like a restore's previous state.
+	var wire struct {
+		State string `json:"state"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&wire); err != nil {
+		return nil, fmt.Errorf("read drawing state response: %w", err)
+	}
+	state, err := base64.StdEncoding.DecodeString(wire.State)
+	if err != nil {
+		return nil, fmt.Errorf("decode drawing state: %w", err)
+	}
+	return state, nil
 }
 
 // ApplyDrawing edits a drawing as a Y.js transaction on the live document.

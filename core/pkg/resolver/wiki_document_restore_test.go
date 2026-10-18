@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -27,6 +28,9 @@ type restoreWorld struct {
 	roomRestores []restoreCall
 	roomResult   wiki.RestoreDrawingResult
 	roomErr      error
+
+	liveState []byte
+	liveErr   error
 }
 
 type restoreCall struct {
@@ -84,6 +88,18 @@ func (f restoreBackups) Delete(_ context.Context, b *models.WikiDocumentBackup) 
 }
 
 type restoreRoom struct{ w *restoreWorld }
+
+func (f restoreRoom) ReadDrawingState(context.Context, string) ([]byte, error) {
+	return f.w.liveState, f.w.liveErr
+}
+
+// echoScenes renders a state as one element whose id is the state's bytes, so
+// a test can see which state was rendered.
+type echoScenes struct{}
+
+func (echoScenes) YjsToExcalidraw(_ context.Context, state []byte) (wiki.ExcalidrawScene, error) {
+	return wiki.ExcalidrawScene{Elements: []json.RawMessage{json.RawMessage(`{"id":"` + string(state) + `"}`)}}, nil
+}
 
 func (f restoreRoom) RestoreDrawing(_ context.Context, documentID string, state []byte, userID string) (wiki.RestoreDrawingResult, error) {
 	f.w.roomRestores = append(f.w.roomRestores, restoreCall{"drawing", documentID, state, "", userID})
@@ -310,4 +326,34 @@ func TestRestoreWikiDocumentBackup_NoRestorerKeepsTheRowCopy(t *testing.T) {
 		t.Fatalf("RestoreWikiDocumentBackup: %v", err)
 	}
 	assertKeptRowCopy(t, w)
+}
+
+// Export renders what is in the room, which the row can lag behind.
+func TestWikiDrawingScene_RendersTheLiveRoom(t *testing.T) {
+	r, w, ctx, _ := newRestoreWorld(t, models.WikiDocumentKindDrawing)
+	r.drawings = wiki.NewDrawingFileRenderer(echoScenes{}, nil, nil)
+	w.liveState = []byte("live room state")
+
+	out, err := r.WikiDrawingScene(ctx, w.doc.DocumentID.String())
+	if err != nil {
+		t.Fatalf("WikiDrawingScene: %v", err)
+	}
+	if !strings.Contains(out, "live room state") || strings.Contains(out, "stale row state") {
+		t.Errorf("exported %s, want the live room's scene", out)
+	}
+}
+
+// A sidecar that cannot be reached still gets a file: the stored row's.
+func TestWikiDrawingScene_FallsBackToTheRow(t *testing.T) {
+	r, w, ctx, _ := newRestoreWorld(t, models.WikiDocumentKindDrawing)
+	r.drawings = wiki.NewDrawingFileRenderer(echoScenes{}, nil, nil)
+	w.liveErr = errors.New("connection refused")
+
+	out, err := r.WikiDrawingScene(ctx, w.doc.DocumentID.String())
+	if err != nil {
+		t.Fatalf("WikiDrawingScene: %v", err)
+	}
+	if !strings.Contains(out, "stale row state") {
+		t.Errorf("exported %s, want the row's scene", out)
+	}
 }

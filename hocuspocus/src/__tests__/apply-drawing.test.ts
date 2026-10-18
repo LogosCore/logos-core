@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Y from "yjs";
 
-import { applyMode, elementsOf } from "../apply-drawing.js";
+import { applyMode, elementsOf, stackedGeometry } from "../apply-drawing.js";
 import { normalizeElements, type NormalizedElement } from "../drawing-elements.js";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -189,4 +189,30 @@ test("deleting an already-deleted shape is not counted again", () => {
   const map = sceneWith(rect("a"));
   applyMode(map, "delete", [], [], ["a"]);
   assert.equal(applyMode(map, "delete", [], [], ["a"]), 0);
+});
+
+test("stacking is reported for shapes this write stacked", () => {
+  const map = sceneWith(rect("a"), rect("b", { x: 300 }));
+  applyMode(map, "add", normalizeElements([rect("c"), rect("d")]), [], []);
+  // c and d land on a: three in one pile.
+  assert.match(stackedGeometry(map.values(), new Set(["c", "d"])) ?? "", /^3 of these shapes/);
+});
+
+test("a shape written on top of one already there is reported", () => {
+  const map = sceneWith(rect("a"));
+  applyMode(map, "add", normalizeElements([rect("n")]), [], []);
+  assert.match(stackedGeometry(map.values(), new Set(["n"])) ?? "", /^2 of these shapes/);
+});
+
+test("a pile already on the canvas is not blamed on an unrelated write", () => {
+  const map = sceneWith(rect("a"), rect("b"));
+  applyMode(map, "add", normalizeElements([rect("n", { x: 500 })]), [], []);
+  assert.equal(stackedGeometry(map.values(), new Set(["n"])), null);
+});
+
+test("deleted shapes and a delete write stack nothing", () => {
+  const map = sceneWith(rect("a"), rect("b"));
+  applyMode(map, "delete", [], [], ["b"]);
+  assert.equal(stackedGeometry(map.values(), new Set(["a"])), null);
+  assert.equal(stackedGeometry(map.values(), new Set()), null);
 });

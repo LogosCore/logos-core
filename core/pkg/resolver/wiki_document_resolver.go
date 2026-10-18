@@ -206,6 +206,20 @@ type BackupRestorer interface {
 	RestoreDocument(ctx context.Context, documentID string, contentState []byte, markdown, userID string) (wiki.RestoreDocumentResult, error)
 }
 
+// LiveDrawingReader reads a drawing's Y.js state from its live room.
+// Satisfied by *wiki.HocuspocusClient; asserted from the restorer rather
+// than added to BackupRestorer, so a wiring without it still exports the row.
+type LiveDrawingReader interface {
+	ReadDrawingState(ctx context.Context, documentID string) ([]byte, error)
+}
+
+// drawingExportImageBudget caps the image bytes one editor Export embeds.
+// The file travels back as a single GraphQL string, base64'd — a third
+// larger again — so the budget is what keeps one download from holding
+// every picture on a huge canvas in memory several times over. Images past
+// it are left out and logged, and draw as empty frames in the file.
+const drawingExportImageBudget = 32 << 20
+
 // MarkdownRenderer converts a document's Y.js binary state back to Markdown.
 // Satisfied by *wiki.HocuspocusClient.
 type MarkdownRenderer interface {
@@ -2201,7 +2215,21 @@ func (r *wikiDocumentResolver) WikiDrawingScene(ctx context.Context, id string) 
 		return "", fmt.Errorf("drawing export is not configured")
 	}
 
-	file, result, err := r.drawings.File(ctx, doc, doc.ContentState, wiki.DrawingFileOptions{})
+	// The live room, not the row: the row is what was last stored, up to a
+	// debounce window behind the screen, so an Export right after drawing
+	// missed the last strokes. The row is the fallback for a sidecar that
+	// cannot be reached, which still beats no file.
+	state := doc.ContentState
+	if live, ok := r.restorer.(LiveDrawingReader); ok {
+		if roomState, err := live.ReadDrawingState(ctx, id); err == nil && len(roomState) > 0 {
+			state = roomState
+		} else if err != nil {
+			logger.From(ctx).Warn("drawing scene export fell back to the stored row",
+				zap.String("document_id", id), zap.Error(err))
+		}
+	}
+
+	file, result, err := r.drawings.File(ctx, doc, state, wiki.DrawingFileOptions{MaxImageBytes: drawingExportImageBudget})
 	if err != nil {
 		return "", fmt.Errorf("failed to render the drawing: %w", err)
 	}
