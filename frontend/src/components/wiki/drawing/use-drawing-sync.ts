@@ -218,6 +218,14 @@ export function useDrawingSync({
     // Ids whose key left the room since the last merge, with the value the
     // room held. See hideRemovedElements.
     const removed = new Map<string, ExcalidrawElement | undefined>()
+    // Ids the room changed since the last merge. Each merge used to read and
+    // sort the whole room and index it again, every frame a peer was drawing,
+    // to take the handful of elements their gesture touched. Only those are
+    // merged now; everything else on this canvas already agrees with the room
+    // or is newer, which is what the previous merges established. `null` is a
+    // full merge, for the first one after subscribing, which has no event to
+    // say what changed.
+    let changed: Set<string> | null = null
     let frame = 0
 
     // At most once per frame. A peer mid-gesture sends up to twenty updates
@@ -232,9 +240,16 @@ export function useDrawingSync({
       // The appState is read at merge time rather than captured: what the
       // pointer is holding changes between one remote update and the next, and
       // this handler outlives any one gesture.
+      const remote = changed
+        ? [...changed].flatMap((id) => {
+            const el = shared.get(id)
+            return el ? [el] : []
+          })
+        : readElements(ydoc)
+      changed = new Set()
       const { elements, accepted, contested, deferred } = mergeRemoteElements(
         api.getSceneElementsIncludingDeleted(),
-        readElements(ydoc),
+        remote,
         locallyEditingIDs(api.getAppState()),
       )
       // The versions taken from the room are now what this client holds, so
@@ -255,8 +270,9 @@ export function useDrawingSync({
 
       // A peer's image arrives as an element carrying a wiki image id, with no
       // file entry on this client — the canvas would render an empty frame.
-      // Register the ones we do not have; the bytes come from the URL.
-      registerWikiImages(api, shown)
+      // Register the ones we do not have; the bytes come from the URL. Only
+      // the merged ones can be new here.
+      registerWikiImages(api, remote)
 
       // Never into the undo history. Left to Excalidraw's default, a peer's
       // change was folded into this user's next undo step, so Ctrl+Z reverted
@@ -274,6 +290,7 @@ export function useDrawingSync({
       if (transaction.origin === LOCAL_ORIGIN) return
       for (const [id, change] of event.changes.keys) {
         if (change.action === "delete") removed.set(id, change.oldValue as ExcalidrawElement | undefined)
+        else changed?.add(id)
       }
       frame ||= requestAnimationFrame(apply)
     }

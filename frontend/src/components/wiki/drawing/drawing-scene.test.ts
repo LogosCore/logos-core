@@ -100,6 +100,35 @@ describe("locallyEditingIDs", () => {
 })
 
 describe("mergeRemoteElements", () => {
+  // The canvas merges only the ids a room update changed. That is only sound
+  // if it gives the same scene as merging the whole room, whenever the rest of
+  // the room already agrees with the canvas — which earlier merges ensure.
+  test("merging only the changed ids gives the same scene as merging the whole room", () => {
+    const local = [
+      element("a", 3, 1, { index: "a0" } as Partial<ExcalidrawElement>),
+      element("b", 5, 1, { index: "a1" } as Partial<ExcalidrawElement>),
+      element("c", 2, 1, { index: "a2" } as Partial<ExcalidrawElement>),
+      element("mine", 1, 1, { index: "a3" } as Partial<ExcalidrawElement>),
+    ]
+    const changed = [
+      element("b", 6, 1, { index: "a1" } as Partial<ExcalidrawElement>),
+      element("c", 1, 1, { index: "a2" } as Partial<ExcalidrawElement>),
+      element("new", 1, 1, { index: "a0V" } as Partial<ExcalidrawElement>),
+    ]
+    const room = [local[0], ...changed]
+
+    const whole = mergeRemoteElements(local, room)
+    const partial = mergeRemoteElements(local, changed)
+
+    const shape = (r: ReturnType<typeof mergeRemoteElements>) =>
+      r.elements.map((el) => [el.id, el.version])
+    expect(shape(partial)).toEqual(shape(whole))
+    expect([...partial.contested]).toEqual([...whole.contested])
+    expect([...partial.deferred]).toEqual([...whole.deferred])
+    // The unchanged element is not re-accepted; its version is already seen.
+    expect([...partial.accepted.keys()].sort()).toEqual(["b", "new"])
+  })
+
   test("hands the canvas copies of the room's elements, never the room's own objects", () => {
     const doc = new YDoc()
     const room = getElementsMap(doc)
