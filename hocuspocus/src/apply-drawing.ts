@@ -38,7 +38,7 @@ import { layoutArrows, type Obstacle } from "./arrow-layout.js";
 const MAX_ELEMENTS_PER_CALL = 1000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
-type DrawingMode = "add" | "update" | "delete" | "replace";
+export type DrawingMode = "add" | "update" | "delete" | "replace";
 
 const MODES: ReadonlySet<string> = new Set<DrawingMode>([
   "add",
@@ -90,6 +90,55 @@ function assignLayers(
   return incoming.map((el) =>
     typeof el.z === "number" ? el : { ...el, z: next++ },
   );
+}
+
+/** A fresh versionNonce, in the range Excalidraw mints its own. */
+function freshNonce(): number {
+  return Math.floor(Math.random() * 2 ** 31);
+}
+
+/**
+ * Raise a written element above whatever the room already holds under its id.
+ *
+ * An agent that reads a shape and writes it back in an add or a replace sends
+ * the version it read, or none at all, which defaults to 1. Every open canvas
+ * already holds that version and keeps its own copy on a tie (see
+ * shouldKeepLocal in the frontend's drawing-scene.ts), so the write landed in
+ * the room and appeared on nobody's screen. A replace was worse: the id was
+ * tombstoned at v+1 a moment earlier and then overwritten at v.
+ */
+function aboveExisting(
+  elements: Y.Map<NormalizedElement>,
+  incoming: NormalizedElement[],
+): NormalizedElement[] {
+  return incoming.map((el) => {
+    const existing = elements.get(el.id);
+    if (!existing) return el;
+    return {
+      ...el,
+      version: Math.max(el.version ?? 1, existing.version ?? 1) + 1,
+      versionNonce: freshNonce(),
+      updated: Date.now(),
+    };
+  });
+}
+
+/**
+ * The tombstone for an element.
+ *
+ * `updated` is set to now: it is what pruneDrawingTombstones measures the
+ * tombstone's age from, and carrying over the shape's old time let a shape
+ * last edited more than a week ago be pruned at the next room load — inside
+ * the window that exists so an offline tab cannot write it back.
+ */
+function tombstoneOf(existing: NormalizedElement): NormalizedElement {
+  return {
+    ...existing,
+    isDeleted: true,
+    version: (existing.version ?? 1) + 1,
+    versionNonce: freshNonce(),
+    updated: Date.now(),
+  };
 }
 
 /** A shape's box, for working out where an arrow meets its edge. */
@@ -265,7 +314,7 @@ export function wireBindings(
  * written back at its existing version is indistinguishable from the copy a
  * canvas already holds, and the change would never appear on screen.
  */
-function applyMode(
+export function applyMode(
   elements: Y.Map<NormalizedElement>,
   mode: DrawingMode,
   incoming: NormalizedElement[],
@@ -279,7 +328,7 @@ function applyMode(
       // in the scene. Placing first silently fell back to the default stroke
       // for every arrow in the batch, which is the collapse this was meant to
       // prevent — three arrows to three different boxes, one visible line.
-      const layered = assignLayers(elements, incoming);
+      const layered = aboveExisting(elements, assignLayers(elements, incoming));
       for (const el of layered) elements.set(el.id, el);
       placeBoundArrows(elements, layered);
       wireBindings(elements, layered);
@@ -303,6 +352,8 @@ function applyMode(
           ...existing,
           ...fields,
           version: (existing.version ?? 1) + 1,
+          versionNonce: freshNonce(),
+          updated: Date.now(),
         };
         if (next.type === "arrow" || next.type === "line") {
           next = placeBoundArrow(elements, next);
@@ -329,11 +380,7 @@ function applyMode(
         // Tombstoned, not removed. Excalidraw propagates an erasure by
         // flagging the element; dropping the key instead would let a peer
         // that still holds the element write it straight back.
-        elements.set(id, {
-          ...existing,
-          isDeleted: true,
-          version: (existing.version ?? 1) + 1,
-        });
+        elements.set(id, tombstoneOf(existing));
         applied++;
       }
       return applied;
@@ -345,18 +392,14 @@ function applyMode(
       // one coherent change rather than the canvas briefly emptying.
       for (const [id, existing] of elements.entries()) {
         if (existing?.isDeleted) continue;
-        elements.set(id, {
-          ...existing,
-          isDeleted: true,
-          version: (existing.version ?? 1) + 1,
-        });
+        elements.set(id, tombstoneOf(existing));
       }
       // Written first, then the arrows are placed: an arrow bound to a box
       // that arrived in the same batch can only be measured once that box is
       // in the scene. Placing first silently fell back to the default stroke
       // for every arrow in the batch, which is the collapse this was meant to
       // prevent — three arrows to three different boxes, one visible line.
-      const layered = assignLayers(elements, incoming);
+      const layered = aboveExisting(elements, assignLayers(elements, incoming));
       for (const el of layered) elements.set(el.id, el);
       placeBoundArrows(elements, layered);
       wireBindings(elements, layered);
@@ -514,7 +557,16 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
         return;
       }
 
-      const mode = (MODES.has(body.mode as string) ? body.mode : "add") as DrawingMode;
+      // Absent means add. Anything else unrecognised is refused: falling back
+      // to add turned a mistyped "Replace" or "remove" into shapes piled on
+      // top of the scene, reported as ok.
+      if (body.mode != null && body.mode !== "" && !MODES.has(body.mode as string)) {
+        res.status(400).json({
+          error: `unknown mode ${JSON.stringify(body.mode)}; use add, update, delete or replace`,
+        });
+        return;
+      }
+      const mode = (body.mode || "add") as DrawingMode;
 
       const elementIDs =
         Array.isArray(body.elementIds) &&

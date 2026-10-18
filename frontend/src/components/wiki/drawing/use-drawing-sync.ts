@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Doc as YDoc } from "yjs"
 import type { HocuspocusProvider } from "@hocuspocus/provider"
+import { CaptureUpdateAction } from "@excalidraw/excalidraw"
 import type {
   ExcalidrawImperativeAPI,
   AppState,
@@ -18,6 +19,7 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 import { toast } from "sonner"
 
 import { getCursorColor } from "@/lib/cursor-colors"
+import { holdRoom } from "@/hooks/use-hocuspocus"
 import {
   LOCAL_ORIGIN,
   getAppStateMap,
@@ -48,6 +50,7 @@ import {
   pendingImages,
   publishableElements,
   uploadPendingImages,
+  uploadRetryDelay,
   wikiImageFiles,
   wikiImageIDs,
   wikiImageURL,
@@ -169,7 +172,10 @@ export function useDrawingSync({
         for (const id of settled) deferredRef.current.delete(id)
         if (rebased.length > 0) {
           const byID = new Map(rebased.map((el) => [el.id, el]))
-          api.updateScene({ elements: elements.map((el) => byID.get(el.id) ?? el) })
+          api.updateScene({
+            elements: elements.map((el) => byID.get(el.id) ?? el),
+            captureUpdate: CaptureUpdateAction.NEVER,
+          })
           elements = api.getSceneElementsIncludingDeleted()
         }
       }
@@ -247,7 +253,10 @@ export function useDrawingSync({
       // Register the ones we do not have; the bytes come from the URL.
       registerWikiImages(api, shown)
 
-      api.updateScene({ elements: shown })
+      // Never into the undo history. Left to Excalidraw's default, a peer's
+      // change was folded into this user's next undo step, so Ctrl+Z reverted
+      // the peer's edit too — at a new version, which then published it.
+      api.updateScene({ elements: shown, captureUpdate: CaptureUpdateAction.NEVER })
       if (contested.size > 0) writerRef.current?.request(true)
     }
 
@@ -288,7 +297,9 @@ export function useDrawingSync({
       const next: Partial<AppState> = {}
       if (viewBackgroundColor !== undefined) next.viewBackgroundColor = viewBackgroundColor
       if (typeof gridSize === "number") next.gridSize = gridSize
-      if (Object.keys(next).length > 0) api.updateScene({ appState: next as AppState })
+      if (Object.keys(next).length > 0) {
+        api.updateScene({ appState: next as AppState, captureUpdate: CaptureUpdateAction.NEVER })
+      }
     }
 
     shared.observe(handler)
@@ -303,36 +314,85 @@ export function useDrawingSync({
   // element carrying the local id after it was rewritten; this puts the
   // stored id back on it instead of uploading the same bytes a second time.
   const adoptedRef = useRef<Map<string, string>>(new Map())
+  // Local fileId to the failures its upload has had, and when it may be tried
+  // again — Infinity once the server has refused it for good. See
+  // uploadRetryDelay.
+  const failedRef = useRef<Map<string, { attempts: number; retryAt: number }>>(new Map())
+  // Whether the canvas is still mounted. An upload can outlive it — see the
+  // hold in adoptImages — and then has to publish without the canvas.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const adoptImages = useCallback(
     async (elements: readonly ExcalidrawElement[], files: BinaryFiles) => {
       if (!api || !isEditor) return
 
+      const now = Date.now()
       const waiting = pendingImages(elements, files).filter(
-        (image) => !uploadingRef.current.has(image.fileId),
+        (image) =>
+          !uploadingRef.current.has(image.fileId) &&
+          (failedRef.current.get(image.fileId)?.retryAt ?? 0) <= now,
       )
       const known = waiting.filter((image) => adoptedRef.current.has(image.fileId))
       const pending = waiting.filter((image) => !adoptedRef.current.has(image.fileId))
       if (known.length === 0 && pending.length === 0) return
       for (const image of pending) uploadingRef.current.add(image.fileId)
 
-      const mapping = await uploadPendingImages(documentId, pending, (fileId, error) => {
-        // Released so the next change retries. The image keeps rendering
-        // locally in the meantime — but only locally, since it is not
-        // published until it is stored — so the message says so.
-        uploadingRef.current.delete(fileId)
-        toast.error("Could not store an image on this drawing.", {
-          description:
-            "Only you can see it until it is stored; it will be retried on your next change. " +
-            (error instanceof Error ? error.message : ""),
+      // Keeps the room connected if the user leaves the page mid-upload, so
+      // the image can still be published below once it is stored.
+      const release = pending.length > 0 ? holdRoom(ydoc) : null
+      let mapping: Map<string, string>
+      try {
+        mapping = await uploadPendingImages(documentId, pending, (fileId, error) => {
+          // Released for a later change to retry, after a delay. The image
+          // keeps rendering locally in the meantime — but only locally, since
+          // it is not published until it is stored — so the message says so.
+          // Told once per image: a retry that fails again says nothing new.
+          uploadingRef.current.delete(fileId)
+          const attempts = (failedRef.current.get(fileId)?.attempts ?? 0) + 1
+          const delay = uploadRetryDelay(error, attempts)
+          failedRef.current.set(fileId, {
+            attempts,
+            retryAt: delay === null ? Infinity : Date.now() + delay,
+          })
+          const reason = error instanceof Error ? error.message : ""
+          if (delay === null) {
+            toast.error("An image on this drawing was refused.", {
+              description: `Only you can see it, and it will not be stored. Remove it and try another file. ${reason}`,
+            })
+          } else if (attempts === 1) {
+            toast.error("Could not store an image on this drawing.", {
+              description: `Only you can see it until it is stored; it will be retried. ${reason}`,
+            })
+          }
         })
-      })
-      for (const [fileId, id] of mapping) {
-        uploadingRef.current.delete(fileId)
-        adoptedRef.current.set(fileId, id)
-      }
-      for (const image of known) {
-        mapping.set(image.fileId, adoptedRef.current.get(image.fileId) as string)
+        for (const [fileId, id] of mapping) {
+          uploadingRef.current.delete(fileId)
+          failedRef.current.delete(fileId)
+          adoptedRef.current.set(fileId, id)
+        }
+        for (const image of known) {
+          mapping.set(image.fileId, adoptedRef.current.get(image.fileId) as string)
+        }
+
+        // The canvas went away while the upload ran. Its last flush left these
+        // images out (see publishableElements), so publish them from the scene
+        // it last reported, straight into the room the hold kept open.
+        if (!mountedRef.current) {
+          const last = latestRef.current
+          if (mapping.size > 0 && last) {
+            const seen = lastSeen()
+            writeLocalElements(ydoc, publishableElements(applyImageIDs(last, mapping), seen), seen)
+          }
+          return
+        }
+      } finally {
+        release?.()
       }
       if (mapping.size === 0) return
 
@@ -351,9 +411,12 @@ export function useDrawingSync({
       )
       api.updateScene({
         elements: applyImageIDs(api.getSceneElementsIncludingDeleted(), mapping),
+        // Bookkeeping, not an edit: an undo should not swap the stored id back
+        // for the local one (adoptedRef covers it if a redo hands one back).
+        captureUpdate: CaptureUpdateAction.NEVER,
       })
     },
-    [api, documentId, isEditor],
+    [api, documentId, isEditor, ydoc, lastSeen],
   )
 
   // An image only exists on this canvas until its upload finishes, so leaving

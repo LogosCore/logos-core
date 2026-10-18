@@ -170,6 +170,29 @@ export function applyImageIDs(
   })
 }
 
+/** The first retry's delay after a failed upload; each later one doubles. */
+export const UPLOAD_RETRY_BASE_MS = 2_000
+/** The longest a failed upload waits before its next try. */
+export const UPLOAD_RETRY_MAX_MS = 60_000
+
+/**
+ * How long to wait before uploading an image again after `attempts` failures,
+ * or null when retrying cannot help.
+ *
+ * Retrying used to happen on the very next change event, and Excalidraw fires
+ * one on every pointer move — so a rejected image was re-encoded, re-posted
+ * and re-toasted many times a second for as long as the operator kept
+ * drawing. A refusal the server will repeat (a format it does not take, a
+ * file over the limit, no permission) now stops; anything else backs off.
+ */
+export function uploadRetryDelay(error: unknown, attempts: number): number | null {
+  const status = (error as { status?: unknown } | null)?.status
+  if (typeof status === "number" && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+    return null
+  }
+  return Math.min(UPLOAD_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), UPLOAD_RETRY_MAX_MS)
+}
+
 /** Decode a data: URL into bytes for upload. */
 export async function dataURLToBlob(dataURL: string): Promise<Blob> {
   const response = await fetch(dataURL)

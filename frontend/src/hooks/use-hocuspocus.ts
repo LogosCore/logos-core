@@ -11,6 +11,60 @@ function getWsUrl(): string {
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected"
 
+// Work that still has to write into a room after its page has gone away. A
+// drawing's image upload is the case: the element can only be published once
+// the bytes are stored, and leaving the page inside the app unmounts the
+// canvas long before that. Without a hold the teardown below destroyed the
+// provider mid-upload and the image never reached the room.
+const roomHolds = new WeakMap<YDoc, Set<Promise<void>>>()
+
+// How long a held room may stay connected after its page left, so a hung
+// upload cannot keep a socket open for the rest of the session.
+const HOLD_TIMEOUT_MS = 120_000
+// How long to wait for the server to acknowledge what was written last.
+const UNSYNCED_TIMEOUT_MS = 5_000
+
+/**
+ * Keep a room's provider alive past its page's unmount until the returned
+ * release function is called. The room still tears down afterwards, once its
+ * last update has been acknowledged.
+ */
+export function holdRoom(doc: YDoc): () => void {
+  let resolve!: () => void
+  const held = new Promise<void>((r) => {
+    resolve = r
+  })
+  let holds = roomHolds.get(doc)
+  if (!holds) {
+    holds = new Set()
+    roomHolds.set(doc, holds)
+  }
+  holds.add(held)
+  return () => {
+    holds.delete(held)
+    resolve()
+  }
+}
+
+function timeout(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function waitForAcknowledged(provider: HocuspocusProvider): Promise<void> {
+  if (!provider.hasUnsyncedChanges) return Promise.resolve()
+  return Promise.race([
+    new Promise<void>((resolve) => {
+      const onUnsynced = () => {
+        if (provider.hasUnsyncedChanges) return
+        provider.off("unsyncedChanges", onUnsynced)
+        resolve()
+      }
+      provider.on("unsyncedChanges", onUnsynced)
+    }),
+    timeout(UNSYNCED_TIMEOUT_MS),
+  ])
+}
+
 interface UseHocuspocusReturn {
   ydoc: YDoc
   provider: HocuspocusProvider | null
@@ -148,12 +202,24 @@ export function useHocuspocus(documentId: string): UseHocuspocusReturn {
     return () => {
       cancelled = true
       setProvider(null)
-      if (hpProvider) {
-        hpProvider.off("status", onStatus)
-        hpProvider.off("synced", onSynced)
-        hpProvider.destroy()
+      const provider = hpProvider
+      if (provider) {
+        provider.off("status", onStatus)
+        provider.off("synced", onSynced)
       }
-      doc.destroy()
+      const destroy = () => {
+        provider?.destroy()
+        doc.destroy()
+      }
+
+      const holds = roomHolds.get(doc)
+      if (!holds || holds.size === 0 || !provider) {
+        destroy()
+        return
+      }
+      void Promise.race([Promise.all(holds), timeout(HOLD_TIMEOUT_MS)])
+        .then(() => waitForAcknowledged(provider))
+        .finally(destroy)
     }
   }, [documentId])
 

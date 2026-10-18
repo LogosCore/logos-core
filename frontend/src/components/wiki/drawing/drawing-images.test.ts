@@ -7,6 +7,9 @@ import {
   isWikiImageID,
   pendingImages,
   publishableElements,
+  UPLOAD_RETRY_BASE_MS,
+  UPLOAD_RETRY_MAX_MS,
+  uploadRetryDelay,
   wikiImageFiles,
   wikiImageIDs,
   wikiImageURL,
@@ -169,5 +172,24 @@ describe("publishableElements", () => {
   test("the rewrite to a wiki id is what releases it", () => {
     const [rewritten] = applyImageIDs([imageElement("img", LOCAL_ID)], new Map([[LOCAL_ID, WIKI_ID]]))
     expect(ids(publishableElements([rewritten], new Map()))).toEqual(["img"])
+  })
+})
+
+describe("uploadRetryDelay", () => {
+  test("stops on a refusal the server will repeat", () => {
+    for (const status of [400, 403, 413, 415]) {
+      expect(uploadRetryDelay({ status }, 1)).toBeNull()
+    }
+  })
+
+  test("backs off on timeouts, rate limits, server errors and network failures", () => {
+    expect(uploadRetryDelay({ status: 408 }, 1)).toBe(UPLOAD_RETRY_BASE_MS)
+    expect(uploadRetryDelay({ status: 429 }, 2)).toBe(UPLOAD_RETRY_BASE_MS * 2)
+    expect(uploadRetryDelay({ status: 503 }, 3)).toBe(UPLOAD_RETRY_BASE_MS * 4)
+    expect(uploadRetryDelay(new TypeError("Failed to fetch"), 1)).toBe(UPLOAD_RETRY_BASE_MS)
+  })
+
+  test("caps the delay", () => {
+    expect(uploadRetryDelay(new Error("offline"), 50)).toBe(UPLOAD_RETRY_MAX_MS)
   })
 })
