@@ -41,6 +41,15 @@ func (r *attachmentRepository[T]) FindByID(ctx context.Context, id uuid.UUID) (T
 	return attachment, err
 }
 
+func (r *attachmentRepository[T]) FindByIDs(ctx context.Context, ids []uuid.UUID) ([]T, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var attachments []T
+	err := r.coll.Find(ctx, bson.M{r.idField: bson.M{"$in": ids}}).All(&attachments)
+	return attachments, err
+}
+
 func (r *attachmentRepository[T]) FindByDocumentID(ctx context.Context, docID uuid.UUID) ([]T, error) {
 	var attachments []T
 	err := r.coll.Find(ctx, bson.M{"document_id": docID}).All(&attachments)

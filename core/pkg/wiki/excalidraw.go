@@ -182,15 +182,32 @@ func (d *DrawingFileRenderer) embedImages(ctx context.Context, operationID uuid.
 		return out, result
 	}
 
+	// One query for the whole scene. A lookup per image was one Mongo round
+	// trip per picture, and a whole-wiki export renders every drawing.
+	parsed := make([]uuid.UUID, 0, len(ids))
+	for _, raw := range ids {
+		if id, err := uuid.Parse(raw); err == nil {
+			parsed = append(parsed, id)
+		}
+	}
+	found := make(map[uuid.UUID]models.WikiImage, len(parsed))
+	rows, lookupErr := d.images.FindByIDs(ctx, parsed)
+	for _, img := range rows {
+		found[img.ImageID] = img
+	}
+
 	for _, raw := range ids {
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			result.Skips = append(result.Skips, DrawingImageSkip{raw, "drawing_image_unadopted"})
 			continue
 		}
-		img, err := d.images.FindByID(ctx, id)
+		img, ok := found[id]
 		switch {
-		case err != nil:
+		case lookupErr != nil:
+			result.Skips = append(result.Skips, DrawingImageSkip{raw, "image_lookup_failed: " + lookupErr.Error()})
+			continue
+		case !ok:
 			result.Skips = append(result.Skips, DrawingImageSkip{raw, "image_not_found"})
 			continue
 		case img.OperationID != operationID:

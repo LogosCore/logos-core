@@ -15,6 +15,9 @@ const wikiImageCollection = "wiki_images"
 type IWikiImageRepository interface {
 	Create(ctx context.Context, img *models.WikiImage) error
 	FindByID(ctx context.Context, id uuid.UUID) (models.WikiImage, error)
+	// FindByIDs is FindByID for many images in one round trip. Ids with no
+	// row are simply absent from the result.
+	FindByIDs(ctx context.Context, ids []uuid.UUID) ([]models.WikiImage, error)
 	FindByDocumentID(ctx context.Context, docID uuid.UUID) ([]models.WikiImage, error)
 	// FindCandidatesOlderThan returns active (non-deleted) images whose creation
 	// time is before the given cutoff. The sweeper cross-references these

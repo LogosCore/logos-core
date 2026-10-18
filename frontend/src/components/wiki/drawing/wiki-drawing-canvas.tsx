@@ -27,7 +27,7 @@ import { Maximize } from "lucide-react"
 import { useDrawingSync } from "./use-drawing-sync"
 import { readGridPreference, writeGridPreference } from "./drawing-grid-preference"
 import { loadDrawingView, saveDrawingView, type DrawingView } from "./drawing-view-memory"
-import { drawingLibraryAdapter } from "./drawing-library"
+import { drawingLibraryAdapter, followLibraryInOtherTabs } from "./drawing-library"
 import { embedWikiImages } from "./drawing-images"
 import { ShapesSidebar, ShapesTrigger } from "./drawing-shapes-panel"
 import "@excalidraw/excalidraw/index.css"
@@ -85,6 +85,14 @@ export default function WikiDrawingCanvas({
   // The operator's own shapes survive a reload (drawing-library.ts), and the
   // Shapes panel lists them next to the built-ins.
   useHandleLibrary({ excalidrawAPI: api, adapter: drawingLibraryAdapter })
+  // And kept in step with other tabs, so one tab's save cannot erase what
+  // another just added. See followLibraryInOtherTabs.
+  useEffect(() => {
+    if (!api) return
+    return followLibraryInOtherTabs((libraryItems) => {
+      void api.updateLibrary({ libraryItems, merge: false })
+    })
+  }, [api])
   const [personalShapes, setPersonalShapes] = useState<LibraryItems>([])
   const dark = resolvedTheme === "dark"
 

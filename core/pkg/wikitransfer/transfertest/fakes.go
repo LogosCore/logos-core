@@ -320,6 +320,18 @@ func (r *ImageRepo) FindByID(_ context.Context, id uuid.UUID) (models.WikiImage,
 	return img, nil
 }
 
+func (r *ImageRepo) FindByIDs(_ context.Context, ids []uuid.UUID) ([]models.WikiImage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []models.WikiImage
+	for _, id := range ids {
+		if img, ok := r.Images[id]; ok {
+			out = append(out, img)
+		}
+	}
+	return out, nil
+}
+
 func (r *ImageRepo) FindByDocumentID(_ context.Context, docID uuid.UUID) ([]models.WikiImage, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

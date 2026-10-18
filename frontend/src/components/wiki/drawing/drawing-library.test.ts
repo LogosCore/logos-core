@@ -14,7 +14,7 @@ vi.stubGlobal("localStorage", {
   removeItem: (k: string) => void memory.delete(k),
 })
 
-const { drawingLibraryAdapter } = await import("./drawing-library")
+const { drawingLibraryAdapter, followLibraryInOtherTabs } = await import("./drawing-library")
 const { BUILTIN_SHAPES, SHAPE_CATEGORIES, matchesShape } = await import("./drawing-catalogue")
 
 const item = { id: "lib1", status: "unpublished", elements: [], created: 1 }
@@ -124,5 +124,36 @@ describe("the generated icons", () => {
     const { version } = JSON.parse(readFileSync(pkg, "utf8")) as { version: string }
     const generated = readFileSync(new URL("./drawing-icons.generated.ts", import.meta.url), "utf8")
     expect(generated).toContain(`from lucide-react ${version}\n`)
+  })
+})
+
+describe("the library across tabs", () => {
+  const storageEvent = (key: string | null, newValue: string | null) =>
+    Object.assign(new Event("storage"), { key, newValue })
+
+  it("takes another tab's save", () => {
+    const target = new EventTarget()
+    const seen: unknown[] = []
+    const stop = followLibraryInOtherTabs((items) => seen.push(items), target)
+
+    target.dispatchEvent(storageEvent("wiki_drawing_library", JSON.stringify({ libraryItems: [item] })))
+    expect(seen).toEqual([[item]])
+
+    // Emptied in the other tab, or the whole store cleared.
+    target.dispatchEvent(storageEvent("wiki_drawing_library", null))
+    target.dispatchEvent(storageEvent(null, null))
+    expect(seen).toEqual([[item], [], []])
+
+    stop()
+    target.dispatchEvent(storageEvent("wiki_drawing_library", JSON.stringify({ libraryItems: [item] })))
+    expect(seen).toHaveLength(3)
+  })
+
+  it("ignores other keys", () => {
+    const target = new EventTarget()
+    const seen: unknown[] = []
+    followLibraryInOtherTabs((items) => seen.push(items), target)
+    target.dispatchEvent(storageEvent("wiki_drawing_grid", "true"))
+    expect(seen).toEqual([])
   })
 })
