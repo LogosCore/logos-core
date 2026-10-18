@@ -234,7 +234,11 @@ func (c *HocuspocusClient) YjsToExcalidraw(ctx context.Context, contentState []b
 			resp.StatusCode, string(errBody))
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&scene); err != nil {
+	// Bounded like every other sidecar response. The request is capped at
+	// 4 MB of Y.js state (MAX_YJS_BYTES in internal-api.ts), and its JSON
+	// scene is a few times that; 32 MB leaves room without letting a broken
+	// sidecar stream an unbounded body into memory.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&scene); err != nil {
 		return ExcalidrawScene{}, fmt.Errorf("decode yjs-to-excalidraw response: %w", err)
 	}
 	return scene, nil

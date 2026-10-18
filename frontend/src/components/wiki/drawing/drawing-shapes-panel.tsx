@@ -41,6 +41,7 @@ import {
   type ShapeStyle,
 } from "./drawing-catalogue"
 import { centeredAt, randomId, viewportCenter, withFreshIds } from "./drawing-insert"
+import { wikiImageFiles } from "./drawing-images"
 
 export const SHAPES_SIDEBAR = "logos-shapes"
 
@@ -382,7 +383,9 @@ function Preview({ elements, dark }: { elements: readonly ExcalidrawElement[]; d
     exportToSvg({
       elements,
       appState: { exportBackground: false, exportWithDarkMode: dark },
-      files: null,
+      // A saved shape can hold a picture; without its file the tile drew an
+      // empty frame. Wiki images are served by URL, so this is just their ids.
+      files: wikiImageFiles(elements),
       exportPadding: 4,
       skipInliningFonts: true,
     })

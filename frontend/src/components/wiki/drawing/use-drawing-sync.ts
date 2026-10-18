@@ -524,10 +524,15 @@ export function useDrawingSync({
       // Mid-gesture changes wait for the throttle; anything else, including
       // the change that ends a gesture, goes out at once.
       if (changed) writerRef.current?.request(immediate)
+      // Wiki images this canvas has no file entry for yet. Remote merges
+      // register theirs; this catches the ones placed here — inserted or
+      // dragged in from My shapes, which keeps the element but not its file,
+      // or brought back by an undo — which drew as empty frames until reload.
+      if (changed && api) registerWikiImages(api, elements)
       const retryDue = [...failedRef.current.values()].some((f) => f.retryAt !== Infinity)
       if (changed || retryDue) void adoptImages(elements, files)
     },
-    [ydoc, isEditor, adoptImages, publishSelection],
+    [ydoc, api, isEditor, adoptImages, publishSelection],
   )
 
   const color = getCursorColor(user?.userId ?? "anon")
