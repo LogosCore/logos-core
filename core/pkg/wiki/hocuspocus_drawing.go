@@ -83,6 +83,9 @@ type ApplyDrawingResult struct {
 	// not what was meant — shapes stacked exactly on top of one another, most
 	// often. Empty when there is nothing to say.
 	Warning string `json:"warning,omitempty"`
+	// Missing is the ids an update or delete named that match no live shape:
+	// never there, or already erased.
+	Missing []string `json:"missing,omitempty"`
 }
 
 // ReadDrawing returns the scene as it stands in the live room.

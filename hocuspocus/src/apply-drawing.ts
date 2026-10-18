@@ -373,7 +373,9 @@ export function applyMode(
         // An update naming an element that is not there is a mistake worth
         // reporting rather than an insert worth performing — the usual cause
         // is a stale id from a read taken before somebody else's deletion.
-        if (!existing) continue;
+        // A tombstone is not there either: updating one used to count as
+        // applied while changing nothing anyone could see.
+        if (!existing || existing.isDeleted) continue;
 
         // Only the fields that were sent. Merging a fully-defaulted element
         // here is what used to reset a shape's size and detach its label when
@@ -435,7 +437,7 @@ export function applyMode(
       const deleted = new Set<string>();
       for (const id of elementIDs) {
         const existing = elements.get(id);
-        if (!existing) continue;
+        if (!existing || existing.isDeleted) continue;
         // Tombstoned, not removed. Excalidraw propagates an erasure by
         // flagging the element; dropping the key instead would let a peer
         // that still holds the element write it straight back.
@@ -750,8 +752,18 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
 
         let applied = 0;
         let warning: string | null = null;
+        // Ids an update or delete named that match no live shape, so the caller
+        // is told which ones, not just that fewer applied than it sent.
+        let missing: string[] = [];
         await connection.transact((document) => {
           const elements = elementsOf(document);
+          if (mode === "update" || mode === "delete") {
+            const named = mode === "update" ? patches.map((p) => p.id) : elementIDs;
+            missing = named.filter((id) => {
+              const el = elements.get(id);
+              return !el || el.isDeleted;
+            });
+          }
           // One Y.js transaction, so everyone in the room receives the
           // finished change as one update. A direct connection's transact()
           // does not open one, and every write in it went out on its own:
@@ -776,6 +788,7 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
           applied,
           watchers: watcherCount(server, documentId),
           ...(warning ? { warning } : {}),
+          ...(missing.length > 0 ? { missing } : {}),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : "apply failed";

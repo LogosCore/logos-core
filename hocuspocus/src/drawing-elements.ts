@@ -516,6 +516,43 @@ const NUMERIC_FIELDS = new Set([
   "z",
 ]);
 
+/** Fields an update may not set: the server keeps them so that every canvas
+ * takes the change. */
+const SERVER_OWNED_FIELDS = new Set(["version", "versionNonce", "index", "updated"]);
+
+/** A line's points: pairs of finite numbers, relative to the element's x/y. */
+function points(value: unknown, i: number): number[][] {
+  const ok =
+    Array.isArray(value) &&
+    value.every(
+      (p) => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === "number" && Number.isFinite(n)),
+    );
+  if (!ok) {
+    throw new DrawingElementError(`element ${i}: points must be a list of [x, y] number pairs`);
+  }
+  return value as number[][];
+}
+
+/** A shape's back-references: what is bound to it, as {id, type}. */
+function boundElements(value: unknown, i: number): { id: string; type: "text" | "arrow" }[] | null {
+  if (value === null) return null;
+  const ok =
+    Array.isArray(value) &&
+    value.every(
+      (b) =>
+        typeof b === "object" &&
+        b !== null &&
+        typeof (b as { id?: unknown }).id === "string" &&
+        ["text", "arrow"].includes((b as { type?: unknown }).type as string),
+    );
+  if (!ok) {
+    throw new DrawingElementError(
+      `element ${i}: boundElements must be null or a list of {id, type} with type "text" or "arrow"`,
+    );
+  }
+  return value as { id: string; type: "text" | "arrow" }[];
+}
+
 /**
  * Normalize an update.
  *
@@ -550,6 +587,33 @@ export function normalizePatches(input: unknown): ElementPatch[] {
     const patch: ElementPatch = { id };
     for (const [key, value] of Object.entries(el)) {
       if (key === "id" || value === undefined) continue;
+      // The server's bookkeeping, not the caller's. An agent that read the
+      // full view and sent it back carries the versions it read; taking them
+      // would write an element below the room's copy, which no canvas takes.
+      if (SERVER_OWNED_FIELDS.has(key)) continue;
+      if (key === "isDeleted") {
+        throw new DrawingElementError(
+          `element ${i}: an update cannot erase or restore a shape — use mode:delete to erase it, ` +
+            `or add it again to bring it back`,
+        );
+      }
+      if (key === "type") {
+        if (typeof value !== "string" || !SHAPE_TYPES.has(value)) {
+          throw new DrawingElementError(
+            `element ${i}: unknown element type ${JSON.stringify(value)}; supported: ${[...SHAPE_TYPES].join(", ")}`,
+          );
+        }
+        patch.type = value;
+        continue;
+      }
+      if (key === "points") {
+        patch.points = points(value, i);
+        continue;
+      }
+      if (key === "boundElements") {
+        patch.boundElements = boundElements(value, i);
+        continue;
+      }
       if (NUMERIC_FIELDS.has(key)) {
         patch[key] = num(value, 0, `element ${i}: ${key}`);
         continue;

@@ -396,6 +396,12 @@ func handleEditWikiDrawing(ctx context.Context, s *Server, args editWikiDrawingA
 		view.Notes = append(view.Notes,
 			"No shape on the canvas matched those ids, so nothing changed. "+
 				"Read the drawing again — it may have been edited since.")
+	} else if len(result.Missing) > 0 {
+		// Some applied and some did not: the count alone reads as a success.
+		view.Notes = append(view.Notes, fmt.Sprintf(
+			"%d of those ids matched no shape on the canvas — never there, or erased since — "+
+				"and were skipped: %s. Read the drawing again for current ids.",
+			len(result.Missing), strings.Join(result.Missing, ", ")))
 	}
 
 	return toolResult{

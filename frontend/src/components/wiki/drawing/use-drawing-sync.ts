@@ -208,6 +208,9 @@ export function useDrawingSync({
     }
   }, [ydoc, api, isEditor, lastSeen])
 
+  // Whether the scene observer has replayed what arrived before it subscribed.
+  const caughtUpRef = useRef(false)
+
   // Shared scene to canvas.
   useEffect(() => {
     if (!api) return
@@ -276,11 +279,28 @@ export function useDrawingSync({
     }
 
     shared.observe(handler)
+
+    // Catch up on whatever reached the room between the read at mount and
+    // this subscription. The canvas was seeded from `initial`, but the
+    // observer only starts once the canvas hands over its API, a render
+    // later, and nothing replayed that gap: an edit landing in it stayed off
+    // screen until some later update forced a merge, and a tombstone swept in
+    // it was never hidden, because no delete event ever reached `removed`.
+    // Once only: a later run of this effect (a new API) has no gap of that
+    // kind, and the ids would by then mean nothing.
+    if (!caughtUpRef.current) {
+      caughtUpRef.current = true
+      for (const el of initial.elements) {
+        if (!shared.has(el.id)) removed.set(el.id, el)
+      }
+    }
+    frame = requestAnimationFrame(apply)
+
     return () => {
       shared.unobserve(handler)
       cancelAnimationFrame(frame)
     }
-  }, [ydoc, api, lastSeen])
+  }, [ydoc, api, lastSeen, initial])
 
   // Shared appState to canvas. Without this a peer's background change never
   // reached this canvas — and worse, this canvas's next onChange compared its
@@ -291,8 +311,7 @@ export function useDrawingSync({
     if (!api) return
     const shared = getAppStateMap(ydoc)
 
-    const handler = (_event: unknown, transaction: { origin: unknown }) => {
-      if (transaction.origin === LOCAL_ORIGIN) return
+    const sync = () => {
       const { viewBackgroundColor, gridSize } = readSharedAppState(ydoc)
       // Only fields the room actually holds. One that is absent was never
       // chosen, and the canvas's own default is the right thing to keep.
@@ -303,8 +322,15 @@ export function useDrawingSync({
         api.updateScene({ appState: next as AppState, captureUpdate: CaptureUpdateAction.NEVER })
       }
     }
+    const handler = (_event: unknown, transaction: { origin: unknown }) => {
+      if (transaction.origin === LOCAL_ORIGIN) return
+      sync()
+    }
 
     shared.observe(handler)
+    // As with the scene: a background changed before this subscribed would
+    // otherwise stay stale here until it changed again.
+    sync()
     return () => shared.unobserve(handler)
   }, [ydoc, api])
 

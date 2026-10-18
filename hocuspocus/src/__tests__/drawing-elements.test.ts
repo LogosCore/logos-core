@@ -343,3 +343,31 @@ test("wide scripts are measured wider, Cyrillic like Latin", () => {
   assert.equal(cyrillic, latin, "Cyrillic measures like Latin");
   assert.ok(cjk > latin * 1.5, `CJK should be far wider, got ${cjk} vs ${latin}`);
 });
+
+test("an update refuses an unknown type", () => {
+  assert.throws(() => normalizePatches([{ id: "a", type: "hexagon" }]), /unknown element type/);
+  assert.equal(normalizePatches([{ id: "a", type: "ellipse" }])[0].type, "ellipse");
+});
+
+test("an update cannot erase or restore a shape", () => {
+  assert.throws(() => normalizePatches([{ id: "a", isDeleted: false }]), /mode:delete/);
+  assert.throws(() => normalizePatches([{ id: "a", isDeleted: true }]), /mode:delete/);
+});
+
+test("an update's points must be number pairs", () => {
+  assert.throws(() => normalizePatches([{ id: "a", points: "0,0 10,10" }]), /points/);
+  assert.throws(() => normalizePatches([{ id: "a", points: [[0, 0], [1]] }]), /points/);
+  assert.throws(() => normalizePatches([{ id: "a", points: [[0, Number.NaN]] }]), /points/);
+  assert.deepEqual(normalizePatches([{ id: "a", points: [[0, 0], [5, 5]] }])[0].points, [[0, 0], [5, 5]]);
+});
+
+test("an update's boundElements must be {id, type} references", () => {
+  assert.throws(() => normalizePatches([{ id: "a", boundElements: ["b"] }]), /boundElements/);
+  assert.throws(() => normalizePatches([{ id: "a", boundElements: [{ id: "b", type: "image" }] }]), /boundElements/);
+  assert.equal(normalizePatches([{ id: "a", boundElements: null }])[0].boundElements, null);
+});
+
+test("an update drops the server's bookkeeping fields", () => {
+  const [patch] = normalizePatches([{ id: "a", x: 1, version: 3, versionNonce: 7, index: "a0", updated: 1 }]);
+  assert.deepEqual(patch, { id: "a", x: 1 });
+});

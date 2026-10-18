@@ -175,3 +175,18 @@ test("an update that sends its own points keeps them when rebinding", () => {
   applyMode(map, "update", [], [{ id: "arr", endBinding: { elementId: "c", focus: 0, gap: 4 }, points }], []);
   assert.deepEqual(map.get("arr")!.points, points);
 });
+
+test("an update to a deleted shape is skipped, not counted", () => {
+  const map = sceneWith(rect("a"));
+  applyMode(map, "delete", [], [], ["a"]);
+  const tombstone = map.get("a")!;
+  const applied = applyMode(map, "update", [], [{ id: "a", x: 99 }], []);
+  assert.equal(applied, 0);
+  assert.deepEqual(map.get("a"), tombstone);
+});
+
+test("deleting an already-deleted shape is not counted again", () => {
+  const map = sceneWith(rect("a"));
+  applyMode(map, "delete", [], [], ["a"]);
+  assert.equal(applyMode(map, "delete", [], [], ["a"]), 0);
+});
