@@ -24,7 +24,10 @@ import { restoreDrawingInto } from "./restore-drawing.js";
 import { attachmentReferencesOf, type AttachmentReferences } from "./attachment-references.js";
 import {
   boundTextFields,
+  canHoldLabel,
   DrawingElementError,
+  fitArrowLabel,
+  labelElementFor,
   normalizeElements,
   normalizePatches,
   type ElementPatch,
@@ -32,6 +35,7 @@ import {
 } from "./drawing-elements.js";
 import { applyStoredState } from "./stored-state.js";
 import { layoutArrows, type Obstacle } from "./arrow-layout.js";
+import { textCollisions, textCollisionWarning } from "./text-overlap.js";
 
 /** Bounds one call. A scene far past this stops being a diagram and starts
  * being a dataset, and the whole thing rides in one Y.js transaction. */
@@ -360,6 +364,7 @@ export function applyMode(
       const layered = aboveExisting(elements, assignLayers(elements, incoming));
       for (const el of layered) elements.set(el.id, el);
       placeBoundArrows(elements, layered);
+      fitArrowLabels(elements, layered);
       wireBindings(elements, layered);
       return layered.length;
     }
@@ -417,9 +422,12 @@ export function applyMode(
           elements.set(patch.id, next);
         }
 
-        if (typeof label === "string") {
+        if (typeof label === "string" && label.trim() !== "") {
           retitleLabel(elements, next, label);
+          next = elements.get(patch.id) ?? next;
         }
+        // Wherever the arrow now runs, and whatever it now says.
+        fitArrowLabels(elements, [next]);
         applied++;
       }
       // Bindings are wired here too: an arrow that gains a binding by update
@@ -465,6 +473,7 @@ export function applyMode(
       const layered = aboveExisting(elements, assignLayers(elements, incoming));
       for (const el of layered) elements.set(el.id, el);
       placeBoundArrows(elements, layered);
+      fitArrowLabels(elements, layered);
       wireBindings(elements, layered);
       return layered.length;
     }
@@ -535,11 +544,12 @@ function detachDeleted(elements: Y.Map<NormalizedElement>, deleted: Set<string>)
 }
 
 /**
- * Change the words on a shape that already has a bound label.
+ * Change the words on a shape's label, or give it one.
  *
  * Without this, `label` on an update would be written onto the shape as a
  * stray field and the visible text would not move — the caller would be told
- * the update applied and see nothing change.
+ * the update applied and see nothing change. The same was true of a shape
+ * that had no label yet: the words went nowhere and the update still counted.
  */
 function retitleLabel(
   elements: Y.Map<NormalizedElement>,
@@ -550,22 +560,77 @@ function retitleLabel(
     ? (container.boundElements as { id?: string; type?: string }[])
     : [];
   const textID = bound.find((b) => b?.type === "text")?.id;
-  if (!textID) return;
+  const text = textID ? elements.get(textID) : undefined;
 
-  const text = elements.get(textID);
-  if (!text) return;
+  if (!text || text.isDeleted) {
+    if (!canHoldLabel(container.type)) return;
+    const created = labelElementFor(container, label);
+    // Above the shape it labels, or the shape's fill hides it.
+    const z = typeof container.z === "number" ? container.z + 0.0001 : undefined;
+    elements.set(created.id, {
+      ...created,
+      ...(z !== undefined ? { z } : {}),
+      // A label removed earlier left a tombstone under this id.
+      version: Math.max(created.version, (text?.version ?? 0) + 1),
+      updated: Date.now(),
+    });
+    const kept = bound.filter((b) => b?.id !== created.id);
+    elements.set(container.id, {
+      ...container,
+      boundElements: [...kept, { id: created.id, type: "text" }],
+      version: (container.version ?? 1) + 1,
+      versionNonce: freshNonce(),
+      updated: Date.now(),
+    });
+    return;
+  }
 
   // Stored wrapped to the box, with the words as written in originalText,
   // which is what Excalidraw re-wraps from when the box is resized; leaving
-  // it behind makes the label revert to the old words.
-  const fields = boundTextFields(label, Number(text.fontSize) || 16, Number(container.width) || 100);
-  elements.set(textID, {
+  // it behind makes the label revert to the old words. An arrow's label is
+  // wrapped by fitArrowLabels, to the arrow's own rule.
+  const fields =
+    container.type === "arrow"
+      ? { text: label, originalText: label }
+      : boundTextFields(label, Number(text.fontSize) || 16, Number(container.width) || 100);
+  elements.set(text.id, {
     ...text,
-    text: fields.text,
-    originalText: fields.originalText,
-    height: fields.height,
+    ...fields,
     version: (text.version ?? 1) + 1,
+    versionNonce: freshNonce(),
+    updated: Date.now(),
   });
+}
+
+/**
+ * Fit each arrow's label to where the arrow now runs.
+ *
+ * An arrow bound at both ends has no geometry until placeBoundArrows gives it
+ * one, so a label sized when the arrow arrived was wrapped to a width of
+ * nothing and sat at the origin. Excalidraw centres the label itself when it
+ * draws, but not its wrapping, and a read reports where it was stored.
+ */
+function fitArrowLabels(
+  elements: Y.Map<NormalizedElement>,
+  batch: readonly NormalizedElement[],
+): void {
+  for (const el of batch) {
+    if (el.type !== "arrow") continue;
+    const arrow = elements.get(el.id);
+    if (!arrow || arrow.isDeleted || !Array.isArray(arrow.boundElements)) continue;
+    const textID = (arrow.boundElements as { id?: string; type?: string }[]).find((b) => b?.type === "text")?.id;
+    const text = textID ? elements.get(textID) : undefined;
+    if (!text || text.isDeleted) continue;
+    const fitted = fitArrowLabel(arrow, text);
+    const same = (["text", "width", "height", "x", "y"] as const).every((k) => fitted[k] === text[k]);
+    if (same) continue;
+    elements.set(text.id, {
+      ...fitted,
+      version: (text.version ?? 1) + 1,
+      versionNonce: freshNonce(),
+      updated: Date.now(),
+    });
+  }
 }
 
 /**
@@ -822,7 +887,11 @@ export function setupDrawingApi(app: Express, server: Hocuspocus): void {
           const written = new Set(
             mode === "update" ? patches.map((p) => p.id) : mode === "delete" ? [] : incoming.map((el) => el.id),
           );
-          warning = stackedGeometry(elements.values(), written);
+          // And whether any words now run across a line or another label —
+          // the struck-through look that a successful write cannot show.
+          warning = [stackedGeometry(elements.values(), written), textCollisionWarning(textCollisions(elements.values(), written))]
+            .filter(Boolean)
+            .join(" ") || null;
         });
 
         res.status(200).json({

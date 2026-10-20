@@ -407,6 +407,13 @@ var releases = []Release{
 			"get_wiki_drawing returns sequence, timeline and gantt diagrams as diagrams, each with its type and the Mermaid it was drawn from. sequences is still there, for the sequence diagrams alone.",
 			"Connections can now end on a zone, a node can connect to itself (drawn as a loop), and plain boxes carry badges as cards do. Mermaid types that cannot be drawn yet (class, ER, pie and others) are refused by name.",
 		},
+	}, {
+		Version: 47,
+		Date:    "2026-10-20",
+		Notes: []string{
+			"edit_wiki_drawing: an arrow's label now sits on the line and moves with it; label on mode:update adds a label to a shape that has none. label on a line, frame or other shape that cannot hold one is refused with what to use instead.",
+			"edit_wiki_drawing notes any text that runs across an arrow, another text or a box's border.",
+		},
 	},
 }
 

@@ -66,5 +66,10 @@ as sent); change lines and send them back. Shapes with no id of their own read a
 
 `edit_wiki_drawing` takes Excalidraw elements for geometry Mermaid cannot
 express. Read with `view:"outline"` for ids and positions. Modes `add`,
-`update` (fields sent; `label` retitles), `delete`, `replace`; only `type`
-is required. Both tools merge with what the operator is doing.
+`update` (fields sent; `label` retitles or adds one), `delete`, `replace`;
+only `type` is required. Both tools merge with what the operator is doing.
+
+`label` goes on a rectangle, ellipse, diamond or arrow. Words for a
+connection belong in the arrow's `label`, which sits on the line and moves
+with it — not in a text placed near it. A response note names any text that
+runs across an arrow, another text or a box's border.

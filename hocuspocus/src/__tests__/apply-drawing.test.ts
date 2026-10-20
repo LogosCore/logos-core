@@ -216,3 +216,76 @@ test("deleted shapes and a delete write stack nothing", () => {
   assert.equal(stackedGeometry(map.values(), new Set(["a"])), null);
   assert.equal(stackedGeometry(map.values(), new Set()), null);
 });
+
+// --- Arrow labels --------------------------------------------------------
+
+function labelOf(map: Y.Map<NormalizedElement>, arrowID: string): NormalizedElement {
+  const bound = map.get(arrowID)!.boundElements as { id: string; type: string }[];
+  const id = bound.find((b) => b.type === "text")!.id;
+  return map.get(id)!;
+}
+
+test("an arrow's label keeps the arrow's geometry and sits on its middle", () => {
+  const map = sceneWith();
+  applyMode(map, "add", normalizeElements([
+    { id: "m", type: "arrow", x: 100, y: 200, points: [[0, 0], [300, 0]], label: "GET /distribution-strategy/{id}/distribute" },
+  ]), [], []);
+  const arrow = map.get("m")!;
+  // Not sized like a box: a flat arrow stays flat.
+  assert.equal(arrow.height, 0);
+  assert.equal(arrow.width, 300);
+  const label = labelOf(map, "m");
+  assert.equal(label.containerId, "m");
+  // Excalidraw's own wrap width: max(0.7 * 300, 16 * 11) = 210.
+  assert.ok(Number(label.width) <= 210, `width ${label.width}`);
+  assert.ok(String(label.text).includes("\n"), "a long label wraps to the arrow");
+  assert.equal(label.originalText, "GET /distribution-strategy/{id}/distribute");
+  const cx = Number(label.x) + Number(label.width) / 2;
+  const cy = Number(label.y) + Number(label.height) / 2;
+  assert.deepEqual([Math.round(cx), Math.round(cy)], [250, 200]);
+});
+
+test("a bound arrow's label is fitted once the server has placed the arrow", () => {
+  const map = sceneWith(rect("a", { x: 0, y: 0 }), rect("b", { x: 600, y: 0 }));
+  applyMode(map, "add", normalizeElements([
+    { id: "e", type: "arrow", startBinding: "a", endBinding: "b", label: "pass-the-hash" },
+  ]), [], []);
+  const arrow = map.get("e")!;
+  const label = labelOf(map, "e");
+  const mid = Number(arrow.x) + (arrow.points as number[][])[1][0] / 2;
+  assert.equal(Math.round(Number(label.x) + Number(label.width) / 2), Math.round(mid));
+  assert.equal(Math.round(Number(label.y) + Number(label.height) / 2), 25);
+});
+
+test("moving a labelled arrow by update moves its label with it", () => {
+  const map = sceneWith();
+  applyMode(map, "add", normalizeElements([
+    { id: "m", type: "arrow", x: 0, y: 0, points: [[0, 0], [200, 0]], label: "ping" },
+  ]), [], []);
+  const before = labelOf(map, "m");
+  applyMode(map, "update", [], [{ id: "m", y: 120 }], []);
+  const after = labelOf(map, "m");
+  assert.equal(Number(after.y) - Number(before.y), 120);
+  assert.ok(after.version > before.version);
+});
+
+test("label on an update rewraps an arrow's words to the arrow", () => {
+  const map = sceneWith();
+  applyMode(map, "add", normalizeElements([
+    { id: "m", type: "arrow", x: 0, y: 0, points: [[0, 0], [260, 0]], label: "ping" },
+  ]), [], []);
+  applyMode(map, "update", [], [{ id: "m", label: "POST /messages/draft subject=requestId text=/path + meta lines" }], []);
+  const label = labelOf(map, "m");
+  assert.equal(label.originalText, "POST /messages/draft subject=requestId text=/path + meta lines");
+  assert.ok(String(label.text).includes("\n"));
+  assert.ok(Number(label.width) <= Math.max(0.7 * 260, 176));
+});
+
+test("label on an update gives a shape without one a label, instead of nothing", () => {
+  const map = sceneWith(rect("a"), { id: "m", type: "arrow", x: 0, y: 100, points: [[0, 0], [200, 0]] });
+  assert.equal(applyMode(map, "update", [], [{ id: "a", label: "DC01" }, { id: "m", label: "pong" }], []), 2);
+  assert.equal(labelOf(map, "a").text, "DC01");
+  assert.equal(labelOf(map, "a").containerId, "a");
+  assert.equal(labelOf(map, "m").text, "pong");
+  assert.equal(Math.round(Number(labelOf(map, "m").y) + Number(labelOf(map, "m").height) / 2), 100);
+});

@@ -54,7 +54,7 @@ type editWikiDrawingArgs struct {
 	// Elements is Excalidraw's own element shape. Every field but `type` is
 	// optional — the server fills in the bookkeeping (seed, nonce, group ids)
 	// that nobody composing a diagram should have to supply.
-	Elements   []map[string]any `json:"elements,omitempty"    jsonschema:"Excalidraw elements; type is required. See drawings.md for label, z, bindings. Not used with mode:delete."`
+	Elements   []map[string]any `json:"elements,omitempty"    jsonschema:"Excalidraw elements; type is required. label on a rectangle, ellipse, diamond or arrow; an arrow's words go in its label. See drawings.md for label, z, bindings. Not used with mode:delete."`
 	ElementIDs []string         `json:"element_ids,omitempty" jsonschema:"Ids to erase, from get_wiki_drawing. Only for mode:delete."`
 }
 

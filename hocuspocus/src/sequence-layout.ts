@@ -56,6 +56,8 @@ const ROW = 58;
 const BLOCK_ROW = 34;
 const NOTE_WIDTH = 220;
 const ACTIVATION_WIDTH = 12;
+/** Where a self-message's loop ends and its words begin, from the lifeline. */
+const SELF_LABEL_OFFSET = 52;
 const FONT = { sketch: 5, clean: 6 } as const;
 
 export interface SequenceResult {
@@ -162,7 +164,7 @@ export function drawSequence(
   };
 
   const body: NormalizedElement[] = [];
-  const frames: { kind: string; label: string; y: number; dividers: { y: number; label: string }[]; minCol: number; maxCol: number }[] = [];
+  const frames: { kind: string; label: string; y: number; depth: number; dividers: { y: number; label: string }[]; minCol: number; maxCol: number; minX: number; maxX: number }[] = [];
   const openFrames: typeof frames = [];
   const activations = new Map<string, number[]>();
   const bars: { col: number; from: number; to: number; depth: number }[] = [];
@@ -173,6 +175,15 @@ export function drawSequence(
     for (const f of openFrames) {
       f.minCol = Math.min(f.minCol, c);
       f.maxCol = Math.max(f.maxCol, c);
+    }
+  };
+  // What a frame must also take in beyond its columns: a note beside the
+  // outermost lifeline, or a self-message's words, which can reach past
+  // where the columns alone would put the frame's edge.
+  const reach = (left: number, right: number) => {
+    for (const f of openFrames) {
+      f.minX = Math.min(f.minX, left);
+      f.maxX = Math.max(f.maxX, right);
     }
   };
 
@@ -208,7 +219,7 @@ export function drawSequence(
           m.type === L.LOOP_START ? "loop" : m.type === L.ALT_START ? "alt" : m.type === L.OPT_START ? "opt"
           : m.type === L.CRITICAL_START ? "critical" : m.type === L.BREAK_START ? "break" : m.type === L.RECT_START ? "rect" : "par";
         const row = nextRow(BLOCK_ROW);
-        const frame = { kind, label: kind === "rect" ? "" : text, y: row.y, dividers: [], minCol: Infinity, maxCol: -Infinity };
+        const frame = { kind, label: kind === "rect" ? "" : text, y: row.y, depth: openFrames.length, dividers: [], minCol: Infinity, maxCol: -Infinity, minX: Infinity, maxX: -Infinity };
         frames.push(frame);
         openFrames.push(frame);
         continue;
@@ -236,16 +247,22 @@ export function drawSequence(
         const b = col.get(m.to ?? "") ?? a;
         touch(a);
         touch(b);
-        const fields = boundTextFields(text, 15, NOTE_WIDTH);
-        const height = Math.max(40, fields.height + 20);
-        const row = nextRow(height + 16);
         const over = m.placement === db.PLACEMENT.OVER;
         const left = over ? Math.min(centerX(a), centerX(b)) - (a === b ? NOTE_WIDTH / 2 : 30) : m.placement === db.PLACEMENT.LEFTOF ? centerX(a) - NOTE_WIDTH - 16 : centerX(a) + 16;
         const width = over && a !== b ? Math.abs(centerX(b) - centerX(a)) + 60 : NOTE_WIDTH;
+        // Wrapped at the width the note is drawn at. Measured at NOTE_WIDTH,
+        // a note spanning two columns was sized for lines its words never
+        // broke into, and stood half empty.
+        const fields = boundTextFields(text, 15, width);
+        const height = Math.max(40, fields.height + 20);
+        // Clear of the arrow above it as well as the row below.
+        const row = nextRow(height + 24);
+        const noteY = row.y + 8;
+        reach(left, left + width);
         const note = normalizeElement({
           type: "rectangle",
           x: left,
-          y: row.y,
+          y: noteY,
           width,
           height,
           backgroundColor: "#fff3bf",
@@ -257,14 +274,14 @@ export function drawSequence(
         });
         const label = normalizeElement({
           type: "text",
-          ...boundTextFields(text, 15, width),
+          ...fields,
           fontSize: 15,
           fontFamily: font,
           textAlign: "left",
           verticalAlign: "middle",
           containerId: note.id,
           x: left + 8,
-          y: row.y + (height - fields.height) / 2,
+          y: noteY + (height - fields.height) / 2,
           customData: tag("note-text"),
         });
         note.boundElements = [{ id: label.id, type: "text" }];
@@ -293,12 +310,23 @@ export function drawSequence(
       : [L.SOLID_POINT, L.DOTTED_POINT].includes(m.type) ? "triangle_outline"
       : "arrow";
     const both = [L.BIDIRECTIONAL_SOLID, L.BIDIRECTIONAL_DOTTED].includes(m.type);
-    const labelLines = boundTextFields(words, 15, 400);
-    const row = nextRow(Math.max(ROW, labelLines.height + 34));
-    const lineY = row.y + row.height - 14;
     const self = a === b;
     const x1 = centerX(a) + (self ? ACTIVATION_WIDTH / 2 : a < b ? ACTIVATION_WIDTH / 2 : -ACTIVATION_WIDTH / 2);
     const x2 = centerX(b) + (self ? ACTIVATION_WIDTH / 2 : a < b ? -ACTIVATION_WIDTH / 2 : ACTIVATION_WIDTH / 2);
+    // The words are wrapped once, to the room they really have, and that one
+    // wrap sizes the row and places them. The row used to be measured at
+    // 400px and the words then wrapped again to the arrow, which is narrower:
+    // the label gained lines its row had no room for, was still placed as if
+    // it had not, and the extra lines ran down across the arrow. A
+    // self-message's words were wrapped to 120px and spilled out of the row
+    // into whatever came next. They now have up to the next lifeline.
+    const room = self
+      ? Math.max(colWidth - ACTIVATION_WIDTH / 2 - SELF_LABEL_OFFSET - 16, 120)
+      : Math.max(Math.abs(x2 - x1) - 10, 120);
+    const labelFields = boundTextFields(words, 15, room + 16);
+    const row = nextRow(Math.max(ROW, labelFields.height + 34));
+    const lineY = row.y + row.height - 14;
+    if (self) reach(x1, x1 + SELF_LABEL_OFFSET + labelFields.width);
     const points = self ? [[0, -18], [44, -18], [44, 6], [0, 6]] : [[0, 0], [x2 - x1, 0]];
     const arrow = normalizeElement({
       type: "arrow",
@@ -317,17 +345,18 @@ export function drawSequence(
     });
     if (self) arrow.y = lineY - 18;
     // The words sit above the line, not on it: a row is read left to right
-    // along its arrow, and a label across the line hides where it starts.
-    const textWidth = Math.min(labelLines.width, Math.max(Math.abs(x2 - x1) - 10, 120));
+    // along its arrow, and a label across the line hides where it starts. A
+    // self-message's sit beside its loop, level with its top, and rise as
+    // they gain lines so they never drop below its bottom.
     const label = normalizeElement({
       type: "text",
-      ...boundTextFields(words, 15, textWidth + 16),
+      ...labelFields,
       fontSize: 15,
       fontFamily: font,
       textAlign: self ? "left" : "center",
       verticalAlign: "top",
-      x: self ? x1 + 52 : (x1 + x2) / 2 - textWidth / 2,
-      y: self ? lineY - 18 : lineY - 8 - labelLines.height,
+      x: self ? x1 + SELF_LABEL_OFFSET : (x1 + x2) / 2 - labelFields.width / 2,
+      y: self ? lineY + 6 - Math.max(labelFields.height, 24) : lineY - 8 - labelFields.height,
       customData: tag("message-text"),
     });
     body.push(arrow, label);
@@ -347,14 +376,23 @@ export function drawSequence(
     )) out.push({ ...el, customData: tag("box") });
   }
 
-  // Frames, outermost first so inner ones paint over them.
-  frames.forEach((f, depth) => {
+  // Frames, outermost first so inner ones paint over them. Inset by how deeply
+  // each is nested, not by its place in the list: that stepped the edges of
+  // frames that merely followed one another, so no two lined up. Drawn
+  // straight, like the lifelines, in either style — a hand-drawn frame the
+  // height of the diagram wobbles visibly beside them.
+  frames.forEach((f) => {
+    const depth = f.depth;
     const minCol = Number.isFinite(f.minCol) ? f.minCol : 0;
     const maxCol = Number.isFinite(f.maxCol) ? f.maxCol : actors.length - 1;
     const end = (f as { end?: number }).end ?? bottom;
     const inset = 6 * (depth % 4);
-    const x = centerX(minCol) - colWidth / 2 + 20 + inset;
-    const width = centerX(maxCol) - centerX(minCol) + colWidth - 40 - 2 * inset;
+    // Shrinks as the inset grows, so a nested frame stays inside its parent
+    // when both are widened by the same note or self-message.
+    const margin = 24 - inset;
+    const x = Math.min(centerX(minCol) - colWidth / 2 + 20 + inset, f.minX - margin);
+    const right = Math.max(centerX(maxCol) + colWidth / 2 - 20 - inset, f.maxX + margin);
+    const width = right - x;
     push(normalizeElement({
       type: "rectangle",
       x,
@@ -365,7 +403,7 @@ export function drawSequence(
       fillStyle: "solid",
       strokeColor: f.kind === "rect" ? "#a5d8ff" : "#868e96",
       strokeWidth: 1,
-      roughness,
+      roughness: 0,
       customData: tag("frame"),
     }));
     if (f.kind !== "rect") {
@@ -381,7 +419,7 @@ export function drawSequence(
       }));
     }
     for (const d of f.dividers) {
-      push(normalizeElement({ type: "line", x, y: d.y + 4, points: [[0, 0], [width, 0]], width, height: 0, strokeColor: "#868e96", strokeStyle: "dashed", strokeWidth: 1, roughness, customData: tag("divider") }));
+      push(normalizeElement({ type: "line", x, y: d.y + 4, points: [[0, 0], [width, 0]], width, height: 0, strokeColor: "#868e96", strokeStyle: "dashed", strokeWidth: 1, roughness: 0, customData: tag("divider") }));
       if (d.label) push(normalizeElement({ type: "text", text: `[${d.label}]`, fontSize: 14, fontFamily: font, strokeColor: "#495057", x: x + 8, y: d.y + 10, customData: tag("divider-label") }));
     }
   });

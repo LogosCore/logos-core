@@ -371,3 +371,16 @@ test("an update drops the server's bookkeeping fields", () => {
   const [patch] = normalizePatches([{ id: "a", x: 1, version: 3, versionNonce: 7, index: "a0", updated: 1 }]);
   assert.deepEqual(patch, { id: "a", x: 1 });
 });
+
+test("label is refused on shapes Excalidraw cannot bind text to, with what to use instead", () => {
+  assert.throws(() => normalizeElements([{ type: "line", label: "x" }]), /endArrowhead: null/);
+  assert.throws(() => normalizeElements([{ type: "frame", label: "x" }]), /`name`/);
+  assert.throws(() => normalizeElements([{ type: "freedraw", label: "x" }]), /text element beside it/);
+});
+
+test("free text with no size is measured as stored, not as if wrapped", () => {
+  const [title] = normalizeElements([{ type: "text", text: "Mail.ru Distributor Protocol", fontSize: 24 }]);
+  // One line, as drawn: 24 * 1.25 tall.
+  assert.equal(title.height, 30);
+  assert.ok(Number(title.width) > 320);
+});

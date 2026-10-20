@@ -246,10 +246,15 @@ export function normalizeElement(input: unknown): NormalizedElement {
 
   // A text element's box comes from its words unless the caller sized it.
   // The old 100x100 default clipped anything longer than a short word.
+  //
+  // Measured as stored: free text keeps its own line breaks and is never
+  // wrapped (textFields), so wrapping it here at the label width gave a long
+  // one-line title the box of two short lines — half as wide and twice as
+  // tall as what is drawn.
   let defaultWidth = 100;
   let defaultHeight = 100;
   if (type === "text" && typeof el.text === "string" && el.text !== "") {
-    const measured = measureText(el.text, num(el.fontSize, DEFAULTS.fontSize, "fontSize"));
+    const measured = measureText(el.text, num(el.fontSize, DEFAULTS.fontSize, "fontSize"), Infinity);
     defaultWidth = Math.ceil(measured.width);
     defaultHeight = Math.ceil(measured.height);
   }
@@ -299,8 +304,21 @@ export function normalizeElement(input: unknown): NormalizedElement {
     case "text":
       return { ...base, ...textFields(el) };
     case "arrow":
-    case "line":
-      return { ...base, ...linearFields(el) };
+    case "line": {
+      const linear = linearFields(el);
+      // A line's box is the extent of its points, which is what Excalidraw
+      // draws from. Left at the 100x100 default, a flat 300px arrow claimed
+      // to be 100 wide and 100 tall — and an arrow's label is wrapped to its
+      // width.
+      const pts = linear.points as number[][];
+      if (pts.length >= 2 && pts.every((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))) {
+        const xs = pts.map((p) => p[0]);
+        const ys = pts.map((p) => p[1]);
+        base.width = Math.max(...xs) - Math.min(...xs);
+        base.height = Math.max(...ys) - Math.min(...ys);
+      }
+      return { ...base, ...linear };
+    }
     case "freedraw":
       return {
         ...base,
@@ -439,6 +457,105 @@ function labelFor(container: NormalizedElement, text: string): NormalizedElement
   });
 }
 
+/** The shapes Excalidraw will bind a label to. Anything else given a label
+ * produced a text pointing at a container that cannot hold it, which
+ * Excalidraw unbinds on load and leaves loose wherever it was written. */
+const LABEL_CONTAINERS = new Set(["rectangle", "ellipse", "diamond", "arrow"]);
+
+const ARROW_LABEL_FONT_SIZE = 16;
+
+/** Why a shape cannot carry `label`, or null when it can. */
+function labelRefusal(type: string): string | null {
+  if (LABEL_CONTAINERS.has(type)) return null;
+  if (type === "line") return "a line cannot hold a label — use an arrow with endArrowhead: null, which can";
+  if (type === "frame") return "a frame is titled by `name`, not `label`";
+  return `a ${type} cannot hold a label — place a text element beside it`;
+}
+
+/**
+ * How wide an arrow's label may be before it wraps: Excalidraw's own rule
+ * (getBoundTextMaxWidth), so the lines stored here are the lines it draws.
+ */
+function arrowLabelMaxWidth(arrow: NormalizedElement, fontSize: number): number {
+  return Math.max(0.7 * Math.abs(Number(arrow.width) || 0), fontSize * 11);
+}
+
+/**
+ * The middle of an arrow, where Excalidraw centres its label: the middle
+ * point of an odd number of points, else the middle of the middle segment.
+ * Taken straight even on a curved arrow, which is close enough for a
+ * starting box — Excalidraw places the label itself when it draws.
+ */
+function arrowMidpoint(arrow: NormalizedElement): { x: number; y: number } | null {
+  const points = arrow.points;
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const ox = Number(arrow.x) || 0;
+  const oy = Number(arrow.y) || 0;
+  const at = (i: number) => (points as number[][])[i];
+  if (points.length % 2 === 1) {
+    const [px, py] = at(Math.floor(points.length / 2));
+    return { x: ox + px, y: oy + py };
+  }
+  const i = points.length / 2 - 1;
+  const [ax, ay] = at(i);
+  const [bx, by] = at(i + 1);
+  return { x: ox + (ax + bx) / 2, y: oy + (ay + by) / 2 };
+}
+
+/**
+ * Fit an arrow's label to the arrow as it now stands: wrapped from its own
+ * words to the width Excalidraw allows, and centred on the arrow's middle.
+ *
+ * Needed whenever the arrow's geometry is settled or changes, which for a
+ * bound arrow is only once the server has placed it (apply-drawing.ts), so
+ * this is run again there.
+ */
+export function fitArrowLabel(arrow: NormalizedElement, text: NormalizedElement): NormalizedElement {
+  const fontSize = Number(text.fontSize) || ARROW_LABEL_FONT_SIZE;
+  const words = typeof text.originalText === "string" ? text.originalText : String(text.text ?? "");
+  const maxWidth = arrowLabelMaxWidth(arrow, fontSize);
+  const wrapped = wrapText(words, fontSize, maxWidth);
+  const measured = measureText(words, fontSize, maxWidth);
+  const width = Math.min(Math.ceil(measured.width), Math.ceil(maxWidth));
+  const height = Math.ceil(measured.height);
+  const mid = arrowMidpoint(arrow);
+  return {
+    ...text,
+    text: wrapped,
+    originalText: words,
+    width,
+    height,
+    ...(mid ? { x: mid.x - width / 2, y: mid.y - height / 2 } : {}),
+  };
+}
+
+/**
+ * The label for a shape or an arrow, wired to it from the text's side. The
+ * caller adds the text to the container's boundElements.
+ */
+export function labelElementFor(container: NormalizedElement, words: string): NormalizedElement {
+  if (container.type !== "arrow") return labelFor(container, words);
+  const text = normalizeElement({
+    type: "text",
+    id: `${container.id}-label`,
+    text: words,
+    originalText: words,
+    fontSize: ARROW_LABEL_FONT_SIZE,
+    containerId: container.id,
+    textAlign: "center",
+    verticalAlign: "middle",
+    strokeColor: container.strokeColor,
+    x: Number(container.x) || 0,
+    y: Number(container.y) || 0,
+  });
+  return fitArrowLabel(container, text);
+}
+
+/** Whether `label` may be given to a shape of this type. */
+export function canHoldLabel(type: unknown): boolean {
+  return typeof type === "string" && LABEL_CONTAINERS.has(type);
+}
+
 /**
  * Normalize a batch, expanding the `label` shorthand and naming which entry
  * failed — an agent told only "invalid element" has to bisect its own payload
@@ -471,6 +588,19 @@ export function normalizeElements(input: unknown): NormalizedElement[] {
       throw new DrawingElementError(
         `element ${i}: a text element carries its words in \`text\`, not \`label\``,
       );
+    }
+    const refusal = labelRefusal(el.type);
+    if (refusal) throw new DrawingElementError(`element ${i}: ${refusal}`);
+
+    // An arrow's label sits on the line, and the arrow keeps the geometry it
+    // was given: sizing it like a box grew a flat arrow 48px tall and wrapped
+    // its words to a box that is not there.
+    if (el.type === "arrow") {
+      const text = labelElementFor(el, label);
+      const bound = Array.isArray(el.boundElements) ? el.boundElements : [];
+      out.push({ ...el, boundElements: [...bound, { id: text.id, type: "text" }] });
+      out.push(text);
+      return;
     }
 
     // Size the box to the label, unless the caller sized it themselves. A
