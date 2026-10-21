@@ -286,8 +286,16 @@ export function WikiEditor({
   // text. Listen on document (the contenteditable=false view DOM isn't
   // focusable, so keydown lands on body and never bubbles to the view root)
   // and gate on the selection anchor living inside this editor's code block.
+  //
+  // Never on a destroyed editor. When useEditor's deps change (switching
+  // operation from the foreign-operation banner changes operationId and the
+  // role together) its own effect destroys the old instance, and this effect,
+  // re-run in the same commit for the isEditor change, still receives that
+  // instance. A destroyed editor reports isEditable false, so it passed the
+  // read-only check, and its view is gone: view.dom threw into the error
+  // boundary. The next render brings the new instance and this runs again.
   useEffect(() => {
-    if (!editor || editor.isEditable) return
+    if (!editor || editor.isDestroyed || editor.isEditable) return
     const root = editor.view.dom as HTMLElement
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -415,7 +423,8 @@ export function WikiEditor({
         // Anchor for the document guide's "type /" step.
         data-tour="editor-body"
         onMouseDown={(e) => {
-          if (!isEditor || !editor) return
+          // A destroyed instance has no view; see the select-all effect.
+          if (!isEditor || !editor || editor.isDestroyed) return
           if (e.target !== e.currentTarget) return
           e.preventDefault()
 
