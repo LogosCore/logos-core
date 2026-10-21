@@ -258,10 +258,15 @@ func TestParse_AllowsDoubleDotInFilename(t *testing.T) {
 	if len(got.Collections) != 1 {
 		t.Fatalf("collections: got %d want 1", len(got.Collections))
 	}
+	// "sub/" has no "sub.md" beside it, so it comes back as an empty page
+	// holding "foo bar" rather than taking that document with it.
 	titles := docTitles(got.Collections[0].Documents)
-	want := []string{"solutions", "v1.0"}
+	want := []string{"solutions", "sub", "v1.0"}
 	if !sliceEq(titles, want) {
 		t.Errorf("root titles: got %v want %v", titles, want)
+	}
+	if sub := findDoc(got.Collections[0].Documents, "sub"); len(sub.Children) != 1 || sub.Children[0].Title != "foo bar" {
+		t.Errorf("sub page = %+v", sub)
 	}
 }
 
@@ -469,3 +474,178 @@ var errEOF = &eofErr{}
 type eofErr struct{}
 
 func (*eofErr) Error() string { return "EOF" }
+
+// --- archive layouts the parser has to see through ---
+
+func TestParse_SkipsWrapperFolder(t *testing.T) {
+	// A zip built from the export's folder rather than its contents, e.g.
+	// unzipped and compressed again. It used to import as one empty page
+	// named after the wrapper.
+	zr := buildZip(t, map[string]string{
+		"outline-export/col/a.md":                "# a\nbody\n",
+		"outline-export/col/a/b.md":              "# b\nbody\n",
+		"outline-export/col/uploads/u/1/x.png":   "png",
+		"outline-export/other/c.md":              "# c\nbody\n",
+		"outline-export/other/uploads/u/2/y.txt": "txt",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got.Collections) != 2 || got.Collections[0].Name != "col" || got.Collections[1].Name != "other" {
+		t.Fatalf("collections: %+v", got.Collections)
+	}
+	a := findDoc(got.Collections[0].Documents, "a")
+	if a == nil || len(a.Children) != 1 || a.Children[0].Title != "b" {
+		t.Errorf("tree under the wrapper not built: %+v", got.Collections[0].Documents)
+	}
+	if _, ok := got.AttachmentBlobs["uploads/u/1/x.png"]; !ok {
+		t.Errorf("attachment under the wrapper not indexed: %v", got.AttachmentBlobs)
+	}
+	if len(got.Warnings) != 1 || got.Warnings[0].Path != "outline-export/" {
+		t.Errorf("warnings = %+v", got.Warnings)
+	}
+}
+
+func TestParse_SkipsNestedWrappers(t *testing.T) {
+	zr := buildZip(t, map[string]string{
+		"Downloads/export/col/a.md": "# a\nbody\n",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got.Collections) != 1 || got.Collections[0].Name != "col" || len(got.Collections[0].Documents) != 1 {
+		t.Fatalf("collections: %+v", got.Collections)
+	}
+	if len(got.Warnings) != 1 || got.Warnings[0].Path != "Downloads/export/" {
+		t.Errorf("warnings = %+v", got.Warnings)
+	}
+}
+
+func TestParse_KeepsSingleCollectionExport(t *testing.T) {
+	// One top-level folder holding pages directly is a collection, not a
+	// wrapper, even with an uploads tree beside the pages.
+	zr := buildZip(t, map[string]string{
+		"col/a.md":              "# a\nbody\n",
+		"col/uploads/u/1/x.png": "png",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got.Collections) != 1 || got.Collections[0].Name != "col" || len(got.Collections[0].Documents) != 1 {
+		t.Fatalf("collections: %+v", got.Collections)
+	}
+	if len(got.Warnings) != 0 {
+		t.Errorf("warnings = %+v", got.Warnings)
+	}
+}
+
+func TestParse_IgnoresMacOSArchiverJunk(t *testing.T) {
+	// macOS "Compress" adds __MACOSX/ resource forks beside the folder. Left
+	// in, they hid the wrapper and imported as pages of binary garbage.
+	zr := buildZip(t, map[string]string{
+		"export/col/a.md":            "# a\nbody\n",
+		"export/col/.DS_Store":       "\x00\x00",
+		"export/col/._a.md":          "\x00\x05\x16\x07",
+		"__MACOSX/export/col/._a.md": "\x00\x05\x16\x07",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got.Collections) != 1 || got.Collections[0].Name != "col" {
+		t.Fatalf("collections: %+v", got.Collections)
+	}
+	if titles := docTitles(got.Collections[0].Documents); !sliceEq(titles, []string{"a"}) {
+		t.Errorf("documents = %v", titles)
+	}
+}
+
+func TestParse_FolderWithoutPageGetsAnEmptyPage(t *testing.T) {
+	// "folder/" has no "folder.md" beside it. Its documents used to be
+	// unreachable and vanished without a word.
+	zr := buildZip(t, map[string]string{
+		"col/a.md":         "# a\nbody\n",
+		"col/folder/b.md":  "# b\nbody\n",
+		"col/deep/er/c.md": "# c\nbody\n",
+		"col/zeta.md":      "# zeta\nbody\n",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	docs := got.Collections[0].Documents
+	if titles := docTitles(docs); !sliceEq(titles, []string{"a", "deep", "folder", "zeta"}) {
+		t.Fatalf("root documents = %v", titles)
+	}
+	folder := findDoc(docs, "folder")
+	if folder.BodyMarkdown != "" || len(folder.Children) != 1 || folder.Children[0].Title != "b" {
+		t.Errorf("folder page = %+v", folder)
+	}
+	deep := findDoc(docs, "deep")
+	if len(deep.Children) != 1 || deep.Children[0].Title != "er" || len(deep.Children[0].Children) != 1 {
+		t.Errorf("nested folder pages not built: %+v", deep)
+	}
+	var paths []string
+	for _, w := range got.Warnings {
+		paths = append(paths, w.Path)
+	}
+	if !sliceEq(paths, []string{"col/deep/", "col/deep/er/", "col/folder/"}) {
+		t.Errorf("warnings = %+v", got.Warnings)
+	}
+}
+
+func TestParse_StrayFileKeepsTheOuterFolder(t *testing.T) {
+	// A file directly inside the single top-level folder means it is not a
+	// wrapper. Nothing is lost: the inner folder becomes a page.
+	zr := buildZip(t, map[string]string{
+		"export/README.txt": "hi",
+		"export/col/a.md":   "# a\nbody\n",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got.Collections) != 1 || got.Collections[0].Name != "export" {
+		t.Fatalf("collections: %+v", got.Collections)
+	}
+	col := findDoc(got.Collections[0].Documents, "col")
+	if col == nil || len(col.Children) != 1 || col.Children[0].Title != "a" {
+		t.Errorf("documents = %+v", got.Collections[0].Documents)
+	}
+}
+
+func TestParse_RefusesAZipWithNoMarkdown(t *testing.T) {
+	// Outline's JSON export: one .json per collection, no .md anywhere. It
+	// used to import as empty pages and report success.
+	zr := buildZip(t, map[string]string{
+		"col.json":              "{}",
+		"metadata.json":         "{}",
+		"uploads/u/1/x.png":     "png",
+		"col/uploads/u/2/y.png": "png",
+	})
+	_, err := Parse(zr)
+	if err == nil || !strings.Contains(err.Error(), "Markdown") || !strings.Contains(err.Error(), "JSON") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestParse_SceneBesideStubUnderWrapper(t *testing.T) {
+	zr := buildZip(t, map[string]string{
+		"w/col/d.md":         "# d\n[scene](d.excalidraw)\n",
+		"w/col/d.excalidraw": "{}",
+	})
+	got, err := Parse(zr)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	d := findDoc(got.Collections[0].Documents, "d")
+	if d == nil || d.SceneRef != "col/d.excalidraw" {
+		t.Fatalf("scene not attached: %+v", d)
+	}
+	if _, ok := got.SceneBlobs[d.SceneRef]; !ok {
+		t.Errorf("scene ref %q not in %v", d.SceneRef, got.SceneBlobs)
+	}
+}

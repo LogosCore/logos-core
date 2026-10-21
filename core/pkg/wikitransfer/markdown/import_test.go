@@ -114,3 +114,26 @@ func TestReadPlan_CredentialFences(t *testing.T) {
 		t.Error("tombstone not collected")
 	}
 }
+
+func TestReadPlan_WarningsReachTheReport(t *testing.T) {
+	zr := buildZip(t, map[string]string{
+		"outline-export/col/a.md":        "# a\nbody\n",
+		"outline-export/col/folder/b.md": "# b\nbody\n",
+	})
+	plan, err := ReadPlan(zr)
+	if err != nil {
+		t.Fatalf("ReadPlan: %v", err)
+	}
+	m := wikitransfer.NewMaterialiser(transfertest.NewDocRepo(), nil, nil, nil, transfertest.NewIngestor(), &transfertest.Rebaser{}, nil, zap.NewNop())
+	report, err := m.Run(context.Background(), plan, wikitransfer.Target{OperationID: uuid.New(), CallerID: uuid.New()}, nil)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// col, a, folder, b.
+	if report.CreatedDocs != 4 || report.SkippedDocs != 0 {
+		t.Fatalf("report = %+v", report)
+	}
+	if len(report.Warnings) != 2 || report.Warnings[0].Path != "outline-export/" || report.Warnings[1].Path != "col/folder/" {
+		t.Errorf("warnings = %+v", report.Warnings)
+	}
+}

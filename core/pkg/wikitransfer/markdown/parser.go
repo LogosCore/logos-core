@@ -54,9 +54,23 @@ type ParsedExport struct {
 	AttachmentBlobs map[string]*zip.File
 
 	// SceneBlobs maps every `.excalidraw` file outside uploads to its zip
-	// entry, keyed by full zip-internal path. A document claims one through
-	// Doc.SceneRef.
+	// entry, keyed by its path with any wrapper folder removed (see
+	// wrapperPrefix). A document claims one through Doc.SceneRef.
 	SceneBlobs map[string]*zip.File
+
+	// Warnings lists what the parser did to make the zip importable that
+	// the operator should know about: a wrapper folder skipped, a folder
+	// that had no page of its own, a page that could not be read. ReadPlan
+	// hands them to the import report, so an import that had to improvise
+	// says so instead of reporting a clean success.
+	Warnings []ParseNote
+}
+
+// ParseNote is one entry in ParsedExport.Warnings. Path is the
+// zip-internal path the note is about.
+type ParseNote struct {
+	Path   string
+	Reason string
 }
 
 // Collection is one top-level folder in the zip. In Outline terms, this
@@ -119,9 +133,9 @@ type Doc struct {
 }
 
 // Parse walks the zip and produces the export tree. Returns an error only
-// for invariant violations (path traversal, no top-level folder, etc.);
-// missing or malformed individual documents are skipped with no error so
-// the orchestrator can report partial-success rather than abort.
+// for invariant violations (path traversal, no markdown at all); a document
+// that cannot be read becomes an empty page and a warning, so the import
+// reports what it lost rather than aborting.
 func Parse(zr *zip.Reader) (*ParsedExport, error) {
 	if zr == nil {
 		return nil, fmt.Errorf("nil zip reader")
@@ -133,12 +147,22 @@ func Parse(zr *zip.Reader) (*ParsedExport, error) {
 	}
 
 	if len(files.collections) == 0 {
-		return nil, fmt.Errorf("zip has no top-level collection folder")
+		// The usual cause is not a broken zip but the wrong export: Outline's
+		// JSON export carries no .md files at all. Saying so beats creating
+		// one empty page per folder and reporting success.
+		return nil, fmt.Errorf("zip contains no Markdown (.md) documents inside a folder; " +
+			"export from Outline with the Markdown format, not JSON")
 	}
 
 	out := &ParsedExport{
 		AttachmentBlobs: files.attachments,
 		SceneBlobs:      files.scenes,
+	}
+	if files.wrapper != "" {
+		out.Warnings = append(out.Warnings, ParseNote{
+			Path:   files.wrapper,
+			Reason: "wrapper folder around the export was skipped",
+		})
 	}
 
 	collectionNames := make([]string, 0, len(files.collections))
@@ -152,7 +176,7 @@ func Parse(zr *zip.Reader) (*ParsedExport, error) {
 	for _, name := range collectionNames {
 		mds := files.collections[name]
 		coll := &Collection{Name: name}
-		coll.Documents = buildDocTree(name, mds, files.scenes)
+		coll.Documents = buildDocTree(name, mds, files.scenes, out)
 		out.Collections = append(out.Collections, coll)
 	}
 
@@ -175,11 +199,69 @@ type indexedZip struct {
 	// filename keeps two drawings with the same slug in different branches
 	// apart.
 	scenes map[string]*zip.File
+	// wrapper is the folder prefix (with trailing slash) stripped from
+	// every name, or "" when the zip had none. See wrapperPrefix.
+	wrapper string
 }
 
 type mdEntry struct {
 	relPath string // relative to the collection root, e.g. "test/1234.md"
 	file    *zip.File
+}
+
+// isArchiverJunk reports whether a zip entry is metadata an archiver added
+// rather than part of the export. macOS "Compress" adds a top-level
+// __MACOSX/ tree of `._name` resource forks beside the real folder: left in,
+// it is a second top-level folder (so the real one is not recognised as a
+// wrapper) and every `._page.md` in it parses as a page of binary garbage.
+func isArchiverJunk(segments []string) bool {
+	if segments[0] == "__MACOSX" {
+		return true
+	}
+	base := segments[len(segments)-1]
+	return base == ".DS_Store" || strings.HasPrefix(base, "._")
+}
+
+// wrapperPrefix returns the folder that wraps the whole export, such as
+// "outline-export/", or "" when there is none.
+//
+// The parser reads each top-level folder as a collection. A zip somebody
+// unzipped and compressed again — or one an archiver built from the folder
+// rather than its contents — has a single extra folder around everything,
+// which then read as one collection holding no pages of its own: the import
+// created one empty page named after the archive and reported success. A
+// collection folder always holds at least one page directly, so a single
+// top-level folder that holds no files directly is a wrapper. Nested
+// wrappers are peeled one at a time.
+func wrapperPrefix(names [][]string) string {
+	prefix := ""
+	depth := 0
+	for {
+		var top string
+		for _, segs := range names {
+			if len(segs) <= depth+1 {
+				// A file directly at this level: nothing here is a wrapper.
+				return prefix
+			}
+			if top == "" {
+				top = segs[depth]
+			} else if segs[depth] != top {
+				return prefix
+			}
+		}
+		if top == "" {
+			return prefix
+		}
+		// Peel only if a folder level remains under it to read collections
+		// from; a folder whose files sit one level down is a collection.
+		for _, segs := range names {
+			if len(segs) <= depth+2 {
+				return prefix
+			}
+		}
+		prefix += top + "/"
+		depth++
+	}
 }
 
 func indexZip(zr *zip.Reader) (*indexedZip, error) {
@@ -188,6 +270,18 @@ func indexZip(zr *zip.Reader) (*indexedZip, error) {
 		attachments: map[string]*zip.File{},
 		scenes:      map[string]*zip.File{},
 	}
+
+	// The wrapper is found on the entries that are actually part of the
+	// export; unsafe names are refused by the loop below either way.
+	var names [][]string
+	for _, f := range zr.File {
+		segments := strings.Split(f.Name, "/")
+		if f.FileInfo().IsDir() || isArchiverJunk(segments) {
+			continue
+		}
+		names = append(names, segments)
+	}
+	out.wrapper = wrapperPrefix(names)
 
 	for _, f := range zr.File {
 		// Reject path traversal up front — same-mountpoint sandbox isn't a
@@ -205,9 +299,11 @@ func indexZip(zr *zip.Reader) (*indexedZip, error) {
 				return nil, fmt.Errorf("zip contains unsafe path: %s", f.Name)
 			}
 		}
-		if f.FileInfo().IsDir() {
+		if f.FileInfo().IsDir() || isArchiverJunk(segments) {
 			continue
 		}
+		name := strings.TrimPrefix(f.Name, out.wrapper)
+		segments = strings.Split(name, "/")
 
 		if len(segments) < 2 {
 			// File at zip root — not a collection member, skip silently.
@@ -233,17 +329,17 @@ func indexZip(zr *zip.Reader) (*indexedZip, error) {
 			continue
 		}
 
-		if strings.HasSuffix(f.Name, drawingExtension) {
-			out.scenes[f.Name] = f
+		if strings.HasSuffix(name, drawingExtension) {
+			out.scenes[name] = f
 			continue
 		}
 
-		if !strings.HasSuffix(f.Name, ".md") {
+		if !strings.HasSuffix(name, ".md") {
 			// Unknown non-markdown file outside uploads — ignore.
 			continue
 		}
 
-		rel := strings.TrimPrefix(f.Name, collName+"/")
+		rel := strings.TrimPrefix(name, collName+"/")
 		out.collections[collName] = append(out.collections[collName], mdEntry{
 			relPath: rel,
 			file:    f,
@@ -271,42 +367,83 @@ func indexOfUploadsSegment(segments []string) int {
 //	foo.md         — leaf doc "foo" at the level it was found
 //	foo.md + foo/  — doc "foo" with children inside foo/
 //	foo/bar.md     — doc "bar" whose parent is "foo"
+//	foo/bar.md, no foo.md — an empty page "foo" holding "bar"
+//
+// The last case is not something Outline writes, but a folder with no page
+// beside it used to make every document under it unreachable, silently. It
+// gets an empty page named after the folder instead, and a warning.
 //
 // Sibling order within each level is case-insensitive by filename.
-func buildDocTree(collectionName string, entries []mdEntry, scenes map[string]*zip.File) []*Doc {
-	// Index every .md by its parent directory (relative to the collection
+func buildDocTree(collectionName string, entries []mdEntry, scenes map[string]*zip.File, notes *ParsedExport) []*Doc {
+	// Group entries by their parent directory (relative to the collection
 	// root). Root docs have parent dir == "".
-	byPath := map[string]mdEntry{} // relPath → entry
+	byParentDir := map[string][]mdEntry{}
+	// Every directory that holds a document somewhere below it, keyed by its
+	// own parent directory.
+	subdirs := map[string]map[string]struct{}{}
 	for _, e := range entries {
-		byPath[e.relPath] = e
+		dir := cleanDir(path.Dir(e.relPath))
+		byParentDir[dir] = append(byParentDir[dir], e)
+		for d := dir; d != ""; d = cleanDir(path.Dir(d)) {
+			parent := cleanDir(path.Dir(d))
+			if subdirs[parent] == nil {
+				subdirs[parent] = map[string]struct{}{}
+			}
+			subdirs[parent][d] = struct{}{}
+		}
 	}
 
-	// Group entries by their parent directory.
-	byParentDir := map[string][]mdEntry{}
-	for _, e := range entries {
-		dir := path.Dir(e.relPath)
-		if dir == "." {
-			dir = ""
-		}
-		byParentDir[dir] = append(byParentDir[dir], e)
+	// One level's siblings: its .md files, plus folders with no .md of the
+	// same name beside them. A folder sorts as if it were "<name>.md", so a
+	// zip gains no new ordering rule.
+	type sibling struct {
+		key   string
+		entry *mdEntry
+		dir   string
 	}
-	for dir := range byParentDir {
-		sort.Slice(byParentDir[dir], func(i, j int) bool {
-			a := strings.ToLower(byParentDir[dir][i].relPath)
-			b := strings.ToLower(byParentDir[dir][j].relPath)
-			return a < b
-		})
+	siblingsOf := func(parentDir string) []sibling {
+		var out []sibling
+		claimed := map[string]struct{}{}
+		for i := range byParentDir[parentDir] {
+			e := &byParentDir[parentDir][i]
+			out = append(out, sibling{key: strings.ToLower(e.relPath), entry: e})
+			claimed[strings.TrimSuffix(e.relPath, ".md")] = struct{}{}
+		}
+		for d := range subdirs[parentDir] {
+			if _, ok := claimed[d]; ok {
+				continue
+			}
+			out = append(out, sibling{key: strings.ToLower(d + ".md"), dir: d})
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].key < out[j].key })
+		return out
 	}
 
 	// Materialise the root level recursively.
 	var build func(parentDir string) []*Doc
 	build = func(parentDir string) []*Doc {
 		var out []*Doc
-		for _, e := range byParentDir[parentDir] {
+		for _, s := range siblingsOf(parentDir) {
+			if s.entry == nil {
+				base := path.Base(s.dir)
+				notes.Warnings = append(notes.Warnings, ParseNote{
+					Path:   path.Join(collectionName, s.dir) + "/",
+					Reason: "folder had no page of its own; created an empty page for it",
+				})
+				out = append(out, &Doc{Title: base, SortKey: base, Children: build(s.dir)})
+				continue
+			}
+			e := *s.entry
 			base := strings.TrimSuffix(path.Base(e.relPath), ".md")
 			doc := parseDoc(e.file, base)
 			if doc == nil {
-				continue
+				// Skipping it outright would take its children with it. The
+				// page's own body is what is lost, so that is what is reported.
+				notes.Warnings = append(notes.Warnings, ParseNote{
+					Path:   path.Join(collectionName, e.relPath),
+					Reason: "could not be read from the zip; created an empty page in its place",
+				})
+				doc = &Doc{Title: base, SortKey: base}
 			}
 			// A drawing's scene sits beside its stub, under the same name.
 			scenePath := path.Join(collectionName, parentDir, base+drawingExtension)
@@ -322,13 +459,20 @@ func buildDocTree(collectionName string, entries []mdEntry, scenes map[string]*z
 		return out
 	}
 
-	_ = byPath
 	return build("")
 }
 
+// cleanDir maps path.Dir's "." for the collection root to "".
+func cleanDir(d string) string {
+	if d == "." {
+		return ""
+	}
+	return d
+}
+
 // parseDoc reads a .md zip entry and extracts the title, emoji, and body.
-// Returns nil if the file can't be opened — the caller treats it as a
-// parser-level "skip with warning" rather than aborting the whole import.
+// Returns nil if the file can't be read — the caller puts an empty page in
+// its place and records a warning rather than aborting the whole import.
 func parseDoc(file *zip.File, base string) *Doc {
 	rc, err := file.Open()
 	if err != nil {

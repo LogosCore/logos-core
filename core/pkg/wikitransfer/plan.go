@@ -48,6 +48,11 @@ type Plan struct {
 	// CredentialTombstones lists credential ids the source exported as
 	// deleted. Their chips are lowered to plain text.
 	CredentialTombstones []uuid.UUID
+
+	// Warnings are what the producer had to improvise while reading the
+	// archive (a wrapper folder skipped, a folder given an empty page). The
+	// materialiser copies them into the import report as they are.
+	Warnings []SkipRecord
 }
 
 // Page is one document to create. Exactly one of ContentState or Markdown

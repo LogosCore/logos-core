@@ -35,6 +35,14 @@ test-export.markdown.zip
 
 There is **no manifest file** — no `metadata.json`, no `test.json`. The folder tree itself is the structural source of truth.
 
+The parser tolerates three departures from this layout, each recorded as a warning in the import report:
+
+- **A wrapper folder** around everything (`outline-export/test/test.md`), as when a zip is unzipped and compressed again. A single top-level folder that holds no files directly is skipped, repeatedly if nested. Before this, the zip imported as one empty page named after the wrapper.
+- **A folder with no page beside it** (`test/foo/bar.md` without `test/foo.md`) becomes an empty page named after the folder. Before this, every document under it was dropped silently.
+- **Archiver junk** — `__MACOSX/`, `._*` resource forks, `.DS_Store` — is ignored.
+
+A zip with no `.md` at all (Outline's JSON export) is refused with an error that says so, instead of importing as empty pages.
+
 One file type Outline never emits is read back here: a `.excalidraw` sitting beside a `.md` of the same base name. That is how a Logos markdown export writes a drawing page — a stub `.md` carrying the title and a link, and the scene next to it — and reading it back attaches the scene to the imported page, so a round trip through this format does not drop the diagram. The page returns as prose, not as a canvas: rebuilding a drawing from a file another tool may have edited is the native bundle's job, not this one's. Every other unknown file outside `uploads/` is still ignored.
 
 ### 2.2 Hierarchy convention

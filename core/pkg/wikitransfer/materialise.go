@@ -135,6 +135,7 @@ func (m *Materialiser) Run(ctx context.Context, plan *Plan, target Target, progr
 		total:  plan.CountPages(),
 	}
 	r.report.TotalDocs = r.total
+	r.report.Warnings = append(r.report.Warnings, plan.Warnings...)
 
 	parentPath, parentDepth, siblingPrefix, err := r.resolveParent(ctx)
 	if err != nil {

@@ -48,6 +48,9 @@ func ReadPlan(zr *zip.Reader) (*wikitransfer.Plan, error) {
 	for id := range tombstones {
 		plan.CredentialTombstones = append(plan.CredentialTombstones, id)
 	}
+	for _, n := range parsed.Warnings {
+		plan.Warnings = append(plan.Warnings, wikitransfer.SkipRecord{Path: n.Path, Reason: n.Reason})
+	}
 	return plan, nil
 }
 
