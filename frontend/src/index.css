@@ -5,6 +5,8 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 @import "@fontsource/space-mono";
+/* Bold, for inline code in headings (wiki-editor.css). Fetched only by pages that use it. */
+@import "@fontsource/space-mono/700.css";
 
 @custom-variant dark (&:is(.dark *));
 

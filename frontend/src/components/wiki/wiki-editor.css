@@ -330,6 +330,19 @@
   content: none;
 }
 
+/* Inline code inside a heading. Space Mono's ascent and descent are tall, and
+   an inline box paints its font's full content area plus padding regardless
+   of line-height: at h1 size the pill was 56px in a 36px line, so it spilled
+   11px over whatever sat above (the page's metadata row) and 9px below. Scaled
+   to 0.8em with no vertical padding it fits the heading's line. Bold, so it
+   does not read thinner than the heading around it — Space Mono's real 700
+   face (index.css), not a synthesized one. */
+.tiptap :is(h1, h2, h3, h4, h5, h6) code.wiki-inline-code {
+  font-size: 0.8em;
+  font-weight: 700;
+  padding-block: 0;
+}
+
 /* Link mark — produced by StarterKit's Link extension via HTMLAttributes.class.
    Styled here so we don't fight `.prose a` defaults from the typography plugin
    (otherwise the prose underline + foreground color win and links read like
