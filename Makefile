@@ -1,4 +1,4 @@
-.PHONY: test test-integration infra infra-stop infra-reset services services-stop services-reset services-rebuild seaweedfs-reset sso sso-stop swag gqlgen gqlcodegen frontend help
+.PHONY: test test-integration infra infra-stop infra-reset services services-stop services-reset services-rebuild seaweedfs-reset sso sso-stop viewer swag gqlgen gqlcodegen frontend help
 
 include .env
 export
@@ -64,6 +64,9 @@ test-integration: ## Run the repository, token-store and object-store integratio
 	INTEGRATION_S3_ACCESS_KEY=$(SEAWEEDFS_S3_ACCESS_KEY) \
 	INTEGRATION_S3_SECRET_KEY=$(SEAWEEDFS_S3_SECRET_KEY) \
 	go test -count=1 -v ./pkg/repository/ ./pkg/auth/ ./pkg/blob/ ./pkg/cache/ -run 'TestIntegration|TestBSONRoundTrip'
+
+viewer: ## viewer: Builds the HTML export's offline viewer into core/pkg/wikitransfer/htmlbundle/viewer (embedded by the core binary)
+	cd frontend && npm run build:viewer
 
 swag: ## swag: Generates or updates the Swagger/OpenAPI documentation files.
 	@echo "Generating API documentation"

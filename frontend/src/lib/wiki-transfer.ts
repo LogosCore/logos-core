@@ -11,7 +11,7 @@ import { apiFetch, ApiError } from "@/services/api-client"
 
 const API_URL = import.meta.env.VITE_API_URL as string
 
-export type TransferFormat = "bundle" | "markdown"
+export type TransferFormat = "bundle" | "markdown" | "html"
 export type TransferKind = "export" | "import"
 export type TransferStatus = "queued" | "running" | "done" | "failed"
 

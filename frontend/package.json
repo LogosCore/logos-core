@@ -15,6 +15,7 @@
     "budget": "node scripts/check-bundle-budget.mjs",
     "gen:icon-tags": "node scripts/generate-lucide-tags.mjs",
     "gen:drawing-icons": "node scripts/generate-drawing-icons.mjs",
+    "build:viewer": "vite build -c vite.viewer.config.ts && VIEWER_ENTRY=drawing vite build -c vite.viewer.config.ts && VIEWER_ENTRY=simple-icons vite build -c vite.viewer.config.ts",
     "postinstall": "patch-package"
   },
   "dependencies": {

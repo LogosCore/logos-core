@@ -191,3 +191,6 @@ func CollectReferenceLinks(body string) (docs, hosts, hashes []uuid.UUID) {
 	}
 	return docs, hosts, hashes
 }
+
+// SanitizeFilename is sanitizeFilename for the other export formats.
+func SanitizeFilename(raw string) string { return sanitizeFilename(raw) }

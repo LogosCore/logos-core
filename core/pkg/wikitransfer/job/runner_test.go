@@ -45,7 +45,7 @@ func newWorld(t *testing.T, ttl time.Duration) *world {
 	drawings := transfertest.NewDrawingRenderer(images, blank)
 	bw := bundle.NewWriter(images, files, blank, blank, nil, nil, nil, transfertest.Renderer{}, drawings, zap.NewNop(), bundle.Config{})
 	me := markdown.NewExporter(images, files, blank, blank, w.docs, nil, nil, transfertest.Renderer{}, drawings, nil, zap.NewNop(), markdown.Config{})
-	w.runner = job.NewRunner(w.jobs, w.docs, ops, w.artifacts, m, bw, me, nil, zap.NewNop(), job.Config{ArtifactTTL: ttl, PollInterval: time.Hour})
+	w.runner = job.NewRunner(w.jobs, w.docs, ops, w.artifacts, m, bw, me, nil, nil, zap.NewNop(), job.Config{ArtifactTTL: ttl, PollInterval: time.Hour})
 	return w
 }
 
@@ -209,7 +209,7 @@ func TestRunner_SweepDeletesExpiredArtifacts(t *testing.T) {
 
 	// A fresh runner's first tick sweeps; drive it through the public
 	// surface by starting with a tiny poll interval.
-	w2 := job.NewRunner(w.jobs, w.docs, &transfertest.OperationRepo{}, w.artifacts, nil, nil, nil, nil, zap.NewNop(), job.Config{ArtifactTTL: time.Millisecond, PollInterval: 5 * time.Millisecond})
+	w2 := job.NewRunner(w.jobs, w.docs, &transfertest.OperationRepo{}, w.artifacts, nil, nil, nil, nil, nil, zap.NewNop(), job.Config{ArtifactTTL: time.Millisecond, PollInterval: 5 * time.Millisecond})
 	w2.Start()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

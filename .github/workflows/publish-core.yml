@@ -6,12 +6,16 @@ on:
       - main
     paths:
       - "core/**"
+      # The image embeds the HTML export's viewer, built from the frontend.
+      - "frontend/**"
       - ".github/workflows/publish-core.yml"
   pull_request:
     branches:
       - main
     paths:
       - "core/**"
+      # The image embeds the HTML export's viewer, built from the frontend.
+      - "frontend/**"
       - ".github/workflows/publish-core.yml"
   workflow_dispatch:
 
@@ -30,6 +34,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # The HTML export's offline viewer is a frontend build that the core
+      # binary embeds (core/pkg/wikitransfer/htmlbundle/viewer). It is not
+      # committed, so it is built here, into the Docker context, before the
+      # image. Without it the image still builds, and HTML export fails with
+      # a message saying the viewer is missing.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build the HTML export viewer
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build:viewer
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

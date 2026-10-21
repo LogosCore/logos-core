@@ -992,7 +992,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "format": {
-                    "description": "Format is \"bundle\" (default) or \"markdown\".",
+                    "description": "Format is \"bundle\" (default), \"markdown\" or \"html\".",
                     "type": "string"
                 },
                 "operationId": {
@@ -1147,11 +1147,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "bundle",
-                "markdown"
+                "markdown",
+                "html"
             ],
             "x-enum-varnames": [
                 "WikiTransferBundle",
-                "WikiTransferMarkdown"
+                "WikiTransferMarkdown",
+                "WikiTransferHTML"
             ]
         },
         "models.WikiTransferKind": {

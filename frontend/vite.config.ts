@@ -10,7 +10,7 @@ import { defineConfig, type Plugin } from "vite"
 //     actually lives in the same folder (`./<name>.js`)
 // This resolver fixes both for any import originating inside
 // lucide-react/dist/esm. Removing this plugin breaks the build.
-function lucideFixTsExtension(): Plugin {
+export function lucideFixTsExtension(): Plugin {
   return {
     name: "lucide-fix-ts-extension",
     enforce: "pre",

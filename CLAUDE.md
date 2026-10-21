@@ -68,6 +68,20 @@ app shell already reaches, which quietly moves a lazy chunk onto first paint.
 Raising a budget is allowed; doing it without saying why in the commit message
 is not.
 
+### HTML export viewer
+
+The HTML export (`format: "html"`) zips a prebuilt offline viewer that the core
+binary embeds from `core/pkg/wikitransfer/htmlbundle/viewer`. That directory is
+generated and gitignored: `make viewer` (or `npm run build:viewer` in
+`frontend/`) builds `src/viewer` into it with `vite.viewer.config.ts`. Without
+it everything else works and an HTML export fails with "the HTML export viewer
+is not built". `publish-core.yml` builds it before the image, which is why that
+workflow also triggers on `frontend/**`. In the dev stack, air picks the new
+build up on its own (it watches `.html`, and the build rewrites `index.html`).
+
+The viewer renders pages with `wiki-content-extensions.ts`, the same list the
+editor uses — a node added to the editor reaches exports by being added there.
+
 ### Generated icon metadata
 
 `frontend/src/components/wiki/lucide-tags.generated.ts` is lucide's own keyword

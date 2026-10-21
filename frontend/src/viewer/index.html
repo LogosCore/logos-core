@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wiki export</title>
+    <link rel="stylesheet" href="assets/viewer.css" />
+    <script>
+      // Data files are scripts that call these: a page opened from disk may
+      // not fetch() its neighbours, but it may run them. See viewer-data.ts.
+      window.__logosExport = function (tree) { window.__logosTree = tree }
+      window.__logosPages = {}
+      window.__logosPage = function (id, body) { window.__logosPages[id] = body }
+      window.__logosFiles = {}
+      window.__logosFile = function (id, base64) { window.__logosFiles[id] = base64 }
+      // Excalidraw resolves its font URLs against this; drawing.js answers
+      // them from fonts it carries, so nothing leaves the machine. Absolute,
+      // built from this page's own URL: Excalidraw resolves a relative path
+      // against location.origin, which a file:// page in Firefox reports as
+      // "null", and `new URL(path, "null")` throws.
+      window.EXCALIDRAW_ASSET_PATH = new URL("assets/", window.location.href).href
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="data/tree.js"></script>
+    <script src="assets/viewer.js"></script>
+  </body>
+</html>

@@ -29,6 +29,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer/bundle"
+	"github.com/logoscore/logos-core/core/pkg/wikitransfer/htmlbundle"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer/markdown"
 	"go.uber.org/zap"
 )
@@ -73,6 +74,7 @@ type Runner struct {
 	materialiser *wikitransfer.Materialiser
 	bundleWriter *bundle.Writer
 	mdExporter   *markdown.Exporter
+	htmlExporter *htmlbundle.Exporter
 	bus          eventbus.IEventBus
 	logger       *zap.Logger
 	cfg          Config
@@ -92,6 +94,7 @@ func NewRunner(
 	materialiser *wikitransfer.Materialiser,
 	bundleWriter *bundle.Writer,
 	mdExporter *markdown.Exporter,
+	htmlExporter *htmlbundle.Exporter,
 	bus eventbus.IEventBus,
 	logger *zap.Logger,
 	cfg Config,
@@ -103,7 +106,8 @@ func NewRunner(
 	return &Runner{
 		jobs: jobs, docRepo: docRepo, opRepo: opRepo, artifacts: artifacts,
 		materialiser: materialiser, bundleWriter: bundleWriter, mdExporter: mdExporter,
-		bus: bus, logger: logger, cfg: cfg.withDefaults(),
+		htmlExporter: htmlExporter,
+		bus:          bus, logger: logger, cfg: cfg.withDefaults(),
 		wake: make(chan struct{}, 1), ctx: ctx, cancel: cancel,
 	}
 }
@@ -337,6 +341,11 @@ func (r *Runner) writeArchive(ctx context.Context, job *models.WikiTransferJob, 
 			return nil, errors.New("markdown export is not configured")
 		}
 		return r.mdExporter.Run(ctx, zw, scope, r.progressWriter(job.JobID))
+	case models.WikiTransferHTML:
+		if r.htmlExporter == nil {
+			return nil, errors.New("HTML export is not configured")
+		}
+		return r.htmlExporter.Run(ctx, zw, scope, r.progressWriter(job.JobID))
 	default:
 		return nil, fmt.Errorf("unknown export format %q", job.Format)
 	}
@@ -487,8 +496,11 @@ func ExportFilename(title string, format models.WikiTransferFormat, at time.Time
 		stem = "wiki"
 	}
 	ts := at.Format("20060102T150405Z")
-	if format == models.WikiTransferBundle {
+	switch format {
+	case models.WikiTransferBundle:
 		return "wiki-" + stem + "-" + ts + bundle.Extension
+	case models.WikiTransferHTML:
+		return "wiki-" + stem + "-" + ts + ".html.zip"
 	}
 	return "wiki-" + stem + "-" + ts + ".md.zip"
 }

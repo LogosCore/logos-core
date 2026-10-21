@@ -13,6 +13,7 @@ import { Binary, MongoClient, type Db } from "mongodb";
 import * as Y from "yjs";
 import { markdownToYjsUpdate } from "./markdown-to-yjs.js";
 import { yjsUpdateToMarkdown } from "./yjs-to-markdown.js";
+import { EMPTY_PROSEMIRROR_DOC, yjsUpdateToProseMirrorJSON } from "./yjs-to-prosemirror.js";
 import {
   EMPTY_SCENE,
   yjsUpdateToExcalidrawScene,
@@ -426,6 +427,71 @@ export function setupInternalApi(app: Express): void {
       } catch (err) {
         const message = err instanceof Error ? err.message : "conversion failed";
         console.error("yjs-to-excalidraw conversion error:", err);
+        res.status(500).json({ error: message });
+      }
+    },
+  );
+
+  // Y.js update binary in, ProseMirror JSON out. Used by the HTML bundle
+  // export, whose offline viewer renders the tree with the editor's own
+  // extensions. Empty bytes are an empty document, as for markdown.
+  app.post(
+    "/internal/yjs-to-prosemirror",
+    (req: Request, res: Response, next: () => void) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (chunk: Buffer) => {
+        chunks.push(chunk);
+        const total = chunks.reduce((n, c) => n + c.length, 0);
+        if (total > MAX_YJS_BYTES + 1024) {
+          res.status(413).json({ error: "request too large" });
+          req.destroy();
+        }
+      });
+      req.on("end", () => {
+        if (res.headersSent) return;
+        (req as Request & { rawBody?: Buffer }).rawBody = Buffer.concat(chunks);
+        next();
+      });
+      req.on("error", (err: Error) => {
+        if (res.headersSent) return;
+        res.status(400).json({ error: err.message });
+      });
+    },
+    (req: Request, res: Response) => {
+      const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+      if (!rawBody) {
+        res.status(400).json({ error: "empty body" });
+        return;
+      }
+
+      const sigHeader = req.headers[SIGNATURE_HEADER];
+      const sig = Array.isArray(sigHeader) ? sigHeader[0] : sigHeader;
+      if (!verifySignature(rawBody, sig)) {
+        res.status(401).json({ error: "invalid or missing signature" });
+        return;
+      }
+
+      if (rawBody.length === 0) {
+        res.status(200).json(EMPTY_PROSEMIRROR_DOC);
+        return;
+      }
+      if (rawBody.length > MAX_YJS_BYTES) {
+        res.status(413).json({ error: "yjs update exceeds 4 MB" });
+        return;
+      }
+
+      try {
+        const doc = yjsUpdateToProseMirrorJSON(
+          new Uint8Array(
+            rawBody.buffer,
+            rawBody.byteOffset,
+            rawBody.byteLength,
+          ),
+        );
+        res.status(200).json(doc);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "conversion failed";
+        console.error("yjs-to-prosemirror conversion error:", err);
         res.status(500).json({ error: message });
       }
     },

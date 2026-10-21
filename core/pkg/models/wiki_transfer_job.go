@@ -23,6 +23,9 @@ const (
 	WikiTransferBundle WikiTransferFormat = "bundle"
 	// WikiTransferMarkdown is the Outline-flavoured markdown zip.
 	WikiTransferMarkdown WikiTransferFormat = "markdown"
+	// WikiTransferHTML is a static site: a zip that opens in a browser from
+	// disk and looks like the wiki. Export only.
+	WikiTransferHTML WikiTransferFormat = "html"
 )
 
 // WikiTransferStatus is a job's lifecycle state.

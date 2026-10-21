@@ -1,0 +1,31 @@
+/* What the viewer adds to the app's own styles. Kept small on purpose: the
+   point of the bundle is that pages look the way they do in the wiki. */
+
+/* A drawing sits at its natural size inside the pan-zoom viewport, which
+   scales it (viewer-pan-zoom.tsx). */
+.wiki-viewer-drawing svg {
+  display: block;
+}
+
+/* Page chips are links here, and must not pick up the prose link style. */
+.tiptap a.wiki-document-chip {
+  text-decoration: none;
+}
+
+/* Search matches: <mark> in the sidebar's results, ::highlight on the page
+   (viewer-highlight.tsx). One colour for both, legible in either theme. */
+:root {
+  --viewer-search-hl: #fde68a;
+}
+.dark {
+  --viewer-search-hl: rgb(250 204 21 / 0.4);
+}
+mark.viewer-search-mark {
+  background-color: var(--viewer-search-hl);
+  color: inherit;
+  border-radius: 2px;
+}
+::highlight(logos-search) {
+  background-color: var(--viewer-search-hl);
+  color: inherit;
+}

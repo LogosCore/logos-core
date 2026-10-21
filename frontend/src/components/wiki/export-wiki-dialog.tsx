@@ -41,6 +41,11 @@ const FORMATS: Array<{ value: TransferFormat; label: string; hint: string }> = [
     label: "Markdown zip",
     hint: "For Obsidian, Outline and other tools. Drawings come out as .excalidraw scenes; other Logos-only features do not survive.",
   },
+  {
+    value: "html",
+    label: "HTML site",
+    hint: "Read-only copy that looks like the wiki. Unzip and open index.html in any browser — no server or internet needed. Cannot be imported back.",
+  },
 ]
 
 export function ExportWikiDialog({ operationId }: ExportWikiDialogProps) {

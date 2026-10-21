@@ -244,6 +244,53 @@ func (c *HocuspocusClient) YjsToExcalidraw(ctx context.Context, contentState []b
 	return scene, nil
 }
 
+// YjsToProseMirror is YjsToMarkdown for exports that render a page
+// themselves: it returns the document as ProseMirror JSON, the tree the
+// editor stores, for the HTML bundle's viewer to render with the editor's
+// own extensions. Empty input is an empty document without a round trip.
+func (c *HocuspocusClient) YjsToProseMirror(ctx context.Context, contentState []byte) (json.RawMessage, error) {
+	if len(contentState) == 0 {
+		return json.RawMessage(`{"type":"doc","content":[{"type":"paragraph"}]}`), nil
+	}
+	if c.internalSecret == "" {
+		return nil, fmt.Errorf("yjs-to-prosemirror: no internal secret configured")
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.internalSecret))
+	mac.Write(contentState)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	url := c.baseURL + "/internal/yjs-to-prosemirror"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(contentState))
+	if err != nil {
+		return nil, fmt.Errorf("build yjs-to-prosemirror request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("X-Internal-Signature-256", signature)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call hocuspocus yjs-to-prosemirror: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("yjs-to-prosemirror returned %d: %s",
+			resp.StatusCode, string(errBody))
+	}
+
+	// Bounded as YjsToExcalidraw is: JSON is a few times the 4 MB of state.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read yjs-to-prosemirror response: %w", err)
+	}
+	if !json.Valid(body) {
+		return nil, fmt.Errorf("yjs-to-prosemirror returned invalid JSON")
+	}
+	return json.RawMessage(body), nil
+}
+
 // MaxMarkdownBytes is the largest body ApplyMarkdown will accept.
 //
 // MUST match MAX_INPUT_BYTES in hocuspocus/src/apply-markdown.ts. Declared

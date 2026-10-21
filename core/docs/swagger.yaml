@@ -3,7 +3,7 @@ definitions:
   controller.ExportRequest:
     properties:
       format:
-        description: Format is "bundle" (default) or "markdown".
+        description: Format is "bundle" (default), "markdown" or "html".
         type: string
       operationId:
         type: string
@@ -113,10 +113,12 @@ definitions:
     enum:
     - bundle
     - markdown
+    - html
     type: string
     x-enum-varnames:
     - WikiTransferBundle
     - WikiTransferMarkdown
+    - WikiTransferHTML
   models.WikiTransferKind:
     enum:
     - export

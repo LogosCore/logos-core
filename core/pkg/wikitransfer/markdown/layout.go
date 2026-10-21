@@ -111,3 +111,7 @@ func uploadsZipPath(rootFolder string, docID, attID uuid.UUID, filename string) 
 		filename,
 	)
 }
+
+// Slugify is slugify for the other export formats, so a page gets the same
+// folder name whichever zip it leaves in.
+func Slugify(title string) string { return slugify(title) }

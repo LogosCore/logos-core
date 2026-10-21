@@ -19,6 +19,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/wiki"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer/bundle"
+	"github.com/logoscore/logos-core/core/pkg/wikitransfer/htmlbundle"
 	transferjob "github.com/logoscore/logos-core/core/pkg/wikitransfer/job"
 	transfermd "github.com/logoscore/logos-core/core/pkg/wikitransfer/markdown"
 
@@ -315,13 +316,18 @@ func newTransferStack(
 		repos.WikiDocument, repos.Host, repos.Hash,
 		w.hpClient, drawings, repos.Credential, l, transfermd.Config{},
 	)
+	htmlExporter := htmlbundle.NewExporter(
+		repos.WikiImage, repos.WikiFile, w.imageStore, w.fileStore,
+		repos.WikiDocument, repos.Host, repos.Hash,
+		w.hpClient, drawings, repos.Credential, nil, l, htmlbundle.Config{},
+	)
 
 	return &transferStack{
 		imageCtrl: imageCtrl,
 		fileCtrl:  fileCtrl,
 		runner: transferjob.NewRunner(
 			repos.WikiTransferJob, repos.WikiDocument, repos.Operation, w.fileStore,
-			materialiser, bundleWriter, mdExporter, bus, l,
+			materialiser, bundleWriter, mdExporter, htmlExporter, bus, l,
 			transferjob.Config{ArtifactTTL: e.WikiTransferArtifactTTL},
 		),
 	}

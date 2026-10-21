@@ -63,7 +63,7 @@ type ExportRequest struct {
 	OperationID string `json:"operationId" binding:"required"`
 	// RootId scopes the export to one page and its descendants.
 	RootID *string `json:"rootId"`
-	// Format is "bundle" (default) or "markdown".
+	// Format is "bundle" (default), "markdown" or "html".
 	Format string `json:"format"`
 }
 
@@ -126,7 +126,7 @@ func (wtc *WikiTransferController) StartExport(c *gin.Context) {
 	switch format {
 	case "":
 		format = models.WikiTransferBundle
-	case models.WikiTransferBundle, models.WikiTransferMarkdown:
+	case models.WikiTransferBundle, models.WikiTransferMarkdown, models.WikiTransferHTML:
 	default:
 		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("unknown format %q", req.Format))
 		return
