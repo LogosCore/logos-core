@@ -18,6 +18,7 @@
 
 import { createElement, lazy } from "react"
 import type { IconComponent } from "@/components/wiki/icon-catalog"
+import { SVG_GLOB } from "@/components/wiki/simple-icon-glob"
 
 /** Prefix marking an icon value as a Simple Icon slug rather than a lucide name. */
 export const SIMPLE_ICON_PREFIX = "si:"
@@ -40,14 +41,7 @@ export function toSimpleIconName(slug: string): string {
   return SIMPLE_ICON_PREFIX + slug
 }
 
-// Raw per-icon SVGs from the installed package. Lazy (no { eager }), so each
-// match is just a thunk until the icon first renders. simple-icons ships
-// `icons/<slug>.svg`; the slug is the filename.
-const SVG_GLOB = import.meta.glob<string>(
-  "/node_modules/simple-icons/icons/*.svg",
-  { query: "?raw", import: "default" },
-)
-
+// SVG_GLOB keys are `…/icons/<slug>.svg`; the slug is the filename.
 const SLUG_TO_IMPORTER = new Map<string, () => Promise<string>>()
 for (const [path, importFn] of Object.entries(SVG_GLOB)) {
   const slug = path.slice(path.lastIndexOf("/") + 1).replace(/\.svg$/, "")
