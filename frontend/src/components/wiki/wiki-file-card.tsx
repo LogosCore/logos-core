@@ -23,6 +23,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type RefObject,
@@ -43,7 +44,11 @@ import {
 } from "@/lib/wiki-file-preview-state"
 import { useFocusRestoreWithoutScroll } from "@/hooks/use-focus-restore-without-scroll"
 import { PreviewResizeHandle } from "./wiki-file-preview-resize"
-import { isPreviewableImage } from "./wiki-file-preview-image"
+import { estimateTextHeight } from "./wiki-file-preview-fit"
+import { imagePreviewFormat } from "./wiki-file-preview-image"
+import { useDecodedImage } from "./use-decoded-image"
+// Through the alias path, not "./": the viewer build replaces this module.
+import { useServerContentType } from "@/components/wiki/wiki-file-type-probe"
 import {
   detectMediaPreviewKind,
   type MediaPreviewKind,
@@ -67,9 +72,14 @@ const PREVIEW_ALLOWED_CONTENT_TYPES = new Set<string>([
   "image/webp",
   "image/avif",
   "image/bmp",
+  "image/svg+xml",
+  "image/x-icon",
+  "image/vnd.microsoft.icon",
   "video/webm",
   "video/mp4",
   "video/ogg",
+  "video/quicktime",
+  "video/x-m4v",
   "audio/mpeg",
   "audio/ogg",
   "audio/wav",
@@ -83,7 +93,6 @@ const PREVIEW_ALLOWED_CONTENT_TYPES = new Set<string>([
  *  dangerousContentTypes list in wiki_file_controller.go. */
 const DANGEROUS_CONTENT_TYPES = new Set<string>([
   "text/html",
-  "image/svg+xml",
   "application/xhtml+xml",
   "application/javascript",
   "application/x-javascript",
@@ -121,7 +130,9 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   const isEditable = editor.isEditable
   const url = attrs.url ?? ""
   const filename = attrs.filename || "file"
-  const contentType = canonicalize(attrs.contentType)
+  // A card written as Markdown may only have guessed its type; the server's
+  // answer replaces a guess of octet-stream (wiki-file-type-probe.ts).
+  const contentType = useServerContentType(url, canonicalize(attrs.contentType))
   const canPreview =
     PREVIEW_ALLOWED_CONTENT_TYPES.has(contentType) &&
     !DANGEROUS_CONTENT_TYPES.has(contentType)
@@ -132,7 +143,10 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   // Other previewable types (text, markdown) still open in a new tab.
   const isPdf = contentType === "application/pdf"
   // Images bypass the panel entirely — see the thumbnail/lightbox path below.
-  const isImage = isPreviewableImage(contentType, filename) && url !== ""
+  // "native" ones the browser draws from the URL; TIFF and HEIC are decoded
+  // first (use-decoded-image.ts).
+  const imageFormat = url !== "" ? imagePreviewFormat(contentType, filename) : null
+  const isImage = imageFormat !== null
   // Video and audio play in the panel through a native element pointed at
   // the inline URL; nothing is fetched or converted here.
   const mediaKind: MediaPreviewKind | null =
@@ -166,11 +180,24 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   // card readable instead of leaving a broken-image gap, and disarms the
   // lightbox, which would only show the same failure larger.
   const [thumbFailed, setThumbFailed] = useState(false)
-  const showThumbnail = isImage && !thumbFailed
   // The print page never scrolls, so a lazy thumbnail below the initial
   // viewport would still be unfetched when window.print() fires and export as a
   // blank tile. Same trade the image node makes.
   const isPrintMode = usePrintMode()
+  // The card — what a decode waits to see near the viewport, and what the
+  // preview panel scrolls into view when it opens.
+  const cardRef = useRef<HTMLDivElement>(null)
+  const decoded = useDecodedImage(
+    imageFormat === "native" ? null : imageFormat,
+    url,
+    attrs.size,
+    cardRef,
+    isPrintMode,
+  )
+  // Until a decode finishes, the card shows its type icon, and a failed one
+  // leaves it there.
+  const imageSrc = imageFormat === "native" ? previewUrl : decoded.src
+  const showThumbnail = isImage && !thumbFailed && imageSrc !== null
   // Same focus-restore scroll as the inline image node — see the hook.
   const captureFocusTarget = useFocusRestoreWithoutScroll(lightboxOpen)
 
@@ -190,8 +217,6 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
       saveFilePreviewState({ fileId, height: h })
     }
   }
-  // The file card — used to scroll it into view when the preview opens.
-  const cardRef = useRef<HTMLDivElement>(null)
   // The preview panel — target of the native Fullscreen request.
   const previewRef = useRef<HTMLDivElement>(null)
   // Set when Fullscreen is triggered from a collapsed card: the panel must
@@ -368,7 +393,7 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
             onClick={openLightbox}
           >
             <img
-              src={previewUrl}
+              src={imageSrc ?? undefined}
               alt=""
               // Below-the-fold attachments must not fetch until scrolled to —
               // a long document can carry many of these, and the thumbnail is
@@ -454,7 +479,7 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
         <Lightbox
           open
           close={() => setLightboxOpen(false)}
-          slides={[{ src: previewUrl, alt: filename }]}
+          slides={[{ src: imageSrc ?? previewUrl, alt: filename }]}
           plugins={[Zoom, Fullscreen, Counter]}
           carousel={{ finite: true }}
           controller={{ closeOnBackdropClick: true }}
@@ -524,10 +549,36 @@ function FilePreviewPanel({
   // The iframe starts with pointer-events disabled so wheel events pass
   // through to the wiki page. Clicking the preview activates the iframe.
   const [frameActive, setFrameActive] = useState(false)
+  // Set when the browser cannot decode the media: see onMediaUnplayable.
+  const [mediaFailed, setMediaFailed] = useState(false)
+  // A listing shorter than the frame caps it at its own height (see
+  // wiki-file-preview-fit.ts). Wrapped text depends on the width, so the
+  // panel's width is followed as the page resizes.
+  const [panelWidth, setPanelWidth] = useState(0)
+  const layout = rendered.textLayout
+  useEffect(() => {
+    const panel = containerRef.current
+    if (!panel || layout === null) return
+    const observer = new ResizeObserver(() => setPanelWidth(panel.clientWidth))
+    observer.observe(panel)
+    return () => observer.disconnect()
+  }, [containerRef, layout])
+  const frameCap =
+    layout !== null && panelWidth > 0 ? estimateTextHeight(layout, panelWidth) : null
+  const frameStyle = {
+    ...(frameActive ? {} : { pointerEvents: "none" as const }),
+    ...(frameCap === null ? {} : { "--wiki-preview-max": `${frameCap}px` }),
+  } as CSSProperties
 
   return (
     <div className="wiki-file-preview" contentEditable={false} ref={containerRef}>
-      {mediaKind === "video" ? (
+      {mediaKind !== null && mediaFailed ? (
+        <p className="wiki-file-preview-status wiki-file-preview-status--error">
+          This browser can&rsquo;t play this {mediaKind === "video" ? "video" : "recording"}: it was
+          encoded in a format the browser does not decode. Download it to watch it in a desktop
+          player.
+        </p>
+      ) : mediaKind === "video" ? (
         // preload="metadata": duration and first frame only, until played.
         <video
           className="wiki-file-preview-media"
@@ -535,6 +586,13 @@ function FilePreviewPanel({
           preload="metadata"
           src={previewUrl}
           title={filename}
+          onError={() => setMediaFailed(true)}
+          onLoadedMetadata={(e) => {
+            // A video track the browser cannot decode next to an audio track it
+            // can raises no error: the file "plays", sound over a black frame.
+            // No picture size is how that shows.
+            if (e.currentTarget.videoWidth === 0) setMediaFailed(true)
+          }}
         />
       ) : mediaKind === "audio" ? (
         <audio
@@ -543,6 +601,7 @@ function FilePreviewPanel({
           preload="metadata"
           src={previewUrl}
           title={filename}
+          onError={() => setMediaFailed(true)}
         />
       ) : isPdf ? (
         <div className="wiki-file-preview-frame-wrap">
@@ -574,7 +633,7 @@ function FilePreviewPanel({
             sandbox=""
             srcDoc={rendered.content}
             title={`Preview of ${filename}`}
-            style={frameActive ? undefined : { pointerEvents: "none" }}
+            style={frameStyle}
           />
           {!frameActive && (
             <div
@@ -658,8 +717,9 @@ function renderIcon(contentType: string, filename: string): ReactElement {
 
   if (type.startsWith("audio/")) return <FileAudioIcon size={size} />
   if (type.startsWith("video/")) return <FileVideoIcon size={size} />
-  // Reached by images that have no thumbnail: SVG (never rendered inline), a
-  // format the browser can't decode, or one whose bytes have gone missing.
+  // Reached by images that have no thumbnail: a format we have no decoder
+  // for, one still decoding or that failed to, or one whose bytes have gone
+  // missing.
   if (type.startsWith("image/")) return <ImageIcon size={size} />
   if (
     type === "text/html" ||

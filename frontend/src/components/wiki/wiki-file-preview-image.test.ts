@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
-import { isPreviewableImage } from "@/components/wiki/wiki-file-preview-image"
+import { imagePreviewFormat, isPreviewableImage } from "@/components/wiki/wiki-file-preview-image"
 
-describe("isPreviewableImage", () => {
-  test("accepts the raster types the backend serves inline", () => {
+describe("imagePreviewFormat", () => {
+  test("the browser draws what the backend serves inline", () => {
     for (const ct of [
       "image/png",
       "image/jpeg",
@@ -10,37 +10,45 @@ describe("isPreviewableImage", () => {
       "image/webp",
       "image/avif",
       "image/bmp",
+      "image/x-icon",
+      "image/vnd.microsoft.icon",
     ]) {
-      expect(isPreviewableImage(ct, "shot.bin")).toBe(true)
+      expect(imagePreviewFormat(ct, "shot.bin")).toBe("native")
     }
   })
 
-  test("rejects SVG however it is labelled", () => {
-    // SVG is a scriptable document. It must not reach the thumbnail, the
-    // lightbox or the new-tab preview — mirrors dangerousContentTypes in
-    // wiki_file_controller.go.
-    expect(isPreviewableImage("image/svg+xml", "logo.svg")).toBe(false)
-    // A .png name must not rescue a positively-identified SVG.
-    expect(isPreviewableImage("image/svg+xml", "logo.png")).toBe(false)
+  test("SVG is drawn natively: an <img> never runs its scripts", () => {
+    // The new-tab view is sandboxed by the file controller's CSP; see
+    // previewAllowedContentTypes in wiki_file_controller.go.
+    expect(imagePreviewFormat("image/svg+xml", "logo.svg")).toBe("native")
+  })
+
+  test("TIFF and HEIC are decoded first, whichever name the type goes by", () => {
+    expect(imagePreviewFormat("image/tiff", "scan.tif")).toBe("tiff")
+    expect(imagePreviewFormat("image/heic", "IMG_0001.HEIC")).toBe("heic")
+    // What the backend's sniffer calls an iPhone photo.
+    expect(imagePreviewFormat("image/heif", "IMG_0001.HEIC")).toBe("heic")
   })
 
   test("falls back to the extension only when the type says nothing", () => {
-    expect(isPreviewableImage("application/octet-stream", "shot.PNG")).toBe(true)
-    expect(isPreviewableImage("", "shot.jpeg")).toBe(true)
-    expect(isPreviewableImage("application/octet-stream", "notes.txt")).toBe(false)
-    expect(isPreviewableImage("application/octet-stream", "noext")).toBe(false)
+    expect(imagePreviewFormat("application/octet-stream", "shot.PNG")).toBe("native")
+    expect(imagePreviewFormat("", "shot.jpeg")).toBe("native")
+    expect(imagePreviewFormat("application/octet-stream", "favicon.ico")).toBe("native")
+    expect(imagePreviewFormat("application/octet-stream", "scan.TIFF")).toBe("tiff")
+    expect(imagePreviewFormat("", "photo.heif")).toBe("heic")
+    expect(imagePreviewFormat("application/octet-stream", "notes.txt")).toBeNull()
+    expect(imagePreviewFormat("application/octet-stream", "noext")).toBeNull()
   })
 
-  test("a positively-identified type the browser can't decode is not rescued", () => {
-    // The backend said TIFF. No mainstream browser renders it, and a .tif
-    // extension must not talk us into a broken tile.
-    expect(isPreviewableImage("image/tiff", "scan.tif")).toBe(false)
-    expect(isPreviewableImage("text/html", "page.png")).toBe(false)
+  test("a positively-identified type is not overridden by the extension", () => {
+    // No decoder for it, and a .png name must not talk us into a broken tile.
+    expect(imagePreviewFormat("image/x-portable-pixmap", "frame.png")).toBeNull()
+    expect(imagePreviewFormat("text/html", "page.png")).toBeNull()
   })
 
-  test("is case-sensitive on the type, matching the card's canonicalization", () => {
-    // The card lowercases and strips parameters before calling in, so an
-    // already-canonical type is the only input shape this needs to accept.
+  test("isPreviewableImage is any format at all", () => {
     expect(isPreviewableImage("image/png", "a.png")).toBe(true)
+    expect(isPreviewableImage("image/tiff", "a.tif")).toBe(true)
+    expect(isPreviewableImage("application/zip", "a.zip")).toBe(false)
   })
 })

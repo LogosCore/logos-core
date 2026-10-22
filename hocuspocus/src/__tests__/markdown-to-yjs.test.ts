@@ -407,3 +407,23 @@ test("GFM table preserves header, body cells, links, and empty cells", () => {
   assert.equal(emptyCellParas.length, 1);
   assert.equal(emptyCellParas[0].type, "paragraph");
 });
+
+test("a file card's content type comes from its extension", () => {
+  const card = (name: string) => {
+    const md = `[${name} 1024](/api/v1/wiki/files/0e7f6a4c-2f1b-4c3a-9d8e-5b6a7c8d9e0f)`;
+    const content = decode(markdownToYjsUpdate(md)).content as Array<Record<string, unknown>>;
+    const node = content.find((n) => n.type === "wikiFile");
+    assert.ok(node, `no file card for ${name}`);
+    return (node.attrs as Record<string, unknown>).contentType;
+  };
+  // The card picks a thumbnail, player or preview panel from this, so the
+  // formats it can show must not arrive as octet-stream.
+  assert.equal(card("scan.TIFF"), "image/tiff");
+  assert.equal(card("IMG_0001.heic"), "image/heic");
+  assert.equal(card("favicon.ico"), "image/x-icon");
+  assert.equal(card("clip.mp4"), "video/mp4");
+  assert.equal(card("voice.flac"), "audio/flac");
+  assert.equal(card("archive.tar.gz"), "application/gzip");
+  assert.equal(card("README"), "application/octet-stream");
+  assert.equal(card("thing.unknownext"), "application/octet-stream");
+});

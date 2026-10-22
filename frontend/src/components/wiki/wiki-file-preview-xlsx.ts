@@ -14,16 +14,19 @@
 // platform. read-excel-file is MIT, actively published, audits clean, and is
 // ~13 kB gzipped against SheetJS's ~308 kB.
 //
-// What is lost versus a full spreadsheet component: cell formatting, colours,
-// merged-cell geometry, charts, and formulas (cached results are shown, not the
-// formula text). For a preview that is an acceptable trade; anyone needing the
-// real thing downloads the file.
+// Number formats are kept: a value is shown as Excel shows it ($84,219, 12%,
+// 2024-03-01), read back by wiki-file-preview-xlsx-formats.ts. What is lost
+// versus a full spreadsheet component: fonts, colours, merged-cell geometry,
+// charts, and formulas (cached results are shown, not the formula text). For a
+// preview that is an acceptable trade; anyone needing the real thing downloads
+// the file.
 
 import {
   escapeHtml,
   noteBody,
   type PreviewBody,
 } from "./wiki-file-preview-document"
+import { readCellFormats } from "./wiki-file-preview-xlsx-formats"
 
 /** Caps that keep a hostile or merely enormous workbook from locking up the
  *  operator's tab. A spreadsheet claiming a million rows is a denial-of-service
@@ -65,10 +68,23 @@ export function columnLabel(index: number): string {
   return label
 }
 
+/** A value already rendered through its cell's number format, by
+ *  renderXlsxPreview. The parser yields only primitives and Dates, so a cell
+ *  of this shape can only have come from there. */
+export class FormattedCell {
+  readonly text: string
+  readonly numeric: boolean
+  constructor(text: string, numeric: boolean) {
+    this.text = text
+    this.numeric = numeric
+  }
+}
+
 /** Renders one cell value as display text. Returns the text plus whether it
  *  should be right-aligned, which is how a spreadsheet signals "this is a
  *  number" without us having to restyle per cell. */
 function formatCell(value: CellInput): { text: string; numeric: boolean } {
+  if (value instanceof FormattedCell) return { text: value.text, numeric: value.numeric }
   if (value === null || value === undefined) return { text: "", numeric: false }
   if (typeof value === "number") {
     return { text: Number.isFinite(value) ? String(value) : "", numeric: true }
@@ -109,6 +125,45 @@ function trimSheet(data: readonly RowInput[]): RowInput[] {
 }
 
 /**
+ * Lays the sheets out behind a row of tabs along the bottom, as a spreadsheet
+ * does, one sheet showing at a time.
+ *
+ * The frame is sandboxed without scripts, so the switching is HTML and CSS
+ * alone: a hidden radio button per sheet, each tab the label of one, and a
+ * rule per sheet that shows its panel and marks its tab while its radio is
+ * checked. Arrow keys move between them the way they do in any radio group.
+ * The radios come first because a CSS rule can only look at what follows.
+ */
+function sheetTabs(sheets: readonly SheetInput[], panels: readonly string[]): string {
+  const radios = sheets
+    .map((_, i) => `<input type="radio" name="sheet" id="sheet-${i}" class="sheet-radio"${i === 0 ? " checked" : ""}>`)
+    .join("")
+  const rules = sheets
+    .map(
+      (_, i) =>
+        `#sheet-${i}:checked ~ .sheet-panels > [data-sheet="${i}"] { display: block; }` +
+        `#sheet-${i}:checked ~ .sheet-tabs > [data-sheet="${i}"] { background: var(--tab-active-bg); color: var(--tab-active-fg); border-color: var(--tab-border); }` +
+        `#sheet-${i}:focus-visible ~ .sheet-tabs > [data-sheet="${i}"] { outline: 2px solid var(--tab-focus); outline-offset: -3px; }`,
+    )
+    .join("\n")
+  const panelHtml = panels.map((panel, i) => `<section class="sheet-panel" data-sheet="${i}">${panel}</section>`).join("")
+  const tabs = sheets
+    .map(
+      (sheet, i) => {
+        // A long name is cut short on its tab; the tooltip has all of it.
+        const name = escapeHtml(sheet.sheet || `Sheet${i + 1}`)
+        return `<label for="sheet-${i}" class="sheet-tab" data-sheet="${i}" title="${name}">${name}</label>`
+      },
+    )
+    .join("")
+  return (
+    `<style>${rules}</style>${radios}` +
+    `<div class="sheet-panels">${panelHtml}</div>` +
+    `<nav class="sheet-tabs" aria-label="Sheets">${tabs}</nav>`
+  )
+}
+
+/**
  * Builds the body markup for a whole workbook. Pure — no library, no DOM — so
  * the truncation and escaping rules are unit-testable on their own.
  */
@@ -120,18 +175,14 @@ export function buildSheetsHtml(sheets: readonly SheetInput[]): SheetsHtmlResult
     dropped.push(`${sheets.length - visible.length} of ${sheets.length} sheets not shown`)
   }
 
-  const parts: string[] = []
+  const panels: string[] = []
   let rowsTruncated = 0
   let colsTruncated = 0
 
   for (const sheet of visible) {
-    if (sheet.sheet !== "") {
-      parts.push(`<div class="sheet-title">${escapeHtml(sheet.sheet)}</div>`)
-    }
-
     const trimmed = trimSheet(sheet.data)
     if (trimmed.length === 0) {
-      parts.push('<p class="doc-note">Empty sheet.</p>')
+      panels.push('<p class="doc-note">Empty sheet.</p>')
       continue
     }
 
@@ -157,7 +208,7 @@ export function buildSheetsHtml(sheets: readonly SheetInput[]): SheetsHtmlResult
       })
       .join("")
 
-    parts.push(
+    panels.push(
       `<div class="doc-scroll"><table><thead><tr><th></th>${header}</tr></thead>` +
         `<tbody>${body}</tbody></table></div>`,
     )
@@ -167,12 +218,55 @@ export function buildSheetsHtml(sheets: readonly SheetInput[]): SheetsHtmlResult
   if (colsTruncated > 0) dropped.push(`columns beyond the first ${MAX_COLUMNS}`)
 
   return {
-    bodyHtml: parts.join(""),
+    // A CSV is one sheet without a name: the filename is already on the card,
+    // so it gets no tab.
+    bodyHtml:
+      visible.length === 0
+        ? ""
+        : visible.length === 1 && visible[0].sheet === ""
+          ? panels.join("")
+          : sheetTabs(visible, panels),
     notice:
       dropped.length === 0
         ? undefined
         : `Preview truncated — ${dropped.join("; ")}. Download the file to see everything.`,
   }
+}
+
+/** Milliseconds from the Unix epoch to Excel's day zero (1899-12-30). */
+const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30)
+
+/**
+ * Renders every number and date through its cell's format, as Excel would
+ * show it. A cell with no format gets General, which is also what keeps a
+ * float from printing all seventeen digits. Pure apart from the two
+ * functions passed in, so it is testable without the libraries.
+ */
+export function applyNumberFormats(
+  data: readonly RowInput[],
+  formatAt: ((row: number, column: number) => string | null) | undefined,
+  display: (pattern: string, value: number) => string | null,
+): RowInput[] {
+  return data.map((row, r) =>
+    row.map((value, c) => {
+      // Past the preview's caps the row is cut anyway (and counted in the
+      // truncation notice), and no format was read for it.
+      if (r >= MAX_ROWS_PER_SHEET || c >= MAX_COLUMNS) return value
+      const pattern = formatAt?.(r, c) ?? null
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const text = display(pattern ?? "General", value)
+        return text === null ? value : new FormattedCell(text, true)
+      }
+      if (value instanceof Date && Number.isFinite(value.getTime())) {
+        // read-excel-file builds the Date in UTC; the formatter reads a
+        // Date in local time, so hand it the serial Excel stored instead.
+        const serial = (value.getTime() - EXCEL_EPOCH_MS) / 86_400_000
+        const text = pattern === null ? null : display(pattern, serial)
+        return text === null ? value : new FormattedCell(text, true)
+      }
+      return value
+    }),
+  )
 }
 
 /**
@@ -186,8 +280,22 @@ export async function renderXlsxPreview(bytes: ArrayBuffer): Promise<PreviewBody
   // "." entry, so the bare specifier does not resolve under bundler resolution.
   const { default: readXlsxFile } = await import("read-excel-file/browser")
 
-  const sheets = await readXlsxFile(bytes)
-  const { bodyHtml, notice } = buildSheetsHtml(sheets)
+  const [sheets, { format }] = await Promise.all([readXlsxFile(bytes), import("numfmt")])
+  const formats = readCellFormats(bytes, MAX_ROWS_PER_SHEET, MAX_COLUMNS)
+  const display = (pattern: string, value: number): string | null => {
+    try {
+      return format(pattern, value)
+    } catch {
+      return null
+    }
+  }
+  const { bodyHtml, notice } = buildSheetsHtml(
+    sheets.map(({ sheet, data }, i) => {
+      // By name, falling back to position: both come from workbook.xml.
+      const sheetFormats = formats.find((f) => f.name === sheet) ?? formats[i]
+      return { sheet, data: applyNumberFormats(data, sheetFormats?.formatAt, display) }
+    }),
+  )
 
   return bodyHtml === ""
     ? noteBody("This workbook has no sheets.")

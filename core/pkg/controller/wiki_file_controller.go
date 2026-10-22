@@ -84,16 +84,20 @@ var previewAllowedContentTypes = map[string]bool{
 	// raster images below applies: nosniff pins the declared type, the CSP
 	// sandboxes any document interpretation, and a lying payload simply
 	// fails to decode. Served with Range support so the player can seek.
-	"video/webm":  true,
-	"video/mp4":   true,
-	"video/ogg":   true,
-	"audio/mpeg":  true,
-	"audio/ogg":   true,
-	"audio/wav":   true,
-	"audio/x-wav": true,
-	"audio/webm":  true,
-	"audio/mp4":   true,
-	"audio/flac":  true,
+	"video/webm": true,
+	"video/mp4":  true,
+	"video/ogg":  true,
+	// The codec inside a QuickTime file may be one no browser decodes; the
+	// card's player says so rather than this list guessing.
+	"video/quicktime": true,
+	"video/x-m4v":     true,
+	"audio/mpeg":      true,
+	"audio/ogg":       true,
+	"audio/wav":       true,
+	"audio/x-wav":     true,
+	"audio/webm":      true,
+	"audio/mp4":       true,
+	"audio/flac":      true,
 	// Raster images. An image attachment is the one case where the browser
 	// already is the renderer, so serving it inline is what makes a thumbnail
 	// and a lightbox possible without a second copy of the bytes.
@@ -106,21 +110,29 @@ var previewAllowedContentTypes = map[string]bool{
 	// markup, and a document interpretation of it is sandboxed and cut off from
 	// the network. It simply fails to decode.
 	//
-	// SVG is deliberately absent — it is a scriptable document, not a raster,
-	// and stays in dangerousContentTypes below, which wins over this map.
-	"image/png":  true,
-	"image/jpeg": true,
-	"image/gif":  true,
-	"image/webp": true,
-	"image/avif": true,
-	"image/bmp":  true,
+	"image/png":                true,
+	"image/jpeg":               true,
+	"image/gif":                true,
+	"image/webp":               true,
+	"image/avif":               true,
+	"image/bmp":                true,
+	"image/x-icon":             true,
+	"image/vnd.microsoft.icon": true,
+	// SVG is a scriptable document, not a raster, and attachments are stored
+	// as uploaded rather than sanitized the way wiki images are (wiki/svg.go).
+	// It is inline anyway because nothing in it can run: an <img> never
+	// executes an SVG's scripts, and opened on its own it gets the sandbox
+	// CSP Serve sends, which withholds scripts and every fetch. The wiki
+	// image controller has served SVG on exactly that CSP all along.
+	mimeSVG: true,
 }
+
+const mimeSVG = "image/svg+xml"
 
 // dangerousContentTypes are formats the browser may execute if served inline.
 // These are always returned as attachment, regardless of ?preview=1.
 var dangerousContentTypes = map[string]bool{
 	"text/html":                true,
-	"image/svg+xml":            true,
 	"application/xhtml+xml":    true,
 	"application/javascript":   true,
 	"application/x-javascript": true,
@@ -383,8 +395,7 @@ func (wfc *WikiFileController) Download(c *gin.Context) {
 	c.Header("ETag", fileETagFor(file.Checksum))
 	c.Header("Cache-Control", "private, max-age=31536000, immutable")
 	c.Header("X-Content-Type-Options", "nosniff")
-	// Defense-in-depth CSP: file downloads should never execute anything.
-	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
+	c.Header("Content-Security-Policy", fileCSPFor(contentType))
 
 	if err := writeFileBody(c.Writer, c.Request, reader, info.ContentLength); err != nil {
 		// Client disconnect; not worth logging as error.
@@ -481,6 +492,17 @@ func canonicalContentType(ct string) string {
 		ct = ct[:i]
 	}
 	return strings.ToLower(strings.TrimSpace(ct))
+}
+
+// fileCSPFor is the Content-Security-Policy a served file carries. Defense in
+// depth: a file should never execute anything, and for an inline SVG this is
+// what stops it (see previewAllowedContentTypes). An SVG keeps its inline
+// styles, as on the image controller; scripts and fetches stay denied.
+func fileCSPFor(contentType string) string {
+	if canonicalContentType(contentType) == mimeSVG {
+		return "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+	}
+	return "default-src 'none'; sandbox"
 }
 
 // contentDispositionFor returns an RFC 6266 Content-Disposition header value.

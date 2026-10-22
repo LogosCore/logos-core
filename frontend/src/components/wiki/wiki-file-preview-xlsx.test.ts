@@ -30,14 +30,14 @@ describe("columnLabel", () => {
 })
 
 describe("buildSheetsHtml", () => {
-  it("renders one titled table per sheet", () => {
+  it("puts each sheet behind a tab along the bottom", () => {
     const { bodyHtml, notice } = buildSheetsHtml([
       { sheet: "Hosts", data: [["ip", "os"]] },
       { sheet: "Creds", data: [["user"]] },
     ])
 
-    expect(bodyHtml).toContain('<div class="sheet-title">Hosts</div>')
-    expect(bodyHtml).toContain('<div class="sheet-title">Creds</div>')
+    expect(bodyHtml).toContain('<label for="sheet-0" class="sheet-tab" data-sheet="0" title="Hosts">Hosts</label>')
+    expect(bodyHtml).toContain('<label for="sheet-1" class="sheet-tab" data-sheet="1" title="Creds">Creds</label>')
     expect(notice).toBeUndefined()
   })
 
@@ -154,8 +154,8 @@ describe("buildSheetsHtml", () => {
     const sheets = Array.from({ length: 30 }, (_, i) => bigSheet(`s${i}`, 1, 1))
     const { bodyHtml, notice } = buildSheetsHtml(sheets)
 
-    expect(bodyHtml).toContain('<div class="sheet-title">s24</div>')
-    expect(bodyHtml).not.toContain('<div class="sheet-title">s25</div>')
+    expect(bodyHtml).toContain('data-sheet="24" title="s24">s24</label>')
+    expect(bodyHtml).not.toContain(">s25</label>")
     expect(notice).toContain("5 of 30 sheets not shown")
   })
 
@@ -165,16 +165,48 @@ describe("buildSheetsHtml", () => {
 })
 
 describe("buildSheetsHtml with an unnamed sheet", () => {
-  it("omits the heading, so the CSV renderer doesn't repeat the filename", () => {
+  it("omits the tabs, so the CSV renderer doesn't repeat the filename", () => {
     const { bodyHtml } = buildSheetsHtml([{ sheet: "", data: [["a"]] }])
 
-    expect(bodyHtml).not.toContain("sheet-title")
+    expect(bodyHtml).not.toContain("sheet-tab")
     expect(bodyHtml).toContain("<table>")
   })
 
-  it("still emits the heading for a sheet that has a name", () => {
+  it("still shows a tab for a lone sheet that has a name, as a spreadsheet does", () => {
     const { bodyHtml } = buildSheetsHtml([{ sheet: "Sheet1", data: [["a"]] }])
 
-    expect(bodyHtml).toContain('<div class="sheet-title">Sheet1</div>')
+    expect(bodyHtml).toContain('class="sheet-tab" data-sheet="0" title="Sheet1">Sheet1</label>')
+  })
+})
+
+describe("sheet tabs", () => {
+  // The frame runs no scripts, so switching is a radio per sheet and a CSS
+  // rule per sheet; these pin the pieces that have to line up.
+  const { bodyHtml } = buildSheetsHtml([
+    { sheet: "Hosts", data: [["ip"]] },
+    { sheet: "Empty", data: [] },
+    { sheet: "Creds", data: [["user"]] },
+  ])
+
+  it("opens on the first sheet", () => {
+    expect(bodyHtml).toContain('<input type="radio" name="sheet" id="sheet-0" class="sheet-radio" checked>')
+    expect(bodyHtml).toContain('<input type="radio" name="sheet" id="sheet-2" class="sheet-radio">')
+  })
+
+  it("gives every sheet a panel and a rule that shows it", () => {
+    for (const i of [0, 1, 2]) {
+      expect(bodyHtml).toContain(`<section class="sheet-panel" data-sheet="${i}">`)
+      expect(bodyHtml).toContain(`#sheet-${i}:checked ~ .sheet-panels > [data-sheet="${i}"] { display: block; }`)
+    }
+  })
+
+  it("keeps an empty sheet's tab, with a note in its panel", () => {
+    expect(bodyHtml).toContain('<section class="sheet-panel" data-sheet="1"><p class="doc-note">Empty sheet.</p></section>')
+  })
+
+  it("puts the radios before what their rules select", () => {
+    // A ~ selector only reaches later siblings.
+    expect(bodyHtml.indexOf('id="sheet-2"')).toBeLessThan(bodyHtml.indexOf('class="sheet-panels"'))
+    expect(bodyHtml.indexOf('class="sheet-panels"')).toBeLessThan(bodyHtml.indexOf('class="sheet-tabs"'))
   })
 })

@@ -11,6 +11,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 
+import { textLayoutOf, type TextLayout } from "./wiki-file-preview-fit"
+
 import {
   buildPreviewDocument,
   type PreviewBody,
@@ -185,6 +187,9 @@ export interface RenderedPreviewState {
   content: string | null
   /** User-facing failure message; null while pending or on success. */
   error: string | null
+  /** The lines of a listing-style preview, which the panel sizes itself to;
+   *  null for any other kind of content. See wiki-file-preview-fit.ts. */
+  textLayout: TextLayout | null
 }
 
 /**
@@ -246,7 +251,12 @@ export function useRenderedPreview(
     return buildPreviewDocument({ ...body, theme, title: filename })
   }, [body, theme, filename])
 
-  return { content, error }
+  const textLayout = useMemo(
+    () => (body === null || body.verbatim === true ? null : textLayoutOf(body.bodyHtml, body.notice !== undefined)),
+    [body],
+  )
+
+  return { content, error, textLayout }
 }
 
 async function renderByKind(

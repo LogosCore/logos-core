@@ -71,7 +71,9 @@ export function renderScriptPreview(text: string): PreviewBody {
       const code = highlightLine(line, dialect)
       return `<span class="script-line">${num}${code}</span>`
     })
-    .join("\n")
+    // Each line is a block already. A newline between them would be kept by
+    // the <pre> and drawn as an empty line after every one.
+    .join("")
 
   return {
     bodyHtml: `<pre class="script-pre">${numbered}</pre>`,

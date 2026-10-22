@@ -24,11 +24,14 @@ const EMPTY_FILE = "This file is empty."
 
 /** Renders a plain-text file verbatim. Everything is escaped and wrapped in a
  *  <pre>, so the file's own characters can never become markup — a .txt holding
- *  "<script>" shows those eight characters. */
+ *  "<script>" shows those eight characters. Long lines wrap: a paragraph per
+ *  line is how prose is usually saved, and nobody reads it by scrolling
+ *  sideways. Code, JSON and YAML keep their lines, where the layout means
+ *  something. */
 export function renderTextPreview(text: string): PreviewBody {
   return text.trim() === ""
     ? noteBody(EMPTY_FILE)
-    : { bodyHtml: `<pre>${escapeHtml(text)}</pre>` }
+    : { bodyHtml: `<pre class="text-pre">${escapeHtml(text)}</pre>` }
 }
 
 /** Renders Markdown to HTML. Dynamically imported by the caller, so markdown-it
@@ -50,5 +53,5 @@ export async function renderMarkdownPreview(text: string): Promise<PreviewBody> 
     typographer: false,
   })
 
-  return { bodyHtml: md.render(text) }
+  return { bodyHtml: md.render(text), prose: true }
 }

@@ -96,9 +96,12 @@ func TestContentDispositionFor(t *testing.T) {
 		{"preview jpeg is inline", "shot.jpg", "image/jpeg", true, "inline;"},
 		{"preview webp is inline", "shot.webp", "image/webp", true, "inline;"},
 		{"image default is still attachment", "shot.png", "image/png", false, "attachment;"},
-		// SVG is a scriptable document, not a raster: it must stay an
-		// attachment even though every other image type is now inline.
-		{"preview svg forced to attachment", "x.svg", "image/svg+xml", true, "attachment;"},
+		// Inline only because Serve sandboxes it; see previewAllowedContentTypes.
+		{"preview svg is inline", "x.svg", "image/svg+xml", true, "inline;"},
+		{"svg default is still attachment", "x.svg", "image/svg+xml", false, "attachment;"},
+		{"preview ico is inline", "favicon.ico", "image/x-icon", true, "inline;"},
+		{"preview tiff stays attachment", "scan.tiff", "image/tiff", true, "attachment;"},
+		{"preview quicktime is inline", "clip.mov", "video/quicktime", true, "inline;"},
 		{"preview js forced to attachment", "x.js", "application/javascript", true, "attachment;"},
 	}
 
@@ -113,6 +116,23 @@ func TestContentDispositionFor(t *testing.T) {
 				t.Errorf("expected RFC 5987 filename*, got %q", got)
 			}
 		})
+	}
+}
+
+// An inline SVG is safe only because of this policy, so pin both halves: it is
+// sandboxed with no script source, and it alone is allowed its inline styles.
+func TestFileCSPFor(t *testing.T) {
+	for _, ct := range []string{"image/svg+xml", "IMAGE/SVG+XML; charset=utf-8"} {
+		got := fileCSPFor(ct)
+		if !strings.Contains(got, "sandbox") || !strings.Contains(got, "default-src 'none'") || strings.Contains(got, "script-src") {
+			t.Errorf("fileCSPFor(%q) = %q, want a sandbox with no script source", ct, got)
+		}
+		if !strings.Contains(got, "style-src 'unsafe-inline'") {
+			t.Errorf("fileCSPFor(%q) = %q, want inline styles allowed", ct, got)
+		}
+	}
+	if got := fileCSPFor("image/png"); got != "default-src 'none'; sandbox" {
+		t.Errorf("fileCSPFor(image/png) = %q", got)
 	}
 }
 

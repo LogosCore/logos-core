@@ -19,8 +19,13 @@ describe("detectMediaPreviewKind", () => {
     )
   })
 
+  it("gives QuickTime a player, which reports a codec it cannot decode", () => {
+    expect(detectMediaPreviewKind("video/quicktime", "clip.mov")).toBe("video")
+    expect(detectMediaPreviewKind("application/octet-stream", "IMG_0042.MOV")).toBe("video")
+  })
+
   it("offers no player for media browsers do not decode, or other files", () => {
-    expect(detectMediaPreviewKind("video/quicktime", "clip.mov")).toBeNull()
+    expect(detectMediaPreviewKind("video/x-msvideo", "clip.avi")).toBeNull()
     expect(detectMediaPreviewKind("application/pdf", "report.pdf")).toBeNull()
     expect(detectMediaPreviewKind("text/plain", "notes.txt")).toBeNull()
   })

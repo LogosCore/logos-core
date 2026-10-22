@@ -58,6 +58,10 @@ export interface PreviewBody {
   bodyHtml: string
   /** Truncation or fidelity warning shown above the content. */
   notice?: string
+  /** Flowing text (a Word document, rendered Markdown) rather than a block
+   *  that fills the frame edge to edge (a code listing, a sheet). Prose gets a
+   *  page margin; without one it runs against the frame's border. */
+  prose?: boolean
   /** Set when bodyHtml is already a complete, self-styled document — the raw
    *  HTML attachment path. Such a document must reach the frame untouched;
    *  wrapping it in our shell would nest a whole document inside a <body> and
@@ -103,6 +107,9 @@ body {
   font: 14px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   overflow-wrap: anywhere;
 }
+/* Prose only: a listing or a sheet fills the frame and brings its own inset. */
+body.doc-prose { padding: 16px 24px 32px; }
+body.doc-prose > :first-child { margin-top: 0; }
 h1, h2, h3, h4, h5, h6 { line-height: 1.25; margin: 1.4em 0 0.5em; }
 h1 { font-size: 1.7em; } h2 { font-size: 1.4em; } h3 { font-size: 1.18em; }
 p { margin: 0 0 0.85em; }
@@ -115,6 +122,7 @@ blockquote {
 }
 pre, code { font-family: ui-monospace, "Geist Mono", SFMono-Regular, monospace; font-size: 0.92em; }
 pre { overflow-x: auto; padding: 12px; margin: 0; min-height: 100vh; background: ${c.headerBg}; border-radius: 6px; }
+pre.text-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* Structured-data tokens, shared by the JSON and YAML renderers. Colour is the
    only signal, so each stays legible against the pre background in both themes
    rather than relying on weight or background. */
@@ -217,16 +225,35 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .doc-scroll thead th { box-shadow: inset 0 -1px 0 ${c.border}, inset 0 1px 0 ${c.border}; }
 .doc-scroll tbody th { box-shadow: inset -1px 0 0 ${c.border}, inset 1px 0 0 ${c.border}; }
 
-/* Sheet chrome */
-.sheet-title {
-  margin: 1.8em 0 0.6em;
-  font-size: 0.78em;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: ${c.muted};
+/* Sheet chrome: the tabs along the bottom of a workbook, and the panel each
+   one shows (see sheetTabs in wiki-file-preview-xlsx.ts). */
+.sheet-radio { position: absolute; opacity: 0; pointer-events: none; }
+.sheet-panel { display: none; padding-bottom: 44px; }
+.sheet-tabs {
+  --tab-border: ${c.border};
+  --tab-active-bg: ${c.bg};
+  --tab-active-fg: ${c.fg};
+  /* The radio holds the focus; its tab shows it. */
+  --tab-focus: ${c.muted};
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
+  display: flex; gap: 2px; overflow-x: auto;
+  padding: 0 8px;
+  background: ${c.headerBg};
+  border-top: 1px solid ${c.border};
 }
-.sheet-title:first-child { margin-top: 0; }
+.sheet-tab {
+  flex: none;
+  max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin-top: -1px;
+  padding: 6px 14px;
+  border: 1px solid transparent; border-top: none;
+  border-radius: 0 0 6px 6px;
+  color: ${c.muted};
+  font-size: 0.86em;
+  cursor: pointer;
+  user-select: none;
+}
+.sheet-tab:hover { color: ${c.fg}; }
 .doc-note { color: ${c.muted}; font-style: italic; margin: 0 0 1.4em; }
 .doc-notice {
   margin: 0 0 1.4em;
@@ -253,6 +280,7 @@ export function buildPreviewDocument({
   theme,
   title,
   notice,
+  prose,
 }: PreviewDocumentOptions): string {
   const noticeHtml =
     notice === undefined ? "" : `<div class="doc-notice">${escapeHtml(notice)}</div>`
@@ -265,7 +293,7 @@ export function buildPreviewDocument({
 <title>${escapeHtml(title)}</title>
 <style>${stylesheet(theme)}</style>
 </head>
-<body>${noticeHtml}${bodyHtml}</body>
+<body${prose === true ? ' class="doc-prose"' : ""}>${noticeHtml}${bodyHtml}</body>
 </html>`
 
   return withPreviewCsp(doc)

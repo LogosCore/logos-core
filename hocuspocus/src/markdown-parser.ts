@@ -669,27 +669,65 @@ function fileLinkLineToBlock(line: JsonNode[]): JsonNode | null {
   };
 }
 
-function guessContentType(filename: string): string {
-  const ext = filename.toLowerCase().split(".").pop() ?? "";
-  switch (ext) {
-    case "pdf": return "application/pdf";
-    case "png": return "image/png";
-    case "jpg":
-    case "jpeg": return "image/jpeg";
-    case "gif": return "image/gif";
-    case "webp": return "image/webp";
-    case "svg": return "image/svg+xml";
-    case "txt": return "text/plain";
-    case "md": return "text/markdown";
-    case "csv": return "text/csv";
-    case "json": return "application/json";
-    case "zip": return "application/zip";
-    case "doc": return "application/msword";
-    case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    case "xls": return "application/vnd.ms-excel";
-    case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    default: return "application/octet-stream";
-  }
+// The markdown link carries no content type, so the card's is guessed from the
+// extension. The card decides from it how to show the file (a thumbnail, a
+// player, a preview panel or just a download), so a format missing here falls
+// back to octet-stream and a generic icon. Keep it to types the server would
+// also have named; the card and the server's own record of the file agree on
+// everything that matters for display.
+const CONTENT_TYPE_BY_EXTENSION: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  svg: "image/svg+xml",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  flac: "audio/flac",
+  txt: "text/plain",
+  log: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  html: "text/html",
+  htm: "text/html",
+  xml: "text/xml",
+  json: "application/json",
+  yaml: "application/yaml",
+  yml: "application/yaml",
+  zip: "application/zip",
+  gz: "application/gzip",
+  tgz: "application/gzip",
+  "7z": "application/x-7z-compressed",
+  rar: "application/x-rar-compressed",
+  tar: "application/x-tar",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+
+export function guessContentType(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  const ext = dot === -1 ? "" : filename.slice(dot + 1).toLowerCase();
+  return CONTENT_TYPE_BY_EXTENSION[ext] ?? "application/octet-stream";
 }
 
 // Lower every wikiCredentialBlock at the top level back to a paragraph

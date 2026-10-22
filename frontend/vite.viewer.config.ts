@@ -78,6 +78,16 @@ export default defineConfig({
         find: /^@\/components\/wiki\/icon-glob$/,
         replacement: path.resolve(__dirname, "src/viewer/viewer-icon-glob.ts"),
       },
+      // No server to ask; see src/viewer/viewer-file-type-probe.ts.
+      {
+        find: /^@\/components\/wiki\/wiki-file-type-probe$/,
+        replacement: path.resolve(__dirname, "src/viewer/viewer-file-type-probe.ts"),
+      },
+      // TIFF and HEIC decoders; see src/viewer/viewer-image-decode.ts.
+      {
+        find: /^@\/components\/wiki\/wiki-image-decode$/,
+        replacement: path.resolve(__dirname, "src/viewer/viewer-image-decode.ts"),
+      },
       {
         find: /^@\/components\/wiki\/simple-icon-glob$/,
         replacement: path.resolve(__dirname, "src/viewer/viewer-simple-icon-glob.ts"),

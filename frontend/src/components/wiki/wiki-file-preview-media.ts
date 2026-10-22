@@ -7,13 +7,21 @@
 
 export type MediaPreviewKind = "video" | "audio"
 
-/** Container types browsers decode across the board. Mirrors the media entries
- *  in previewAllowedContentTypes in wiki_file_controller.go, which must serve
- *  them inline for the player to load. */
+/** Containers browsers open. Mirrors the media entries in
+ *  previewAllowedContentTypes in wiki_file_controller.go, which must serve them
+ *  inline for the player to load.
+ *
+ *  A container says nothing certain about the codec inside. QuickTime is the
+ *  clearest case: an iPhone or a screen recorder writes H.264 or HEVC, which
+ *  play, and an older or pro export may be ProRes, which plays nowhere. So a
+ *  .mov gets a player like the rest, and the player reports a file it cannot
+ *  decode (FilePreviewPanel in wiki-file-card.tsx) instead of sitting black. */
 const VIDEO_CONTENT_TYPES = new Set<string>([
   "video/webm",
   "video/mp4",
   "video/ogg",
+  "video/quicktime",
+  "video/x-m4v",
 ])
 const AUDIO_CONTENT_TYPES = new Set<string>([
   "audio/mpeg",
@@ -26,7 +34,7 @@ const AUDIO_CONTENT_TYPES = new Set<string>([
 ])
 
 /** Extension fallback for when sniffing lands on something generic. */
-const VIDEO_EXTENSIONS = new Set<string>(["webm", "mp4", "m4v", "ogv"])
+const VIDEO_EXTENSIONS = new Set<string>(["webm", "mp4", "m4v", "ogv", "mov"])
 const AUDIO_EXTENSIONS = new Set<string>([
   "mp3",
   "ogg",

@@ -35,7 +35,7 @@ export async function renderDocxPreview(bytes: ArrayBuffer): Promise<PreviewBody
   const mammoth = await import("mammoth")
 
   const html = (await mammoth.convertToHtml({ arrayBuffer: bytes })).value.trim()
-  if (html !== "") return { bodyHtml: html }
+  if (html !== "") return { bodyHtml: html, prose: true }
 
   // Nothing survived conversion — try plain text before giving up, so a
   // document built entirely from unsupported constructs still shows its words.
