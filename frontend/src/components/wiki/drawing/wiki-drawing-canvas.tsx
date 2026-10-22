@@ -26,6 +26,7 @@ import { Maximize } from "lucide-react"
 
 import { useDrawingSync } from "./use-drawing-sync"
 import { readGridPreference, writeGridPreference } from "./drawing-grid-preference"
+import { readStylePreference, styleOf, writeStylePreference } from "./drawing-style-preference"
 import { loadDrawingView, saveDrawingView, type DrawingView } from "./drawing-view-memory"
 import { drawingLibraryAdapter, followLibraryInOtherTabs } from "./drawing-library"
 import { embedWikiImages } from "./drawing-images"
@@ -76,6 +77,10 @@ export default function WikiDrawingCanvas({
   // controlled, and Excalidraw then hides its own toggle.
   const [initialGrid] = useState(readGridPreference)
   const gridRef = useRef(initialGrid)
+  // The style new elements get (arrow type, colours, stroke, font…), as this
+  // browser last left it. See drawing-style-preference.ts.
+  const [initialStyle] = useState(readStylePreference)
+  const styleRef = useRef(JSON.stringify(initialStyle))
   const trackExportDialog = useEmbeddedImagesForExport(api)
   const containerRef = useRef<HTMLDivElement>(null)
   const records = useRecordCards({ api, isEditor, operationId, documentId, containerRef })
@@ -91,8 +96,16 @@ export default function WikiDrawingCanvas({
         gridRef.current = appState.gridModeEnabled
         writeGridPreference(appState.gridModeEnabled)
       }
+      if (isEditor) {
+        const style = styleOf(appState)
+        const key = JSON.stringify(style)
+        if (key !== styleRef.current) {
+          styleRef.current = key
+          writeStylePreference(style)
+        }
+      }
     },
-    [onChange, recordsChange, trackExportDialog],
+    [onChange, recordsChange, trackExportDialog, isEditor],
   )
 
   // The operator's own shapes survive a reload (drawing-library.ts), and the
@@ -158,6 +171,7 @@ export default function WikiDrawingCanvas({
           appState: {
             viewBackgroundColor: initialBackgroundColor,
             gridModeEnabled: initialGrid,
+            ...initialStyle,
             ...(initialView && {
               scrollX: initialView.scrollX,
               scrollY: initialView.scrollY,
