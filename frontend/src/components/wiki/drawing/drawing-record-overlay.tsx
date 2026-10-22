@@ -1,6 +1,7 @@
 // What the canvas draws over record cards, in HTML rather than in the scene:
-// an Open button under the selected card, and a marker on a card whose record
-// is gone. Neither belongs in the drawing itself. The button is this
+// an Open button under the selected card, the full words of the card under
+// the pointer, and a marker on a card whose record is gone. None of it
+// belongs in the drawing itself. The button and the words are this
 // operator's, and the marker depends on who is looking: a host this viewer
 // has no access to is not gone for its owner.
 //
@@ -27,7 +28,19 @@ export function RecordOverlay({ items, onOpen }: RecordOverlayProps) {
     // panel or menu still covers it.
     <div className="wiki-record-overlay pointer-events-none absolute inset-0 z-[3] overflow-hidden">
       {items.map((item) =>
-        item.kind === "open" ? (
+        item.kind === "hover" ? (
+          // The record's words in full: a card with arrows keeps its width,
+          // so a long name is cut on the canvas.
+          <div
+            key={`hover-${item.id}`}
+            role="tooltip"
+            className="absolute max-w-[min(28rem,90%)] -translate-x-1/2 -translate-y-full rounded-md border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md"
+            style={{ left: item.x + item.width / 2, top: item.y - 8 }}
+          >
+            <div className="font-medium break-words">{item.title}</div>
+            {item.detail && <div className="mt-0.5 break-words text-muted-foreground">{item.detail}</div>}
+          </div>
+        ) : item.kind === "open" ? (
           <button
             key={`open-${item.id}`}
             type="button"

@@ -11,8 +11,10 @@
 //     one; its handle opens the record too, and a refresh takes it off.
 //
 // Refreshing writes to the shared scene, so only editors do it, once per
-// card per visit. The card keeps its size: words that no longer fit are cut
-// with an ellipsis, since a wider card would leave its arrows behind.
+// card per visit. A card with arrows keeps its size, its words cut with an
+// ellipsis, since a wider card would leave its arrows behind; resizing it
+// makes it wider (see "Resizing a card" in drawing-record-cards.ts), and
+// hovering shows the words in full.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router"
@@ -39,10 +41,18 @@ import {
   elementBox,
   fitText,
   freeSpot,
+  geometryOf,
+  moveArrowEnds,
   recordAt,
   recordCards,
+  recordElementAt,
   refsInPaste,
+  resizeTarget,
+  boxMap,
+  widenCard,
+  type PartGeometry,
   type RecordCard,
+  type WidthTarget,
 } from "./drawing-record-cards"
 import { REF_LABELS, lookupRecord, pickRecord, type RecordLookup } from "./drawing-records"
 import { insertElements, skeletonElements } from "./drawing-place"
@@ -57,9 +67,13 @@ export interface RecordOverlayItem {
   y: number
   width: number
   height: number
-  /** "open": the selected card's Open button; otherwise the card's record is
-   * gone or out of reach. */
-  kind: "open" | "missing" | "forbidden"
+  /** "open": the selected card's Open button; "hover": the full words of the
+   * card under the pointer; otherwise the card's record is gone or out of
+   * reach. */
+  kind: "open" | "hover" | "missing" | "forbidden"
+  /** For "hover": the record's words. */
+  title?: string
+  detail?: string
 }
 
 interface UseRecordCardsArgs {
@@ -81,8 +95,38 @@ const DOUBLE_OPEN_MS = 600
 // Room a card leaves right of its words (CARD_PAD in the catalogue).
 const CARD_PAD = 14
 // The longest words a new card is given; a refresh keeps the card's width.
-const TITLE_MAX = 36
-const DETAIL_MAX = 48
+const TITLE_MAX = 60
+const DETAIL_MAX = 72
+// The narrowest a resize leaves a card: the icon tile and a few letters.
+const MIN_CARD_WIDTH = 160
+// How long the pointer rests on a card before its full words show.
+const HOVER_DELAY_MS = 350
+
+/** An arrow bound to a card, as a resize found it. */
+interface BoundArrow {
+  x: number
+  y: number
+  points: readonly (readonly [number, number])[]
+  elbowed?: boolean
+  start: boolean
+  end: boolean
+}
+
+/** A card's geometry from before a resize: see onChange. */
+interface CardSnapshot {
+  frameId: string
+  frame: { x: number; y: number; width: number; height: number }
+  parts: Map<string, PartGeometry>
+  badges: Set<string>
+  arrows: Map<string, BoundArrow>
+}
+
+type ArrowElement = ExcalidrawElement & {
+  points: readonly (readonly [number, number])[]
+  elbowed?: boolean
+  startBinding?: { elementId: string } | null
+  endBinding?: { elementId: string } | null
+}
 
 export function useRecordCards({ api, isEditor, operationId, documentId, containerRef }: UseRecordCardsArgs) {
   const queryClient = useQueryClient()
@@ -94,6 +138,12 @@ export function useRecordCards({ api, isEditor, operationId, documentId, contain
   const [overlay, setOverlay] = useState<RecordOverlayItem[]>([])
   const overlayKeyRef = useRef("")
   const lastOpenRef = useRef({ key: "", at: 0 })
+  const [hovered, setHovered] = useState<string | null>(null)
+  const cardsRef = useRef<RecordCard[]>([])
+  const lookupsRef = useRef(lookups)
+  useEffect(() => {
+    lookupsRef.current = lookups
+  }, [lookups])
 
   // --- Records ---------------------------------------------------------------
 
@@ -141,36 +191,135 @@ export function useRecordCards({ api, isEditor, operationId, documentId, contain
 
   /** Called from the canvas's onChange: finds the cards when the drawing
    * changed, and keeps the overlay over them as the view moves. */
+  /** The card of `snapshot` at the width `target` says: its parts, its
+   * words refitted, and the arrows bound to it ending on its new edge. The
+   * arrows are taken as they are on `arrowsOn` and moved from it. */
+  const widenUpdates = useCallback(
+    (snapshot: CardSnapshot, target: WidthTarget, arrowsOn: Box, arrows: ReadonlyMap<string, BoundArrow>) => {
+      const updates = new Map<string, ExcalidrawElement>()
+      if (!api) return updates
+      const byId = new Map(api.getSceneElementsIncludingDeleted().map((el) => [el.id, el]))
+      const widened = widenCard(snapshot.parts, snapshot.frameId, snapshot.frame, target, snapshot.badges)
+      for (const [id, g] of widened.parts) {
+        const el = byId.get(id)
+        if (el) updates.set(id, newElementWith(el, g as never))
+      }
+      // The words, refitted to the new width from the record's own.
+      const right = widened.frame.x + widened.frame.width - CARD_PAD
+      for (const el of [...updates.values()]) {
+        const part = tagOf(el)?.part
+        if (el.type !== "text" || (part !== "title" && part !== "detail")) continue
+        const ref = refOf(el)
+        const lookup = ref ? lookupsRef.current.get(refKey(ref)) : undefined
+        const text = el as ExcalidrawTextElement
+        const words = lookup?.status === "ok" ? lookup[part] : text.originalText
+        const next = retext(text, words, right - el.x)
+        if (next) updates.set(el.id, next)
+      }
+      const map = boxMap(arrowsOn, widened.frame)
+      for (const [id, arrow] of arrows) {
+        const el = byId.get(id)
+        if (!el || el.isDeleted) continue
+        updates.set(id, newElementWith(el, moveArrowEnds(arrow, arrow, map) as never))
+      }
+      return updates
+    },
+    [api],
+  )
+
+  const apply = useCallback(
+    (updates: ReadonlyMap<string, ExcalidrawElement>, captureUpdate: (typeof CaptureUpdateAction)[keyof typeof CaptureUpdateAction]) => {
+      if (!api || updates.size === 0) return
+      api.updateScene({
+        elements: api.getSceneElementsIncludingDeleted().map((el) => updates.get(el.id) ?? el),
+        captureUpdate,
+      })
+    },
+    [api],
+  )
+
+  /** Excalidraw's own resize of a card (a touch, or a handle the canvas did
+   * not take over) scaled it; make it a change of width after the fact. */
+  const finishResize = useCallback(
+    (snapshot: CardSnapshot) => {
+      if (!api) return
+      const all = api.getSceneElementsIncludingDeleted()
+      const frameNow = all.find((el) => el.id === snapshot.frameId)
+      if (!frameNow || frameNow.isDeleted) return
+      const now = elementBox(frameNow)
+      const target = resizeTarget(snapshot.frame, now, MIN_CARD_WIDTH)
+      if (!target) return
+      // Excalidraw moved the arrows with the scaled card: move them on from
+      // where it left them.
+      const arrows = new Map<string, BoundArrow>()
+      for (const [id] of snapshot.arrows) {
+        const a = all.find((el) => el.id === id) as ArrowElement | undefined
+        if (a) arrows.set(id, { ...arrowOf(a, snapshot.frameId) })
+      }
+      // Not a step of its own: it finishes the resize the operator made.
+      apply(widenUpdates(snapshot, target, now, arrows), CaptureUpdateAction.NEVER)
+    },
+    [api, apply, widenUpdates],
+  )
+
+  const snapshotRef = useRef<CardSnapshot | null>(null)
+  const snapshotKeyRef = useRef("")
+  const resizingRef = useRef(false)
+
   const onChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState) => {
       const hash = hashElementsVersion(elements)
       let current = cards
-      if (hash !== hashRef.current) {
+      const changed = hash !== hashRef.current
+      if (changed) {
         hashRef.current = hash
         current = recordCards(elements)
+        cardsRef.current = current
         setCards(current)
         request(current.map((c) => c.ref))
       }
-      const items = overlayItems(current, lookups, appState)
+
+      // A resize of one card on its own ends as a wider card, not a bigger
+      // one. Its geometry is kept while it is selected and still, and
+      // compared with what the resize left once the resize ends.
+      if (isEditor) {
+        if (resizingRef.current && !appState.isResizing && snapshotRef.current) {
+          const snapshot = snapshotRef.current
+          requestAnimationFrame(() => finishResize(snapshot))
+        }
+        resizingRef.current = appState.isResizing
+        if (!appState.isResizing) {
+          const selection = Object.keys(appState.selectedElementIds)
+          const key = `${hash}:${selection.join(",")}`
+          if (key !== snapshotKeyRef.current) {
+            snapshotKeyRef.current = key
+            snapshotRef.current = snapshotOf(soleSelectedCard(current, selection), elements)
+          }
+        }
+      }
+
+      const items = overlayItems(current, lookups, appState, appState.isResizing ? null : hovered)
       const key = JSON.stringify(items)
       if (key !== overlayKeyRef.current) {
         overlayKeyRef.current = key
         setOverlay(items)
       }
     },
-    [cards, lookups, request],
+    [cards, lookups, request, isEditor, hovered, finishResize],
   )
 
-  // A lookup that lands moves the overlay without a canvas change.
+  // A lookup that lands, or the pointer resting on a card, changes the
+  // overlay without a canvas change.
   useEffect(() => {
     if (!api) return
-    const items = overlayItems(cards, lookups, api.getAppState())
+    const items = overlayItems(cards, lookups, api.getAppState(), hovered)
     const key = JSON.stringify(items)
     if (key !== overlayKeyRef.current) {
       overlayKeyRef.current = key
       setOverlay(items)
     }
-  }, [api, cards, lookups])
+  }, [api, cards, lookups, hovered])
+
 
   // --- Refresh ------------------------------------------------------------------
 
@@ -180,7 +329,22 @@ export function useRecordCards({ api, isEditor, operationId, documentId, contain
     const updates = new Map<string, ExcalidrawElement>()
     const added: ExcalidrawElement[] = []
     for (const card of cards) {
-      if (refreshedRef.current.has(card.frame.id)) continue
+      if (refreshedRef.current.has(card.frame.id)) {
+        // Words that run past the card's edge (an undone resize leaves the
+        // wide card's words in the narrow card) are refitted.
+        const lookup = lookups.get(card.key)
+        const right = card.frame.x + card.frame.width - CARD_PAD
+        for (const [el, part] of [
+          [card.title, "title"],
+          [card.detail, "detail"],
+        ] as const) {
+          if (!el || el.x + el.width <= right + 1) continue
+          const words = lookup?.status === "ok" ? lookup[part] : el.originalText
+          const next = retext(el, words, right - el.x)
+          if (next) updates.set(el.id, next)
+        }
+        continue
+      }
       const lookup = lookups.get(card.key)
       if (!lookup) continue
       refreshedRef.current.add(card.frame.id)
@@ -343,9 +507,81 @@ export function useRecordCards({ api, isEditor, operationId, documentId, contain
     }
     const onCanvas = (e: Event) => (e.target as HTMLElement | null)?.tagName === "CANVAS"
 
+    // A corner handle of a record card selected on its own: the canvas takes
+    // the drag over, so the card widens rather than scales. Excalidraw draws
+    // the handles a few pixels out from the corners of the group's box.
+    const HANDLE_REACH_PX = 12
+    const grabbedCorner = (e: PointerEvent): { snapshot: CardSnapshot; side: "left" | "right" } | null => {
+      const state = api.getAppState()
+      if (!isEditor || state.viewModeEnabled) return null
+      const card = soleSelectedCard(cardsRef.current, Object.keys(state.selectedElementIds))
+      if (!card) return null
+      const parts = api.getSceneElements().filter((p) => card.partIds.includes(p.id))
+      if (parts.length === 0) return null
+      const boxes = parts.map(elementBox)
+      const a = sceneCoordsToViewportCoords(
+        { sceneX: Math.min(...boxes.map((b) => b.x)), sceneY: Math.min(...boxes.map((b) => b.y)) },
+        state,
+      )
+      const b = sceneCoordsToViewportCoords(
+        {
+          sceneX: Math.max(...boxes.map((b) => b.x + b.width)),
+          sceneY: Math.max(...boxes.map((b) => b.y + b.height)),
+        },
+        state,
+      )
+      for (const [cx, cy, side] of [
+        [a.x, a.y, "left"],
+        [a.x, b.y, "left"],
+        [b.x, a.y, "right"],
+        [b.x, b.y, "right"],
+      ] as const) {
+        if (Math.hypot(e.clientX - cx, e.clientY - cy) <= HANDLE_REACH_PX) {
+          const snapshot = snapshotOf(card, api.getSceneElements())
+          return snapshot ? { snapshot, side } : null
+        }
+      }
+      return null
+    }
+
+    const widenDrag = (e: PointerEvent, grab: { snapshot: CardSnapshot; side: "left" | "right" }) => {
+      const { snapshot, side } = grab
+      const startX = e.clientX
+      const zoom = api.getAppState().zoom.value
+      let last: Map<string, ExcalidrawElement> | null = null
+      const target = (clientX: number): WidthTarget => {
+        const dx = (clientX - startX) / zoom
+        const { x, width: w } = snapshot.frame
+        const width = Math.min(1600, Math.max(MIN_CARD_WIDTH, Math.round(side === "right" ? w + dx : w - dx)))
+        return { x: side === "right" ? x : x + w - width, width }
+      }
+      const onMove = (ev: PointerEvent) => {
+        ev.stopPropagation()
+        last = widenUpdates(snapshot, target(ev.clientX), snapshot.frame, snapshot.arrows)
+        // Steps of one change: the whole drag is one undo.
+        apply(last, CaptureUpdateAction.EVENTUALLY)
+      }
+      const onUp = (ev: PointerEvent) => {
+        ev.stopPropagation()
+        window.removeEventListener("pointermove", onMove, true)
+        window.removeEventListener("pointerup", onUp, true)
+        if (last) apply(widenUpdates(snapshot, target(ev.clientX), snapshot.frame, snapshot.arrows), CaptureUpdateAction.IMMEDIATELY)
+      }
+      window.addEventListener("pointermove", onMove, true)
+      window.addEventListener("pointerup", onUp, true)
+    }
+
     const down = (e: PointerEvent) => {
       press = null
       if (e.button !== 0 || !onCanvas(e)) return
+      const grab = grabbedCorner(e)
+      if (grab) {
+        e.stopPropagation()
+        e.preventDefault()
+        hover(null)
+        widenDrag(e, grab)
+        return
+      }
       const viewing = api.getAppState().viewModeEnabled
       const modifier = e.ctrlKey || e.metaKey
       if (!viewing && !modifier) return
@@ -370,11 +606,32 @@ export function useRecordCards({ api, isEditor, operationId, documentId, contain
     // canvas's cursor on every move, from React's handler, which runs after
     // this listener; so the hand goes on a frame later.
     let frame = 0
+    // The card the pointer rests on, for its full words.
+    let hoverTimer: ReturnType<typeof setTimeout> | undefined
+    let hoverId: string | null = null
+    const hover = (id: string | null) => {
+      if (id === hoverId) return
+      hoverId = id
+      clearTimeout(hoverTimer)
+      if (id === null) setHovered(null)
+      else hoverTimer = setTimeout(() => setHovered(id), HOVER_DELAY_MS)
+    }
+    const leave = () => hover(null)
     const move = (e: PointerEvent) => {
-      if (!onCanvas(e) || e.buttons !== 0) return
-      const viewing = api.getAppState().viewModeEnabled
+      if (!onCanvas(e) || e.buttons !== 0) {
+        hover(null)
+        return
+      }
+      const state = api.getAppState()
+      const under = recordElementAt(
+        api.getSceneElements(),
+        viewportCoordsToSceneCoords({ clientX: e.clientX, clientY: e.clientY }, state),
+      )
+      const card = under ? cardsRef.current.find((c) => c.partIds.includes(under.id)) : undefined
+      hover(card ? card.frame.id : null)
+      const viewing = state.viewModeEnabled
       if (!viewing && !(e.ctrlKey || e.metaKey)) return
-      if (!hit(e)) return
+      if (!under) return
       const canvas = e.target as HTMLElement
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
@@ -384,13 +641,20 @@ export function useRecordCards({ api, isEditor, operationId, documentId, contain
     el.addEventListener("pointerdown", down, true)
     el.addEventListener("pointerup", up, true)
     el.addEventListener("pointermove", move)
+    el.addEventListener("pointerleave", leave)
+    el.addEventListener("pointerdown", leave)
+    el.addEventListener("wheel", leave, { passive: true })
     return () => {
       el.removeEventListener("pointerdown", down, true)
       el.removeEventListener("pointerup", up, true)
       el.removeEventListener("pointermove", move)
+      el.removeEventListener("pointerleave", leave)
+      el.removeEventListener("pointerdown", leave)
+      el.removeEventListener("wheel", leave)
       cancelAnimationFrame(frame)
+      clearTimeout(hoverTimer)
     }
-  }, [api, containerRef, open])
+  }, [api, containerRef, open, isEditor, widenUpdates, apply])
 
   const openCard = useCallback((ref: CardRef) => void open(ref), [open])
 
@@ -406,6 +670,7 @@ function overlayItems(
   cards: readonly RecordCard[],
   lookups: ReadonlyMap<string, RecordLookup>,
   appState: AppState,
+  hovered: string | null,
 ): RecordOverlayItem[] {
   const items: RecordOverlayItem[] = []
   const box = (card: RecordCard) => {
@@ -422,12 +687,9 @@ function overlayItems(
   // The Open button is for one card selected on its own: with more selected
   // it would be ambiguous, and a box selection over a map would sprout one
   // per card.
-  const selected = Object.keys(appState.selectedElementIds)
-  if (!appState.viewModeEnabled && selected.length > 0 && !appState.editingTextElement && !appState.newElement) {
-    const card = cards.find((c) => appState.selectedElementIds[c.frame.id])
-    if (card && selected.every((id) => card.partIds.includes(id))) {
-      items.push({ id: card.frame.id, ref: card.ref, kind: "open", ...box(card) })
-    }
+  if (!appState.viewModeEnabled && !appState.editingTextElement && !appState.newElement && !appState.isResizing) {
+    const card = soleSelectedCard(cards, Object.keys(appState.selectedElementIds))
+    if (card) items.push({ id: card.frame.id, ref: card.ref, kind: "open", ...box(card) })
   }
   for (const card of cards) {
     const lookup = lookups.get(card.key)
@@ -435,21 +697,78 @@ function overlayItems(
       items.push({ id: card.frame.id, ref: card.ref, kind: lookup.status, ...box(card) })
     }
   }
+  const card = hovered ? cards.find((c) => c.frame.id === hovered) : undefined
+  const lookup = card ? lookups.get(card.key) : undefined
+  // Only when the card shows less than the record says.
+  const cut =
+    lookup?.status === "ok" &&
+    ((card?.title?.originalText ?? lookup.title) !== lookup.title ||
+      (card?.detail?.originalText ?? lookup.detail) !== lookup.detail)
+  if (card && lookup?.status === "ok" && cut && !appState.editingTextElement) {
+    items.push({ id: card.frame.id, ref: card.ref, kind: "hover", title: lookup.title, detail: lookup.detail, ...box(card) })
+  }
   return items
 }
 
+/** The card selected on its own, if one is: all of the selection is its
+ * parts. */
+function soleSelectedCard(cards: readonly RecordCard[], selection: readonly string[]): RecordCard | null {
+  if (selection.length === 0) return null
+  const card = cards.find((c) => selection.includes(c.frame.id))
+  return card && selection.every((id) => card.partIds.includes(id)) ? card : null
+}
+
+function snapshotOf(card: RecordCard | null, elements: readonly ExcalidrawElement[]): CardSnapshot | null {
+  if (!card) return null
+  const parts = new Map<string, PartGeometry>()
+  const badges = new Set<string>()
+  for (const el of elements) {
+    if (!card.partIds.includes(el.id)) continue
+    parts.set(el.id, geometryOf(el))
+    if (tagOf(el)?.part.startsWith("badge:")) badges.add(el.id)
+  }
+  const arrows = new Map<string, BoundArrow>()
+  for (const bound of card.frame.boundElements ?? []) {
+    if (bound.type !== "arrow") continue
+    const el = elements.find((e) => e.id === bound.id) as ArrowElement | undefined
+    if (!el || el.isDeleted) continue
+    const arrow = arrowOf(el, card.frame.id)
+    if (arrow.start || arrow.end) arrows.set(el.id, arrow)
+  }
+  return { frameId: card.frame.id, frame: elementBox(card.frame), parts, badges, arrows }
+}
+
+/** An arrow's points and which of its ends are bound to `frameId`. */
+function arrowOf(el: ArrowElement, frameId: string): BoundArrow {
+  return {
+    x: el.x,
+    y: el.y,
+    points: el.points.map((p) => [p[0], p[1]] as const),
+    elbowed: el.elbowed,
+    start: el.startBinding?.elementId === frameId,
+    end: el.endBinding?.elementId === frameId,
+  }
+}
+
+type Box = { x: number; y: number; width: number; height: number }
+
 /** `el` with new words fitted to `maxWidth`, or null when it already shows
- * them. */
+ * them in a box their size. The box is checked too: Excalidraw draws text
+ * clipped to its element's width, and a resize restores parts' boxes. */
 function retext(el: ExcalidrawTextElement, words: string, maxWidth: number): ExcalidrawElement | null {
   const measure = (text: string) => measureText(el, text)
-  // Already the record's words, or a cut of them that fits (the one a card
-  // is placed with): leave it.
   const shown = el.originalText || el.text
-  const cut = shown.length > 1 && shown.endsWith("…") && words.startsWith(shown.slice(0, -1).trimEnd())
-  if (shown === words || (cut && measure(shown).width <= maxWidth)) return null
-  const text = fitText(words, maxWidth, (t) => measure(t).width)
-  if (text === el.text && text === el.originalText) return null
+  let text = shown
+  if (!(shown === words && measure(shown).width <= maxWidth)) {
+    const fitted = fitText(words, maxWidth, (t) => measure(t).width)
+    // A cut of the record's words that fits and shows no less than this one
+    // would (the one a card is placed with): keep it rather than recut it.
+    const cut = shown.length > 1 && shown.endsWith("…") && words.startsWith(shown.slice(0, -1).trimEnd())
+    if (!(cut && fitted.length <= shown.length && measure(shown).width <= maxWidth)) text = fitted
+  }
   const size = measure(text)
+  const sameBox = Math.abs(size.width - el.width) < 0.5 && Math.abs(size.height - el.height) < 0.5
+  if (text === el.text && text === el.originalText && sameBox) return null
   return newElementWith(el, { text, originalText: text, width: size.width, height: size.height })
 }
 

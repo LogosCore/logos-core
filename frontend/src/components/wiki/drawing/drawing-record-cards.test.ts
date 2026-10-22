@@ -2,7 +2,18 @@ import { describe, expect, test } from "vitest"
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 
 import { buildRefCard, parseRef, type CardRef, type Skeleton } from "./drawing-catalogue"
-import { fitText, humanize, recordAt, recordCards, refsInPaste } from "./drawing-record-cards"
+import {
+  fitText,
+  humanize,
+  moveArrowEnds,
+  recordAt,
+  recordCards,
+  refsInPaste,
+  resizeTarget,
+  boxMap,
+  widenCard,
+  type PartGeometry,
+} from "./drawing-record-cards"
 
 const HOST: CardRef = { kind: "host", id: "0b6f3c2e-8a51-4c7e-9d0f-1a2b3c4d5e6f" }
 
@@ -124,5 +135,73 @@ describe("refsInPaste", () => {
     expect(refsInPaste("", "https://evil.example/tasks?task=t1", origin)).toEqual([])
     expect(refsInPaste("", `${origin}/tasks`, origin)).toEqual([])
     expect(refsInPaste("", "", origin)).toEqual([])
+  })
+})
+
+describe("resizing a card", () => {
+  // A 200×76 card at (100, 50): frame, a title, a badge on its corner.
+  const before = new Map<string, PartGeometry>([
+    ["frame", { x: 100, y: 50, width: 200, height: 76 }],
+    ["title", { x: 174, y: 66, width: 80, height: 25, fontSize: 20 }],
+    ["badge", { x: 279, y: 35, width: 34, height: 34 }],
+  ])
+  const frameBefore = { x: 100, y: 50, width: 200, height: 76 }
+  const badges = new Set(["badge"])
+
+  test("a scale from the right is a wider card of the same height and text size", () => {
+    // Excalidraw scaled the group by 1.5 from its top-left corner.
+    const target = resizeTarget(frameBefore, { x: 100, y: 50, width: 300, height: 114 }, 160)!
+    expect(target).toEqual({ x: 100, width: 300 })
+    const w = widenCard(before, "frame", frameBefore, target, badges)
+    expect(w.frame).toEqual({ x: 100, y: 50, width: 300, height: 76 })
+    expect(w.parts.get("title")).toEqual({ x: 174, y: 66, width: 80, height: 25, fontSize: 20 })
+    // The badge rides the new corner.
+    expect(w.parts.get("badge")?.x).toBe(379)
+  })
+
+  test("a scale from the left keeps the right edge", () => {
+    const target = resizeTarget(frameBefore, { x: 0, y: 12, width: 300, height: 114 }, 160)!
+    expect(target).toEqual({ x: 0, width: 300 })
+    const w = widenCard(before, "frame", frameBefore, target, badges)
+    expect(w.parts.get("title")?.x).toBe(74)
+    expect(w.parts.get("badge")?.x).toBe(279)
+  })
+
+  test("no narrower than the minimum, and a resize that changed nothing is nothing", () => {
+    expect(resizeTarget(frameBefore, { x: 100, y: 50, width: 50, height: 19 }, 160)?.width).toBe(160)
+    expect(resizeTarget(frameBefore, frameBefore, 160)).toBeNull()
+  })
+
+  test("a point keeps its place on the box", () => {
+    const map = boxMap({ x: 100, y: 50, width: 300, height: 114 }, { x: 100, y: 50, width: 300, height: 76 })
+    // The middle of the right edge stays the middle of the right edge.
+    expect(map({ x: 400, y: 107 })).toEqual({ x: 400, y: 88 })
+    expect(map({ x: 100, y: 50 })).toEqual({ x: 100, y: 50 })
+  })
+})
+
+describe("moveArrowEnds", () => {
+  const map = (p: { x: number; y: number }) => ({ x: p.x + 100, y: p.y - 20 })
+
+  test("a straight arrow's bound end moves, its other end stays", () => {
+    const out = moveArrowEnds({ x: 0, y: 0, points: [[0, 0], [100, 50]] }, { start: false, end: true }, map)
+    expect(out.points).toEqual([[0, 0], [200, 30]])
+    expect([out.x, out.y, out.width, out.height]).toEqual([0, 0, 200, 30])
+  })
+
+  test("moving the start moves the arrow's origin", () => {
+    const out = moveArrowEnds({ x: 10, y: 10, points: [[0, 0], [100, 0]] }, { start: true, end: false }, map)
+    expect([out.x, out.y]).toEqual([110, -10])
+    expect(out.points).toEqual([[0, 0], [0, 20]])
+  })
+
+  test("an elbow arrow keeps its right angles", () => {
+    // Right, then down into the card's top.
+    const out = moveArrowEnds(
+      { x: 0, y: 0, points: [[0, 0], [100, 0], [100, 80]], elbowed: true },
+      { start: false, end: true },
+      map,
+    )
+    expect(out.points).toEqual([[0, 0], [200, 0], [200, 60]])
   })
 })

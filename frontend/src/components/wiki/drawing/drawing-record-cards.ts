@@ -78,14 +78,21 @@ export function elementBox(el: ExcalidrawElement): { x: number; y: number; width
  * not make it unclickable.
  */
 export function recordAt(elements: readonly ExcalidrawElement[], point: { x: number; y: number }): CardRef | null {
+  const el = recordElementAt(elements, point)
+  return el ? refOf(el) : null
+}
+
+/** The part of a record card under a scene point, as recordAt finds it. */
+export function recordElementAt(
+  elements: readonly ExcalidrawElement[],
+  point: { x: number; y: number },
+): ExcalidrawElement | null {
   for (let i = elements.length - 1; i >= 0; i--) {
     const el = elements[i]
-    if (el.isDeleted) continue
-    const ref = refOf(el)
-    if (!ref) continue
+    if (el.isDeleted || !refOf(el)) continue
     const box = elementBox(el)
     if (point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height) {
-      return ref
+      return el
     }
   }
   return null
@@ -202,4 +209,127 @@ export function freeSpot(
 export function clip(text: string, max: number): string {
   const chars = [...text.trim()]
   return chars.length <= max ? chars.join("") : chars.slice(0, max - 1).join("").trimEnd() + "…"
+}
+
+// ---------------------------------------------------------------------------
+// Resizing a card
+//
+// A card is a group, and Excalidraw resizes a group by scaling all of it:
+// the text grows with the box and never gets more room. For a card that is
+// not what a resize means. The canvas keeps the card's geometry from before
+// the resize, and once the resize ends turns the scaling into width: every
+// part back to its own size, the frame as wide as the resize made it, the
+// badges on its new corner (use-record-cards.ts refits the words).
+
+/** The parts of an element a resize changes. */
+export interface PartGeometry {
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize?: number
+  points?: readonly (readonly [number, number])[]
+}
+
+export function geometryOf(el: ExcalidrawElement): PartGeometry {
+  const g: PartGeometry = { x: el.x, y: el.y, width: el.width, height: el.height }
+  if ("fontSize" in el) g.fontSize = el.fontSize
+  const points = (el as Element).points
+  if (points) g.points = points.map((p) => [p[0], p[1]] as const)
+  return g
+}
+
+/** Where a resized card's frame goes: its left edge and width. */
+export interface WidthTarget {
+  x: number
+  width: number
+}
+
+/**
+ * The width a resize of the whole card (Excalidraw's own, which scales it)
+ * stands for, at least `minWidth`. The edge the resize was anchored on
+ * stays where it was. Null when the resize changed nothing.
+ */
+export function resizeTarget(frameBefore: Box, frameNow: Box, minWidth: number, maxWidth = 1600): WidthTarget | null {
+  const width = Math.min(maxWidth, Math.max(minWidth, Math.round(frameNow.width)))
+  const same = (a: number, b: number) => Math.abs(a - b) < 0.5
+  if (same(width, frameBefore.width) && same(frameNow.height, frameBefore.height) && same(frameNow.x, frameBefore.x)) {
+    return null
+  }
+  // Dragged from the right (left edge fixed), from the left (right edge
+  // fixed), or about the centre (Alt).
+  if (same(frameNow.x, frameBefore.x)) return { x: frameBefore.x, width }
+  if (same(frameNow.x + frameNow.width, frameBefore.x + frameBefore.width)) {
+    return { x: frameBefore.x + frameBefore.width - width, width }
+  }
+  return { x: frameNow.x + frameNow.width / 2 - width / 2, width }
+}
+
+/**
+ * The card at a new width: every part at its own size, moved with the left
+ * edge, the frame as wide as `target` says, the badges on its new corner.
+ * The card keeps its height and its place up and down.
+ */
+export function widenCard(
+  before: ReadonlyMap<string, PartGeometry>,
+  frameId: string,
+  frameBefore: Box,
+  target: WidthTarget,
+  badgeIds: ReadonlySet<string>,
+): { frame: Box; parts: Map<string, PartGeometry> } {
+  const frame = { x: target.x, y: frameBefore.y, width: target.width, height: frameBefore.height }
+  const dx = frame.x - frameBefore.x
+  const grow = frame.width - frameBefore.width
+  const parts = new Map<string, PartGeometry>()
+  for (const [id, g] of before) {
+    if (id === frameId) parts.set(id, { ...g, ...frame })
+    else parts.set(id, { ...g, x: g.x + dx + (badgeIds.has(id) ? grow : 0) })
+  }
+  return { frame, parts }
+}
+
+/** A point on box `from` to the same place on box `to`: for the ends of the
+ * arrows bound to a card that changed size. */
+export function boxMap(from: Box, to: Box): (p: { x: number; y: number }) => { x: number; y: number } {
+  return (p) => ({
+    x: to.x + ((p.x - from.x) / (from.width || 1)) * to.width,
+    y: to.y + ((p.y - from.y) / (from.height || 1)) * to.height,
+  })
+}
+
+/**
+ * An arrow with its bound end(s) moved by `map`: `ends` says which. An
+ * elbow arrow keeps its right angles, its segment into the moved end
+ * following it along the other axis. Returns the arrow's new origin and
+ * points, and its box.
+ */
+export function moveArrowEnds(
+  arrow: { x: number; y: number; points: readonly (readonly [number, number])[]; elbowed?: boolean },
+  ends: { start: boolean; end: boolean },
+  map: (p: { x: number; y: number }) => { x: number; y: number },
+): { x: number; y: number; width: number; height: number; points: [number, number][] } {
+  const abs = arrow.points.map((p) => ({ x: arrow.x + p[0], y: arrow.y + p[1] }))
+  const move = (i: number, neighbour: number) => {
+    const old = abs[i]
+    const next = map(old)
+    abs[i] = next
+    if (!arrow.elbowed || neighbour < 0 || neighbour >= abs.length) return
+    const n = abs[neighbour]
+    // The segment into the end was horizontal or vertical; keep it so.
+    if (Math.abs(n.y - old.y) < 0.5) abs[neighbour] = { x: n.x, y: next.y }
+    else if (Math.abs(n.x - old.x) < 0.5) abs[neighbour] = { x: next.x, y: n.y }
+  }
+  if (abs.length > 0 && ends.start) move(0, 1)
+  if (abs.length > 1 && ends.end) move(abs.length - 1, abs.length - 2)
+  const origin = abs[0] ?? { x: arrow.x, y: arrow.y }
+  const points = abs.map((p) => [p.x - origin.x, p.y - origin.y] as [number, number])
+  const xs = points.map((p) => p[0])
+  const ys = points.map((p) => p[1])
+  return {
+    x: origin.x,
+    y: origin.y,
+    width: Math.max(...xs) - Math.min(...xs),
+    height: Math.max(...ys) - Math.min(...ys),
+    points,
+  }
 }
