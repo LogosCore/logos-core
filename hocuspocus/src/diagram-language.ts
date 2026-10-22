@@ -25,6 +25,7 @@
 //
 //   ID: KIND "title" "detail" +badge     a node; title and detail optional
 //   ... color=red icon=key-round         its colour and icon, on any node line
+//   ... ref=host:<id>                    the Logos record a card stands for
 //   ID: "title"                          retitle a node that exists
 //   ID +badge -badge                     add or remove badges
 //   A -> B "label" [style]               a connection; also <-> and --
@@ -45,9 +46,13 @@ import {
   COLOR_NAMES,
   EDGE_STYLES,
   ICON_NAMES,
+  REF_KINDS,
   ZONE_KINDS,
   iconsFor,
   isColor,
+  parseRef,
+  refKey,
+  type CardRef,
   type EdgeStyle,
   type ShapeStyle,
   type ZoneKind,
@@ -92,6 +97,8 @@ export interface DiagramNode {
   color?: string | null;
   /** A lucide icon name; null takes a chosen icon off. */
   icon?: string | null;
+  /** The record the card stands for; null makes it a plain card again. */
+  ref?: CardRef | null;
   /** The zone this node was declared inside, if any. */
   zone?: string;
   line: number;
@@ -235,7 +242,7 @@ function tokenize(line: string): Token[] {
       if (line[i] === "=") {
         i++;
         const quoted = line[i] === '"';
-        const value = quoted ? line.slice(i + 1).match(/^[^"]*/)?.[0] ?? "" : line.slice(i).match(/^[#A-Za-z0-9_.\-]*/)?.[0] ?? "";
+        const value = quoted ? line.slice(i + 1).match(/^[^"]*/)?.[0] ?? "" : line.slice(i).match(/^[#A-Za-z0-9_.:\-]*/)?.[0] ?? "";
         if (value === "") throw new Error(`${m[0]}= needs a value`);
         i += value.length + (quoted ? 2 : 0);
         out.push({ t: "attr", k: m[0].toLowerCase(), v: value });
@@ -425,7 +432,7 @@ export function parseDiagram(source: string): Diagram {
         } else if (tok.t === "attr") {
           if (!setAttr(node, tok)) return;
         } else {
-          return fail("after an id without a colon, only +badge, -badge, color= and icon= may follow");
+          return fail("after an id without a colon, only +badge, -badge, color=, icon= and ref= may follow");
         }
       }
       return;
@@ -509,7 +516,20 @@ export function parseDiagram(source: string): Diagram {
         }
         return true;
       }
-      fail(`unknown attribute "${tok.k}=". Nodes take color= and icon=.`);
+      if (tok.k === "ref") {
+        if (value === "none") {
+          node.ref = null;
+          return true;
+        }
+        const ref = parseRef(value);
+        if (!ref) {
+          fail(`"${value}" is not a record. A ref is KIND:ID, KIND one of ${REF_KINDS.join(", ")}, e.g. ref=host:<the host's id>.`);
+          return false;
+        }
+        node.ref = ref;
+        return true;
+      }
+      fail(`unknown attribute "${tok.k}=". Nodes take color=, icon= and ref=.`);
       return false;
     }
 
@@ -547,6 +567,7 @@ export interface SerializedNode {
   badges: string[];
   color?: string;
   icon?: string;
+  ref?: CardRef;
 }
 
 export interface SerializedZone {
@@ -578,6 +599,7 @@ export function nodeLine(node: SerializedNode): string {
   for (const badge of node.badges) parts.push(`+${badge}`);
   if (node.color) parts.push(`color=${node.color}`);
   if (node.icon) parts.push(`icon=${node.icon}`);
+  if (node.ref) parts.push(`ref=${refKey(node.ref)}`);
   return parts.join(" ");
 }
 

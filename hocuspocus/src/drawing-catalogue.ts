@@ -79,13 +79,74 @@ export interface ShapeTag {
   seq?: string
   /** On a sequence diagram's lifelines: the Mermaid it was drawn from. */
   source?: string
+  /** On a record card: the Logos record it stands for. Clicking the card
+   * opens that record; its title and detail are refreshed from it. */
+  ref?: CardRef
 }
+
+// ---------------------------------------------------------------------------
+// Record cards
+//
+// A card can stand for a record of the operation: a host, a credential, a
+// hash, a task or a wiki page. Its tag then carries `ref`, on every part like
+// the rest of the tag; the canvas opens the record's dialog when the card is
+// clicked (use-record-cards.ts).
+//
+// No Excalidraw element link: Excalidraw draws a link's handle on the
+// element's top-right corner, which is where a card's badges sit, and the
+// two collided. The card opens without it.
+
+export const REF_KINDS = ["host", "credential", "hash", "task", "document"] as const
+export type RefKind = (typeof REF_KINDS)[number]
+
+export interface CardRef {
+  kind: RefKind
+  id: string
+}
+
+/** The card kind a record is drawn as. */
+export const REF_CARD_KIND: Record<RefKind, string> = {
+  host: "server",
+  credential: "credential",
+  hash: "hash",
+  task: "task",
+  document: "document",
+}
+
+const REF_ID_RE = /^[0-9A-Za-z_-]{1,64}$/
+
+export function isRefKind(value: unknown): value is RefKind {
+  return typeof value === "string" && (REF_KINDS as readonly string[]).includes(value)
+}
+
+/** A ref read from untrusted data (a scene, an agent's text), or null. */
+export function parseRef(value: unknown): CardRef | null {
+  if (typeof value === "string") {
+    const i = value.indexOf(":")
+    return i > 0 ? parseRef({ kind: value.slice(0, i), id: value.slice(i + 1) }) : null
+  }
+  if (!value || typeof value !== "object") return null
+  const { kind, id } = value as { kind?: unknown; id?: unknown }
+  return isRefKind(kind) && typeof id === "string" && REF_ID_RE.test(id) ? { kind, id } : null
+}
+
+/** "host:<id>", as the diagram language writes it. */
+export function refKey(ref: CardRef): string {
+  return `${ref.kind}:${ref.id}`
+}
+
 
 export function tagOf(element: object): ShapeTag | null {
   const logos = ((element as { customData?: unknown }).customData as { logos?: unknown } | undefined)?.logos
   if (!logos || typeof logos !== "object") return null
   const tag = logos as Partial<ShapeTag>
   return typeof tag.shape === "string" && typeof tag.part === "string" ? (tag as ShapeTag) : null
+}
+
+/** The record an element's card stands for, if it is part of a record card. */
+export function refOf(element: object): CardRef | null {
+  const tag = tagOf(element)
+  return tag?.ref ? parseRef(tag.ref) : null
 }
 
 /** Tag every element of a shape. The tag goes on each part, not only the
@@ -150,7 +211,11 @@ const ROLES = {
   security: { tile: "#ffe3e3", ink: "#e03131", border: "#e03131" },
   offence: { tile: "#495057", ink: WHITE, border: "#212529", dark: true },
   loot: { tile: "#fff3bf", ink: "#f08c00", border: "#f08c00" },
+  // Violet, as a credential chip is in a page (wiki-chips.css).
+  credential: { tile: "#e5dbff", ink: "#6741d9", border: "#6741d9" },
   finding: { tile: "#ffe8cc", ink: "#e8590c", border: "#e8590c" },
+  work: { tile: "#dbe4ff", ink: "#3b5bdb", border: "#3b5bdb" },
+  page: { tile: "#e9ecef", ink: "#495057", border: "#495057" },
 } satisfies Record<string, Role>
 
 /** Colours an agent can name with `color=`: Excalidraw's own palette (open
@@ -613,6 +678,7 @@ export const SHAPE_CATEGORIES = [
   { id: "defences", label: "Defences" },
   { id: "offence", label: "Offence" },
   { id: "loot", label: "Loot & findings" },
+  { id: "work", label: "Tasks & pages" },
   { id: "status", label: "Status badges" },
   { id: "severity", label: "Severity" },
   { id: "connections", label: "Connections" },
@@ -645,10 +711,12 @@ const CARDS: CardSpec[] = [
   { kind: "attacker", name: "Attacker", category: "offence", role: "offence", icon: "venetian-mask", title: "Attacker", detail: "Operator workstation", keywords: ["red team", "adversary", "operator", "hacker"] },
   { kind: "c2-server", name: "C2 server", category: "offence", role: "offence", icon: "radio-tower", title: "C2 server", detail: "team server · 443", keywords: ["command and control", "cobalt strike", "sliver", "teamserver", "redirector"] },
   { kind: "shell", name: "Shell / implant", category: "offence", role: "offence", icon: "terminal", title: "Beacon", detail: "SYSTEM · pid 4120", keywords: ["beacon", "agent", "implant", "session", "reverse shell"] },
-  { kind: "credential", name: "Credential", category: "loot", role: "loot", icon: "key-round", title: "Credential", detail: "svc_backup · cleartext", keywords: ["password", "secret", "login", "creds"] },
+  { kind: "credential", name: "Credential", category: "loot", role: "credential", icon: "key-round", title: "Credential", detail: "svc_backup · cleartext", keywords: ["password", "secret", "login", "creds"] },
   { kind: "hash", name: "Hash", category: "loot", role: "loot", icon: "hash", title: "NTLM hash", detail: "Administrator", keywords: ["ntlm", "kerberos", "tgt", "crack"] },
   { kind: "vulnerability", name: "Vulnerability", category: "loot", role: "finding", icon: "triangle-alert", title: "Vulnerability", detail: "CVE-2024-XXXX", keywords: ["cve", "exploit", "weakness", "vuln"] },
   { kind: "finding", name: "Finding", category: "loot", role: "finding", icon: "bug", title: "Finding", detail: "Weak password policy", keywords: ["issue", "report", "misconfiguration"] },
+  { kind: "task", name: "Task", category: "work", role: "work", icon: "list-todo", title: "Task", detail: "In process · Kerberoast svc accounts", keywords: ["todo", "ticket", "job", "kanban"] },
+  { kind: "document", name: "Wiki page", category: "work", role: "page", icon: "file-text", title: "Wiki page", detail: "Recon notes", keywords: ["doc", "document", "note", "page", "report"] },
 ]
 
 /** Every card kind, in catalogue order. */
@@ -683,6 +751,8 @@ export interface CardRequest {
   color?: string
   /** A lucide icon name (ICON_NAMES), overriding the kind's own icon. */
   icon?: string
+  /** The record the card stands for. */
+  ref?: CardRef
 }
 
 /** A card as the diagram language asks for it, at the origin. Throws on an
@@ -696,17 +766,35 @@ export function buildCard(req: CardRequest): { elements: Skeleton[]; width: numb
   if (!role) throw new Error(`unknown colour "${req.color}"`)
   const style = STYLES[req.style]
   const card = cardShapes(`card-${req.kind}`, { role, icon: iconName }, req.title, req.detail, style, req.badges ?? [])
-  return {
-    elements: tagged(card.elements, {
-      shape: `card:${req.kind}`,
-      style: req.style,
-      ...(req.node ? { node: req.node } : {}),
-      ...(req.color ? { color: req.color } : {}),
-      ...(req.icon ? { icon: req.icon } : {}),
-    }),
-    width: card.width,
-    height: CARD_HEIGHT,
-  }
+  const elements = tagged(card.elements, {
+    shape: `card:${req.kind}`,
+    style: req.style,
+    ...(req.node ? { node: req.node } : {}),
+    ...(req.color ? { color: req.color } : {}),
+    ...(req.icon ? { icon: req.icon } : {}),
+    ...(req.ref ? { ref: { kind: req.ref.kind, id: req.ref.id } } : {}),
+  })
+  return { elements, width: card.width, height: CARD_HEIGHT }
+}
+
+/** A record card: the card of the record's kind, with its words. */
+export function buildRefCard(req: {
+  ref: CardRef
+  title: string
+  detail: string
+  style: ShapeStyle
+  icon?: string
+  color?: string
+}): { elements: Skeleton[]; width: number; height: number } {
+  return buildCard({
+    kind: REF_CARD_KIND[req.ref.kind],
+    title: req.title,
+    detail: req.detail,
+    style: req.style,
+    ref: req.ref,
+    ...(req.icon ? { icon: req.icon } : {}),
+    ...(req.color ? { color: req.color } : {}),
+  })
 }
 
 /** The look of a plain shape in a chosen colour: its outline in the ink and

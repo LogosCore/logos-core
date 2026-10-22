@@ -19,31 +19,25 @@
 // library (drawing-library.ts). Those shapes show here under "My shapes".
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import {
-  CaptureUpdateAction,
-  MIME_TYPES,
-  Sidebar,
-  convertToExcalidrawElements,
-  exportToSvg,
-  serializeLibraryAsJSON,
-} from "@excalidraw/excalidraw"
+import { MIME_TYPES, Sidebar, exportToSvg, serializeLibraryAsJSON } from "@excalidraw/excalidraw"
 import type { ExcalidrawImperativeAPI, LibraryItem, LibraryItems } from "@excalidraw/excalidraw/types"
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
-import type { ExcalidrawElementSkeleton } from "@excalidraw/excalidraw/data/transform"
 import { ChevronDown, Search, Shapes, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
   BUILTIN_SHAPES,
   SHAPE_CATEGORIES,
+  buildRefCard,
   matchesShape,
   type BuiltinShape,
+  type RefKind,
   type ShapeStyle,
 } from "./drawing-catalogue"
-import { centeredAt, randomId, viewportCenter, withFreshIds } from "./drawing-insert"
+import { randomId, withFreshIds } from "./drawing-insert"
+import { SHAPES_SIDEBAR, insertElements, skeletonElements } from "./drawing-place"
 import { wikiImageFiles } from "./drawing-images"
 
-export const SHAPES_SIDEBAR = "logos-shapes"
 
 // ---------------------------------------------------------------------------
 // Preferences: style, collapsed categories, docked. Per browser, like the
@@ -83,12 +77,39 @@ function writePrefs(prefs: Prefs) {
 // Elements
 
 /** A shape's elements, converted from its skeleton. Built fresh for every
- * insert, after the canvas has loaded its fonts, so labels are measured in
- * the font they are drawn in. */
+ * insert, after the canvas has loaded its fonts. */
 function buildShape(shape: BuiltinShape, style: ShapeStyle): ExcalidrawElement[] {
-  // The catalogue builds Excalidraw skeletons without importing Excalidraw
-  // (it is shared with the sidecar), so its type is a loose version of this.
-  return convertToExcalidrawElements(shape.build(style) as unknown as ExcalidrawElementSkeleton[], { regenerateIds: true })
+  return skeletonElements(shape.build(style))
+}
+
+// ---------------------------------------------------------------------------
+// Linked records: cards that stand for a record of the operation. A click
+// opens the record's picker; the card is placed once one is picked.
+
+const RECORD_TILES: { kind: RefKind; name: string; title: string; detail: string; keywords: string[] }[] = [
+  { kind: "host", name: "Host", title: "DC01", detail: "10.0.5.10 · Windows Server", keywords: ["machine", "server", "ip"] },
+  { kind: "credential", name: "Credential", title: "svc_backup", detail: "Password", keywords: ["password", "login", "secret"] },
+  { kind: "hash", name: "Hash", title: "aad3b435b514…", detail: "Cracked", keywords: ["ntlm", "crack"] },
+  { kind: "task", name: "Task", title: "Kerberoast", detail: "In process", keywords: ["todo", "kanban"] },
+  { kind: "document", name: "Wiki page", title: "Recon notes", detail: "Wiki page", keywords: ["doc", "document", "note"] },
+]
+
+const recordPreviewCache = new Map<string, ExcalidrawElement[]>()
+function recordPreview(tile: (typeof RECORD_TILES)[number], style: ShapeStyle): ExcalidrawElement[] {
+  const key = `${tile.kind}:${style}`
+  let elements = recordPreviewCache.get(key)
+  if (!elements) {
+    const card = buildRefCard({ ref: { kind: tile.kind, id: "preview" }, title: tile.title, detail: tile.detail, style })
+    elements = skeletonElements(card.elements)
+    recordPreviewCache.set(key, elements)
+  }
+  return elements
+}
+
+function matchesRecord(tile: (typeof RECORD_TILES)[number], query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const haystack = [tile.name, "linked record", ...tile.keywords].join(" ").toLowerCase()
+  return words.every((w) => haystack.includes(w))
 }
 
 /** Previews are converted once per shape and style and kept: the panel
@@ -102,27 +123,6 @@ function previewElements(shape: BuiltinShape, style: ShapeStyle): ExcalidrawElem
     previewCache.set(key, elements)
   }
   return elements
-}
-
-function insertElements(api: ExcalidrawImperativeAPI, elements: readonly ExcalidrawElement[]) {
-  const placed = centeredAt(withFreshIds(elements), viewportCenter(api.getAppState()))
-  // Selected the way a click on it would select it: the outermost group, and
-  // every element except labels, which Excalidraw selects through their
-  // container.
-  const groups = new Set(placed.map((el) => el.groupIds.at(-1)).filter((g): g is string => !!g))
-  const selected = placed.filter((el) => !(el as { containerId?: string | null }).containerId)
-  api.updateScene({
-    elements: [...api.getSceneElementsIncludingDeleted(), ...placed],
-    appState: {
-      selectedElementIds: Object.fromEntries(selected.map((el) => [el.id, true])),
-      selectedGroupIds: Object.fromEntries([...groups].map((g) => [g, true])),
-      editingGroupId: null,
-    } as never,
-    captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-  })
-  // On a narrow screen the panel covers the canvas; get out of the way of
-  // the shape that was just put there.
-  if (window.matchMedia("(max-width: 767px)").matches) api.toggleSidebar({ name: SHAPES_SIDEBAR, force: false })
 }
 
 function dragElements(event: React.DragEvent, elements: readonly ExcalidrawElement[]) {
@@ -152,9 +152,11 @@ interface ShapesSidebarProps {
   /** The operator's own library, as Excalidraw last reported it. */
   personal: LibraryItems
   dark: boolean
+  /** Pick a record of `kind` and place its card. */
+  onAddRecord?: (kind: RefKind) => void
 }
 
-export function ShapesSidebar({ api, personal, dark }: ShapesSidebarProps) {
+export function ShapesSidebar({ api, personal, dark, onAddRecord }: ShapesSidebarProps) {
   const [prefs, setPrefs] = useState(readPrefs)
   const [query, setQuery] = useState("")
   const update = (next: Partial<Prefs>) => {
@@ -182,7 +184,12 @@ export function ShapesSidebar({ api, personal, dark }: ShapesSidebarProps) {
     })
   }, [personal, query])
 
-  const nothing = sections.length === 0 && mine.length === 0
+  const records = useMemo(
+    () => (onAddRecord ? RECORD_TILES.filter((tile) => matchesRecord(tile, query)) : []),
+    [onAddRecord, query],
+  )
+
+  const nothing = sections.length === 0 && mine.length === 0 && records.length === 0
 
   return (
     <Sidebar
@@ -238,6 +245,37 @@ export function ShapesSidebar({ api, personal, dark }: ShapesSidebarProps) {
 
         <div className="-mx-3 min-h-0 flex-1 overflow-y-auto px-3">
           {nothing && <p className="py-8 text-center text-sm text-muted-foreground">No shapes match “{query}”.</p>}
+
+          {onAddRecord && records.length > 0 && (
+            <Section
+              label="Linked records"
+              count={records.length}
+              open={searching || !prefs.collapsed.includes("records")}
+              onToggle={() =>
+                update({
+                  collapsed: prefs.collapsed.includes("records")
+                    ? prefs.collapsed.filter((id) => id !== "records")
+                    : [...prefs.collapsed, "records"],
+                })
+              }
+            >
+              <p className="mb-2 text-xs text-muted-foreground">
+                A card for a record of this operation. Click it on the canvas to open the record.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {records.map((tile) => (
+                  <ShapeTile
+                    key={`record-${tile.kind}`}
+                    name={tile.name}
+                    hint={`${tile.name}: click to pick one from this operation`}
+                    preview={recordPreview(tile, prefs.style)}
+                    dark={dark}
+                    onInsert={() => onAddRecord(tile.kind)}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
 
           {sections.map((section) => {
             const open = searching || !prefs.collapsed.includes(section.id)
@@ -346,6 +384,7 @@ function ShapeTile({
   preview,
   dark,
   small = false,
+  hint,
   onInsert,
   onDrag,
 }: {
@@ -353,16 +392,19 @@ function ShapeTile({
   preview: readonly ExcalidrawElement[]
   dark: boolean
   small?: boolean
+  /** The tooltip; by default, how to add the shape. */
+  hint?: string
   onInsert: () => void
-  onDrag: (event: React.DragEvent) => void
+  /** Absent for a tile that cannot be dragged. */
+  onDrag?: (event: React.DragEvent) => void
 }) {
   return (
     <button
       type="button"
-      draggable
+      draggable={!!onDrag}
       onClick={onInsert}
       onDragStart={onDrag}
-      title={`${name}: click to add, or drag onto the canvas`}
+      title={hint ?? `${name}: click to add, or drag onto the canvas`}
       className="group flex min-w-0 flex-col items-stretch gap-1 rounded-md border border-transparent p-1 text-left transition-colors hover:border-border hover:bg-accent/60 focus-visible:border-ring focus-visible:outline-none"
     >
       <div className={cn("flex items-center justify-center rounded bg-muted/40", small ? "h-12" : "h-16")}>

@@ -79,6 +79,7 @@ type Exporter struct {
 	docRepo     repository.IWikiDocumentRepository
 	hostRepo    repository.IHostRepository
 	hashRepo    repository.IHashRepository
+	taskRepo    repository.ITaskRepository
 	renderer    Renderer
 	drawings    *wiki.DrawingFileRenderer
 	credentials wikitransfer.CredentialLookup
@@ -88,7 +89,7 @@ type Exporter struct {
 	now         func() time.Time
 }
 
-// NewExporter wires the exporter. docRepo, hostRepo, hashRepo and
+// NewExporter wires the exporter. docRepo, hostRepo, hashRepo, taskRepo and
 // credentials may be nil; chips they would have resolved then show their
 // generic label. drawings may be nil, which records each drawing as a skip.
 // viewer nil means the embedded build (see viewer.go).
@@ -99,6 +100,7 @@ func NewExporter(
 	docRepo repository.IWikiDocumentRepository,
 	hostRepo repository.IHostRepository,
 	hashRepo repository.IHashRepository,
+	taskRepo repository.ITaskRepository,
 	renderer Renderer,
 	drawings *wiki.DrawingFileRenderer,
 	credentials wikitransfer.CredentialLookup,
@@ -114,7 +116,7 @@ func NewExporter(
 	}
 	return &Exporter{
 		imageRepo: imageRepo, fileRepo: fileRepo, imageStore: imageStore, fileStore: fileStore,
-		docRepo: docRepo, hostRepo: hostRepo, hashRepo: hashRepo,
+		docRepo: docRepo, hostRepo: hostRepo, hashRepo: hashRepo, taskRepo: taskRepo,
 		renderer: renderer, drawings: drawings, credentials: credentials,
 		viewer: viewer, logger: logger, cfg: cfg, now: time.Now,
 	}
@@ -151,6 +153,9 @@ type pageData struct {
 	Kind  string          `json:"kind"`
 	Doc   json.RawMessage `json:"doc,omitempty"`
 	Scene any             `json:"scene,omitempty"`
+	// Refs are the records a drawing's record cards stand for, by
+	// "<kind>:<id>", as the chips in a page carry them (see drawingRefs).
+	Refs map[string]any `json:"refs,omitempty"`
 }
 
 type exportRun struct {
@@ -297,7 +302,8 @@ func (r *exportRun) renderBody(ctx context.Context, doc models.WikiDocument, lab
 		}
 		r.attachmentBytes += result.Bytes
 		r.report.ImagesExported += result.ImagesEmbedded
-		return pageData{Kind: "drawing", Scene: file}, drawingText(file), nil
+		refs, refText := r.drawingRefs(ctx, doc, label, file)
+		return pageData{Kind: "drawing", Scene: file, Refs: refs}, drawingText(file) + refText, nil
 	}
 
 	if doc.Kind.Or() != models.WikiDocumentKindDocument {

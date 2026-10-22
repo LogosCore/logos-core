@@ -9,6 +9,7 @@
 //                                                      title, then detail
 //   class dc01 compromised,red                         badges and colour
 //   kms@{ icon: "key-round" }                          an icon
+//   %% dc01 ref=host:<id>                              the record it stands for
 //   subgraph internal["Internal"] ... end              a zone
 //   class internal dmz                                 its kind
 //   a e1@-- "pass-the-hash" --> b                      a connection ...
@@ -30,6 +31,8 @@ import {
   ICON_NAMES,
   ZONE_KINDS,
   iconsFor,
+  REF_CARD_KIND,
+  refKey,
   type EdgeStyle,
   type ZoneKind,
 } from "./drawing-catalogue.js";
@@ -170,6 +173,21 @@ export async function flowchartToDiagram(
     }
     throw err;
   }
+  // A comment names a node as the Mermaid does, so a shape with no id of its
+  // own goes by its alias there too (%% n_<element id> ref=...).
+  for (const [key, node] of [...diagram.nodes]) {
+    const id = real(key);
+    if (id === key) continue;
+    diagram.nodes.delete(key);
+    diagram.nodes.set(id, { ...node, id });
+  }
+  for (const removal of diagram.removals) {
+    if (removal.kind === "item") removal.id = real(removal.id);
+    else {
+      removal.from = real(removal.from);
+      removal.to = real(removal.to);
+    }
+  }
   const direction = db.getDirection();
   diagram.direction ??= direction === "TB" || direction === "TD" || direction === "BT" ? "down" : "right";
 
@@ -213,6 +231,8 @@ export async function flowchartToDiagram(
       else if (COLOR_NAMES.includes(k)) node.color = k;
       else warnings.push(`class "${c}" on ${v.id} means nothing here`);
     }
+    // A record card says its kind by its record, over the [box] it is written as.
+    if (!node.kind && node.ref) node.kind = REF_CARD_KIND[node.ref.kind];
     if (!node.kind && v.type && SHAPE_KINDS[v.type]) node.kind = SHAPE_KINDS[v.type];
     if (v.icon) {
       const name = v.icon.replace(/^[a-z0-9-]+:/i, "").toLowerCase();
@@ -326,6 +346,8 @@ export function writeMermaid(scene: Scene, direction: "right" | "down" = "right"
     const kindClass = n.kind === "ellipse" || n.kind === "diamond" || n.kind === "box" ? "" : `:::${n.kind}`;
     lines.push(`${pad}${id}${open}${label(text)}${close}${kindClass}`);
     if (n.icon) lines.push(`${pad}${id}@{ icon: "${n.icon}" }`);
+    // Mermaid has no field for it, so it rides in a comment like the rest.
+    if (n.ref) lines.push(`${pad}%% ${id} ref=${refKey(n.ref)}`);
     const extra = [...n.badges, ...(n.color ? [n.color] : [])];
     if (extra.length > 0) classLines.push(`  class ${id} ${extra.join(",")}`);
   };

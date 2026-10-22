@@ -36,7 +36,8 @@ Links: `-->` `---` `<-->` `-.->` (dotted) `==>` (thick) `--o` `--x`.
 **Kinds:** `server` `workstation` `laptop` `mobile` `ot-device` `file-share`
 `domain-controller` `user` `admin` `database` `web-app` `mail-server`
 `internet` `cloud` `router` `switch` `vpn` `firewall` `edr` `attacker`
-`c2-server` `shell` `credential` `hash` `vulnerability` `finding`; a plain
+`c2-server` `shell` `credential` `hash` `vulnerability` `finding` `task`
+`document`; a plain
 `box`, `ellipse`, `diamond`, `note`. A box with an icon is a card.
 **Badges:** `compromised` `credentials` `privileged` `flag` `has-finding`
 `monitored` `out-of-scope` `target`. **Colours:** `gray` `red` `pink`
@@ -45,6 +46,13 @@ Links: `-->` `---` `<-->` `-.->` (dotted) `==>` (thick) `--o` `--x`.
 `creds` `c2`; routes `elbow` (default) `curved` `straight`. **Zones:**
 `network` `dmz` `cloud` `trust`. Icons are lucide names; a wrong one is
 refused with icons that fit.
+
+**Record cards.** A card can stand for a record of the operation: add
+`%% dc01 ref=host:<id>` (kinds `host` `credential` `hash` `task` `document`,
+ids from the matching list tools). The operator clicks it to open the record,
+and its title and detail follow the record's, so give it the record's name; a
+node with a ref and no class is drawn as its record's card. `%% dc01
+ref=none` unlinks it.
 
 States and mindmaps are drawn like flowcharts: classes, ids and merging
 apply. Sequences, timelines and gantts are drawn whole; a `title` names one,

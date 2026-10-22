@@ -30,11 +30,15 @@ import { loadDrawingView, saveDrawingView, type DrawingView } from "./drawing-vi
 import { drawingLibraryAdapter, followLibraryInOtherTabs } from "./drawing-library"
 import { embedWikiImages } from "./drawing-images"
 import { ShapesSidebar, ShapesTrigger } from "./drawing-shapes-panel"
+import { useRecordCards } from "./use-record-cards"
+import { RecordOverlay } from "./drawing-record-overlay"
 import "@excalidraw/excalidraw/index.css"
 import "./wiki-drawing.css"
 
 interface WikiDrawingCanvasProps {
   documentId: string
+  /** The page's operation: record cards are picked from it. */
+  operationId: string
   ydoc: YDoc
   provider: HocuspocusProvider | null
   isEditor: boolean
@@ -46,6 +50,7 @@ interface WikiDrawingCanvasProps {
 
 export default function WikiDrawingCanvas({
   documentId,
+  operationId,
   ydoc,
   provider,
   isEditor,
@@ -69,9 +74,13 @@ export default function WikiDrawingCanvas({
   const [initialGrid] = useState(readGridPreference)
   const gridRef = useRef(initialGrid)
   const trackExportDialog = useEmbeddedImagesForExport(api)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const records = useRecordCards({ api, isEditor, operationId, documentId, containerRef })
+  const recordsChange = records.onChange
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
       onChange(elements, appState, files)
+      recordsChange(elements, appState)
       trackExportDialog(appState)
       // onChange fires on every pointer move; write only on an actual toggle.
       if (appState.gridModeEnabled !== gridRef.current) {
@@ -79,7 +88,7 @@ export default function WikiDrawingCanvas({
         writeGridPreference(appState.gridModeEnabled)
       }
     },
-    [onChange, trackExportDialog],
+    [onChange, recordsChange, trackExportDialog],
   )
 
   // The operator's own shapes survive a reload (drawing-library.ts), and the
@@ -134,7 +143,7 @@ export default function WikiDrawingCanvas({
   }, [onReady])
 
   return (
-    <div className="wiki-drawing-canvas flex min-h-0 flex-1">
+    <div ref={containerRef} className="wiki-drawing-canvas relative flex min-h-0 flex-1">
       <Excalidraw
         excalidrawAPI={onExcalidrawAPI}
         initialData={{
@@ -159,6 +168,11 @@ export default function WikiDrawingCanvas({
         onChange={handleChange}
         onScrollChange={onScrollChange}
         onPointerUpdate={onPointerUpdate}
+        // Record cards open their record here rather than following the
+        // link (use-record-cards.ts); any other link behaves as Excalidraw's.
+        onLinkOpen={records.onLinkOpen}
+        // A copied chip, or a link to a record, pastes as its card.
+        onPaste={records.onPaste}
         // Tells Excalidraw to render other people's cursors at all. Without it
         // the collaborators map is accepted and silently ignored.
         isCollaborating
@@ -189,8 +203,11 @@ export default function WikiDrawingCanvas({
           },
         }}
       >
-        {isEditor && <ShapesSidebar api={api} personal={personalShapes} dark={dark} />}
+        {isEditor && (
+          <ShapesSidebar api={api} personal={personalShapes} dark={dark} onAddRecord={records.addRecord} />
+        )}
       </Excalidraw>
+      <RecordOverlay items={records.overlay} onOpen={records.openCard} />
     </div>
   )
 }

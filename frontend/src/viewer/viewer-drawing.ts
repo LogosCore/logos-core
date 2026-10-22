@@ -5,7 +5,13 @@
 import type { ExcalidrawFileData } from "./viewer-data"
 
 export interface DrawingRenderer {
-  renderSvg(scene: ExcalidrawFileData, opts: { dark: boolean }): Promise<SVGSVGElement>
+  /** The scene as SVG at scale 1, and the scene point at the SVG's top-left
+   * corner: a point (x, y) in the SVG is (origin.x + x, origin.y + y) on
+   * the canvas. */
+  renderSvg(
+    scene: ExcalidrawFileData,
+    opts: { dark: boolean },
+  ): Promise<{ svg: SVGSVGElement; origin: { x: number; y: number } }>
 }
 
 declare global {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { MaximizeIcon, MinusIcon, PlusIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { fitView, panBy, wheelZoomFactor, zoomAt, zoomTo, type View } from "./pan-zoom"
 
 interface PanZoomProps {
@@ -7,7 +8,16 @@ interface PanZoomProps {
   width: number
   height: number
   children: ReactNode
+  /** A click or tap that did not drag, at a point of the content (its own
+   * pixels at scale 1). */
+  onTap?: (x: number, y: number) => void
+  /** Whether the content point under the pointer can be clicked, for the
+   * cursor. */
+  clickableAt?: (x: number, y: number) => boolean
 }
+
+// A press that moves further than this is a drag.
+const TAP_SLOP_PX = 5
 
 /**
  * A viewport over content larger than the page, as Excalidraw's own canvas
@@ -15,7 +25,7 @@ interface PanZoomProps {
  * pinch to zoom about the pointer, and buttons for zoom, fit and 100%.
  * Keyboard: + / − zoom, 0 fits, 1 is 100%, arrows pan.
  */
-export function PanZoom({ width, height, children }: PanZoomProps) {
+export function PanZoom({ width, height, children, onTap, clickableAt }: PanZoomProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [view, setView] = useState<View>({ scale: 1, x: 0, y: 0 })
   const fitted = useRef(false)
@@ -58,17 +68,29 @@ export function PanZoom({ width, height, children }: PanZoomProps) {
     return () => el.removeEventListener("wheel", onWheel)
   }, [])
 
+  // The content point under a client point.
+  const contentAt = (clientX: number, clientY: number) => {
+    const rect = viewportRef.current!.getBoundingClientRect()
+    return [(clientX - rect.left - view.x) / view.scale, (clientY - rect.top - view.y) / view.scale] as const
+  }
+
   // Pointers: one drags, two pinch.
   const pointers = useRef(new Map<number, { x: number; y: number }>())
+  const press = useRef<{ id: number; x: number; y: number } | null>(null)
+  const [pointing, setPointing] = useState(false)
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button")) return
     e.currentTarget.setPointerCapture(e.pointerId)
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    press.current = pointers.current.size === 1 && e.button === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const map = pointers.current
     const prev = map.get(e.pointerId)
-    if (!prev) return
+    if (!prev) {
+      if (clickableAt) setPointing(clickableAt(...contentAt(e.clientX, e.clientY)))
+      return
+    }
     const next = { x: e.clientX, y: e.clientY }
     if (map.size === 1) {
       setView((v) => panBy(v, next.x - prev.x, next.y - prev.y))
@@ -85,6 +107,11 @@ export function PanZoom({ width, height, children }: PanZoomProps) {
   }
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId)
+    const p = press.current
+    press.current = null
+    if (onTap && p?.id === e.pointerId && e.type === "pointerup" && Math.hypot(e.clientX - p.x, e.clientY - p.y) <= TAP_SLOP_PX) {
+      onTap(...contentAt(e.clientX, e.clientY))
+    }
   }
 
   const zoomBy = (factor: number) => setView((v) => zoomAt(v, factor, ...centre()))
@@ -139,7 +166,10 @@ export function PanZoom({ width, height, children }: PanZoomProps) {
         setView((v) => zoomAt(v, 2, e.clientX - rect.left, e.clientY - rect.top))
       }}
       onKeyDown={onKeyDown}
-      className="wiki-viewer-panzoom relative h-full min-h-80 cursor-grab touch-none overflow-hidden rounded-md outline-none select-none active:cursor-grabbing"
+      className={cn(
+        "wiki-viewer-panzoom relative h-full min-h-80 touch-none overflow-hidden rounded-md outline-none select-none",
+        pointing ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+      )}
       aria-label="Drawing. Drag to pan; Ctrl or ⌘ with the wheel, or pinch, to zoom."
     >
       <div

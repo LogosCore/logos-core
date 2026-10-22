@@ -643,3 +643,52 @@ describe("repeated connections between the same two nodes", () => {
     assert.equal(readScene(live(map)).edges.length, 6);
   });
 });
+
+describe("record cards", () => {
+  const HOST = "0b6f3c2e-8a51-4c7e-9d0f-1a2b3c4d5e6f";
+
+  test("ref= draws the record's card and reads back", () => {
+    const { map } = room();
+    apply(map, `dc: ref=host:${HOST} "DC01" "10.0.5.10"\nt: "Kerberoast" ref=task:abc123`);
+    const elements = live(map);
+    const frame = elements.find((el) => tagOf(el)?.part === "frame" && tagOf(el)?.node === "dc");
+    assert.ok(frame);
+    assert.equal(tagOf(frame)?.shape, "card:server");
+    assert.deepEqual(tagOf(frame)?.ref, { kind: "host", id: HOST });
+    // No element link: its handle would sit on the badges' corner.
+    assert.ok(!frame.link);
+    // Every part says which record it belongs to, as every part carries the tag.
+    const parts = elements.filter((el) => tagOf(el)?.node === "dc");
+    assert.ok(parts.length > 3 && parts.every((el) => tagOf(el)?.ref?.id === HOST));
+    // A task without a kind is drawn as a task card.
+    const task = elements.find((el) => tagOf(el)?.part === "frame" && tagOf(el)?.node === "t");
+    assert.equal(tagOf(task!)?.shape, "card:task");
+
+    const text = read(map);
+    assert.match(text, new RegExp(`dc: server "DC01" "10.0.5.10" ref=host:${HOST}`));
+    assert.match(text, /t: task "Kerberoast" ref=task:abc123/);
+  });
+
+  test("a read text applies back unchanged, and ref=none unlinks", () => {
+    const { map } = room();
+    apply(map, `dc: server "DC01" ref=host:${HOST}`);
+    const first = read(map);
+    const again = apply(map, first);
+    assert.equal(again.updated, 0);
+    apply(map, "dc ref=none");
+    const frame = live(map).find((el) => tagOf(el)?.part === "frame" && tagOf(el)?.node === "dc");
+    assert.equal(tagOf(frame!)?.ref, undefined);
+    assert.doesNotMatch(read(map), /ref=/);
+  });
+
+  test("a bad ref is refused with what a ref looks like", () => {
+    assert.throws(() => parseDiagram("a: server ref=vm:1"), /A ref is KIND:ID/);
+    assert.throws(() => parseDiagram("a: server ref=host"), /A ref is KIND:ID/);
+  });
+
+  test("only cards take a ref", () => {
+    const { map } = room();
+    const result = apply(map, `n: note "hi" ref=host:${HOST}`);
+    assert.match(result.warnings.join("\n"), /only cards stand for a record/);
+  });
+});

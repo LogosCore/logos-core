@@ -51,6 +51,7 @@ const ICONS = [
   ...new Set(
     `
     app-window ban brick-wall bug cloud cpu crosshair crown database ethernet-port
+    list-todo square-check-big pen-tool
     eye flag folder-open globe hash key-round laptop lock mail monitor network
     radio-tower router server shield-check skull smartphone terminal
     triangle-alert user user-cog venetian-mask

@@ -25,6 +25,9 @@ import type * as Y from "yjs";
 
 import {
   CARD_KINDS,
+  REF_CARD_KIND,
+  refKey,
+  type CardRef,
   ZONE_TITLE_SPACE,
   buildBadgeOnCard,
   buildCard,
@@ -81,6 +84,8 @@ interface Plan {
   badges: string[];
   color?: string;
   icon?: string;
+  /** The record a card stands for. */
+  ref?: CardRef;
   width: number;
   height: number;
   zone?: string;
@@ -160,6 +165,7 @@ export function applyDiagram(
       badges: [...existing.badges],
       color: existing.color,
       icon: existing.icon,
+      ref: existing.ref,
       width: existing.box.width,
       height: existing.box.height,
       zone: existing.zone,
@@ -171,7 +177,8 @@ export function applyDiagram(
   }
   for (const node of diagram.nodes.values()) {
     const prior = plans.get(node.id);
-    const kind = node.kind ?? prior?.kind ?? "box";
+    // A record card without a kind is drawn as its record's card.
+    const kind = node.kind ?? prior?.kind ?? (node.ref ? REF_CARD_KIND[node.ref.kind] : "box");
     // null clears a choice; undefined keeps what is there.
     let color = node.color === null ? undefined : (node.color ?? prior?.color);
     let icon = node.icon === null ? undefined : (node.icon ?? prior?.icon);
@@ -184,6 +191,11 @@ export function applyDiagram(
       color = undefined;
     }
     const card = asCard(kind, icon);
+    let ref = node.ref === null ? undefined : (node.ref ?? prior?.ref);
+    if (ref && !card) {
+      result.warnings.push(`line ${node.line}: only cards stand for a record, and "${node.id}" is a ${kind}; the ref was left off`);
+      ref = undefined;
+    }
     const badges = [...new Set([...(prior?.badges ?? []), ...node.addBadges])].filter((b) => !node.removeBadges.includes(b));
     if (badges.length > 0 && !card && kind !== "box") {
       result.warnings.push(
@@ -196,7 +208,8 @@ export function applyDiagram(
     const detail = card ? (node.detail ?? prior?.detail ?? "") : "";
     const size = nodeSize(kind, title, detail, icon);
     if (prior?.existing) {
-      const restyled = color !== prior.color || icon !== prior.icon;
+      const restyled =
+        color !== prior.color || icon !== prior.icon || (ref ? refKey(ref) : "") !== (prior.ref ? refKey(prior.ref) : "");
       const changed =
         restyled || kind !== prior.kind || title !== prior.title || detail !== prior.detail || badges.join() !== prior.badges.join();
       if (node.zone && node.zone !== prior.zone) {
@@ -215,13 +228,14 @@ export function applyDiagram(
         badges,
         color,
         icon,
+        ref,
         changed: true,
         rebuild,
         width: rebuild ? size.width : prior.width,
         height: rebuild ? size.height : prior.height,
       });
     } else {
-      plans.set(node.id, { id: node.id, kind, title, detail, badges, color, icon, ...size, zone: node.zone, changed: true, rebuild: true });
+      plans.set(node.id, { id: node.id, kind, title, detail, badges, color, icon, ref, ...size, zone: node.zone, changed: true, rebuild: true });
     }
   }
 
@@ -409,7 +423,7 @@ function check(diagram: Diagram, scene: Scene, result: DiagramResult): void {
   const isZone = (id: string) => diagram.zones.has(id) || scene.zones.has(id);
 
   for (const node of diagram.nodes.values()) {
-    if (!node.kind && !scene.nodes.has(node.id)) {
+    if (!node.kind && !node.ref && !scene.nodes.has(node.id)) {
       problems.push({
         line: node.line,
         message: `"${node.id}" is new, so it needs a kind: ${node.id}: server "${node.title ?? node.id}"`,
@@ -706,6 +720,7 @@ function buildNode(plan: Plan, x: number, y: number, style: ShapeStyle, frameId?
       node: plan.id,
       color: plan.color,
       icon: plan.icon,
+      ref: plan.ref,
     });
     return skeletonsToElements(card.elements, { x, y, frameId, z: NODE_Z });
   }

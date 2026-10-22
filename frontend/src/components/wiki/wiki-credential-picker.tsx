@@ -14,17 +14,18 @@ import { CredentialPickerDialog } from "@/components/findings/credential-picker-
  * insertion reads it via `getState()` so we don't churn re-renders for a
  * transient reference.
  */
-interface PickerArgs {
-  editor: Editor
-  operationId: string
-  insertPos: number
-}
+/** Either inserts a reference into an editor, or hands the picked id to
+ * `onPick` (a drawing places a card with it). */
+type PickerArgs =
+  | { editor: Editor; operationId: string; insertPos: number; onPick?: undefined }
+  | { operationId: string; onPick: (id: string) => void; editor?: undefined; insertPos?: undefined }
 
 interface PickerState {
   open: boolean
   editor: Editor | null
   operationId: string
   insertPos: number | null
+  onPick: ((id: string) => void) | null
   openPicker: (args: PickerArgs) => void
   closePicker: () => void
 }
@@ -34,10 +35,11 @@ const useWikiCredentialPickerStore = create<PickerState>((set) => ({
   editor: null,
   operationId: "",
   insertPos: null,
-  openPicker: ({ editor, operationId, insertPos }) =>
-    set({ open: true, editor, operationId, insertPos }),
+  onPick: null,
+  openPicker: ({ editor, operationId, insertPos, onPick }) =>
+    set({ open: true, editor: editor ?? null, operationId, insertPos: insertPos ?? null, onPick: onPick ?? null }),
   closePicker: () =>
-    set({ open: false, editor: null, operationId: "", insertPos: null }),
+    set({ open: false, editor: null, operationId: "", insertPos: null, onPick: null }),
 }))
 
 /** Imperative entry point — called from the slash-command item. Co-located
@@ -52,12 +54,18 @@ export function WikiCredentialPickerDialog() {
   const open = useWikiCredentialPickerStore((s) => s.open)
   const operationId = useWikiCredentialPickerStore((s) => s.operationId)
   const closePicker = useWikiCredentialPickerStore((s) => s.closePicker)
+  const forDrawing = useWikiCredentialPickerStore((s) => s.onPick !== null)
 
   // Shared insertion path — both the list pick and the create-then-insert flow
   // funnel through here so the editor side stays in one place. Reads the editor
   // imperatively so it never participates in render.
   function insertCredential(credentialId: string) {
-    const { editor, insertPos } = useWikiCredentialPickerStore.getState()
+    const { editor, insertPos, onPick } = useWikiCredentialPickerStore.getState()
+    if (onPick) {
+      closePicker()
+      onPick(credentialId)
+      return
+    }
     if (!editor) {
       closePicker()
       return
@@ -81,8 +89,12 @@ export function WikiCredentialPickerDialog() {
         if (!next) closePicker()
       }}
       operationId={operationId}
-      title="Insert credential reference"
-      description="Pick a credential from this operation to embed in the document."
+      title={forDrawing ? "Add credential to drawing" : "Insert credential reference"}
+      description={
+        forDrawing
+          ? "Pick a credential from this operation to draw as a card."
+          : "Pick a credential from this operation to embed in the document."
+      }
       createDescription="Add a credential to this operation and insert a reference to it."
       createSubmitLabel="Create & insert"
       createIdPrefix="wiki-cred-create"

@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer/transfertest"
 	"go.uber.org/zap"
@@ -58,6 +59,8 @@ type world struct {
 	network, peering, diagram models.WikiDocument
 	outside, foreign          models.WikiDocument
 	hostID, hashID, credID    uuid.UUID
+	taskID                    uuid.UUID
+	tasks                     *taskRepo
 	imageID, fileID, notesID  uuid.UUID
 	scope                     *wikitransfer.Scope
 	exporter                  *Exporter
@@ -98,7 +101,7 @@ func node(typ string, attrs map[string]any, content ...map[string]any) map[strin
 func newWorld(t *testing.T) *world {
 	t.Helper()
 	w := &world{
-		op: uuid.New(), hostID: uuid.New(), hashID: uuid.New(), credID: uuid.New(),
+		op: uuid.New(), hostID: uuid.New(), hashID: uuid.New(), credID: uuid.New(), taskID: uuid.New(),
 		imageID: uuid.New(), fileID: uuid.New(), notesID: uuid.New(),
 	}
 	w.network = models.WikiDocument{DocumentID: uuid.New(), OperationID: w.op, Title: "Network", Emoji: "🌐", SortOrder: "a"}
@@ -173,10 +176,13 @@ func newWorld(t *testing.T) *world {
 	hashes := &transfertest.HashRepo{Hashes: map[uuid.UUID]models.Hash{
 		w.hashID: {HashID: w.hashID, OperationID: w.op, Value: "aad3b435", Status: models.HashStatusCracked},
 	}}
+	w.tasks = &taskRepo{tasks: map[uuid.UUID]models.Task{
+		w.taskID: {TaskID: w.taskID, OperationID: w.op, Name: "Kerberoast", Stage: models.TaskStageInProcess},
+	}}
 	creds := transfertest.NewCredentialRepo(models.Credential{
 		CredentialID: w.credID, OperationID: w.op, Name: "svc_backup", Username: "backup", Password: "Winter2026!",
 	})
-	w.exporter = NewExporter(images, files, store, store, docs, hosts, hashes, pmRenderer{},
+	w.exporter = NewExporter(images, files, store, store, docs, hosts, hashes, w.tasks, pmRenderer{},
 		transfertest.NewDrawingRenderer(images, store), creds, &w.viewer, zap.NewNop(), Config{})
 	return w
 }
@@ -366,6 +372,77 @@ func TestExport_DrawingCarriesItsScene(t *testing.T) {
 	script(t, entries["acme/data/pages/"+w.diagram.DocumentID.String()+".js"], "__logosPage", &page)
 	if page.Kind != "drawing" || page.Scene.Type != "excalidraw" || len(page.Scene.Elements) != 1 {
 		t.Errorf("drawing page = %+v", page)
+	}
+}
+
+// taskRepo is the one lookup the exporter makes of tasks.
+type taskRepo struct {
+	repository.ITaskRepository
+	tasks map[uuid.UUID]models.Task
+}
+
+func (r *taskRepo) FindByID(_ context.Context, id uuid.UUID) (models.Task, error) {
+	t, ok := r.tasks[id]
+	if !ok {
+		return models.Task{}, errors.New("not found")
+	}
+	return t, nil
+}
+
+func TestExport_DrawingRecordCardsCarryTheirRecords(t *testing.T) {
+	w := newWorld(t)
+	frame := func(id, kind, ref string) map[string]any {
+		return map[string]any{"id": id, "type": "rectangle", "x": 0, "y": 0, "width": 200, "height": 76,
+			"customData": map[string]any{"logos": map[string]any{
+				"shape": "card:server", "part": "frame", "ref": map[string]any{"kind": kind, "id": ref}}}}
+	}
+	gone := uuid.New().String()
+	scene, err := json.Marshal(map[string]any{"elements": []any{
+		frame("a", "host", w.hostID.String()),
+		frame("b", "host", w.hostID.String()), // the same host twice: resolved once
+		frame("c", "task", w.taskID.String()),
+		frame("d", "document", w.peering.DocumentID.String()),
+		frame("e", "credential", w.credID.String()),
+		frame("f", "task", gone),
+		frame("g", "vm", "x"), // a kind this export does not know
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.diagram.ContentState = scene
+	w.scope.States = transfertest.NewDocRepo(w.network, w.peering, w.diagram)
+	entries, _ := w.run(t)
+
+	var page struct {
+		Refs map[string]map[string]any `json:"refs"`
+	}
+	script(t, entries["acme/data/pages/"+w.diagram.DocumentID.String()+".js"], "__logosPage", &page)
+	if len(page.Refs) != 5 {
+		t.Fatalf("refs = %v", page.Refs)
+	}
+	if h := page.Refs["host:"+w.hostID.String()]; h["hostname"] != "in-bgp01" || h["kind"] != "host" {
+		t.Errorf("host = %v", h)
+	}
+	if task := page.Refs["task:"+w.taskID.String()]; task["name"] != "Kerberoast" || task["stage"] != "IN_PROCESS" {
+		t.Errorf("task = %v", task)
+	}
+	if doc := page.Refs["document:"+w.peering.DocumentID.String()]; doc["href"] != "#/page/"+w.peering.DocumentID.String() {
+		t.Errorf("page = %v", doc)
+	}
+	if c := page.Refs["credential:"+w.credID.String()]; c["password"] != "Winter2026!" {
+		t.Errorf("credential = %v", c)
+	}
+	if missing := page.Refs["task:"+gone]; missing["missing"] != true {
+		t.Errorf("deleted task = %v", missing)
+	}
+
+	// The records' names are searchable on the drawing's page.
+	var tree treeData
+	script(t, entries["acme/data/tree.js"], "__logosExport", &tree)
+	for _, p := range tree.Pages {
+		if p.ID == w.diagram.DocumentID.String() && !strings.Contains(p.Text, "Kerberoast") {
+			t.Errorf("drawing text = %q", p.Text)
+		}
 	}
 }
 

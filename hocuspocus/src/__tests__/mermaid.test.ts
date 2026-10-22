@@ -9,6 +9,8 @@ import { aliasesOf, flowchartToDiagram, mermaidId, writeMermaid } from "../merma
 import { isMermaid, parseMermaidText } from "../mermaid-parse.js";
 import { drawSequence, parseSequence } from "../sequence-layout.js";
 import { normalizeElements, type NormalizedElement } from "../drawing-elements.js";
+import { buildRefCard, tagOf } from "../drawing-catalogue.js";
+import { skeletonsToElements } from "../drawing-skeleton.js";
 import { DRAWING_ROOT_KEY } from "../drawing-projection.js";
 
 function room() {
@@ -77,6 +79,36 @@ describe("Mermaid flowcharts", () => {
     assert.ok(isMermaid(back));
     const again = await draw(map, back);
     assert.deepEqual([again.created, again.updated, again.connected, again.removed], [0, 0, 0, 0]);
+  });
+
+  test("a record card's ref rides in a comment, both ways", async () => {
+    const { map } = room();
+    const host = "0b6f3c2e-8a51-4c7e-9d0f-1a2b3c4d5e6f";
+    await draw(map, `flowchart LR\n  dc01["DC01<br/>10.0.5.10"]:::server\n  %% dc01 ref=host:${host}\n  t["Kerberoast"]\n  %% t ref=task:abc`);
+    const scene = readScene(live(map));
+    assert.deepEqual(scene.nodes.get("dc01")?.ref, { kind: "host", id: host });
+    // Without a class, the ref gives the card its kind.
+    assert.equal(scene.nodes.get("t")?.kind, "task");
+    const back = writeMermaid(scene);
+    assert.match(back, new RegExp(`%% dc01 ref=host:${host}`));
+    const again = await draw(map, back);
+    assert.deepEqual([again.created, again.updated], [0, 0]);
+  });
+
+  test("a record card placed from the panel keeps its ref through its alias", async () => {
+    const { map } = room();
+    const host = "0b6f3c2e-8a51-4c7e-9d0f-1a2b3c4d5e6f";
+    // As the panel places it: a catalogue card with no diagram id.
+    const card = buildRefCard({ ref: { kind: "host", id: host }, title: "DC01", detail: "", style: "sketch" });
+    for (const el of skeletonsToElements(card.elements, { x: 0, y: 0 })) map.set(el.id, el);
+    const frame = live(map).find((el) => tagOf(el)?.part === "frame")!;
+    const back = writeMermaid(readScene(live(map)));
+    assert.match(back, new RegExp(`%% ${mermaidId(frame.id)} ref=host:${host}`));
+    const again = await draw(map, back);
+    assert.deepEqual([again.created, again.updated], [0, 0]);
+    // And an agent can unlink it by the name it was shown.
+    await draw(map, `flowchart LR\n  %% ${mermaidId(frame.id)} ref=none`);
+    assert.equal(readScene(live(map)).nodes.get(frame.id)?.ref, undefined);
   });
 
   test("a shape with no id of its own is written under an alias, and found again by it", async () => {

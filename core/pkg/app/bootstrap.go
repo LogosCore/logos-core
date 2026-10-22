@@ -318,7 +318,7 @@ func newTransferStack(
 	)
 	htmlExporter := htmlbundle.NewExporter(
 		repos.WikiImage, repos.WikiFile, w.imageStore, w.fileStore,
-		repos.WikiDocument, repos.Host, repos.Hash,
+		repos.WikiDocument, repos.Host, repos.Hash, repos.Task,
 		w.hpClient, drawings, repos.Credential, nil, l, htmlbundle.Config{},
 	)
 

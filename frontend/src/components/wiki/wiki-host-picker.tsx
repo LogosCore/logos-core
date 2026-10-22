@@ -18,17 +18,18 @@ import { HostPickerList } from "@/components/findings/host-picker-list"
  * pickers — list-only because hosts are created/imported on the Findings tab
  * rather than hand-built one at a time from the editor.
  */
-interface PickerArgs {
-  editor: Editor
-  operationId: string
-  insertPos: number
-}
+/** Either inserts a reference into an editor, or hands the picked id to
+ * `onPick` (a drawing places a card with it). */
+type PickerArgs =
+  | { editor: Editor; operationId: string; insertPos: number; onPick?: undefined }
+  | { operationId: string; onPick: (id: string) => void; editor?: undefined; insertPos?: undefined }
 
 interface PickerState {
   open: boolean
   editor: Editor | null
   operationId: string
   insertPos: number | null
+  onPick: ((id: string) => void) | null
   openPicker: (args: PickerArgs) => void
   closePicker: () => void
 }
@@ -38,10 +39,11 @@ const useWikiHostPickerStore = create<PickerState>((set) => ({
   editor: null,
   operationId: "",
   insertPos: null,
-  openPicker: ({ editor, operationId, insertPos }) =>
-    set({ open: true, editor, operationId, insertPos }),
+  onPick: null,
+  openPicker: ({ editor, operationId, insertPos, onPick }) =>
+    set({ open: true, editor: editor ?? null, operationId, insertPos: insertPos ?? null, onPick: onPick ?? null }),
   closePicker: () =>
-    set({ open: false, editor: null, operationId: "", insertPos: null }),
+    set({ open: false, editor: null, operationId: "", insertPos: null, onPick: null }),
 }))
 
 /** Imperative entry point — called from the slash-command item. Co-located
@@ -54,6 +56,7 @@ export function openHostPicker(args: PickerArgs) {
 export function WikiHostPickerDialog() {
   const open = useWikiHostPickerStore((s) => s.open)
   const closePicker = useWikiHostPickerStore((s) => s.closePicker)
+  const forDrawing = useWikiHostPickerStore((s) => s.onPick !== null)
   const [search, setSearch] = useState("")
 
   // Reset the search field when the picker reopens.
@@ -74,10 +77,12 @@ export function WikiHostPickerDialog() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ServerIcon className="size-4" />
-            Insert host reference
+            {forDrawing ? "Add host to drawing" : "Insert host reference"}
           </DialogTitle>
           <DialogDescription>
-            Pick a host from this operation to embed in the document.
+            {forDrawing
+              ? "Pick a host from this operation to draw as a card."
+              : "Pick a host from this operation to embed in the document."}
           </DialogDescription>
         </DialogHeader>
         {open ? <PickerBody search={search} setSearch={setSearch} /> : null}
@@ -96,7 +101,12 @@ function PickerBody({ search, setSearch }: PickerBodyProps) {
   const closePicker = useWikiHostPickerStore((s) => s.closePicker)
 
   function insertHost(hostId: string) {
-    const { editor, insertPos } = useWikiHostPickerStore.getState()
+    const { editor, insertPos, onPick } = useWikiHostPickerStore.getState()
+    if (onPick) {
+      closePicker()
+      onPick(hostId)
+      return
+    }
     if (!editor) {
       closePicker()
       return

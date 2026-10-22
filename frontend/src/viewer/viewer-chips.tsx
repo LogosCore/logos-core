@@ -26,7 +26,7 @@ import { HostIcon } from "@/components/findings/host-icon"
 import { hashStatusLabel, truncateHashValue } from "@/components/findings/hash-status-utils"
 import type { HashStatus } from "@/graphql/gql/graphql"
 import "@/components/wiki/wiki-chips.css"
-import { RecordDialog } from "./viewer-record-dialog"
+import { RecordDialogFor } from "./viewer-record-views"
 
 type Exported = Record<string, unknown> | null
 
@@ -97,21 +97,6 @@ function useOpen() {
   return { open, setOpen, onClick }
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  PASSWORD: "Password",
-  SSH_KEY: "SSH key",
-  API_KEY: "API key",
-  TOKEN: "Token",
-  HASH: "Hash",
-  OTHER: "Other",
-}
-
-const VALIDITY_LABEL: Record<string, string> = {
-  UNKNOWN: "Not tested",
-  VALID: "Works",
-  INVALID: "Does not work",
-}
-
 export function StaticHostChip(props: NodeViewProps) {
   const e = exported(props)
   const dialog = useOpen()
@@ -126,7 +111,6 @@ export function StaticHostChip(props: NodeViewProps) {
     )
   }
   const label = str(e.hostname) || "Unnamed host"
-  const interfaces = (Array.isArray(e.interfaces) ? e.interfaces : []) as { name?: string; addresses?: string[] }[]
   const icon = (
     <HostIcon emoji={str(e.emoji)} icon={str(e.icon)} color={str(e.color)} os={str(e.os)} size={14} className="wiki-host-chip__icon" />
   )
@@ -141,20 +125,7 @@ export function StaticHostChip(props: NodeViewProps) {
         {icon}
         <span className="wiki-host-chip__name">{label}</span>
       </button>
-      <RecordDialog
-        open={dialog.open}
-        onOpenChange={dialog.setOpen}
-        icon={<ServerIcon className="size-4" />}
-        title={label}
-        description={str(e.description) || undefined}
-        rows={[
-          { label: "Hostname", value: label, mono: true },
-          { label: "Operating system", value: str(e.os) },
-          ...interfaces
-            .filter((i) => i.addresses?.length)
-            .map((i) => ({ label: i.name ? `Interface ${i.name}` : "Interface", value: i.addresses!.join(", "), mono: true })),
-        ]}
-      />
+      <RecordDialogFor kind="host" data={e} open={dialog.open} onOpenChange={dialog.setOpen} />
     </NodeViewWrapper>
   )
 }
@@ -191,14 +162,7 @@ export function StaticHashChip(props: NodeViewProps) {
           <LockIcon className="wiki-hash-chip__status wiki-hash-chip__status--uncracked size-3" />
         )}
       </button>
-      <RecordDialog
-        open={dialog.open}
-        onOpenChange={dialog.setOpen}
-        icon={<HashIcon className="size-4" />}
-        title="Hash"
-        description={hashStatusLabel(status)}
-        rows={[{ label: "Value", value, mono: true, block: value.length > 64 }]}
-      />
+      <RecordDialogFor kind="hash" data={e} open={dialog.open} onOpenChange={dialog.setOpen} />
     </NodeViewWrapper>
   )
 }
@@ -240,8 +204,6 @@ export function StaticCredentialChip(props: NodeViewProps) {
   const creds = username && password ? `${username}:${password}` : username || password
   const validity = (str(e.validity) || "UNKNOWN") as keyof typeof VALIDITY_ICON
   const ValidityIcon = VALIDITY_ICON[validity] ?? VALIDITY_ICON.UNKNOWN
-  const properties = (Array.isArray(e.properties) ? e.properties : []) as { name: string; value: string }[]
-  const tags = (Array.isArray(e.tags) ? e.tags : []) as string[]
   const title = [name, creds, ...keys.map((k, i) => `${k.name}: ${hashes[i] ?? "hashing…"}`), "Click for details"]
     .filter(Boolean)
     .join("\n")
@@ -263,20 +225,7 @@ export function StaticCredentialChip(props: NodeViewProps) {
         ))}
         <ValidityIcon className={cn("wiki-credential-chip__validity size-3", VALIDITY_CLASS[validity])} />
       </button>
-      <RecordDialog
-        open={dialog.open}
-        onOpenChange={dialog.setOpen}
-        icon={<KeyIcon className="size-4" />}
-        title={name}
-        description={[TYPE_LABEL[str(e.type)] ?? str(e.type), VALIDITY_LABEL[validity]].filter(Boolean).join(" · ")}
-        rows={[
-          { label: "Username", value: username, mono: true },
-          { label: "Password", value: password, mono: true },
-          ...keys.map((k) => ({ label: k.name || "Key", value: k.content, mono: true, block: true })),
-          ...properties.map((p) => ({ label: p.name, value: p.value, mono: true })),
-        ]}
-        tags={tags}
-      />
+      <RecordDialogFor kind="credential" data={e} open={dialog.open} onOpenChange={dialog.setOpen} />
     </NodeViewWrapper>
   )
 }

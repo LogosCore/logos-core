@@ -6,6 +6,9 @@ import { loadPage, type ExcalidrawFileData, type ExportPage, type PageBody } fro
 import { loadDrawingRenderer } from "./viewer-drawing"
 import { PanZoom } from "./viewer-pan-zoom"
 import { usePageHighlight } from "./viewer-page-highlight"
+import { cardAt } from "./viewer-drawing-cards"
+import { RecordDialogFor, type ExportedRecord, type RecordKind } from "./viewer-record-views"
+import { toast } from "sonner"
 
 type State =
   | { status: "loading" }
@@ -44,7 +47,7 @@ function LoadedPage({ id, dark, highlight }: { id: string; dark: boolean; highli
     return <p className="text-sm text-muted-foreground">{state.message}</p>
   }
   if (state.body.kind === "drawing") {
-    return <DrawingView scene={state.body.scene} dark={dark} />
+    return <DrawingView scene={state.body.scene} refs={state.body.refs ?? {}} dark={dark} />
   }
   return <DocumentView id={id} doc={state.body.doc} highlight={highlight} />
 }
@@ -79,25 +82,42 @@ function DocumentView({ id, doc, highlight }: { id: string; doc: JSONContent; hi
   )
 }
 
-function DrawingView({ scene, dark }: { scene: ExcalidrawFileData; dark: boolean }) {
+type Refs = Record<string, ExportedRecord>
+
+function DrawingView({ scene, refs, dark }: { scene: ExcalidrawFileData; refs: Refs; dark: boolean }) {
   const empty = useMemo(
     () => !scene.elements.some((el) => !(el as { isDeleted?: boolean }).isDeleted),
     [scene],
   )
   if (empty) return <p className="text-sm text-muted-foreground">This drawing is empty.</p>
   // Keyed by theme: a fresh render per theme, with no stale error carried over.
-  return <DrawingSvg key={dark ? "dark" : "light"} scene={scene} dark={dark} />
+  return <DrawingSvg key={dark ? "dark" : "light"} scene={scene} refs={refs} dark={dark} />
 }
 
-function DrawingSvg({ scene, dark }: { scene: ExcalidrawFileData; dark: boolean }) {
-  const [rendered, setRendered] = useState<{ svg: SVGSVGElement; width: number; height: number } | null>(null)
+const RECORD_LABEL: Record<string, string> = {
+  host: "host",
+  credential: "credential",
+  hash: "hash",
+  task: "task",
+  document: "page",
+}
+
+function DrawingSvg({ scene, refs, dark }: { scene: ExcalidrawFileData; refs: Refs; dark: boolean }) {
+  const [rendered, setRendered] = useState<{
+    svg: SVGSVGElement
+    width: number
+    height: number
+    origin: { x: number; y: number }
+  } | null>(null)
+  const [record, setRecord] = useState<{ kind: RecordKind; data: ExportedRecord } | null>(null)
+  const [recordOpen, setRecordOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     loadDrawingRenderer()
       .then((renderer) => renderer.renderSvg(scene, { dark }))
-      .then((svg) => {
+      .then(({ svg, origin }) => {
         if (cancelled) return
         // Rendered at its natural size; the pan-zoom viewport does the
         // scaling, so a wide diagram can be read at 100% and beyond.
@@ -105,7 +125,7 @@ function DrawingSvg({ scene, dark }: { scene: ExcalidrawFileData; dark: boolean 
         const height = Number(svg.getAttribute("height")) || svg.viewBox.baseVal.height || 600
         svg.setAttribute("width", String(width))
         svg.setAttribute("height", String(height))
-        setRendered({ svg, width, height })
+        setRendered({ svg, width, height, origin })
       })
       .catch((err: Error) => !cancelled && setError(`The drawing could not be rendered: ${err.message}`))
     return () => {
@@ -115,10 +135,42 @@ function DrawingSvg({ scene, dark }: { scene: ExcalidrawFileData; dark: boolean 
 
   if (error) return <p className="text-sm text-muted-foreground">{error}</p>
   if (!rendered) return <p className="text-sm text-muted-foreground">Rendering…</p>
+  // A record card opens its record as the export carried it: a page in the
+  // export by navigating to it, anything else in the dialog its chip opens.
+  const keyAt = (x: number, y: number) => cardAt(scene.elements, { x: rendered.origin.x + x, y: rendered.origin.y + y })
+  const onTap = (x: number, y: number) => {
+    const key = keyAt(x, y)
+    if (!key) return
+    const kind = key.slice(0, key.indexOf(":"))
+    const data = refs[key]
+    const label = RECORD_LABEL[kind] ?? "record"
+    if (!data || data.missing || data.unresolved) {
+      toast(`This ${label} is not in the export`, {
+        description: data?.missing ? "It was deleted, or belongs to another operation." : undefined,
+      })
+      return
+    }
+    if (kind === "document") {
+      const href = typeof data.href === "string" ? data.href : ""
+      if (href) window.location.hash = href
+      else toast("This page is not in the export", { description: typeof data.title === "string" ? data.title : undefined })
+      return
+    }
+    setRecord({ kind: kind as RecordKind, data })
+    setRecordOpen(true)
+  }
   return (
-    <PanZoom width={rendered.width} height={rendered.height}>
-      <SvgHost svg={rendered.svg} />
-    </PanZoom>
+    <>
+      <PanZoom
+        width={rendered.width}
+        height={rendered.height}
+        onTap={onTap}
+        clickableAt={(x, y) => keyAt(x, y) !== null}
+      >
+        <SvgHost svg={rendered.svg} />
+      </PanZoom>
+      {record && <RecordDialogFor kind={record.kind} data={record.data} open={recordOpen} onOpenChange={setRecordOpen} />}
+    </>
   )
 }
 

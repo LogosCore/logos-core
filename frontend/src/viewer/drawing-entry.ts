@@ -9,7 +9,7 @@
 // URL that names one. Xiaolai (CJK, 13 MB) is left out; CJK text in a
 // drawing falls back to a system font.
 
-import { exportToSvg } from "@excalidraw/excalidraw"
+import { exportToSvg, getCommonBounds } from "@excalidraw/excalidraw"
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 import type { AppState, BinaryFiles } from "@excalidraw/excalidraw/types"
 import type { DrawingRenderer } from "./viewer-drawing"
@@ -35,10 +35,20 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   return dataURL ? realFetch(dataURL) : realFetch(input, init)
 }
 
+/** A record card's frame links to the record in the app, which from a page
+ * on disk is a dead path; the viewer opens the card itself (viewer-page.tsx). */
+function withoutRecordLinks(el: ExcalidrawElement): ExcalidrawElement {
+  const ref = (el.customData as { logos?: { ref?: unknown } } | undefined)?.logos?.ref
+  return ref && el.link ? { ...el, link: null } : el
+}
+
+const EXPORT_PADDING = 16
+
 const renderer: DrawingRenderer = {
   async renderSvg(scene: ExcalidrawFileData, { dark }) {
-    const elements = (scene.elements as ExcalidrawElement[]).filter((el) => !el.isDeleted)
-    return exportToSvg({
+    const elements = (scene.elements as ExcalidrawElement[]).filter((el) => !el.isDeleted).map(withoutRecordLinks)
+    const [minX, minY] = getCommonBounds(elements)
+    const svg = await exportToSvg({
       elements,
       appState: {
         ...(scene.appState as Partial<AppState>),
@@ -46,8 +56,9 @@ const renderer: DrawingRenderer = {
         exportWithDarkMode: dark,
       },
       files: (scene.files ?? {}) as BinaryFiles,
-      exportPadding: 16,
+      exportPadding: EXPORT_PADDING,
     })
+    return { svg, origin: { x: minX - EXPORT_PADDING, y: minY - EXPORT_PADDING } }
   },
 }
 

@@ -2,6 +2,7 @@ import { GemIcon } from "lucide-react"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useCredentialDeepLink } from "@/hooks/use-credential-deep-link"
 import { useHashDeepLink } from "@/hooks/use-hash-deep-link"
+import { useHostDeepLink } from "@/hooks/use-host-deep-link"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useFindingsStore } from "@/stores/findings"
 import { CredentialDetailsDialog } from "@/components/findings/credential-details-dialog"
@@ -34,6 +35,9 @@ function FindingsPageInner({ mode }: { mode: FindingsMode }) {
   // dialog isn't hidden behind a different one.
   useCredentialDeepLink()
   useHashDeepLink()
+  // `?host=<id>`, where a host card in a drawing links to. Hosts exist only
+  // in one operation, so not in the global view.
+  useHostDeepLink(mode.kind === "scoped")
 
   const activeTab = useFindingsStore((s) => s.activeTab)
   const setActiveTab = useFindingsStore((s) => s.setActiveTab)

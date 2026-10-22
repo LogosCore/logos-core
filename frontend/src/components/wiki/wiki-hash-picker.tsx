@@ -18,17 +18,18 @@ import { HashPickerList } from "@/components/findings/hash-picker-list"
  * list-only because hashes are bulk-imported on the Findings tab rather than
  * hand-created one at a time from the editor.
  */
-interface PickerArgs {
-  editor: Editor
-  operationId: string
-  insertPos: number
-}
+/** Either inserts a reference into an editor, or hands the picked id to
+ * `onPick` (a drawing places a card with it). */
+type PickerArgs =
+  | { editor: Editor; operationId: string; insertPos: number; onPick?: undefined }
+  | { operationId: string; onPick: (id: string) => void; editor?: undefined; insertPos?: undefined }
 
 interface PickerState {
   open: boolean
   editor: Editor | null
   operationId: string
   insertPos: number | null
+  onPick: ((id: string) => void) | null
   openPicker: (args: PickerArgs) => void
   closePicker: () => void
 }
@@ -38,10 +39,11 @@ const useWikiHashPickerStore = create<PickerState>((set) => ({
   editor: null,
   operationId: "",
   insertPos: null,
-  openPicker: ({ editor, operationId, insertPos }) =>
-    set({ open: true, editor, operationId, insertPos }),
+  onPick: null,
+  openPicker: ({ editor, operationId, insertPos, onPick }) =>
+    set({ open: true, editor: editor ?? null, operationId, insertPos: insertPos ?? null, onPick: onPick ?? null }),
   closePicker: () =>
-    set({ open: false, editor: null, operationId: "", insertPos: null }),
+    set({ open: false, editor: null, operationId: "", insertPos: null, onPick: null }),
 }))
 
 /** Imperative entry point — called from the slash-command item. Co-located
@@ -54,6 +56,7 @@ export function openHashPicker(args: PickerArgs) {
 export function WikiHashPickerDialog() {
   const open = useWikiHashPickerStore((s) => s.open)
   const closePicker = useWikiHashPickerStore((s) => s.closePicker)
+  const forDrawing = useWikiHashPickerStore((s) => s.onPick !== null)
   const [search, setSearch] = useState("")
 
   // Reset the search field when the picker reopens.
@@ -74,10 +77,12 @@ export function WikiHashPickerDialog() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HashIcon className="size-4" />
-            Insert hash reference
+            {forDrawing ? "Add hash to drawing" : "Insert hash reference"}
           </DialogTitle>
           <DialogDescription>
-            Pick a hash from this operation to embed in the document.
+            {forDrawing
+              ? "Pick a hash from this operation to draw as a card."
+              : "Pick a hash from this operation to embed in the document."}
           </DialogDescription>
         </DialogHeader>
         {open ? (
@@ -98,7 +103,12 @@ function PickerBody({ search, setSearch }: PickerBodyProps) {
   const closePicker = useWikiHashPickerStore((s) => s.closePicker)
 
   function insertHash(hashId: string) {
-    const { editor, insertPos } = useWikiHashPickerStore.getState()
+    const { editor, insertPos, onPick } = useWikiHashPickerStore.getState()
+    if (onPick) {
+      closePicker()
+      onPick(hashId)
+      return
+    }
     if (!editor) {
       closePicker()
       return

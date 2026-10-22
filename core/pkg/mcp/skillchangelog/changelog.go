@@ -415,6 +415,13 @@ var releases = []Release{
 			"edit_wiki_drawing notes any text that runs across an arrow, another text or a box's border.",
 		},
 	},
+	{
+		Version: 48,
+		Date:    "2026-10-22",
+		Notes: []string{
+			"Drawings: a card can stand for a host, credential, hash, task or wiki page with `%% id ref=host:<id>`. The operator clicks it to open the record; get_wiki_drawing reads the ref back. New card kinds task and document.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

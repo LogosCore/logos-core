@@ -22,7 +22,17 @@
 // placed from the panel or drawn by hand has none, and its element id stands
 // in, so every node has an id a write can refer to.
 
-import { CARD_HEIGHT, ZONE_KINDS, tagOf, type EdgeStyle, type ShapeStyle, type ShapeTag, type ZoneKind } from "./drawing-catalogue.js";
+import {
+  CARD_HEIGHT,
+  ZONE_KINDS,
+  parseRef,
+  tagOf,
+  type CardRef,
+  type EdgeStyle,
+  type ShapeStyle,
+  type ShapeTag,
+  type ZoneKind,
+} from "./drawing-catalogue.js";
 import { EDGE_STYLES } from "./drawing-catalogue.js";
 import {
   defaultHeads,
@@ -53,6 +63,8 @@ export interface SceneNode {
   /** A colour or icon an agent chose over the kind's own. */
   color?: string;
   icon?: string;
+  /** The Logos record a card stands for. */
+  ref?: CardRef;
   /** The element arrows bind to: a card's frame, a box itself. */
   frameId: string;
   elementIds: string[];
@@ -239,6 +251,7 @@ export function readScene(live: readonly NormalizedElement[]): Scene {
         builtin: true,
         ...(tag.color ? { color: tag.color } : {}),
         ...(tag.icon ? { icon: tag.icon } : {}),
+        ...(parseRef(tag.ref) ? { ref: parseRef(tag.ref) as CardRef } : {}),
       });
       continue;
     }
@@ -439,6 +452,7 @@ export function sceneToText(scene: Scene): string {
     badges: n.badges,
     color: n.color,
     icon: n.icon,
+    ref: n.ref,
   });
   const zoneOut = (zone: SceneZone): SerializedZone => ({
     id: zone.id,

@@ -44,7 +44,13 @@ export interface ExcalidrawFileData {
 
 export type PageBody =
   | { kind: "document"; doc: JSONContent }
-  | { kind: "drawing"; scene: ExcalidrawFileData }
+  | {
+      kind: "drawing"
+      scene: ExcalidrawFileData
+      /** The records the drawing's record cards stand for, by "kind:id":
+       * the exporter's chip data plus `kind`, or `missing`. */
+      refs?: Record<string, Record<string, unknown>>
+    }
 
 declare global {
   interface Window {

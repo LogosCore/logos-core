@@ -172,6 +172,12 @@ look as they do in the wiki. It is never imported back.
 - Drawings render to SVG in the browser through `assets/drawing.js`
   (Excalidraw's export, fonts embedded, fetched only when a drawing opens).
   Brand icons load from `assets/simple-icons.js` the same way.
+- A drawing's record cards (cards whose tag carries `customData.logos.ref`, a
+  host, credential, hash, task or page) are resolved by the same code as the
+  chips, once per record, into the page's `refs` (`htmlbundle.drawingRefs`).
+  The viewer hit-tests a click on the SVG against the scene and opens the
+  record's dialog, or the page in the export; a record outside the operation
+  or deleted is `missing`.
 - Credentials are written in full for every caller, as the markdown zip does:
   they are operation records, not secrets this export keeps back.
 

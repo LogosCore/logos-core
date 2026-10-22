@@ -318,3 +318,100 @@ func drawingText(file wiki.ExcalidrawFile) string {
 	}
 	return b.String()
 }
+
+// drawingRefs resolves the records a drawing's record cards stand for. A card
+// carries its record in its tag (customData.logos.ref, see the frontend's
+// drawing-catalogue.ts); each record is resolved once however many cards show
+// it, by the same code as a page's chip for it, so a card opens the same
+// details a chip does. The second value is the records' names, for search.
+func (r *exportRun) drawingRefs(ctx context.Context, doc models.WikiDocument, label string, file wiki.ExcalidrawFile) (map[string]any, string) {
+	t := &transform{run: r, ctx: ctx, doc: doc, label: label}
+	out := map[string]any{}
+	for _, raw := range file.Elements {
+		var el struct {
+			IsDeleted  bool `json:"isDeleted"`
+			CustomData struct {
+				Logos struct {
+					Part string `json:"part"`
+					Ref  struct {
+						Kind string `json:"kind"`
+						ID   string `json:"id"`
+					} `json:"ref"`
+				} `json:"logos"`
+			} `json:"customData"`
+		}
+		if json.Unmarshal(raw, &el) != nil || el.IsDeleted || el.CustomData.Logos.Part != "frame" {
+			continue
+		}
+		ref := el.CustomData.Logos.Ref
+		key := ref.Kind + ":" + ref.ID
+		if ref.ID == "" {
+			continue
+		}
+		if _, done := out[key]; done {
+			continue
+		}
+		if data := t.refData(ref.Kind, ref.ID); data != nil {
+			out[key] = data
+			t.text.WriteString("\n")
+		}
+	}
+	if len(out) == 0 {
+		return nil, ""
+	}
+	return out, t.text.String()
+}
+
+// refData is one record card's record: the chip data a page's chip for it
+// would carry, with the record's kind. nil for a kind this export does not
+// know.
+func (t *transform) refData(kind, id string) map[string]any {
+	attrs := map[string]any{}
+	switch kind {
+	case "host":
+		attrs["hostId"] = id
+		t.hostChip(attrs)
+	case "hash":
+		attrs["hashId"] = id
+		t.hashChip(attrs)
+	case "credential":
+		attrs["credentialId"] = id
+		t.credentialChip(attrs)
+	case "document":
+		attrs["documentId"] = id
+		t.pageChip(attrs)
+	case "task":
+		attrs[ExportAttr] = t.taskData(id)
+	default:
+		return nil
+	}
+	data, _ := attrs[ExportAttr].(map[string]any)
+	if data == nil {
+		// Not resolvable here (no repository wired): the viewer shows the
+		// card's own words and nothing to open.
+		data = map[string]any{"unresolved": true}
+	}
+	data["kind"] = kind
+	return data
+}
+
+// taskData is a task as its card opens it: the fields of the task dialog
+// that read without the app.
+func (t *transform) taskData(raw string) map[string]any {
+	id, err := uuid.Parse(raw)
+	if err != nil || t.run.e.taskRepo == nil {
+		return nil
+	}
+	task, err := t.run.e.taskRepo.FindByID(t.ctx, id)
+	if err != nil || task.DeletedAt != nil || task.OperationID != t.doc.OperationID {
+		t.run.report.Warn(t.label, "task_reference_unresolved: "+raw)
+		return map[string]any{"missing": true}
+	}
+	t.text.WriteString(task.Name)
+	return map[string]any{
+		"name": task.Name, "description": task.Description, "stage": string(task.Stage),
+		"status": string(task.Status), "summary": task.Summary,
+		"riskScore": task.RiskScore, "riskDescription": task.RiskDescription,
+		"profitScore": task.ProfitScore, "profitDescription": task.ProfitDescription,
+	}
+}

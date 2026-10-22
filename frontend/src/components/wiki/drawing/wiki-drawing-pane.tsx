@@ -106,6 +106,10 @@ export function WikiDrawingPane({
               <Suspense fallback={<DrawingSkeleton />}>
                 <WikiDrawingCanvas
                   documentId={documentId}
+                  // Record cards are picked from the page's own operation,
+                  // not the tree on show: a page opened from the Public
+                  // tree, or with no operation scoped, still belongs to one.
+                  operationId={document?.operationId ?? operationId}
                   ydoc={ydoc}
                   provider={provider}
                   isEditor={isEditor}
