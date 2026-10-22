@@ -32,6 +32,9 @@ import { embedWikiImages } from "./drawing-images"
 import { ShapesSidebar, ShapesTrigger } from "./drawing-shapes-panel"
 import { useRecordCards } from "./use-record-cards"
 import { RecordOverlay } from "./drawing-record-overlay"
+import { QuickShapes, type QuickChoice } from "./drawing-quick-shapes"
+import type { RefKind } from "./drawing-catalogue"
+import { insertElements } from "./drawing-place"
 import "@excalidraw/excalidraw/index.css"
 import "./wiki-drawing.css"
 
@@ -76,6 +79,7 @@ export default function WikiDrawingCanvas({
   const trackExportDialog = useEmbeddedImagesForExport(api)
   const containerRef = useRef<HTMLDivElement>(null)
   const records = useRecordCards({ api, isEditor, operationId, documentId, containerRef })
+  const quick = useQuickShapes(api, isEditor, containerRef)
   const recordsChange = records.onChange
   const handleChange = useCallback(
     (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
@@ -167,7 +171,10 @@ export default function WikiDrawingCanvas({
         }}
         onChange={handleChange}
         onScrollChange={onScrollChange}
-        onPointerUpdate={onPointerUpdate}
+        onPointerUpdate={(payload) => {
+          onPointerUpdate(payload)
+          quick.trackPointer(payload.pointer)
+        }}
         // Record cards open their record here rather than following the
         // link (use-record-cards.ts); any other link behaves as Excalidraw's.
         onLinkOpen={records.onLinkOpen}
@@ -208,8 +215,81 @@ export default function WikiDrawingCanvas({
         )}
       </Excalidraw>
       <RecordOverlay items={records.overlay} onOpen={records.openCard} />
+      {isEditor && (
+        <QuickShapes
+          open={quick.open}
+          onOpenChange={quick.setOpen}
+          personal={personalShapes}
+          dark={dark}
+          records
+          onChoose={(choice) => quick.place(choice, records.addRecord)}
+        />
+      )}
     </div>
   )
+}
+
+/**
+ * The quick shape picker's half on the canvas: "/" opens it, and what it
+ * picks goes where the pointer last was on the canvas, or the middle of the
+ * view when the pointer is elsewhere. See drawing-quick-shapes.tsx.
+ */
+function useQuickShapes(
+  api: ExcalidrawImperativeAPI | null,
+  isEditor: boolean,
+  containerRef: React.RefObject<HTMLElement | null>,
+) {
+  const [open, setOpen] = useState(false)
+  const pointerRef = useRef<{ x: number; y: number } | null>(null)
+  // Where the pointer was when "/" was pressed: the picker's backdrop covers
+  // the canvas the moment it opens, which counts as the pointer leaving it.
+  const placeAtRef = useRef<{ x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!api || !isEditor || !el) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return
+      // Typing a slash stays typing: in Excalidraw's text editor, a search
+      // box, a dialog or anywhere outside this canvas.
+      const target = e.target as HTMLElement | null
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return
+      if (target && target !== document.body && !el.contains(target)) return
+      const state = api.getAppState()
+      if (state.viewModeEnabled || state.editingTextElement || state.openDialog) return
+      e.preventDefault()
+      e.stopPropagation()
+      placeAtRef.current = pointerRef.current
+      setOpen(true)
+    }
+    const onLeave = () => {
+      pointerRef.current = null
+    }
+    window.addEventListener("keydown", onKey, true)
+    el.addEventListener("pointerleave", onLeave)
+    return () => {
+      window.removeEventListener("keydown", onKey, true)
+      el.removeEventListener("pointerleave", onLeave)
+    }
+  }, [api, isEditor, containerRef])
+
+  const trackPointer = useCallback((pointer: { x: number; y: number }) => {
+    pointerRef.current = { x: pointer.x, y: pointer.y }
+  }, [])
+
+  const place = useCallback(
+    (choice: QuickChoice, addRecord: (kind: RefKind) => void) => {
+      if (choice.kind === "record") {
+        addRecord(choice.record)
+        return
+      }
+      if (!api) return
+      insertElements(api, choice.elements, placeAtRef.current ?? undefined)
+    },
+    [api],
+  )
+
+  return { open, setOpen, trackPointer, place }
 }
 
 /**

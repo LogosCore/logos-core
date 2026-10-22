@@ -25,105 +25,19 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types"
 import { ChevronDown, Search, Shapes, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import {
-  BUILTIN_SHAPES,
-  SHAPE_CATEGORIES,
-  buildRefCard,
-  matchesShape,
-  type BuiltinShape,
-  type RefKind,
-  type ShapeStyle,
-} from "./drawing-catalogue"
+import { BUILTIN_SHAPES, SHAPE_CATEGORIES, matchesShape, type RefKind } from "./drawing-catalogue"
 import { randomId, withFreshIds } from "./drawing-insert"
-import { SHAPES_SIDEBAR, insertElements, skeletonElements } from "./drawing-place"
+import { SHAPES_SIDEBAR, insertElements } from "./drawing-place"
+import {
+  RECORD_TILES,
+  buildShape,
+  matchesRecord,
+  previewElements,
+  recordPreview,
+  useShapePrefs,
+} from "./drawing-shape-entries"
 import { wikiImageFiles } from "./drawing-images"
 
-
-// ---------------------------------------------------------------------------
-// Preferences: style, collapsed categories, docked. Per browser, like the
-// grid preference.
-
-const PREFS_KEY = "wiki_drawing_shapes_panel"
-
-interface Prefs {
-  style: ShapeStyle
-  collapsed: string[]
-  docked: boolean
-}
-
-function readPrefs(): Prefs {
-  const fallback: Prefs = { style: "sketch", collapsed: [], docked: false }
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "null") as Partial<Prefs> | null
-    return {
-      style: parsed?.style === "clean" ? "clean" : "sketch",
-      collapsed: Array.isArray(parsed?.collapsed) ? parsed.collapsed.filter((c) => typeof c === "string") : [],
-      docked: parsed?.docked === true,
-    }
-  } catch {
-    return fallback
-  }
-}
-
-function writePrefs(prefs: Prefs) {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
-  } catch {
-    // Storage unavailable: the panel starts from its defaults next time.
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Elements
-
-/** A shape's elements, converted from its skeleton. Built fresh for every
- * insert, after the canvas has loaded its fonts. */
-function buildShape(shape: BuiltinShape, style: ShapeStyle): ExcalidrawElement[] {
-  return skeletonElements(shape.build(style))
-}
-
-// ---------------------------------------------------------------------------
-// Linked records: cards that stand for a record of the operation. A click
-// opens the record's picker; the card is placed once one is picked.
-
-const RECORD_TILES: { kind: RefKind; name: string; title: string; detail: string; keywords: string[] }[] = [
-  { kind: "host", name: "Host", title: "DC01", detail: "10.0.5.10 · Windows Server", keywords: ["machine", "server", "ip"] },
-  { kind: "credential", name: "Credential", title: "svc_backup", detail: "Password", keywords: ["password", "login", "secret"] },
-  { kind: "hash", name: "Hash", title: "aad3b435b514…", detail: "Cracked", keywords: ["ntlm", "crack"] },
-  { kind: "task", name: "Task", title: "Kerberoast", detail: "In process", keywords: ["todo", "kanban"] },
-  { kind: "document", name: "Wiki page", title: "Recon notes", detail: "Wiki page", keywords: ["doc", "document", "note"] },
-]
-
-const recordPreviewCache = new Map<string, ExcalidrawElement[]>()
-function recordPreview(tile: (typeof RECORD_TILES)[number], style: ShapeStyle): ExcalidrawElement[] {
-  const key = `${tile.kind}:${style}`
-  let elements = recordPreviewCache.get(key)
-  if (!elements) {
-    const card = buildRefCard({ ref: { kind: tile.kind, id: "preview" }, title: tile.title, detail: tile.detail, style })
-    elements = skeletonElements(card.elements)
-    recordPreviewCache.set(key, elements)
-  }
-  return elements
-}
-
-function matchesRecord(tile: (typeof RECORD_TILES)[number], query: string): boolean {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const haystack = [tile.name, "linked record", ...tile.keywords].join(" ").toLowerCase()
-  return words.every((w) => haystack.includes(w))
-}
-
-/** Previews are converted once per shape and style and kept: the panel
- * re-renders on every keystroke in the search box. */
-const previewCache = new Map<string, ExcalidrawElement[]>()
-function previewElements(shape: BuiltinShape, style: ShapeStyle): ExcalidrawElement[] {
-  const key = `${shape.key}:${shape.styled ? style : "-"}`
-  let elements = previewCache.get(key)
-  if (!elements) {
-    elements = buildShape(shape, style)
-    previewCache.set(key, elements)
-  }
-  return elements
-}
 
 function dragElements(event: React.DragEvent, elements: readonly ExcalidrawElement[]) {
   const item: LibraryItem = {
@@ -157,15 +71,8 @@ interface ShapesSidebarProps {
 }
 
 export function ShapesSidebar({ api, personal, dark, onAddRecord }: ShapesSidebarProps) {
-  const [prefs, setPrefs] = useState(readPrefs)
+  const [prefs, update] = useShapePrefs()
   const [query, setQuery] = useState("")
-  const update = (next: Partial<Prefs>) => {
-    setPrefs((prev) => {
-      const merged = { ...prev, ...next }
-      writePrefs(merged)
-      return merged
-    })
-  }
 
   const searching = query.trim() !== ""
   const sections = useMemo(
@@ -463,7 +370,7 @@ function previewSvg(elements: readonly ExcalidrawElement[], dark: boolean): Prom
  * what gets inserted. Fonts are not inlined: the canvas has already loaded
  * them into the page, and inlining would subset a font for every tile.
  * Drawn once the tile is on screen, from previewSvg's cache. */
-function Preview({ elements, dark }: { elements: readonly ExcalidrawElement[]; dark: boolean }) {
+export function Preview({ elements, dark }: { elements: readonly ExcalidrawElement[]; dark: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const host = ref.current
