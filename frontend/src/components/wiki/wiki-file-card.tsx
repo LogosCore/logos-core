@@ -253,10 +253,15 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   }
 
   const pendingScrollRef = useRef(false)
+  // True when this reader opened the panel just now, as opposed to its being
+  // restored open with the page. Only the first takes the pointer straight
+  // away; see FilePreviewPanel.
+  const [openedByReader, setOpenedByReader] = useState(false)
 
   function toggleInlinePreview() {
     if (!canPreviewInline) return
     const opening = !expanded
+    if (opening) setOpenedByReader(true)
     if (opening && !pendingFullscreenRef.current) {
       pendingScrollRef.current = true
       if (previewHeight === null) {
@@ -342,6 +347,7 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
       return
     }
     if (!expanded) {
+      setOpenedByReader(true)
       pendingFullscreenRef.current = true
       setExpanded(true)
       return
@@ -501,6 +507,7 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
           rendered={rendered}
           height={previewHeight}
           onHeightChange={setPreviewHeight}
+          startActive={openedByReader}
         />
       ) : null}
     </NodeViewWrapper>
@@ -522,6 +529,8 @@ interface FilePreviewPanelProps {
   height: number | null
   /** Commits a new dragged height once the drag ends. */
   onHeightChange: (height: number) => void
+  /** The frame takes the pointer from the start, without a first click. */
+  startActive: boolean
 }
 
 // The expandable preview panel. PDFs render via an inline iframe src; every
@@ -539,6 +548,7 @@ function FilePreviewPanel({
   rendered,
   height,
   onHeightChange,
+  startActive,
 }: FilePreviewPanelProps): ReactElement {
   // Shared by whichever of the two iframes renders — the resize handle measures
   // this to seed the drag. Absent while HTML is still loading or errored, which
@@ -546,10 +556,13 @@ function FilePreviewPanel({
   const frameRef = useRef<HTMLIFrameElement>(null)
   // Media sizes itself to its own aspect ratio, so no drag handle.
   const hasFrame = mediaKind === null && (isPdf || rendered.content !== null)
-  // The iframe starts with pointer-events disabled so wheel events pass
-  // through to the wiki page. Clicking the preview activates the iframe.
-  const [frameActive, setFrameActive] = useState(false)
-  // Set when the browser cannot decode the media: see onMediaUnplayable.
+  // An inactive frame has pointer-events disabled, so the wheel scrolls the
+  // wiki page past it; clicking the preview activates it. A panel the reader
+  // just opened starts active: they opened it to read it. One restored open
+  // with the page starts inactive, or scrolling down the page would stop dead
+  // inside the first preview the pointer crossed.
+  const [frameActive, setFrameActive] = useState(startActive)
+  // Set when the browser cannot decode the media; see the players below.
   const [mediaFailed, setMediaFailed] = useState(false)
   // A listing shorter than the frame caps it at its own height (see
   // wiki-file-preview-fit.ts). Wrapped text depends on the width, so the
