@@ -7,6 +7,8 @@ package lifecycle
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
 
@@ -57,6 +60,18 @@ type ModuleEventPublisher interface {
 	Publish(event eventbus.Event)
 }
 
+// ManagementHooks connects the lifecycle handlers to module management.
+// Satisfied by *modulemgmt.Service; nil-safe (management is then inert: a
+// declared manifest is still validated and stored, and the register reply
+// carries an empty revision-0 config).
+type ManagementHooks interface {
+	// ManagementConfigFor is the effective config for a registering instance.
+	ManagementConfigFor(ctx context.Context, moduleName, instance string, manifest *protocol.ManagementManifest) (protocol.ManagementConfig, error)
+	// HeartbeatApplied reports the revision an instance says it applied; the
+	// implementation pushes asynchronously when that is behind.
+	HeartbeatApplied(instance string, appliedRevision int64)
+}
+
 // Config carries the bootstrap values handed back to a module on register and
 // the liveness parameters used by the reaper.
 type Config struct {
@@ -72,10 +87,15 @@ type Service struct {
 	emitter     EventEmitter
 	invalidator RegistrationInvalidator
 	publisher   ModuleEventPublisher
+	mgmt        ManagementHooks
 	logger      *zap.Logger
 	cfg         Config
 	now         func() time.Time
 }
+
+// SetManagement attaches module management. Separate from NewService because
+// management depends on the RPC client, which is built after the service.
+func (s *Service) SetManagement(m ManagementHooks) { s.mgmt = m }
 
 // NewService builds the lifecycle service. emitter may be nil (AMQP audit
 // events are then skipped) so core can run with the broker present but events
@@ -108,6 +128,11 @@ type registerRequest struct {
 	Version     string `json:"version"`
 	RPCQueue    string `json:"rpc_queue"`
 	Description string `json:"description"`
+	// Management is the optional management manifest.
+	Management *protocol.ManagementManifest `json:"management"`
+	// AppliedRevision is the config revision the process has applied (0 for
+	// a fresh process that has not received any).
+	AppliedRevision int64 `json:"applied_revision"`
 }
 
 type registerReply struct {
@@ -121,12 +146,18 @@ type registerReply struct {
 type registerConfig struct {
 	Policy       map[string]any `json:"policy"`
 	FeatureFlags map[string]any `json:"feature_flags"`
+	// Management is the instance's effective config; present only when the
+	// module declared a manifest.
+	Management *protocol.ManagementConfig `json:"management,omitempty"`
 }
 
 type heartbeatRequest struct {
 	Instance string         `json:"instance"`
 	Status   string         `json:"status"`
 	Metrics  map[string]any `json:"metrics"`
+	// AppliedRevision is the config revision the module has processed. A
+	// pointer so a module that does not send it leaves the stored value alone.
+	AppliedRevision *int64 `json:"applied_revision"`
 }
 
 type heartbeatReply struct {
@@ -156,16 +187,41 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 	}
 
 	reg := &models.Module{
-		Type:         p.ModuleType,
-		Name:         p.ModuleName,
-		Instance:     p.Instance,
-		Version:      p.Version,
-		RPCQueue:     p.RPCQueue,
-		Description:  p.Description,
-		RegisteredAt: s.now(),
+		Type:            p.ModuleType,
+		Name:            p.ModuleName,
+		Instance:        p.Instance,
+		Version:         p.Version,
+		RPCQueue:        p.RPCQueue,
+		Description:     p.Description,
+		RegisteredAt:    s.now(),
+		AppliedRevision: p.AppliedRevision,
+	}
+	if p.Management != nil {
+		if err := protocol.ValidateManifest(*p.Management); err != nil {
+			return nil, validationErr("invalid management manifest: " + err.Error())
+		}
+		hash, err := manifestHash(*p.Management)
+		if err != nil {
+			return nil, validationErr("invalid management manifest: " + err.Error())
+		}
+		reg.Manifest = &models.ModuleManifest{ManagementManifest: *p.Management}
+		reg.ManifestHash = hash
 	}
 	if err := s.repo.Upsert(ctx, reg); err != nil {
 		return nil, fmt.Errorf("persist registration: %w", err)
+	}
+
+	var mgmtCfg *protocol.ManagementConfig
+	if p.Management != nil {
+		cfg := protocol.ManagementConfig{Revision: 0, Values: map[string]any{}}
+		if s.mgmt != nil {
+			var err error
+			cfg, err = s.mgmt.ManagementConfigFor(ctx, p.ModuleName, p.Instance, p.Management)
+			if err != nil {
+				return nil, fmt.Errorf("load management config: %w", err)
+			}
+		}
+		mgmtCfg = &cfg
 	}
 
 	s.emit(ctx, p.ModuleType, p.Instance, EventRegistered)
@@ -187,8 +243,20 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 		Config: registerConfig{
 			Policy:       orEmptyMap(s.cfg.Policy),
 			FeatureFlags: orEmptyMap(s.cfg.FeatureFlags),
+			Management:   mgmtCfg,
 		},
 	}, nil
+}
+
+// manifestHash fingerprints a manifest (sha256 of its JSON encoding), so a
+// changed declaration is visible without diffing documents.
+func manifestHash(m protocol.ManagementManifest) (string, error) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // HandleHeartbeat implements the module.heartbeat operation.
@@ -201,7 +269,7 @@ func (s *Service) HandleHeartbeat(ctx context.Context, req messaging.Envelope) (
 		return nil, validationErr("instance is required")
 	}
 
-	found, err := s.repo.TouchHeartbeat(ctx, p.Instance, p.Status, p.Metrics, s.now())
+	found, err := s.repo.TouchHeartbeat(ctx, p.Instance, p.Status, p.Metrics, p.AppliedRevision, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("touch heartbeat: %w", err)
 	}
@@ -210,6 +278,13 @@ func (s *Service) HandleHeartbeat(ctx context.Context, req messaging.Envelope) (
 			Code:    messaging.CodeUnknownInstance,
 			Message: fmt.Sprintf("no active registration for instance %q", p.Instance),
 		}
+	}
+
+	// Drift repair: if the module is behind the desired config revision, push
+	// it in the background. config_changed stays false — core pushes, the
+	// module does not pull.
+	if s.mgmt != nil && p.AppliedRevision != nil {
+		s.mgmt.HeartbeatApplied(p.Instance, *p.AppliedRevision)
 	}
 
 	return heartbeatReply{Instance: p.Instance, Ack: true, ConfigChanged: false}, nil

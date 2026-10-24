@@ -477,6 +477,7 @@ var moduleTopics = []eventbus.Topic{
 	eventbus.TopicModuleRegistered,
 	eventbus.TopicModuleDeregistered,
 	eventbus.TopicModuleDead,
+	eventbus.TopicModuleUpdated,
 }
 
 // toModuleEvent converts an event bus Event to a GraphQL ModuleEvent. A module

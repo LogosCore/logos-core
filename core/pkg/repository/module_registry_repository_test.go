@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -21,7 +22,7 @@ func TestRegisteredInstanceFilter_ScopesToRegistered(t *testing.T) {
 func TestHeartbeatUpdate_OmitsEmptyStatusAndNilMetrics(t *testing.T) {
 	at := time.Unix(1000, 0).UTC()
 
-	full := heartbeatUpdate("healthy", map[string]any{"x": 1}, at)
+	full := heartbeatUpdate("healthy", map[string]any{"x": 1}, nil, at)
 	set := full["$set"].(bson.M)
 	if set["last_heartbeat_at"] != at {
 		t.Errorf("last_heartbeat_at = %v, want %v", set["last_heartbeat_at"], at)
@@ -33,7 +34,7 @@ func TestHeartbeatUpdate_OmitsEmptyStatusAndNilMetrics(t *testing.T) {
 		t.Error("expected last_metrics to be set")
 	}
 
-	bare := heartbeatUpdate("", nil, at)["$set"].(bson.M)
+	bare := heartbeatUpdate("", nil, nil, at)["$set"].(bson.M)
 	if _, ok := bare["last_status"]; ok {
 		t.Error("empty status should not be written")
 	}
@@ -149,5 +150,70 @@ func TestStaleRegisteredFilter_UsesIfNullFallback(t *testing.T) {
 	}
 	if lt[1] != cutoff {
 		t.Errorf("cutoff operand = %v, want %v", lt[1], cutoff)
+	}
+}
+
+func TestTakeoverUpdate_ManagementFields(t *testing.T) {
+	withManifest := &models.Module{
+		Instance: "http-1", AppliedRevision: 4,
+		Manifest:     &models.ModuleManifest{ManagementManifest: protocol.ManagementManifest{SchemaVersion: "1"}},
+		ManifestHash: "abc",
+	}
+	u := takeoverUpdate(withManifest)
+	set, unset := u["$set"].(bson.M), u["$unset"].(bson.M)
+	if set["manifest"] != withManifest.Manifest || set["manifest_hash"] != "abc" || set["applied_revision"] != int64(4) {
+		t.Errorf("$set = %v", set)
+	}
+	for _, k := range []string{"rejected", "restart_required", "last_apply_error"} {
+		if _, ok := unset[k]; !ok {
+			t.Errorf("%q should be cleared on register", k)
+		}
+	}
+	if _, ok := unset["manifest"]; ok {
+		t.Error("manifest must not be unset when declared")
+	}
+
+	// A registration that declares none removes the old manifest.
+	u = takeoverUpdate(&models.Module{Instance: "http-1"})
+	set, unset = u["$set"].(bson.M), u["$unset"].(bson.M)
+	if _, ok := set["manifest"]; ok {
+		t.Error("manifest set without a declaration")
+	}
+	if _, ok := unset["manifest"]; !ok {
+		t.Error("manifest should be unset when not declared")
+	}
+	if _, ok := unset["manifest_hash"]; !ok {
+		t.Error("manifest_hash should be unset when not declared")
+	}
+}
+
+func TestHeartbeatUpdate_AppliedRevision(t *testing.T) {
+	rev := int64(7)
+	set := heartbeatUpdate("healthy", nil, &rev, time.Unix(1, 0))["$set"].(bson.M)
+	if set["applied_revision"] != int64(7) {
+		t.Errorf("applied_revision = %v", set["applied_revision"])
+	}
+	if _, ok := heartbeatUpdate("healthy", nil, nil, time.Unix(1, 0))["$set"].(bson.M)["applied_revision"]; ok {
+		t.Error("absent applied_revision must not be written")
+	}
+}
+
+func TestApplyResultUpdate(t *testing.T) {
+	at := time.Unix(9, 0).UTC()
+	u := applyResultUpdate(protocol.ConfigApplyReply{AppliedRevision: 3, Rejected: map[string]string{"k": "no"}, RestartRequired: []string{"m"}}, at)
+	set, unset := u["$set"].(bson.M), u["$unset"].(bson.M)
+	if set["applied_revision"] != int64(3) || set["last_apply_at"] != at || set["rejected"] == nil || set["restart_required"] == nil {
+		t.Errorf("$set = %v", set)
+	}
+	if _, ok := unset["last_apply_error"]; !ok {
+		t.Error("a successful apply must clear last_apply_error")
+	}
+	u = applyResultUpdate(protocol.ConfigApplyReply{AppliedRevision: 3}, at)
+	unset = u["$unset"].(bson.M)
+	if _, ok := unset["rejected"]; !ok {
+		t.Error("no rejections → rejected unset")
+	}
+	if _, ok := unset["restart_required"]; !ok {
+		t.Error("nothing to restart → restart_required unset")
 	}
 }

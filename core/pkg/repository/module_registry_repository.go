@@ -7,6 +7,7 @@ import (
 
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,9 +24,11 @@ type IModuleRegistryRepository interface {
 	// refreshes registered_at, and clears any prior dead/deregistered markers so
 	// re-registering an instance revives it.
 	Upsert(ctx context.Context, reg *models.Module) error
-	// TouchHeartbeat refreshes liveness fields on a registered instance. The
-	// bool is false when no registered instance matched (→ unknown_instance).
-	TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, at time.Time) (bool, error)
+	// TouchHeartbeat refreshes liveness fields on a registered instance, and
+	// the applied config revision when the heartbeat reported one (nil leaves
+	// it untouched). The bool is false when no registered instance matched
+	// (→ unknown_instance).
+	TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, appliedRevision *int64, at time.Time) (bool, error)
 	// MarkDeregistered transitions a registered instance to deregistered. The
 	// bool is false when no registered instance matched (→ unknown_instance).
 	MarkDeregistered(ctx context.Context, instance, reason string, at time.Time) (bool, error)
@@ -42,6 +45,17 @@ type IModuleRegistryRepository interface {
 	// together. Distinct from ListActive, which is the registered-only hot path
 	// used by the active-set lookups.
 	List(ctx context.Context, statuses []string) ([]models.Module, error)
+
+	// --- module management ---
+
+	// ListRegisteredByName returns every registered instance of a module name —
+	// the push targets of a MODULE-scope config change.
+	ListRegisteredByName(ctx context.Context, moduleName string) ([]models.Module, error)
+	// RecordApplyResult stores a mgmt.config.apply reply: the applied revision,
+	// rejected keys and restart-required keys, and clears last_apply_error.
+	RecordApplyResult(ctx context.Context, instance string, reply protocol.ConfigApplyReply, at time.Time) error
+	// RecordApplyError records a push that failed after all retries.
+	RecordApplyError(ctx context.Context, instance, message string, at time.Time) error
 }
 
 type moduleRegistryRepository struct {
@@ -56,6 +70,8 @@ func NewModuleRegistryRepository(db database.Database) IModuleRegistryRepository
 		// Reaper scans by status; module_type for operator queries.
 		{Key: []string{"status"}},
 		{Key: []string{"module_type"}},
+		// Management: MODULE-scope config pushes fan out by module name.
+		{Key: []string{"module_name", "status"}},
 	})
 
 	return &moduleRegistryRepository{coll: coll}
@@ -74,9 +90,13 @@ func registeredInstanceFilter(instance string) bson.M {
 	return bson.M{"instance": instance, "status": models.ModuleStatusRegistered}
 }
 
-// heartbeatUpdate sets the liveness fields recorded on each heartbeat.
-func heartbeatUpdate(status string, metrics map[string]any, at time.Time) bson.M {
+// heartbeatUpdate sets the liveness fields recorded on each heartbeat, plus the
+// applied config revision when the module reported one.
+func heartbeatUpdate(status string, metrics map[string]any, appliedRevision *int64, at time.Time) bson.M {
 	set := bson.M{"last_heartbeat_at": at}
+	if appliedRevision != nil {
+		set["applied_revision"] = *appliedRevision
+	}
 	if status != "" {
 		set["last_status"] = status
 	}
@@ -106,26 +126,62 @@ func markDeadUpdate(at time.Time) bson.M {
 // takeoverUpdate writes a re-registration over an existing row in place: it
 // refreshes the descriptor + registered_at and unsets every prior end-state /
 // stale-liveness marker, so a dead or deregistered instance is revived.
+//
+// The management manifest is replaced by whatever this registration declared
+// — and removed when it declared none — and the applied revision is the one
+// the (re)started process reports. The previous process's apply outcome
+// (rejected / restart_required / last_apply_error) is cleared: the register
+// reply hands the new process the current effective config.
 func takeoverUpdate(reg *models.Module) bson.M {
-	return bson.M{
-		"$set": bson.M{
-			"module_type":   reg.Type,
-			"module_name":   reg.Name,
-			"version":       reg.Version,
-			"rpc_queue":     reg.RPCQueue,
-			"description":   reg.Description,
-			"status":        models.ModuleStatusRegistered,
-			"registered_at": reg.RegisteredAt,
-		},
-		"$unset": bson.M{
-			"deregistered_at":   "",
-			"deregister_reason": "",
-			"declared_dead_at":  "",
-			"last_heartbeat_at": "",
-			"last_status":       "",
-			"last_metrics":      "",
-		},
+	set := bson.M{
+		"module_type":      reg.Type,
+		"module_name":      reg.Name,
+		"version":          reg.Version,
+		"rpc_queue":        reg.RPCQueue,
+		"description":      reg.Description,
+		"status":           models.ModuleStatusRegistered,
+		"registered_at":    reg.RegisteredAt,
+		"applied_revision": reg.AppliedRevision,
 	}
+	unset := bson.M{
+		"deregistered_at":   "",
+		"deregister_reason": "",
+		"declared_dead_at":  "",
+		"last_heartbeat_at": "",
+		"last_status":       "",
+		"last_metrics":      "",
+		"rejected":          "",
+		"restart_required":  "",
+		"last_apply_error":  "",
+	}
+	if reg.Manifest != nil {
+		set["manifest"] = reg.Manifest
+		set["manifest_hash"] = reg.ManifestHash
+	} else {
+		unset["manifest"] = ""
+		unset["manifest_hash"] = ""
+	}
+	return bson.M{"$set": set, "$unset": unset}
+}
+
+// applyResultUpdate records a mgmt.config.apply reply.
+func applyResultUpdate(reply protocol.ConfigApplyReply, at time.Time) bson.M {
+	set := bson.M{
+		"applied_revision": reply.AppliedRevision,
+		"last_apply_at":    at,
+	}
+	unset := bson.M{"last_apply_error": ""}
+	if len(reply.Rejected) > 0 {
+		set["rejected"] = reply.Rejected
+	} else {
+		unset["rejected"] = ""
+	}
+	if len(reply.RestartRequired) > 0 {
+		set["restart_required"] = reply.RestartRequired
+	} else {
+		unset["restart_required"] = ""
+	}
+	return bson.M{"$set": set, "$unset": unset}
 }
 
 // listFilter scopes a registry listing to the given statuses. Empty/nil returns
@@ -185,8 +241,8 @@ func (r *moduleRegistryRepository) Upsert(ctx context.Context, reg *models.Modul
 	return err
 }
 
-func (r *moduleRegistryRepository) TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, at time.Time) (bool, error) {
-	err := r.coll.UpdateOne(ctx, registeredInstanceFilter(instance), heartbeatUpdate(status, metrics, at))
+func (r *moduleRegistryRepository) TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, appliedRevision *int64, at time.Time) (bool, error) {
+	err := r.coll.UpdateOne(ctx, registeredInstanceFilter(instance), heartbeatUpdate(status, metrics, appliedRevision, at))
 	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
 		return false, nil
 	}
@@ -244,4 +300,32 @@ func (r *moduleRegistryRepository) List(ctx context.Context, statuses []string) 
 	var out []models.Module
 	err := r.coll.Find(ctx, listFilter(statuses)).Sort("-registered_at").All(&out)
 	return out, err
+}
+
+func (r *moduleRegistryRepository) ListRegisteredByName(ctx context.Context, moduleName string) ([]models.Module, error) {
+	var out []models.Module
+	err := r.coll.Find(ctx, bson.M{"module_name": moduleName, "status": models.ModuleStatusRegistered}).All(&out)
+	return out, err
+}
+
+// RecordApplyResult and RecordApplyError match the instance in any lifecycle
+// state: a push can finish after the instance died, and recording its outcome
+// is harmless. A row that vanished is not an error.
+func (r *moduleRegistryRepository) RecordApplyResult(ctx context.Context, instance string, reply protocol.ConfigApplyReply, at time.Time) error {
+	err := r.coll.UpdateOne(ctx, instanceFilter(instance), applyResultUpdate(reply, at))
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil
+	}
+	return err
+}
+
+func (r *moduleRegistryRepository) RecordApplyError(ctx context.Context, instance, message string, at time.Time) error {
+	err := r.coll.UpdateOne(ctx, instanceFilter(instance), bson.M{"$set": bson.M{
+		"last_apply_error": message,
+		"last_apply_at":    at,
+	}})
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil
+	}
+	return err
 }

@@ -25,6 +25,10 @@ func GetPermissionsByRole(role string) ([]string, error) {
 
 			ModuleReadPermission,
 			ModuleDeletePermission,
+			ModuleConfigReadPermission,
+			ModuleConfigWritePermission,
+			ModuleActionInvokePermission,
+			ModuleActionInvokeHighPermission,
 		}, nil
 	case "user":
 		return []string{

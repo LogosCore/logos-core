@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	"go.uber.org/zap"
 )
@@ -81,7 +82,7 @@ func (f *fakeRepo) FindByInstance(_ context.Context, _ string) (models.Module, e
 }
 
 func (f *fakeRepo) Upsert(context.Context, *models.Module) error { return nil }
-func (f *fakeRepo) TouchHeartbeat(context.Context, string, string, map[string]any, time.Time) (bool, error) {
+func (f *fakeRepo) TouchHeartbeat(context.Context, string, string, map[string]any, *int64, time.Time) (bool, error) {
 	return false, nil
 }
 func (f *fakeRepo) MarkDeregistered(context.Context, string, string, time.Time) (bool, error) {
@@ -189,3 +190,11 @@ func TestInvalidate_RemovesCacheEntry(t *testing.T) {
 		t.Errorf("repo calls = %d, want 2 (prime + post-invalidate)", repo.calls)
 	}
 }
+
+func (f *fakeRepo) ListRegisteredByName(context.Context, string) ([]models.Module, error) {
+	return nil, nil
+}
+func (f *fakeRepo) RecordApplyResult(context.Context, string, protocol.ConfigApplyReply, time.Time) error {
+	return nil
+}
+func (f *fakeRepo) RecordApplyError(context.Context, string, string, time.Time) error { return nil }

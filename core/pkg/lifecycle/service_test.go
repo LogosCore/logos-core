@@ -10,6 +10,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	"go.uber.org/zap"
 )
@@ -39,7 +40,7 @@ func (f *fakeRepo) Upsert(_ context.Context, reg *models.Module) error {
 	return nil
 }
 
-func (f *fakeRepo) TouchHeartbeat(_ context.Context, instance, status string, metrics map[string]any, at time.Time) (bool, error) {
+func (f *fakeRepo) TouchHeartbeat(_ context.Context, instance, status string, metrics map[string]any, applied *int64, at time.Time) (bool, error) {
 	if f.heartbeatErr != nil {
 		return false, f.heartbeatErr
 	}
@@ -50,6 +51,9 @@ func (f *fakeRepo) TouchHeartbeat(_ context.Context, instance, status string, me
 	row.LastStatus = status
 	row.LastMetrics = metrics
 	row.LastHeartbeatAt = &at
+	if applied != nil {
+		row.AppliedRevision = *applied
+	}
 	return true, nil
 }
 
@@ -466,3 +470,11 @@ func assertRPCCode(t *testing.T, err error, code string) {
 		t.Fatalf("error code = %q, want %q", rpcErr.Code, code)
 	}
 }
+
+func (f *fakeRepo) ListRegisteredByName(context.Context, string) ([]models.Module, error) {
+	return nil, nil
+}
+func (f *fakeRepo) RecordApplyResult(context.Context, string, protocol.ConfigApplyReply, time.Time) error {
+	return nil
+}
+func (f *fakeRepo) RecordApplyError(context.Context, string, string, time.Time) error { return nil }

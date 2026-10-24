@@ -287,6 +287,7 @@ type ComplexityRoot struct {
 		Instance         func(childComplexity int) int
 		LastHeartbeatAt  func(childComplexity int) int
 		LastStatus       func(childComplexity int) int
+		Management       func(childComplexity int) int
 		Name             func(childComplexity int) int
 		RegisteredAt     func(childComplexity int) int
 		Status           func(childComplexity int) int
@@ -294,10 +295,113 @@ type ComplexityRoot struct {
 		Version          func(childComplexity int) int
 	}
 
+	ModuleAction struct {
+		Confirm        func(childComplexity int) int
+		Description    func(childComplexity int) int
+		Label          func(childComplexity int) int
+		Name           func(childComplexity int) int
+		Params         func(childComplexity int) int
+		Risk           func(childComplexity int) int
+		TimeoutSeconds func(childComplexity int) int
+	}
+
+	ModuleActionInvocation struct {
+		Action     func(childComplexity int) int
+		Actor      func(childComplexity int) int
+		Error      func(childComplexity int) int
+		FinishedAt func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Instance   func(childComplexity int) int
+		Params     func(childComplexity int) int
+		Result     func(childComplexity int) int
+		StartedAt  func(childComplexity int) int
+		Status     func(childComplexity int) int
+	}
+
+	ModuleActor struct {
+		ID   func(childComplexity int) int
+		Name func(childComplexity int) int
+		Type func(childComplexity int) int
+	}
+
+	ModuleConfigChange struct {
+		Actor      func(childComplexity int) int
+		At         func(childComplexity int) int
+		Changes    func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Instance   func(childComplexity int) int
+		ModuleName func(childComplexity int) int
+		Revision   func(childComplexity int) int
+		Scope      func(childComplexity int) int
+	}
+
+	ModuleConfigKeyChange struct {
+		Key func(childComplexity int) int
+		New func(childComplexity int) int
+		Old func(childComplexity int) int
+	}
+
+	ModuleEnumOption struct {
+		Label func(childComplexity int) int
+		Value func(childComplexity int) int
+	}
+
 	ModuleEvent struct {
 		Action   func(childComplexity int) int
 		Instance func(childComplexity int) int
 		Module   func(childComplexity int) int
+	}
+
+	ModuleField struct {
+		Default     func(childComplexity int) int
+		Description func(childComplexity int) int
+		Group       func(childComplexity int) int
+		Key         func(childComplexity int) int
+		Label       func(childComplexity int) int
+		Max         func(childComplexity int) int
+		MaxLength   func(childComplexity int) int
+		Min         func(childComplexity int) int
+		Options     func(childComplexity int) int
+		Order       func(childComplexity int) int
+		Pattern     func(childComplexity int) int
+		Placeholder func(childComplexity int) int
+		Required    func(childComplexity int) int
+		Type        func(childComplexity int) int
+		Unit        func(childComplexity int) int
+	}
+
+	ModuleManagement struct {
+		Actions          func(childComplexity int) int
+		AppliedRevision  func(childComplexity int) int
+		InstanceRevision func(childComplexity int) int
+		LastApplyError   func(childComplexity int) int
+		ModuleRevision   func(childComplexity int) int
+		Properties       func(childComplexity int) int
+		Revision         func(childComplexity int) int
+		SchemaVersion    func(childComplexity int) int
+		Status           func(childComplexity int) int
+		SyncState        func(childComplexity int) int
+	}
+
+	ModuleProperty struct {
+		Apply           func(childComplexity int) int
+		Effective       func(childComplexity int) int
+		Field           func(childComplexity int) int
+		InstanceValue   func(childComplexity int) int
+		IsSet           func(childComplexity int) int
+		ModuleValue     func(childComplexity int) int
+		RejectedReason  func(childComplexity int) int
+		RestartRequired func(childComplexity int) int
+		Source          func(childComplexity int) int
+	}
+
+	ModuleStatusValue struct {
+		Description func(childComplexity int) int
+		Key         func(childComplexity int) int
+		Label       func(childComplexity int) int
+		Type        func(childComplexity int) int
+		Unit        func(childComplexity int) int
+		Value       func(childComplexity int) int
 	}
 
 	Mutation struct {
@@ -336,6 +440,7 @@ type ComplexityRoot struct {
 		EmptyWikiDocumentTrash        func(childComplexity int, operationID string) int
 		ImportLocalPreferences        func(childComplexity int, input model.ImportLocalPreferencesInput) int
 		InstantiateTemplate           func(childComplexity int, templateID string, targetOperationID string, parentDocumentID *string, title *string, emoji *string, icon *string, color *string) int
+		InvokeModuleAction            func(childComplexity int, instance string, action string, params any) int
 		MarkHashCracked               func(childComplexity int, id string, input model.MarkHashCrackedInput) int
 		PermanentlyDeleteWikiDocument func(childComplexity int, id string) int
 		PublishOperatorFocus          func(childComplexity int, input model.OperatorFocusInput) int
@@ -370,6 +475,7 @@ type ComplexityRoot struct {
 		UpdateCustomTimelineEvent     func(childComplexity int, id string, input model.UpdateCustomTimelineEventInput) int
 		UpdateHash                    func(childComplexity int, id string, input model.UpdateHashInput) int
 		UpdateHost                    func(childComplexity int, id string, input model.UpdateHostInput) int
+		UpdateModuleConfig            func(childComplexity int, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) int
 		UpdateOperation               func(childComplexity int, id string, input model.UpdateOperationInput) int
 		UpdateOperationMemberRole     func(childComplexity int, operationID string, userID string, role models.OperationRole) int
 		UpdateOwnProfile              func(childComplexity int, input model.UpdateUserInput) int
@@ -456,6 +562,9 @@ type ComplexityRoot struct {
 		Host                               func(childComplexity int, id string) int
 		Hosts                              func(childComplexity int, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		Me                                 func(childComplexity int) int
+		Module                             func(childComplexity int, instance string) int
+		ModuleActionInvocations            func(childComplexity int, instance string, limit *int) int
+		ModuleConfigChanges                func(childComplexity int, instance string, limit *int) int
 		Modules                            func(childComplexity int, status []string) int
 		MyAPIKey                           func(childComplexity int) int
 		MyAgentActions                     func(childComplexity int, agentKeyID *string, operationID *string, writesOnly *bool, outcomes []model.AgentActionOutcome, first *int, after *string, last *int, before *string) int
@@ -974,6 +1083,7 @@ type ModuleResolver interface {
 	DeregisteredAt(ctx context.Context, obj *models.Module) (*string, error)
 
 	DeclaredDeadAt(ctx context.Context, obj *models.Module) (*string, error)
+	Management(ctx context.Context, obj *models.Module) (*model.ModuleManagement, error)
 }
 type MutationResolver interface {
 	CreateUser(ctx context.Context, input model.CreateUserInput) (*models.User, error)
@@ -1015,6 +1125,8 @@ type MutationResolver interface {
 	CreateHost(ctx context.Context, operationID string, input model.CreateHostInput) (*models.Host, error)
 	UpdateHost(ctx context.Context, id string, input model.UpdateHostInput) (*models.Host, error)
 	DeleteHost(ctx context.Context, id string) (bool, error)
+	UpdateModuleConfig(ctx context.Context, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
+	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 	RemoveModule(ctx context.Context, instance string) (*models.Module, error)
 	RevokeSession(ctx context.Context, id string) (bool, error)
 	RevokeAllMySessions(ctx context.Context) (int, error)
@@ -1088,6 +1200,9 @@ type QueryResolver interface {
 	WikiDocumentsReferencingHash(ctx context.Context, hashID string) ([]*models.WikiDocument, error)
 	Host(ctx context.Context, id string) (*models.Host, error)
 	Hosts(ctx context.Context, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.HostConnection, error)
+	Module(ctx context.Context, instance string) (*models.Module, error)
+	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
+	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
 	Modules(ctx context.Context, status []string) ([]*models.Module, error)
 	MySessions(ctx context.Context, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Sessions(ctx context.Context, userID *string, search *string, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
@@ -2188,6 +2303,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Module.LastStatus(childComplexity), true
+	case "Module.management":
+		if e.ComplexityRoot.Module.Management == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.Management(childComplexity), true
 	case "Module.name":
 		if e.ComplexityRoot.Module.Name == nil {
 			break
@@ -2219,6 +2340,210 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Module.Version(childComplexity), true
 
+	case "ModuleAction.confirm":
+		if e.ComplexityRoot.ModuleAction.Confirm == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Confirm(childComplexity), true
+	case "ModuleAction.description":
+		if e.ComplexityRoot.ModuleAction.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Description(childComplexity), true
+	case "ModuleAction.label":
+		if e.ComplexityRoot.ModuleAction.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Label(childComplexity), true
+	case "ModuleAction.name":
+		if e.ComplexityRoot.ModuleAction.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Name(childComplexity), true
+	case "ModuleAction.params":
+		if e.ComplexityRoot.ModuleAction.Params == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Params(childComplexity), true
+	case "ModuleAction.risk":
+		if e.ComplexityRoot.ModuleAction.Risk == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Risk(childComplexity), true
+	case "ModuleAction.timeoutSeconds":
+		if e.ComplexityRoot.ModuleAction.TimeoutSeconds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.TimeoutSeconds(childComplexity), true
+
+	case "ModuleActionInvocation.action":
+		if e.ComplexityRoot.ModuleActionInvocation.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Action(childComplexity), true
+	case "ModuleActionInvocation.actor":
+		if e.ComplexityRoot.ModuleActionInvocation.Actor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Actor(childComplexity), true
+	case "ModuleActionInvocation.error":
+		if e.ComplexityRoot.ModuleActionInvocation.Error == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Error(childComplexity), true
+	case "ModuleActionInvocation.finishedAt":
+		if e.ComplexityRoot.ModuleActionInvocation.FinishedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.FinishedAt(childComplexity), true
+	case "ModuleActionInvocation.id":
+		if e.ComplexityRoot.ModuleActionInvocation.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.ID(childComplexity), true
+	case "ModuleActionInvocation.instance":
+		if e.ComplexityRoot.ModuleActionInvocation.Instance == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Instance(childComplexity), true
+	case "ModuleActionInvocation.params":
+		if e.ComplexityRoot.ModuleActionInvocation.Params == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Params(childComplexity), true
+	case "ModuleActionInvocation.result":
+		if e.ComplexityRoot.ModuleActionInvocation.Result == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Result(childComplexity), true
+	case "ModuleActionInvocation.startedAt":
+		if e.ComplexityRoot.ModuleActionInvocation.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.StartedAt(childComplexity), true
+	case "ModuleActionInvocation.status":
+		if e.ComplexityRoot.ModuleActionInvocation.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActionInvocation.Status(childComplexity), true
+
+	case "ModuleActor.id":
+		if e.ComplexityRoot.ModuleActor.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActor.ID(childComplexity), true
+	case "ModuleActor.name":
+		if e.ComplexityRoot.ModuleActor.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActor.Name(childComplexity), true
+	case "ModuleActor.type":
+		if e.ComplexityRoot.ModuleActor.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleActor.Type(childComplexity), true
+
+	case "ModuleConfigChange.actor":
+		if e.ComplexityRoot.ModuleConfigChange.Actor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.Actor(childComplexity), true
+	case "ModuleConfigChange.at":
+		if e.ComplexityRoot.ModuleConfigChange.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.At(childComplexity), true
+	case "ModuleConfigChange.changes":
+		if e.ComplexityRoot.ModuleConfigChange.Changes == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.Changes(childComplexity), true
+	case "ModuleConfigChange.id":
+		if e.ComplexityRoot.ModuleConfigChange.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.ID(childComplexity), true
+	case "ModuleConfigChange.instance":
+		if e.ComplexityRoot.ModuleConfigChange.Instance == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.Instance(childComplexity), true
+	case "ModuleConfigChange.moduleName":
+		if e.ComplexityRoot.ModuleConfigChange.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.ModuleName(childComplexity), true
+	case "ModuleConfigChange.revision":
+		if e.ComplexityRoot.ModuleConfigChange.Revision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.Revision(childComplexity), true
+	case "ModuleConfigChange.scope":
+		if e.ComplexityRoot.ModuleConfigChange.Scope == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigChange.Scope(childComplexity), true
+
+	case "ModuleConfigKeyChange.key":
+		if e.ComplexityRoot.ModuleConfigKeyChange.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigKeyChange.Key(childComplexity), true
+	case "ModuleConfigKeyChange.new":
+		if e.ComplexityRoot.ModuleConfigKeyChange.New == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigKeyChange.New(childComplexity), true
+	case "ModuleConfigKeyChange.old":
+		if e.ComplexityRoot.ModuleConfigKeyChange.Old == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConfigKeyChange.Old(childComplexity), true
+
+	case "ModuleEnumOption.label":
+		if e.ComplexityRoot.ModuleEnumOption.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleEnumOption.Label(childComplexity), true
+	case "ModuleEnumOption.value":
+		if e.ComplexityRoot.ModuleEnumOption.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleEnumOption.Value(childComplexity), true
+
 	case "ModuleEvent.action":
 		if e.ComplexityRoot.ModuleEvent.Action == nil {
 			break
@@ -2237,6 +2562,250 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleEvent.Module(childComplexity), true
+
+	case "ModuleField.default":
+		if e.ComplexityRoot.ModuleField.Default == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Default(childComplexity), true
+	case "ModuleField.description":
+		if e.ComplexityRoot.ModuleField.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Description(childComplexity), true
+	case "ModuleField.group":
+		if e.ComplexityRoot.ModuleField.Group == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Group(childComplexity), true
+	case "ModuleField.key":
+		if e.ComplexityRoot.ModuleField.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Key(childComplexity), true
+	case "ModuleField.label":
+		if e.ComplexityRoot.ModuleField.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Label(childComplexity), true
+	case "ModuleField.max":
+		if e.ComplexityRoot.ModuleField.Max == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Max(childComplexity), true
+	case "ModuleField.maxLength":
+		if e.ComplexityRoot.ModuleField.MaxLength == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.MaxLength(childComplexity), true
+	case "ModuleField.min":
+		if e.ComplexityRoot.ModuleField.Min == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Min(childComplexity), true
+	case "ModuleField.options":
+		if e.ComplexityRoot.ModuleField.Options == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Options(childComplexity), true
+	case "ModuleField.order":
+		if e.ComplexityRoot.ModuleField.Order == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Order(childComplexity), true
+	case "ModuleField.pattern":
+		if e.ComplexityRoot.ModuleField.Pattern == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Pattern(childComplexity), true
+	case "ModuleField.placeholder":
+		if e.ComplexityRoot.ModuleField.Placeholder == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Placeholder(childComplexity), true
+	case "ModuleField.required":
+		if e.ComplexityRoot.ModuleField.Required == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Required(childComplexity), true
+	case "ModuleField.type":
+		if e.ComplexityRoot.ModuleField.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Type(childComplexity), true
+	case "ModuleField.unit":
+		if e.ComplexityRoot.ModuleField.Unit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Unit(childComplexity), true
+
+	case "ModuleManagement.actions":
+		if e.ComplexityRoot.ModuleManagement.Actions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.Actions(childComplexity), true
+	case "ModuleManagement.appliedRevision":
+		if e.ComplexityRoot.ModuleManagement.AppliedRevision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.AppliedRevision(childComplexity), true
+	case "ModuleManagement.instanceRevision":
+		if e.ComplexityRoot.ModuleManagement.InstanceRevision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.InstanceRevision(childComplexity), true
+	case "ModuleManagement.lastApplyError":
+		if e.ComplexityRoot.ModuleManagement.LastApplyError == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.LastApplyError(childComplexity), true
+	case "ModuleManagement.moduleRevision":
+		if e.ComplexityRoot.ModuleManagement.ModuleRevision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.ModuleRevision(childComplexity), true
+	case "ModuleManagement.properties":
+		if e.ComplexityRoot.ModuleManagement.Properties == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.Properties(childComplexity), true
+	case "ModuleManagement.revision":
+		if e.ComplexityRoot.ModuleManagement.Revision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.Revision(childComplexity), true
+	case "ModuleManagement.schemaVersion":
+		if e.ComplexityRoot.ModuleManagement.SchemaVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.SchemaVersion(childComplexity), true
+	case "ModuleManagement.status":
+		if e.ComplexityRoot.ModuleManagement.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.Status(childComplexity), true
+	case "ModuleManagement.syncState":
+		if e.ComplexityRoot.ModuleManagement.SyncState == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.SyncState(childComplexity), true
+
+	case "ModuleProperty.apply":
+		if e.ComplexityRoot.ModuleProperty.Apply == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.Apply(childComplexity), true
+	case "ModuleProperty.effective":
+		if e.ComplexityRoot.ModuleProperty.Effective == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.Effective(childComplexity), true
+	case "ModuleProperty.field":
+		if e.ComplexityRoot.ModuleProperty.Field == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.Field(childComplexity), true
+	case "ModuleProperty.instanceValue":
+		if e.ComplexityRoot.ModuleProperty.InstanceValue == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.InstanceValue(childComplexity), true
+	case "ModuleProperty.isSet":
+		if e.ComplexityRoot.ModuleProperty.IsSet == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.IsSet(childComplexity), true
+	case "ModuleProperty.moduleValue":
+		if e.ComplexityRoot.ModuleProperty.ModuleValue == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.ModuleValue(childComplexity), true
+	case "ModuleProperty.rejectedReason":
+		if e.ComplexityRoot.ModuleProperty.RejectedReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.RejectedReason(childComplexity), true
+	case "ModuleProperty.restartRequired":
+		if e.ComplexityRoot.ModuleProperty.RestartRequired == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.RestartRequired(childComplexity), true
+	case "ModuleProperty.source":
+		if e.ComplexityRoot.ModuleProperty.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.Source(childComplexity), true
+
+	case "ModuleStatusValue.description":
+		if e.ComplexityRoot.ModuleStatusValue.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Description(childComplexity), true
+	case "ModuleStatusValue.key":
+		if e.ComplexityRoot.ModuleStatusValue.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Key(childComplexity), true
+	case "ModuleStatusValue.label":
+		if e.ComplexityRoot.ModuleStatusValue.Label == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Label(childComplexity), true
+	case "ModuleStatusValue.type":
+		if e.ComplexityRoot.ModuleStatusValue.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Type(childComplexity), true
+	case "ModuleStatusValue.unit":
+		if e.ComplexityRoot.ModuleStatusValue.Unit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Unit(childComplexity), true
+	case "ModuleStatusValue.value":
+		if e.ComplexityRoot.ModuleStatusValue.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Value(childComplexity), true
 
 	case "Mutation.addCredentialComment":
 		if e.ComplexityRoot.Mutation.AddCredentialComment == nil {
@@ -2613,6 +3182,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.InstantiateTemplate(childComplexity, args["templateId"].(string), args["targetOperationId"].(string), args["parentDocumentId"].(*string), args["title"].(*string), args["emoji"].(*string), args["icon"].(*string), args["color"].(*string)), true
+	case "Mutation.invokeModuleAction":
+		if e.ComplexityRoot.Mutation.InvokeModuleAction == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_invokeModuleAction_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.InvokeModuleAction(childComplexity, args["instance"].(string), args["action"].(string), args["params"].(any)), true
 	case "Mutation.markHashCracked":
 		if e.ComplexityRoot.Mutation.MarkHashCracked == nil {
 			break
@@ -2977,6 +3557,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateHost(childComplexity, args["id"].(string), args["input"].(model.UpdateHostInput)), true
+	case "Mutation.updateModuleConfig":
+		if e.ComplexityRoot.Mutation.UpdateModuleConfig == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateModuleConfig_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateModuleConfig(childComplexity, args["instance"].(string), args["scope"].(model.ModuleConfigScope), args["values"].([]*model.ModuleConfigValueInput), args["expectedRevision"].(int)), true
 	case "Mutation.updateOperation":
 		if e.ComplexityRoot.Mutation.UpdateOperation == nil {
 			break
@@ -3394,6 +3985,39 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Me(childComplexity), true
+	case "Query.module":
+		if e.ComplexityRoot.Query.Module == nil {
+			break
+		}
+
+		args, err := ec.field_Query_module_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Module(childComplexity, args["instance"].(string)), true
+	case "Query.moduleActionInvocations":
+		if e.ComplexityRoot.Query.ModuleActionInvocations == nil {
+			break
+		}
+
+		args, err := ec.field_Query_moduleActionInvocations_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ModuleActionInvocations(childComplexity, args["instance"].(string), args["limit"].(*int)), true
+	case "Query.moduleConfigChanges":
+		if e.ComplexityRoot.Query.ModuleConfigChanges == nil {
+			break
+		}
+
+		args, err := ec.field_Query_moduleConfigChanges_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ModuleConfigChanges(childComplexity, args["instance"].(string), args["limit"].(*int)), true
 	case "Query.modules":
 		if e.ComplexityRoot.Query.Modules == nil {
 			break
@@ -5577,6 +6201,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputImportLocalPreferencesInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMarkHashCrackedInput,
+		ec.unmarshalInputModuleConfigValueInput,
 		ec.unmarshalInputNetworkInterfaceInput,
 		ec.unmarshalInputOperatorFocusInput,
 		ec.unmarshalInputReorderWikiDocumentSiblingsInput,
@@ -6823,6 +7448,212 @@ extend type Mutation {
 extend type Subscription {
   hostChanged(operationId: ID!): HostEvent!
     @hasPermission(permission: "operation:member")
+}
+`, BuiltIn: false},
+	{Name: "../schema/module_management.graphql", Input: `# =============================================================================
+# Module management — declared properties, actions and status (prototype)
+# =============================================================================
+#
+# A module declares a management manifest at module.register (see
+# logos-golang-protocol/protocol/management.go). Core stores the desired value
+# of each property at two scopes:
+#
+#   MODULE   — applies to every instance with the same module name (e.g. all
+#              "http" channels). The normal case: instance ids change as you scale.
+#   INSTANCE — an override for one instance.
+#
+# effective = instance value ?? module value ?? the module's own default.
+# Core pushes the effective config to the module (mgmt.config.apply); the module
+# reports the revision it processed. revision = moduleRevision + instanceRevision,
+# so it only ever grows.
+
+# Arbitrary JSON value (property values, defaults, bounds, action params/results).
+scalar JSON
+
+extend type Module {
+  # Null when the module declared no management manifest.
+  management: ModuleManagement
+}
+
+enum ModuleConfigScope {
+  MODULE
+  INSTANCE
+}
+
+enum ModuleSyncState {
+  # appliedRevision == revision
+  IN_SYNC
+  # A newer revision is being pushed / awaiting the module's ack.
+  PENDING
+  # Pushing failed repeatedly, or the module is not registered.
+  OUT_OF_SYNC
+}
+
+type ModuleManagement {
+  schemaVersion: String!
+  properties: [ModuleProperty!]!
+  actions: [ModuleAction!]!
+  status: [ModuleStatusValue!]!
+
+  # Desired effective revision for this instance, and the one it last processed.
+  revision: Int!
+  appliedRevision: Int!
+  # Per-scope revisions, for optimistic concurrency on updateModuleConfig.
+  moduleRevision: Int!
+  instanceRevision: Int!
+  syncState: ModuleSyncState!
+  # Last push/apply error, if any.
+  lastApplyError: String
+}
+
+type ModuleEnumOption {
+  value: String!
+  label: String
+}
+
+# A typed field: a property or an action parameter.
+# type: string | int | number | bool | enum | duration | bytes | url | secret | string_list
+type ModuleField {
+  key: String!
+  type: String!
+  label: String!
+  description: String
+  group: String
+  order: Int!
+  unit: String
+  placeholder: String
+  required: Boolean!
+  default: JSON
+  min: JSON
+  max: JSON
+  pattern: String
+  maxLength: Int
+  options: [ModuleEnumOption!]
+}
+
+type ModuleProperty {
+  field: ModuleField!
+  # "live" | "restart"
+  apply: String!
+  # Effective desired value. Always null for secrets (see isSet).
+  effective: JSON
+  # Where the effective value comes from: "default" | "module" | "instance".
+  source: String!
+  # Values stored at each scope (null = not set there). Null for secrets.
+  moduleValue: JSON
+  instanceValue: JSON
+  # Secrets only: whether a value is stored at any scope.
+  isSet: Boolean!
+  # The module rejected the current value at the applied revision.
+  rejectedReason: String
+  # A restart-mode change the module has not picked up yet.
+  restartRequired: Boolean!
+}
+
+type ModuleAction {
+  name: String!
+  label: String!
+  description: String
+  # "low" | "high". High-risk actions need module:action:invoke:high.
+  risk: String!
+  confirm: String
+  params: [ModuleField!]!
+  timeoutSeconds: Int!
+}
+
+type ModuleStatusValue {
+  key: String!
+  type: String!
+  label: String!
+  description: String
+  unit: String
+  # Latest reported value from heartbeat metrics; null if never reported.
+  value: JSON
+}
+
+type ModuleActor {
+  type: String!
+  id: String!
+  name: String
+}
+
+enum ModuleActionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+}
+
+type ModuleActionInvocation {
+  id: ID!
+  instance: ID!
+  action: String!
+  params: JSON
+  status: ModuleActionStatus!
+  result: JSON
+  error: String
+  actor: ModuleActor!
+  startedAt: String!
+  finishedAt: String
+}
+
+type ModuleConfigChange {
+  id: ID!
+  # Module name the change was made for, and the instance for INSTANCE scope.
+  moduleName: String!
+  instance: ID
+  scope: ModuleConfigScope!
+  # New revision of that scope.
+  revision: Int!
+  # Changed keys with old/new values; secrets redacted as "***".
+  changes: [ModuleConfigKeyChange!]!
+  actor: ModuleActor!
+  at: String!
+}
+
+type ModuleConfigKeyChange {
+  key: String!
+  old: JSON
+  new: JSON
+}
+
+input ModuleConfigValueInput {
+  key: String!
+  # null clears the value at this scope (falls back to the next scope / default).
+  value: JSON
+}
+
+extend type Query {
+  module(instance: ID!): Module
+    @hasPermission(permission: "module:read")
+
+  # Newest first.
+  moduleActionInvocations(instance: ID!, limit: Int): [ModuleActionInvocation!]!
+    @hasPermission(permission: "module:read")
+
+  # Config changes affecting this instance (its INSTANCE scope plus its
+  # module's MODULE scope), newest first.
+  moduleConfigChanges(instance: ID!, limit: Int): [ModuleConfigChange!]!
+    @hasPermission(permission: "module:read")
+}
+
+extend type Mutation {
+  # Set or clear property values at a scope. MODULE scope targets the module
+  # name of ` + "`" + `instance` + "`" + `. expectedRevision is that scope's current revision
+  # (moduleRevision / instanceRevision); a mismatch fails with CONFLICT.
+  # Validated against the instance's manifest; agent API keys are rejected.
+  updateModuleConfig(
+    instance: ID!
+    scope: ModuleConfigScope!
+    values: [ModuleConfigValueInput!]!
+    expectedRevision: Int!
+  ): Module! @hasPermission(permission: "module:config:write")
+
+  # Run a declared action on a registered instance and wait for its result
+  # (bounded by the action's timeout). High-risk actions additionally need
+  # module:action:invoke:high. Agent API keys are rejected.
+  invokeModuleAction(instance: ID!, action: String!, params: JSON): ModuleActionInvocation!
+    @hasPermission(permission: "module:action:invoke")
 }
 `, BuiltIn: false},
 	{Name: "../schema/modules.graphql", Input: `# =============================================================================
@@ -9274,6 +10105,27 @@ func (ec *executionContext) field_Mutation_instantiateTemplate_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_invokeModuleAction_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "action", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["action"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "params", ec.unmarshalOJSON2interface)
+	if err != nil {
+		return nil, err
+	}
+	args["params"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_markHashCracked_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9716,6 +10568,32 @@ func (ec *executionContext) field_Mutation_updateHost_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateModuleConfig_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "scope", ec.unmarshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope)
+	if err != nil {
+		return nil, err
+	}
+	args["scope"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "values", ec.unmarshalNModuleConfigValueInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInputᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["values"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedRevision", ec.unmarshalNInt2int)
+	if err != nil {
+		return nil, err
+	}
+	args["expectedRevision"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateOperationMemberRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10038,6 +10916,49 @@ func (ec *executionContext) field_Query_hosts_args(ctx context.Context, rawArgs 
 		return nil, err
 	}
 	args["before"] = arg7
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_moduleActionInvocations_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_moduleConfigChanges_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_module_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
 	return args, nil
 }
 
@@ -16641,6 +17562,1070 @@ func (ec *executionContext) fieldContext_Module_declaredDeadAt(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Module_management(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_management,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Module().Management(ctx, obj)
+		},
+		nil,
+		ec.marshalOModuleManagement2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleManagement,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_management(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "schemaVersion":
+				return ec.fieldContext_ModuleManagement_schemaVersion(ctx, field)
+			case "properties":
+				return ec.fieldContext_ModuleManagement_properties(ctx, field)
+			case "actions":
+				return ec.fieldContext_ModuleManagement_actions(ctx, field)
+			case "status":
+				return ec.fieldContext_ModuleManagement_status(ctx, field)
+			case "revision":
+				return ec.fieldContext_ModuleManagement_revision(ctx, field)
+			case "appliedRevision":
+				return ec.fieldContext_ModuleManagement_appliedRevision(ctx, field)
+			case "moduleRevision":
+				return ec.fieldContext_ModuleManagement_moduleRevision(ctx, field)
+			case "instanceRevision":
+				return ec.fieldContext_ModuleManagement_instanceRevision(ctx, field)
+			case "syncState":
+				return ec.fieldContext_ModuleManagement_syncState(ctx, field)
+			case "lastApplyError":
+				return ec.fieldContext_ModuleManagement_lastApplyError(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleManagement", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_name(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_label(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_description(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_risk(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_risk,
+		func(ctx context.Context) (any, error) {
+			return obj.Risk, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_risk(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_confirm(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_confirm,
+		func(ctx context.Context) (any, error) {
+			return obj.Confirm, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_confirm(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_params(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_params,
+		func(ctx context.Context) (any, error) {
+			return obj.Params, nil
+		},
+		nil,
+		ec.marshalNModuleField2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_params(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "type":
+				return ec.fieldContext_ModuleField_type(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleField_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleField_description(ctx, field)
+			case "group":
+				return ec.fieldContext_ModuleField_group(ctx, field)
+			case "order":
+				return ec.fieldContext_ModuleField_order(ctx, field)
+			case "unit":
+				return ec.fieldContext_ModuleField_unit(ctx, field)
+			case "placeholder":
+				return ec.fieldContext_ModuleField_placeholder(ctx, field)
+			case "required":
+				return ec.fieldContext_ModuleField_required(ctx, field)
+			case "default":
+				return ec.fieldContext_ModuleField_default(ctx, field)
+			case "min":
+				return ec.fieldContext_ModuleField_min(ctx, field)
+			case "max":
+				return ec.fieldContext_ModuleField_max(ctx, field)
+			case "pattern":
+				return ec.fieldContext_ModuleField_pattern(ctx, field)
+			case "maxLength":
+				return ec.fieldContext_ModuleField_maxLength(ctx, field)
+			case "options":
+				return ec.fieldContext_ModuleField_options(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_timeoutSeconds(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_timeoutSeconds,
+		func(ctx context.Context) (any, error) {
+			return obj.TimeoutSeconds, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_timeoutSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_id(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_instance(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_instance,
+		func(ctx context.Context) (any, error) {
+			return obj.Instance, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_instance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_action(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_action,
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_params(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_params,
+		func(ctx context.Context) (any, error) {
+			return obj.Params, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_params(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_status(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_status,
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		ec.marshalNModuleActionStatus2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModuleActionStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_result(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_result,
+		func(ctx context.Context) (any, error) {
+			return obj.Result, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_result(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_error(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_error,
+		func(ctx context.Context) (any, error) {
+			return obj.Error, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_actor(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_actor,
+		func(ctx context.Context) (any, error) {
+			return obj.Actor, nil
+		},
+		nil,
+		ec.marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_actor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_ModuleActor_type(ctx, field)
+			case "id":
+				return ec.fieldContext_ModuleActor_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ModuleActor_name(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_startedAt(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_startedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActionInvocation_finishedAt(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActionInvocation_finishedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.FinishedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActionInvocation_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActionInvocation",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActor_type(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActor_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActor_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActor",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActor_id(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActor_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActor_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActor",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleActor_name(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActor) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleActor_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleActor_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleActor",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_id(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_instance(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_instance,
+		func(ctx context.Context) (any, error) {
+			return obj.Instance, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_instance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_scope(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_scope,
+		func(ctx context.Context) (any, error) {
+			return obj.Scope, nil
+		},
+		nil,
+		ec.marshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_scope(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModuleConfigScope does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_revision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_revision,
+		func(ctx context.Context) (any, error) {
+			return obj.Revision, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_revision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_changes(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_changes,
+		func(ctx context.Context) (any, error) {
+			return obj.Changes, nil
+		},
+		nil,
+		ec.marshalNModuleConfigKeyChange2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigKeyChangeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_changes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleConfigKeyChange_key(ctx, field)
+			case "old":
+				return ec.fieldContext_ModuleConfigKeyChange_old(ctx, field)
+			case "new":
+				return ec.fieldContext_ModuleConfigKeyChange_new(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleConfigKeyChange", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_actor(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_actor,
+		func(ctx context.Context) (any, error) {
+			return obj.Actor, nil
+		},
+		nil,
+		ec.marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_actor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_ModuleActor_type(ctx, field)
+			case "id":
+				return ec.fieldContext_ModuleActor_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ModuleActor_name(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigChange_at(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigChange_at,
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigChange_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigKeyChange_key(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigKeyChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigKeyChange_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigKeyChange_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigKeyChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigKeyChange_old(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigKeyChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigKeyChange_old,
+		func(ctx context.Context) (any, error) {
+			return obj.Old, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigKeyChange_old(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigKeyChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConfigKeyChange_new(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigKeyChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConfigKeyChange_new,
+		func(ctx context.Context) (any, error) {
+			return obj.New, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConfigKeyChange_new(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConfigKeyChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleEnumOption_value(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEnumOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleEnumOption_value,
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleEnumOption_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleEnumOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleEnumOption_label(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEnumOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleEnumOption_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleEnumOption_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleEnumOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleEvent_action(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEvent) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -16747,8 +18732,1258 @@ func (ec *executionContext) fieldContext_ModuleEvent_module(_ context.Context, f
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_key(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_type(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_label(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_description(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_group(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_group,
+		func(ctx context.Context) (any, error) {
+			return obj.Group, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_group(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_order(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_order,
+		func(ctx context.Context) (any, error) {
+			return obj.Order, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_order(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_unit(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_unit,
+		func(ctx context.Context) (any, error) {
+			return obj.Unit, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_unit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_placeholder(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_placeholder,
+		func(ctx context.Context) (any, error) {
+			return obj.Placeholder, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_placeholder(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_required(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_required,
+		func(ctx context.Context) (any, error) {
+			return obj.Required, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_required(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_default(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_default,
+		func(ctx context.Context) (any, error) {
+			return obj.Default, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_default(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_min(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_min,
+		func(ctx context.Context) (any, error) {
+			return obj.Min, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_min(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_max(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_max,
+		func(ctx context.Context) (any, error) {
+			return obj.Max, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_max(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_pattern(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_pattern,
+		func(ctx context.Context) (any, error) {
+			return obj.Pattern, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_pattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_maxLength(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_maxLength,
+		func(ctx context.Context) (any, error) {
+			return obj.MaxLength, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_maxLength(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_options(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_options,
+		func(ctx context.Context) (any, error) {
+			return obj.Options, nil
+		},
+		nil,
+		ec.marshalOModuleEnumOption2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOptionᚄ,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_options(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "value":
+				return ec.fieldContext_ModuleEnumOption_value(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleEnumOption_label(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleEnumOption", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_schemaVersion,
+		func(ctx context.Context) (any, error) {
+			return obj.SchemaVersion, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_schemaVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_properties(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_properties,
+		func(ctx context.Context) (any, error) {
+			return obj.Properties, nil
+		},
+		nil,
+		ec.marshalNModuleProperty2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModulePropertyᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_properties(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "field":
+				return ec.fieldContext_ModuleProperty_field(ctx, field)
+			case "apply":
+				return ec.fieldContext_ModuleProperty_apply(ctx, field)
+			case "effective":
+				return ec.fieldContext_ModuleProperty_effective(ctx, field)
+			case "source":
+				return ec.fieldContext_ModuleProperty_source(ctx, field)
+			case "moduleValue":
+				return ec.fieldContext_ModuleProperty_moduleValue(ctx, field)
+			case "instanceValue":
+				return ec.fieldContext_ModuleProperty_instanceValue(ctx, field)
+			case "isSet":
+				return ec.fieldContext_ModuleProperty_isSet(ctx, field)
+			case "rejectedReason":
+				return ec.fieldContext_ModuleProperty_rejectedReason(ctx, field)
+			case "restartRequired":
+				return ec.fieldContext_ModuleProperty_restartRequired(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleProperty", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_actions(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_actions,
+		func(ctx context.Context) (any, error) {
+			return obj.Actions, nil
+		},
+		nil,
+		ec.marshalNModuleAction2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_actions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_ModuleAction_name(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleAction_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleAction_description(ctx, field)
+			case "risk":
+				return ec.fieldContext_ModuleAction_risk(ctx, field)
+			case "confirm":
+				return ec.fieldContext_ModuleAction_confirm(ctx, field)
+			case "params":
+				return ec.fieldContext_ModuleAction_params(ctx, field)
+			case "timeoutSeconds":
+				return ec.fieldContext_ModuleAction_timeoutSeconds(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleAction", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_status(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_status,
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		ec.marshalNModuleStatusValue2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleStatusValueᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleStatusValue_key(ctx, field)
+			case "type":
+				return ec.fieldContext_ModuleStatusValue_type(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleStatusValue_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleStatusValue_description(ctx, field)
+			case "unit":
+				return ec.fieldContext_ModuleStatusValue_unit(ctx, field)
+			case "value":
+				return ec.fieldContext_ModuleStatusValue_value(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleStatusValue", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_revision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_revision,
+		func(ctx context.Context) (any, error) {
+			return obj.Revision, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_revision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_appliedRevision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_appliedRevision,
+		func(ctx context.Context) (any, error) {
+			return obj.AppliedRevision, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_appliedRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_moduleRevision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_moduleRevision,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleRevision, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_moduleRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_instanceRevision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_instanceRevision,
+		func(ctx context.Context) (any, error) {
+			return obj.InstanceRevision, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_instanceRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_syncState(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_syncState,
+		func(ctx context.Context) (any, error) {
+			return obj.SyncState, nil
+		},
+		nil,
+		ec.marshalNModuleSyncState2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleSyncState,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_syncState(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModuleSyncState does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_lastApplyError(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_lastApplyError,
+		func(ctx context.Context) (any, error) {
+			return obj.LastApplyError, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_lastApplyError(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_field(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_field,
+		func(ctx context.Context) (any, error) {
+			return obj.Field, nil
+		},
+		nil,
+		ec.marshalNModuleField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleField,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_field(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "type":
+				return ec.fieldContext_ModuleField_type(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleField_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleField_description(ctx, field)
+			case "group":
+				return ec.fieldContext_ModuleField_group(ctx, field)
+			case "order":
+				return ec.fieldContext_ModuleField_order(ctx, field)
+			case "unit":
+				return ec.fieldContext_ModuleField_unit(ctx, field)
+			case "placeholder":
+				return ec.fieldContext_ModuleField_placeholder(ctx, field)
+			case "required":
+				return ec.fieldContext_ModuleField_required(ctx, field)
+			case "default":
+				return ec.fieldContext_ModuleField_default(ctx, field)
+			case "min":
+				return ec.fieldContext_ModuleField_min(ctx, field)
+			case "max":
+				return ec.fieldContext_ModuleField_max(ctx, field)
+			case "pattern":
+				return ec.fieldContext_ModuleField_pattern(ctx, field)
+			case "maxLength":
+				return ec.fieldContext_ModuleField_maxLength(ctx, field)
+			case "options":
+				return ec.fieldContext_ModuleField_options(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_apply(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_apply,
+		func(ctx context.Context) (any, error) {
+			return obj.Apply, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_apply(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_effective(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_effective,
+		func(ctx context.Context) (any, error) {
+			return obj.Effective, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_effective(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_source(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_source,
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_moduleValue(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_moduleValue,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleValue, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_moduleValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_instanceValue(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_instanceValue,
+		func(ctx context.Context) (any, error) {
+			return obj.InstanceValue, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_instanceValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_isSet(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_isSet,
+		func(ctx context.Context) (any, error) {
+			return obj.IsSet, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_isSet(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_rejectedReason(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_rejectedReason,
+		func(ctx context.Context) (any, error) {
+			return obj.RejectedReason, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_rejectedReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleProperty_restartRequired(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleProperty_restartRequired,
+		func(ctx context.Context) (any, error) {
+			return obj.RestartRequired, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleProperty_restartRequired(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleProperty",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_key(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_type(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_label(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_description(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_unit(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_unit,
+		func(ctx context.Context) (any, error) {
+			return obj.Unit, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_unit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_value(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_value,
+		func(ctx context.Context) (any, error) {
+			return obj.Value, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
 		},
 	}
 	return fc, nil
@@ -19783,6 +23018,180 @@ func (ec *executionContext) fieldContext_Mutation_deleteHost(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_updateModuleConfig(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_updateModuleConfig,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateModuleConfig(ctx, fc.Args["instance"].(string), fc.Args["scope"].(model.ModuleConfigScope), fc.Args["values"].([]*model.ModuleConfigValueInput), fc.Args["expectedRevision"].(int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:config:write")
+				if err != nil {
+					var zeroVal *models.Module
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *models.Module
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateModuleConfig(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "instance":
+				return ec.fieldContext_Module_instance(ctx, field)
+			case "type":
+				return ec.fieldContext_Module_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Module_name(ctx, field)
+			case "version":
+				return ec.fieldContext_Module_version(ctx, field)
+			case "description":
+				return ec.fieldContext_Module_description(ctx, field)
+			case "status":
+				return ec.fieldContext_Module_status(ctx, field)
+			case "lastStatus":
+				return ec.fieldContext_Module_lastStatus(ctx, field)
+			case "registeredAt":
+				return ec.fieldContext_Module_registeredAt(ctx, field)
+			case "lastHeartbeatAt":
+				return ec.fieldContext_Module_lastHeartbeatAt(ctx, field)
+			case "deregisteredAt":
+				return ec.fieldContext_Module_deregisteredAt(ctx, field)
+			case "deregisterReason":
+				return ec.fieldContext_Module_deregisterReason(ctx, field)
+			case "declaredDeadAt":
+				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateModuleConfig_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_invokeModuleAction(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_invokeModuleAction,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().InvokeModuleAction(ctx, fc.Args["instance"].(string), fc.Args["action"].(string),
+				func() any {
+					if fc.Args["params"] == nil {
+						return nil
+					}
+					return fc.Args["params"].(any)
+				}())
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:action:invoke")
+				if err != nil {
+					var zeroVal *model.ModuleActionInvocation
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.ModuleActionInvocation
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModuleActionInvocation2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionInvocation,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_invokeModuleAction(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ModuleActionInvocation_id(ctx, field)
+			case "instance":
+				return ec.fieldContext_ModuleActionInvocation_instance(ctx, field)
+			case "action":
+				return ec.fieldContext_ModuleActionInvocation_action(ctx, field)
+			case "params":
+				return ec.fieldContext_ModuleActionInvocation_params(ctx, field)
+			case "status":
+				return ec.fieldContext_ModuleActionInvocation_status(ctx, field)
+			case "result":
+				return ec.fieldContext_ModuleActionInvocation_result(ctx, field)
+			case "error":
+				return ec.fieldContext_ModuleActionInvocation_error(ctx, field)
+			case "actor":
+				return ec.fieldContext_ModuleActionInvocation_actor(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_ModuleActionInvocation_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_ModuleActionInvocation_finishedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActionInvocation", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_invokeModuleAction_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_removeModule(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19850,6 +23259,8 @@ func (ec *executionContext) fieldContext_Mutation_removeModule(ctx context.Conte
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
 		},
@@ -26049,6 +29460,251 @@ func (ec *executionContext) fieldContext_Query_hosts(ctx context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_module(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_module,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Module(ctx, fc.Args["instance"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:read")
+				if err != nil {
+					var zeroVal *models.Module
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *models.Module
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_module(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "instance":
+				return ec.fieldContext_Module_instance(ctx, field)
+			case "type":
+				return ec.fieldContext_Module_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Module_name(ctx, field)
+			case "version":
+				return ec.fieldContext_Module_version(ctx, field)
+			case "description":
+				return ec.fieldContext_Module_description(ctx, field)
+			case "status":
+				return ec.fieldContext_Module_status(ctx, field)
+			case "lastStatus":
+				return ec.fieldContext_Module_lastStatus(ctx, field)
+			case "registeredAt":
+				return ec.fieldContext_Module_registeredAt(ctx, field)
+			case "lastHeartbeatAt":
+				return ec.fieldContext_Module_lastHeartbeatAt(ctx, field)
+			case "deregisteredAt":
+				return ec.fieldContext_Module_deregisteredAt(ctx, field)
+			case "deregisterReason":
+				return ec.fieldContext_Module_deregisterReason(ctx, field)
+			case "declaredDeadAt":
+				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_module_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_moduleActionInvocations(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_moduleActionInvocations,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ModuleActionInvocations(ctx, fc.Args["instance"].(string), fc.Args["limit"].(*int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:read")
+				if err != nil {
+					var zeroVal []*model.ModuleActionInvocation
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.ModuleActionInvocation
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModuleActionInvocation2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionInvocationᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_moduleActionInvocations(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ModuleActionInvocation_id(ctx, field)
+			case "instance":
+				return ec.fieldContext_ModuleActionInvocation_instance(ctx, field)
+			case "action":
+				return ec.fieldContext_ModuleActionInvocation_action(ctx, field)
+			case "params":
+				return ec.fieldContext_ModuleActionInvocation_params(ctx, field)
+			case "status":
+				return ec.fieldContext_ModuleActionInvocation_status(ctx, field)
+			case "result":
+				return ec.fieldContext_ModuleActionInvocation_result(ctx, field)
+			case "error":
+				return ec.fieldContext_ModuleActionInvocation_error(ctx, field)
+			case "actor":
+				return ec.fieldContext_ModuleActionInvocation_actor(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_ModuleActionInvocation_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_ModuleActionInvocation_finishedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActionInvocation", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_moduleActionInvocations_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_moduleConfigChanges(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_moduleConfigChanges,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ModuleConfigChanges(ctx, fc.Args["instance"].(string), fc.Args["limit"].(*int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:read")
+				if err != nil {
+					var zeroVal []*model.ModuleConfigChange
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.ModuleConfigChange
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModuleConfigChange2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigChangeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_moduleConfigChanges(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ModuleConfigChange_id(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_ModuleConfigChange_moduleName(ctx, field)
+			case "instance":
+				return ec.fieldContext_ModuleConfigChange_instance(ctx, field)
+			case "scope":
+				return ec.fieldContext_ModuleConfigChange_scope(ctx, field)
+			case "revision":
+				return ec.fieldContext_ModuleConfigChange_revision(ctx, field)
+			case "changes":
+				return ec.fieldContext_ModuleConfigChange_changes(ctx, field)
+			case "actor":
+				return ec.fieldContext_ModuleConfigChange_actor(ctx, field)
+			case "at":
+				return ec.fieldContext_ModuleConfigChange_at(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleConfigChange", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_moduleConfigChanges_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_modules(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26116,6 +29772,8 @@ func (ec *executionContext) fieldContext_Query_modules(ctx context.Context, fiel
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
 		},
@@ -40937,6 +44595,43 @@ func (ec *executionContext) unmarshalInputMarkHashCrackedInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputModuleConfigValueInput(ctx context.Context, obj any) (model.ModuleConfigValueInput, error) {
+	var it model.ModuleConfigValueInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"key", "value"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "key":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("key"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Key = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalOJSON2interface(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputNetworkInterfaceInput(ctx context.Context, obj any) (model.NetworkInterfaceInput, error) {
 	var it model.NetworkInterfaceInput
 	if obj == nil {
@@ -45036,6 +48731,375 @@ func (ec *executionContext) _Module(ctx context.Context, sel ast.SelectionSet, o
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "management":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Module_management(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleActionImplementors = []string{"ModuleAction"}
+
+func (ec *executionContext) _ModuleAction(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleAction) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleActionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleAction")
+		case "name":
+			out.Values[i] = ec._ModuleAction_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._ModuleAction_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._ModuleAction_description(ctx, field, obj)
+		case "risk":
+			out.Values[i] = ec._ModuleAction_risk(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "confirm":
+			out.Values[i] = ec._ModuleAction_confirm(ctx, field, obj)
+		case "params":
+			out.Values[i] = ec._ModuleAction_params(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "timeoutSeconds":
+			out.Values[i] = ec._ModuleAction_timeoutSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleActionInvocationImplementors = []string{"ModuleActionInvocation"}
+
+func (ec *executionContext) _ModuleActionInvocation(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleActionInvocation) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleActionInvocationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleActionInvocation")
+		case "id":
+			out.Values[i] = ec._ModuleActionInvocation_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "instance":
+			out.Values[i] = ec._ModuleActionInvocation_instance(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "action":
+			out.Values[i] = ec._ModuleActionInvocation_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "params":
+			out.Values[i] = ec._ModuleActionInvocation_params(ctx, field, obj)
+		case "status":
+			out.Values[i] = ec._ModuleActionInvocation_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "result":
+			out.Values[i] = ec._ModuleActionInvocation_result(ctx, field, obj)
+		case "error":
+			out.Values[i] = ec._ModuleActionInvocation_error(ctx, field, obj)
+		case "actor":
+			out.Values[i] = ec._ModuleActionInvocation_actor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "startedAt":
+			out.Values[i] = ec._ModuleActionInvocation_startedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "finishedAt":
+			out.Values[i] = ec._ModuleActionInvocation_finishedAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleActorImplementors = []string{"ModuleActor"}
+
+func (ec *executionContext) _ModuleActor(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleActor) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleActorImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleActor")
+		case "type":
+			out.Values[i] = ec._ModuleActor_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._ModuleActor_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._ModuleActor_name(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleConfigChangeImplementors = []string{"ModuleConfigChange"}
+
+func (ec *executionContext) _ModuleConfigChange(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConfigChange) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleConfigChangeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleConfigChange")
+		case "id":
+			out.Values[i] = ec._ModuleConfigChange_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleName":
+			out.Values[i] = ec._ModuleConfigChange_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "instance":
+			out.Values[i] = ec._ModuleConfigChange_instance(ctx, field, obj)
+		case "scope":
+			out.Values[i] = ec._ModuleConfigChange_scope(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revision":
+			out.Values[i] = ec._ModuleConfigChange_revision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "changes":
+			out.Values[i] = ec._ModuleConfigChange_changes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "actor":
+			out.Values[i] = ec._ModuleConfigChange_actor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "at":
+			out.Values[i] = ec._ModuleConfigChange_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleConfigKeyChangeImplementors = []string{"ModuleConfigKeyChange"}
+
+func (ec *executionContext) _ModuleConfigKeyChange(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConfigKeyChange) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleConfigKeyChangeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleConfigKeyChange")
+		case "key":
+			out.Values[i] = ec._ModuleConfigKeyChange_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "old":
+			out.Values[i] = ec._ModuleConfigKeyChange_old(ctx, field, obj)
+		case "new":
+			out.Values[i] = ec._ModuleConfigKeyChange_new(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleEnumOptionImplementors = []string{"ModuleEnumOption"}
+
+func (ec *executionContext) _ModuleEnumOption(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleEnumOption) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleEnumOptionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleEnumOption")
+		case "value":
+			out.Values[i] = ec._ModuleEnumOption_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._ModuleEnumOption_label(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -45082,6 +49146,288 @@ func (ec *executionContext) _ModuleEvent(ctx context.Context, sel ast.SelectionS
 			}
 		case "module":
 			out.Values[i] = ec._ModuleEvent_module(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleFieldImplementors = []string{"ModuleField"}
+
+func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleField) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleFieldImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleField")
+		case "key":
+			out.Values[i] = ec._ModuleField_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._ModuleField_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._ModuleField_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._ModuleField_description(ctx, field, obj)
+		case "group":
+			out.Values[i] = ec._ModuleField_group(ctx, field, obj)
+		case "order":
+			out.Values[i] = ec._ModuleField_order(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unit":
+			out.Values[i] = ec._ModuleField_unit(ctx, field, obj)
+		case "placeholder":
+			out.Values[i] = ec._ModuleField_placeholder(ctx, field, obj)
+		case "required":
+			out.Values[i] = ec._ModuleField_required(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "default":
+			out.Values[i] = ec._ModuleField_default(ctx, field, obj)
+		case "min":
+			out.Values[i] = ec._ModuleField_min(ctx, field, obj)
+		case "max":
+			out.Values[i] = ec._ModuleField_max(ctx, field, obj)
+		case "pattern":
+			out.Values[i] = ec._ModuleField_pattern(ctx, field, obj)
+		case "maxLength":
+			out.Values[i] = ec._ModuleField_maxLength(ctx, field, obj)
+		case "options":
+			out.Values[i] = ec._ModuleField_options(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleManagementImplementors = []string{"ModuleManagement"}
+
+func (ec *executionContext) _ModuleManagement(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleManagement) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleManagementImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleManagement")
+		case "schemaVersion":
+			out.Values[i] = ec._ModuleManagement_schemaVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "properties":
+			out.Values[i] = ec._ModuleManagement_properties(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "actions":
+			out.Values[i] = ec._ModuleManagement_actions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._ModuleManagement_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revision":
+			out.Values[i] = ec._ModuleManagement_revision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "appliedRevision":
+			out.Values[i] = ec._ModuleManagement_appliedRevision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleRevision":
+			out.Values[i] = ec._ModuleManagement_moduleRevision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "instanceRevision":
+			out.Values[i] = ec._ModuleManagement_instanceRevision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "syncState":
+			out.Values[i] = ec._ModuleManagement_syncState(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastApplyError":
+			out.Values[i] = ec._ModuleManagement_lastApplyError(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modulePropertyImplementors = []string{"ModuleProperty"}
+
+func (ec *executionContext) _ModuleProperty(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleProperty) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modulePropertyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleProperty")
+		case "field":
+			out.Values[i] = ec._ModuleProperty_field(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "apply":
+			out.Values[i] = ec._ModuleProperty_apply(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "effective":
+			out.Values[i] = ec._ModuleProperty_effective(ctx, field, obj)
+		case "source":
+			out.Values[i] = ec._ModuleProperty_source(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleValue":
+			out.Values[i] = ec._ModuleProperty_moduleValue(ctx, field, obj)
+		case "instanceValue":
+			out.Values[i] = ec._ModuleProperty_instanceValue(ctx, field, obj)
+		case "isSet":
+			out.Values[i] = ec._ModuleProperty_isSet(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rejectedReason":
+			out.Values[i] = ec._ModuleProperty_rejectedReason(ctx, field, obj)
+		case "restartRequired":
+			out.Values[i] = ec._ModuleProperty_restartRequired(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleStatusValueImplementors = []string{"ModuleStatusValue"}
+
+func (ec *executionContext) _ModuleStatusValue(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleStatusValue) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleStatusValueImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleStatusValue")
+		case "key":
+			out.Values[i] = ec._ModuleStatusValue_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._ModuleStatusValue_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._ModuleStatusValue_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._ModuleStatusValue_description(ctx, field, obj)
+		case "unit":
+			out.Values[i] = ec._ModuleStatusValue_unit(ctx, field, obj)
+		case "value":
+			out.Values[i] = ec._ModuleStatusValue_value(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -45393,6 +49739,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteHost":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteHost(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateModuleConfig":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateModuleConfig(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "invokeModuleAction":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_invokeModuleAction(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -46835,6 +51195,69 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_hosts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "module":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_module(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "moduleActionInvocations":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_moduleActionInvocations(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "moduleConfigChanges":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_moduleConfigChanges(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -53548,6 +57971,174 @@ func (ec *executionContext) marshalNModule2ᚖgithubᚗcomᚋlogoscoreᚋlogos�
 	return ec._Module(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNModuleAction2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleAction) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleAction2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleAction(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleAction2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleAction(ctx context.Context, sel ast.SelectionSet, v *model.ModuleAction) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleAction(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleActionInvocation2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionInvocation(ctx context.Context, sel ast.SelectionSet, v model.ModuleActionInvocation) graphql.Marshaler {
+	return ec._ModuleActionInvocation(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNModuleActionInvocation2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionInvocationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleActionInvocation) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleActionInvocation2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionInvocation(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleActionInvocation2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionInvocation(ctx context.Context, sel ast.SelectionSet, v *model.ModuleActionInvocation) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleActionInvocation(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNModuleActionStatus2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionStatus(ctx context.Context, v any) (model.ModuleActionStatus, error) {
+	var res model.ModuleActionStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleActionStatus2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActionStatus(ctx context.Context, sel ast.SelectionSet, v model.ModuleActionStatus) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor(ctx context.Context, sel ast.SelectionSet, v *model.ModuleActor) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleActor(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleConfigChange2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigChangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleConfigChange) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleConfigChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigChange(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleConfigChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigChange(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConfigChange) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleConfigChange(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleConfigKeyChange2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigKeyChangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleConfigKeyChange) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleConfigKeyChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigKeyChange(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleConfigKeyChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigKeyChange(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConfigKeyChange) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleConfigKeyChange(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope(ctx context.Context, v any) (model.ModuleConfigScope, error) {
+	var res model.ModuleConfigScope
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope(ctx context.Context, sel ast.SelectionSet, v model.ModuleConfigScope) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNModuleConfigValueInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInputᚄ(ctx context.Context, v any) ([]*model.ModuleConfigValueInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.ModuleConfigValueInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNModuleConfigValueInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNModuleConfigValueInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInput(ctx context.Context, v any) (*model.ModuleConfigValueInput, error) {
+	res, err := ec.unmarshalInputModuleConfigValueInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleEnumOption2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOption(ctx context.Context, sel ast.SelectionSet, v *model.ModuleEnumOption) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleEnumOption(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNModuleEvent2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEvent(ctx context.Context, sel ast.SelectionSet, v model.ModuleEvent) graphql.Marshaler {
 	return ec._ModuleEvent(ctx, sel, &v)
 }
@@ -53560,6 +58151,94 @@ func (ec *executionContext) marshalNModuleEvent2ᚖgithubᚗcomᚋlogoscoreᚋlo
 		return graphql.Null
 	}
 	return ec._ModuleEvent(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleField2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleField) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleField(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleField(ctx context.Context, sel ast.SelectionSet, v *model.ModuleField) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleField(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleProperty2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModulePropertyᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleProperty) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleProperty2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleProperty(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleProperty2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleProperty(ctx context.Context, sel ast.SelectionSet, v *model.ModuleProperty) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleProperty(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleStatusValue2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleStatusValueᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleStatusValue) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleStatusValue2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleStatusValue(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleStatusValue2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleStatusValue(ctx context.Context, sel ast.SelectionSet, v *model.ModuleStatusValue) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleStatusValue(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNModuleSyncState2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleSyncState(ctx context.Context, v any) (model.ModuleSyncState, error) {
+	var res model.ModuleSyncState
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleSyncState2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleSyncState(ctx context.Context, sel ast.SelectionSet, v model.ModuleSyncState) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNNetworkInterface2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐInterface(ctx context.Context, sel ast.SelectionSet, v models.Interface) graphql.Marshaler {
@@ -55408,6 +60087,24 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	return res
 }
 
+func (ec *executionContext) unmarshalOJSON2interface(ctx context.Context, v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalAny(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOJSON2interface(ctx context.Context, sel ast.SelectionSet, v any) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalAny(v)
+	return res
+}
+
 func (ec *executionContext) unmarshalOLoginInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐLoginInputᚄ(ctx context.Context, v any) ([]*model.LoginInput, error) {
 	if v == nil {
 		return nil, nil
@@ -55431,6 +60128,32 @@ func (ec *executionContext) marshalOModule2ᚖgithubᚗcomᚋlogoscoreᚋlogos�
 		return graphql.Null
 	}
 	return ec._Module(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOModuleEnumOption2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleEnumOption) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleEnumOption2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOption(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalOModuleManagement2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleManagement(ctx context.Context, sel ast.SelectionSet, v *model.ModuleManagement) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ModuleManagement(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalONetworkInterfaceInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐNetworkInterfaceInputᚄ(ctx context.Context, v any) ([]*model.NetworkInterfaceInput, error) {

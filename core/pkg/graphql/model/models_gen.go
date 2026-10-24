@@ -249,10 +249,118 @@ type MarkHashCrackedInput struct {
 	NewCredential *CreateCredentialInput `json:"newCredential,omitempty"`
 }
 
+type ModuleAction struct {
+	Name           string         `json:"name"`
+	Label          string         `json:"label"`
+	Description    *string        `json:"description,omitempty"`
+	Risk           string         `json:"risk"`
+	Confirm        *string        `json:"confirm,omitempty"`
+	Params         []*ModuleField `json:"params"`
+	TimeoutSeconds int            `json:"timeoutSeconds"`
+}
+
+type ModuleActionInvocation struct {
+	ID         string             `json:"id"`
+	Instance   string             `json:"instance"`
+	Action     string             `json:"action"`
+	Params     any                `json:"params,omitempty"`
+	Status     ModuleActionStatus `json:"status"`
+	Result     any                `json:"result,omitempty"`
+	Error      *string            `json:"error,omitempty"`
+	Actor      *ModuleActor       `json:"actor"`
+	StartedAt  string             `json:"startedAt"`
+	FinishedAt *string            `json:"finishedAt,omitempty"`
+}
+
+type ModuleActor struct {
+	Type string  `json:"type"`
+	ID   string  `json:"id"`
+	Name *string `json:"name,omitempty"`
+}
+
+type ModuleConfigChange struct {
+	ID         string                   `json:"id"`
+	ModuleName string                   `json:"moduleName"`
+	Instance   *string                  `json:"instance,omitempty"`
+	Scope      ModuleConfigScope        `json:"scope"`
+	Revision   int                      `json:"revision"`
+	Changes    []*ModuleConfigKeyChange `json:"changes"`
+	Actor      *ModuleActor             `json:"actor"`
+	At         string                   `json:"at"`
+}
+
+type ModuleConfigKeyChange struct {
+	Key string `json:"key"`
+	Old any    `json:"old,omitempty"`
+	New any    `json:"new,omitempty"`
+}
+
+type ModuleConfigValueInput struct {
+	Key   string `json:"key"`
+	Value any    `json:"value,omitempty"`
+}
+
+type ModuleEnumOption struct {
+	Value string  `json:"value"`
+	Label *string `json:"label,omitempty"`
+}
+
 type ModuleEvent struct {
 	Action   EventAction    `json:"action"`
 	Instance string         `json:"instance"`
 	Module   *models.Module `json:"module,omitempty"`
+}
+
+type ModuleField struct {
+	Key         string              `json:"key"`
+	Type        string              `json:"type"`
+	Label       string              `json:"label"`
+	Description *string             `json:"description,omitempty"`
+	Group       *string             `json:"group,omitempty"`
+	Order       int                 `json:"order"`
+	Unit        *string             `json:"unit,omitempty"`
+	Placeholder *string             `json:"placeholder,omitempty"`
+	Required    bool                `json:"required"`
+	Default     any                 `json:"default,omitempty"`
+	Min         any                 `json:"min,omitempty"`
+	Max         any                 `json:"max,omitempty"`
+	Pattern     *string             `json:"pattern,omitempty"`
+	MaxLength   *int                `json:"maxLength,omitempty"`
+	Options     []*ModuleEnumOption `json:"options,omitempty"`
+}
+
+type ModuleManagement struct {
+	SchemaVersion    string               `json:"schemaVersion"`
+	Properties       []*ModuleProperty    `json:"properties"`
+	Actions          []*ModuleAction      `json:"actions"`
+	Status           []*ModuleStatusValue `json:"status"`
+	Revision         int                  `json:"revision"`
+	AppliedRevision  int                  `json:"appliedRevision"`
+	ModuleRevision   int                  `json:"moduleRevision"`
+	InstanceRevision int                  `json:"instanceRevision"`
+	SyncState        ModuleSyncState      `json:"syncState"`
+	LastApplyError   *string              `json:"lastApplyError,omitempty"`
+}
+
+type ModuleProperty struct {
+	Field           *ModuleField `json:"field"`
+	Apply           string       `json:"apply"`
+	Effective       any          `json:"effective,omitempty"`
+	Source          string       `json:"source"`
+	ModuleValue     any          `json:"moduleValue,omitempty"`
+	InstanceValue   any          `json:"instanceValue,omitempty"`
+	IsSet           bool         `json:"isSet"`
+	RejectedReason  *string      `json:"rejectedReason,omitempty"`
+	RestartRequired bool         `json:"restartRequired"`
+}
+
+type ModuleStatusValue struct {
+	Key         string  `json:"key"`
+	Type        string  `json:"type"`
+	Label       string  `json:"label"`
+	Description *string `json:"description,omitempty"`
+	Unit        *string `json:"unit,omitempty"`
+	Value       any     `json:"value,omitempty"`
 }
 
 type Mutation struct {
@@ -931,6 +1039,177 @@ func (e *HostSortField) UnmarshalJSON(b []byte) error {
 }
 
 func (e HostSortField) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ModuleActionStatus string
+
+const (
+	ModuleActionStatusRunning   ModuleActionStatus = "RUNNING"
+	ModuleActionStatusSucceeded ModuleActionStatus = "SUCCEEDED"
+	ModuleActionStatusFailed    ModuleActionStatus = "FAILED"
+	ModuleActionStatusTimedOut  ModuleActionStatus = "TIMED_OUT"
+)
+
+var AllModuleActionStatus = []ModuleActionStatus{
+	ModuleActionStatusRunning,
+	ModuleActionStatusSucceeded,
+	ModuleActionStatusFailed,
+	ModuleActionStatusTimedOut,
+}
+
+func (e ModuleActionStatus) IsValid() bool {
+	switch e {
+	case ModuleActionStatusRunning, ModuleActionStatusSucceeded, ModuleActionStatusFailed, ModuleActionStatusTimedOut:
+		return true
+	}
+	return false
+}
+
+func (e ModuleActionStatus) String() string {
+	return string(e)
+}
+
+func (e *ModuleActionStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModuleActionStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModuleActionStatus", str)
+	}
+	return nil
+}
+
+func (e ModuleActionStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ModuleActionStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ModuleActionStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ModuleConfigScope string
+
+const (
+	ModuleConfigScopeModule   ModuleConfigScope = "MODULE"
+	ModuleConfigScopeInstance ModuleConfigScope = "INSTANCE"
+)
+
+var AllModuleConfigScope = []ModuleConfigScope{
+	ModuleConfigScopeModule,
+	ModuleConfigScopeInstance,
+}
+
+func (e ModuleConfigScope) IsValid() bool {
+	switch e {
+	case ModuleConfigScopeModule, ModuleConfigScopeInstance:
+		return true
+	}
+	return false
+}
+
+func (e ModuleConfigScope) String() string {
+	return string(e)
+}
+
+func (e *ModuleConfigScope) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModuleConfigScope(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModuleConfigScope", str)
+	}
+	return nil
+}
+
+func (e ModuleConfigScope) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ModuleConfigScope) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ModuleConfigScope) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ModuleSyncState string
+
+const (
+	ModuleSyncStateInSync    ModuleSyncState = "IN_SYNC"
+	ModuleSyncStatePending   ModuleSyncState = "PENDING"
+	ModuleSyncStateOutOfSync ModuleSyncState = "OUT_OF_SYNC"
+)
+
+var AllModuleSyncState = []ModuleSyncState{
+	ModuleSyncStateInSync,
+	ModuleSyncStatePending,
+	ModuleSyncStateOutOfSync,
+}
+
+func (e ModuleSyncState) IsValid() bool {
+	switch e {
+	case ModuleSyncStateInSync, ModuleSyncStatePending, ModuleSyncStateOutOfSync:
+		return true
+	}
+	return false
+}
+
+func (e ModuleSyncState) String() string {
+	return string(e)
+}
+
+func (e *ModuleSyncState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModuleSyncState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModuleSyncState", str)
+	}
+	return nil
+}
+
+func (e ModuleSyncState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ModuleSyncState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ModuleSyncState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

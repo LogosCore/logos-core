@@ -22,6 +22,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/mcp"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
+	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -63,6 +64,9 @@ type Repositories struct {
 	AgentKey           repository.IAgentKeyRepository
 	AgentAction        repository.IAgentActionRepository
 	ModuleRegistry     repository.IModuleRegistryRepository
+	ModuleConfig       repository.IModuleConfigRepository
+	ModuleConfigChange repository.IModuleConfigChangeRepository
+	ModuleInvocation   repository.IModuleActionInvocationRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
@@ -114,6 +118,10 @@ type App struct {
 	reaper        *lifecycle.Reaper
 	moduleGate    *modulegate.Gate   // registration gate for the data-plane sync endpoint
 	moduleService *lifecycle.Service // deregister path shared by RPC + the GraphQL removeModule mutation
+	// Module management: core → module RPC client and the service behind
+	// updateModuleConfig / invokeModuleAction / Module.management.
+	rpcClient  *messaging.RPCClient
+	moduleMgmt *modulemgmt.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -163,6 +171,14 @@ func NewApp() (*App, error) {
 		return nil, fmt.Errorf("failed to initialize module-lifecycle control plane: %w", err)
 	}
 
+	// Module management rides on the same control plane: the register reply
+	// carries the effective config, heartbeats trigger drift repair, and
+	// config pushes / actions go out over the core → module RPC client.
+	rpcClient := messaging.NewRPCClient(mqConfig(e), l)
+	moduleMgmt := modulemgmt.NewService(repos.ModuleRegistry, repos.ModuleConfig, repos.ModuleConfigChange,
+		repos.ModuleInvocation, rpcClient, bus, modulemgmt.Config{}, l)
+	moduleService.SetManagement(moduleMgmt)
+
 	// --- Future integration patterns ---
 	//
 	// SSE (subscribes to event bus):
@@ -208,7 +224,20 @@ func NewApp() (*App, error) {
 		reaper:          reaper,
 		moduleGate:      moduleGate,
 		moduleService:   moduleService,
+		rpcClient:       rpcClient,
+		moduleMgmt:      moduleMgmt,
 	}, nil
+}
+
+// mqConfig is the broker connection config from the environment.
+func mqConfig(e *environment.EnvironmentSettings) messaging.Config {
+	return messaging.Config{
+		Host:     e.RabbitMQHost,
+		Port:     e.RabbitMQPort,
+		User:     e.RabbitMQUser,
+		Password: e.RabbitMQPassword,
+		VHost:    e.RabbitMQVHost,
+	}
 }
 
 // initLifecycle stands up the AMQP control plane: the broker connection, the
@@ -223,13 +252,7 @@ func initLifecycle(
 	e *environment.EnvironmentSettings,
 	l *zap.Logger,
 ) (*messaging.Client, *messaging.RPCServer, *lifecycle.Service, *lifecycle.Reaper, error) {
-	client, err := messaging.NewClient(messaging.Config{
-		Host:     e.RabbitMQHost,
-		Port:     e.RabbitMQPort,
-		User:     e.RabbitMQUser,
-		Password: e.RabbitMQPassword,
-		VHost:    e.RabbitMQVHost,
-	}, l)
+	client, err := messaging.NewClient(mqConfig(e), l)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("connect to RabbitMQ: %w", err)
 	}
@@ -309,6 +332,11 @@ func (a *App) stopLifecycle() {
 	}
 	if a.rpcServer != nil {
 		a.rpcServer.Stop()
+	}
+	if a.rpcClient != nil {
+		if err := a.rpcClient.Close(); err != nil {
+			a.logger.Warn("Error closing module RPC client", zap.Error(err))
+		}
 	}
 	if a.mqClient != nil {
 		if err := a.mqClient.Close(); err != nil {

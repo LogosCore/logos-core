@@ -24,4 +24,12 @@ const (
 	// Module — app-admin management of the module-instance registry.
 	ModuleReadPermission   string = "module:read"   // admin: list module instances
 	ModuleDeletePermission string = "module:delete" // admin: remove (deregister) a module instance
+
+	// Module management — declared properties and actions (see
+	// module_management.graphql). Reading a module's management view is gated
+	// by module:read today; module:config:read is reserved for splitting it out.
+	ModuleConfigReadPermission       string = "module:config:read"        // reserved
+	ModuleConfigWritePermission      string = "module:config:write"       // set/clear property values
+	ModuleActionInvokePermission     string = "module:action:invoke"      // run a low-risk declared action
+	ModuleActionInvokeHighPermission string = "module:action:invoke:high" // additionally required for risk "high"
 )

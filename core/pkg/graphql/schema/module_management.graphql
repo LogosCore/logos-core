@@ -1,0 +1,205 @@
+# =============================================================================
+# Module management — declared properties, actions and status (prototype)
+# =============================================================================
+#
+# A module declares a management manifest at module.register (see
+# logos-golang-protocol/protocol/management.go). Core stores the desired value
+# of each property at two scopes:
+#
+#   MODULE   — applies to every instance with the same module name (e.g. all
+#              "http" channels). The normal case: instance ids change as you scale.
+#   INSTANCE — an override for one instance.
+#
+# effective = instance value ?? module value ?? the module's own default.
+# Core pushes the effective config to the module (mgmt.config.apply); the module
+# reports the revision it processed. revision = moduleRevision + instanceRevision,
+# so it only ever grows.
+
+# Arbitrary JSON value (property values, defaults, bounds, action params/results).
+scalar JSON
+
+extend type Module {
+  # Null when the module declared no management manifest.
+  management: ModuleManagement
+}
+
+enum ModuleConfigScope {
+  MODULE
+  INSTANCE
+}
+
+enum ModuleSyncState {
+  # appliedRevision == revision
+  IN_SYNC
+  # A newer revision is being pushed / awaiting the module's ack.
+  PENDING
+  # Pushing failed repeatedly, or the module is not registered.
+  OUT_OF_SYNC
+}
+
+type ModuleManagement {
+  schemaVersion: String!
+  properties: [ModuleProperty!]!
+  actions: [ModuleAction!]!
+  status: [ModuleStatusValue!]!
+
+  # Desired effective revision for this instance, and the one it last processed.
+  revision: Int!
+  appliedRevision: Int!
+  # Per-scope revisions, for optimistic concurrency on updateModuleConfig.
+  moduleRevision: Int!
+  instanceRevision: Int!
+  syncState: ModuleSyncState!
+  # Last push/apply error, if any.
+  lastApplyError: String
+}
+
+type ModuleEnumOption {
+  value: String!
+  label: String
+}
+
+# A typed field: a property or an action parameter.
+# type: string | int | number | bool | enum | duration | bytes | url | secret | string_list
+type ModuleField {
+  key: String!
+  type: String!
+  label: String!
+  description: String
+  group: String
+  order: Int!
+  unit: String
+  placeholder: String
+  required: Boolean!
+  default: JSON
+  min: JSON
+  max: JSON
+  pattern: String
+  maxLength: Int
+  options: [ModuleEnumOption!]
+}
+
+type ModuleProperty {
+  field: ModuleField!
+  # "live" | "restart"
+  apply: String!
+  # Effective desired value. Always null for secrets (see isSet).
+  effective: JSON
+  # Where the effective value comes from: "default" | "module" | "instance".
+  source: String!
+  # Values stored at each scope (null = not set there). Null for secrets.
+  moduleValue: JSON
+  instanceValue: JSON
+  # Secrets only: whether a value is stored at any scope.
+  isSet: Boolean!
+  # The module rejected the current value at the applied revision.
+  rejectedReason: String
+  # A restart-mode change the module has not picked up yet.
+  restartRequired: Boolean!
+}
+
+type ModuleAction {
+  name: String!
+  label: String!
+  description: String
+  # "low" | "high". High-risk actions need module:action:invoke:high.
+  risk: String!
+  confirm: String
+  params: [ModuleField!]!
+  timeoutSeconds: Int!
+}
+
+type ModuleStatusValue {
+  key: String!
+  type: String!
+  label: String!
+  description: String
+  unit: String
+  # Latest reported value from heartbeat metrics; null if never reported.
+  value: JSON
+}
+
+type ModuleActor {
+  type: String!
+  id: String!
+  name: String
+}
+
+enum ModuleActionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+}
+
+type ModuleActionInvocation {
+  id: ID!
+  instance: ID!
+  action: String!
+  params: JSON
+  status: ModuleActionStatus!
+  result: JSON
+  error: String
+  actor: ModuleActor!
+  startedAt: String!
+  finishedAt: String
+}
+
+type ModuleConfigChange {
+  id: ID!
+  # Module name the change was made for, and the instance for INSTANCE scope.
+  moduleName: String!
+  instance: ID
+  scope: ModuleConfigScope!
+  # New revision of that scope.
+  revision: Int!
+  # Changed keys with old/new values; secrets redacted as "***".
+  changes: [ModuleConfigKeyChange!]!
+  actor: ModuleActor!
+  at: String!
+}
+
+type ModuleConfigKeyChange {
+  key: String!
+  old: JSON
+  new: JSON
+}
+
+input ModuleConfigValueInput {
+  key: String!
+  # null clears the value at this scope (falls back to the next scope / default).
+  value: JSON
+}
+
+extend type Query {
+  module(instance: ID!): Module
+    @hasPermission(permission: "module:read")
+
+  # Newest first.
+  moduleActionInvocations(instance: ID!, limit: Int): [ModuleActionInvocation!]!
+    @hasPermission(permission: "module:read")
+
+  # Config changes affecting this instance (its INSTANCE scope plus its
+  # module's MODULE scope), newest first.
+  moduleConfigChanges(instance: ID!, limit: Int): [ModuleConfigChange!]!
+    @hasPermission(permission: "module:read")
+}
+
+extend type Mutation {
+  # Set or clear property values at a scope. MODULE scope targets the module
+  # name of `instance`. expectedRevision is that scope's current revision
+  # (moduleRevision / instanceRevision); a mismatch fails with CONFLICT.
+  # Validated against the instance's manifest; agent API keys are rejected.
+  updateModuleConfig(
+    instance: ID!
+    scope: ModuleConfigScope!
+    values: [ModuleConfigValueInput!]!
+    expectedRevision: Int!
+  ): Module! @hasPermission(permission: "module:config:write")
+
+  # Run a declared action on a registered instance and wait for its result
+  # (bounded by the action's timeout). High-risk actions additionally need
+  # module:action:invoke:high. Agent API keys are rejected.
+  invokeModuleAction(instance: ID!, action: String!, params: JSON): ModuleActionInvocation!
+    @hasPermission(permission: "module:action:invoke")
+}

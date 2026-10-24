@@ -48,6 +48,13 @@ models:
     model:
       - github.com/logoscore/logos-core/core/pkg/pagination.PageInfo
 
+  # Arbitrary JSON (module management values, defaults, bounds, action
+  # params/results). gqlgen's built-in Any passes the decoded value through
+  # untouched: map[string]any / []any / float64|json.Number / string / bool.
+  JSON:
+    model:
+      - github.com/99designs/gqlgen/graphql.Any
+
   # Map GraphQL ID scalar to Go string (default is usually fine, but
   # being explicit helps avoid confusion).
   ID:

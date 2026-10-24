@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 )
 
@@ -51,7 +52,7 @@ func (f *fakeModuleRepo) FindByInstance(_ context.Context, instance string) (mod
 }
 
 func (f *fakeModuleRepo) Upsert(context.Context, *models.Module) error { return nil }
-func (f *fakeModuleRepo) TouchHeartbeat(context.Context, string, string, map[string]any, time.Time) (bool, error) {
+func (f *fakeModuleRepo) TouchHeartbeat(context.Context, string, string, map[string]any, *int64, time.Time) (bool, error) {
 	return false, nil
 }
 func (f *fakeModuleRepo) MarkDeregistered(context.Context, string, string, time.Time) (bool, error) {
@@ -86,7 +87,7 @@ func TestModules_PassesStatusFilterThrough(t *testing.T) {
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},
 		{Instance: "tg-1", Status: models.ModuleStatusDead},
 	}}
-	r := NewModuleResolver(repo, &fakeDeregistrar{})
+	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil)
 
 	out, err := r.Modules(context.Background(), []string{models.ModuleStatusRegistered})
 	if err != nil {
@@ -105,7 +106,7 @@ func TestModules_NilFilterReturnsAll(t *testing.T) {
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},
 		{Instance: "tg-1", Status: models.ModuleStatusDead},
 	}}
-	r := NewModuleResolver(repo, &fakeDeregistrar{})
+	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil)
 
 	out, err := r.Modules(context.Background(), nil)
 	if err != nil {
@@ -121,7 +122,7 @@ func TestRemoveModule_DeregistersAndReturnsUpdatedRow(t *testing.T) {
 		{Instance: "http-1", Type: "channel", Status: models.ModuleStatusDeregistered},
 	}}
 	dereg := &fakeDeregistrar{found: true}
-	r := NewModuleResolver(repo, dereg)
+	r := NewModuleResolver(repo, dereg, nil)
 
 	mod, err := r.RemoveModule(adminCtx(uuid.New()), "http-1")
 	if err != nil {
@@ -141,7 +142,7 @@ func TestRemoveModule_DeregistersAndReturnsUpdatedRow(t *testing.T) {
 
 func TestRemoveModule_NotRegisteredIsError(t *testing.T) {
 	dereg := &fakeDeregistrar{found: false}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg)
+	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil)
 
 	if _, err := r.RemoveModule(adminCtx(uuid.New()), "ghost"); err == nil {
 		t.Fatal("expected error when instance is not currently registered")
@@ -150,7 +151,7 @@ func TestRemoveModule_NotRegisteredIsError(t *testing.T) {
 
 func TestRemoveModule_BlankInstanceRejectedBeforeDeregister(t *testing.T) {
 	dereg := &fakeDeregistrar{found: true}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg)
+	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil)
 
 	if _, err := r.RemoveModule(adminCtx(uuid.New()), "   "); err == nil {
 		t.Fatal("expected error for blank instance")
@@ -162,7 +163,7 @@ func TestRemoveModule_BlankInstanceRejectedBeforeDeregister(t *testing.T) {
 
 func TestRemoveModule_PropagatesDeregisterError(t *testing.T) {
 	dereg := &fakeDeregistrar{err: errors.New("mongo down")}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg)
+	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil)
 
 	if _, err := r.RemoveModule(adminCtx(uuid.New()), "http-1"); err == nil {
 		t.Fatal("expected deregister error to propagate")
@@ -170,7 +171,7 @@ func TestRemoveModule_PropagatesDeregisterError(t *testing.T) {
 }
 
 func TestModuleFieldResolvers_FormatTimestamps(t *testing.T) {
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{})
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, nil)
 	hb := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	mod := &models.Module{
 		RegisteredAt:    time.Date(2026, 6, 27, 11, 0, 0, 0, time.UTC),
@@ -190,4 +191,14 @@ func TestModuleFieldResolvers_FormatTimestamps(t *testing.T) {
 	if err != nil || dead != nil {
 		t.Errorf("DeclaredDeadAt = %v, want nil", dead)
 	}
+}
+
+func (f *fakeModuleRepo) ListRegisteredByName(context.Context, string) ([]models.Module, error) {
+	return nil, nil
+}
+func (f *fakeModuleRepo) RecordApplyResult(context.Context, string, protocol.ConfigApplyReply, time.Time) error {
+	return nil
+}
+func (f *fakeModuleRepo) RecordApplyError(context.Context, string, string, time.Time) error {
+	return nil
 }

@@ -45,4 +45,21 @@ type Module struct {
 	DeregisteredAt   *time.Time `bson:"deregistered_at,omitempty" json:"deregistered_at,omitempty"`
 	DeregisterReason string     `bson:"deregister_reason,omitempty" json:"deregister_reason,omitempty"`
 	DeclaredDeadAt   *time.Time `bson:"declared_dead_at,omitempty" json:"declared_dead_at,omitempty"`
+
+	// --- Module management (see module_management.go) ---
+
+	// Manifest is what the instance declared at its latest module.register;
+	// nil when it declared none. Replaced (or cleared) by every register.
+	Manifest     *ModuleManifest `bson:"manifest,omitempty" json:"manifest,omitempty"`
+	ManifestHash string          `bson:"manifest_hash,omitempty" json:"manifest_hash,omitempty"`
+	// AppliedRevision is the config revision the instance last reported it
+	// processed (register, heartbeat, or a mgmt.config.apply reply).
+	AppliedRevision int64 `bson:"applied_revision" json:"applied_revision"`
+	// Rejected and RestartRequired come from the last mgmt.config.apply reply.
+	Rejected        map[string]string `bson:"rejected,omitempty" json:"rejected,omitempty"`
+	RestartRequired []string          `bson:"restart_required,omitempty" json:"restart_required,omitempty"`
+	// LastApplyError is set when a push failed after all retries, and cleared
+	// by the next successful apply.
+	LastApplyError string     `bson:"last_apply_error,omitempty" json:"last_apply_error,omitempty"`
+	LastApplyAt    *time.Time `bson:"last_apply_at,omitempty" json:"last_apply_at,omitempty"`
 }

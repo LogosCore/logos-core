@@ -102,6 +102,10 @@ const (
 	TopicModuleRegistered   Topic = "module.registered"
 	TopicModuleDeregistered Topic = "module.deregistered"
 	TopicModuleDead         Topic = "module.dead"
+	// TopicModuleUpdated is a change to a module's management state (desired
+	// config, apply result, action invocation) — the row survives with the
+	// same lifecycle status. Emitted by pkg/modulemgmt.
+	TopicModuleUpdated Topic = "module.updated"
 
 	// Timeline events — emitted by pkg/events.Logger after a row has been
 	// persisted to the operation_events collection. Carries only the

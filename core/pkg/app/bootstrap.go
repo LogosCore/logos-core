@@ -74,6 +74,9 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		AgentKey:           repository.NewAgentKeyRepository(db), // wrapped with auth-cache eviction below
 		AgentAction:        repository.NewAgentActionRepository(db),
 		ModuleRegistry:     repository.NewModuleRegistryRepository(db),
+		ModuleConfig:       repository.NewModuleConfigRepository(db),
+		ModuleConfigChange: repository.NewModuleConfigChangeRepository(db),
+		ModuleInvocation:   repository.NewModuleActionInvocationRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed

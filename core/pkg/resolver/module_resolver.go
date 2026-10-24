@@ -8,6 +8,7 @@ import (
 
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
+	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 )
@@ -28,9 +29,17 @@ type ModuleDeregistrar interface {
 type IModuleResolver interface {
 	// Queries
 	Modules(ctx context.Context, status []string) ([]*models.Module, error)
+	Module(ctx context.Context, instance string) (*models.Module, error)
+	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
+	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
 
 	// Mutations
 	RemoveModule(ctx context.Context, instance string) (*models.Module, error)
+	UpdateModuleConfig(ctx context.Context, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
+	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
+
+	// Management is the Module.management field (module_management.graphql).
+	Management(ctx context.Context, obj *models.Module) (*model.ModuleManagement, error)
 
 	// Field resolvers for the Module type (timestamps → RFC3339 / nullable).
 	RegisteredAt(ctx context.Context, obj *models.Module) (string, error)
@@ -47,13 +56,15 @@ const removeModuleReason = "removed by admin"
 type moduleResolver struct {
 	repo        repository.IModuleRegistryRepository
 	deregistrar ModuleDeregistrar
+	mgmt        ModuleManager
 }
 
 // NewModuleResolver builds the Module resolver. deregistrar is the lifecycle
 // service; removeModule routes through it so the GraphQL path and the RPC
-// deregister path share one transition.
-func NewModuleResolver(repo repository.IModuleRegistryRepository, deregistrar ModuleDeregistrar) IModuleResolver {
-	return &moduleResolver{repo: repo, deregistrar: deregistrar}
+// deregister path share one transition. mgmt is the module-management service
+// (nil disables management: Module.management is null, mutations error).
+func NewModuleResolver(repo repository.IModuleRegistryRepository, deregistrar ModuleDeregistrar, mgmt ModuleManager) IModuleResolver {
+	return &moduleResolver{repo: repo, deregistrar: deregistrar, mgmt: mgmt}
 }
 
 // Modules lists module instances filtered to the given lifecycle statuses,
