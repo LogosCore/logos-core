@@ -12,6 +12,7 @@ const config: CodegenConfig = {
         enumsAsTypes: true,
         scalars: {
           ID: "string",
+          JSON: "unknown",
         },
         skipTypename: true,
       },

@@ -14,6 +14,7 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
+  JSON: { input: unknown; output: unknown; }
 };
 
 export type ApiKey = {
@@ -428,6 +429,7 @@ export type Module = {
   instance: Scalars['ID']['output'];
   lastHeartbeatAt?: Maybe<Scalars['String']['output']>;
   lastStatus: Scalars['String']['output'];
+  management?: Maybe<ModuleManagement>;
   name: Scalars['String']['output'];
   registeredAt: Scalars['String']['output'];
   status: Scalars['String']['output'];
@@ -435,11 +437,134 @@ export type Module = {
   version: Scalars['String']['output'];
 };
 
+export type ModuleAction = {
+  confirm?: Maybe<Scalars['String']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
+  label: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  params: Array<ModuleField>;
+  risk: Scalars['String']['output'];
+  timeoutSeconds: Scalars['Int']['output'];
+};
+
+export type ModuleActionInvocation = {
+  action: Scalars['String']['output'];
+  actor: ModuleActor;
+  error?: Maybe<Scalars['String']['output']>;
+  finishedAt?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  instance: Scalars['ID']['output'];
+  params?: Maybe<Scalars['JSON']['output']>;
+  result?: Maybe<Scalars['JSON']['output']>;
+  startedAt: Scalars['String']['output'];
+  status: ModuleActionStatus;
+};
+
+export type ModuleActionStatus =
+  | 'FAILED'
+  | 'RUNNING'
+  | 'SUCCEEDED'
+  | 'TIMED_OUT';
+
+export type ModuleActor = {
+  id: Scalars['String']['output'];
+  name?: Maybe<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
+};
+
+export type ModuleConfigChange = {
+  actor: ModuleActor;
+  at: Scalars['String']['output'];
+  changes: Array<ModuleConfigKeyChange>;
+  id: Scalars['ID']['output'];
+  instance?: Maybe<Scalars['ID']['output']>;
+  moduleName: Scalars['String']['output'];
+  revision: Scalars['Int']['output'];
+  scope: ModuleConfigScope;
+};
+
+export type ModuleConfigKeyChange = {
+  key: Scalars['String']['output'];
+  new?: Maybe<Scalars['JSON']['output']>;
+  old?: Maybe<Scalars['JSON']['output']>;
+};
+
+export type ModuleConfigScope =
+  | 'INSTANCE'
+  | 'MODULE';
+
+export type ModuleConfigValueInput = {
+  key: Scalars['String']['input'];
+  value?: InputMaybe<Scalars['JSON']['input']>;
+};
+
+export type ModuleEnumOption = {
+  label?: Maybe<Scalars['String']['output']>;
+  value: Scalars['String']['output'];
+};
+
 export type ModuleEvent = {
   action: EventAction;
   instance: Scalars['ID']['output'];
   module?: Maybe<Module>;
 };
+
+export type ModuleField = {
+  default?: Maybe<Scalars['JSON']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
+  group?: Maybe<Scalars['String']['output']>;
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  max?: Maybe<Scalars['JSON']['output']>;
+  maxLength?: Maybe<Scalars['Int']['output']>;
+  min?: Maybe<Scalars['JSON']['output']>;
+  options?: Maybe<Array<ModuleEnumOption>>;
+  order: Scalars['Int']['output'];
+  pattern?: Maybe<Scalars['String']['output']>;
+  placeholder?: Maybe<Scalars['String']['output']>;
+  required: Scalars['Boolean']['output'];
+  type: Scalars['String']['output'];
+  unit?: Maybe<Scalars['String']['output']>;
+};
+
+export type ModuleManagement = {
+  actions: Array<ModuleAction>;
+  appliedRevision: Scalars['Int']['output'];
+  instanceRevision: Scalars['Int']['output'];
+  lastApplyError?: Maybe<Scalars['String']['output']>;
+  moduleRevision: Scalars['Int']['output'];
+  properties: Array<ModuleProperty>;
+  revision: Scalars['Int']['output'];
+  schemaVersion: Scalars['String']['output'];
+  status: Array<ModuleStatusValue>;
+  syncState: ModuleSyncState;
+};
+
+export type ModuleProperty = {
+  apply: Scalars['String']['output'];
+  effective?: Maybe<Scalars['JSON']['output']>;
+  field: ModuleField;
+  instanceValue?: Maybe<Scalars['JSON']['output']>;
+  isSet: Scalars['Boolean']['output'];
+  moduleValue?: Maybe<Scalars['JSON']['output']>;
+  rejectedReason?: Maybe<Scalars['String']['output']>;
+  restartRequired: Scalars['Boolean']['output'];
+  source: Scalars['String']['output'];
+};
+
+export type ModuleStatusValue = {
+  description?: Maybe<Scalars['String']['output']>;
+  key: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  type: Scalars['String']['output'];
+  unit?: Maybe<Scalars['String']['output']>;
+  value?: Maybe<Scalars['JSON']['output']>;
+};
+
+export type ModuleSyncState =
+  | 'IN_SYNC'
+  | 'OUT_OF_SYNC'
+  | 'PENDING';
 
 export type Mutation = {
   addCredentialComment: Credential;
@@ -477,6 +602,7 @@ export type Mutation = {
   emptyWikiDocumentTrash: Scalars['Boolean']['output'];
   importLocalPreferences: User;
   instantiateTemplate: WikiDocument;
+  invokeModuleAction: ModuleActionInvocation;
   markHashCracked: Hash;
   permanentlyDeleteWikiDocument: Scalars['Boolean']['output'];
   publishOperatorFocus: Scalars['Boolean']['output'];
@@ -511,6 +637,7 @@ export type Mutation = {
   updateCustomTimelineEvent: TimelineEvent;
   updateHash: Hash;
   updateHost: Host;
+  updateModuleConfig: Module;
   updateOperation: Operation;
   updateOperationMemberRole: Operation;
   updateOwnProfile: User;
@@ -704,6 +831,13 @@ export type MutationInstantiateTemplateArgs = {
 };
 
 
+export type MutationInvokeModuleActionArgs = {
+  action: Scalars['String']['input'];
+  instance: Scalars['ID']['input'];
+  params?: InputMaybe<Scalars['JSON']['input']>;
+};
+
+
 export type MutationMarkHashCrackedArgs = {
   id: Scalars['ID']['input'];
   input: MarkHashCrackedInput;
@@ -882,6 +1016,14 @@ export type MutationUpdateHostArgs = {
 };
 
 
+export type MutationUpdateModuleConfigArgs = {
+  expectedRevision: Scalars['Int']['input'];
+  instance: Scalars['ID']['input'];
+  scope: ModuleConfigScope;
+  values: Array<ModuleConfigValueInput>;
+};
+
+
 export type MutationUpdateOperationArgs = {
   id: Scalars['ID']['input'];
   input: UpdateOperationInput;
@@ -1030,6 +1172,9 @@ export type Query = {
   host: Host;
   hosts: HostConnection;
   me: User;
+  module?: Maybe<Module>;
+  moduleActionInvocations: Array<ModuleActionInvocation>;
+  moduleConfigChanges: Array<ModuleConfigChange>;
   modules: Array<Module>;
   myAPIKey?: Maybe<ApiKey>;
   myAgentActions: AgentActionConnection;
@@ -1148,6 +1293,23 @@ export type QueryHostsArgs = {
   search?: InputMaybe<Scalars['String']['input']>;
   sortBy?: InputMaybe<HostSortField>;
   sortDirection?: InputMaybe<SortDirection>;
+};
+
+
+export type QueryModuleArgs = {
+  instance: Scalars['ID']['input'];
+};
+
+
+export type QueryModuleActionInvocationsArgs = {
+  instance: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryModuleConfigChangesArgs = {
+  instance: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -2526,6 +2688,54 @@ export type ModuleChangedSubscriptionVariables = Exact<{ [key: string]: never; }
 
 export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, instance: string, module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null } | null } };
 
+export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null };
+
+export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, moduleRevision: number, instanceRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, moduleValue?: unknown | null, instanceValue?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null };
+
+export type ModuleQueryVariables = Exact<{
+  instance: Scalars['ID']['input'];
+}>;
+
+
+export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, moduleRevision: number, instanceRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, moduleValue?: unknown | null, instanceValue?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null } | null };
+
+export type ModuleActionInvocationFieldsFragment = { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } };
+
+export type ModuleActionInvocationsQueryVariables = Exact<{
+  instance: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type ModuleActionInvocationsQuery = { moduleActionInvocations: Array<{ id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } }> };
+
+export type ModuleConfigChangesQueryVariables = Exact<{
+  instance: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type ModuleConfigChangesQuery = { moduleConfigChanges: Array<{ id: string, moduleName: string, instance?: string | null, scope: ModuleConfigScope, revision: number, at: string, changes: Array<{ key: string, old?: unknown | null, new?: unknown | null }>, actor: { type: string, id: string, name?: string | null } }> };
+
+export type UpdateModuleConfigMutationVariables = Exact<{
+  instance: Scalars['ID']['input'];
+  scope: ModuleConfigScope;
+  values: Array<ModuleConfigValueInput> | ModuleConfigValueInput;
+  expectedRevision: Scalars['Int']['input'];
+}>;
+
+
+export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, moduleRevision: number, instanceRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, moduleValue?: unknown | null, instanceValue?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null } };
+
+export type InvokeModuleActionMutationVariables = Exact<{
+  instance: Scalars['ID']['input'];
+  action: Scalars['String']['input'];
+  params?: InputMaybe<Scalars['JSON']['input']>;
+}>;
+
+
+export type InvokeModuleActionMutation = { invokeModuleAction: { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } } };
+
 export type OperationMemberFieldsFragment = { role: OperationRole, user: { id: string, username: string, roles: Array<string>, active: boolean, createdAt: string, updatedAt: string } };
 
 export type OperationFieldsFragment = { id: string, name: string, description: string, createdAt: string, updatedAt: string, members: Array<{ role: OperationRole, user: { id: string, username: string, roles: Array<string>, active: boolean, createdAt: string, updatedAt: string } }> };
@@ -3642,6 +3852,125 @@ export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
   declaredDeadAt
 }
     `, {"fragmentName":"ModuleFields"}) as unknown as TypedDocumentString<ModuleFieldsFragment, unknown>;
+export const ModuleFieldDefFieldsFragmentDoc = new TypedDocumentString(`
+    fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  options {
+    value
+    label
+  }
+}
+    `, {"fragmentName":"ModuleFieldDefFields"}) as unknown as TypedDocumentString<ModuleFieldDefFieldsFragment, unknown>;
+export const ModuleDetailFieldsFragmentDoc = new TypedDocumentString(`
+    fragment ModuleDetailFields on Module {
+  ...ModuleFields
+  management {
+    schemaVersion
+    revision
+    appliedRevision
+    moduleRevision
+    instanceRevision
+    syncState
+    lastApplyError
+    properties {
+      field {
+        ...ModuleFieldDefFields
+      }
+      apply
+      effective
+      source
+      moduleValue
+      instanceValue
+      isSet
+      rejectedReason
+      restartRequired
+    }
+    actions {
+      name
+      label
+      description
+      risk
+      confirm
+      timeoutSeconds
+      params {
+        ...ModuleFieldDefFields
+      }
+    }
+    status {
+      key
+      type
+      label
+      description
+      unit
+      value
+    }
+  }
+}
+    fragment ModuleFields on Module {
+  instance
+  type
+  name
+  version
+  description
+  status
+  lastStatus
+  registeredAt
+  lastHeartbeatAt
+  deregisteredAt
+  deregisterReason
+  declaredDeadAt
+}
+fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  options {
+    value
+    label
+  }
+}`, {"fragmentName":"ModuleDetailFields"}) as unknown as TypedDocumentString<ModuleDetailFieldsFragment, unknown>;
+export const ModuleActionInvocationFieldsFragmentDoc = new TypedDocumentString(`
+    fragment ModuleActionInvocationFields on ModuleActionInvocation {
+  id
+  instance
+  action
+  params
+  status
+  result
+  error
+  actor {
+    type
+    id
+    name
+  }
+  startedAt
+  finishedAt
+}
+    `, {"fragmentName":"ModuleActionInvocationFields"}) as unknown as TypedDocumentString<ModuleActionInvocationFieldsFragment, unknown>;
 export const OperationMemberFieldsFragmentDoc = new TypedDocumentString(`
     fragment OperationMemberFields on OperationMember {
   user {
@@ -5425,6 +5754,245 @@ export const ModuleChangedDocument = new TypedDocumentString(`
   deregisterReason
   declaredDeadAt
 }`) as unknown as TypedDocumentString<ModuleChangedSubscription, ModuleChangedSubscriptionVariables>;
+export const ModuleDocument = new TypedDocumentString(`
+    query Module($instance: ID!) {
+  module(instance: $instance) {
+    ...ModuleDetailFields
+  }
+}
+    fragment ModuleFields on Module {
+  instance
+  type
+  name
+  version
+  description
+  status
+  lastStatus
+  registeredAt
+  lastHeartbeatAt
+  deregisteredAt
+  deregisterReason
+  declaredDeadAt
+}
+fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  options {
+    value
+    label
+  }
+}
+fragment ModuleDetailFields on Module {
+  ...ModuleFields
+  management {
+    schemaVersion
+    revision
+    appliedRevision
+    moduleRevision
+    instanceRevision
+    syncState
+    lastApplyError
+    properties {
+      field {
+        ...ModuleFieldDefFields
+      }
+      apply
+      effective
+      source
+      moduleValue
+      instanceValue
+      isSet
+      rejectedReason
+      restartRequired
+    }
+    actions {
+      name
+      label
+      description
+      risk
+      confirm
+      timeoutSeconds
+      params {
+        ...ModuleFieldDefFields
+      }
+    }
+    status {
+      key
+      type
+      label
+      description
+      unit
+      value
+    }
+  }
+}`) as unknown as TypedDocumentString<ModuleQuery, ModuleQueryVariables>;
+export const ModuleActionInvocationsDocument = new TypedDocumentString(`
+    query ModuleActionInvocations($instance: ID!, $limit: Int) {
+  moduleActionInvocations(instance: $instance, limit: $limit) {
+    ...ModuleActionInvocationFields
+  }
+}
+    fragment ModuleActionInvocationFields on ModuleActionInvocation {
+  id
+  instance
+  action
+  params
+  status
+  result
+  error
+  actor {
+    type
+    id
+    name
+  }
+  startedAt
+  finishedAt
+}`) as unknown as TypedDocumentString<ModuleActionInvocationsQuery, ModuleActionInvocationsQueryVariables>;
+export const ModuleConfigChangesDocument = new TypedDocumentString(`
+    query ModuleConfigChanges($instance: ID!, $limit: Int) {
+  moduleConfigChanges(instance: $instance, limit: $limit) {
+    id
+    moduleName
+    instance
+    scope
+    revision
+    changes {
+      key
+      old
+      new
+    }
+    actor {
+      type
+      id
+      name
+    }
+    at
+  }
+}
+    `) as unknown as TypedDocumentString<ModuleConfigChangesQuery, ModuleConfigChangesQueryVariables>;
+export const UpdateModuleConfigDocument = new TypedDocumentString(`
+    mutation UpdateModuleConfig($instance: ID!, $scope: ModuleConfigScope!, $values: [ModuleConfigValueInput!]!, $expectedRevision: Int!) {
+  updateModuleConfig(
+    instance: $instance
+    scope: $scope
+    values: $values
+    expectedRevision: $expectedRevision
+  ) {
+    ...ModuleDetailFields
+  }
+}
+    fragment ModuleFields on Module {
+  instance
+  type
+  name
+  version
+  description
+  status
+  lastStatus
+  registeredAt
+  lastHeartbeatAt
+  deregisteredAt
+  deregisterReason
+  declaredDeadAt
+}
+fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  options {
+    value
+    label
+  }
+}
+fragment ModuleDetailFields on Module {
+  ...ModuleFields
+  management {
+    schemaVersion
+    revision
+    appliedRevision
+    moduleRevision
+    instanceRevision
+    syncState
+    lastApplyError
+    properties {
+      field {
+        ...ModuleFieldDefFields
+      }
+      apply
+      effective
+      source
+      moduleValue
+      instanceValue
+      isSet
+      rejectedReason
+      restartRequired
+    }
+    actions {
+      name
+      label
+      description
+      risk
+      confirm
+      timeoutSeconds
+      params {
+        ...ModuleFieldDefFields
+      }
+    }
+    status {
+      key
+      type
+      label
+      description
+      unit
+      value
+    }
+  }
+}`) as unknown as TypedDocumentString<UpdateModuleConfigMutation, UpdateModuleConfigMutationVariables>;
+export const InvokeModuleActionDocument = new TypedDocumentString(`
+    mutation InvokeModuleAction($instance: ID!, $action: String!, $params: JSON) {
+  invokeModuleAction(instance: $instance, action: $action, params: $params) {
+    ...ModuleActionInvocationFields
+  }
+}
+    fragment ModuleActionInvocationFields on ModuleActionInvocation {
+  id
+  instance
+  action
+  params
+  status
+  result
+  error
+  actor {
+    type
+    id
+    name
+  }
+  startedAt
+  finishedAt
+}`) as unknown as TypedDocumentString<InvokeModuleActionMutation, InvokeModuleActionMutationVariables>;
 export const OperationDocument = new TypedDocumentString(`
     query Operation($id: ID!) {
   operation(id: $id) {

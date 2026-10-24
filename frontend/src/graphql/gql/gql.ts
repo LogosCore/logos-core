@@ -84,6 +84,14 @@ type Documents = {
     "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": typeof types.ModulesDocument,
     "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": typeof types.RemoveModuleDocument,
     "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n": typeof types.ModuleChangedDocument,
+    "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    options {\n      value\n      label\n    }\n  }\n": typeof types.ModuleFieldDefFieldsFragmentDoc,
+    "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      moduleRevision\n      instanceRevision\n      syncState\n      lastApplyError\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        moduleValue\n        instanceValue\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n      }\n    }\n  }\n": typeof types.ModuleDetailFieldsFragmentDoc,
+    "\n  query Module($instance: ID!) {\n    module(instance: $instance) {\n      ...ModuleDetailFields\n    }\n  }\n": typeof types.ModuleDocument,
+    "\n  fragment ModuleActionInvocationFields on ModuleActionInvocation {\n    id\n    instance\n    action\n    params\n    status\n    result\n    error\n    actor {\n      type\n      id\n      name\n    }\n    startedAt\n    finishedAt\n  }\n": typeof types.ModuleActionInvocationFieldsFragmentDoc,
+    "\n  query ModuleActionInvocations($instance: ID!, $limit: Int) {\n    moduleActionInvocations(instance: $instance, limit: $limit) {\n      ...ModuleActionInvocationFields\n    }\n  }\n": typeof types.ModuleActionInvocationsDocument,
+    "\n  query ModuleConfigChanges($instance: ID!, $limit: Int) {\n    moduleConfigChanges(instance: $instance, limit: $limit) {\n      id\n      moduleName\n      instance\n      scope\n      revision\n      changes {\n        key\n        old\n        new\n      }\n      actor {\n        type\n        id\n        name\n      }\n      at\n    }\n  }\n": typeof types.ModuleConfigChangesDocument,
+    "\n  mutation UpdateModuleConfig(\n    $instance: ID!\n    $scope: ModuleConfigScope!\n    $values: [ModuleConfigValueInput!]!\n    $expectedRevision: Int!\n  ) {\n    updateModuleConfig(\n      instance: $instance\n      scope: $scope\n      values: $values\n      expectedRevision: $expectedRevision\n    ) {\n      ...ModuleDetailFields\n    }\n  }\n": typeof types.UpdateModuleConfigDocument,
+    "\n  mutation InvokeModuleAction($instance: ID!, $action: String!, $params: JSON) {\n    invokeModuleAction(instance: $instance, action: $action, params: $params) {\n      ...ModuleActionInvocationFields\n    }\n  }\n": typeof types.InvokeModuleActionDocument,
     "\n  fragment OperationMemberFields on OperationMember {\n    user {\n      id\n      username\n      roles\n      active\n      createdAt\n      updatedAt\n    }\n    role\n  }\n": typeof types.OperationMemberFieldsFragmentDoc,
     "\n  fragment OperationFields on Operation {\n    id\n    name\n    description\n    members {\n      ...OperationMemberFields\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.OperationFieldsFragmentDoc,
     "\n  query Operation($id: ID!) {\n    operation(id: $id) {\n      ...OperationFields\n    }\n  }\n": typeof types.OperationDocument,
@@ -271,6 +279,14 @@ const documents: Documents = {
     "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": types.ModulesDocument,
     "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": types.RemoveModuleDocument,
     "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n": types.ModuleChangedDocument,
+    "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    options {\n      value\n      label\n    }\n  }\n": types.ModuleFieldDefFieldsFragmentDoc,
+    "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      moduleRevision\n      instanceRevision\n      syncState\n      lastApplyError\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        moduleValue\n        instanceValue\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n      }\n    }\n  }\n": types.ModuleDetailFieldsFragmentDoc,
+    "\n  query Module($instance: ID!) {\n    module(instance: $instance) {\n      ...ModuleDetailFields\n    }\n  }\n": types.ModuleDocument,
+    "\n  fragment ModuleActionInvocationFields on ModuleActionInvocation {\n    id\n    instance\n    action\n    params\n    status\n    result\n    error\n    actor {\n      type\n      id\n      name\n    }\n    startedAt\n    finishedAt\n  }\n": types.ModuleActionInvocationFieldsFragmentDoc,
+    "\n  query ModuleActionInvocations($instance: ID!, $limit: Int) {\n    moduleActionInvocations(instance: $instance, limit: $limit) {\n      ...ModuleActionInvocationFields\n    }\n  }\n": types.ModuleActionInvocationsDocument,
+    "\n  query ModuleConfigChanges($instance: ID!, $limit: Int) {\n    moduleConfigChanges(instance: $instance, limit: $limit) {\n      id\n      moduleName\n      instance\n      scope\n      revision\n      changes {\n        key\n        old\n        new\n      }\n      actor {\n        type\n        id\n        name\n      }\n      at\n    }\n  }\n": types.ModuleConfigChangesDocument,
+    "\n  mutation UpdateModuleConfig(\n    $instance: ID!\n    $scope: ModuleConfigScope!\n    $values: [ModuleConfigValueInput!]!\n    $expectedRevision: Int!\n  ) {\n    updateModuleConfig(\n      instance: $instance\n      scope: $scope\n      values: $values\n      expectedRevision: $expectedRevision\n    ) {\n      ...ModuleDetailFields\n    }\n  }\n": types.UpdateModuleConfigDocument,
+    "\n  mutation InvokeModuleAction($instance: ID!, $action: String!, $params: JSON) {\n    invokeModuleAction(instance: $instance, action: $action, params: $params) {\n      ...ModuleActionInvocationFields\n    }\n  }\n": types.InvokeModuleActionDocument,
     "\n  fragment OperationMemberFields on OperationMember {\n    user {\n      id\n      username\n      roles\n      active\n      createdAt\n      updatedAt\n    }\n    role\n  }\n": types.OperationMemberFieldsFragmentDoc,
     "\n  fragment OperationFields on Operation {\n    id\n    name\n    description\n    members {\n      ...OperationMemberFields\n    }\n    createdAt\n    updatedAt\n  }\n": types.OperationFieldsFragmentDoc,
     "\n  query Operation($id: ID!) {\n    operation(id: $id) {\n      ...OperationFields\n    }\n  }\n": types.OperationDocument,
@@ -665,6 +681,38 @@ export function graphql(source: "\n  mutation RemoveModule($instance: ID!) {\n  
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n"): typeof import('./graphql').ModuleChangedDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    options {\n      value\n      label\n    }\n  }\n"): typeof import('./graphql').ModuleFieldDefFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      moduleRevision\n      instanceRevision\n      syncState\n      lastApplyError\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        moduleValue\n        instanceValue\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n      }\n    }\n  }\n"): typeof import('./graphql').ModuleDetailFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query Module($instance: ID!) {\n    module(instance: $instance) {\n      ...ModuleDetailFields\n    }\n  }\n"): typeof import('./graphql').ModuleDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment ModuleActionInvocationFields on ModuleActionInvocation {\n    id\n    instance\n    action\n    params\n    status\n    result\n    error\n    actor {\n      type\n      id\n      name\n    }\n    startedAt\n    finishedAt\n  }\n"): typeof import('./graphql').ModuleActionInvocationFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ModuleActionInvocations($instance: ID!, $limit: Int) {\n    moduleActionInvocations(instance: $instance, limit: $limit) {\n      ...ModuleActionInvocationFields\n    }\n  }\n"): typeof import('./graphql').ModuleActionInvocationsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ModuleConfigChanges($instance: ID!, $limit: Int) {\n    moduleConfigChanges(instance: $instance, limit: $limit) {\n      id\n      moduleName\n      instance\n      scope\n      revision\n      changes {\n        key\n        old\n        new\n      }\n      actor {\n        type\n        id\n        name\n      }\n      at\n    }\n  }\n"): typeof import('./graphql').ModuleConfigChangesDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateModuleConfig(\n    $instance: ID!\n    $scope: ModuleConfigScope!\n    $values: [ModuleConfigValueInput!]!\n    $expectedRevision: Int!\n  ) {\n    updateModuleConfig(\n      instance: $instance\n      scope: $scope\n      values: $values\n      expectedRevision: $expectedRevision\n    ) {\n      ...ModuleDetailFields\n    }\n  }\n"): typeof import('./graphql').UpdateModuleConfigDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation InvokeModuleAction($instance: ID!, $action: String!, $params: JSON) {\n    invokeModuleAction(instance: $instance, action: $action, params: $params) {\n      ...ModuleActionInvocationFields\n    }\n  }\n"): typeof import('./graphql').InvokeModuleActionDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

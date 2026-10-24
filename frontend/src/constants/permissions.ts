@@ -27,6 +27,9 @@ export const Permissions = {
   // Module
   MODULE_READ: 'module:read',
   MODULE_DELETE: 'module:delete',
+  MODULE_CONFIG_WRITE: 'module:config:write',
+  MODULE_ACTION_INVOKE: 'module:action:invoke',
+  MODULE_ACTION_INVOKE_HIGH: 'module:action:invoke:high',
 } as const;
 
 /**

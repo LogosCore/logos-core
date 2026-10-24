@@ -5,6 +5,14 @@ import {
   ModulesDocument,
   RemoveModuleDocument,
   ModuleChangedDocument,
+  ModuleDocument,
+  ModuleActionInvocationsDocument,
+  ModuleConfigChangesDocument,
+  UpdateModuleConfigDocument,
+  InvokeModuleActionDocument,
+  type ModuleQuery,
+  type UpdateModuleConfigMutationVariables,
+  type InvokeModuleActionMutationVariables,
 } from "@/graphql/gql/graphql"
 
 // Query key factory. The module list is small and unpaginated, so a single
@@ -13,6 +21,12 @@ export const moduleKeys = {
   all: ["modules"] as const,
   lists: () => [...moduleKeys.all, "list"] as const,
   list: (status: string[] | null) => [...moduleKeys.lists(), status] as const,
+  details: () => [...moduleKeys.all, "detail"] as const,
+  detail: (instance: string) => [...moduleKeys.details(), instance] as const,
+  invocations: (instance: string) =>
+    [...moduleKeys.all, "invocations", instance] as const,
+  configChanges: (instance: string) =>
+    [...moduleKeys.all, "config-changes", instance] as const,
 }
 
 export function useModules(status: string[] | null) {
@@ -52,6 +66,105 @@ export function useModuleChangedSubscription() {
   useSubscription(ModuleChangedDocument, undefined, {
     onData: () => {
       queryClient.invalidateQueries({ queryKey: moduleKeys.lists() })
+    },
+  })
+}
+
+// --- Module detail / management ---
+
+const HISTORY_LIMIT = 50
+
+/**
+ * One module with its management manifest. While a config revision is being
+ * applied (PENDING) it also polls, as a fallback in case the moduleChanged
+ * event announcing the ack is missed — the subscription is the primary path.
+ */
+export function useModule(instance: string) {
+  return useQuery({
+    queryKey: moduleKeys.detail(instance),
+    queryFn: () => graphqlClient(ModuleDocument, { instance }),
+    enabled: instance !== "",
+    refetchInterval: (query) =>
+      query.state.data?.module?.management?.syncState === "PENDING" ? 3000 : false,
+  })
+}
+
+export function useModuleActionInvocations(instance: string) {
+  return useQuery({
+    queryKey: moduleKeys.invocations(instance),
+    queryFn: () =>
+      graphqlClient(ModuleActionInvocationsDocument, {
+        instance,
+        limit: HISTORY_LIMIT,
+      }),
+    enabled: instance !== "",
+  })
+}
+
+export function useModuleConfigChanges(instance: string) {
+  return useQuery({
+    queryKey: moduleKeys.configChanges(instance),
+    queryFn: () =>
+      graphqlClient(ModuleConfigChangesDocument, {
+        instance,
+        limit: HISTORY_LIMIT,
+      }),
+    enabled: instance !== "",
+  })
+}
+
+/**
+ * Real-time updates for the detail page: any moduleChanged event for this
+ * instance (lifecycle, heartbeat-driven status, config sync progress)
+ * refetches the detail and its config history. The list is refreshed too so
+ * going back shows current rows.
+ */
+export function useModuleDetailSubscription(instance: string) {
+  const queryClient = useQueryClient()
+
+  useSubscription(ModuleChangedDocument, undefined, {
+    enabled: instance !== "",
+    onData: (data) => {
+      queryClient.invalidateQueries({ queryKey: moduleKeys.lists() })
+      if (data.moduleChanged.instance !== instance) return
+      queryClient.invalidateQueries({ queryKey: moduleKeys.detail(instance) })
+      queryClient.invalidateQueries({
+        queryKey: moduleKeys.configChanges(instance),
+      })
+    },
+  })
+}
+
+/**
+ * Set / clear property values at a scope. The mutation returns the updated
+ * module, which replaces the cached detail so the sync badge flips to PENDING
+ * without waiting for a refetch.
+ */
+export function useUpdateModuleConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: UpdateModuleConfigMutationVariables) =>
+      graphqlClient(UpdateModuleConfigDocument, vars),
+    onSuccess: (data, vars) => {
+      queryClient.setQueryData<ModuleQuery>(moduleKeys.detail(vars.instance), {
+        module: data.updateModuleConfig,
+      })
+      queryClient.invalidateQueries({
+        queryKey: moduleKeys.configChanges(vars.instance),
+      })
+    },
+  })
+}
+
+export function useInvokeModuleAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: InvokeModuleActionMutationVariables) =>
+      graphqlClient(InvokeModuleActionDocument, vars),
+    onSettled: (_data, _err, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: moduleKeys.invocations(vars.instance),
+      })
     },
   })
 }

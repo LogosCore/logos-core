@@ -47,3 +47,159 @@ export const ModuleChangedSubscription = graphql(`
     }
   }
 `)
+
+// --- Module management (detail page) ---
+
+export const ModuleFieldDefFields = graphql(`
+  fragment ModuleFieldDefFields on ModuleField {
+    key
+    type
+    label
+    description
+    group
+    order
+    unit
+    placeholder
+    required
+    default
+    min
+    max
+    pattern
+    maxLength
+    options {
+      value
+      label
+    }
+  }
+`)
+
+export const ModuleDetailFields = graphql(`
+  fragment ModuleDetailFields on Module {
+    ...ModuleFields
+    management {
+      schemaVersion
+      revision
+      appliedRevision
+      moduleRevision
+      instanceRevision
+      syncState
+      lastApplyError
+      properties {
+        field {
+          ...ModuleFieldDefFields
+        }
+        apply
+        effective
+        source
+        moduleValue
+        instanceValue
+        isSet
+        rejectedReason
+        restartRequired
+      }
+      actions {
+        name
+        label
+        description
+        risk
+        confirm
+        timeoutSeconds
+        params {
+          ...ModuleFieldDefFields
+        }
+      }
+      status {
+        key
+        type
+        label
+        description
+        unit
+        value
+      }
+    }
+  }
+`)
+
+export const ModuleQuery = graphql(`
+  query Module($instance: ID!) {
+    module(instance: $instance) {
+      ...ModuleDetailFields
+    }
+  }
+`)
+
+export const ModuleActionInvocationFields = graphql(`
+  fragment ModuleActionInvocationFields on ModuleActionInvocation {
+    id
+    instance
+    action
+    params
+    status
+    result
+    error
+    actor {
+      type
+      id
+      name
+    }
+    startedAt
+    finishedAt
+  }
+`)
+
+export const ModuleActionInvocationsQuery = graphql(`
+  query ModuleActionInvocations($instance: ID!, $limit: Int) {
+    moduleActionInvocations(instance: $instance, limit: $limit) {
+      ...ModuleActionInvocationFields
+    }
+  }
+`)
+
+export const ModuleConfigChangesQuery = graphql(`
+  query ModuleConfigChanges($instance: ID!, $limit: Int) {
+    moduleConfigChanges(instance: $instance, limit: $limit) {
+      id
+      moduleName
+      instance
+      scope
+      revision
+      changes {
+        key
+        old
+        new
+      }
+      actor {
+        type
+        id
+        name
+      }
+      at
+    }
+  }
+`)
+
+export const UpdateModuleConfigMutation = graphql(`
+  mutation UpdateModuleConfig(
+    $instance: ID!
+    $scope: ModuleConfigScope!
+    $values: [ModuleConfigValueInput!]!
+    $expectedRevision: Int!
+  ) {
+    updateModuleConfig(
+      instance: $instance
+      scope: $scope
+      values: $values
+      expectedRevision: $expectedRevision
+    ) {
+      ...ModuleDetailFields
+    }
+  }
+`)
+
+export const InvokeModuleActionMutation = graphql(`
+  mutation InvokeModuleAction($instance: ID!, $action: String!, $params: JSON) {
+    invokeModuleAction(instance: $instance, action: $action, params: $params) {
+      ...ModuleActionInvocationFields
+    }
+  }
+`)

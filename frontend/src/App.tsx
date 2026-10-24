@@ -26,6 +26,7 @@ const EnrollPage = page(() => import("@/pages/enroll"), "EnrollPage")
 const OperationsPage = page(() => import("@/pages/operations"), "OperationsPage")
 const UsersPage = page(() => import("@/pages/users"), "UsersPage")
 const ModulesPage = page(() => import("@/pages/modules"), "ModulesPage")
+const ModuleDetailPage = page(() => import("@/pages/module-detail"), "ModuleDetailPage")
 const SkillsPage = page(() => import("@/pages/skills"), "SkillsPage")
 const WikiPage = page(() => import("@/pages/wiki"), "WikiPage")
 const WikiPrintPage = page(() => import("@/pages/wiki-print"), "WikiPrintPage")
@@ -76,6 +77,7 @@ function App() {
               <Route path="operations" element={<OperationsPage />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="modules" element={<ModulesPage />} />
+              <Route path="modules/:instance" element={<ModuleDetailPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="wiki" element={<WikiPage />} />
               <Route path="wiki/:documentId" element={<WikiPage />} />

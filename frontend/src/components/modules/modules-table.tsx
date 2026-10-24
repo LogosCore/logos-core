@@ -1,4 +1,5 @@
-import { BlocksIcon, EllipsisIcon, TrashIcon } from "lucide-react"
+import { useNavigate } from "react-router"
+import { BlocksIcon, EllipsisIcon, SlidersHorizontalIcon, TrashIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,6 +16,7 @@ import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { useAuthStore } from "@/stores/auth"
 import { useModuleStore } from "@/stores/modules"
 import { Permissions } from "@/constants/permissions"
+import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 
 interface ModulesTableProps {
@@ -23,42 +25,18 @@ interface ModulesTableProps {
 }
 
 const GRID_COLS = "grid-cols-[1.5fr_1fr_1fr_90px_130px_1fr_1fr_1fr_48px]"
-const GRID_COLS_NO_ACTIONS = "grid-cols-[1.5fr_1fr_1fr_90px_130px_1fr_1fr_1fr]"
-
-// Status indicator follows the same dot-and-text idiom as the Users table's
-// active/inactive cell. Registered is healthy/green, deregistered is a neutral
-// "gone on purpose" amber, dead is a failure red.
-const STATUS_STYLES: Record<string, { dot: string; text: string }> = {
-  registered: {
-    dot: "bg-green-600 dark:bg-green-400",
-    text: "text-green-600 dark:text-green-400",
-  },
-  deregistered: {
-    dot: "bg-amber-600 dark:bg-amber-400",
-    text: "text-amber-600 dark:text-amber-400",
-  },
-  dead: {
-    dot: "bg-red-600 dark:bg-red-400",
-    text: "text-red-600 dark:text-red-400",
-  },
-}
-
-function StatusIndicator({ status }: { status: string }) {
-  const s = STATUS_STYLES[status] ?? STATUS_STYLES.dead
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-sm ${s.text}`}>
-      <span className={`size-2 rounded-full ${s.dot}`} />
-      {status}
-    </span>
-  )
-}
 
 export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const openRemoveDialog = useModuleStore((s) => s.openRemoveDialog)
 
+  const navigate = useNavigate()
+
   const canRemove = hasPermission(Permissions.MODULE_DELETE)
-  const gridCols = canRemove ? GRID_COLS : GRID_COLS_NO_ACTIONS
+  // The row menu always has "Manage", so the actions column is always there.
+  const gridCols = GRID_COLS
+  const openDetail = (instance: string) =>
+    navigate(`/modules/${encodeURIComponent(instance)}`)
 
   return (
     <VirtualizedDataTable
@@ -80,7 +58,7 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
           <div>Health</div>
           <div>Last heartbeat</div>
           <div>Registered</div>
-          {canRemove && <div />}
+          <div />
         </>
       }
       emptyState={
@@ -94,7 +72,15 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
         // deregistering an already-dead/deregistered instance.
         const isRegistered = m.status === "registered"
         return (
-          <div className={dataTableRowClass(gridCols)}>
+          <div
+            className={`${dataTableRowClass(gridCols)} cursor-pointer`}
+            role="link"
+            tabIndex={0}
+            onClick={() => openDetail(m.instance)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") openDetail(m.instance)
+            }}
+          >
             <div className="min-w-0">
               <div className="font-medium truncate">{m.instance}</div>
               {m.description && (
@@ -111,7 +97,7 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
               {m.version || "—"}
             </div>
             <div>
-              <StatusIndicator status={m.status} />
+              <ModuleStatusIndicator status={m.status} />
             </div>
             <div className="text-sm text-muted-foreground truncate">
               {m.lastStatus || "—"}
@@ -126,15 +112,24 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
             <div className="text-sm text-muted-foreground">
               <FormattedDateTimeText date={m.registeredAt} />
             </div>
-            {canRemove && (
-              <div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={<Button variant="ghost" size="icon-sm" />}
-                  >
-                    <EllipsisIcon className="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+            {/* The menu sits inside the clickable row: keep its clicks and
+                keys from also opening the detail page. */}
+            <div
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={<Button variant="ghost" size="icon-sm" />}
+                >
+                  <EllipsisIcon className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => openDetail(m.instance)}>
+                    <SlidersHorizontalIcon className="size-4" />
+                    Manage
+                  </DropdownMenuItem>
+                  {canRemove && (
                     <DropdownMenuItem
                       variant="destructive"
                       disabled={!isRegistered}
@@ -145,10 +140,10 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
                       <TrashIcon className="size-4" />
                       Remove
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         )
       }}
