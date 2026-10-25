@@ -169,11 +169,21 @@ function SelectLabel({
   )
 }
 
+/**
+ * `description` renders a muted second line under the label. It sits outside
+ * `ItemText`, so the closed trigger still shows only the label.
+ */
 function SelectItem({
   className,
   children,
+  description,
   ...props
-}: SelectPrimitive.Item.Props) {
+}: SelectPrimitive.Item.Props & { description?: React.ReactNode }) {
+  const text = (
+    <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
+      {children}
+    </SelectPrimitive.ItemText>
+  )
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -183,9 +193,14 @@ function SelectItem({
       )}
       {...props}
     >
-      <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
-        {children}
-      </SelectPrimitive.ItemText>
+      {description ? (
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
+          {text}
+          <div className="text-xs whitespace-normal text-muted-foreground">{description}</div>
+        </div>
+      ) : (
+        text
+      )}
       <SelectPrimitive.ItemIndicator
         render={
           <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />

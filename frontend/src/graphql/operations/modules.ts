@@ -69,6 +69,7 @@ export const ModuleFieldDefFields = graphql(`
     options {
       value
       label
+      description
     }
   }
 `)

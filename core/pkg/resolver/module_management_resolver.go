@@ -265,7 +265,7 @@ func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 	if len(f.Options) > 0 {
 		out.Options = make([]*model.ModuleEnumOption, len(f.Options))
 		for i, o := range f.Options {
-			out.Options[i] = &model.ModuleEnumOption{Value: o.Value, Label: strPtr(o.Label)}
+			out.Options[i] = &model.ModuleEnumOption{Value: o.Value, Label: strPtr(o.Label), Description: strPtr(o.Description)}
 		}
 	}
 	return out

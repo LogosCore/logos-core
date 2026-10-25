@@ -340,8 +340,9 @@ type ComplexityRoot struct {
 	}
 
 	ModuleEnumOption struct {
-		Label func(childComplexity int) int
-		Value func(childComplexity int) int
+		Description func(childComplexity int) int
+		Label       func(childComplexity int) int
+		Value       func(childComplexity int) int
 	}
 
 	ModuleEvent struct {
@@ -2533,6 +2534,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleConfigKeyChange.Old(childComplexity), true
 
+	case "ModuleEnumOption.description":
+		if e.ComplexityRoot.ModuleEnumOption.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleEnumOption.Description(childComplexity), true
 	case "ModuleEnumOption.label":
 		if e.ComplexityRoot.ModuleEnumOption.Label == nil {
 			break
@@ -7616,6 +7623,8 @@ type ModuleManagement {
 type ModuleEnumOption {
   value: String!
   label: String
+  # What choosing this option does.
+  description: String
 }
 
 # A typed field: a property or an action parameter.
@@ -18679,6 +18688,35 @@ func (ec *executionContext) fieldContext_ModuleEnumOption_label(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleEnumOption_description(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEnumOption) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleEnumOption_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleEnumOption_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleEnumOption",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleEvent_action(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEvent) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19228,6 +19266,8 @@ func (ec *executionContext) fieldContext_ModuleField_options(_ context.Context, 
 				return ec.fieldContext_ModuleEnumOption_value(ctx, field)
 			case "label":
 				return ec.fieldContext_ModuleEnumOption_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleEnumOption_description(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleEnumOption", field.Name)
 		},
@@ -49455,6 +49495,8 @@ func (ec *executionContext) _ModuleEnumOption(ctx context.Context, sel ast.Selec
 			}
 		case "label":
 			out.Values[i] = ec._ModuleEnumOption_label(ctx, field, obj)
+		case "description":
+			out.Values[i] = ec._ModuleEnumOption_description(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

@@ -129,7 +129,7 @@ export function FieldControl({
           </SelectTrigger>
           <SelectContent>
             {options.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
+              <SelectItem key={o.value} value={o.value} description={o.description}>
                 {o.label || o.value}
               </SelectItem>
             ))}

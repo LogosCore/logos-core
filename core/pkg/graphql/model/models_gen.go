@@ -299,8 +299,9 @@ type ModuleConfigValueInput struct {
 }
 
 type ModuleEnumOption struct {
-	Value string  `json:"value"`
-	Label *string `json:"label,omitempty"`
+	Value       string  `json:"value"`
+	Label       *string `json:"label,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 type ModuleEvent struct {

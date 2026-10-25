@@ -49,6 +49,8 @@ type ModuleManagement {
 type ModuleEnumOption {
   value: String!
   label: String
+  # What choosing this option does.
+  description: String
 }
 
 # A typed field: a property or an action parameter.
