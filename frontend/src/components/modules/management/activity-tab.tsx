@@ -57,7 +57,7 @@ export function ActivityTab({
   }
 
   return (
-    <ol className="flex flex-col divide-y rounded-xl border">
+    <ol className="flex flex-col divide-y rounded-xl border bg-card">
       {items.map((item) => {
         if (item.kind === "config") {
           const c = item.change

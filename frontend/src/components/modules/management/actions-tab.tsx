@@ -349,7 +349,7 @@ function InvocationsTable({ instance, actions }: { instance: string; actions: re
   return (
     <section className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold">Recent invocations</h3>
-      <div className="rounded-xl border">
+      <div className="rounded-xl border bg-card">
         <Table>
           <TableHeader>
             <TableRow>

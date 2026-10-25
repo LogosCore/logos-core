@@ -23,7 +23,7 @@ function DateOrDash({ date }: { date?: string | null }) {
 export function ModuleIdentity({ module }: { module: ModuleDetailFieldsFragment }) {
   const m = module
   return (
-    <section className="rounded-xl border">
+    <section className="rounded-xl border bg-card">
       <h3 className="border-b px-4 py-2 text-sm font-semibold">Identity</h3>
       <dl className="divide-y">
         <Row label="Instance">
@@ -71,7 +71,7 @@ export function ModuleIdentity({ module }: { module: ModuleDetailFieldsFragment 
 
 export function StatusValues({ management }: { management: Management }) {
   return (
-    <section className="rounded-xl border">
+    <section className="rounded-xl border bg-card">
       <h3 className="border-b px-4 py-2 text-sm font-semibold">Status</h3>
       {management.status.length === 0 ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">
