@@ -18,8 +18,8 @@ func (r *moduleResolver) Management(ctx context.Context, obj *models.Module) (*m
 }
 
 // UpdateModuleConfig is the resolver for the updateModuleConfig field.
-func (r *mutationResolver) UpdateModuleConfig(ctx context.Context, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error) {
-	return r.ModuleResolver.UpdateModuleConfig(ctx, instance, scope, values, expectedRevision)
+func (r *mutationResolver) UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error) {
+	return r.ModuleResolver.UpdateModuleConfig(ctx, instance, values, expectedRevision)
 }
 
 // InvokeModuleAction is the resolver for the invokeModuleAction field.

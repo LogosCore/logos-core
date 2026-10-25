@@ -65,10 +65,13 @@ type ModuleEventPublisher interface {
 // declared manifest is still validated and stored, and the register reply
 // carries an empty revision-0 config).
 type ManagementHooks interface {
-	// ManagementConfigFor is the effective config for a registering instance.
-	ManagementConfigFor(ctx context.Context, moduleName, instance string, manifest *protocol.ManagementManifest) (protocol.ManagementConfig, error)
+	// ManagementConfigFor is the config for a registering instance, given the
+	// revision the process reports applied (the implementation raises the
+	// desired revision past it when the store is behind).
+	ManagementConfigFor(ctx context.Context, moduleName, instance string, manifest *protocol.ManagementManifest, appliedRevision int64) (protocol.ManagementConfig, error)
 	// HeartbeatApplied reports the revision an instance says it applied; the
-	// implementation pushes asynchronously when that is behind.
+	// implementation pushes asynchronously when that differs from the desired
+	// revision.
 	HeartbeatApplied(instance string, appliedRevision int64)
 }
 
@@ -216,7 +219,7 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 		cfg := protocol.ManagementConfig{Revision: 0, Values: map[string]any{}}
 		if s.mgmt != nil {
 			var err error
-			cfg, err = s.mgmt.ManagementConfigFor(ctx, p.ModuleName, p.Instance, p.Management)
+			cfg, err = s.mgmt.ManagementConfigFor(ctx, p.ModuleName, p.Instance, p.Management, p.AppliedRevision)
 			if err != nil {
 				return nil, fmt.Errorf("load management config: %w", err)
 			}
@@ -280,8 +283,8 @@ func (s *Service) HandleHeartbeat(ctx context.Context, req messaging.Envelope) (
 		}
 	}
 
-	// Drift repair: if the module is behind the desired config revision, push
-	// it in the background. config_changed stays false — core pushes, the
+	// Drift repair: if the module's applied revision differs from the desired
+	// config revision, push in the background. config_changed stays false — core pushes, the
 	// module does not pull.
 	if s.mgmt != nil && p.AppliedRevision != nil {
 		s.mgmt.HeartbeatApplied(p.Instance, *p.AppliedRevision)

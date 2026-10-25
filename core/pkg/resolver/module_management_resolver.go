@@ -32,7 +32,7 @@ type ModuleManager interface {
 	Effective(ctx context.Context, mod models.Module) (modulemgmt.EffectiveConfig, error)
 	UpdateConfig(ctx context.Context, req modulemgmt.UpdateRequest) (*models.Module, error)
 	InvokeAction(ctx context.Context, req modulemgmt.InvokeRequest) (*models.ModuleActionInvocation, error)
-	ConfigChanges(ctx context.Context, mod models.Module, limit int64) ([]models.ModuleConfigChange, error)
+	ConfigChanges(ctx context.Context, instance string, limit int64) ([]models.ModuleConfigChange, error)
 	Invocations(ctx context.Context, instance string, limit int64) ([]models.ModuleActionInvocation, error)
 }
 
@@ -137,14 +137,7 @@ func (r *moduleResolver) ModuleConfigChanges(ctx context.Context, instance strin
 	if r.mgmt == nil {
 		return []*model.ModuleConfigChange{}, nil
 	}
-	mod, err := r.repo.FindByInstance(ctx, instance)
-	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
-		return []*model.ModuleConfigChange{}, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to load module: %w", err)
-	}
-	rows, err := r.mgmt.ConfigChanges(ctx, mod, historyLimit(limit))
+	rows, err := r.mgmt.ConfigChanges(ctx, strings.TrimSpace(instance), historyLimit(limit))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list module config changes: %w", err)
 	}
@@ -168,8 +161,8 @@ func (r *moduleResolver) Management(ctx context.Context, obj *models.Module) (*m
 }
 
 // buildManagement renders the management view. Secret values never leave
-// here: effective/moduleValue/instanceValue/default are null for secrets, and
-// isSet says whether one is stored.
+// here: effective/value/default are null for secrets, and isSet says whether
+// one is stored.
 func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.ModuleManagement {
 	m := mod.Manifest.ManagementManifest
 	restart := make(map[string]bool, len(mod.RestartRequired))
@@ -184,13 +177,12 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 			Field:           toFieldModel(p.Spec.FieldSpec),
 			Apply:           string(p.Spec.Apply),
 			Source:          p.Source,
-			IsSet:           p.IsSet(),
+			IsSet:           p.IsSet,
 			RestartRequired: restart[p.Spec.Key],
 		}
 		if !secret {
 			mp.Effective = p.Effective
-			mp.ModuleValue = p.ModuleValue
-			mp.InstanceValue = p.InstanceValue
+			mp.Value = p.Value
 		}
 		if reason, ok := mod.Rejected[p.Spec.Key]; ok {
 			mp.RejectedReason = &reason
@@ -236,16 +228,14 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 	}
 
 	return &model.ModuleManagement{
-		SchemaVersion:    m.SchemaVersion,
-		Properties:       props,
-		Actions:          actions,
-		Status:           status,
-		Revision:         int(eff.Revision()),
-		AppliedRevision:  int(mod.AppliedRevision),
-		ModuleRevision:   int(eff.ModuleRevision),
-		InstanceRevision: int(eff.InstanceRevision),
-		SyncState:        model.ModuleSyncState(modulemgmt.SyncState(*mod, eff.Revision())),
-		LastApplyError:   strPtr(mod.LastApplyError),
+		SchemaVersion:   m.SchemaVersion,
+		Properties:      props,
+		Actions:         actions,
+		Status:          status,
+		Revision:        int(eff.Revision),
+		AppliedRevision: int(mod.AppliedRevision),
+		SyncState:       model.ModuleSyncState(modulemgmt.SyncState(*mod, eff.Revision)),
+		LastApplyError:  strPtr(mod.LastApplyError),
 	}
 }
 
@@ -303,29 +293,23 @@ func toInvocationModel(inv *models.ModuleActionInvocation) *model.ModuleActionIn
 }
 
 func toConfigChangeModel(c *models.ModuleConfigChange) *model.ModuleConfigChange {
-	scope := model.ModuleConfigScopeModule
-	if c.Scope == models.ModuleConfigScopeInstance {
-		scope = model.ModuleConfigScopeInstance
-	}
 	changes := make([]*model.ModuleConfigKeyChange, len(c.Changes))
 	for i, k := range c.Changes {
 		changes[i] = &model.ModuleConfigKeyChange{Key: k.Key, Old: k.Old, New: k.New}
 	}
 	return &model.ModuleConfigChange{
-		ID:         c.Id.Hex(),
-		ModuleName: c.ModuleName,
-		Instance:   strPtr(c.Instance),
-		Scope:      scope,
-		Revision:   int(c.Revision),
-		Changes:    changes,
-		Actor:      toActorModel(c.Actor),
-		At:         c.At.Format(time.RFC3339),
+		ID:       c.Id.Hex(),
+		Instance: c.Instance,
+		Revision: int(c.Revision),
+		Changes:  changes,
+		Actor:    toActorModel(c.Actor),
+		At:       c.At.Format(time.RFC3339),
 	}
 }
 
 // --- mutations ---
 
-func (r *moduleResolver) UpdateModuleConfig(ctx context.Context, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error) {
+func (r *moduleResolver) UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error) {
 	auth, err := refuseAgent(ctx)
 	if err != nil {
 		return nil, err
@@ -340,13 +324,8 @@ func (r *moduleResolver) UpdateModuleConfig(ctx context.Context, instance string
 		}
 		kvs = append(kvs, modulemgmt.KeyValue{Key: v.Key, Value: v.Value})
 	}
-	scopeName := models.ModuleConfigScopeModule
-	if scope == model.ModuleConfigScopeInstance {
-		scopeName = models.ModuleConfigScopeInstance
-	}
 	mod, err := r.mgmt.UpdateConfig(ctx, modulemgmt.UpdateRequest{
 		Instance:         strings.TrimSpace(instance),
-		Scope:            scopeName,
 		Values:           kvs,
 		ExpectedRevision: int64(expectedRevision),
 		Actor:            managementActor(auth),

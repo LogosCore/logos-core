@@ -325,14 +325,12 @@ type ComplexityRoot struct {
 	}
 
 	ModuleConfigChange struct {
-		Actor      func(childComplexity int) int
-		At         func(childComplexity int) int
-		Changes    func(childComplexity int) int
-		ID         func(childComplexity int) int
-		Instance   func(childComplexity int) int
-		ModuleName func(childComplexity int) int
-		Revision   func(childComplexity int) int
-		Scope      func(childComplexity int) int
+		Actor    func(childComplexity int) int
+		At       func(childComplexity int) int
+		Changes  func(childComplexity int) int
+		ID       func(childComplexity int) int
+		Instance func(childComplexity int) int
+		Revision func(childComplexity int) int
 	}
 
 	ModuleConfigKeyChange struct {
@@ -371,28 +369,25 @@ type ComplexityRoot struct {
 	}
 
 	ModuleManagement struct {
-		Actions          func(childComplexity int) int
-		AppliedRevision  func(childComplexity int) int
-		InstanceRevision func(childComplexity int) int
-		LastApplyError   func(childComplexity int) int
-		ModuleRevision   func(childComplexity int) int
-		Properties       func(childComplexity int) int
-		Revision         func(childComplexity int) int
-		SchemaVersion    func(childComplexity int) int
-		Status           func(childComplexity int) int
-		SyncState        func(childComplexity int) int
+		Actions         func(childComplexity int) int
+		AppliedRevision func(childComplexity int) int
+		LastApplyError  func(childComplexity int) int
+		Properties      func(childComplexity int) int
+		Revision        func(childComplexity int) int
+		SchemaVersion   func(childComplexity int) int
+		Status          func(childComplexity int) int
+		SyncState       func(childComplexity int) int
 	}
 
 	ModuleProperty struct {
 		Apply           func(childComplexity int) int
 		Effective       func(childComplexity int) int
 		Field           func(childComplexity int) int
-		InstanceValue   func(childComplexity int) int
 		IsSet           func(childComplexity int) int
-		ModuleValue     func(childComplexity int) int
 		RejectedReason  func(childComplexity int) int
 		RestartRequired func(childComplexity int) int
 		Source          func(childComplexity int) int
+		Value           func(childComplexity int) int
 	}
 
 	ModuleStatusValue struct {
@@ -475,7 +470,7 @@ type ComplexityRoot struct {
 		UpdateCustomTimelineEvent     func(childComplexity int, id string, input model.UpdateCustomTimelineEventInput) int
 		UpdateHash                    func(childComplexity int, id string, input model.UpdateHashInput) int
 		UpdateHost                    func(childComplexity int, id string, input model.UpdateHostInput) int
-		UpdateModuleConfig            func(childComplexity int, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) int
+		UpdateModuleConfig            func(childComplexity int, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) int
 		UpdateOperation               func(childComplexity int, id string, input model.UpdateOperationInput) int
 		UpdateOperationMemberRole     func(childComplexity int, operationID string, userID string, role models.OperationRole) int
 		UpdateOwnProfile              func(childComplexity int, input model.UpdateUserInput) int
@@ -1125,7 +1120,7 @@ type MutationResolver interface {
 	CreateHost(ctx context.Context, operationID string, input model.CreateHostInput) (*models.Host, error)
 	UpdateHost(ctx context.Context, id string, input model.UpdateHostInput) (*models.Host, error)
 	DeleteHost(ctx context.Context, id string) (bool, error)
-	UpdateModuleConfig(ctx context.Context, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
+	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 	RemoveModule(ctx context.Context, instance string) (*models.Module, error)
 	RevokeSession(ctx context.Context, id string) (bool, error)
@@ -2493,24 +2488,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleConfigChange.Instance(childComplexity), true
-	case "ModuleConfigChange.moduleName":
-		if e.ComplexityRoot.ModuleConfigChange.ModuleName == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ModuleConfigChange.ModuleName(childComplexity), true
 	case "ModuleConfigChange.revision":
 		if e.ComplexityRoot.ModuleConfigChange.Revision == nil {
 			break
 		}
 
 		return e.ComplexityRoot.ModuleConfigChange.Revision(childComplexity), true
-	case "ModuleConfigChange.scope":
-		if e.ComplexityRoot.ModuleConfigChange.Scope == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ModuleConfigChange.Scope(childComplexity), true
 
 	case "ModuleConfigKeyChange.key":
 		if e.ComplexityRoot.ModuleConfigKeyChange.Key == nil {
@@ -2666,24 +2649,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleManagement.AppliedRevision(childComplexity), true
-	case "ModuleManagement.instanceRevision":
-		if e.ComplexityRoot.ModuleManagement.InstanceRevision == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ModuleManagement.InstanceRevision(childComplexity), true
 	case "ModuleManagement.lastApplyError":
 		if e.ComplexityRoot.ModuleManagement.LastApplyError == nil {
 			break
 		}
 
 		return e.ComplexityRoot.ModuleManagement.LastApplyError(childComplexity), true
-	case "ModuleManagement.moduleRevision":
-		if e.ComplexityRoot.ModuleManagement.ModuleRevision == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ModuleManagement.ModuleRevision(childComplexity), true
 	case "ModuleManagement.properties":
 		if e.ComplexityRoot.ModuleManagement.Properties == nil {
 			break
@@ -2733,24 +2704,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleProperty.Field(childComplexity), true
-	case "ModuleProperty.instanceValue":
-		if e.ComplexityRoot.ModuleProperty.InstanceValue == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ModuleProperty.InstanceValue(childComplexity), true
 	case "ModuleProperty.isSet":
 		if e.ComplexityRoot.ModuleProperty.IsSet == nil {
 			break
 		}
 
 		return e.ComplexityRoot.ModuleProperty.IsSet(childComplexity), true
-	case "ModuleProperty.moduleValue":
-		if e.ComplexityRoot.ModuleProperty.ModuleValue == nil {
-			break
-		}
-
-		return e.ComplexityRoot.ModuleProperty.ModuleValue(childComplexity), true
 	case "ModuleProperty.rejectedReason":
 		if e.ComplexityRoot.ModuleProperty.RejectedReason == nil {
 			break
@@ -2769,6 +2728,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleProperty.Source(childComplexity), true
+	case "ModuleProperty.value":
+		if e.ComplexityRoot.ModuleProperty.Value == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleProperty.Value(childComplexity), true
 
 	case "ModuleStatusValue.description":
 		if e.ComplexityRoot.ModuleStatusValue.Description == nil {
@@ -3567,7 +3532,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.UpdateModuleConfig(childComplexity, args["instance"].(string), args["scope"].(model.ModuleConfigScope), args["values"].([]*model.ModuleConfigValueInput), args["expectedRevision"].(int)), true
+		return e.ComplexityRoot.Mutation.UpdateModuleConfig(childComplexity, args["instance"].(string), args["values"].([]*model.ModuleConfigValueInput), args["expectedRevision"].(int)), true
 	case "Mutation.updateOperation":
 		if e.ComplexityRoot.Mutation.UpdateOperation == nil {
 			break
@@ -7455,17 +7420,14 @@ extend type Subscription {
 # =============================================================================
 #
 # A module declares a management manifest at module.register (see
-# logos-golang-protocol/protocol/management.go). Core stores the desired value
-# of each property at two scopes:
+# logos-golang-protocol/protocol/management.go). Config is per instance only:
+# core stores the desired value of each property for one instance, and there
+# is no shared configuration across instances of the same module.
 #
-#   MODULE   — applies to every instance with the same module name (e.g. all
-#              "http" channels). The normal case: instance ids change as you scale.
-#   INSTANCE — an override for one instance.
-#
-# effective = instance value ?? module value ?? the module's own default.
-# Core pushes the effective config to the module (mgmt.config.apply); the module
-# reports the revision it processed. revision = moduleRevision + instanceRevision,
-# so it only ever grows.
+# effective = the instance's stored value ?? the module's own default.
+# Every write bumps the instance's config revision, which only ever grows.
+# Core pushes the config to the instance (mgmt.config.apply); the instance
+# reports the revision it processed (appliedRevision).
 
 # Arbitrary JSON value (property values, defaults, bounds, action params/results).
 scalar JSON
@@ -7473,11 +7435,6 @@ scalar JSON
 extend type Module {
   # Null when the module declared no management manifest.
   management: ModuleManagement
-}
-
-enum ModuleConfigScope {
-  MODULE
-  INSTANCE
 }
 
 enum ModuleSyncState {
@@ -7495,12 +7452,10 @@ type ModuleManagement {
   actions: [ModuleAction!]!
   status: [ModuleStatusValue!]!
 
-  # Desired effective revision for this instance, and the one it last processed.
+  # The instance's config revision (expectedRevision for updateModuleConfig),
+  # and the one the instance last processed.
   revision: Int!
   appliedRevision: Int!
-  # Per-scope revisions, for optimistic concurrency on updateModuleConfig.
-  moduleRevision: Int!
-  instanceRevision: Int!
   syncState: ModuleSyncState!
   # Last push/apply error, if any.
   lastApplyError: String
@@ -7535,14 +7490,14 @@ type ModuleProperty {
   field: ModuleField!
   # "live" | "restart"
   apply: String!
-  # Effective desired value. Always null for secrets (see isSet).
+  # Effective desired value: the stored value, else the default. Always null
+  # for secrets (see isSet).
   effective: JSON
-  # Where the effective value comes from: "default" | "module" | "instance".
+  # "default" (nothing stored; the module uses its default) | "set".
   source: String!
-  # Values stored at each scope (null = not set there). Null for secrets.
-  moduleValue: JSON
-  instanceValue: JSON
-  # Secrets only: whether a value is stored at any scope.
+  # The stored value; null when unset. Always null for secrets.
+  value: JSON
+  # Whether a value is stored (the only signal for secrets).
   isSet: Boolean!
   # The module rejected the current value at the applied revision.
   rejectedReason: String
@@ -7599,11 +7554,8 @@ type ModuleActionInvocation {
 
 type ModuleConfigChange {
   id: ID!
-  # Module name the change was made for, and the instance for INSTANCE scope.
-  moduleName: String!
-  instance: ID
-  scope: ModuleConfigScope!
-  # New revision of that scope.
+  instance: ID!
+  # The instance's config revision this change produced.
   revision: Int!
   # Changed keys with old/new values; secrets redacted as "***".
   changes: [ModuleConfigKeyChange!]!
@@ -7619,7 +7571,7 @@ type ModuleConfigKeyChange {
 
 input ModuleConfigValueInput {
   key: String!
-  # null clears the value at this scope (falls back to the next scope / default).
+  # null clears the stored value (resets the property to the module's default).
   value: JSON
 }
 
@@ -7631,20 +7583,18 @@ extend type Query {
   moduleActionInvocations(instance: ID!, limit: Int): [ModuleActionInvocation!]!
     @hasPermission(permission: "module:read")
 
-  # Config changes affecting this instance (its INSTANCE scope plus its
-  # module's MODULE scope), newest first.
+  # Config changes of this instance, newest first.
   moduleConfigChanges(instance: ID!, limit: Int): [ModuleConfigChange!]!
     @hasPermission(permission: "module:read")
 }
 
 extend type Mutation {
-  # Set or clear property values at a scope. MODULE scope targets the module
-  # name of ` + "`" + `instance` + "`" + `. expectedRevision is that scope's current revision
-  # (moduleRevision / instanceRevision); a mismatch fails with CONFLICT.
-  # Validated against the instance's manifest; agent API keys are rejected.
+  # Set or clear property values of one instance. expectedRevision is the
+  # instance's current config revision (ModuleManagement.revision); a mismatch
+  # fails with CONFLICT. Validated against the instance's manifest; agent API
+  # keys are rejected.
   updateModuleConfig(
     instance: ID!
-    scope: ModuleConfigScope!
     values: [ModuleConfigValueInput!]!
     expectedRevision: Int!
   ): Module! @hasPermission(permission: "module:config:write")
@@ -10576,21 +10526,16 @@ func (ec *executionContext) field_Mutation_updateModuleConfig_args(ctx context.C
 		return nil, err
 	}
 	args["instance"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "scope", ec.unmarshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "values", ec.unmarshalNModuleConfigValueInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInputᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["scope"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "values", ec.unmarshalNModuleConfigValueInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInputᚄ)
+	args["values"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedRevision", ec.unmarshalNInt2int)
 	if err != nil {
 		return nil, err
 	}
-	args["values"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedRevision", ec.unmarshalNInt2int)
-	if err != nil {
-		return nil, err
-	}
-	args["expectedRevision"] = arg3
+	args["expectedRevision"] = arg2
 	return args, nil
 }
 
@@ -17598,10 +17543,6 @@ func (ec *executionContext) fieldContext_Module_management(_ context.Context, fi
 				return ec.fieldContext_ModuleManagement_revision(ctx, field)
 			case "appliedRevision":
 				return ec.fieldContext_ModuleManagement_appliedRevision(ctx, field)
-			case "moduleRevision":
-				return ec.fieldContext_ModuleManagement_moduleRevision(ctx, field)
-			case "instanceRevision":
-				return ec.fieldContext_ModuleManagement_instanceRevision(ctx, field)
 			case "syncState":
 				return ec.fieldContext_ModuleManagement_syncState(ctx, field)
 			case "lastApplyError":
@@ -18262,35 +18203,6 @@ func (ec *executionContext) fieldContext_ModuleConfigChange_id(_ context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _ModuleConfigChange_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_ModuleConfigChange_moduleName,
-		func(ctx context.Context) (any, error) {
-			return obj.ModuleName, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_ModuleConfigChange_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "ModuleConfigChange",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _ModuleConfigChange_instance(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18301,9 +18213,9 @@ func (ec *executionContext) _ModuleConfigChange_instance(ctx context.Context, fi
 			return obj.Instance, nil
 		},
 		nil,
-		ec.marshalOID2ᚖstring,
+		ec.marshalNID2string,
 		true,
-		false,
+		true,
 	)
 }
 
@@ -18315,35 +18227,6 @@ func (ec *executionContext) fieldContext_ModuleConfigChange_instance(_ context.C
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _ModuleConfigChange_scope(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConfigChange) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_ModuleConfigChange_scope,
-		func(ctx context.Context) (any, error) {
-			return obj.Scope, nil
-		},
-		nil,
-		ec.marshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_ModuleConfigChange_scope(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "ModuleConfigChange",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ModuleConfigScope does not have child fields")
 		},
 	}
 	return fc, nil
@@ -19243,10 +19126,8 @@ func (ec *executionContext) fieldContext_ModuleManagement_properties(_ context.C
 				return ec.fieldContext_ModuleProperty_effective(ctx, field)
 			case "source":
 				return ec.fieldContext_ModuleProperty_source(ctx, field)
-			case "moduleValue":
-				return ec.fieldContext_ModuleProperty_moduleValue(ctx, field)
-			case "instanceValue":
-				return ec.fieldContext_ModuleProperty_instanceValue(ctx, field)
+			case "value":
+				return ec.fieldContext_ModuleProperty_value(ctx, field)
 			case "isSet":
 				return ec.fieldContext_ModuleProperty_isSet(ctx, field)
 			case "rejectedReason":
@@ -19394,64 +19275,6 @@ func (ec *executionContext) _ModuleManagement_appliedRevision(ctx context.Contex
 }
 
 func (ec *executionContext) fieldContext_ModuleManagement_appliedRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "ModuleManagement",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _ModuleManagement_moduleRevision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_ModuleManagement_moduleRevision,
-		func(ctx context.Context) (any, error) {
-			return obj.ModuleRevision, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_ModuleManagement_moduleRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "ModuleManagement",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _ModuleManagement_instanceRevision(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_ModuleManagement_instanceRevision,
-		func(ctx context.Context) (any, error) {
-			return obj.InstanceRevision, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_ModuleManagement_instanceRevision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ModuleManagement",
 		Field:      field,
@@ -19670,14 +19493,14 @@ func (ec *executionContext) fieldContext_ModuleProperty_source(_ context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _ModuleProperty_moduleValue(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
+func (ec *executionContext) _ModuleProperty_value(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_ModuleProperty_moduleValue,
+		ec.fieldContext_ModuleProperty_value,
 		func(ctx context.Context) (any, error) {
-			return obj.ModuleValue, nil
+			return obj.Value, nil
 		},
 		nil,
 		ec.marshalOJSON2interface,
@@ -19686,36 +19509,7 @@ func (ec *executionContext) _ModuleProperty_moduleValue(ctx context.Context, fie
 	)
 }
 
-func (ec *executionContext) fieldContext_ModuleProperty_moduleValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "ModuleProperty",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type JSON does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _ModuleProperty_instanceValue(ctx context.Context, field graphql.CollectedField, obj *model.ModuleProperty) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_ModuleProperty_instanceValue,
-		func(ctx context.Context) (any, error) {
-			return obj.InstanceValue, nil
-		},
-		nil,
-		ec.marshalOJSON2interface,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_ModuleProperty_instanceValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ModuleProperty_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ModuleProperty",
 		Field:      field,
@@ -23026,7 +22820,7 @@ func (ec *executionContext) _Mutation_updateModuleConfig(ctx context.Context, fi
 		ec.fieldContext_Mutation_updateModuleConfig,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().UpdateModuleConfig(ctx, fc.Args["instance"].(string), fc.Args["scope"].(model.ModuleConfigScope), fc.Args["values"].([]*model.ModuleConfigValueInput), fc.Args["expectedRevision"].(int))
+			return ec.Resolvers.Mutation().UpdateModuleConfig(ctx, fc.Args["instance"].(string), fc.Args["values"].([]*model.ModuleConfigValueInput), fc.Args["expectedRevision"].(int))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -29673,12 +29467,8 @@ func (ec *executionContext) fieldContext_Query_moduleConfigChanges(ctx context.C
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_ModuleConfigChange_id(ctx, field)
-			case "moduleName":
-				return ec.fieldContext_ModuleConfigChange_moduleName(ctx, field)
 			case "instance":
 				return ec.fieldContext_ModuleConfigChange_instance(ctx, field)
-			case "scope":
-				return ec.fieldContext_ModuleConfigChange_scope(ctx, field)
 			case "revision":
 				return ec.fieldContext_ModuleConfigChange_revision(ctx, field)
 			case "changes":
@@ -48984,15 +48774,8 @@ func (ec *executionContext) _ModuleConfigChange(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "moduleName":
-			out.Values[i] = ec._ModuleConfigChange_moduleName(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "instance":
 			out.Values[i] = ec._ModuleConfigChange_instance(ctx, field, obj)
-		case "scope":
-			out.Values[i] = ec._ModuleConfigChange_scope(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -49289,16 +49072,6 @@ func (ec *executionContext) _ModuleManagement(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "moduleRevision":
-			out.Values[i] = ec._ModuleManagement_moduleRevision(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "instanceRevision":
-			out.Values[i] = ec._ModuleManagement_instanceRevision(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "syncState":
 			out.Values[i] = ec._ModuleManagement_syncState(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -49357,10 +49130,8 @@ func (ec *executionContext) _ModuleProperty(ctx context.Context, sel ast.Selecti
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "moduleValue":
-			out.Values[i] = ec._ModuleProperty_moduleValue(ctx, field, obj)
-		case "instanceValue":
-			out.Values[i] = ec._ModuleProperty_instanceValue(ctx, field, obj)
+		case "value":
+			out.Values[i] = ec._ModuleProperty_value(ctx, field, obj)
 		case "isSet":
 			out.Values[i] = ec._ModuleProperty_isSet(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -58097,16 +57868,6 @@ func (ec *executionContext) marshalNModuleConfigKeyChange2ᚖgithubᚗcomᚋlogo
 		return graphql.Null
 	}
 	return ec._ModuleConfigKeyChange(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope(ctx context.Context, v any) (model.ModuleConfigScope, error) {
-	var res model.ModuleConfigScope
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNModuleConfigScope2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigScope(ctx context.Context, sel ast.SelectionSet, v model.ModuleConfigScope) graphql.Marshaler {
-	return v
 }
 
 func (ec *executionContext) unmarshalNModuleConfigValueInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInputᚄ(ctx context.Context, v any) ([]*model.ModuleConfigValueInput, error) {

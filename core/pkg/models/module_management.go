@@ -12,18 +12,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 )
 
-// Module management storage: desired property values per scope, the audit
+// Module management storage: desired property values per instance, the audit
 // trail of changes to them, and action invocations. The manifest itself lives
 // on the registry row (Module.Manifest). Wire types are in
 // logos-golang-protocol/protocol/management.go.
-
-// Config scopes. A MODULE-scope document applies to every instance with the
-// same module name (Instance is ""); an INSTANCE-scope document overrides it
-// for one instance.
-const (
-	ModuleConfigScopeModule   = "module"
-	ModuleConfigScopeInstance = "instance"
-)
 
 // Action invocation states.
 const (
@@ -48,8 +40,9 @@ func (a ModuleActor) Protocol() *protocol.Actor {
 	return &protocol.Actor{Type: a.Type, ID: a.ID, Name: a.Name}
 }
 
-// ModuleConfig is the desired property values at one scope:
-// one document per (module_name, scope, instance).
+// ModuleConfig is the desired property values of one instance: one document
+// per instance. Config is per instance only — there is no shared module-level
+// config. Revision grows with every write and never goes back.
 //
 // TODO(module-mgmt): secret property values are stored here in clear text for
 // the prototype. Encrypt them at rest (envelope encryption keyed off a core
@@ -58,9 +51,8 @@ func (a ModuleActor) Protocol() *protocol.Actor {
 type ModuleConfig struct {
 	field.DefaultField `bson:",inline"`
 
+	Instance   string      `bson:"instance" json:"instance"`
 	ModuleName string      `bson:"module_name" json:"module_name"`
-	Scope      string      `bson:"scope" json:"scope"`
-	Instance   string      `bson:"instance" json:"instance"` // "" for module scope
 	Values     JSONMap     `bson:"values" json:"values"`
 	Revision   int64       `bson:"revision" json:"revision"`
 	UpdatedBy  ModuleActor `bson:"updated_by" json:"updated_by"`
@@ -75,13 +67,13 @@ type ModuleConfigKeyChange struct {
 	New any    `bson:"new" json:"new"`
 }
 
-// ModuleConfigChange is an audit entry: one successful updateModuleConfig.
+// ModuleConfigChange is an audit entry: one successful updateModuleConfig of
+// one instance's config.
 type ModuleConfigChange struct {
 	field.DefaultField `bson:",inline"`
 
+	Instance   string `bson:"instance" json:"instance"`
 	ModuleName string `bson:"module_name" json:"module_name"`
-	Instance   string `bson:"instance,omitempty" json:"instance,omitempty"` // instance scope only
-	Scope      string `bson:"scope" json:"scope"`
 	Revision   int64  `bson:"revision" json:"revision"`
 	// Changes is stored as JSON-shaped BSON (see JSONMap) so old/new values
 	// read back as plain JSON types.

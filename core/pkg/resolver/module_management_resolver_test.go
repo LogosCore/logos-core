@@ -43,7 +43,7 @@ func (f *fakeManager) InvokeAction(_ context.Context, req modulemgmt.InvokeReque
 		Status: models.ModuleActionTimedOut, Error: "no reply within 30s", Actor: req.Actor}, nil
 }
 
-func (f *fakeManager) ConfigChanges(context.Context, models.Module, int64) ([]models.ModuleConfigChange, error) {
+func (f *fakeManager) ConfigChanges(context.Context, string, int64) ([]models.ModuleConfigChange, error) {
 	return nil, nil
 }
 
@@ -70,7 +70,7 @@ func TestUpdateModuleConfig_RejectsAgentKeys(t *testing.T) {
 	ctx := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{
 		UserID: "u-1", Roles: []string{"admin"}, Agent: &gqlctx.AgentInfo{AgentKeyID: "a-1"},
 	})
-	_, err := r.UpdateModuleConfig(ctx, "http-1", model.ModuleConfigScopeModule, nil, 0)
+	_, err := r.UpdateModuleConfig(ctx, "http-1", nil, 0)
 	if gqlCode(err) != "FORBIDDEN" {
 		t.Errorf("err = %v, want FORBIDDEN", err)
 	}
@@ -87,24 +87,24 @@ func TestUpdateModuleConfig_MapsErrorsAndPassesActor(t *testing.T) {
 	mgr := &fakeManager{}
 	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, mgr)
 
-	mod, err := r.UpdateModuleConfig(userCtx("admin"), "http-1", model.ModuleConfigScopeInstance,
+	mod, err := r.UpdateModuleConfig(userCtx("admin"), "http-1",
 		[]*model.ModuleConfigValueInput{{Key: "limit", Value: json.Number("5")}, {Key: "mode", Value: nil}}, 3)
 	if err != nil || mod.Instance != "http-1" {
 		t.Fatalf("UpdateModuleConfig = %+v, %v", mod, err)
 	}
 	req := mgr.updates[0]
-	if req.Scope != models.ModuleConfigScopeInstance || req.ExpectedRevision != 3 || len(req.Values) != 2 ||
+	if req.Instance != "http-1" || req.ExpectedRevision != 3 || len(req.Values) != 2 ||
 		req.Actor != (models.ModuleActor{Type: "user", ID: "u-1", Name: "alice"}) {
 		t.Errorf("request = %+v", req)
 	}
 
 	for err, code := range map[error]string{
-		&modulemgmt.ConflictError{Scope: "module", CurrentRevision: 4}: "CONFLICT",
-		&modulemgmt.ValidationError{Message: "bad"}:                    "BAD_USER_INPUT",
-		modulemgmt.ErrModuleNotFound:                                   "NOT_FOUND",
+		&modulemgmt.ConflictError{CurrentRevision: 4}: "CONFLICT",
+		&modulemgmt.ValidationError{Message: "bad"}:   "BAD_USER_INPUT",
+		modulemgmt.ErrModuleNotFound:                  "NOT_FOUND",
 	} {
 		mgr.updateErr = err
-		if _, got := r.UpdateModuleConfig(userCtx("admin"), "http-1", model.ModuleConfigScopeModule,
+		if _, got := r.UpdateModuleConfig(userCtx("admin"), "http-1",
 			[]*model.ModuleConfigValueInput{{Key: "limit", Value: 1}}, 0); gqlCode(got) != code {
 			t.Errorf("%v → %v, want code %s", err, got, code)
 		}
@@ -155,8 +155,7 @@ func TestManagementField_NullWithoutManifestAndHidesSecrets(t *testing.T) {
 		LastMetrics: map[string]any{"depth": int32(4)},
 	}
 	eff := modulemgmt.ComputeEffective(&m,
-		&models.ModuleConfig{Revision: 2, Values: models.JSONMap{"token": "s3cret"}},
-		&models.ModuleConfig{Revision: 1, Values: models.JSONMap{"limit": float64(50)}})
+		&models.ModuleConfig{Revision: 3, Values: models.JSONMap{"token": "s3cret", "limit": float64(50)}})
 	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, &fakeManager{eff: eff})
 
 	if got, err := r.Management(context.Background(), &models.Module{Instance: "bare"}); got != nil || err != nil {
@@ -167,18 +166,17 @@ func TestManagementField_NullWithoutManifestAndHidesSecrets(t *testing.T) {
 	if err != nil || got == nil {
 		t.Fatalf("Management = %+v, %v", got, err)
 	}
-	if got.Revision != 3 || got.ModuleRevision != 2 || got.InstanceRevision != 1 || got.AppliedRevision != 2 ||
-		got.SyncState != model.ModuleSyncStatePending {
-		t.Errorf("revisions/sync = %d %d %d %d %s", got.Revision, got.ModuleRevision, got.InstanceRevision, got.AppliedRevision, got.SyncState)
+	if got.Revision != 3 || got.AppliedRevision != 2 || got.SyncState != model.ModuleSyncStatePending {
+		t.Errorf("revisions/sync = %d %d %s", got.Revision, got.AppliedRevision, got.SyncState)
 	}
 	token, limit := got.Properties[0], got.Properties[1]
-	if token.Effective != nil || token.ModuleValue != nil || token.InstanceValue != nil || token.Field.Default != nil {
+	if token.Effective != nil || token.Value != nil || token.Field.Default != nil {
 		t.Errorf("secret leaked: %+v / default %v", token, token.Field.Default)
 	}
-	if !token.IsSet || token.Source != modulemgmt.SourceModule || token.Field.Label != "token" {
+	if !token.IsSet || token.Source != modulemgmt.SourceSet || token.Field.Label != "token" {
 		t.Errorf("token = %+v", token)
 	}
-	if limit.Effective != float64(50) || limit.Source != modulemgmt.SourceInstance || !limit.RestartRequired ||
+	if limit.Effective != float64(50) || limit.Value != float64(50) || limit.Source != modulemgmt.SourceSet || !limit.RestartRequired ||
 		limit.RejectedReason == nil || *limit.RejectedReason != "too big" || limit.Field.Label != "Limit" {
 		t.Errorf("limit = %+v", limit)
 	}

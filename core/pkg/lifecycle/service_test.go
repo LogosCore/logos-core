@@ -471,9 +471,6 @@ func assertRPCCode(t *testing.T, err error, code string) {
 	}
 }
 
-func (f *fakeRepo) ListRegisteredByName(context.Context, string) ([]models.Module, error) {
-	return nil, nil
-}
 func (f *fakeRepo) RecordApplyResult(context.Context, string, protocol.ConfigApplyReply, time.Time) error {
 	return nil
 }

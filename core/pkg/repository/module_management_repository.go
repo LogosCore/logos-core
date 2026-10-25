@@ -14,39 +14,45 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Module management storage — desired config per scope, its audit trail, and
-// action invocations. See models/module_management.go.
+// Module management storage — desired config per instance, its audit trail,
+// and action invocations. See models/module_management.go.
 
+// The config collections were renamed when config became per instance only
+// (the prototype's module_config / module_config_changes held a module-wide
+// scope too). New names rather than a changed unique index on the old ones, so
+// a stale index in an existing database cannot fail EnsureIndexes at boot.
 const (
-	moduleConfigCollection           = "module_config"
-	moduleConfigChangeCollection     = "module_config_changes"
+	moduleConfigCollection           = "module_instance_config"
+	moduleConfigChangeCollection     = "module_instance_config_changes"
 	moduleActionInvocationCollection = "module_action_invocations"
 )
 
 // ErrModuleConfigConflict is returned by IModuleConfigRepository.Apply when
-// the scope's revision is not the expected one (someone else wrote first).
+// the instance's revision is not the expected one (someone else wrote first).
 var ErrModuleConfigConflict = errors.New("module config revision conflict")
 
 // IModuleConfigRepository stores desired property values, one document per
-// (module_name, scope, instance).
+// instance.
 type IModuleConfigRepository interface {
-	// FindForInstance returns the MODULE-scope document of moduleName and the
-	// INSTANCE-scope document of instance; either is nil when absent.
-	FindForInstance(ctx context.Context, moduleName, instance string) (module, inst *models.ModuleConfig, err error)
-	// Apply sets and unsets values at one scope and increments its revision,
-	// atomically and only if the current revision equals expectedRevision (0
-	// for a document that does not exist yet). A mismatch returns
-	// ErrModuleConfigConflict. instance must be "" for module scope.
-	Apply(ctx context.Context, moduleName, scope, instance string, expectedRevision int64,
+	// FindByInstance returns the instance's config document, nil when absent.
+	FindByInstance(ctx context.Context, instance string) (*models.ModuleConfig, error)
+	// Apply sets and unsets values and increments the revision, atomically and
+	// only if the current revision equals expectedRevision (0 for a document
+	// that does not exist yet). A mismatch returns ErrModuleConfigConflict.
+	Apply(ctx context.Context, moduleName, instance string, expectedRevision int64,
 		set map[string]any, unset []string, actor models.ModuleActor, at time.Time) (*models.ModuleConfig, error)
+	// RaiseRevision lifts the revision to at least minRevision without
+	// touching the values (creating an empty document if none exists), and
+	// returns the resulting document. Atomic and monotonic: a revision already
+	// at or above minRevision is left alone.
+	RaiseRevision(ctx context.Context, moduleName, instance string, minRevision int64, at time.Time) (*models.ModuleConfig, error)
 }
 
 // IModuleConfigChangeRepository is the audit trail of config writes.
 type IModuleConfigChangeRepository interface {
 	Insert(ctx context.Context, change *models.ModuleConfigChange) error
-	// ListForInstance returns the changes that affect instance — its own
-	// INSTANCE scope plus its module's MODULE scope — newest first.
-	ListForInstance(ctx context.Context, moduleName, instance string, limit int64) ([]models.ModuleConfigChange, error)
+	// ListByInstance returns an instance's config changes, newest first.
+	ListByInstance(ctx context.Context, instance string, limit int64) ([]models.ModuleConfigChange, error)
 }
 
 // IModuleActionInvocationRepository records action invocations.
@@ -58,7 +64,7 @@ type IModuleActionInvocationRepository interface {
 	ListByInstance(ctx context.Context, instance string, limit int64) ([]models.ModuleActionInvocation, error)
 }
 
-// --- module_config ---
+// --- module_instance_config ---
 
 type moduleConfigRepository struct {
 	coll database.Collection
@@ -66,46 +72,28 @@ type moduleConfigRepository struct {
 
 func NewModuleConfigRepository(db database.Database) IModuleConfigRepository {
 	db.EnsureIndexes(context.Background(), moduleConfigCollection, []opts.IndexModel{
-		// One document per scope. Also what makes a racing first write (two
+		// One document per instance. Also what makes a racing first write (two
 		// upserts at expectedRevision 0) fail as a conflict instead of
 		// creating a duplicate.
-		{Key: []string{"module_name", "scope", "instance"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
+		{Key: []string{"instance"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 	})
 	return &moduleConfigRepository{coll: db.Collection(moduleConfigCollection)}
 }
 
-// moduleConfigScopeFilter matches one scope document.
-func moduleConfigScopeFilter(moduleName, scope, instance string) bson.M {
-	return bson.M{"module_name": moduleName, "scope": scope, "instance": instance}
-}
-
-// moduleConfigForInstanceFilter matches the two documents that make up an
-// instance's desired config.
-func moduleConfigForInstanceFilter(moduleName, instance string) bson.M {
-	return bson.M{
-		"module_name": moduleName,
-		"$or": bson.A{
-			bson.M{"scope": models.ModuleConfigScopeModule, "instance": ""},
-			bson.M{"scope": models.ModuleConfigScopeInstance, "instance": instance},
-		},
-	}
-}
-
-// moduleConfigApplyFilter is the compare half of the compare-and-set: the scope
-// document at exactly expectedRevision. At 0 it also matches "no document"
-// through the upsert — the equality fields seed the new document, which the
-// $inc then takes to revision 1. An existing document at a later revision does
-// not match, so the upsert tries to insert and the unique index refuses it.
-func moduleConfigApplyFilter(moduleName, scope, instance string, expectedRevision int64) bson.M {
-	f := moduleConfigScopeFilter(moduleName, scope, instance)
-	f["revision"] = expectedRevision
-	return f
+// moduleConfigApplyFilter is the compare half of the compare-and-set: the
+// instance's document at exactly expectedRevision. At 0 it also matches "no
+// document" through the upsert — the equality fields seed the new document,
+// which the $inc then takes to revision 1. An existing document at a later
+// revision does not match, so the upsert tries to insert and the unique index
+// refuses it.
+func moduleConfigApplyFilter(instance string, expectedRevision int64) bson.M {
+	return bson.M{"instance": instance, "revision": expectedRevision}
 }
 
 // moduleConfigApplyUpdate is the set half. Keys are manifest property keys,
 // already validated against ^[a-z][a-z0-9_]*$, so they are safe path segments.
-func moduleConfigApplyUpdate(set map[string]any, unset []string, actor models.ModuleActor, at time.Time) bson.M {
-	setDoc := bson.M{"updated_by": actor, "updated_at": at, "updateAt": at}
+func moduleConfigApplyUpdate(moduleName string, set map[string]any, unset []string, actor models.ModuleActor, at time.Time) bson.M {
+	setDoc := bson.M{"module_name": moduleName, "updated_by": actor, "updated_at": at, "updateAt": at}
 	for k, v := range set {
 		setDoc["values."+k] = v
 	}
@@ -124,29 +112,35 @@ func moduleConfigApplyUpdate(set map[string]any, unset []string, actor models.Mo
 	return u
 }
 
-func (r *moduleConfigRepository) FindForInstance(ctx context.Context, moduleName, instance string) (*models.ModuleConfig, *models.ModuleConfig, error) {
-	var docs []models.ModuleConfig
-	if err := r.coll.Find(ctx, moduleConfigForInstanceFilter(moduleName, instance)).All(&docs); err != nil {
-		return nil, nil, err
+// moduleConfigRaiseUpdate lifts the revision with $max, which is what makes
+// RaiseRevision monotonic under concurrent writers. Values are untouched; a
+// document created by the upsert starts with none.
+func moduleConfigRaiseUpdate(moduleName string, minRevision int64, at time.Time) bson.M {
+	return bson.M{
+		"$max":         bson.M{"revision": minRevision},
+		"$set":         bson.M{"updateAt": at},
+		"$setOnInsert": bson.M{"module_name": moduleName, "values": bson.M{}, "createAt": at},
 	}
-	var mod, inst *models.ModuleConfig
-	for i := range docs {
-		switch docs[i].Scope {
-		case models.ModuleConfigScopeModule:
-			mod = &docs[i]
-		case models.ModuleConfigScopeInstance:
-			inst = &docs[i]
-		}
-	}
-	return mod, inst, nil
 }
 
-func (r *moduleConfigRepository) Apply(ctx context.Context, moduleName, scope, instance string, expectedRevision int64,
+func (r *moduleConfigRepository) FindByInstance(ctx context.Context, instance string) (*models.ModuleConfig, error) {
+	var doc models.ModuleConfig
+	err := r.coll.Find(ctx, bson.M{"instance": instance}).One(&doc)
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+func (r *moduleConfigRepository) Apply(ctx context.Context, moduleName, instance string, expectedRevision int64,
 	set map[string]any, unset []string, actor models.ModuleActor, at time.Time,
 ) (*models.ModuleConfig, error) {
 	var out models.ModuleConfig
-	err := r.coll.Find(ctx, moduleConfigApplyFilter(moduleName, scope, instance, expectedRevision)).Apply(qmgo.Change{
-		Update:    moduleConfigApplyUpdate(set, unset, actor, at),
+	err := r.coll.Find(ctx, moduleConfigApplyFilter(instance, expectedRevision)).Apply(qmgo.Change{
+		Update:    moduleConfigApplyUpdate(moduleName, set, unset, actor, at),
 		Upsert:    expectedRevision == 0,
 		ReturnNew: true,
 	}, &out)
@@ -160,7 +154,28 @@ func (r *moduleConfigRepository) Apply(ctx context.Context, moduleName, scope, i
 	}
 }
 
-// --- module_config_changes ---
+func (r *moduleConfigRepository) RaiseRevision(ctx context.Context, moduleName, instance string, minRevision int64, at time.Time) (*models.ModuleConfig, error) {
+	var out models.ModuleConfig
+	err := r.coll.Find(ctx, bson.M{"instance": instance}).Apply(qmgo.Change{
+		Update:    moduleConfigRaiseUpdate(moduleName, minRevision, at),
+		Upsert:    true,
+		ReturnNew: true,
+	}, &out)
+	if mongo.IsDuplicateKeyError(err) {
+		// Two racing upserts on a missing document: the other one created it,
+		// so retry as a plain update.
+		err = r.coll.Find(ctx, bson.M{"instance": instance}).Apply(qmgo.Change{
+			Update:    moduleConfigRaiseUpdate(moduleName, minRevision, at),
+			ReturnNew: true,
+		}, &out)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// --- module_instance_config_changes ---
 
 type moduleConfigChangeRepository struct {
 	coll database.Collection
@@ -168,19 +183,9 @@ type moduleConfigChangeRepository struct {
 
 func NewModuleConfigChangeRepository(db database.Database) IModuleConfigChangeRepository {
 	db.EnsureIndexes(context.Background(), moduleConfigChangeCollection, []opts.IndexModel{
-		{Key: []string{"module_name", "-at"}},
+		{Key: []string{"instance", "-at"}},
 	})
 	return &moduleConfigChangeRepository{coll: db.Collection(moduleConfigChangeCollection)}
-}
-
-func moduleConfigChangesForInstanceFilter(moduleName, instance string) bson.M {
-	return bson.M{
-		"module_name": moduleName,
-		"$or": bson.A{
-			bson.M{"scope": models.ModuleConfigScopeModule},
-			bson.M{"scope": models.ModuleConfigScopeInstance, "instance": instance},
-		},
-	}
 }
 
 func (r *moduleConfigChangeRepository) Insert(ctx context.Context, change *models.ModuleConfigChange) error {
@@ -188,9 +193,9 @@ func (r *moduleConfigChangeRepository) Insert(ctx context.Context, change *model
 	return err
 }
 
-func (r *moduleConfigChangeRepository) ListForInstance(ctx context.Context, moduleName, instance string, limit int64) ([]models.ModuleConfigChange, error) {
+func (r *moduleConfigChangeRepository) ListByInstance(ctx context.Context, instance string, limit int64) ([]models.ModuleConfigChange, error) {
 	var out []models.ModuleConfigChange
-	q := r.coll.Find(ctx, moduleConfigChangesForInstanceFilter(moduleName, instance)).Sort("-at", "-_id")
+	q := r.coll.Find(ctx, bson.M{"instance": instance}).Sort("-at", "-_id")
 	if limit > 0 {
 		q = q.Limit(limit)
 	}

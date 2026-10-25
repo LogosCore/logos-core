@@ -1,7 +1,7 @@
 // Package modulemgmt implements module management: the desired config core
-// holds for a module's declared properties (two scopes, merged into an
-// effective config), pushing it to instances over mgmt.config.apply, and
-// invoking declared actions over mgmt.action.invoke. Wire types live in
+// holds for a module's declared properties (per instance, over the manifest
+// defaults), pushing it to the instance over mgmt.config.apply, and invoking
+// declared actions over mgmt.action.invoke. Wire types live in
 // logos-golang-protocol/protocol/management.go; storage in
 // models/module_management.go.
 //
@@ -20,9 +20,10 @@ import (
 
 // Where a property's effective value comes from.
 const (
-	SourceDefault  = "default"
-	SourceModule   = "module"
-	SourceInstance = "instance"
+	// SourceDefault: nothing stored; the module uses its own default.
+	SourceDefault = "default"
+	// SourceSet: a value is stored for the instance.
+	SourceSet = "set"
 )
 
 // Sync states, matching the GraphQL ModuleSyncState enum.
@@ -34,31 +35,23 @@ const (
 
 // PropertyState is one declared property with its stored and effective value.
 type PropertyState struct {
-	Spec          protocol.PropertySpec
-	ModuleValue   any
-	HasModule     bool
-	InstanceValue any
-	HasInstance   bool
-	// Effective is instance ?? module ?? the manifest default; Source says
+	Spec protocol.PropertySpec
+	// Value is the stored value; meaningful only when IsSet.
+	Value any
+	IsSet bool
+	// Effective is the stored value, else the manifest default; Source says
 	// which. For SourceDefault the module uses its own default — core never
 	// sends a value for it.
 	Effective any
 	Source    string
 }
 
-// IsSet reports whether a value is stored at either scope.
-func (p PropertyState) IsSet() bool { return p.HasModule || p.HasInstance }
-
-// EffectiveConfig is an instance's merged desired config.
+// EffectiveConfig is an instance's desired config.
 type EffectiveConfig struct {
-	ModuleRevision   int64
-	InstanceRevision int64
-	Properties       []PropertyState
+	// Revision is the instance's config revision (0 before the first write).
+	Revision   int64
+	Properties []PropertyState
 }
-
-// Revision is the instance's desired revision: the sum of both scopes'
-// revisions, so it grows whenever either scope is written.
-func (e EffectiveConfig) Revision() int64 { return e.ModuleRevision + e.InstanceRevision }
 
 // Wire is the config handed to the module: only properties that are declared
 // in this instance's manifest AND have a stored value. An absent key tells the
@@ -66,25 +59,21 @@ func (e EffectiveConfig) Revision() int64 { return e.ModuleRevision + e.Instance
 func (e EffectiveConfig) Wire() protocol.ManagementConfig {
 	values := map[string]any{}
 	for _, p := range e.Properties {
-		if p.Source != SourceDefault {
-			values[p.Spec.Key] = p.Effective
+		if p.IsSet {
+			values[p.Spec.Key] = p.Value
 		}
 	}
-	return protocol.ManagementConfig{Revision: e.Revision(), Values: values}
+	return protocol.ManagementConfig{Revision: e.Revision, Values: values}
 }
 
-// ComputeEffective merges the two scope documents (either may be nil) over a
+// ComputeEffective lays the instance's stored config (nil when none) over a
 // manifest. Stored keys the manifest no longer declares are ignored.
-func ComputeEffective(manifest *protocol.ManagementManifest, mod, inst *models.ModuleConfig) EffectiveConfig {
+func ComputeEffective(manifest *protocol.ManagementManifest, cfg *models.ModuleConfig) EffectiveConfig {
 	var e EffectiveConfig
-	var modVals, instVals map[string]any
-	if mod != nil {
-		e.ModuleRevision = mod.Revision
-		modVals = mod.Values
-	}
-	if inst != nil {
-		e.InstanceRevision = inst.Revision
-		instVals = inst.Values
+	var vals map[string]any
+	if cfg != nil {
+		e.Revision = cfg.Revision
+		vals = cfg.Values
 	}
 	if manifest == nil {
 		return e
@@ -92,13 +81,9 @@ func ComputeEffective(manifest *protocol.ManagementManifest, mod, inst *models.M
 	e.Properties = make([]PropertyState, 0, len(manifest.Properties))
 	for _, spec := range manifest.Properties {
 		p := PropertyState{Spec: spec, Effective: spec.Default, Source: SourceDefault}
-		if v, ok := modVals[spec.Key]; ok && v != nil {
-			p.ModuleValue, p.HasModule = v, true
-			p.Effective, p.Source = v, SourceModule
-		}
-		if v, ok := instVals[spec.Key]; ok && v != nil {
-			p.InstanceValue, p.HasInstance = v, true
-			p.Effective, p.Source = v, SourceInstance
+		if v, ok := vals[spec.Key]; ok && v != nil {
+			p.Value, p.IsSet = v, true
+			p.Effective, p.Source = v, SourceSet
 		}
 		e.Properties = append(e.Properties, p)
 	}

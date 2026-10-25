@@ -16,40 +16,39 @@ import (
 
 // --- effective config ---
 
-func TestComputeEffective_MergeRevisionAndSource(t *testing.T) {
+func TestComputeEffective_StoredOverDefault(t *testing.T) {
 	m := testManifest().ManagementManifest
-	mod := &models.ModuleConfig{Revision: 3, Values: models.JSONMap{"limit": float64(20), "mode": "safe", "gone": "x"}}
-	inst := &models.ModuleConfig{Revision: 2, Values: models.JSONMap{"limit": float64(50), "token": "s3cret"}}
+	cfg := &models.ModuleConfig{Revision: 3, Values: models.JSONMap{"limit": float64(50), "token": "s3cret", "gone": "x"}}
 
-	eff := ComputeEffective(&m, mod, inst)
-	if eff.Revision() != 5 || eff.ModuleRevision != 3 || eff.InstanceRevision != 2 {
-		t.Fatalf("revisions = %d/%d/%d, want 5 = 3 + 2", eff.Revision(), eff.ModuleRevision, eff.InstanceRevision)
+	eff := ComputeEffective(&m, cfg)
+	if eff.Revision != 3 {
+		t.Fatalf("revision = %d, want 3", eff.Revision)
 	}
 	byKey := map[string]PropertyState{}
 	for _, p := range eff.Properties {
 		byKey[p.Spec.Key] = p
 	}
-	if p := byKey["limit"]; p.Effective != float64(50) || p.Source != SourceInstance || p.ModuleValue != float64(20) {
-		t.Errorf("limit = %+v, want instance 50 over module 20", p)
+	if p := byKey["limit"]; p.Effective != float64(50) || p.Value != float64(50) || p.Source != SourceSet || !p.IsSet {
+		t.Errorf("limit = %+v, want stored 50", p)
 	}
-	if p := byKey["mode"]; p.Effective != "safe" || p.Source != SourceModule || p.HasInstance {
-		t.Errorf("mode = %+v, want module value", p)
+	if p := byKey["mode"]; p.Effective != "fast" || p.Source != SourceDefault || p.IsSet || p.Value != nil {
+		t.Errorf("mode = %+v, want manifest default", p)
 	}
-	if p := byKey["token"]; p.Source != SourceInstance || !p.IsSet() {
+	if p := byKey["token"]; p.Source != SourceSet || !p.IsSet {
 		t.Errorf("token = %+v", p)
 	}
 
 	// Only declared keys with a stored value go on the wire; "gone" is no
 	// longer declared and is dropped.
 	wire := eff.Wire()
-	want := map[string]any{"limit": float64(50), "mode": "safe", "token": "s3cret"}
-	if wire.Revision != 5 || !reflect.DeepEqual(wire.Values, want) {
-		t.Errorf("wire = %+v, want revision 5 values %v", wire, want)
+	want := map[string]any{"limit": float64(50), "token": "s3cret"}
+	if wire.Revision != 3 || !reflect.DeepEqual(wire.Values, want) {
+		t.Errorf("wire = %+v, want revision 3 values %v", wire, want)
 	}
 
 	// Nothing stored: everything is the manifest default, and nothing is sent.
-	empty := ComputeEffective(&m, nil, nil)
-	if empty.Revision() != 0 || len(empty.Wire().Values) != 0 {
+	empty := ComputeEffective(&m, nil)
+	if empty.Revision != 0 || len(empty.Wire().Values) != 0 {
 		t.Errorf("empty = %+v", empty.Wire())
 	}
 	for _, p := range empty.Properties {
@@ -71,6 +70,7 @@ func TestSyncState(t *testing.T) {
 		{"behind", withApplied(reg, 3, ""), 4, SyncPending},
 		{"push failed", withApplied(reg, 3, "timeout"), 4, SyncOutOfSync},
 		{"applied despite an old error", withApplied(reg, 4, "timeout"), 4, SyncInSync},
+		{"applied ahead of desired", withApplied(reg, 5, ""), 4, SyncPending},
 		{"not registered", models.Module{Status: models.ModuleStatusDead, AppliedRevision: 4}, 4, SyncOutOfSync},
 	}
 	for _, c := range cases {
@@ -94,13 +94,13 @@ func TestUpdateConfig_Validation(t *testing.T) {
 		name string
 		req  UpdateRequest
 	}{
-		{"undeclared key", UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule, Values: []KeyValue{{"nope", 1}}}},
-		{"out of range", UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule, Values: []KeyValue{{"limit", json.Number("1000")}}}},
-		{"not an integer", UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule, Values: []KeyValue{{"limit", 1.5}}}},
-		{"bad enum", UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule, Values: []KeyValue{{"mode", "slow"}}}},
-		{"duplicate", UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule, Values: []KeyValue{{"limit", 2}, {"limit", 3}}}},
-		{"empty", UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule}},
-		{"no manifest", UpdateRequest{Instance: "bare-1", Scope: models.ModuleConfigScopeModule, Values: []KeyValue{{"limit", 2}}}},
+		{"undeclared key", UpdateRequest{Instance: "http-1", Values: []KeyValue{{"nope", 1}}}},
+		{"out of range", UpdateRequest{Instance: "http-1", Values: []KeyValue{{"limit", json.Number("1000")}}}},
+		{"not an integer", UpdateRequest{Instance: "http-1", Values: []KeyValue{{"limit", 1.5}}}},
+		{"bad enum", UpdateRequest{Instance: "http-1", Values: []KeyValue{{"mode", "slow"}}}},
+		{"duplicate", UpdateRequest{Instance: "http-1", Values: []KeyValue{{"limit", 2}, {"limit", 3}}}},
+		{"empty", UpdateRequest{Instance: "http-1"}},
+		{"no manifest", UpdateRequest{Instance: "bare-1", Values: []KeyValue{{"limit", 2}}}},
 	}
 	for _, c := range cases {
 		_, err := h.svc.UpdateConfig(ctx, c.req)
@@ -109,7 +109,7 @@ func TestUpdateConfig_Validation(t *testing.T) {
 			t.Errorf("%s: err = %v, want ValidationError", c.name, err)
 		}
 	}
-	if _, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "ghost", Scope: models.ModuleConfigScopeModule}); !errors.Is(err, ErrModuleNotFound) {
+	if _, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "ghost"}); !errors.Is(err, ErrModuleNotFound) {
 		t.Errorf("unknown instance err = %v", err)
 	}
 	if h.configs.applies != 0 {
@@ -119,25 +119,19 @@ func TestUpdateConfig_Validation(t *testing.T) {
 
 func TestUpdateConfig_Conflict(t *testing.T) {
 	h := newHarness(registered("http-1"))
-	h.configs.put("http", models.ModuleConfigScopeModule, "", 4, map[string]any{"limit": float64(5)})
+	h.configs.put("http-1", 4, map[string]any{"limit": float64(5)})
 	ctx := context.Background()
 
-	_, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule,
+	_, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "http-1",
 		Values: []KeyValue{{"limit", 6}}, ExpectedRevision: 3})
 	var c *ConflictError
 	if !errors.As(err, &c) || c.CurrentRevision != 4 {
 		t.Fatalf("stale expectedRevision err = %v, want conflict at 4", err)
 	}
 
-	// INSTANCE scope has its own revision: 0 while no document exists.
-	if _, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeInstance,
-		Values: []KeyValue{{"limit", 6}}, ExpectedRevision: 4}); !errors.As(err, &c) {
-		t.Errorf("instance scope at wrong revision err = %v, want conflict", err)
-	}
-
 	// Lost race at write time: the read matched but the conditional write did not.
 	h.configs.raceOnApply = true
-	if _, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "http-1", Scope: models.ModuleConfigScopeModule,
+	if _, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "http-1",
 		Values: []KeyValue{{"limit", 6}}, ExpectedRevision: 4}); !errors.As(err, &c) {
 		t.Errorf("write-time race err = %v, want conflict", err)
 	}
@@ -147,16 +141,14 @@ func TestUpdateConfig_Conflict(t *testing.T) {
 	}
 }
 
-func TestUpdateConfig_WritesAuditsAndPushesModuleScope(t *testing.T) {
-	other := registered("http-2")
-	dead := registered("http-3")
-	dead.Status = models.ModuleStatusDead
-	h := newHarness(registered("http-1"), other, dead)
-	h.configs.put("http", models.ModuleConfigScopeModule, "", 1, map[string]any{"limit": float64(5), "token": "old"})
+func TestUpdateConfig_WritesAuditsAndPushesThatInstanceOnly(t *testing.T) {
+	h := newHarness(registered("http-1"), registered("http-2"))
+	h.configs.put("http-1", 1, map[string]any{"limit": float64(5), "token": "old"})
+	h.configs.put("http-2", 7, map[string]any{"limit": float64(99)})
 	ctx := context.Background()
 
 	mod, err := h.svc.UpdateConfig(ctx, UpdateRequest{
-		Instance: "http-1", Scope: models.ModuleConfigScopeModule, ExpectedRevision: 1, Actor: alice,
+		Instance: "http-1", ExpectedRevision: 1, Actor: alice,
 		Values: []KeyValue{{"limit", json.Number("7")}, {"token", "new"}, {"mode", nil}},
 	})
 	if err != nil {
@@ -173,7 +165,7 @@ func TestUpdateConfig_WritesAuditsAndPushesModuleScope(t *testing.T) {
 		t.Fatalf("audit rows = %d", len(h.changes.rows))
 	}
 	ch := h.changes.rows[0]
-	if ch.Revision != 2 || ch.Scope != models.ModuleConfigScopeModule || ch.Actor != alice || ch.Instance != "" {
+	if ch.Revision != 2 || ch.Instance != "http-1" || ch.ModuleName != "http" || ch.Actor != alice {
 		t.Errorf("change = %+v", ch)
 	}
 	got := map[string]models.ModuleConfigKeyChange{}
@@ -187,54 +179,49 @@ func TestUpdateConfig_WritesAuditsAndPushesModuleScope(t *testing.T) {
 		t.Errorf("secret not redacted: %+v", got["token"])
 	}
 
-	// Pushed to both registered instances of "http", not the dead one, with the
-	// effective config at the new revision.
+	// Pushed to http-1 only, at its new revision; http-2 and its config are
+	// untouched.
 	applies := h.rpc.callsOf(protocol.TypeMgmtConfigApply)
-	queues := map[string]bool{}
-	for _, c := range applies {
-		queues[c.queue] = true
-		var req protocol.ConfigApplyRequest
-		_ = json.Unmarshal(c.payload, &req)
-		if req.Revision != 2 || req.Values["limit"] != float64(7) || req.Values["token"] != "new" {
-			t.Errorf("push = %s", c.payload)
-		}
-		if req.Actor == nil || req.Actor.ID != alice.ID {
-			t.Errorf("push actor = %+v", req.Actor)
-		}
+	if len(applies) != 1 || applies[0].queue != "q.http-1" {
+		t.Fatalf("applies = %+v, want one push to http-1", applies)
 	}
-	if !queues["q.http-1"] || !queues["q.http-2"] || queues["q.http-3"] {
-		t.Errorf("pushed to %v", queues)
+	var req protocol.ConfigApplyRequest
+	_ = json.Unmarshal(applies[0].payload, &req)
+	if req.Revision != 2 || req.Values["limit"] != float64(7) || req.Values["token"] != "new" {
+		t.Errorf("push = %s", applies[0].payload)
 	}
-	if r := h.reg.row("http-2"); r.AppliedRevision != 2 {
-		t.Errorf("http-2 applied = %d, want 2", r.AppliedRevision)
+	if req.Actor == nil || req.Actor.ID != alice.ID {
+		t.Errorf("push actor = %+v", req.Actor)
+	}
+	if r := h.reg.row("http-1"); r.AppliedRevision != 2 {
+		t.Errorf("http-1 applied = %d, want 2", r.AppliedRevision)
+	}
+	if d := h.configs.doc("http-2"); d.Revision != 7 || d.Values["limit"] != float64(99) {
+		t.Errorf("http-2 config changed: %+v", d)
 	}
 	if h.bus.count() == 0 {
 		t.Error("expected module.updated events")
 	}
-}
 
-func TestUpdateConfig_InstanceScopePushesOnlyThatInstance(t *testing.T) {
-	h := newHarness(registered("http-1"), registered("http-2"))
-	if _, err := h.svc.UpdateConfig(context.Background(), UpdateRequest{
-		Instance: "http-1", Scope: models.ModuleConfigScopeInstance, Values: []KeyValue{{"mode", "safe"}}, Actor: alice,
-	}); err != nil {
+	// Reset to default: a nil value removes the stored key.
+	if _, err := h.svc.UpdateConfig(ctx, UpdateRequest{Instance: "http-1", ExpectedRevision: 2, Actor: alice,
+		Values: []KeyValue{{"limit", nil}}}); err != nil {
 		t.Fatal(err)
 	}
 	h.svc.Wait()
-	applies := h.rpc.callsOf(protocol.TypeMgmtConfigApply)
-	if len(applies) != 1 || applies[0].queue != "q.http-1" {
-		t.Fatalf("applies = %+v", applies)
+	if d := h.configs.doc("http-1"); d.Revision != 3 || d.Values["limit"] != nil {
+		t.Errorf("after reset = %+v", d)
 	}
-	if h.changes.rows[0].Instance != "http-1" || h.changes.rows[0].Revision != 1 {
-		t.Errorf("change = %+v", h.changes.rows[0])
+	if last := h.changes.rows[len(h.changes.rows)-1]; last.Changes[0].Old != float64(7) || last.Changes[0].New != nil {
+		t.Errorf("reset audit = %+v", last.Changes)
 	}
 }
 
 func TestUpdateConfig_NoChangeIsANoOp(t *testing.T) {
 	h := newHarness(registered("http-1"))
-	h.configs.put("http", models.ModuleConfigScopeModule, "", 1, map[string]any{"limit": float64(5)})
+	h.configs.put("http-1", 1, map[string]any{"limit": float64(5)})
 	if _, err := h.svc.UpdateConfig(context.Background(), UpdateRequest{
-		Instance: "http-1", Scope: models.ModuleConfigScopeModule, ExpectedRevision: 1, Values: []KeyValue{{"limit", 5}},
+		Instance: "http-1", ExpectedRevision: 1, Values: []KeyValue{{"limit", 5}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +269,7 @@ func TestPush_ErrorReplyIsNotRetried(t *testing.T) {
 
 func TestPush_RecordsRejectedAndRestartRequired(t *testing.T) {
 	h := newHarness(registered("http-1"))
-	h.configs.put("http", models.ModuleConfigScopeModule, "", 2, map[string]any{"mode": "safe"})
+	h.configs.put("http-1", 2, map[string]any{"mode": "safe"})
 	h.rpc.handler = func(rpcCall) (messaging.ReplyEnvelope, error) {
 		return okReply(protocol.ConfigApplyReply{AppliedRevision: 2, Rejected: map[string]string{"limit": "too big"}, RestartRequired: []string{"mode"}})
 	}
@@ -323,7 +310,8 @@ func TestHeartbeatApplied_PushesOnlyWhenBehind(t *testing.T) {
 	inSync := registered("http-2")
 	inSync.AppliedRevision = 3
 	h := newHarness(behind, inSync)
-	h.configs.put("http", models.ModuleConfigScopeModule, "", 3, map[string]any{"limit": float64(9)})
+	h.configs.put("http-1", 3, map[string]any{"limit": float64(9)})
+	h.configs.put("http-2", 3, map[string]any{"limit": float64(9)})
 
 	h.svc.HeartbeatApplied("http-1", 1)
 	h.svc.HeartbeatApplied("http-2", 3)
@@ -343,6 +331,90 @@ func TestHeartbeatApplied_PushesOnlyWhenBehind(t *testing.T) {
 	h.svc.Wait()
 	if n := len(h.rpc.callsOf(protocol.TypeMgmtConfigApply)); n != 1 {
 		t.Errorf("applies after repeat heartbeat = %d, want 1", n)
+	}
+}
+
+// TestCatchUp_AppliedAheadOfDesired covers a config store that was reset or
+// migrated while the module kept running: the instance reports applied 2 but
+// the stored revision is lower. Modules ignore applies below what they already
+// applied, so core raises the revision to applied+1 (values kept, no audit
+// entry) and pushes that, which brings the instance back IN_SYNC.
+func TestCatchUp_AppliedAheadOfDesired(t *testing.T) {
+	ahead := registered("http-1")
+	ahead.AppliedRevision = 2
+	fresh := registered("http-2")
+	fresh.AppliedRevision = 2
+	h := newHarness(ahead, fresh)
+	h.configs.put("http-1", 1, map[string]any{"limit": float64(9)})
+	// http-2 has no config document at all (desired revision 0).
+	// The fake module behaves like the real one: it ignores stale revisions.
+	h.rpc.handler = func(c rpcCall) (messaging.ReplyEnvelope, error) {
+		var req protocol.ConfigApplyRequest
+		_ = json.Unmarshal(c.payload, &req)
+		applied := int64(2)
+		if req.Revision > applied {
+			applied = req.Revision
+		}
+		return okReply(protocol.ConfigApplyReply{AppliedRevision: applied})
+	}
+
+	h.svc.HeartbeatApplied("http-1", 2)
+	h.svc.HeartbeatApplied("http-2", 2)
+	h.svc.Wait()
+
+	for _, inst := range []string{"http-1", "http-2"} {
+		d := h.configs.doc(inst)
+		if d == nil || d.Revision != 3 {
+			t.Fatalf("%s config = %+v, want revision raised to 3", inst, d)
+		}
+		if row := h.reg.row(inst); row.AppliedRevision != 3 || SyncState(row, d.Revision) != SyncInSync {
+			t.Errorf("%s applied = %d sync = %s, want 3 IN_SYNC", inst, row.AppliedRevision, SyncState(row, d.Revision))
+		}
+	}
+	if d := h.configs.doc("http-1"); d.Values["limit"] != float64(9) {
+		t.Errorf("raise must not change values: %+v", d.Values)
+	}
+	pushed := map[string]protocol.ConfigApplyRequest{}
+	for _, c := range h.rpc.callsOf(protocol.TypeMgmtConfigApply) {
+		var req protocol.ConfigApplyRequest
+		_ = json.Unmarshal(c.payload, &req)
+		pushed[c.queue] = req
+	}
+	if r := pushed["q.http-1"]; r.Revision != 3 || r.Values["limit"] != float64(9) {
+		t.Errorf("http-1 push = %+v", r)
+	}
+	if r := pushed["q.http-2"]; r.Revision != 3 || len(r.Values) != 0 {
+		t.Errorf("http-2 push = %+v", r)
+	}
+	if len(h.changes.rows) != 0 {
+		t.Errorf("a catch-up raise is not an operator change; audit rows = %d", len(h.changes.rows))
+	}
+
+	// The next write continues from the raised revision.
+	if _, err := h.svc.UpdateConfig(context.Background(), UpdateRequest{Instance: "http-1", ExpectedRevision: 3,
+		Values: []KeyValue{{"limit", 11}}, Actor: alice}); err != nil {
+		t.Fatalf("write after raise: %v", err)
+	}
+	h.svc.Wait()
+	if row := h.reg.row("http-1"); row.AppliedRevision != 4 {
+		t.Errorf("applied after write = %d, want 4", row.AppliedRevision)
+	}
+}
+
+func TestManagementConfigFor_RaisesPastAppliedRevision(t *testing.T) {
+	h := newHarness()
+	m := testManifest().ManagementManifest
+	h.configs.put("http-1", 1, map[string]any{"limit": float64(9)})
+	ctx := context.Background()
+
+	cfg, err := h.svc.ManagementConfigFor(ctx, "http", "http-1", &m, 5)
+	if err != nil || cfg.Revision != 6 || cfg.Values["limit"] != float64(9) {
+		t.Fatalf("register config = %+v, %v; want revision 6 with values kept", cfg, err)
+	}
+	// Not ahead: served as stored, no raise.
+	raises := h.configs.raises
+	if cfg, err = h.svc.ManagementConfigFor(ctx, "http", "http-1", &m, 0); err != nil || cfg.Revision != 6 || h.configs.raises != raises {
+		t.Errorf("register config = %+v, %v (raises %d)", cfg, err, h.configs.raises-raises)
 	}
 }
 

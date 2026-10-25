@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -21,8 +22,8 @@ type fakeMgmt struct {
 	}
 }
 
-func (f *fakeMgmt) ManagementConfigFor(_ context.Context, name, instance string, _ *protocol.ManagementManifest) (protocol.ManagementConfig, error) {
-	f.asked = append(f.asked, name+"/"+instance)
+func (f *fakeMgmt) ManagementConfigFor(_ context.Context, name, instance string, _ *protocol.ManagementManifest, applied int64) (protocol.ManagementConfig, error) {
+	f.asked = append(f.asked, fmt.Sprintf("%s/%s@%d", name, instance, applied))
 	return f.cfg, nil
 }
 
@@ -69,7 +70,7 @@ func TestHandleRegister_ManifestStoredAndReplyCarriesManagementConfig(t *testing
 	if row.AppliedRevision != 3 {
 		t.Errorf("applied_revision = %d, want 3", row.AppliedRevision)
 	}
-	if len(mgmt.asked) != 1 || mgmt.asked[0] != "http/http-1" {
+	if len(mgmt.asked) != 1 || mgmt.asked[0] != "http/http-1@3" {
 		t.Errorf("config asked for %v", mgmt.asked)
 	}
 

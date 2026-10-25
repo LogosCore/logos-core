@@ -279,14 +279,12 @@ type ModuleActor struct {
 }
 
 type ModuleConfigChange struct {
-	ID         string                   `json:"id"`
-	ModuleName string                   `json:"moduleName"`
-	Instance   *string                  `json:"instance,omitempty"`
-	Scope      ModuleConfigScope        `json:"scope"`
-	Revision   int                      `json:"revision"`
-	Changes    []*ModuleConfigKeyChange `json:"changes"`
-	Actor      *ModuleActor             `json:"actor"`
-	At         string                   `json:"at"`
+	ID       string                   `json:"id"`
+	Instance string                   `json:"instance"`
+	Revision int                      `json:"revision"`
+	Changes  []*ModuleConfigKeyChange `json:"changes"`
+	Actor    *ModuleActor             `json:"actor"`
+	At       string                   `json:"at"`
 }
 
 type ModuleConfigKeyChange struct {
@@ -330,16 +328,14 @@ type ModuleField struct {
 }
 
 type ModuleManagement struct {
-	SchemaVersion    string               `json:"schemaVersion"`
-	Properties       []*ModuleProperty    `json:"properties"`
-	Actions          []*ModuleAction      `json:"actions"`
-	Status           []*ModuleStatusValue `json:"status"`
-	Revision         int                  `json:"revision"`
-	AppliedRevision  int                  `json:"appliedRevision"`
-	ModuleRevision   int                  `json:"moduleRevision"`
-	InstanceRevision int                  `json:"instanceRevision"`
-	SyncState        ModuleSyncState      `json:"syncState"`
-	LastApplyError   *string              `json:"lastApplyError,omitempty"`
+	SchemaVersion   string               `json:"schemaVersion"`
+	Properties      []*ModuleProperty    `json:"properties"`
+	Actions         []*ModuleAction      `json:"actions"`
+	Status          []*ModuleStatusValue `json:"status"`
+	Revision        int                  `json:"revision"`
+	AppliedRevision int                  `json:"appliedRevision"`
+	SyncState       ModuleSyncState      `json:"syncState"`
+	LastApplyError  *string              `json:"lastApplyError,omitempty"`
 }
 
 type ModuleProperty struct {
@@ -347,8 +343,7 @@ type ModuleProperty struct {
 	Apply           string       `json:"apply"`
 	Effective       any          `json:"effective,omitempty"`
 	Source          string       `json:"source"`
-	ModuleValue     any          `json:"moduleValue,omitempty"`
-	InstanceValue   any          `json:"instanceValue,omitempty"`
+	Value           any          `json:"value,omitempty"`
 	IsSet           bool         `json:"isSet"`
 	RejectedReason  *string      `json:"rejectedReason,omitempty"`
 	RestartRequired bool         `json:"restartRequired"`
@@ -1098,61 +1093,6 @@ func (e *ModuleActionStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e ModuleActionStatus) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-type ModuleConfigScope string
-
-const (
-	ModuleConfigScopeModule   ModuleConfigScope = "MODULE"
-	ModuleConfigScopeInstance ModuleConfigScope = "INSTANCE"
-)
-
-var AllModuleConfigScope = []ModuleConfigScope{
-	ModuleConfigScopeModule,
-	ModuleConfigScopeInstance,
-}
-
-func (e ModuleConfigScope) IsValid() bool {
-	switch e {
-	case ModuleConfigScopeModule, ModuleConfigScopeInstance:
-		return true
-	}
-	return false
-}
-
-func (e ModuleConfigScope) String() string {
-	return string(e)
-}
-
-func (e *ModuleConfigScope) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = ModuleConfigScope(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid ModuleConfigScope", str)
-	}
-	return nil
-}
-
-func (e ModuleConfigScope) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *ModuleConfigScope) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e ModuleConfigScope) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

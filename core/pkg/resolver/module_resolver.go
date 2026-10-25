@@ -35,7 +35,7 @@ type IModuleResolver interface {
 
 	// Mutations
 	RemoveModule(ctx context.Context, instance string) (*models.Module, error)
-	UpdateModuleConfig(ctx context.Context, instance string, scope model.ModuleConfigScope, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
+	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 
 	// Management is the Module.management field (module_management.graphql).

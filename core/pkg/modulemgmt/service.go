@@ -32,23 +32,22 @@ func invalid(format string, args ...any) error {
 	return &ValidationError{Message: fmt.Sprintf(format, args...)}
 }
 
-// ConflictError means expectedRevision was not the scope's current revision.
+// ConflictError means expectedRevision was not the instance's current config
+// revision.
 type ConflictError struct {
-	Scope           string
 	CurrentRevision int64 // -1 when unknown (lost a race at write time)
 }
 
 func (e *ConflictError) Error() string {
 	if e.CurrentRevision < 0 {
-		return fmt.Sprintf("%s config was changed concurrently; reload and retry", e.Scope)
+		return "config was changed concurrently; reload and retry"
 	}
-	return fmt.Sprintf("%s config is at revision %d; reload and retry", e.Scope, e.CurrentRevision)
+	return fmt.Sprintf("config is at revision %d; reload and retry", e.CurrentRevision)
 }
 
 // Registry is the slice of the module registry the service uses.
 type Registry interface {
 	FindByInstance(ctx context.Context, instance string) (models.Module, error)
-	ListRegisteredByName(ctx context.Context, moduleName string) ([]models.Module, error)
 	RecordApplyResult(ctx context.Context, instance string, reply protocol.ConfigApplyReply, at time.Time) error
 	RecordApplyError(ctx context.Context, instance, message string, at time.Time) error
 }
@@ -162,31 +161,65 @@ func NewService(
 
 // --- reads ---
 
-// Effective loads and merges the desired config of a module row.
+// Effective loads the desired config of a module row.
 func (s *Service) Effective(ctx context.Context, mod models.Module) (EffectiveConfig, error) {
-	modCfg, instCfg, err := s.configs.FindForInstance(ctx, mod.Name, mod.Instance)
+	cfg, err := s.configs.FindByInstance(ctx, mod.Instance)
 	if err != nil {
 		return EffectiveConfig{}, fmt.Errorf("load module config: %w", err)
 	}
-	var manifest *protocol.ManagementManifest
-	if mod.Manifest != nil {
-		manifest = &mod.Manifest.ManagementManifest
-	}
-	return ComputeEffective(manifest, modCfg, instCfg), nil
+	return ComputeEffective(manifestOf(mod), cfg), nil
 }
 
-// ManagementConfigFor is the effective config for the module.register reply.
-func (s *Service) ManagementConfigFor(ctx context.Context, moduleName, instance string, manifest *protocol.ManagementManifest) (protocol.ManagementConfig, error) {
-	modCfg, instCfg, err := s.configs.FindForInstance(ctx, moduleName, instance)
+// ManagementConfigFor is the config for the module.register reply.
+// appliedRevision is the revision the registering process reports applied; if
+// that is ahead of the stored revision, the revision is raised first (see
+// catchUp) so the process accepts the config instead of ignoring it as stale.
+func (s *Service) ManagementConfigFor(ctx context.Context, moduleName, instance string, manifest *protocol.ManagementManifest, appliedRevision int64) (protocol.ManagementConfig, error) {
+	cfg, err := s.configs.FindByInstance(ctx, instance)
 	if err != nil {
 		return protocol.ManagementConfig{}, fmt.Errorf("load module config: %w", err)
 	}
-	return ComputeEffective(manifest, modCfg, instCfg).Wire(), nil
+	cfg, err = s.catchUp(ctx, moduleName, instance, appliedRevision, cfg)
+	if err != nil {
+		return protocol.ManagementConfig{}, err
+	}
+	return ComputeEffective(manifest, cfg).Wire(), nil
 }
 
-// ConfigChanges lists the audit entries affecting an instance, newest first.
-func (s *Service) ConfigChanges(ctx context.Context, mod models.Module, limit int64) ([]models.ModuleConfigChange, error) {
-	return s.changes.ListForInstance(ctx, mod.Name, mod.Instance, limit)
+// catchUp handles an instance that reports an applied revision ahead of the
+// stored desired revision — the config store was reset or migrated while the
+// module kept running. Modules ignore an apply whose revision is below what
+// they already applied, so the desired revision is raised to applied+1 (values
+// unchanged, no audit entry: nothing an operator set has changed). It returns
+// the config to use; cfg itself when no raise was needed.
+func (s *Service) catchUp(ctx context.Context, moduleName, instance string, appliedRevision int64, cfg *models.ModuleConfig) (*models.ModuleConfig, error) {
+	var rev int64
+	if cfg != nil {
+		rev = cfg.Revision
+	}
+	if appliedRevision <= rev {
+		return cfg, nil
+	}
+	raised, err := s.configs.RaiseRevision(ctx, moduleName, instance, appliedRevision+1, s.now())
+	if err != nil {
+		return nil, fmt.Errorf("raise config revision: %w", err)
+	}
+	s.logger.Info("instance applied revision is ahead of desired config; raised revision",
+		zap.String("instance", instance), zap.Int64("applied_revision", appliedRevision),
+		zap.Int64("old_revision", rev), zap.Int64("revision", raised.Revision))
+	return raised, nil
+}
+
+func manifestOf(mod models.Module) *protocol.ManagementManifest {
+	if mod.Manifest == nil {
+		return nil
+	}
+	return &mod.Manifest.ManagementManifest
+}
+
+// ConfigChanges lists an instance's config audit entries, newest first.
+func (s *Service) ConfigChanges(ctx context.Context, instance string, limit int64) ([]models.ModuleConfigChange, error) {
+	return s.changes.ListByInstance(ctx, instance, limit)
 }
 
 // Invocations lists an instance's action invocations, newest first.
@@ -196,7 +229,8 @@ func (s *Service) Invocations(ctx context.Context, instance string, limit int64)
 
 // --- config writes ---
 
-// KeyValue is one property assignment; a nil Value clears the key.
+// KeyValue is one property assignment; a nil Value clears the key (the module
+// falls back to its default).
 type KeyValue struct {
 	Key   string
 	Value any
@@ -205,15 +239,14 @@ type KeyValue struct {
 // UpdateRequest is one updateModuleConfig call.
 type UpdateRequest struct {
 	Instance         string
-	Scope            string // models.ModuleConfigScopeModule | ...Instance
 	Values           []KeyValue
 	ExpectedRevision int64
 	Actor            models.ModuleActor
 }
 
-// UpdateConfig validates and stores property values at one scope, then pushes
-// the new effective config to the affected registered instances in the
-// background. It returns the (re-read) module row of req.Instance.
+// UpdateConfig validates and stores property values for one instance, then
+// pushes its new config to it in the background. It returns the (re-read)
+// module row.
 func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.Module, error) {
 	mod, err := s.findModule(ctx, req.Instance)
 	if err != nil {
@@ -221,14 +254,6 @@ func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.
 	}
 	if mod.Manifest == nil {
 		return nil, invalid("module %q declares no management manifest", req.Instance)
-	}
-	scopeInstance := ""
-	switch req.Scope {
-	case models.ModuleConfigScopeModule:
-	case models.ModuleConfigScopeInstance:
-		scopeInstance = mod.Instance
-	default:
-		return nil, invalid("unknown scope %q", req.Scope)
 	}
 	if len(req.Values) == 0 {
 		return nil, invalid("no values given")
@@ -261,13 +286,9 @@ func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.
 		set[kv.Key] = v
 	}
 
-	modCfg, instCfg, err := s.configs.FindForInstance(ctx, mod.Name, mod.Instance)
+	current, err := s.configs.FindByInstance(ctx, mod.Instance)
 	if err != nil {
 		return nil, fmt.Errorf("load module config: %w", err)
-	}
-	current := modCfg
-	if req.Scope == models.ModuleConfigScopeInstance {
-		current = instCfg
 	}
 	var currentRev int64
 	var currentVals map[string]any
@@ -275,7 +296,7 @@ func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.
 		currentRev, currentVals = current.Revision, current.Values
 	}
 	if currentRev != req.ExpectedRevision {
-		return nil, &ConflictError{Scope: req.Scope, CurrentRevision: currentRev}
+		return nil, &ConflictError{CurrentRevision: currentRev}
 	}
 
 	// The audit diff is exact: it is computed against the revision the write
@@ -299,18 +320,17 @@ func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.
 	}
 
 	now := s.now()
-	doc, err := s.configs.Apply(ctx, mod.Name, req.Scope, scopeInstance, req.ExpectedRevision, set, unset, req.Actor, now)
+	doc, err := s.configs.Apply(ctx, mod.Name, mod.Instance, req.ExpectedRevision, set, unset, req.Actor, now)
 	if errors.Is(err, repository.ErrModuleConfigConflict) {
-		return nil, &ConflictError{Scope: req.Scope, CurrentRevision: -1}
+		return nil, &ConflictError{CurrentRevision: -1}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("store module config: %w", err)
 	}
 
 	change := &models.ModuleConfigChange{
+		Instance:   mod.Instance,
 		ModuleName: mod.Name,
-		Instance:   scopeInstance,
-		Scope:      req.Scope,
 		Revision:   doc.Revision,
 		Changes:    changes,
 		Actor:      req.Actor,
@@ -322,38 +342,16 @@ func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.
 		s.logger.Error("failed to record module config change", zap.String("module", mod.Name), zap.Error(err))
 	}
 
-	targets := []models.Module{mod}
-	if req.Scope == models.ModuleConfigScopeModule {
-		if regs, err := s.registry.ListRegisteredByName(ctx, mod.Name); err != nil {
-			s.logger.Warn("failed to list instances for config push", zap.String("module", mod.Name), zap.Error(err))
-		} else {
-			targets = regs
-			if !containsInstance(regs, mod.Instance) {
-				targets = append(targets, mod)
-			}
-		}
+	if mod.Status == models.ModuleStatusRegistered {
+		s.RequestPush(mod.Instance, req.Actor)
 	}
-	for _, t := range targets {
-		if t.Status == models.ModuleStatusRegistered && t.Manifest != nil {
-			s.RequestPush(t.Instance, req.Actor)
-		}
-		s.publishUpdated(t)
-	}
+	s.publishUpdated(mod)
 
 	updated, err := s.registry.FindByInstance(ctx, mod.Instance)
 	if err != nil {
 		return &mod, nil //nolint:nilerr // the write succeeded; serve the pre-write row rather than fail it
 	}
 	return &updated, nil
-}
-
-func containsInstance(mods []models.Module, instance string) bool {
-	for _, m := range mods {
-		if m.Instance == instance {
-			return true
-		}
-	}
-	return false
 }
 
 // --- pushing ---
@@ -378,8 +376,9 @@ func (s *Service) RequestPush(instance string, actor models.ModuleActor) {
 }
 
 // HeartbeatApplied is the heartbeat hook: given the revision the instance
-// reports applied, it pushes in the background if that is behind the desired
-// revision. Rate-limited per instance (DriftCheckInterval) and skipped while a
+// reports applied, it pushes in the background if that differs from the
+// desired revision (behind: drift; ahead: the config store was reset, see
+// catchUp). Rate-limited per instance (DriftCheckInterval) and skipped while a
 // push is already running, so a module that keeps failing to apply is not
 // hammered on every heartbeat.
 func (s *Service) HeartbeatApplied(instance string, appliedRevision int64) {
@@ -411,7 +410,7 @@ func (s *Service) state(instance string) *pushState {
 // Wait blocks until background pushes finish. For tests and shutdown.
 func (s *Service) Wait() { s.wg.Wait() }
 
-func (s *Service) runPushes(instance string, onlyIfBehind bool) {
+func (s *Service) runPushes(instance string, onlyIfDrifted bool) {
 	defer s.wg.Done()
 	for {
 		s.mu.Lock()
@@ -420,8 +419,8 @@ func (s *Service) runPushes(instance string, onlyIfBehind bool) {
 		st.again = false
 		s.mu.Unlock()
 
-		s.pushWithRetries(instance, actor, onlyIfBehind)
-		onlyIfBehind = false // a re-run was requested by a config write
+		s.pushWithRetries(instance, actor, onlyIfDrifted)
+		onlyIfDrifted = false // a re-run was requested by a config write
 
 		s.mu.Lock()
 		if !st.again {
@@ -444,14 +443,14 @@ type errTerminal struct{ err error }
 func (e errTerminal) Error() string { return e.err.Error() }
 func (e errTerminal) Unwrap() error { return e.err }
 
-func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onlyIfBehind bool) {
+func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onlyIfDrifted bool) {
 	ctx := context.Background()
 	var lastErr error
 	var mod models.Module
 	backoff := s.cfg.RetryBackoff
 	for attempt := 1; attempt <= s.cfg.ApplyAttempts; attempt++ {
 		var err error
-		mod, err = s.pushOnce(ctx, instance, actor, onlyIfBehind)
+		mod, err = s.pushOnce(ctx, instance, actor, onlyIfDrifted)
 		if err == nil {
 			s.publishUpdated(mod)
 			return
@@ -481,8 +480,8 @@ func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onl
 	s.publishUpdated(mod)
 }
 
-// pushOnce sends the current effective config once and records the reply.
-func (s *Service) pushOnce(ctx context.Context, instance string, actor models.ModuleActor, onlyIfBehind bool) (models.Module, error) {
+// pushOnce sends the instance's current config once and records the reply.
+func (s *Service) pushOnce(ctx context.Context, instance string, actor models.ModuleActor, onlyIfDrifted bool) (models.Module, error) {
 	mod, err := s.registry.FindByInstance(ctx, instance)
 	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
 		return mod, errNotPushable
@@ -493,11 +492,15 @@ func (s *Service) pushOnce(ctx context.Context, instance string, actor models.Mo
 	if mod.Status != models.ModuleStatusRegistered || mod.Manifest == nil || mod.RPCQueue == "" {
 		return mod, errNotPushable
 	}
-	eff, err := s.Effective(ctx, mod)
+	cfg, err := s.configs.FindByInstance(ctx, instance)
 	if err != nil {
+		return mod, fmt.Errorf("load module config: %w", err)
+	}
+	if cfg, err = s.catchUp(ctx, mod.Name, instance, mod.AppliedRevision, cfg); err != nil {
 		return mod, err
 	}
-	if onlyIfBehind && mod.AppliedRevision >= eff.Revision() {
+	eff := ComputeEffective(manifestOf(mod), cfg)
+	if onlyIfDrifted && mod.AppliedRevision == eff.Revision {
 		return mod, errNotPushable
 	}
 
@@ -507,7 +510,7 @@ func (s *Service) pushOnce(ctx context.Context, instance string, actor models.Mo
 		return mod, err
 	}
 	if reply.Status != protocol.StatusOK {
-		return mod, errTerminal{fmt.Errorf("module refused config revision %d: %s", eff.Revision(), replyErrorText(reply))}
+		return mod, errTerminal{fmt.Errorf("module refused config revision %d: %s", eff.Revision, replyErrorText(reply))}
 	}
 	var res protocol.ConfigApplyReply
 	if err := json.Unmarshal(reply.Payload, &res); err != nil {
@@ -517,7 +520,7 @@ func (s *Service) pushOnce(ctx context.Context, instance string, actor models.Mo
 		return mod, fmt.Errorf("record apply result: %w", err)
 	}
 	s.logger.Info("config applied", zap.String("instance", instance),
-		zap.Int64("revision", eff.Revision()), zap.Int64("applied_revision", res.AppliedRevision),
+		zap.Int64("revision", eff.Revision), zap.Int64("applied_revision", res.AppliedRevision),
 		zap.Int("rejected", len(res.Rejected)), zap.Strings("restart_required", res.RestartRequired))
 	return mod, nil
 }

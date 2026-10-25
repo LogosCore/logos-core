@@ -3,17 +3,14 @@
 # =============================================================================
 #
 # A module declares a management manifest at module.register (see
-# logos-golang-protocol/protocol/management.go). Core stores the desired value
-# of each property at two scopes:
+# logos-golang-protocol/protocol/management.go). Config is per instance only:
+# core stores the desired value of each property for one instance, and there
+# is no shared configuration across instances of the same module.
 #
-#   MODULE   — applies to every instance with the same module name (e.g. all
-#              "http" channels). The normal case: instance ids change as you scale.
-#   INSTANCE — an override for one instance.
-#
-# effective = instance value ?? module value ?? the module's own default.
-# Core pushes the effective config to the module (mgmt.config.apply); the module
-# reports the revision it processed. revision = moduleRevision + instanceRevision,
-# so it only ever grows.
+# effective = the instance's stored value ?? the module's own default.
+# Every write bumps the instance's config revision, which only ever grows.
+# Core pushes the config to the instance (mgmt.config.apply); the instance
+# reports the revision it processed (appliedRevision).
 
 # Arbitrary JSON value (property values, defaults, bounds, action params/results).
 scalar JSON
@@ -21,11 +18,6 @@ scalar JSON
 extend type Module {
   # Null when the module declared no management manifest.
   management: ModuleManagement
-}
-
-enum ModuleConfigScope {
-  MODULE
-  INSTANCE
 }
 
 enum ModuleSyncState {
@@ -43,12 +35,10 @@ type ModuleManagement {
   actions: [ModuleAction!]!
   status: [ModuleStatusValue!]!
 
-  # Desired effective revision for this instance, and the one it last processed.
+  # The instance's config revision (expectedRevision for updateModuleConfig),
+  # and the one the instance last processed.
   revision: Int!
   appliedRevision: Int!
-  # Per-scope revisions, for optimistic concurrency on updateModuleConfig.
-  moduleRevision: Int!
-  instanceRevision: Int!
   syncState: ModuleSyncState!
   # Last push/apply error, if any.
   lastApplyError: String
@@ -83,14 +73,14 @@ type ModuleProperty {
   field: ModuleField!
   # "live" | "restart"
   apply: String!
-  # Effective desired value. Always null for secrets (see isSet).
+  # Effective desired value: the stored value, else the default. Always null
+  # for secrets (see isSet).
   effective: JSON
-  # Where the effective value comes from: "default" | "module" | "instance".
+  # "default" (nothing stored; the module uses its default) | "set".
   source: String!
-  # Values stored at each scope (null = not set there). Null for secrets.
-  moduleValue: JSON
-  instanceValue: JSON
-  # Secrets only: whether a value is stored at any scope.
+  # The stored value; null when unset. Always null for secrets.
+  value: JSON
+  # Whether a value is stored (the only signal for secrets).
   isSet: Boolean!
   # The module rejected the current value at the applied revision.
   rejectedReason: String
@@ -147,11 +137,8 @@ type ModuleActionInvocation {
 
 type ModuleConfigChange {
   id: ID!
-  # Module name the change was made for, and the instance for INSTANCE scope.
-  moduleName: String!
-  instance: ID
-  scope: ModuleConfigScope!
-  # New revision of that scope.
+  instance: ID!
+  # The instance's config revision this change produced.
   revision: Int!
   # Changed keys with old/new values; secrets redacted as "***".
   changes: [ModuleConfigKeyChange!]!
@@ -167,7 +154,7 @@ type ModuleConfigKeyChange {
 
 input ModuleConfigValueInput {
   key: String!
-  # null clears the value at this scope (falls back to the next scope / default).
+  # null clears the stored value (resets the property to the module's default).
   value: JSON
 }
 
@@ -179,20 +166,18 @@ extend type Query {
   moduleActionInvocations(instance: ID!, limit: Int): [ModuleActionInvocation!]!
     @hasPermission(permission: "module:read")
 
-  # Config changes affecting this instance (its INSTANCE scope plus its
-  # module's MODULE scope), newest first.
+  # Config changes of this instance, newest first.
   moduleConfigChanges(instance: ID!, limit: Int): [ModuleConfigChange!]!
     @hasPermission(permission: "module:read")
 }
 
 extend type Mutation {
-  # Set or clear property values at a scope. MODULE scope targets the module
-  # name of `instance`. expectedRevision is that scope's current revision
-  # (moduleRevision / instanceRevision); a mismatch fails with CONFLICT.
-  # Validated against the instance's manifest; agent API keys are rejected.
+  # Set or clear property values of one instance. expectedRevision is the
+  # instance's current config revision (ModuleManagement.revision); a mismatch
+  # fails with CONFLICT. Validated against the instance's manifest; agent API
+  # keys are rejected.
   updateModuleConfig(
     instance: ID!
-    scope: ModuleConfigScope!
     values: [ModuleConfigValueInput!]!
     expectedRevision: Int!
   ): Module! @hasPermission(permission: "module:config:write")

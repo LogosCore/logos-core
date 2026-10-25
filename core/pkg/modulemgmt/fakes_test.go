@@ -43,18 +43,6 @@ func (r *fakeRegistry) FindByInstance(_ context.Context, instance string) (model
 	return *m, nil
 }
 
-func (r *fakeRegistry) ListRegisteredByName(_ context.Context, name string) ([]models.Module, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	var out []models.Module
-	for _, m := range r.rows {
-		if m.Name == name && m.Status == models.ModuleStatusRegistered {
-			out = append(out, *m)
-		}
-	}
-	return out, nil
-}
-
 func (r *fakeRegistry) RecordApplyResult(_ context.Context, instance string, reply protocol.ConfigApplyReply, at time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -88,43 +76,44 @@ func (r *fakeRegistry) row(instance string) models.Module {
 
 // --- config store, with the repository's compare-and-set semantics ---
 
-type cfgKey struct{ name, scope, instance string }
-
 type fakeConfigs struct {
 	mu   sync.Mutex
-	docs map[cfgKey]*models.ModuleConfig
+	docs map[string]*models.ModuleConfig // by instance
 	// raceOnApply simulates another writer winning between read and write.
 	raceOnApply bool
 	applies     int
+	raises      int
 }
 
-func newFakeConfigs() *fakeConfigs { return &fakeConfigs{docs: map[cfgKey]*models.ModuleConfig{}} }
+func newFakeConfigs() *fakeConfigs { return &fakeConfigs{docs: map[string]*models.ModuleConfig{}} }
 
-func (f *fakeConfigs) put(name, scope, instance string, rev int64, values map[string]any) {
-	f.docs[cfgKey{name, scope, instance}] = &models.ModuleConfig{
-		ModuleName: name, Scope: scope, Instance: instance, Revision: rev, Values: values,
+func (f *fakeConfigs) put(instance string, rev int64, values map[string]any) {
+	f.docs[instance] = &models.ModuleConfig{ModuleName: "http", Instance: instance, Revision: rev, Values: values}
+}
+
+func copyConfig(d *models.ModuleConfig) *models.ModuleConfig {
+	if d == nil {
+		return nil
 	}
+	c := *d
+	c.Values = models.JSONMap{}
+	for k, v := range d.Values {
+		c.Values[k] = v
+	}
+	return &c
 }
 
-func (f *fakeConfigs) FindForInstance(_ context.Context, name, instance string) (*models.ModuleConfig, *models.ModuleConfig, error) {
+func (f *fakeConfigs) doc(instance string) *models.ModuleConfig {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	cp := func(d *models.ModuleConfig) *models.ModuleConfig {
-		if d == nil {
-			return nil
-		}
-		c := *d
-		c.Values = models.JSONMap{}
-		for k, v := range d.Values {
-			c.Values[k] = v
-		}
-		return &c
-	}
-	return cp(f.docs[cfgKey{name, models.ModuleConfigScopeModule, ""}]),
-		cp(f.docs[cfgKey{name, models.ModuleConfigScopeInstance, instance}]), nil
+	return copyConfig(f.docs[instance])
 }
 
-func (f *fakeConfigs) Apply(_ context.Context, name, scope, instance string, expected int64,
+func (f *fakeConfigs) FindByInstance(_ context.Context, instance string) (*models.ModuleConfig, error) {
+	return f.doc(instance), nil
+}
+
+func (f *fakeConfigs) Apply(_ context.Context, name, instance string, expected int64,
 	set map[string]any, unset []string, actor models.ModuleActor, at time.Time,
 ) (*models.ModuleConfig, error) {
 	f.mu.Lock()
@@ -133,8 +122,7 @@ func (f *fakeConfigs) Apply(_ context.Context, name, scope, instance string, exp
 	if f.raceOnApply {
 		return nil, repository.ErrModuleConfigConflict
 	}
-	k := cfgKey{name, scope, instance}
-	d := f.docs[k]
+	d := f.docs[instance]
 	var cur int64
 	if d != nil {
 		cur = d.Revision
@@ -143,9 +131,10 @@ func (f *fakeConfigs) Apply(_ context.Context, name, scope, instance string, exp
 		return nil, repository.ErrModuleConfigConflict
 	}
 	if d == nil {
-		d = &models.ModuleConfig{ModuleName: name, Scope: scope, Instance: instance, Values: models.JSONMap{}}
-		f.docs[k] = d
+		d = &models.ModuleConfig{Instance: instance, Values: models.JSONMap{}}
+		f.docs[instance] = d
 	}
+	d.ModuleName = name
 	for kk, v := range set {
 		d.Values[kk] = v
 	}
@@ -154,8 +143,22 @@ func (f *fakeConfigs) Apply(_ context.Context, name, scope, instance string, exp
 	}
 	d.Revision++
 	d.UpdatedBy, d.UpdatedAt = actor, at
-	c := *d
-	return &c, nil
+	return copyConfig(d), nil
+}
+
+func (f *fakeConfigs) RaiseRevision(_ context.Context, name, instance string, minRevision int64, _ time.Time) (*models.ModuleConfig, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.raises++
+	d := f.docs[instance]
+	if d == nil {
+		d = &models.ModuleConfig{ModuleName: name, Instance: instance, Values: models.JSONMap{}}
+		f.docs[instance] = d
+	}
+	if d.Revision < minRevision {
+		d.Revision = minRevision
+	}
+	return copyConfig(d), nil
 }
 
 type fakeChanges struct {
@@ -170,7 +173,7 @@ func (f *fakeChanges) Insert(_ context.Context, c *models.ModuleConfigChange) er
 	return nil
 }
 
-func (f *fakeChanges) ListForInstance(context.Context, string, string, int64) ([]models.ModuleConfigChange, error) {
+func (f *fakeChanges) ListByInstance(context.Context, string, int64) ([]models.ModuleConfigChange, error) {
 	return f.rows, nil
 }
 

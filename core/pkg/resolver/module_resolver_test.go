@@ -193,9 +193,6 @@ func TestModuleFieldResolvers_FormatTimestamps(t *testing.T) {
 	}
 }
 
-func (f *fakeModuleRepo) ListRegisteredByName(context.Context, string) ([]models.Module, error) {
-	return nil, nil
-}
 func (f *fakeModuleRepo) RecordApplyResult(context.Context, string, protocol.ConfigApplyReply, time.Time) error {
 	return nil
 }

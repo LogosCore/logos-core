@@ -48,9 +48,6 @@ type IModuleRegistryRepository interface {
 
 	// --- module management ---
 
-	// ListRegisteredByName returns every registered instance of a module name —
-	// the push targets of a MODULE-scope config change.
-	ListRegisteredByName(ctx context.Context, moduleName string) ([]models.Module, error)
 	// RecordApplyResult stores a mgmt.config.apply reply: the applied revision,
 	// rejected keys and restart-required keys, and clears last_apply_error.
 	RecordApplyResult(ctx context.Context, instance string, reply protocol.ConfigApplyReply, at time.Time) error
@@ -70,8 +67,6 @@ func NewModuleRegistryRepository(db database.Database) IModuleRegistryRepository
 		// Reaper scans by status; module_type for operator queries.
 		{Key: []string{"status"}},
 		{Key: []string{"module_type"}},
-		// Management: MODULE-scope config pushes fan out by module name.
-		{Key: []string{"module_name", "status"}},
 	})
 
 	return &moduleRegistryRepository{coll: coll}
@@ -299,12 +294,6 @@ func (r *moduleRegistryRepository) ListActive(ctx context.Context) ([]models.Mod
 func (r *moduleRegistryRepository) List(ctx context.Context, statuses []string) ([]models.Module, error) {
 	var out []models.Module
 	err := r.coll.Find(ctx, listFilter(statuses)).Sort("-registered_at").All(&out)
-	return out, err
-}
-
-func (r *moduleRegistryRepository) ListRegisteredByName(ctx context.Context, moduleName string) ([]models.Module, error) {
-	var out []models.Module
-	err := r.coll.Find(ctx, bson.M{"module_name": moduleName, "status": models.ModuleStatusRegistered}).All(&out)
 	return out, err
 }
 
