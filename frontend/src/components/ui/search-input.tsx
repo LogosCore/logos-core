@@ -9,6 +9,8 @@ interface SearchInputProps {
   debounceMs?: number
   className?: string
   inputClassName?: string
+  // Tooltip; defaults to the quoted-match hint of server-side search.
+  title?: string
 }
 
 export function SearchInput({
@@ -18,6 +20,7 @@ export function SearchInput({
   debounceMs = 300,
   className,
   inputClassName,
+  title = 'Wrap in "quotes" to match whole values — "10.1.142.1" won’t match 10.1.142.13',
 }: SearchInputProps) {
   // Debounce search input — local state syncs to caller after delay
   const [inputValue, setInputValue] = useState(value)
@@ -39,7 +42,7 @@ export function SearchInput({
         placeholder={placeholder}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
-        title={'Wrap in "quotes" to match whole values — "10.1.142.1" won’t match 10.1.142.13'}
+        title={title || undefined}
         className={inputClassName ?? (inputValue ? "pl-9 pr-8" : "pl-9")}
       />
       {inputValue && (

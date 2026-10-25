@@ -118,7 +118,7 @@ export function FieldControl({
           onValueChange={(v) => setText(typeof v === "string" ? v : "")}
           disabled={disabled}
         >
-          <SelectTrigger id={id} className="w-full sm:w-72" aria-invalid={invalid || undefined}>
+          <SelectTrigger id={id} className="w-full max-w-72" aria-invalid={invalid || undefined}>
             <SelectValue
               placeholder={
                 defaultOption
@@ -168,7 +168,7 @@ export function FieldControl({
             aria-invalid={invalid || undefined}
             placeholder={placeholder ?? "30s"}
             spellCheck={false}
-            className="sm:w-72"
+            className="w-full max-w-72"
           />
           <span className="text-xs text-muted-foreground">{DURATION_HINT}</span>
         </div>
@@ -186,7 +186,7 @@ export function FieldControl({
             aria-invalid={invalid || undefined}
             placeholder={placeholder}
             inputMode={field.type === "int" ? "numeric" : "decimal"}
-            className="sm:w-48"
+            className="w-full max-w-48"
           />
           {field.unit && (
             <span className="text-sm text-muted-foreground">{field.unit}</span>

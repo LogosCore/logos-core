@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { RotateCcwIcon, TriangleAlertIcon } from "lucide-react"
+import { RotateCcwIcon, SearchXIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
+import { SearchInput } from "@/components/ui/search-input"
+import { cn } from "@/lib/utils"
 import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
 import { useUpdateModuleConfig } from "@/graphql/hooks/modules"
 import { errorMessage, graphqlErrorCode } from "./api-errors"
@@ -44,6 +46,7 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
   const [edits, setEdits] = useState<Record<string, Draft>>({})
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
   const update = useUpdateModuleConfig()
 
   const properties = management.properties
@@ -57,7 +60,14 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
   }, [properties, edits])
 
   const { diff, errors } = useMemo(() => evaluateForm(properties, drafts), [properties, drafts])
-  const groups = useMemo(() => groupByField(properties, (p) => p.field), [properties])
+  // Search narrows what is shown only; edits to hidden properties still count
+  // towards Save and appear in the confirm dialog.
+  const visible = useMemo(() => filterProperties(properties, search), [properties, search])
+  // One grid, ordered by group; each card names its group.
+  const cards = useMemo(
+    () => groupByField(visible, (p) => p.field).flatMap((g) => g.items),
+    [visible],
+  )
   const dirty = Object.keys(edits).length > 0
   const errorCount = Object.keys(errors).length
 
@@ -121,9 +131,13 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Settings for this channel. Revision {management.revision}.
-        </p>
+        <SearchInput
+          value={search}
+          onValueChange={setSearch}
+          placeholder="Search settings..."
+          debounceMs={100}
+          title=""
+        />
         {canWrite ? (
           <div className="flex items-center gap-2">
             {errorCount > 0 && (
@@ -151,26 +165,30 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
         )}
       </div>
 
-      {groups.map(({ group, items }) => (
-        <section key={group} className="rounded-xl border">
-          <h3 className="border-b px-4 py-2 text-sm font-semibold">{group}</h3>
-          <div className="divide-y">
-            {items.map((p) => (
-              <PropertyRow
-                key={p.field.key}
-                property={p}
-                draft={drafts[p.field.key]}
-                edited={p.field.key in edits}
-                error={errors[p.field.key]}
-                disabled={!canWrite}
-                onChange={(d) => setDraft(p.field.key, d)}
-                onReset={() => setDraft(p.field.key, resetDraft(p.field))}
-                onUndo={() => undo(p.field.key)}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+      {cards.length === 0 && (
+        <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+          <SearchXIcon className="size-8 opacity-50" />
+          <p className="text-sm">No settings match “{search}”.</p>
+        </div>
+      )}
+
+      {/* auto-fill sizes columns to the space beside the sidebar, not the
+          viewport. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,24rem),1fr))] gap-3">
+        {cards.map((p) => (
+          <PropertyCard
+            key={p.field.key}
+            property={p}
+            draft={drafts[p.field.key]}
+            edited={p.field.key in edits}
+            error={errors[p.field.key]}
+            disabled={!canWrite}
+            onChange={(d) => setDraft(p.field.key, d)}
+            onReset={() => setDraft(p.field.key, resetDraft(p.field))}
+            onUndo={() => undo(p.field.key)}
+          />
+        ))}
+      </div>
 
       <ConfirmSaveDialog
         open={confirmOpen}
@@ -186,7 +204,7 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
   )
 }
 
-function PropertyRow({
+function PropertyCard({
   property: p,
   draft,
   edited,
@@ -217,7 +235,20 @@ function PropertyRow({
   const canReset = !disabled && p.source === "set" && !draftEmpty
 
   return (
-    <Field className="gap-2 px-4 py-3" data-invalid={error ? true : undefined}>
+    <Field
+      className={cn(
+        "min-w-0",
+        "gap-2 rounded-xl border bg-card p-4",
+        edited && "border-primary/50",
+        error && "border-destructive/60",
+      )}
+      data-invalid={error ? true : undefined}
+    >
+      {f.group && (
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {f.group}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <FieldLabel htmlFor={id} className="w-auto">
           {f.label}
@@ -278,6 +309,18 @@ function PropertyRow({
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )
+}
+
+// filterProperties keeps properties whose label, key, description or group
+// contains every whitespace-separated term (case-insensitive).
+function filterProperties(properties: Property[], query: string): Property[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return properties
+  return properties.filter((p) => {
+    const f = p.field
+    const text = [f.label, f.key, f.description, f.group].filter(Boolean).join(" ").toLowerCase()
+    return terms.every((t) => text.includes(t))
+  })
 }
 
 function ConfirmSaveDialog({
