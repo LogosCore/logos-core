@@ -1,17 +1,15 @@
 import { Link, useParams, useSearchParams } from "react-router"
 import { ArrowLeftIcon, BlocksIcon, PackageOpenIcon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useAuthStore } from "@/stores/auth"
 import { Permissions } from "@/constants/permissions"
 import { useModule, useModuleDetailSubscription } from "@/graphql/hooks/modules"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
-import { SyncStateBadge } from "@/components/modules/management/sync-state-badge"
+import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
 import { ModuleIdentity, StatusValues } from "@/components/modules/management/overview-tab"
 import { ConfigTab } from "@/components/modules/management/config-tab"
 import { ActionsTab } from "@/components/modules/management/actions-tab"
@@ -64,26 +62,20 @@ export function ModuleDetailPage() {
             <>
               <span className="h-5 w-px bg-border" aria-hidden />
               <h1 className="font-mono text-xl font-semibold">{module.instance}</h1>
-              <div className="flex flex-wrap items-center gap-2">
-                {module.name && <Badge variant="default">{module.name}</Badge>}
-                <Badge variant="secondary">{module.type}</Badge>
-                {module.version && <Badge variant="outline">v{module.version.replace(/^v/, "")}</Badge>}
-                {module.management && <SyncStateBadge management={module.management} />}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <ModuleStatusIndicator status={module.status} />
-                <span className="inline-flex items-center gap-1.5">
-                  Health:
-                  <ModuleHealthIndicator health={module.lastStatus} registered={module.status === "registered"} />
-                </span>
-                <span>
-                  Last heartbeat:{" "}
-                  {module.lastHeartbeatAt ? (
-                    <FormattedDateTimeText date={module.lastHeartbeatAt} format="yyyy.mm.dd hh:MM:ss" />
-                  ) : (
-                    "never"
-                  )}
-                </span>
+              {/* What it is, as quiet text: details live on the Overview. */}
+              <span className="text-sm text-muted-foreground">
+                {[module.name, module.type, module.version && `v${module.version.replace(/^v/, "")}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+              {/* How it is: every state in the same dot-and-label style. */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:ml-auto">
+                <ModuleStatusIndicator
+                  status={module.status}
+                  title={module.lastHeartbeatAt ? `Last heartbeat ${new Date(module.lastHeartbeatAt).toLocaleString()}` : undefined}
+                />
+                <ModuleHealthIndicator health={module.lastStatus} registered={module.status === "registered"} />
+                {module.management && <ModuleSyncIndicator management={module.management} />}
               </div>
             </>
           )}
