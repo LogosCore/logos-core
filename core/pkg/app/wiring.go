@@ -184,7 +184,7 @@ func (a *App) buildResolvers() *resolvers {
 		// the lifecycle service so the GraphQL deregister and the RPC
 		// deregister share one transition (registry update + gate bust +
 		// audit + bus event).
-		module: resolver.NewModuleResolver(a.repos.ModuleRegistry, a.moduleService, a.moduleMgmt),
+		module: resolver.NewModuleResolver(a.repos.ModuleRegistry, a.moduleService, a.moduleMgmt, a.moduleLogs),
 		skill:  resolver.NewSkillResolver(a.skillService, a.repos.Skill, a.repos.SkillSubscription, a.repos.User),
 	}
 }

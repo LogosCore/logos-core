@@ -1,0 +1,51 @@
+# =============================================================================
+# Module live logs (prototype)
+# =============================================================================
+#
+# A live tail of one module instance's logs, relayed from the module while the
+# subscription is open (see logos-golang-protocol/protocol/logs.go). Core does
+# not store any of it. Only modules whose manifest declares the "logs"
+# capability support it (ModuleManagement.capabilities).
+
+enum ModuleLogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum ModuleLogStreamState {
+  STREAMING
+  # The module is unreachable; core keeps retrying.
+  DISCONNECTED
+  # The module ended the stream (reason says why); core retries while the
+  # subscription stays open.
+  ENDED
+}
+
+type ModuleLogRecord {
+  time: String!
+  level: ModuleLogLevel!
+  message: String!
+  attrs: JSON
+}
+
+type ModuleLogEvent {
+  records: [ModuleLogRecord!]!
+  # Records from the module's recent buffer, sent once when the stream opens.
+  backlog: Boolean!
+  # Records lost on the way (module rate limit, slow viewer).
+  dropped: Int!
+  # Batches went missing in transit; an unknown number of records is gone.
+  lost: Boolean!
+  # Set when the stream's state changes.
+  state: ModuleLogStreamState
+  reason: String
+}
+
+extend type Subscription {
+  # Live tail of a module's logs at minLevel and above (default INFO). Agent
+  # API keys are rejected.
+  moduleLogs(instance: ID!, minLevel: ModuleLogLevel): ModuleLogEvent!
+    @hasPermission(permission: "module:logs:read")
+}

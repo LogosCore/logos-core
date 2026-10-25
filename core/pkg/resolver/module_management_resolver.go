@@ -232,6 +232,7 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 		Properties:      props,
 		Actions:         actions,
 		Status:          status,
+		Capabilities:    append([]string{}, m.Capabilities...),
 		Revision:        int(eff.Revision),
 		AppliedRevision: int(mod.AppliedRevision),
 		SyncState:       model.ModuleSyncState(modulemgmt.SyncState(*mod, eff.Revision)),

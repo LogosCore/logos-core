@@ -368,9 +368,26 @@ type ComplexityRoot struct {
 		Unit        func(childComplexity int) int
 	}
 
+	ModuleLogEvent struct {
+		Backlog func(childComplexity int) int
+		Dropped func(childComplexity int) int
+		Lost    func(childComplexity int) int
+		Reason  func(childComplexity int) int
+		Records func(childComplexity int) int
+		State   func(childComplexity int) int
+	}
+
+	ModuleLogRecord struct {
+		Attrs   func(childComplexity int) int
+		Level   func(childComplexity int) int
+		Message func(childComplexity int) int
+		Time    func(childComplexity int) int
+	}
+
 	ModuleManagement struct {
 		Actions         func(childComplexity int) int
 		AppliedRevision func(childComplexity int) int
+		Capabilities    func(childComplexity int) int
 		LastApplyError  func(childComplexity int) int
 		Properties      func(childComplexity int) int
 		Revision        func(childComplexity int) int
@@ -707,6 +724,7 @@ type ComplexityRoot struct {
 		HashChanged                 func(childComplexity int, operationID string) int
 		HostChanged                 func(childComplexity int, operationID string) int
 		ModuleChanged               func(childComplexity int) int
+		ModuleLogs                  func(childComplexity int, instance string, minLevel *model.ModuleLogLevel) int
 		MyAgentActionOccurred       func(childComplexity int) int
 		MyCredentialChanged         func(childComplexity int, operationIds []string) int
 		MyHashChanged               func(childComplexity int, operationIds []string) int
@@ -1257,6 +1275,7 @@ type SubscriptionResolver interface {
 	HashChanged(ctx context.Context, operationID string) (<-chan *model.HashEvent, error)
 	MyHashChanged(ctx context.Context, operationIds []string) (<-chan *model.HashEvent, error)
 	HostChanged(ctx context.Context, operationID string) (<-chan *model.HostEvent, error)
+	ModuleLogs(ctx context.Context, instance string, minLevel *model.ModuleLogLevel) (<-chan *model.ModuleLogEvent, error)
 	ModuleChanged(ctx context.Context) (<-chan *model.ModuleEvent, error)
 	MySessionChanged(ctx context.Context) (<-chan *model.SessionEvent, error)
 	SessionChanged(ctx context.Context, userID *string) (<-chan *model.SessionEvent, error)
@@ -2637,6 +2656,68 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleField.Unit(childComplexity), true
 
+	case "ModuleLogEvent.backlog":
+		if e.ComplexityRoot.ModuleLogEvent.Backlog == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogEvent.Backlog(childComplexity), true
+	case "ModuleLogEvent.dropped":
+		if e.ComplexityRoot.ModuleLogEvent.Dropped == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogEvent.Dropped(childComplexity), true
+	case "ModuleLogEvent.lost":
+		if e.ComplexityRoot.ModuleLogEvent.Lost == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogEvent.Lost(childComplexity), true
+	case "ModuleLogEvent.reason":
+		if e.ComplexityRoot.ModuleLogEvent.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogEvent.Reason(childComplexity), true
+	case "ModuleLogEvent.records":
+		if e.ComplexityRoot.ModuleLogEvent.Records == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogEvent.Records(childComplexity), true
+	case "ModuleLogEvent.state":
+		if e.ComplexityRoot.ModuleLogEvent.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogEvent.State(childComplexity), true
+
+	case "ModuleLogRecord.attrs":
+		if e.ComplexityRoot.ModuleLogRecord.Attrs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogRecord.Attrs(childComplexity), true
+	case "ModuleLogRecord.level":
+		if e.ComplexityRoot.ModuleLogRecord.Level == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogRecord.Level(childComplexity), true
+	case "ModuleLogRecord.message":
+		if e.ComplexityRoot.ModuleLogRecord.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogRecord.Message(childComplexity), true
+	case "ModuleLogRecord.time":
+		if e.ComplexityRoot.ModuleLogRecord.Time == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleLogRecord.Time(childComplexity), true
+
 	case "ModuleManagement.actions":
 		if e.ComplexityRoot.ModuleManagement.Actions == nil {
 			break
@@ -2649,6 +2730,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleManagement.AppliedRevision(childComplexity), true
+	case "ModuleManagement.capabilities":
+		if e.ComplexityRoot.ModuleManagement.Capabilities == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleManagement.Capabilities(childComplexity), true
 	case "ModuleManagement.lastApplyError":
 		if e.ComplexityRoot.ModuleManagement.LastApplyError == nil {
 			break
@@ -4911,6 +4998,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.ModuleChanged(childComplexity), true
+	case "Subscription.moduleLogs":
+		if e.ComplexityRoot.Subscription.ModuleLogs == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_moduleLogs_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.ModuleLogs(childComplexity, args["instance"].(string), args["minLevel"].(*model.ModuleLogLevel)), true
 	case "Subscription.myAgentActionOccurred":
 		if e.ComplexityRoot.Subscription.MyAgentActionOccurred == nil {
 			break
@@ -7415,6 +7513,58 @@ extend type Subscription {
     @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
+	{Name: "../schema/module_logs.graphql", Input: `# =============================================================================
+# Module live logs (prototype)
+# =============================================================================
+#
+# A live tail of one module instance's logs, relayed from the module while the
+# subscription is open (see logos-golang-protocol/protocol/logs.go). Core does
+# not store any of it. Only modules whose manifest declares the "logs"
+# capability support it (ModuleManagement.capabilities).
+
+enum ModuleLogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum ModuleLogStreamState {
+  STREAMING
+  # The module is unreachable; core keeps retrying.
+  DISCONNECTED
+  # The module ended the stream (reason says why); core retries while the
+  # subscription stays open.
+  ENDED
+}
+
+type ModuleLogRecord {
+  time: String!
+  level: ModuleLogLevel!
+  message: String!
+  attrs: JSON
+}
+
+type ModuleLogEvent {
+  records: [ModuleLogRecord!]!
+  # Records from the module's recent buffer, sent once when the stream opens.
+  backlog: Boolean!
+  # Records lost on the way (module rate limit, slow viewer).
+  dropped: Int!
+  # Batches went missing in transit; an unknown number of records is gone.
+  lost: Boolean!
+  # Set when the stream's state changes.
+  state: ModuleLogStreamState
+  reason: String
+}
+
+extend type Subscription {
+  # Live tail of a module's logs at minLevel and above (default INFO). Agent
+  # API keys are rejected.
+  moduleLogs(instance: ID!, minLevel: ModuleLogLevel): ModuleLogEvent!
+    @hasPermission(permission: "module:logs:read")
+}
+`, BuiltIn: false},
 	{Name: "../schema/module_management.graphql", Input: `# =============================================================================
 # Module management — declared properties, actions and status (prototype)
 # =============================================================================
@@ -7451,6 +7601,8 @@ type ModuleManagement {
   properties: [ModuleProperty!]!
   actions: [ModuleAction!]!
   status: [ModuleStatusValue!]!
+  # Optional features the module serves, e.g. "logs" (live log tail).
+  capabilities: [String!]!
 
   # The instance's config revision (expectedRevision for updateModuleConfig),
   # and the one the instance last processed.
@@ -11954,6 +12106,22 @@ func (ec *executionContext) field_Subscription_hostChanged_args(ctx context.Cont
 		return nil, err
 	}
 	args["operationId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_moduleLogs_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "minLevel", ec.unmarshalOModuleLogLevel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel)
+	if err != nil {
+		return nil, err
+	}
+	args["minLevel"] = arg1
 	return args, nil
 }
 
@@ -17539,6 +17707,8 @@ func (ec *executionContext) fieldContext_Module_management(_ context.Context, fi
 				return ec.fieldContext_ModuleManagement_actions(ctx, field)
 			case "status":
 				return ec.fieldContext_ModuleManagement_status(ctx, field)
+			case "capabilities":
+				return ec.fieldContext_ModuleManagement_capabilities(ctx, field)
 			case "revision":
 				return ec.fieldContext_ModuleManagement_revision(ctx, field)
 			case "appliedRevision":
@@ -19065,6 +19235,306 @@ func (ec *executionContext) fieldContext_ModuleField_options(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleLogEvent_records(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogEvent_records,
+		func(ctx context.Context) (any, error) {
+			return obj.Records, nil
+		},
+		nil,
+		ec.marshalNModuleLogRecord2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogRecordᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogEvent_records(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "time":
+				return ec.fieldContext_ModuleLogRecord_time(ctx, field)
+			case "level":
+				return ec.fieldContext_ModuleLogRecord_level(ctx, field)
+			case "message":
+				return ec.fieldContext_ModuleLogRecord_message(ctx, field)
+			case "attrs":
+				return ec.fieldContext_ModuleLogRecord_attrs(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleLogRecord", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogEvent_backlog(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogEvent_backlog,
+		func(ctx context.Context) (any, error) {
+			return obj.Backlog, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogEvent_backlog(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogEvent_dropped(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogEvent_dropped,
+		func(ctx context.Context) (any, error) {
+			return obj.Dropped, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogEvent_dropped(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogEvent_lost(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogEvent_lost,
+		func(ctx context.Context) (any, error) {
+			return obj.Lost, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogEvent_lost(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogEvent_state(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogEvent_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalOModuleLogStreamState2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogStreamState,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogEvent_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModuleLogStreamState does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogEvent_reason(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogEvent_reason,
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogEvent_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogRecord_time(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogRecord_time,
+		func(ctx context.Context) (any, error) {
+			return obj.Time, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogRecord_time(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogRecord_level(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogRecord_level,
+		func(ctx context.Context) (any, error) {
+			return obj.Level, nil
+		},
+		nil,
+		ec.marshalNModuleLogLevel2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogRecord_level(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModuleLogLevel does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogRecord_message(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogRecord_message,
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogRecord_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleLogRecord_attrs(ctx context.Context, field graphql.CollectedField, obj *model.ModuleLogRecord) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleLogRecord_attrs,
+		func(ctx context.Context) (any, error) {
+			return obj.Attrs, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleLogRecord_attrs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleLogRecord",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleManagement_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19224,6 +19694,35 @@ func (ec *executionContext) fieldContext_ModuleManagement_status(_ context.Conte
 				return ec.fieldContext_ModuleStatusValue_value(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleStatusValue", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleManagement_capabilities(ctx context.Context, field graphql.CollectedField, obj *model.ModuleManagement) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleManagement_capabilities,
+		func(ctx context.Context) (any, error) {
+			return obj.Capabilities, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleManagement_capabilities(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleManagement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -34967,6 +35466,79 @@ func (ec *executionContext) fieldContext_Subscription_hostChanged(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_moduleLogs(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Subscription_moduleLogs,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().ModuleLogs(ctx, fc.Args["instance"].(string), fc.Args["minLevel"].(*model.ModuleLogLevel))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:logs:read")
+				if err != nil {
+					var zeroVal *model.ModuleLogEvent
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.ModuleLogEvent
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModuleLogEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogEvent,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Subscription_moduleLogs(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "records":
+				return ec.fieldContext_ModuleLogEvent_records(ctx, field)
+			case "backlog":
+				return ec.fieldContext_ModuleLogEvent_backlog(ctx, field)
+			case "dropped":
+				return ec.fieldContext_ModuleLogEvent_dropped(ctx, field)
+			case "lost":
+				return ec.fieldContext_ModuleLogEvent_lost(ctx, field)
+			case "state":
+				return ec.fieldContext_ModuleLogEvent_state(ctx, field)
+			case "reason":
+				return ec.fieldContext_ModuleLogEvent_reason(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleLogEvent", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_moduleLogs_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Subscription_moduleChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
 	return graphql.ResolveFieldStream(
 		ctx,
@@ -49031,6 +49603,115 @@ func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var moduleLogEventImplementors = []string{"ModuleLogEvent"}
+
+func (ec *executionContext) _ModuleLogEvent(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleLogEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleLogEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleLogEvent")
+		case "records":
+			out.Values[i] = ec._ModuleLogEvent_records(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "backlog":
+			out.Values[i] = ec._ModuleLogEvent_backlog(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "dropped":
+			out.Values[i] = ec._ModuleLogEvent_dropped(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lost":
+			out.Values[i] = ec._ModuleLogEvent_lost(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._ModuleLogEvent_state(ctx, field, obj)
+		case "reason":
+			out.Values[i] = ec._ModuleLogEvent_reason(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleLogRecordImplementors = []string{"ModuleLogRecord"}
+
+func (ec *executionContext) _ModuleLogRecord(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleLogRecord) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleLogRecordImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleLogRecord")
+		case "time":
+			out.Values[i] = ec._ModuleLogRecord_time(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "level":
+			out.Values[i] = ec._ModuleLogRecord_level(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._ModuleLogRecord_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attrs":
+			out.Values[i] = ec._ModuleLogRecord_attrs(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var moduleManagementImplementors = []string{"ModuleManagement"}
 
 func (ec *executionContext) _ModuleManagement(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleManagement) graphql.Marshaler {
@@ -49059,6 +49740,11 @@ func (ec *executionContext) _ModuleManagement(ctx context.Context, sel ast.Selec
 			}
 		case "status":
 			out.Values[i] = ec._ModuleManagement_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "capabilities":
+			out.Values[i] = ec._ModuleManagement_capabilities(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -52774,6 +53460,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_myHashChanged(ctx, fields[0])
 	case "hostChanged":
 		return ec._Subscription_hostChanged(ctx, fields[0])
+	case "moduleLogs":
+		return ec._Subscription_moduleLogs(ctx, fields[0])
 	case "moduleChanged":
 		return ec._Subscription_moduleChanged(ctx, fields[0])
 	case "mySessionChanged":
@@ -57940,6 +58628,56 @@ func (ec *executionContext) marshalNModuleField2ᚖgithubᚗcomᚋlogoscoreᚋlo
 	return ec._ModuleField(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNModuleLogEvent2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogEvent(ctx context.Context, sel ast.SelectionSet, v model.ModuleLogEvent) graphql.Marshaler {
+	return ec._ModuleLogEvent(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNModuleLogEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogEvent(ctx context.Context, sel ast.SelectionSet, v *model.ModuleLogEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleLogEvent(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNModuleLogLevel2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel(ctx context.Context, v any) (model.ModuleLogLevel, error) {
+	var res model.ModuleLogLevel
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleLogLevel2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel(ctx context.Context, sel ast.SelectionSet, v model.ModuleLogLevel) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNModuleLogRecord2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogRecordᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleLogRecord) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleLogRecord2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogRecord(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleLogRecord2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogRecord(ctx context.Context, sel ast.SelectionSet, v *model.ModuleLogRecord) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleLogRecord(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNModuleProperty2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModulePropertyᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleProperty) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -59908,6 +60646,38 @@ func (ec *executionContext) marshalOModuleEnumOption2ᚕᚖgithubᚗcomᚋlogosc
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalOModuleLogLevel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel(ctx context.Context, v any) (*model.ModuleLogLevel, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.ModuleLogLevel)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOModuleLogLevel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogLevel(ctx context.Context, sel ast.SelectionSet, v *model.ModuleLogLevel) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOModuleLogStreamState2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogStreamState(ctx context.Context, v any) (*model.ModuleLogStreamState, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.ModuleLogStreamState)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOModuleLogStreamState2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleLogStreamState(ctx context.Context, sel ast.SelectionSet, v *model.ModuleLogStreamState) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOModuleManagement2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleManagement(ctx context.Context, sel ast.SelectionSet, v *model.ModuleManagement) graphql.Marshaler {

@@ -32,4 +32,5 @@ const (
 	ModuleConfigWritePermission      string = "module:config:write"       // set/clear property values
 	ModuleActionInvokePermission     string = "module:action:invoke"      // run a low-risk declared action
 	ModuleActionInvokeHighPermission string = "module:action:invoke:high" // additionally required for risk "high"
+	ModuleLogsReadPermission         string = "module:logs:read"          // live tail of a module's logs
 )

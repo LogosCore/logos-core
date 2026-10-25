@@ -34,6 +34,8 @@ type ModuleManagement {
   properties: [ModuleProperty!]!
   actions: [ModuleAction!]!
   status: [ModuleStatusValue!]!
+  # Optional features the module serves, e.g. "logs" (live log tail).
+  capabilities: [String!]!
 
   # The instance's config revision (expectedRevision for updateModuleConfig),
   # and the one the instance last processed.

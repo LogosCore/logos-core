@@ -87,7 +87,7 @@ func TestModules_PassesStatusFilterThrough(t *testing.T) {
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},
 		{Instance: "tg-1", Status: models.ModuleStatusDead},
 	}}
-	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil)
+	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil, nil)
 
 	out, err := r.Modules(context.Background(), []string{models.ModuleStatusRegistered})
 	if err != nil {
@@ -106,7 +106,7 @@ func TestModules_NilFilterReturnsAll(t *testing.T) {
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},
 		{Instance: "tg-1", Status: models.ModuleStatusDead},
 	}}
-	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil)
+	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil, nil)
 
 	out, err := r.Modules(context.Background(), nil)
 	if err != nil {
@@ -122,7 +122,7 @@ func TestRemoveModule_DeregistersAndReturnsUpdatedRow(t *testing.T) {
 		{Instance: "http-1", Type: "channel", Status: models.ModuleStatusDeregistered},
 	}}
 	dereg := &fakeDeregistrar{found: true}
-	r := NewModuleResolver(repo, dereg, nil)
+	r := NewModuleResolver(repo, dereg, nil, nil)
 
 	mod, err := r.RemoveModule(adminCtx(uuid.New()), "http-1")
 	if err != nil {
@@ -142,7 +142,7 @@ func TestRemoveModule_DeregistersAndReturnsUpdatedRow(t *testing.T) {
 
 func TestRemoveModule_NotRegisteredIsError(t *testing.T) {
 	dereg := &fakeDeregistrar{found: false}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil, nil)
 
 	if _, err := r.RemoveModule(adminCtx(uuid.New()), "ghost"); err == nil {
 		t.Fatal("expected error when instance is not currently registered")
@@ -151,7 +151,7 @@ func TestRemoveModule_NotRegisteredIsError(t *testing.T) {
 
 func TestRemoveModule_BlankInstanceRejectedBeforeDeregister(t *testing.T) {
 	dereg := &fakeDeregistrar{found: true}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil, nil)
 
 	if _, err := r.RemoveModule(adminCtx(uuid.New()), "   "); err == nil {
 		t.Fatal("expected error for blank instance")
@@ -163,7 +163,7 @@ func TestRemoveModule_BlankInstanceRejectedBeforeDeregister(t *testing.T) {
 
 func TestRemoveModule_PropagatesDeregisterError(t *testing.T) {
 	dereg := &fakeDeregistrar{err: errors.New("mongo down")}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil, nil)
 
 	if _, err := r.RemoveModule(adminCtx(uuid.New()), "http-1"); err == nil {
 		t.Fatal("expected deregister error to propagate")
@@ -171,7 +171,7 @@ func TestRemoveModule_PropagatesDeregisterError(t *testing.T) {
 }
 
 func TestModuleFieldResolvers_FormatTimestamps(t *testing.T) {
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, nil, nil)
 	hb := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	mod := &models.Module{
 		RegisteredAt:    time.Date(2026, 6, 27, 11, 0, 0, 0, time.UTC),

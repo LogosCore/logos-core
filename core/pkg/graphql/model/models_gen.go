@@ -327,11 +327,28 @@ type ModuleField struct {
 	Options     []*ModuleEnumOption `json:"options,omitempty"`
 }
 
+type ModuleLogEvent struct {
+	Records []*ModuleLogRecord    `json:"records"`
+	Backlog bool                  `json:"backlog"`
+	Dropped int                   `json:"dropped"`
+	Lost    bool                  `json:"lost"`
+	State   *ModuleLogStreamState `json:"state,omitempty"`
+	Reason  *string               `json:"reason,omitempty"`
+}
+
+type ModuleLogRecord struct {
+	Time    string         `json:"time"`
+	Level   ModuleLogLevel `json:"level"`
+	Message string         `json:"message"`
+	Attrs   any            `json:"attrs,omitempty"`
+}
+
 type ModuleManagement struct {
 	SchemaVersion   string               `json:"schemaVersion"`
 	Properties      []*ModuleProperty    `json:"properties"`
 	Actions         []*ModuleAction      `json:"actions"`
 	Status          []*ModuleStatusValue `json:"status"`
+	Capabilities    []string             `json:"capabilities"`
 	Revision        int                  `json:"revision"`
 	AppliedRevision int                  `json:"appliedRevision"`
 	SyncState       ModuleSyncState      `json:"syncState"`
@@ -1093,6 +1110,122 @@ func (e *ModuleActionStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e ModuleActionStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ModuleLogLevel string
+
+const (
+	ModuleLogLevelDebug ModuleLogLevel = "DEBUG"
+	ModuleLogLevelInfo  ModuleLogLevel = "INFO"
+	ModuleLogLevelWarn  ModuleLogLevel = "WARN"
+	ModuleLogLevelError ModuleLogLevel = "ERROR"
+)
+
+var AllModuleLogLevel = []ModuleLogLevel{
+	ModuleLogLevelDebug,
+	ModuleLogLevelInfo,
+	ModuleLogLevelWarn,
+	ModuleLogLevelError,
+}
+
+func (e ModuleLogLevel) IsValid() bool {
+	switch e {
+	case ModuleLogLevelDebug, ModuleLogLevelInfo, ModuleLogLevelWarn, ModuleLogLevelError:
+		return true
+	}
+	return false
+}
+
+func (e ModuleLogLevel) String() string {
+	return string(e)
+}
+
+func (e *ModuleLogLevel) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModuleLogLevel(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModuleLogLevel", str)
+	}
+	return nil
+}
+
+func (e ModuleLogLevel) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ModuleLogLevel) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ModuleLogLevel) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ModuleLogStreamState string
+
+const (
+	ModuleLogStreamStateStreaming    ModuleLogStreamState = "STREAMING"
+	ModuleLogStreamStateDisconnected ModuleLogStreamState = "DISCONNECTED"
+	ModuleLogStreamStateEnded        ModuleLogStreamState = "ENDED"
+)
+
+var AllModuleLogStreamState = []ModuleLogStreamState{
+	ModuleLogStreamStateStreaming,
+	ModuleLogStreamStateDisconnected,
+	ModuleLogStreamStateEnded,
+}
+
+func (e ModuleLogStreamState) IsValid() bool {
+	switch e {
+	case ModuleLogStreamStateStreaming, ModuleLogStreamStateDisconnected, ModuleLogStreamStateEnded:
+		return true
+	}
+	return false
+}
+
+func (e ModuleLogStreamState) String() string {
+	return string(e)
+}
+
+func (e *ModuleLogStreamState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModuleLogStreamState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModuleLogStreamState", str)
+	}
+	return nil
+}
+
+func (e ModuleLogStreamState) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ModuleLogStreamState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ModuleLogStreamState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

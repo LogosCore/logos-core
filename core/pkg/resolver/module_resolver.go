@@ -38,6 +38,9 @@ type IModuleResolver interface {
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 
+	// Subscriptions
+	ModuleLogs(ctx context.Context, instance string, minLevel *model.ModuleLogLevel) (<-chan *model.ModuleLogEvent, error)
+
 	// Management is the Module.management field (module_management.graphql).
 	Management(ctx context.Context, obj *models.Module) (*model.ModuleManagement, error)
 
@@ -57,14 +60,16 @@ type moduleResolver struct {
 	repo        repository.IModuleRegistryRepository
 	deregistrar ModuleDeregistrar
 	mgmt        ModuleManager
+	logs        ModuleLogStreamer
 }
 
 // NewModuleResolver builds the Module resolver. deregistrar is the lifecycle
 // service; removeModule routes through it so the GraphQL path and the RPC
 // deregister path share one transition. mgmt is the module-management service
 // (nil disables management: Module.management is null, mutations error).
-func NewModuleResolver(repo repository.IModuleRegistryRepository, deregistrar ModuleDeregistrar, mgmt ModuleManager) IModuleResolver {
-	return &moduleResolver{repo: repo, deregistrar: deregistrar, mgmt: mgmt}
+// logs is the live log relay (nil disables moduleLogs).
+func NewModuleResolver(repo repository.IModuleRegistryRepository, deregistrar ModuleDeregistrar, mgmt ModuleManager, logs ModuleLogStreamer) IModuleResolver {
+	return &moduleResolver{repo: repo, deregistrar: deregistrar, mgmt: mgmt, logs: logs}
 }
 
 // Modules lists module instances filtered to the given lifecycle statuses,

@@ -22,6 +22,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/mcp"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
+	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
@@ -120,8 +121,11 @@ type App struct {
 	moduleService *lifecycle.Service // deregister path shared by RPC + the GraphQL removeModule mutation
 	// Module management: core → module RPC client and the service behind
 	// updateModuleConfig / invokeModuleAction / Module.management.
-	rpcClient  *messaging.RPCClient
-	moduleMgmt *modulemgmt.Service
+	rpcClient *messaging.RPCClient
+	// logConsumer and moduleLogs serve the live module log tail.
+	logConsumer *messaging.LogConsumer
+	moduleLogs  *modulelogs.Relay
+	moduleMgmt  *modulemgmt.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -179,6 +183,11 @@ func NewApp() (*App, error) {
 		repos.ModuleInvocation, rpcClient, bus, modulemgmt.Config{}, l)
 	moduleService.SetManagement(moduleMgmt)
 
+	// Live module log tail: relayed per viewer over the same RPC client plus a
+	// temporary queue per stream; nothing is stored.
+	logConsumer := messaging.NewLogConsumer(mqConfig(e), l)
+	moduleLogs := modulelogs.New(repos.ModuleRegistry, rpcClient, logConsumer, l)
+
 	// --- Future integration patterns ---
 	//
 	// SSE (subscribes to event bus):
@@ -226,6 +235,8 @@ func NewApp() (*App, error) {
 		moduleService:   moduleService,
 		rpcClient:       rpcClient,
 		moduleMgmt:      moduleMgmt,
+		logConsumer:     logConsumer,
+		moduleLogs:      moduleLogs,
 	}, nil
 }
 
@@ -332,6 +343,11 @@ func (a *App) stopLifecycle() {
 	}
 	if a.rpcServer != nil {
 		a.rpcServer.Stop()
+	}
+	if a.logConsumer != nil {
+		if err := a.logConsumer.Close(); err != nil {
+			a.logger.Warn("Error closing module log consumer", zap.Error(err))
+		}
 	}
 	if a.rpcClient != nil {
 		if err := a.rpcClient.Close(); err != nil {
