@@ -477,10 +477,8 @@ export type ModuleConfigChange = {
   at: Scalars['String']['output'];
   changes: Array<ModuleConfigKeyChange>;
   id: Scalars['ID']['output'];
-  instance?: Maybe<Scalars['ID']['output']>;
-  moduleName: Scalars['String']['output'];
+  instance: Scalars['ID']['output'];
   revision: Scalars['Int']['output'];
-  scope: ModuleConfigScope;
 };
 
 export type ModuleConfigKeyChange = {
@@ -488,10 +486,6 @@ export type ModuleConfigKeyChange = {
   new?: Maybe<Scalars['JSON']['output']>;
   old?: Maybe<Scalars['JSON']['output']>;
 };
-
-export type ModuleConfigScope =
-  | 'INSTANCE'
-  | 'MODULE';
 
 export type ModuleConfigValueInput = {
   key: Scalars['String']['input'];
@@ -530,9 +524,7 @@ export type ModuleField = {
 export type ModuleManagement = {
   actions: Array<ModuleAction>;
   appliedRevision: Scalars['Int']['output'];
-  instanceRevision: Scalars['Int']['output'];
   lastApplyError?: Maybe<Scalars['String']['output']>;
-  moduleRevision: Scalars['Int']['output'];
   properties: Array<ModuleProperty>;
   revision: Scalars['Int']['output'];
   schemaVersion: Scalars['String']['output'];
@@ -544,12 +536,11 @@ export type ModuleProperty = {
   apply: Scalars['String']['output'];
   effective?: Maybe<Scalars['JSON']['output']>;
   field: ModuleField;
-  instanceValue?: Maybe<Scalars['JSON']['output']>;
   isSet: Scalars['Boolean']['output'];
-  moduleValue?: Maybe<Scalars['JSON']['output']>;
   rejectedReason?: Maybe<Scalars['String']['output']>;
   restartRequired: Scalars['Boolean']['output'];
   source: Scalars['String']['output'];
+  value?: Maybe<Scalars['JSON']['output']>;
 };
 
 export type ModuleStatusValue = {
@@ -1019,7 +1010,6 @@ export type MutationUpdateHostArgs = {
 export type MutationUpdateModuleConfigArgs = {
   expectedRevision: Scalars['Int']['input'];
   instance: Scalars['ID']['input'];
-  scope: ModuleConfigScope;
   values: Array<ModuleConfigValueInput>;
 };
 
@@ -2690,14 +2680,14 @@ export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, 
 
 export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null };
 
-export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, moduleRevision: number, instanceRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, moduleValue?: unknown | null, instanceValue?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null };
+export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null };
 
 export type ModuleQueryVariables = Exact<{
   instance: Scalars['ID']['input'];
 }>;
 
 
-export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, moduleRevision: number, instanceRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, moduleValue?: unknown | null, instanceValue?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null } | null };
+export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null } | null };
 
 export type ModuleActionInvocationFieldsFragment = { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } };
 
@@ -2715,17 +2705,16 @@ export type ModuleConfigChangesQueryVariables = Exact<{
 }>;
 
 
-export type ModuleConfigChangesQuery = { moduleConfigChanges: Array<{ id: string, moduleName: string, instance?: string | null, scope: ModuleConfigScope, revision: number, at: string, changes: Array<{ key: string, old?: unknown | null, new?: unknown | null }>, actor: { type: string, id: string, name?: string | null } }> };
+export type ModuleConfigChangesQuery = { moduleConfigChanges: Array<{ id: string, instance: string, revision: number, at: string, changes: Array<{ key: string, old?: unknown | null, new?: unknown | null }>, actor: { type: string, id: string, name?: string | null } }> };
 
 export type UpdateModuleConfigMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
-  scope: ModuleConfigScope;
   values: Array<ModuleConfigValueInput> | ModuleConfigValueInput;
   expectedRevision: Scalars['Int']['input'];
 }>;
 
 
-export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, moduleRevision: number, instanceRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, moduleValue?: unknown | null, instanceValue?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null } };
+export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null }> } | null } };
 
 export type InvokeModuleActionMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
@@ -3881,8 +3870,6 @@ export const ModuleDetailFieldsFragmentDoc = new TypedDocumentString(`
     schemaVersion
     revision
     appliedRevision
-    moduleRevision
-    instanceRevision
     syncState
     lastApplyError
     properties {
@@ -3892,8 +3879,7 @@ export const ModuleDetailFieldsFragmentDoc = new TypedDocumentString(`
       apply
       effective
       source
-      moduleValue
-      instanceValue
+      value
       isSet
       rejectedReason
       restartRequired
@@ -5800,8 +5786,6 @@ fragment ModuleDetailFields on Module {
     schemaVersion
     revision
     appliedRevision
-    moduleRevision
-    instanceRevision
     syncState
     lastApplyError
     properties {
@@ -5811,8 +5795,7 @@ fragment ModuleDetailFields on Module {
       apply
       effective
       source
-      moduleValue
-      instanceValue
+      value
       isSet
       rejectedReason
       restartRequired
@@ -5864,9 +5847,7 @@ export const ModuleConfigChangesDocument = new TypedDocumentString(`
     query ModuleConfigChanges($instance: ID!, $limit: Int) {
   moduleConfigChanges(instance: $instance, limit: $limit) {
     id
-    moduleName
     instance
-    scope
     revision
     changes {
       key
@@ -5883,10 +5864,9 @@ export const ModuleConfigChangesDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<ModuleConfigChangesQuery, ModuleConfigChangesQueryVariables>;
 export const UpdateModuleConfigDocument = new TypedDocumentString(`
-    mutation UpdateModuleConfig($instance: ID!, $scope: ModuleConfigScope!, $values: [ModuleConfigValueInput!]!, $expectedRevision: Int!) {
+    mutation UpdateModuleConfig($instance: ID!, $values: [ModuleConfigValueInput!]!, $expectedRevision: Int!) {
   updateModuleConfig(
     instance: $instance
-    scope: $scope
     values: $values
     expectedRevision: $expectedRevision
   ) {
@@ -5933,8 +5913,6 @@ fragment ModuleDetailFields on Module {
     schemaVersion
     revision
     appliedRevision
-    moduleRevision
-    instanceRevision
     syncState
     lastApplyError
     properties {
@@ -5944,8 +5922,7 @@ fragment ModuleDetailFields on Module {
       apply
       effective
       source
-      moduleValue
-      instanceValue
+      value
       isSet
       rejectedReason
       restartRequired

@@ -115,9 +115,9 @@ export const DURATION_HINT = 'Go duration, e.g. "500ms", "30s", "1m30s", "2h"'
 
 /**
  * `text` covers every type typed into an input (and enum's selected value);
- * an empty text means "not set at this scope". `bool` is null when not set.
- * Secrets never carry their stored value: `keep` leaves it alone, `replace`
- * sends `text`, `clear` removes it at this scope.
+ * an empty text means "not set" (the default applies). `bool` is null when not
+ * set. Secrets never carry their stored value: `keep` leaves it alone,
+ * `replace` sends `text`, `clear` removes it.
  */
 export type Draft =
   | { kind: "text"; text: string }
@@ -174,7 +174,7 @@ export type ParseResult =
   | { ok: false; error: string }
 
 /**
- * The JSON value a draft stands for: null = unset at this scope. For a secret
+ * The JSON value a draft stands for: null = unset (the default). For a secret
  * in `keep` mode the result is `undefined`, meaning "no change".
  */
 export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
@@ -244,9 +244,9 @@ function formatBound(type: FieldType, bound: unknown): string {
 
 export interface ValidateOptions {
   /**
-   * The value the property falls back to when this scope holds nothing (the
-   * other scope's value or the default). `required` only fails when the value
-   * is unset here AND nothing below it supplies one.
+   * The value the property falls back to when nothing is stored (the
+   * module's default). `required` only fails when the value is unset AND
+   * there is no fallback.
    */
   fallback?: unknown
 }
@@ -427,56 +427,50 @@ export function groupByField<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Config form: scope values, diff
+// Config form: initial values, diff
 // ---------------------------------------------------------------------------
 
-export type Scope = "MODULE" | "INSTANCE"
-
+/**
+ * A property as the config form sees it. Config is per instance: `value` is
+ * what is stored for the instance (null when unset — and always for secrets),
+ * `effective` is that value or else the module's default, and `source` says
+ * which ("set" | "default").
+ */
 export interface PropertyLike {
   field: FieldDef
   effective?: unknown
   source: string
-  moduleValue?: unknown
-  instanceValue?: unknown
+  value?: unknown
   isSet: boolean
 }
 
-export function scopeValue(p: PropertyLike, scope: Scope): unknown {
-  return (scope === "MODULE" ? p.moduleValue : p.instanceValue) ?? null
+/** What a property's control starts with: the effective value (never a secret). */
+export function initialValue(p: PropertyLike): unknown {
+  return p.field.type === "secret" ? null : (p.effective ?? null)
 }
 
-/** What the property resolves to when the given scope holds nothing. */
-export function fallbackValue(p: PropertyLike, scope: Scope): unknown {
-  const below = scope === "INSTANCE" ? (p.moduleValue ?? null) : null
-  return below ?? p.field.default ?? null
-}
-
-/**
- * Whether a secret is stored at this scope. The API only says whether one is
- * stored anywhere and where the effective value comes from, so this is exact
- * for the scope that wins and a best guess (unknown → false) below it.
- */
-export function secretSetAtScope(p: PropertyLike, scope: Scope): boolean {
-  if (!p.isSet) return false
-  return p.source === (scope === "MODULE" ? "module" : "instance")
-}
-
-export function initialDrafts(
-  properties: readonly PropertyLike[],
-  scope: Scope,
-): Record<string, Draft> {
+export function initialDrafts(properties: readonly PropertyLike[]): Record<string, Draft> {
   const out: Record<string, Draft> = {}
-  for (const p of properties) out[p.field.key] = initialDraft(p.field, scopeValue(p, scope))
+  for (const p of properties) out[p.field.key] = initialDraft(p.field, initialValue(p))
   return out
+}
+
+/** The draft that resets a property to the module's default (saved as null). */
+export function resetDraft(field: FieldDef): Draft {
+  return field.type === "secret"
+    ? { kind: "secret", mode: "clear", text: "" }
+    : emptyDraft(field)
 }
 
 export interface DiffEntry {
   key: string
   label: string
   type: string
+  /** The stored value before (null when it was the default). */
   old: unknown
+  /** The value to store; null resets to the default. */
   new: unknown
-  /** Display strings; secrets masked. */
+  /** Display strings; secrets masked, defaults marked. */
   oldText: string
   newText: string
 }
@@ -486,53 +480,56 @@ export interface FormEvaluation {
   errors: Record<string, string>
 }
 
+function defaultText(field: FieldDef): string {
+  return `${formatValue(field.type, field.default ?? null, field.unit)} (default)`
+}
+
 /**
- * Validate every draft and diff it against what is stored at `scope`. Only
- * properties that changed are validated for `required` — an untouched empty
- * field the server already accepted is not the user's problem to fix here.
+ * Validate every draft and diff it against the instance's current config.
+ * Controls start from the effective value, so a property is changed when its
+ * draft differs from that; an emptied control (or "Reset to default") resets a
+ * stored value to the default, and is no change for one that is already the
+ * default. Only changed properties are validated — an untouched field the
+ * server already accepted is not the user's problem to fix here.
  */
 export function evaluateForm(
   properties: readonly PropertyLike[],
   drafts: Record<string, Draft>,
-  scope: Scope,
 ): FormEvaluation {
   const diff: DiffEntry[] = []
   const errors: Record<string, string> = {}
   for (const p of [...properties].sort((a, b) => compareFields(a.field, b.field))) {
-    const draft = drafts[p.field.key]
+    const f = p.field
+    const draft = drafts[f.key]
     if (!draft) continue
-    const parsed = parseDraft(p.field, draft)
+    const parsed = parseDraft(f, draft)
     if (!parsed.ok) {
-      errors[p.field.key] = parsed.error
+      errors[f.key] = parsed.error
       continue
     }
-    const isSecret = p.field.type === "secret"
-    const old = isSecret ? (secretSetAtScope(p, scope) ? SECRET_MASK : null) : scopeValue(p, scope)
     const next = parsed.value
     if (next === undefined) continue // secret kept
-    if (isSecret && next === null && old === null) continue // clearing nothing
-    if (!isSecret && valuesEqual(old, next)) continue
-    // A secret's fallback is unknowable (values are never sent); assume one
-    // exists when the secret is stored somewhere other than this scope.
-    const fallback = isSecret
-      ? p.isSet && !secretSetAtScope(p, scope)
-        ? SECRET_MASK
-        : null
-      : fallbackValue(p, scope)
-    const error = validateValue(p.field, next, { fallback })
+    const isSecret = f.type === "secret"
+    const isSet = isSecret ? p.isSet : p.source === "set"
+    if (next === null && !isSet) continue // resetting what is already the default
+    if (!isSecret && next !== null && valuesEqual(initialValue(p), next)) continue
+    // Secrets have no visible default, so a required one cannot be cleared.
+    const error = validateValue(f, next, { fallback: isSecret ? null : f.default })
     if (error) {
-      errors[p.field.key] = error
+      errors[f.key] = error
       continue
     }
-    diff.push({
-      key: p.field.key,
-      label: p.field.label,
-      type: p.field.type,
-      old,
-      new: next,
-      oldText: isSecret ? (old === null ? "Not set" : SECRET_MASK) : formatValue(p.field.type, old, p.field.unit),
-      newText: isSecret ? (next === null ? "Not set" : SECRET_MASK) : formatValue(p.field.type, next, p.field.unit),
-    })
+    const old = isSecret ? (isSet ? SECRET_MASK : null) : isSet ? (p.value ?? null) : null
+    let oldText: string
+    let newText: string
+    if (isSecret) {
+      oldText = isSet ? SECRET_MASK : "Not set"
+      newText = next === null ? "Not set" : SECRET_MASK
+    } else {
+      oldText = isSet ? formatValue(f.type, old, f.unit) : defaultText(f)
+      newText = next === null ? defaultText(f) : formatValue(f.type, next, f.unit)
+    }
+    diff.push({ key: f.key, label: f.label, type: f.type, old, new: next, oldText, newText })
   }
   return { diff, errors }
 }

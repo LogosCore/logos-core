@@ -29,12 +29,12 @@ interface FieldControlProps {
   disabled?: boolean
   invalid?: boolean
   /**
-   * The value used when nothing is set at the edited scope — shown as the
-   * placeholder (or the switch's resting state) so an empty control still
-   * says what applies.
+   * The module's default, used when nothing is set — shown as the placeholder
+   * (or the switch's resting state) so an empty control still says what
+   * applies.
    */
-  inherited?: unknown
-  /** Secrets only: whether a value is stored at the edited scope. */
+  defaultValue?: unknown
+  /** Secrets only: whether a value is stored. */
   secretSet?: boolean
 }
 
@@ -46,14 +46,14 @@ export function FieldControl({
   id,
   disabled,
   invalid,
-  inherited,
+  defaultValue,
   secretSet,
 }: FieldControlProps) {
-  const inheritedText =
-    inherited === null || inherited === undefined
+  const defaultText =
+    defaultValue === null || defaultValue === undefined
       ? undefined
-      : formatValue(field.type, inherited, field.unit)
-  const placeholder = inheritedText ?? field.placeholder ?? undefined
+      : formatValue(field.type, defaultValue, field.unit)
+  const placeholder = defaultText ?? field.placeholder ?? undefined
 
   switch (draft.kind) {
     case "bool":
@@ -61,14 +61,14 @@ export function FieldControl({
         <div className="flex items-center gap-2">
           <Switch
             id={id}
-            checked={draft.value ?? inherited === true}
+            checked={draft.value ?? defaultValue === true}
             onCheckedChange={(checked) => onChange({ kind: "bool", value: checked })}
             disabled={disabled}
             aria-invalid={invalid || undefined}
           />
           <span className="text-sm text-muted-foreground">
-            {(draft.value ?? inherited === true) ? "On" : "Off"}
-            {draft.value === null && inheritedText !== undefined && " (inherited)"}
+            {(draft.value ?? defaultValue === true) ? "On" : "Off"}
+            {draft.value === null && defaultText !== undefined && " (default)"}
           </span>
         </div>
       )
@@ -108,9 +108,9 @@ export function FieldControl({
   switch (field.type) {
     case "enum": {
       const options = field.options ?? []
-      const inheritedOption =
-        typeof inherited === "string"
-          ? options.find((o) => o.value === inherited)
+      const defaultOption =
+        typeof defaultValue === "string"
+          ? options.find((o) => o.value === defaultValue)
           : undefined
       return (
         <Select
@@ -121,8 +121,8 @@ export function FieldControl({
           <SelectTrigger id={id} className="w-full sm:w-72" aria-invalid={invalid || undefined}>
             <SelectValue
               placeholder={
-                inheritedOption
-                  ? `${inheritedOption.label || inheritedOption.value} (inherited)`
+                defaultOption
+                  ? `${defaultOption.label || defaultOption.value} (default)`
                   : "Select…"
               }
             />
@@ -148,8 +148,8 @@ export function FieldControl({
           aria-invalid={invalid || undefined}
           rows={Math.min(8, Math.max(3, text.split("\n").length + 1))}
           placeholder={
-            Array.isArray(inherited) && inherited.length > 0
-              ? inherited.join("\n")
+            Array.isArray(defaultValue) && defaultValue.length > 0
+              ? defaultValue.join("\n")
               : (field.placeholder ?? "One per line")
           }
           spellCheck={false}

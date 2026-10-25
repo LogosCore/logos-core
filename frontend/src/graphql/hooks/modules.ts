@@ -136,7 +136,7 @@ export function useModuleDetailSubscription(instance: string) {
 }
 
 /**
- * Set / clear property values at a scope. The mutation returns the updated
+ * Set / clear an instance's property values. The mutation returns the updated
  * module, which replaces the cached detail so the sync badge flips to PENDING
  * without waiting for a refetch.
  */

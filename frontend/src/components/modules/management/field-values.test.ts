@@ -11,9 +11,11 @@ import {
   initialDraft,
   initialDrafts,
   initialParamDrafts,
+  initialValue,
   mergeActivity,
   parseDraft,
   parseGoDuration,
+  resetDraft,
   splitBytes,
   validateValue,
   type Draft,
@@ -34,7 +36,7 @@ function prop(
   f: FieldDef,
   p: Partial<Omit<PropertyLike, "field">> = {},
 ): PropertyLike {
-  return { field: f, source: "default", isSet: false, effective: null, moduleValue: null, instanceValue: null, ...p }
+  return { field: f, source: "default", isSet: false, effective: null, value: null, ...p }
 }
 
 describe("bytes", () => {
@@ -199,73 +201,89 @@ describe("groupByField", () => {
 })
 
 describe("evaluateForm", () => {
-  const port = field({ key: "port", type: "int", label: "Port", min: 1, max: 65535 })
-  const verbose = field({ key: "verbose", type: "bool", label: "Verbose" })
+  const port = field({ key: "port", type: "int", label: "Port", min: 1, max: 65535, default: 80 })
+  const verbose = field({ key: "verbose", type: "bool", label: "Verbose", default: false })
   const token = field({ key: "token", type: "secret", label: "Token" })
   const name = field({ key: "name", type: "string", label: "Name", required: true })
+  const level = field({ key: "level", type: "enum", label: "Level", default: "info", options: [{ value: "info" }, { value: "debug" }] })
 
   const props = [
-    prop(port, { moduleValue: 8080, effective: 8080, source: "module" }),
+    prop(port, { value: 8080, effective: 8080, source: "set", isSet: true }),
     prop(verbose, { effective: false }),
-    prop(token, { isSet: true, source: "module" }),
-    prop(name, { effective: "x", moduleValue: "x", source: "module" }),
+    prop(token, { isSet: true, source: "set" }),
+    prop(name, { effective: "x", value: "x", source: "set", isSet: true }),
+    prop(level, { effective: "info" }),
   ]
 
-  it("has no diff when nothing changed", () => {
-    expect(evaluateForm(props, initialDrafts(props, "MODULE"), "MODULE")).toEqual({ diff: [], errors: {} })
-    expect(evaluateForm(props, initialDrafts(props, "INSTANCE"), "INSTANCE")).toEqual({ diff: [], errors: {} })
+  it("pre-fills controls with the effective value, never a secret", () => {
+    expect(props.map(initialValue)).toEqual([8080, false, null, "x", "info"])
+    const drafts = initialDrafts(props)
+    expect(drafts.level).toEqual({ kind: "text", text: "info" })
+    expect(drafts.verbose).toEqual({ kind: "bool", value: false })
+    expect(drafts.token).toEqual({ kind: "secret", mode: "keep", text: "" })
   })
 
-  it("lists changes with old → new, secrets masked", () => {
+  it("has no diff when nothing changed", () => {
+    expect(evaluateForm(props, initialDrafts(props))).toEqual({ diff: [], errors: {} })
+  })
+
+  it("lists changes with old → new, secrets masked, defaults marked", () => {
     const drafts: Record<string, Draft> = {
-      ...initialDrafts(props, "MODULE"),
+      ...initialDrafts(props),
       port: { kind: "text", text: "9090" },
       verbose: { kind: "bool", value: true },
       token: { kind: "secret", mode: "replace", text: "s3cret" },
+      level: { kind: "text", text: "debug" },
     }
-    const { diff, errors } = evaluateForm(props, drafts, "MODULE")
+    const { diff, errors } = evaluateForm(props, drafts)
     expect(errors).toEqual({})
     expect(diff.map((d) => [d.key, d.oldText, d.newText])).toEqual([
+      ["level", "info (default)", "debug"],
       ["port", "8080", "9090"],
       ["token", "•••", "•••"],
-      ["verbose", "—", "true"],
+      ["verbose", "false (default)", "true"],
     ])
     expect(diff.find((d) => d.key === "token")?.new).toBe("s3cret")
+    expect(diff.find((d) => d.key === "level")).toMatchObject({ old: null, new: "debug" })
   })
 
-  it("reset clears the value at this scope", () => {
-    const drafts = { ...initialDrafts(props, "MODULE"), port: { kind: "text", text: "" } as Draft }
-    const { diff } = evaluateForm(props, drafts, "MODULE")
+  it("reset to default sends null for a stored value", () => {
+    const drafts = { ...initialDrafts(props), port: resetDraft(port) }
+    const { diff } = evaluateForm(props, drafts)
     expect(diff).toHaveLength(1)
-    expect(diff[0]).toMatchObject({ key: "port", old: 8080, new: null, newText: "—" })
+    expect(diff[0]).toMatchObject({ key: "port", old: 8080, new: null, oldText: "8080", newText: "80 (default)" })
   })
 
-  it("clearing a secret only diffs if it is set at this scope", () => {
-    const drafts = { ...initialDrafts(props, "INSTANCE"), token: { kind: "secret", mode: "clear", text: "" } as Draft }
-    expect(evaluateForm(props, drafts, "INSTANCE").diff).toEqual([])
-    const m = { ...initialDrafts(props, "MODULE"), token: { kind: "secret", mode: "clear", text: "" } as Draft }
-    expect(evaluateForm(props, m, "MODULE").diff[0]).toMatchObject({ key: "token", new: null, newText: "Not set" })
+  it("emptying a property that is already the default is no change", () => {
+    const drafts = { ...initialDrafts(props), level: resetDraft(level), verbose: resetDraft(verbose) }
+    expect(evaluateForm(props, drafts).diff).toEqual([])
+  })
+
+  it("clearing a secret only diffs if one is stored", () => {
+    const unset = props.map((p) => (p.field.key === "token" ? { ...p, isSet: false, source: "default" } : p))
+    const drafts = { ...initialDrafts(unset), token: resetDraft(token) }
+    expect(evaluateForm(unset, drafts).diff).toEqual([])
+    const set = { ...initialDrafts(props), token: resetDraft(token) }
+    expect(evaluateForm(props, set).diff[0]).toMatchObject({ key: "token", new: null, newText: "Not set" })
   })
 
   it("reports errors and excludes invalid keys from the diff", () => {
     const drafts = {
-      ...initialDrafts(props, "MODULE"),
+      ...initialDrafts(props),
       port: { kind: "text", text: "70000" } as Draft,
       name: { kind: "text", text: "" } as Draft,
     }
-    const { diff, errors } = evaluateForm(props, drafts, "MODULE")
+    const { diff, errors } = evaluateForm(props, drafts)
     expect(diff).toEqual([])
     expect(errors).toEqual({ port: "Must be at most 65535", name: "Required" })
   })
 
-  it("required is satisfied at INSTANCE scope by the module value", () => {
-    const withInstance = props.map((p) =>
-      p.field.key === "name" ? { ...p, instanceValue: "y", effective: "y", source: "instance" } : p,
-    )
-    const drafts = { ...initialDrafts(withInstance, "INSTANCE"), name: { kind: "text", text: "" } as Draft }
-    const { diff, errors } = evaluateForm(withInstance, drafts, "INSTANCE")
+  it("required is satisfied by the module default when reset", () => {
+    const withDefault = field({ key: "host", type: "string", label: "Host", required: true, default: "localhost" })
+    const ps = [prop(withDefault, { value: "h", effective: "h", source: "set", isSet: true })]
+    const { diff, errors } = evaluateForm(ps, { host: resetDraft(withDefault) })
     expect(errors).toEqual({})
-    expect(diff[0]).toMatchObject({ key: "name", old: "y", new: null })
+    expect(diff[0]).toMatchObject({ key: "host", old: "h", new: null })
   })
 })
 
@@ -294,8 +312,8 @@ describe("activity", () => {
     const actor = { type: "user", id: "u1", name: "Ann" }
     const items = mergeActivity(
       [
-        { id: "c1", moduleName: "http", instance: null, scope: "MODULE", revision: 1, changes: [], actor, at: "2026-01-01T10:00:00Z" },
-        { id: "c2", moduleName: "http", instance: "h1", scope: "INSTANCE", revision: 1, changes: [], actor, at: "2026-01-01T12:00:00Z" },
+        { id: "c1", instance: "h1", revision: 1, changes: [], actor, at: "2026-01-01T10:00:00Z" },
+        { id: "c2", instance: "h1", revision: 2, changes: [], actor, at: "2026-01-01T12:00:00Z" },
       ],
       [
         { id: "i1", instance: "h1", action: "flush", status: "SUCCEEDED", actor, startedAt: "2026-01-01T11:00:00Z" },

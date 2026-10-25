@@ -80,8 +80,6 @@ export const ModuleDetailFields = graphql(`
       schemaVersion
       revision
       appliedRevision
-      moduleRevision
-      instanceRevision
       syncState
       lastApplyError
       properties {
@@ -91,8 +89,7 @@ export const ModuleDetailFields = graphql(`
         apply
         effective
         source
-        moduleValue
-        instanceValue
+        value
         isSet
         rejectedReason
         restartRequired
@@ -159,9 +156,7 @@ export const ModuleConfigChangesQuery = graphql(`
   query ModuleConfigChanges($instance: ID!, $limit: Int) {
     moduleConfigChanges(instance: $instance, limit: $limit) {
       id
-      moduleName
       instance
-      scope
       revision
       changes {
         key
@@ -181,13 +176,11 @@ export const ModuleConfigChangesQuery = graphql(`
 export const UpdateModuleConfigMutation = graphql(`
   mutation UpdateModuleConfig(
     $instance: ID!
-    $scope: ModuleConfigScope!
     $values: [ModuleConfigValueInput!]!
     $expectedRevision: Int!
   ) {
     updateModuleConfig(
       instance: $instance
-      scope: $scope
       values: $values
       expectedRevision: $expectedRevision
     ) {

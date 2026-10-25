@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
 import { PlayIcon, SlidersHorizontalIcon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
@@ -10,7 +9,7 @@ import {
 } from "@/graphql/hooks/modules"
 import { InvocationDetails, InvocationStatusBadge } from "./actions-tab"
 import { durationMs, formatElapsed, formatValue, mergeActivity } from "./field-values"
-import { actorLabel, scopeLabel } from "./labels"
+import { actorLabel } from "./labels"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
 
@@ -68,14 +67,7 @@ export function ActivityTab({
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-medium">{actorLabel(c.actor)}</span>
-                  <span className="text-muted-foreground">changed configuration for</span>
-                  <Badge variant="secondary">
-                    {c.scope === "MODULE"
-                      ? scopeLabel("MODULE", c.moduleName)
-                      : c.instance === module.instance
-                        ? "This instance"
-                        : c.instance}
-                  </Badge>
+                  <span className="text-muted-foreground">changed configuration</span>
                   <span className="text-xs text-muted-foreground">rev {c.revision}</span>
                   <FormattedDateTimeText
                     date={c.at}
