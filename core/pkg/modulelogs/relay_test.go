@@ -171,6 +171,40 @@ func TestStreamRelaysBatchesAndStops(t *testing.T) {
 	t.Fatal("stream not stopped after the viewer left")
 }
 
+func TestStreamRecreatedAfterModuleEndedIt(t *testing.T) {
+	r, rpc, src := newRelay(fakeRegistry{"http-1": module(protocol.CapabilityLogs)})
+	r.renew = 10 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := r.Stream(ctx, Request{Instance: "http-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next(t, events) // STREAMING
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 1, End: true, EndReason: protocol.LogEndShutdown})
+	if ev := next(t, events); ev.State != StateEnded {
+		t.Fatalf("end event = %+v", ev)
+	}
+	// The next renewal recreates the stream with a backlog and says so.
+	if ev := next(t, events); ev.State != StateStreaming {
+		t.Fatalf("after renewal = %+v", ev)
+	}
+	var backlogs []int
+	for _, c := range rpc.ops() {
+		if c.op == protocol.TypeMgmtLogsStart {
+			backlogs = append(backlogs, c.payload.(protocol.LogsStartRequest).Backlog)
+		}
+	}
+	if len(backlogs) < 2 || backlogs[1] != backlogRecords {
+		t.Errorf("start backlogs = %v, want the recreating renewal to ask for %d", backlogs, backlogRecords)
+	}
+	for _, b := range backlogs[2:] {
+		if b != 0 {
+			t.Errorf("plain renewal asked for a backlog: %v", backlogs)
+		}
+	}
+}
+
 func TestStreamStartFailureClosesNothingLeaks(t *testing.T) {
 	r, rpc, _ := newRelay(fakeRegistry{"http-1": module(protocol.CapabilityLogs)})
 	rpc.fail = messaging.ErrRPCUnroutable

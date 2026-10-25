@@ -85,6 +85,7 @@ type Relay struct {
 	source   Source
 	logger   *zap.Logger
 	newID    func() string
+	renew    time.Duration
 }
 
 // New returns a Relay.
@@ -95,6 +96,7 @@ func New(registry Registry, rpc messaging.RPCCaller, source Source, logger *zap.
 		source:   source,
 		logger:   logger.With(zap.String("component", "module-logs")),
 		newID:    protocol.NewULID,
+		renew:    renewEvery,
 	}
 }
 
@@ -156,6 +158,10 @@ type stream struct {
 
 	lastSeq int64
 	dropped int64 // events core could not hand on, carried into the next one
+	// ended is set when the module ended the stream (shutdown, replaced): the
+	// next successful renewal recreates it, with a backlog so the viewer sees
+	// what the module logged meanwhile (e.g. a restarted process's startup).
+	ended bool
 }
 
 // start sends mgmt.logs.start; with backlog 0 it is a lease renewal.
@@ -183,7 +189,7 @@ func (s *stream) start(ctx context.Context, backlog int) error {
 func (s *stream) run(ctx context.Context, cancel context.CancelFunc, batches <-chan []byte) {
 	defer cancel()
 	defer s.stop()
-	renew := time.NewTicker(renewEvery)
+	renew := time.NewTicker(s.relay.renew)
 	defer renew.Stop()
 	connected := true
 	for {
@@ -192,14 +198,18 @@ func (s *stream) run(ctx context.Context, cancel context.CancelFunc, batches <-c
 			return
 		case <-renew.C:
 			// Renewal also recreates the stream after the module restarted
-			// or reconnected (it then has no backlog to resend).
-			err := s.start(ctx, 0)
+			// or reconnected.
+			backlog := 0
+			if s.ended || !connected {
+				backlog = backlogRecords
+			}
+			err := s.start(ctx, backlog)
 			switch {
 			case err != nil && connected:
 				connected = false
 				s.emit(&Event{State: StateDisconnected, Reason: err.Error()})
-			case err == nil && !connected:
-				connected = true
+			case err == nil && (!connected || s.ended):
+				connected, s.ended = true, false
 				s.emit(&Event{State: StateStreaming})
 			}
 		case body, ok := <-batches:
@@ -228,8 +238,7 @@ func (s *stream) handle(body []byte) {
 	s.lastSeq = b.Seq
 	if b.End {
 		ev.State, ev.Reason = StateEnded, b.EndReason
-		// A module that shuts down or loses the slot comes back through the
-		// next renewal, which recreates the stream.
+		s.ended = true
 	}
 	s.emit(ev)
 }
