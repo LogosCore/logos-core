@@ -330,3 +330,50 @@ describe("activity", () => {
     expect(formatElapsed(90_000)).toBe("1m30s")
   })
 })
+
+describe("string_map", () => {
+  const headers = {
+    key: "headers",
+    type: "string_map",
+    label: "Headers",
+    order: 0,
+    required: false,
+    keyPattern: "^[A-Za-z-]+$",
+    pattern: "^[^\\r\\n]*$",
+    maxItems: 2,
+  } as FieldDef
+
+  it("drafts rows from an object and parses them back", () => {
+    const draft = initialDraft(headers, { "X-A": "1", "X-B": "2" })
+    expect(draft).toEqual({ kind: "map", entries: [{ key: "X-A", value: "1" }, { key: "X-B", value: "2" }] })
+    expect(parseDraft(headers, draft)).toEqual({ ok: true, value: { "X-A": "1", "X-B": "2" } })
+  })
+
+  it("ignores blank rows and reads no rows as unset", () => {
+    expect(parseDraft(headers, { kind: "map", entries: [{ key: "", value: "" }] })).toEqual({ ok: true, value: null })
+    expect(initialDraft(headers, null)).toEqual({ kind: "map", entries: [] })
+  })
+
+  it("rejects a missing key and duplicates", () => {
+    expect(parseDraft(headers, { kind: "map", entries: [{ key: "", value: "x" }] }).ok).toBe(false)
+    const dup = parseDraft(headers, {
+      kind: "map",
+      entries: [
+        { key: "X-A", value: "1" },
+        { key: " X-A ", value: "2" },
+      ],
+    })
+    expect(dup.ok).toBe(false)
+  })
+
+  it("validates keys, values and the entry count", () => {
+    expect(validateValue(headers, { "X A": "1" })).toMatch(/not a valid key/)
+    expect(validateValue(headers, { "X-A": "a\nb" })).toMatch(/must match/)
+    expect(validateValue(headers, { A: "1", B: "2", C: "3" })).toMatch(/At most 2/)
+    expect(validateValue(headers, { "X-A": "1" })).toBeNull()
+  })
+
+  it("formats as key: value pairs", () => {
+    expect(formatValue("string_map", { "X-A": "1", "X-B": "2" })).toBe("X-A: 1, X-B: 2")
+  })
+})

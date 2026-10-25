@@ -501,3 +501,11 @@ func (f *fakeRepo) RecordApplyResult(context.Context, string, protocol.ConfigApp
 	return nil
 }
 func (f *fakeRepo) RecordApplyError(context.Context, string, string, time.Time) error { return nil }
+
+func (f *fakeRepo) LatestConnectionSchema(context.Context, string) (*models.ModuleConnectionSchema, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) LatestConnectionSchemas(context.Context) (map[string]*models.ModuleConnectionSchema, error) {
+	return nil, nil
+}

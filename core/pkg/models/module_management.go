@@ -152,6 +152,20 @@ func (m *ModuleManifest) UnmarshalBSON(data []byte) error {
 	return bsonDocToJSON(data, &m.ManagementManifest)
 }
 
+// ModuleConnectionSchema is the stored minion connection schema, JSON-encoded
+// for the same reason as ModuleManifest.
+type ModuleConnectionSchema struct {
+	protocol.ConnectionSchema
+}
+
+func (m ModuleConnectionSchema) MarshalBSON() ([]byte, error) {
+	return jsonToBSONDoc(m.ConnectionSchema)
+}
+
+func (m *ModuleConnectionSchema) UnmarshalBSON(data []byte) error {
+	return bsonDocToJSON(data, &m.ConnectionSchema)
+}
+
 // JSONMap is a string-keyed map of JSON values with the same JSON-faithful BSON
 // encoding as ModuleManifest. Used for property values and action params.
 type JSONMap map[string]any

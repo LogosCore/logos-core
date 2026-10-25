@@ -13,6 +13,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/auth/oidc"
 	"github.com/logoscore/logos-core/core/pkg/blob"
 	"github.com/logoscore/logos-core/core/pkg/cache"
+	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
@@ -68,6 +69,7 @@ type Repositories struct {
 	ModuleConfig       repository.IModuleConfigRepository
 	ModuleConfigChange repository.IModuleConfigChangeRepository
 	ModuleInvocation   repository.IModuleActionInvocationRepository
+	ChannelEndpoint    repository.IChannelEndpointRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
@@ -126,6 +128,8 @@ type App struct {
 	logConsumer *messaging.LogConsumer
 	moduleLogs  *modulelogs.Relay
 	moduleMgmt  *modulemgmt.Service
+	// endpoints holds the values minions are given to reach a channel.
+	endpoints *channelendpoints.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -237,6 +241,7 @@ func NewApp() (*App, error) {
 		moduleMgmt:      moduleMgmt,
 		logConsumer:     logConsumer,
 		moduleLogs:      moduleLogs,
+		endpoints:       channelendpoints.NewService(repos.ChannelEndpoint, repos.ModuleRegistry),
 	}, nil
 }
 

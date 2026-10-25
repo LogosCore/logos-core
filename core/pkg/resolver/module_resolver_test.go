@@ -199,3 +199,11 @@ func (f *fakeModuleRepo) RecordApplyResult(context.Context, string, protocol.Con
 func (f *fakeModuleRepo) RecordApplyError(context.Context, string, string, time.Time) error {
 	return nil
 }
+
+func (f *fakeModuleRepo) LatestConnectionSchema(context.Context, string) (*models.ModuleConnectionSchema, error) {
+	return nil, nil
+}
+
+func (f *fakeModuleRepo) LatestConnectionSchemas(context.Context) (map[string]*models.ModuleConnectionSchema, error) {
+	return nil, nil
+}

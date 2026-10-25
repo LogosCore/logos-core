@@ -4,6 +4,7 @@ import {
   FileCode2Icon,
   KanbanSquareIcon,
   PackageIcon,
+  RadioTowerIcon,
   RouteIcon,
   GemIcon,
   SwordsIcon,
@@ -53,6 +54,12 @@ export const navigationOperationItems: NavigationItem[] = [
     url: "/timeline",
     permission: null,
     icon: RouteIcon,
+  },
+  {
+    title: "Endpoints",
+    url: "/endpoints",
+    permission: null,
+    icon: RadioTowerIcon,
   },
 ];
 

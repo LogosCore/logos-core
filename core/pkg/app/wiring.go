@@ -54,6 +54,7 @@ type resolvers struct {
 	agentAction resolver.IAgentActionResolver
 	module      resolver.IModuleResolver
 	skill       resolver.ISkillResolver
+	endpoint    resolver.IChannelEndpointResolver
 }
 
 // buildControllers constructs every REST handler. Order is not significant
@@ -163,6 +164,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithWikiDocumentBackupRepo(a.repos.WikiDocumentBackup),
 			resolver.WithCredentialRepo(a.repos.Credential),
 			resolver.WithHostRepo(a.repos.Host),
+			resolver.WithChannelEndpointRepo(a.repos.ChannelEndpoint),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -186,5 +188,7 @@ func (a *App) buildResolvers() *resolvers {
 		// audit + bus event).
 		module: resolver.NewModuleResolver(a.repos.ModuleRegistry, a.moduleService, a.moduleMgmt, a.moduleLogs),
 		skill:  resolver.NewSkillResolver(a.skillService, a.repos.Skill, a.repos.SkillSubscription, a.repos.User),
+		// Channel endpoints are operation data, authorized by operation role.
+		endpoint: resolver.NewChannelEndpointResolver(a.endpoints, a.repos.Operation),
 	}
 }

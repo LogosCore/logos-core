@@ -33,6 +33,14 @@ type Documents = {
     "\n  mutation RegenerateMyAPIKey {\n    regenerateMyAPIKey {\n      apiKey {\n        ...APIKeyFields\n      }\n      token\n    }\n  }\n": typeof types.RegenerateMyApiKeyDocument,
     "\n  mutation SetMyAPIKeyEnabled($enabled: Boolean!) {\n    setMyAPIKeyEnabled(enabled: $enabled) {\n      ...APIKeyFields\n    }\n  }\n": typeof types.SetMyApiKeyEnabledDocument,
     "\n  mutation DeleteMyAPIKey {\n    deleteMyAPIKey\n  }\n": typeof types.DeleteMyApiKeyDocument,
+    "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.ChannelEndpointFieldsFragmentDoc,
+    "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": typeof types.ChannelKindsDocument,
+    "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.ChannelEndpointsDocument,
+    "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.ChannelEndpointDocument,
+    "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n": typeof types.ChannelEndpointExportDocument,
+    "\n  mutation CreateChannelEndpoint($operationId: ID!, $moduleName: String!, $input: ChannelEndpointInput!) {\n    createChannelEndpoint(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.CreateChannelEndpointDocument,
+    "\n  mutation UpdateChannelEndpoint($id: ID!, $input: ChannelEndpointInput!, $expectedRevision: Int!) {\n    updateChannelEndpoint(id: $id, input: $input, expectedRevision: $expectedRevision) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.UpdateChannelEndpointDocument,
+    "\n  mutation DeleteChannelEndpoint($id: ID!) {\n    deleteChannelEndpoint(id: $id)\n  }\n": typeof types.DeleteChannelEndpointDocument,
     "\n  fragment CredentialCommentFields on CredentialComment {\n    id\n    text\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n    }\n  }\n": typeof types.CredentialCommentFieldsFragmentDoc,
     "\n  fragment CredentialFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n    validity\n    tags\n    comments {\n      ...CredentialCommentFields\n    }\n    viewerCanModerateComments\n    createdBy {\n      id\n      username\n    }\n    backlinkCount\n    createdAt\n    updatedAt\n  }\n": typeof types.CredentialFieldsFragmentDoc,
     "\n  fragment CredentialFieldsWithOperation on Credential {\n    ...CredentialFields\n    operation {\n      id\n      name\n    }\n  }\n": typeof types.CredentialFieldsWithOperationFragmentDoc,
@@ -84,8 +92,8 @@ type Documents = {
     "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": typeof types.ModulesDocument,
     "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": typeof types.RemoveModuleDocument,
     "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      kind\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n": typeof types.ModuleChangedDocument,
-    "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    options {\n      value\n      label\n      description\n    }\n  }\n": typeof types.ModuleFieldDefFieldsFragmentDoc,
-    "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n  }\n": typeof types.ModuleDetailFieldsFragmentDoc,
+    "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    format\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    keyPattern\n    maxItems\n    options {\n      value\n      label\n      description\n    }\n  }\n": typeof types.ModuleFieldDefFieldsFragmentDoc,
+    "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n    connection {\n      version\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": typeof types.ModuleDetailFieldsFragmentDoc,
     "\n  query Module($instance: ID!) {\n    module(instance: $instance) {\n      ...ModuleDetailFields\n    }\n  }\n": typeof types.ModuleDocument,
     "\n  fragment ModuleActionInvocationFields on ModuleActionInvocation {\n    id\n    instance\n    action\n    params\n    status\n    result\n    error\n    actor {\n      type\n      id\n      name\n    }\n    startedAt\n    finishedAt\n  }\n": typeof types.ModuleActionInvocationFieldsFragmentDoc,
     "\n  query ModuleActionInvocations($instance: ID!, $limit: Int) {\n    moduleActionInvocations(instance: $instance, limit: $limit) {\n      ...ModuleActionInvocationFields\n    }\n  }\n": typeof types.ModuleActionInvocationsDocument,
@@ -229,6 +237,14 @@ const documents: Documents = {
     "\n  mutation RegenerateMyAPIKey {\n    regenerateMyAPIKey {\n      apiKey {\n        ...APIKeyFields\n      }\n      token\n    }\n  }\n": types.RegenerateMyApiKeyDocument,
     "\n  mutation SetMyAPIKeyEnabled($enabled: Boolean!) {\n    setMyAPIKeyEnabled(enabled: $enabled) {\n      ...APIKeyFields\n    }\n  }\n": types.SetMyApiKeyEnabledDocument,
     "\n  mutation DeleteMyAPIKey {\n    deleteMyAPIKey\n  }\n": types.DeleteMyApiKeyDocument,
+    "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": types.ChannelEndpointFieldsFragmentDoc,
+    "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": types.ChannelKindsDocument,
+    "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.ChannelEndpointsDocument,
+    "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.ChannelEndpointDocument,
+    "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n": types.ChannelEndpointExportDocument,
+    "\n  mutation CreateChannelEndpoint($operationId: ID!, $moduleName: String!, $input: ChannelEndpointInput!) {\n    createChannelEndpoint(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.CreateChannelEndpointDocument,
+    "\n  mutation UpdateChannelEndpoint($id: ID!, $input: ChannelEndpointInput!, $expectedRevision: Int!) {\n    updateChannelEndpoint(id: $id, input: $input, expectedRevision: $expectedRevision) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.UpdateChannelEndpointDocument,
+    "\n  mutation DeleteChannelEndpoint($id: ID!) {\n    deleteChannelEndpoint(id: $id)\n  }\n": types.DeleteChannelEndpointDocument,
     "\n  fragment CredentialCommentFields on CredentialComment {\n    id\n    text\n    createdAt\n    updatedAt\n    author {\n      id\n      username\n    }\n  }\n": types.CredentialCommentFieldsFragmentDoc,
     "\n  fragment CredentialFields on Credential {\n    id\n    operationId\n    name\n    type\n    username\n    password\n    keys {\n      name\n      content\n    }\n    properties {\n      name\n      value\n    }\n    validity\n    tags\n    comments {\n      ...CredentialCommentFields\n    }\n    viewerCanModerateComments\n    createdBy {\n      id\n      username\n    }\n    backlinkCount\n    createdAt\n    updatedAt\n  }\n": types.CredentialFieldsFragmentDoc,
     "\n  fragment CredentialFieldsWithOperation on Credential {\n    ...CredentialFields\n    operation {\n      id\n      name\n    }\n  }\n": types.CredentialFieldsWithOperationFragmentDoc,
@@ -280,8 +296,8 @@ const documents: Documents = {
     "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": types.ModulesDocument,
     "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": types.RemoveModuleDocument,
     "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      kind\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n": types.ModuleChangedDocument,
-    "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    options {\n      value\n      label\n      description\n    }\n  }\n": types.ModuleFieldDefFieldsFragmentDoc,
-    "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n  }\n": types.ModuleDetailFieldsFragmentDoc,
+    "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    format\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    keyPattern\n    maxItems\n    options {\n      value\n      label\n      description\n    }\n  }\n": types.ModuleFieldDefFieldsFragmentDoc,
+    "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n    connection {\n      version\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": types.ModuleDetailFieldsFragmentDoc,
     "\n  query Module($instance: ID!) {\n    module(instance: $instance) {\n      ...ModuleDetailFields\n    }\n  }\n": types.ModuleDocument,
     "\n  fragment ModuleActionInvocationFields on ModuleActionInvocation {\n    id\n    instance\n    action\n    params\n    status\n    result\n    error\n    actor {\n      type\n      id\n      name\n    }\n    startedAt\n    finishedAt\n  }\n": types.ModuleActionInvocationFieldsFragmentDoc,
     "\n  query ModuleActionInvocations($instance: ID!, $limit: Int) {\n    moduleActionInvocations(instance: $instance, limit: $limit) {\n      ...ModuleActionInvocationFields\n    }\n  }\n": types.ModuleActionInvocationsDocument,
@@ -479,6 +495,38 @@ export function graphql(source: "\n  mutation SetMyAPIKeyEnabled($enabled: Boole
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation DeleteMyAPIKey {\n    deleteMyAPIKey\n  }\n"): typeof import('./graphql').DeleteMyApiKeyDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n"): typeof import('./graphql').ChannelEndpointFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n"): typeof import('./graphql').ChannelKindsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n"): typeof import('./graphql').ChannelEndpointsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n"): typeof import('./graphql').ChannelEndpointDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n"): typeof import('./graphql').ChannelEndpointExportDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation CreateChannelEndpoint($operationId: ID!, $moduleName: String!, $input: ChannelEndpointInput!) {\n    createChannelEndpoint(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...ChannelEndpointFields\n    }\n  }\n"): typeof import('./graphql').CreateChannelEndpointDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UpdateChannelEndpoint($id: ID!, $input: ChannelEndpointInput!, $expectedRevision: Int!) {\n    updateChannelEndpoint(id: $id, input: $input, expectedRevision: $expectedRevision) {\n      ...ChannelEndpointFields\n    }\n  }\n"): typeof import('./graphql').UpdateChannelEndpointDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteChannelEndpoint($id: ID!) {\n    deleteChannelEndpoint(id: $id)\n  }\n"): typeof import('./graphql').DeleteChannelEndpointDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -686,11 +734,11 @@ export function graphql(source: "\n  subscription ModuleChanged {\n    moduleCha
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    options {\n      value\n      label\n      description\n    }\n  }\n"): typeof import('./graphql').ModuleFieldDefFieldsFragmentDoc;
+export function graphql(source: "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    format\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    keyPattern\n    maxItems\n    options {\n      value\n      label\n      description\n    }\n  }\n"): typeof import('./graphql').ModuleFieldDefFieldsFragmentDoc;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n  }\n"): typeof import('./graphql').ModuleDetailFieldsFragmentDoc;
+export function graphql(source: "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n    connection {\n      version\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n"): typeof import('./graphql').ModuleDetailFieldsFragmentDoc;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

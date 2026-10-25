@@ -63,6 +63,7 @@ type operationResolver struct {
 	wikiBackupRepo repository.IWikiDocumentBackupRepository // needed for cascade delete
 	credRepo       repository.ICredentialRepository         // needed for cascade delete
 	hostRepo       repository.IHostRepository               // needed for cascade delete
+	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
 
@@ -111,6 +112,14 @@ func WithCredentialRepo(repo repository.ICredentialRepository) OperationResolver
 func WithHostRepo(repo repository.IHostRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.hostRepo = repo
+	}
+}
+
+// WithChannelEndpointRepo adds the channel endpoint repository for cascade
+// delete.
+func WithChannelEndpointRepo(repo repository.IChannelEndpointRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.endpointRepo = repo
 	}
 }
 
@@ -254,6 +263,13 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.hostRepo != nil {
 		if err := r.hostRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's hosts: %w", err)
+		}
+	}
+
+	// Cascade delete: remove the operation's channel endpoints
+	if r.endpointRepo != nil {
+		if err := r.endpointRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's channel endpoints: %w", err)
 		}
 	}
 

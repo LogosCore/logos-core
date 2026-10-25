@@ -72,6 +72,39 @@ type ChangeTaskStageInput struct {
 	Summary *string            `json:"summary,omitempty"`
 }
 
+type ChannelEndpoint struct {
+	ID            string                    `json:"id"`
+	OperationID   string                    `json:"operationId"`
+	Name          string                    `json:"name"`
+	Description   *string                   `json:"description,omitempty"`
+	ModuleName    string                    `json:"moduleName"`
+	SchemaVersion int                       `json:"schemaVersion"`
+	SchemaChanged bool                      `json:"schemaChanged"`
+	Values        any                       `json:"values"`
+	Problems      []*ChannelEndpointProblem `json:"problems"`
+	Revision      int                       `json:"revision"`
+	CreatedBy     *ModuleActor              `json:"createdBy"`
+	UpdatedBy     *ModuleActor              `json:"updatedBy"`
+	CreatedAt     string                    `json:"createdAt"`
+	UpdatedAt     string                    `json:"updatedAt"`
+}
+
+type ChannelEndpointInput struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Values      any     `json:"values"`
+}
+
+type ChannelEndpointProblem struct {
+	Key     *string `json:"key,omitempty"`
+	Message string  `json:"message"`
+}
+
+type ChannelKind struct {
+	ModuleName string                  `json:"moduleName"`
+	Schema     *ModuleConnectionSchema `json:"schema"`
+}
+
 type CreateAgentKeyInput struct {
 	Name            string               `json:"name"`
 	OperationScopes []string             `json:"operationScopes,omitempty"`
@@ -298,6 +331,11 @@ type ModuleConfigValueInput struct {
 	Value any    `json:"value,omitempty"`
 }
 
+type ModuleConnectionSchema struct {
+	Version int            `json:"version"`
+	Fields  []*ModuleField `json:"fields"`
+}
+
 type ModuleEnumOption struct {
 	Value       string  `json:"value"`
 	Label       *string `json:"label,omitempty"`
@@ -320,12 +358,15 @@ type ModuleField struct {
 	Order       int                 `json:"order"`
 	Unit        *string             `json:"unit,omitempty"`
 	Placeholder *string             `json:"placeholder,omitempty"`
+	Format      *string             `json:"format,omitempty"`
 	Required    bool                `json:"required"`
 	Default     any                 `json:"default,omitempty"`
 	Min         any                 `json:"min,omitempty"`
 	Max         any                 `json:"max,omitempty"`
 	Pattern     *string             `json:"pattern,omitempty"`
 	MaxLength   *int                `json:"maxLength,omitempty"`
+	KeyPattern  *string             `json:"keyPattern,omitempty"`
+	MaxItems    *int                `json:"maxItems,omitempty"`
 	Options     []*ModuleEnumOption `json:"options,omitempty"`
 }
 

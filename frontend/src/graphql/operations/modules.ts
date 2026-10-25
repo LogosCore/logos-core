@@ -61,12 +61,15 @@ export const ModuleFieldDefFields = graphql(`
     order
     unit
     placeholder
+    format
     required
     default
     min
     max
     pattern
     maxLength
+    keyPattern
+    maxItems
     options {
       value
       label
@@ -116,6 +119,12 @@ export const ModuleDetailFields = graphql(`
         unit
         value
         alert
+      }
+    }
+    connection {
+      version
+      fields {
+        ...ModuleFieldDefFields
       }
     }
   }

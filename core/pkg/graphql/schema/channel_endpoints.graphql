@@ -1,0 +1,116 @@
+# =============================================================================
+# Channel endpoints — an operation's ready-to-use minion connection settings
+# =============================================================================
+#
+# A channel declares a minion connection schema at module.register (see
+# logos-golang-protocol/protocol/connection.go): the parameters a minion needs
+# to reach it, e.g. an HTTP channel's base URL and TLS settings. The schema
+# belongs to the channel kind (module name, e.g. "http"); a kind's current
+# schema is the highest version any of its instances declared.
+#
+# An endpoint is a ready-to-use set of values for a kind's schema (e.g. "EU
+# CDN"), kept by an operation so its operators can reuse it when creating
+# minions. The values are copied into a minion, so nothing depends on an
+# endpoint afterwards; channels never see endpoints. Endpoints are validated
+# against the kind's current schema when saved, and again on every read.
+#
+# Viewers of an operation read its endpoints; operators and admins change
+# them. Agent API keys may read but not write.
+
+extend type Module {
+  # The minion connection schema this instance declared; null when it declared
+  # none (only channels do).
+  connection: ModuleConnectionSchema
+}
+
+type ModuleConnectionSchema {
+  # Version of the channel kind's parameter set; raised when values for an
+  # earlier one would be read wrongly.
+  version: Int!
+  fields: [ModuleField!]!
+}
+
+# A channel kind minions can be given endpoints for.
+type ChannelKind {
+  # The kind, e.g. "http".
+  moduleName: String!
+  schema: ModuleConnectionSchema!
+}
+
+type ChannelEndpointProblem {
+  # The field the problem is about; null when it is not one field's.
+  key: String
+  message: String!
+}
+
+type ChannelEndpoint {
+  id: ID!
+  operationId: ID!
+  # Unique within the operation.
+  name: String!
+  description: String
+  # The channel kind, e.g. "http".
+  moduleName: String!
+  # Connection schema version the values were saved against.
+  schemaVersion: Int!
+  # The kind now declares another schema version: the values may need a look.
+  schemaChanged: Boolean!
+  # Stored values by field key. Fields without a value use the schema's
+  # default.
+  values: JSON!
+  # Why the endpoint does not fit the kind's current schema; empty when it can
+  # be used.
+  problems: [ChannelEndpointProblem!]!
+  # Grows with every change; updateChannelEndpoint compares against it.
+  revision: Int!
+  createdBy: ModuleActor!
+  updatedBy: ModuleActor!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input ChannelEndpointInput {
+  name: String!
+  description: String
+  # Values by field key, replacing the stored ones. null, "" and [] leave a
+  # field unset (its default applies).
+  values: JSON!
+}
+
+extend type Query {
+  # Channel kinds that declared a connection schema, with their current one.
+  channelKinds: [ChannelKind!]!
+    @hasPermission(permission: "operation:member")
+
+  # An operation's endpoints by kind and name; one kind's when moduleName is
+  # set. Needs at least viewer in the operation.
+  channelEndpoints(operationId: ID!, moduleName: String): [ChannelEndpoint!]!
+    @hasPermission(permission: "operation:member")
+
+  # One endpoint; null when it does not exist. Needs at least viewer in its
+  # operation.
+  channelEndpoint(id: ID!): ChannelEndpoint
+    @hasPermission(permission: "operation:member")
+
+  # The endpoint as a minion's connection settings: its values over the
+  # schema's defaults. Fails with BAD_USER_INPUT while the endpoint has
+  # problems. Needs at least viewer in its operation.
+  channelEndpointExport(id: ID!): JSON!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Mutation {
+  # Validated against the kind's current schema; field problems are in the
+  # error's extensions.problems. Needs at least operator in the operation;
+  # agent API keys are rejected.
+  createChannelEndpoint(operationId: ID!, moduleName: String!, input: ChannelEndpointInput!): ChannelEndpoint!
+    @hasPermission(permission: "operation:member")
+
+  # expectedRevision is the revision the caller read; a mismatch fails with
+  # CONFLICT.
+  updateChannelEndpoint(id: ID!, input: ChannelEndpointInput!, expectedRevision: Int!): ChannelEndpoint!
+    @hasPermission(permission: "operation:member")
+
+  deleteChannelEndpoint(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+}

@@ -11,6 +11,7 @@
 //   bool                         → boolean
 //   duration                     → Go duration string ("30s", "1m30s")
 //   string_list                  → string[]
+//   string_map                   → { [key: string]: string }
 // Bounds (min / max) are numbers, or duration strings for duration.
 
 import type {
@@ -32,6 +33,7 @@ export type FieldType =
   | "bool"
   | "duration"
   | "string_list"
+  | "string_map"
 
 // ---------------------------------------------------------------------------
 // Bytes
@@ -124,6 +126,13 @@ export type Draft =
   | { kind: "bool"; value: boolean | null }
   | { kind: "bytes"; text: string; unit: ByteUnit }
   | { kind: "secret"; mode: "keep" | "replace" | "clear"; text: string }
+  | { kind: "map"; entries: MapEntry[] }
+
+/** One row of a string_map control. */
+export interface MapEntry {
+  key: string
+  value: string
+}
 
 export interface DraftOptions {
   /** Edit secrets as plain write-only text (action params) instead of keep/replace. */
@@ -146,6 +155,14 @@ export function initialDraft(
   }
   if (type === "bool") {
     return { kind: "bool", value: typeof value === "boolean" ? value : null }
+  }
+  if (type === "string_map") {
+    return {
+      kind: "map",
+      entries: isPlainObject(value)
+        ? Object.entries(value).map(([key, v]) => ({ key, value: typeof v === "string" ? v : String(v) }))
+        : [],
+    }
   }
   if (type === "bytes") {
     if (typeof value === "number") return { kind: "bytes", ...splitBytes(value) }
@@ -187,6 +204,17 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
       return { ok: true, value: draft.text === "" ? undefined : draft.text }
     case "bool":
       return { ok: true, value: draft.value }
+    case "map": {
+      const out: Record<string, string> = {}
+      for (const e of draft.entries) {
+        const key = e.key.trim()
+        if (key === "" && e.value === "") continue // an untouched blank row
+        if (key === "") return { ok: false, error: "Every entry needs a key" }
+        if (key in out) return { ok: false, error: `"${key}" appears twice` }
+        out[key] = e.value
+      }
+      return { ok: true, value: Object.keys(out).length === 0 ? null : out }
+    }
     case "bytes": {
       const t = draft.text.trim()
       if (t === "") return { ok: true, value: null }
@@ -301,6 +329,7 @@ export function validateValue(
     }
     case "string_list": {
       if (!Array.isArray(value)) return "Must be a list"
+      if (field.maxItems != null && value.length > field.maxItems) return `At most ${field.maxItems} items`
       for (const item of value) {
         if (typeof item !== "string") return "Items must be text"
         if (field.maxLength != null && [...item].length > field.maxLength) {
@@ -312,9 +341,31 @@ export function validateValue(
       }
       return null
     }
+    case "string_map": {
+      if (!isPlainObject(value)) return "Must be a set of keys and values"
+      const entries = Object.entries(value)
+      if (field.maxItems != null && entries.length > field.maxItems) return `At most ${field.maxItems} entries`
+      for (const [key, item] of entries) {
+        if (typeof item !== "string") return `"${key}" must be text`
+        if (field.keyPattern && !matchesPattern(field.keyPattern, key)) {
+          return `"${key}" is not a valid key (must match ${field.keyPattern})`
+        }
+        if (field.maxLength != null && [...item].length > field.maxLength) {
+          return `"${key}": at most ${field.maxLength} characters`
+        }
+        if (field.pattern && !matchesPattern(field.pattern, item)) {
+          return `"${key}": value must match ${field.pattern}`
+        }
+      }
+      return null
+    }
     default:
       return null
   }
+}
+
+export function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
 function checkBounds(field: FieldDef, type: FieldType, n: number): string | null {
@@ -370,6 +421,10 @@ export function formatValue(type: string, value: unknown, unit?: string | null):
   if (type === "bool" && typeof value === "boolean") return value ? "true" : "false"
   if (Array.isArray(value)) {
     return value.length === 0 ? "(empty)" : value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(", ")
+  }
+  if (type === "string_map" && isPlainObject(value)) {
+    const entries = Object.entries(value)
+    return entries.length === 0 ? "(empty)" : entries.map(([k, v]) => `${k}: ${String(v)}`).join(", ")
   }
   let text: string
   if (typeof value === "string") text = value

@@ -43,6 +43,8 @@ type IModuleResolver interface {
 
 	// Management is the Module.management field (module_management.graphql).
 	Management(ctx context.Context, obj *models.Module) (*model.ModuleManagement, error)
+	// Connection is the Module.connection field (channel_endpoints.graphql).
+	Connection(ctx context.Context, obj *models.Module) (*model.ModuleConnectionSchema, error)
 
 	// Field resolvers for the Module type (timestamps → RFC3339 / nullable).
 	RegisteredAt(ctx context.Context, obj *models.Module) (string, error)

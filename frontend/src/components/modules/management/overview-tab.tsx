@@ -8,6 +8,42 @@ import { cn } from "@/lib/utils"
 import { formatValue } from "./field-values"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
+type Connection = NonNullable<ModuleDetailFieldsFragment["connection"]>
+
+/**
+ * The minion connection settings this instance declared (read-only). Operators
+ * fill them in as endpoints on an operation's Endpoints page.
+ */
+export function ConnectionSchema({ connection }: { connection: Connection }) {
+  const fields = [...connection.fields].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+  return (
+    <section className="rounded-xl border bg-card">
+      <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
+        Minion connection settings
+        <span className="text-xs font-normal text-muted-foreground">schema v{connection.version}</span>
+      </h3>
+      <dl className="divide-y">
+        {fields.map((f) => (
+          <div key={f.key} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
+            <dt className="min-w-0 truncate text-muted-foreground" title={f.description ?? undefined}>
+              {f.label}
+              {f.required && <span className="text-destructive">*</span>}
+            </dt>
+            <dd className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <code className="font-mono text-xs">{f.key}</code>
+              <span className="text-xs text-muted-foreground">{f.type}</span>
+              {f.default !== null && f.default !== undefined && (
+                <span className="text-xs text-muted-foreground">
+                  default {formatValue(f.type === "secret" ? "string" : f.type, f.default, f.unit)}
+                </span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

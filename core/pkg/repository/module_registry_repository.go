@@ -45,6 +45,14 @@ type IModuleRegistryRepository interface {
 	// together. Distinct from ListActive, which is the registered-only hot path
 	// used by the active-set lookups.
 	List(ctx context.Context, statuses []string) ([]models.Module, error)
+	// LatestConnectionSchema returns the minion connection schema of a channel
+	// kind: the highest version any instance of moduleName declared, from the
+	// most recent registration among those (rows of every lifecycle state
+	// count). Nil when no instance declared one.
+	LatestConnectionSchema(ctx context.Context, moduleName string) (*models.ModuleConnectionSchema, error)
+	// LatestConnectionSchemas is LatestConnectionSchema for every channel
+	// kind that declared one, by module name.
+	LatestConnectionSchemas(ctx context.Context) (map[string]*models.ModuleConnectionSchema, error)
 
 	// --- module management ---
 
@@ -156,6 +164,11 @@ func takeoverUpdate(reg *models.Module) bson.M {
 		unset["manifest"] = ""
 		unset["manifest_hash"] = ""
 	}
+	if reg.Connection != nil {
+		set["connection"] = reg.Connection
+	} else {
+		unset["connection"] = ""
+	}
 	return bson.M{"$set": set, "$unset": unset}
 }
 
@@ -234,6 +247,51 @@ func (r *moduleRegistryRepository) Upsert(ctx context.Context, reg *models.Modul
 		return r.coll.UpdateOne(ctx, instanceFilter(reg.Instance), takeoverUpdate(reg))
 	}
 	return err
+}
+
+func (r *moduleRegistryRepository) LatestConnectionSchema(ctx context.Context, moduleName string) (*models.ModuleConnectionSchema, error) {
+	var mod models.Module
+	err := r.coll.Find(ctx, latestConnectionFilter(moduleName)).
+		Sort("-connection.version", "-registered_at").
+		Select(bson.M{"connection": 1}).
+		One(&mod)
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mod.Connection, nil
+}
+
+func (r *moduleRegistryRepository) LatestConnectionSchemas(ctx context.Context) (map[string]*models.ModuleConnectionSchema, error) {
+	// One row per instance that declared a schema: few, so the newest per
+	// kind is picked here rather than in an aggregation.
+	var mods []models.Module
+	err := r.coll.Find(ctx, bson.M{"connection": bson.M{"$exists": true}}).
+		Sort("module_name", "-connection.version", "-registered_at").
+		Select(bson.M{"module_name": 1, "connection": 1}).
+		All(&mods)
+	if err != nil {
+		return nil, err
+	}
+	return latestPerKind(mods), nil
+}
+
+// latestPerKind keeps the first schema of each module name from rows sorted
+// newest first within a name.
+func latestPerKind(mods []models.Module) map[string]*models.ModuleConnectionSchema {
+	out := map[string]*models.ModuleConnectionSchema{}
+	for i := range mods {
+		if _, seen := out[mods[i].Name]; !seen && mods[i].Connection != nil {
+			out[mods[i].Name] = mods[i].Connection
+		}
+	}
+	return out
+}
+
+func latestConnectionFilter(moduleName string) bson.M {
+	return bson.M{"module_name": moduleName, "connection": bson.M{"$exists": true}}
 }
 
 func (r *moduleRegistryRepository) TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, appliedRevision *int64, at time.Time) (bool, error) {

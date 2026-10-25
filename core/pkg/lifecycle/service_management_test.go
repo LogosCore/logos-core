@@ -142,6 +142,38 @@ func TestHandleRegister_InvalidManifestIsValidationFailed(t *testing.T) {
 	}
 }
 
+func TestHandleRegister_ConnectionSchema(t *testing.T) {
+	svc, repo, _ := newTestService()
+	_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,
+		`{"module_type": "channel", "module_name": "http", "instance": "http-1", "rpc_queue": "q",
+		  "connection": {"schema_version": "1", "version": 2, "fields": [{"key": "base_url", "type": "url", "required": true}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := repo.rows["http-1"].Connection
+	if c == nil || c.Version != 2 || len(c.Fields) != 1 || c.Fields[0].Key != "base_url" {
+		t.Fatalf("connection = %+v", c)
+	}
+
+	// A register without one clears it.
+	if _, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,
+		`{"module_type": "channel", "module_name": "http", "instance": "http-1", "rpc_queue": "q"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if repo.rows["http-1"].Connection != nil {
+		t.Error("connection not cleared")
+	}
+
+	delete(repo.rows, "http-1")
+	_, err = svc.HandleRegister(context.Background(), rawEnv(OpRegister,
+		`{"module_type": "channel", "module_name": "http", "instance": "http-1", "rpc_queue": "q",
+		  "connection": {"schema_version": "1", "version": 0, "fields": []}}`))
+	assertRPCCode(t, err, messaging.CodeValidationFailed)
+	if _, stored := repo.rows["http-1"]; stored {
+		t.Error("invalid registration was persisted")
+	}
+}
+
 func TestHandleHeartbeat_StoresAppliedRevisionAndReportsDrift(t *testing.T) {
 	svc, repo, _ := newTestService()
 	mgmt := &fakeMgmt{}

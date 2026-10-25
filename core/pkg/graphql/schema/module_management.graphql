@@ -54,7 +54,7 @@ type ModuleEnumOption {
 }
 
 # A typed field: a property or an action parameter.
-# type: string | int | number | bool | enum | duration | bytes | url | secret | string_list
+# type: string | int | number | bool | enum | duration | bytes | url | secret | string_list | string_map
 type ModuleField {
   key: String!
   type: String!
@@ -64,12 +64,21 @@ type ModuleField {
   order: Int!
   unit: String
   placeholder: String
+  # What a string field holds, e.g. "user_agent": a UI hint (helpers such as
+  # a generator), never validated.
+  format: String
   required: Boolean!
   default: JSON
   min: JSON
   max: JSON
+  # For string_list and string_map, pattern and maxLength apply to each item
+  # (each value of a map).
   pattern: String
   maxLength: Int
+  # string_map: what every key must match.
+  keyPattern: String
+  # string_list / string_map: most items or entries.
+  maxItems: Int
   options: [ModuleEnumOption!]
 }
 

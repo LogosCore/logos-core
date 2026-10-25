@@ -185,6 +185,15 @@ func TestTakeoverUpdate_ManagementFields(t *testing.T) {
 	if _, ok := unset["manifest_hash"]; !ok {
 		t.Error("manifest_hash should be unset when not declared")
 	}
+	if _, ok := unset["connection"]; !ok {
+		t.Error("connection should be unset when not declared")
+	}
+
+	conn := &models.ModuleConnectionSchema{ConnectionSchema: protocol.ConnectionSchema{SchemaVersion: "1", Version: 1}}
+	u = takeoverUpdate(&models.Module{Instance: "http-1", Connection: conn})
+	if u["$set"].(bson.M)["connection"] != conn {
+		t.Error("connection not set when declared")
+	}
 }
 
 func TestHeartbeatUpdate_AppliedRevision(t *testing.T) {
@@ -215,5 +224,20 @@ func TestApplyResultUpdate(t *testing.T) {
 	}
 	if _, ok := unset["restart_required"]; !ok {
 		t.Error("nothing to restart → restart_required unset")
+	}
+}
+
+func TestLatestPerKind(t *testing.T) {
+	v := func(n int) *models.ModuleConnectionSchema {
+		return &models.ModuleConnectionSchema{ConnectionSchema: protocol.ConnectionSchema{Version: n}}
+	}
+	// Sorted as the query sorts: by name, newest first within a name.
+	got := latestPerKind([]models.Module{
+		{Name: "dns", Connection: v(1)},
+		{Name: "http", Connection: v(3)},
+		{Name: "http", Connection: v(2)},
+	})
+	if len(got) != 2 || got["http"].Version != 3 || got["dns"].Version != 1 {
+		t.Errorf("latest = %v", got)
 	}
 }

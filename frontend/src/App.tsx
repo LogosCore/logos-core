@@ -32,6 +32,9 @@ const WikiPage = page(() => import("@/pages/wiki"), "WikiPage")
 const WikiPrintPage = page(() => import("@/pages/wiki-print"), "WikiPrintPage")
 const FindingsPage = page(() => import("@/pages/findings"), "FindingsPage")
 const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
+const EndpointsPage = page(() => import("@/pages/endpoints"), "EndpointsPage")
+const NewEndpointPage = page(() => import("@/pages/endpoint-editor"), "NewEndpointPage")
+const EditEndpointPage = page(() => import("@/pages/endpoint-editor"), "EditEndpointPage")
 const AgentsPage = page(() => import("@/pages/agents"), "AgentsPage")
 const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
 
@@ -83,6 +86,9 @@ function App() {
               <Route path="wiki/:documentId" element={<WikiPage />} />
               <Route path="findings" element={<FindingsPage />} />
               <Route path="tasks" element={<TasksPage />} />
+              <Route path="endpoints" element={<EndpointsPage />} />
+              <Route path="endpoints/new" element={<NewEndpointPage />} />
+              <Route path="endpoints/:id" element={<EditEndpointPage />} />
               <Route path="timeline" element={<TimelinePage />} />
               {/* One route for both tabs: the page reads the tab off the
                   pathname, and a single element means switching tabs

@@ -1,0 +1,128 @@
+// Pure value handling for the channel endpoint editor: drafts for a
+// connection schema's fields, and the values object the server expects. Field
+// rules are the same as for properties (field-values.ts); what differs is that
+// the whole set is submitted at once rather than as a diff, and that secret
+// fields are plain operation data, edited as text like the rest.
+
+import { GraphQLRequestError } from "@/lib/graphql-client"
+import {
+  compareFields,
+  emptyDraft,
+  initialDraft,
+  parseDraft,
+  validateValue,
+  type Draft,
+  type FieldDef,
+} from "@/components/modules/management/field-values"
+
+/** A channel kind as the endpoint UI uses it: its schema's fields, sorted. */
+export interface Kind {
+  name: string
+  version: number
+  fields: FieldDef[]
+}
+
+/**
+ * Channel kinds by name from the channelKinds query. Secret fields are plain
+ * operation data here: edited and shown as text like the rest.
+ */
+export function kindsByName(
+  kinds: readonly { moduleName: string; schema: { version: number; fields: readonly FieldDef[] } }[],
+): Map<string, Kind> {
+  const out = new Map<string, Kind>()
+  for (const k of kinds) {
+    out.set(k.moduleName, {
+      name: k.moduleName,
+      version: k.schema.version,
+      fields: k.schema.fields
+        .map((f) => (f.type === "secret" ? { ...f, type: "string" } : f))
+        .sort(compareFields),
+    })
+  }
+  return out
+}
+
+/** Endpoint names: unique slugs. Mirrors the server's rule. */
+export const ENDPOINT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
+
+export function nameError(name: string): string | null {
+  const n = name.trim()
+  if (n === "") return "Required"
+  if (!ENDPOINT_NAME_PATTERN.test(n)) {
+    return "Lowercase letters, digits, '.', '_' or '-', starting with a letter or digit (at most 63)"
+  }
+  return null
+}
+
+const AS_TEXT = { secretAsText: true }
+
+/** Drafts for an endpoint's stored values (null: a new endpoint). */
+export function endpointDrafts(
+  fields: readonly FieldDef[],
+  values: Record<string, unknown> | null,
+): Record<string, Draft> {
+  const out: Record<string, Draft> = {}
+  for (const f of fields) {
+    out[f.key] = initialDraft(f, values?.[f.key] ?? null, AS_TEXT)
+  }
+  return out
+}
+
+/**
+ * The values object to submit (it replaces the stored one), plus per-key
+ * errors. Unset fields are left out: their default applies.
+ */
+export function evaluateEndpoint(
+  fields: readonly FieldDef[],
+  drafts: Record<string, Draft>,
+): { values: Record<string, unknown>; errors: Record<string, string> } {
+  const values: Record<string, unknown> = {}
+  const errors: Record<string, string> = {}
+  for (const f of fields) {
+    const parsed = parseDraft(f, drafts[f.key] ?? emptyDraft(f, AS_TEXT))
+    if (!parsed.ok) {
+      errors[f.key] = parsed.error
+      continue
+    }
+    const v = parsed.value
+    const error = validateValue(f, v, { fallback: f.default })
+    if (error) errors[f.key] = error
+    else if (v !== null && v !== undefined) values[f.key] = v
+  }
+  return { values, errors }
+}
+
+/**
+ * Field problems from a BAD_USER_INPUT error (extensions.problems), by key;
+ * problems that are not one field's are under "".
+ */
+export function problemsFromError(err: unknown): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!(err instanceof GraphQLRequestError)) return out
+  for (const e of err.errors) {
+    const problems = e.extensions?.problems
+    if (!Array.isArray(problems)) continue
+    for (const p of problems) {
+      if (p && typeof p === "object" && typeof p.message === "string") {
+        out[typeof p.key === "string" ? p.key : ""] = p.message
+      }
+    }
+  }
+  return out
+}
+
+/** File name for a downloaded endpoint. */
+export function exportFileName(name: string): string {
+  return `${name}.endpoint.json`
+}
+
+/** Endpoints grouped by channel kind, kinds in name order. */
+export function groupByKind<T extends { moduleName: string }>(items: readonly T[]): [string, T[]][] {
+  const groups = new Map<string, T[]>()
+  for (const item of items) {
+    const list = groups.get(item.moduleName)
+    if (list) list.push(item)
+    else groups.set(item.moduleName, [item])
+  }
+  return [...groups].sort(([a], [b]) => a.localeCompare(b))
+}

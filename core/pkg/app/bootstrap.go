@@ -77,6 +77,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		ModuleConfig:       repository.NewModuleConfigRepository(db),
 		ModuleConfigChange: repository.NewModuleConfigChangeRepository(db),
 		ModuleInvocation:   repository.NewModuleActionInvocationRepository(db),
+		ChannelEndpoint:    repository.NewChannelEndpointRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed

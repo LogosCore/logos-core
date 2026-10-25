@@ -251,6 +251,7 @@ func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 		Order:       f.Order,
 		Unit:        strPtr(f.Unit),
 		Placeholder: strPtr(f.Placeholder),
+		Format:      strPtr(f.Format),
 		Required:    f.Required,
 		Min:         f.Min,
 		Max:         f.Max,
@@ -262,6 +263,11 @@ func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 	if f.MaxLength > 0 {
 		ml := f.MaxLength
 		out.MaxLength = &ml
+	}
+	out.KeyPattern = strPtr(f.KeyPattern)
+	if f.MaxItems > 0 {
+		mi := f.MaxItems
+		out.MaxItems = &mi
 	}
 	if len(f.Options) > 0 {
 		out.Options = make([]*model.ModuleEnumOption, len(f.Options))
@@ -414,4 +420,12 @@ func plainJSON(v any) any {
 		return t.Time().UTC().Format(time.RFC3339)
 	}
 	return v
+}
+
+// Connection is the Module.connection field (channel_endpoints.graphql).
+func (r *moduleResolver) Connection(_ context.Context, obj *models.Module) (*model.ModuleConnectionSchema, error) {
+	if obj.Connection == nil {
+		return nil, nil
+	}
+	return toConnectionModel(&obj.Connection.ConnectionSchema), nil
 }

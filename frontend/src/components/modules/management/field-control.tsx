@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { PlusIcon, XIcon } from "lucide-react"
+import { UserAgentGenerator } from "./user-agent-generator"
 import {
   BYTE_UNITS,
   DURATION_HINT,
@@ -19,6 +21,7 @@ import {
   type ByteUnit,
   type Draft,
   type FieldDef,
+  type MapEntry,
 } from "./field-values"
 
 interface FieldControlProps {
@@ -95,6 +98,19 @@ export function FieldControl({
           disabled={disabled}
           invalid={invalid}
           placeholder={placeholder}
+        />
+      )
+
+    case "map":
+      return (
+        <MapControl
+          id={id}
+          field={field}
+          draft={draft}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={invalid}
+          defaultText={defaultText}
         />
       )
 
@@ -194,9 +210,9 @@ export function FieldControl({
         </div>
       )
 
-    default:
+    default: {
       // string, url, secret-as-text (action params), and unknown types.
-      return (
+      const input = (
         <Input
           id={id}
           type={field.type === "secret" ? "password" : "text"}
@@ -211,6 +227,17 @@ export function FieldControl({
           spellCheck={false}
         />
       )
+      // A helper for what the field holds, when the module says so.
+      if (field.type === "string" && field.format === "user_agent") {
+        return (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">{input}</div>
+            <UserAgentGenerator onUse={setText} disabled={disabled} />
+          </div>
+        )
+      }
+      return input
+    }
   }
 }
 
@@ -270,6 +297,95 @@ function BytesControl({
       {hint && draft.unit === "B" && amount >= 1024 && (
         <span className="text-xs text-muted-foreground">≈ {humanizeBytes(amount)}</span>
       )}
+    </div>
+  )
+}
+
+/**
+ * string_map: one row per entry (key, value, remove), and "Add". Rows keep
+ * their order while editing; a blank row is ignored on save.
+ */
+function MapControl({
+  id,
+  field,
+  draft,
+  onChange,
+  disabled,
+  invalid,
+  defaultText,
+}: {
+  id: string
+  field: FieldDef
+  draft: Extract<Draft, { kind: "map" }>
+  onChange: (d: Draft) => void
+  disabled?: boolean
+  invalid?: boolean
+  defaultText?: string
+}) {
+  const entries = draft.entries
+  const set = (next: MapEntry[]) => onChange({ kind: "map", entries: next })
+  const update = (i: number, patch: Partial<MapEntry>) =>
+    set(entries.map((e, j) => (j === i ? { ...e, ...patch } : e)))
+  const full = field.maxItems != null && entries.length >= field.maxItems
+
+  return (
+    <div className="flex flex-col gap-2">
+      {entries.length === 0 && (
+        <span className="text-sm text-muted-foreground">
+          {defaultText !== undefined && defaultText !== "(empty)" ? `Default: ${defaultText}` : "None"}
+        </span>
+      )}
+      {entries.map((e, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Input
+            id={i === 0 ? id : undefined}
+            value={e.key}
+            onChange={(ev) => update(i, { key: ev.target.value })}
+            placeholder="Key"
+            aria-label="Key"
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            autoComplete="off"
+            spellCheck={false}
+            className="w-2/5 font-mono text-sm"
+          />
+          <Input
+            value={e.value}
+            onChange={(ev) => update(i, { value: ev.target.value })}
+            placeholder="Value"
+            aria-label={e.key ? `Value of ${e.key}` : "Value"}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            autoComplete="off"
+            spellCheck={false}
+            className="min-w-0 flex-1 font-mono text-sm"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => set(entries.filter((_, j) => j !== i))}
+            disabled={disabled}
+            title="Remove"
+            aria-label="Remove"
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ))}
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => set([...entries, { key: "", value: "" }])}
+          disabled={disabled || full}
+          title={full ? `At most ${field.maxItems}` : undefined}
+        >
+          <PlusIcon />
+          Add
+        </Button>
+      </div>
     </div>
   )
 }

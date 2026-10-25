@@ -141,6 +141,33 @@ type ComplexityRoot struct {
 		Skipped func(childComplexity int) int
 	}
 
+	ChannelEndpoint struct {
+		CreatedAt     func(childComplexity int) int
+		CreatedBy     func(childComplexity int) int
+		Description   func(childComplexity int) int
+		ID            func(childComplexity int) int
+		ModuleName    func(childComplexity int) int
+		Name          func(childComplexity int) int
+		OperationID   func(childComplexity int) int
+		Problems      func(childComplexity int) int
+		Revision      func(childComplexity int) int
+		SchemaChanged func(childComplexity int) int
+		SchemaVersion func(childComplexity int) int
+		UpdatedAt     func(childComplexity int) int
+		UpdatedBy     func(childComplexity int) int
+		Values        func(childComplexity int) int
+	}
+
+	ChannelEndpointProblem struct {
+		Key     func(childComplexity int) int
+		Message func(childComplexity int) int
+	}
+
+	ChannelKind struct {
+		ModuleName func(childComplexity int) int
+		Schema     func(childComplexity int) int
+	}
+
 	Credential struct {
 		BacklinkCount             func(childComplexity int) int
 		Backlinks                 func(childComplexity int) int
@@ -280,6 +307,7 @@ type ComplexityRoot struct {
 	}
 
 	Module struct {
+		Connection       func(childComplexity int) int
 		DeclaredDeadAt   func(childComplexity int) int
 		DeregisterReason func(childComplexity int) int
 		DeregisteredAt   func(childComplexity int) int
@@ -339,6 +367,11 @@ type ComplexityRoot struct {
 		Old func(childComplexity int) int
 	}
 
+	ModuleConnectionSchema struct {
+		Fields  func(childComplexity int) int
+		Version func(childComplexity int) int
+	}
+
 	ModuleEnumOption struct {
 		Description func(childComplexity int) int
 		Label       func(childComplexity int) int
@@ -355,10 +388,13 @@ type ComplexityRoot struct {
 	ModuleField struct {
 		Default     func(childComplexity int) int
 		Description func(childComplexity int) int
+		Format      func(childComplexity int) int
 		Group       func(childComplexity int) int
 		Key         func(childComplexity int) int
+		KeyPattern  func(childComplexity int) int
 		Label       func(childComplexity int) int
 		Max         func(childComplexity int) int
+		MaxItems    func(childComplexity int) int
 		MaxLength   func(childComplexity int) int
 		Min         func(childComplexity int) int
 		Options     func(childComplexity int) int
@@ -429,6 +465,7 @@ type ComplexityRoot struct {
 		ChangeTaskStage               func(childComplexity int, input model.ChangeTaskStageInput) int
 		CompleteGuide                 func(childComplexity int, guide string) int
 		CreateAgentKey                func(childComplexity int, input model.CreateAgentKeyInput) int
+		CreateChannelEndpoint         func(childComplexity int, operationID string, moduleName string, input model.ChannelEndpointInput) int
 		CreateCredential              func(childComplexity int, operationID string, input model.CreateCredentialInput) int
 		CreateCustomTimelineEvent     func(childComplexity int, operationID string, input model.CreateCustomTimelineEventInput) int
 		CreateHash                    func(childComplexity int, operationID string, input model.CreateHashInput) int
@@ -440,6 +477,7 @@ type ComplexityRoot struct {
 		CreateWikiDocument            func(childComplexity int, operationID string, input model.CreateWikiDocumentInput) int
 		CreateWikiDocumentBackup      func(childComplexity int, documentID string, description *string) int
 		DeleteAgentKey                func(childComplexity int, id string) int
+		DeleteChannelEndpoint         func(childComplexity int, id string) int
 		DeleteCredential              func(childComplexity int, id string) int
 		DeleteCredentialComment       func(childComplexity int, credentialID string, commentID string) int
 		DeleteCustomTimelineEvent     func(childComplexity int, id string) int
@@ -485,6 +523,7 @@ type ComplexityRoot struct {
 		TrackWikiDocumentVisit        func(childComplexity int, documentID string) int
 		TransferSkill                 func(childComplexity int, name string, userID string) int
 		UpdateAgentKey                func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
+		UpdateChannelEndpoint         func(childComplexity int, id string, input model.ChannelEndpointInput, expectedRevision int) int
 		UpdateCredential              func(childComplexity int, id string, input model.UpdateCredentialInput) int
 		UpdateCredentialComment       func(childComplexity int, credentialID string, commentID string, text string) int
 		UpdateCustomTimelineEvent     func(childComplexity int, id string, input model.UpdateCustomTimelineEventInput) int
@@ -568,6 +607,10 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		ChannelEndpoint                    func(childComplexity int, id string) int
+		ChannelEndpointExport              func(childComplexity int, id string) int
+		ChannelEndpoints                   func(childComplexity int, operationID string, moduleName *string) int
+		ChannelKinds                       func(childComplexity int) int
 		Credential                         func(childComplexity int, id string) int
 		CredentialTags                     func(childComplexity int, operationID string) int
 		Credentials                        func(childComplexity int, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
@@ -1099,6 +1142,7 @@ type ModuleResolver interface {
 	DeregisteredAt(ctx context.Context, obj *models.Module) (*string, error)
 
 	DeclaredDeadAt(ctx context.Context, obj *models.Module) (*string, error)
+	Connection(ctx context.Context, obj *models.Module) (*model.ModuleConnectionSchema, error)
 	Management(ctx context.Context, obj *models.Module) (*model.ModuleManagement, error)
 }
 type MutationResolver interface {
@@ -1126,6 +1170,9 @@ type MutationResolver interface {
 	RegenerateMyAPIKey(ctx context.Context) (*model.APIKeyWithSecret, error)
 	SetMyAPIKeyEnabled(ctx context.Context, enabled bool) (*models.APIKey, error)
 	DeleteMyAPIKey(ctx context.Context) (bool, error)
+	CreateChannelEndpoint(ctx context.Context, operationID string, moduleName string, input model.ChannelEndpointInput) (*model.ChannelEndpoint, error)
+	UpdateChannelEndpoint(ctx context.Context, id string, input model.ChannelEndpointInput, expectedRevision int) (*model.ChannelEndpoint, error)
+	DeleteChannelEndpoint(ctx context.Context, id string) (bool, error)
 	CreateCredential(ctx context.Context, operationID string, input model.CreateCredentialInput) (*models.Credential, error)
 	UpdateCredential(ctx context.Context, id string, input model.UpdateCredentialInput) (*models.Credential, error)
 	DeleteCredential(ctx context.Context, id string) (bool, error)
@@ -1202,6 +1249,10 @@ type QueryResolver interface {
 	MyAgentActivitySummary(ctx context.Context) ([]*model.AgentActivitySummary, error)
 	MyAgentKeys(ctx context.Context) ([]*models.AgentKey, error)
 	MyAPIKey(ctx context.Context) (*models.APIKey, error)
+	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
+	ChannelEndpoints(ctx context.Context, operationID string, moduleName *string) ([]*model.ChannelEndpoint, error)
+	ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error)
+	ChannelEndpointExport(ctx context.Context, id string) (any, error)
 	Credential(ctx context.Context, id string) (*models.Credential, error)
 	Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	CredentialTags(ctx context.Context, operationID string) ([]string, error)
@@ -1721,6 +1772,117 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BulkImportHashesResult.Skipped(childComplexity), true
+
+	case "ChannelEndpoint.createdAt":
+		if e.ComplexityRoot.ChannelEndpoint.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.CreatedAt(childComplexity), true
+	case "ChannelEndpoint.createdBy":
+		if e.ComplexityRoot.ChannelEndpoint.CreatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.CreatedBy(childComplexity), true
+	case "ChannelEndpoint.description":
+		if e.ComplexityRoot.ChannelEndpoint.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Description(childComplexity), true
+	case "ChannelEndpoint.id":
+		if e.ComplexityRoot.ChannelEndpoint.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.ID(childComplexity), true
+	case "ChannelEndpoint.moduleName":
+		if e.ComplexityRoot.ChannelEndpoint.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.ModuleName(childComplexity), true
+	case "ChannelEndpoint.name":
+		if e.ComplexityRoot.ChannelEndpoint.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Name(childComplexity), true
+	case "ChannelEndpoint.operationId":
+		if e.ComplexityRoot.ChannelEndpoint.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.OperationID(childComplexity), true
+	case "ChannelEndpoint.problems":
+		if e.ComplexityRoot.ChannelEndpoint.Problems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Problems(childComplexity), true
+	case "ChannelEndpoint.revision":
+		if e.ComplexityRoot.ChannelEndpoint.Revision == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Revision(childComplexity), true
+	case "ChannelEndpoint.schemaChanged":
+		if e.ComplexityRoot.ChannelEndpoint.SchemaChanged == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.SchemaChanged(childComplexity), true
+	case "ChannelEndpoint.schemaVersion":
+		if e.ComplexityRoot.ChannelEndpoint.SchemaVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.SchemaVersion(childComplexity), true
+	case "ChannelEndpoint.updatedAt":
+		if e.ComplexityRoot.ChannelEndpoint.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.UpdatedAt(childComplexity), true
+	case "ChannelEndpoint.updatedBy":
+		if e.ComplexityRoot.ChannelEndpoint.UpdatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.UpdatedBy(childComplexity), true
+	case "ChannelEndpoint.values":
+		if e.ComplexityRoot.ChannelEndpoint.Values == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Values(childComplexity), true
+
+	case "ChannelEndpointProblem.key":
+		if e.ComplexityRoot.ChannelEndpointProblem.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpointProblem.Key(childComplexity), true
+	case "ChannelEndpointProblem.message":
+		if e.ComplexityRoot.ChannelEndpointProblem.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpointProblem.Message(childComplexity), true
+
+	case "ChannelKind.moduleName":
+		if e.ComplexityRoot.ChannelKind.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelKind.ModuleName(childComplexity), true
+	case "ChannelKind.schema":
+		if e.ComplexityRoot.ChannelKind.Schema == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelKind.Schema(childComplexity), true
 
 	case "Credential.backlinkCount":
 		if e.ComplexityRoot.Credential.BacklinkCount == nil {
@@ -2278,6 +2440,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Login.User(childComplexity), true
 
+	case "Module.connection":
+		if e.ComplexityRoot.Module.Connection == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.Connection(childComplexity), true
 	case "Module.declaredDeadAt":
 		if e.ComplexityRoot.Module.DeclaredDeadAt == nil {
 			break
@@ -2536,6 +2704,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleConfigKeyChange.Old(childComplexity), true
 
+	case "ModuleConnectionSchema.fields":
+		if e.ComplexityRoot.ModuleConnectionSchema.Fields == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnectionSchema.Fields(childComplexity), true
+	case "ModuleConnectionSchema.version":
+		if e.ComplexityRoot.ModuleConnectionSchema.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnectionSchema.Version(childComplexity), true
+
 	case "ModuleEnumOption.description":
 		if e.ComplexityRoot.ModuleEnumOption.Description == nil {
 			break
@@ -2592,6 +2773,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Description(childComplexity), true
+	case "ModuleField.format":
+		if e.ComplexityRoot.ModuleField.Format == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.Format(childComplexity), true
 	case "ModuleField.group":
 		if e.ComplexityRoot.ModuleField.Group == nil {
 			break
@@ -2604,6 +2791,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Key(childComplexity), true
+	case "ModuleField.keyPattern":
+		if e.ComplexityRoot.ModuleField.KeyPattern == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.KeyPattern(childComplexity), true
 	case "ModuleField.label":
 		if e.ComplexityRoot.ModuleField.Label == nil {
 			break
@@ -2616,6 +2809,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleField.Max(childComplexity), true
+	case "ModuleField.maxItems":
+		if e.ComplexityRoot.ModuleField.MaxItems == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleField.MaxItems(childComplexity), true
 	case "ModuleField.maxLength":
 		if e.ComplexityRoot.ModuleField.MaxLength == nil {
 			break
@@ -2979,6 +3178,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateAgentKey(childComplexity, args["input"].(model.CreateAgentKeyInput)), true
+	case "Mutation.createChannelEndpoint":
+		if e.ComplexityRoot.Mutation.CreateChannelEndpoint == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createChannelEndpoint_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateChannelEndpoint(childComplexity, args["operationId"].(string), args["moduleName"].(string), args["input"].(model.ChannelEndpointInput)), true
 	case "Mutation.createCredential":
 		if e.ComplexityRoot.Mutation.CreateCredential == nil {
 			break
@@ -3095,6 +3305,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteAgentKey(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteChannelEndpoint":
+		if e.ComplexityRoot.Mutation.DeleteChannelEndpoint == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteChannelEndpoint_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteChannelEndpoint(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteCredential":
 		if e.ComplexityRoot.Mutation.DeleteCredential == nil {
 			break
@@ -3575,6 +3796,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateAgentKey(childComplexity, args["id"].(string), args["input"].(model.UpdateAgentKeyInput)), true
+	case "Mutation.updateChannelEndpoint":
+		if e.ComplexityRoot.Mutation.UpdateChannelEndpoint == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateChannelEndpoint_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateChannelEndpoint(childComplexity, args["id"].(string), args["input"].(model.ChannelEndpointInput), args["expectedRevision"].(int)), true
 	case "Mutation.updateCredential":
 		if e.ComplexityRoot.Mutation.UpdateCredential == nil {
 			break
@@ -3963,6 +4195,45 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PageInfo.StartCursor(childComplexity), true
 
+	case "Query.channelEndpoint":
+		if e.ComplexityRoot.Query.ChannelEndpoint == nil {
+			break
+		}
+
+		args, err := ec.field_Query_channelEndpoint_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ChannelEndpoint(childComplexity, args["id"].(string)), true
+	case "Query.channelEndpointExport":
+		if e.ComplexityRoot.Query.ChannelEndpointExport == nil {
+			break
+		}
+
+		args, err := ec.field_Query_channelEndpointExport_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ChannelEndpointExport(childComplexity, args["id"].(string)), true
+	case "Query.channelEndpoints":
+		if e.ComplexityRoot.Query.ChannelEndpoints == nil {
+			break
+		}
+
+		args, err := ec.field_Query_channelEndpoints_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.ChannelEndpoints(childComplexity, args["operationId"].(string), args["moduleName"].(*string)), true
+	case "Query.channelKinds":
+		if e.ComplexityRoot.Query.ChannelKinds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ChannelKinds(childComplexity), true
 	case "Query.credential":
 		if e.ComplexityRoot.Query.Credential == nil {
 			break
@@ -6270,6 +6541,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputBulkImportHashesInput,
 		ec.unmarshalInputChangeTaskStageInput,
+		ec.unmarshalInputChannelEndpointInput,
 		ec.unmarshalInputCreateAgentKeyInput,
 		ec.unmarshalInputCreateCredentialInput,
 		ec.unmarshalInputCreateCustomTimelineEventInput,
@@ -6716,6 +6988,123 @@ extend type Mutation {
   # deleteMyAPIKey removes the caller's key entirely. Any scripts will
   # 401 immediately and the user can mint a fresh one with createMyAPIKey.
   deleteMyAPIKey: Boolean! @hasPermission(permission: "*")
+}
+`, BuiltIn: false},
+	{Name: "../schema/channel_endpoints.graphql", Input: `# =============================================================================
+# Channel endpoints — an operation's ready-to-use minion connection settings
+# =============================================================================
+#
+# A channel declares a minion connection schema at module.register (see
+# logos-golang-protocol/protocol/connection.go): the parameters a minion needs
+# to reach it, e.g. an HTTP channel's base URL and TLS settings. The schema
+# belongs to the channel kind (module name, e.g. "http"); a kind's current
+# schema is the highest version any of its instances declared.
+#
+# An endpoint is a ready-to-use set of values for a kind's schema (e.g. "EU
+# CDN"), kept by an operation so its operators can reuse it when creating
+# minions. The values are copied into a minion, so nothing depends on an
+# endpoint afterwards; channels never see endpoints. Endpoints are validated
+# against the kind's current schema when saved, and again on every read.
+#
+# Viewers of an operation read its endpoints; operators and admins change
+# them. Agent API keys may read but not write.
+
+extend type Module {
+  # The minion connection schema this instance declared; null when it declared
+  # none (only channels do).
+  connection: ModuleConnectionSchema
+}
+
+type ModuleConnectionSchema {
+  # Version of the channel kind's parameter set; raised when values for an
+  # earlier one would be read wrongly.
+  version: Int!
+  fields: [ModuleField!]!
+}
+
+# A channel kind minions can be given endpoints for.
+type ChannelKind {
+  # The kind, e.g. "http".
+  moduleName: String!
+  schema: ModuleConnectionSchema!
+}
+
+type ChannelEndpointProblem {
+  # The field the problem is about; null when it is not one field's.
+  key: String
+  message: String!
+}
+
+type ChannelEndpoint {
+  id: ID!
+  operationId: ID!
+  # Unique within the operation.
+  name: String!
+  description: String
+  # The channel kind, e.g. "http".
+  moduleName: String!
+  # Connection schema version the values were saved against.
+  schemaVersion: Int!
+  # The kind now declares another schema version: the values may need a look.
+  schemaChanged: Boolean!
+  # Stored values by field key. Fields without a value use the schema's
+  # default.
+  values: JSON!
+  # Why the endpoint does not fit the kind's current schema; empty when it can
+  # be used.
+  problems: [ChannelEndpointProblem!]!
+  # Grows with every change; updateChannelEndpoint compares against it.
+  revision: Int!
+  createdBy: ModuleActor!
+  updatedBy: ModuleActor!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input ChannelEndpointInput {
+  name: String!
+  description: String
+  # Values by field key, replacing the stored ones. null, "" and [] leave a
+  # field unset (its default applies).
+  values: JSON!
+}
+
+extend type Query {
+  # Channel kinds that declared a connection schema, with their current one.
+  channelKinds: [ChannelKind!]!
+    @hasPermission(permission: "operation:member")
+
+  # An operation's endpoints by kind and name; one kind's when moduleName is
+  # set. Needs at least viewer in the operation.
+  channelEndpoints(operationId: ID!, moduleName: String): [ChannelEndpoint!]!
+    @hasPermission(permission: "operation:member")
+
+  # One endpoint; null when it does not exist. Needs at least viewer in its
+  # operation.
+  channelEndpoint(id: ID!): ChannelEndpoint
+    @hasPermission(permission: "operation:member")
+
+  # The endpoint as a minion's connection settings: its values over the
+  # schema's defaults. Fails with BAD_USER_INPUT while the endpoint has
+  # problems. Needs at least viewer in its operation.
+  channelEndpointExport(id: ID!): JSON!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Mutation {
+  # Validated against the kind's current schema; field problems are in the
+  # error's extensions.problems. Needs at least operator in the operation;
+  # agent API keys are rejected.
+  createChannelEndpoint(operationId: ID!, moduleName: String!, input: ChannelEndpointInput!): ChannelEndpoint!
+    @hasPermission(permission: "operation:member")
+
+  # expectedRevision is the revision the caller read; a mismatch fails with
+  # CONFLICT.
+  updateChannelEndpoint(id: ID!, input: ChannelEndpointInput!, expectedRevision: Int!): ChannelEndpoint!
+    @hasPermission(permission: "operation:member")
+
+  deleteChannelEndpoint(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
 	{Name: "../schema/credentials.graphql", Input: `# =============================================================================
@@ -7642,7 +8031,7 @@ type ModuleEnumOption {
 }
 
 # A typed field: a property or an action parameter.
-# type: string | int | number | bool | enum | duration | bytes | url | secret | string_list
+# type: string | int | number | bool | enum | duration | bytes | url | secret | string_list | string_map
 type ModuleField {
   key: String!
   type: String!
@@ -7652,12 +8041,21 @@ type ModuleField {
   order: Int!
   unit: String
   placeholder: String
+  # What a string field holds, e.g. "user_agent": a UI hint (helpers such as
+  # a generator), never validated.
+  format: String
   required: Boolean!
   default: JSON
   min: JSON
   max: JSON
+  # For string_list and string_map, pattern and maxLength apply to each item
+  # (each value of a map).
   pattern: String
   maxLength: Int
+  # string_map: what every key must match.
+  keyPattern: String
+  # string_list / string_map: most items or entries.
+  maxItems: Int
   options: [ModuleEnumOption!]
 }
 
@@ -9912,6 +10310,27 @@ func (ec *executionContext) field_Mutation_createAgentKey_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createChannelEndpoint_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "moduleName", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["moduleName"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNChannelEndpointInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createCredential_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10042,6 +10461,17 @@ func (ec *executionContext) field_Mutation_createWikiDocument_args(ctx context.C
 }
 
 func (ec *executionContext) field_Mutation_deleteAgentKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteChannelEndpoint_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -10624,6 +11054,27 @@ func (ec *executionContext) field_Mutation_updateAgentKey_args(ctx context.Conte
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateChannelEndpoint_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNChannelEndpointInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedRevision", ec.unmarshalNInt2int)
+	if err != nil {
+		return nil, err
+	}
+	args["expectedRevision"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateCredentialComment_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10834,6 +11285,44 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_channelEndpointExport_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_channelEndpoint_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_channelEndpoints_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "moduleName", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["moduleName"] = arg1
 	return args, nil
 }
 
@@ -14023,6 +14512,556 @@ func (ec *executionContext) fieldContext_BulkImportHashesResult_hashes(_ context
 				return ec.fieldContext_Hash_updatedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Hash", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_id(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_operationId(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_name(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_description(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_schemaVersion,
+		func(ctx context.Context) (any, error) {
+			return obj.SchemaVersion, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_schemaVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_schemaChanged(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_schemaChanged,
+		func(ctx context.Context) (any, error) {
+			return obj.SchemaChanged, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_schemaChanged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_values(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_values,
+		func(ctx context.Context) (any, error) {
+			return obj.Values, nil
+		},
+		nil,
+		ec.marshalNJSON2interface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_problems(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_problems,
+		func(ctx context.Context) (any, error) {
+			return obj.Problems, nil
+		},
+		nil,
+		ec.marshalNChannelEndpointProblem2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointProblemᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_problems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ChannelEndpointProblem_key(ctx, field)
+			case "message":
+				return ec.fieldContext_ChannelEndpointProblem_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChannelEndpointProblem", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_revision(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_revision,
+		func(ctx context.Context) (any, error) {
+			return obj.Revision, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_revision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_createdBy,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedBy, nil
+		},
+		nil,
+		ec.marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_ModuleActor_type(ctx, field)
+			case "id":
+				return ec.fieldContext_ModuleActor_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ModuleActor_name(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_updatedBy(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_updatedBy,
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedBy, nil
+		},
+		nil,
+		ec.marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_ModuleActor_type(ctx, field)
+			case "id":
+				return ec.fieldContext_ModuleActor_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ModuleActor_name(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_createdAt,
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpoint_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_updatedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpointProblem_key(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpointProblem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpointProblem_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpointProblem_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpointProblem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelEndpointProblem_message(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpointProblem) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpointProblem_message,
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpointProblem_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpointProblem",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelKind_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.ChannelKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelKind_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelKind_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ChannelKind_schema(ctx context.Context, field graphql.CollectedField, obj *model.ChannelKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelKind_schema,
+		func(ctx context.Context) (any, error) {
+			return obj.Schema, nil
+		},
+		nil,
+		ec.marshalNModuleConnectionSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionSchema,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelKind_schema(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "version":
+				return ec.fieldContext_ModuleConnectionSchema_version(ctx, field)
+			case "fields":
+				return ec.fieldContext_ModuleConnectionSchema_fields(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionSchema", field.Name)
 		},
 	}
 	return fc, nil
@@ -17714,6 +18753,41 @@ func (ec *executionContext) fieldContext_Module_declaredDeadAt(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Module_connection(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_connection,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Module().Connection(ctx, obj)
+		},
+		nil,
+		ec.marshalOModuleConnectionSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionSchema,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_connection(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "version":
+				return ec.fieldContext_ModuleConnectionSchema_version(ctx, field)
+			case "fields":
+				return ec.fieldContext_ModuleConnectionSchema_fields(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionSchema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Module_management(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17948,6 +19022,8 @@ func (ec *executionContext) fieldContext_ModuleAction_params(_ context.Context, 
 				return ec.fieldContext_ModuleField_unit(ctx, field)
 			case "placeholder":
 				return ec.fieldContext_ModuleField_placeholder(ctx, field)
+			case "format":
+				return ec.fieldContext_ModuleField_format(ctx, field)
 			case "required":
 				return ec.fieldContext_ModuleField_required(ctx, field)
 			case "default":
@@ -17960,6 +19036,10 @@ func (ec *executionContext) fieldContext_ModuleAction_params(_ context.Context, 
 				return ec.fieldContext_ModuleField_pattern(ctx, field)
 			case "maxLength":
 				return ec.fieldContext_ModuleField_maxLength(ctx, field)
+			case "keyPattern":
+				return ec.fieldContext_ModuleField_keyPattern(ctx, field)
+			case "maxItems":
+				return ec.fieldContext_ModuleField_maxItems(ctx, field)
 			case "options":
 				return ec.fieldContext_ModuleField_options(ctx, field)
 			}
@@ -18660,6 +19740,102 @@ func (ec *executionContext) fieldContext_ModuleConfigKeyChange_new(_ context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleConnectionSchema_version(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnectionSchema_version,
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnectionSchema_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnectionSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConnectionSchema_fields(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnectionSchema_fields,
+		func(ctx context.Context) (any, error) {
+			return obj.Fields, nil
+		},
+		nil,
+		ec.marshalNModuleField2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnectionSchema_fields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnectionSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_ModuleField_key(ctx, field)
+			case "type":
+				return ec.fieldContext_ModuleField_type(ctx, field)
+			case "label":
+				return ec.fieldContext_ModuleField_label(ctx, field)
+			case "description":
+				return ec.fieldContext_ModuleField_description(ctx, field)
+			case "group":
+				return ec.fieldContext_ModuleField_group(ctx, field)
+			case "order":
+				return ec.fieldContext_ModuleField_order(ctx, field)
+			case "unit":
+				return ec.fieldContext_ModuleField_unit(ctx, field)
+			case "placeholder":
+				return ec.fieldContext_ModuleField_placeholder(ctx, field)
+			case "format":
+				return ec.fieldContext_ModuleField_format(ctx, field)
+			case "required":
+				return ec.fieldContext_ModuleField_required(ctx, field)
+			case "default":
+				return ec.fieldContext_ModuleField_default(ctx, field)
+			case "min":
+				return ec.fieldContext_ModuleField_min(ctx, field)
+			case "max":
+				return ec.fieldContext_ModuleField_max(ctx, field)
+			case "pattern":
+				return ec.fieldContext_ModuleField_pattern(ctx, field)
+			case "maxLength":
+				return ec.fieldContext_ModuleField_maxLength(ctx, field)
+			case "keyPattern":
+				return ec.fieldContext_ModuleField_keyPattern(ctx, field)
+			case "maxItems":
+				return ec.fieldContext_ModuleField_maxItems(ctx, field)
+			case "options":
+				return ec.fieldContext_ModuleField_options(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleEnumOption_value(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEnumOption) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18882,6 +20058,8 @@ func (ec *executionContext) fieldContext_ModuleEvent_module(_ context.Context, f
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
 			case "management":
 				return ec.fieldContext_Module_management(ctx, field)
 			}
@@ -19123,6 +20301,35 @@ func (ec *executionContext) fieldContext_ModuleField_placeholder(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleField_format(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_format,
+		func(ctx context.Context) (any, error) {
+			return obj.Format, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_format(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleField_required(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19285,6 +20492,64 @@ func (ec *executionContext) _ModuleField_maxLength(ctx context.Context, field gr
 }
 
 func (ec *executionContext) fieldContext_ModuleField_maxLength(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_keyPattern(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_keyPattern,
+		func(ctx context.Context) (any, error) {
+			return obj.KeyPattern, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_keyPattern(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleField",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleField_maxItems(ctx context.Context, field graphql.CollectedField, obj *model.ModuleField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleField_maxItems,
+		func(ctx context.Context) (any, error) {
+			return obj.MaxItems, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleField_maxItems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ModuleField",
 		Field:      field,
@@ -19985,6 +21250,8 @@ func (ec *executionContext) fieldContext_ModuleProperty_field(_ context.Context,
 				return ec.fieldContext_ModuleField_unit(ctx, field)
 			case "placeholder":
 				return ec.fieldContext_ModuleField_placeholder(ctx, field)
+			case "format":
+				return ec.fieldContext_ModuleField_format(ctx, field)
 			case "required":
 				return ec.fieldContext_ModuleField_required(ctx, field)
 			case "default":
@@ -19997,6 +21264,10 @@ func (ec *executionContext) fieldContext_ModuleProperty_field(_ context.Context,
 				return ec.fieldContext_ModuleField_pattern(ctx, field)
 			case "maxLength":
 				return ec.fieldContext_ModuleField_maxLength(ctx, field)
+			case "keyPattern":
+				return ec.fieldContext_ModuleField_keyPattern(ctx, field)
+			case "maxItems":
+				return ec.fieldContext_ModuleField_maxItems(ctx, field)
 			case "options":
 				return ec.fieldContext_ModuleField_options(ctx, field)
 			}
@@ -22184,6 +23455,243 @@ func (ec *executionContext) fieldContext_Mutation_deleteMyAPIKey(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createChannelEndpoint(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_createChannelEndpoint,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateChannelEndpoint(ctx, fc.Args["operationId"].(string), fc.Args["moduleName"].(string), fc.Args["input"].(model.ChannelEndpointInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.ChannelEndpoint
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.ChannelEndpoint
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNChannelEndpoint2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createChannelEndpoint(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ChannelEndpoint_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
+			case "name":
+				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
+			case "schemaChanged":
+				return ec.fieldContext_ChannelEndpoint_schemaChanged(ctx, field)
+			case "values":
+				return ec.fieldContext_ChannelEndpoint_values(ctx, field)
+			case "problems":
+				return ec.fieldContext_ChannelEndpoint_problems(ctx, field)
+			case "revision":
+				return ec.fieldContext_ChannelEndpoint_revision(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_ChannelEndpoint_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_ChannelEndpoint_updatedBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ChannelEndpoint_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ChannelEndpoint_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChannelEndpoint", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createChannelEndpoint_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateChannelEndpoint(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_updateChannelEndpoint,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateChannelEndpoint(ctx, fc.Args["id"].(string), fc.Args["input"].(model.ChannelEndpointInput), fc.Args["expectedRevision"].(int))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.ChannelEndpoint
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.ChannelEndpoint
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNChannelEndpoint2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateChannelEndpoint(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ChannelEndpoint_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
+			case "name":
+				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
+			case "schemaChanged":
+				return ec.fieldContext_ChannelEndpoint_schemaChanged(ctx, field)
+			case "values":
+				return ec.fieldContext_ChannelEndpoint_values(ctx, field)
+			case "problems":
+				return ec.fieldContext_ChannelEndpoint_problems(ctx, field)
+			case "revision":
+				return ec.fieldContext_ChannelEndpoint_revision(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_ChannelEndpoint_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_ChannelEndpoint_updatedBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ChannelEndpoint_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ChannelEndpoint_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChannelEndpoint", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateChannelEndpoint_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteChannelEndpoint(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteChannelEndpoint,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteChannelEndpoint(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal bool
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal bool
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteChannelEndpoint(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteChannelEndpoint_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createCredential(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23508,6 +25016,8 @@ func (ec *executionContext) fieldContext_Mutation_updateModuleConfig(ctx context
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
 			case "management":
 				return ec.fieldContext_Module_management(ctx, field)
 			}
@@ -23682,6 +25192,8 @@ func (ec *executionContext) fieldContext_Mutation_removeModule(ctx context.Conte
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
 			case "management":
 				return ec.fieldContext_Module_management(ctx, field)
 			}
@@ -28897,6 +30409,296 @@ func (ec *executionContext) fieldContext_Query_myAPIKey(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_channelKinds(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_channelKinds,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ChannelKinds(ctx)
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal []*model.ChannelKind
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.ChannelKind
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNChannelKind2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelKindᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_channelKinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "moduleName":
+				return ec.fieldContext_ChannelKind_moduleName(ctx, field)
+			case "schema":
+				return ec.fieldContext_ChannelKind_schema(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChannelKind", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_channelEndpoints(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_channelEndpoints,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ChannelEndpoints(ctx, fc.Args["operationId"].(string), fc.Args["moduleName"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal []*model.ChannelEndpoint
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []*model.ChannelEndpoint
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNChannelEndpoint2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_channelEndpoints(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ChannelEndpoint_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
+			case "name":
+				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
+			case "schemaChanged":
+				return ec.fieldContext_ChannelEndpoint_schemaChanged(ctx, field)
+			case "values":
+				return ec.fieldContext_ChannelEndpoint_values(ctx, field)
+			case "problems":
+				return ec.fieldContext_ChannelEndpoint_problems(ctx, field)
+			case "revision":
+				return ec.fieldContext_ChannelEndpoint_revision(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_ChannelEndpoint_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_ChannelEndpoint_updatedBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ChannelEndpoint_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ChannelEndpoint_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChannelEndpoint", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_channelEndpoints_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_channelEndpoint(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_channelEndpoint,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ChannelEndpoint(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.ChannelEndpoint
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.ChannelEndpoint
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOChannelEndpoint2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_channelEndpoint(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ChannelEndpoint_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
+			case "name":
+				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
+			case "schemaChanged":
+				return ec.fieldContext_ChannelEndpoint_schemaChanged(ctx, field)
+			case "values":
+				return ec.fieldContext_ChannelEndpoint_values(ctx, field)
+			case "problems":
+				return ec.fieldContext_ChannelEndpoint_problems(ctx, field)
+			case "revision":
+				return ec.fieldContext_ChannelEndpoint_revision(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_ChannelEndpoint_createdBy(ctx, field)
+			case "updatedBy":
+				return ec.fieldContext_ChannelEndpoint_updatedBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ChannelEndpoint_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ChannelEndpoint_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ChannelEndpoint", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_channelEndpoint_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_channelEndpointExport(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_channelEndpointExport,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().ChannelEndpointExport(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal any
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal any
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNJSON2interface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_channelEndpointExport(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_channelEndpointExport_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_credential(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29950,6 +31752,8 @@ func (ec *executionContext) fieldContext_Query_module(ctx context.Context, field
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
 			case "management":
 				return ec.fieldContext_Module_management(ctx, field)
 			}
@@ -30191,6 +31995,8 @@ func (ec *executionContext) fieldContext_Query_modules(ctx context.Context, fiel
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
 			case "management":
 				return ec.fieldContext_Module_management(ctx, field)
 			}
@@ -44190,6 +45996,50 @@ func (ec *executionContext) unmarshalInputChangeTaskStageInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputChannelEndpointInput(ctx context.Context, obj any) (model.ChannelEndpointInput, error) {
+	var it model.ChannelEndpointInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "description", "values"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "values":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("values"))
+			data, err := ec.unmarshalNJSON2interface(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Values = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateAgentKeyInput(ctx context.Context, obj any) (model.CreateAgentKeyInput, error) {
 	var it model.CreateAgentKeyInput
 	if obj == nil {
@@ -47080,6 +48930,192 @@ func (ec *executionContext) _BulkImportHashesResult(ctx context.Context, sel ast
 	return out
 }
 
+var channelEndpointImplementors = []string{"ChannelEndpoint"}
+
+func (ec *executionContext) _ChannelEndpoint(ctx context.Context, sel ast.SelectionSet, obj *model.ChannelEndpoint) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, channelEndpointImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ChannelEndpoint")
+		case "id":
+			out.Values[i] = ec._ChannelEndpoint_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationId":
+			out.Values[i] = ec._ChannelEndpoint_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._ChannelEndpoint_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._ChannelEndpoint_description(ctx, field, obj)
+		case "moduleName":
+			out.Values[i] = ec._ChannelEndpoint_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "schemaVersion":
+			out.Values[i] = ec._ChannelEndpoint_schemaVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "schemaChanged":
+			out.Values[i] = ec._ChannelEndpoint_schemaChanged(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "values":
+			out.Values[i] = ec._ChannelEndpoint_values(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "problems":
+			out.Values[i] = ec._ChannelEndpoint_problems(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revision":
+			out.Values[i] = ec._ChannelEndpoint_revision(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdBy":
+			out.Values[i] = ec._ChannelEndpoint_createdBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedBy":
+			out.Values[i] = ec._ChannelEndpoint_updatedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ChannelEndpoint_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._ChannelEndpoint_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var channelEndpointProblemImplementors = []string{"ChannelEndpointProblem"}
+
+func (ec *executionContext) _ChannelEndpointProblem(ctx context.Context, sel ast.SelectionSet, obj *model.ChannelEndpointProblem) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, channelEndpointProblemImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ChannelEndpointProblem")
+		case "key":
+			out.Values[i] = ec._ChannelEndpointProblem_key(ctx, field, obj)
+		case "message":
+			out.Values[i] = ec._ChannelEndpointProblem_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var channelKindImplementors = []string{"ChannelKind"}
+
+func (ec *executionContext) _ChannelKind(ctx context.Context, sel ast.SelectionSet, obj *model.ChannelKind) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, channelKindImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ChannelKind")
+		case "moduleName":
+			out.Values[i] = ec._ChannelKind_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "schema":
+			out.Values[i] = ec._ChannelKind_schema(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var credentialImplementors = []string{"Credential"}
 
 func (ec *executionContext) _Credential(ctx context.Context, sel ast.SelectionSet, obj *models.Credential) graphql.Marshaler {
@@ -49225,6 +51261,39 @@ func (ec *executionContext) _Module(ctx context.Context, sel ast.SelectionSet, o
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "connection":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Module_connection(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "management":
 			field := field
 
@@ -49569,6 +51638,50 @@ func (ec *executionContext) _ModuleConfigKeyChange(ctx context.Context, sel ast.
 	return out
 }
 
+var moduleConnectionSchemaImplementors = []string{"ModuleConnectionSchema"}
+
+func (ec *executionContext) _ModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConnectionSchema) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleConnectionSchemaImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleConnectionSchema")
+		case "version":
+			out.Values[i] = ec._ModuleConnectionSchema_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fields":
+			out.Values[i] = ec._ModuleConnectionSchema_fields(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var moduleEnumOptionImplementors = []string{"ModuleEnumOption"}
 
 func (ec *executionContext) _ModuleEnumOption(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleEnumOption) graphql.Marshaler {
@@ -49702,6 +51815,8 @@ func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._ModuleField_unit(ctx, field, obj)
 		case "placeholder":
 			out.Values[i] = ec._ModuleField_placeholder(ctx, field, obj)
+		case "format":
+			out.Values[i] = ec._ModuleField_format(ctx, field, obj)
 		case "required":
 			out.Values[i] = ec._ModuleField_required(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -49717,6 +51832,10 @@ func (ec *executionContext) _ModuleField(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._ModuleField_pattern(ctx, field, obj)
 		case "maxLength":
 			out.Values[i] = ec._ModuleField_maxLength(ctx, field, obj)
+		case "keyPattern":
+			out.Values[i] = ec._ModuleField_keyPattern(ctx, field, obj)
+		case "maxItems":
+			out.Values[i] = ec._ModuleField_maxItems(ctx, field, obj)
 		case "options":
 			out.Values[i] = ec._ModuleField_options(ctx, field, obj)
 		default:
@@ -50232,6 +52351,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteMyAPIKey":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteMyAPIKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createChannelEndpoint":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createChannelEndpoint(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateChannelEndpoint":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateChannelEndpoint(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteChannelEndpoint":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteChannelEndpoint(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -51491,6 +53631,91 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_myAPIKey(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "channelKinds":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_channelKinds(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "channelEndpoints":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_channelEndpoints(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "channelEndpoint":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_channelEndpoint(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "channelEndpointExport":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_channelEndpointExport(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
@@ -57996,6 +60221,93 @@ func (ec *executionContext) unmarshalNChangeTaskStageInput2githubᚗcomᚋlogosc
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNChannelEndpoint2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint(ctx context.Context, sel ast.SelectionSet, v model.ChannelEndpoint) graphql.Marshaler {
+	return ec._ChannelEndpoint(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNChannelEndpoint2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ChannelEndpoint) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNChannelEndpoint2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNChannelEndpoint2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint(ctx context.Context, sel ast.SelectionSet, v *model.ChannelEndpoint) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ChannelEndpoint(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNChannelEndpointInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointInput(ctx context.Context, v any) (model.ChannelEndpointInput, error) {
+	res, err := ec.unmarshalInputChannelEndpointInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNChannelEndpointProblem2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointProblemᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ChannelEndpointProblem) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNChannelEndpointProblem2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointProblem(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNChannelEndpointProblem2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpointProblem(ctx context.Context, sel ast.SelectionSet, v *model.ChannelEndpointProblem) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ChannelEndpointProblem(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNChannelKind2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelKindᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ChannelKind) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNChannelKind2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelKind(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNChannelKind2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelKind(ctx context.Context, sel ast.SelectionSet, v *model.ChannelKind) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ChannelKind(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCreateAgentKeyInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCreateAgentKeyInput(ctx context.Context, v any) (model.CreateAgentKeyInput, error) {
 	res, err := ec.unmarshalInputCreateAgentKeyInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -58511,6 +60823,28 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) unmarshalNJSON2interface(ctx context.Context, v any) (any, error) {
+	res, err := graphql.UnmarshalAny(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNJSON2interface(ctx context.Context, sel ast.SelectionSet, v any) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	_ = sel
+	res := graphql.MarshalAny(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) marshalNLogin2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐLogin(ctx context.Context, sel ast.SelectionSet, v models.Login) graphql.Marshaler {
 	return ec._Login(ctx, sel, &v)
 }
@@ -58717,6 +61051,16 @@ func (ec *executionContext) unmarshalNModuleConfigValueInput2ᚕᚖgithubᚗcom�
 func (ec *executionContext) unmarshalNModuleConfigValueInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConfigValueInput(ctx context.Context, v any) (*model.ModuleConfigValueInput, error) {
 	res, err := ec.unmarshalInputModuleConfigValueInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleConnectionSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConnectionSchema) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleConnectionSchema(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNModuleEnumOption2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOption(ctx context.Context, sel ast.SelectionSet, v *model.ModuleEnumOption) graphql.Marshaler {
@@ -60383,6 +62727,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
+func (ec *executionContext) marshalOChannelEndpoint2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐChannelEndpoint(ctx context.Context, sel ast.SelectionSet, v *model.ChannelEndpoint) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ChannelEndpoint(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOCreateCredentialInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCreateCredentialInput(ctx context.Context, v any) (*model.CreateCredentialInput, error) {
 	if v == nil {
 		return nil, nil
@@ -60778,6 +63129,13 @@ func (ec *executionContext) marshalOModule2ᚖgithubᚗcomᚋlogoscoreᚋlogos�
 		return graphql.Null
 	}
 	return ec._Module(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOModuleConnectionSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConnectionSchema) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ModuleConnectionSchema(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOModuleEnumOption2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOptionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleEnumOption) graphql.Marshaler {

@@ -136,6 +136,8 @@ type registerRequest struct {
 	// AppliedRevision is the config revision the process has applied (0 for
 	// a fresh process that has not received any).
 	AppliedRevision int64 `json:"applied_revision"`
+	// Connection is the optional minion connection schema (channels).
+	Connection *protocol.ConnectionSchema `json:"connection"`
 }
 
 type registerReply struct {
@@ -209,6 +211,12 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 		}
 		reg.Manifest = &models.ModuleManifest{ManagementManifest: *p.Management}
 		reg.ManifestHash = hash
+	}
+	if p.Connection != nil {
+		if err := protocol.ValidateConnectionSchema(*p.Connection); err != nil {
+			return nil, validationErr("invalid connection schema: " + err.Error())
+		}
+		reg.Connection = &models.ModuleConnectionSchema{ConnectionSchema: *p.Connection}
 	}
 	if err := s.repo.Upsert(ctx, reg); err != nil {
 		return nil, fmt.Errorf("persist registration: %w", err)

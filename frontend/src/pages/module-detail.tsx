@@ -10,7 +10,7 @@ import { useModule, useModuleDetailSubscription } from "@/graphql/hooks/modules"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
-import { ModuleIdentity, StatusValues } from "@/components/modules/management/overview-tab"
+import { ConnectionSchema, ModuleIdentity, StatusValues } from "@/components/modules/management/overview-tab"
 import { ConfigTab } from "@/components/modules/management/config-tab"
 import { ActionsTab } from "@/components/modules/management/actions-tab"
 import { ActivityTab } from "@/components/modules/management/activity-tab"
@@ -42,6 +42,8 @@ export function ModuleDetailPage() {
 
   const { data, isLoading, error, refetch } = useModule(instance)
   const module = data?.module
+  const management = module?.management
+  const connection = module?.connection
 
   return (
     // On the Logs tab the page is held to the viewport (min-h-0): its list and
@@ -99,7 +101,7 @@ export function ModuleDetailPage() {
         </div>
       ) : (
         <>
-          {!module.management ? (
+          {!management ? (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-10 text-center text-muted-foreground">
                 <PackageOpenIcon className="size-8 opacity-50" />
@@ -111,7 +113,10 @@ export function ModuleDetailPage() {
                   configuration, actions and status here.
                 </p>
               </div>
-              <ModuleIdentity module={module} />
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <ModuleIdentity module={module} />
+                {connection && <ConnectionSchema connection={connection} />}
+              </div>
             </div>
           ) : (
             <Tabs
@@ -132,29 +137,30 @@ export function ModuleDetailPage() {
                 <TabsTrigger value="configuration">
                   Configuration
                   <span className="text-xs text-muted-foreground">
-                    {module.management.properties.length}
+                    {management.properties.length}
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="actions">
                   Actions
                   <span className="text-xs text-muted-foreground">
-                    {module.management.actions.length}
+                    {management.actions.length}
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="activity">Activity</TabsTrigger>
-                {module.management.capabilities.includes("logs") && (
+                {management.capabilities.includes("logs") && (
                   <TabsTrigger value="logs">Logs</TabsTrigger>
                 )}
               </TabsList>
               <TabsContent value="overview" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <ModuleIdentity module={module} />
-                <StatusValues management={module.management} />
+                <StatusValues management={management} />
+                {connection && <ConnectionSchema connection={connection} />}
               </TabsContent>
               {/* Kept mounted: unsaved edits survive a look at another tab. */}
               <TabsContent value="configuration" keepMounted>
                 <ConfigTab
                   module={module}
-                  management={module.management}
+                  management={management}
                   canWrite={canWrite}
                   refetch={refetch}
                 />
@@ -162,16 +168,16 @@ export function ModuleDetailPage() {
               <TabsContent value="actions">
                 <ActionsTab
                   module={module}
-                  management={module.management}
+                  management={management}
                   canInvoke={canInvoke}
                   canInvokeHigh={canInvokeHigh}
                 />
               </TabsContent>
               <TabsContent value="activity">
-                <ActivityTab module={module} management={module.management} />
+                <ActivityTab module={module} management={management} />
               </TabsContent>
               {/* Mounted only while selected: leaving the tab ends the stream. */}
-              {tab === "logs" && module.management.capabilities.includes("logs") && (
+              {tab === "logs" && management.capabilities.includes("logs") && (
                 <TabsContent value="logs" className="flex min-h-0 flex-col">
                   <LogsTab module={module} canRead={canReadLogs} />
                 </TabsContent>
