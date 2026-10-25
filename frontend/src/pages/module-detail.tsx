@@ -1,6 +1,7 @@
 import { Link, useParams, useSearchParams } from "react-router"
 import { ArrowLeftIcon, BlocksIcon, PackageOpenIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -44,7 +45,9 @@ export function ModuleDetailPage() {
   const module = data?.module
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
+    // On the Logs tab the page is held to the viewport (min-h-0): its list and
+    // detail pane scroll inside themselves instead of growing the page.
+    <div className={cn("flex flex-1 flex-col gap-4 p-4", tab === "logs" && "min-h-0")}>
       {/* Back link, identity and live status share one line; it wraps on
           narrow screens. Before the module loads only the back link shows. */}
       <header className="flex flex-col gap-2">
