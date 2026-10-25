@@ -84,17 +84,26 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
-/** Renders attrs as `key=value` pairs; values with spaces are quoted. */
+/**
+ * Renders attrs on one line as `key=value` pairs in the record's own key
+ * order, nested objects as dotted paths; values with spaces are quoted. For
+ * the list preview and the filter only — the detail pane shows the structure.
+ */
 export function formatAttrs(attrs: Record<string, unknown> | null): string {
   if (!attrs) return ""
-  return Object.keys(attrs)
-    .sort()
-    .map((k) => {
-      const v = attrs[k]
+  const parts: string[] = []
+  const walk = (obj: Record<string, unknown>, prefix: string) => {
+    for (const [k, v] of Object.entries(obj)) {
+      if (isRecord(v)) {
+        walk(v, `${prefix}${k}.`)
+        continue
+      }
       const s = typeof v === "string" ? v : JSON.stringify(v)
-      return `${k}=${/[\s"=]/.test(s) ? JSON.stringify(s) : s}`
-    })
-    .join(" ")
+      parts.push(`${prefix}${k}=${/[\s"=]/.test(s) ? JSON.stringify(s) : s}`)
+    }
+  }
+  walk(attrs, "")
+  return parts.join(" ")
 }
 
 /** HH:MM:SS.mmm in local time. */

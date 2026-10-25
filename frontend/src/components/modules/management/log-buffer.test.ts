@@ -59,9 +59,10 @@ describe("applyEvent", () => {
 describe("formatting and search", () => {
   const line = applyEvent(emptyBuffer, ev({ records: [rec(1, "request failed", { stage: "unpack", err: "too short", n: 3 })] })).lines[0]
 
-  it("formats attrs sorted, quoting values with spaces", () => {
-    expect(formatAttrs(line.attrs)).toBe('err="too short" n=3 stage=unpack')
-    expect(lineText(line)).toBe(`${line.time} INFO  request failed err="too short" n=3 stage=unpack`)
+  it("formats attrs in record order, quoting values with spaces", () => {
+    expect(formatAttrs(line.attrs)).toBe('stage=unpack err="too short" n=3')
+    expect(lineText(line)).toBe(`${line.time} INFO  request failed stage=unpack err="too short" n=3`)
+    expect(formatAttrs({ headers: { accept: "*/*" }, n: 1 })).toBe("headers.accept=*/* n=1")
   })
 
   it("matches every term across level, message and attrs", () => {

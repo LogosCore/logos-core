@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { cn } from "@/lib/utils"
 import type { LogLine } from "./log-buffer"
-import { detailSections, recordJSON, statusTone, type DetailField } from "./log-detail"
+import { detailSections, recordJSON, type DetailRow } from "./log-detail"
 
 const LEVEL_BADGE: Record<LogLine["level"], string> = {
   DEBUG: "bg-muted text-muted-foreground",
@@ -13,19 +13,16 @@ const LEVEL_BADGE: Record<LogLine["level"], string> = {
   ERROR: "bg-destructive/15 text-destructive",
 }
 
-const TONE: Record<"ok" | "warn" | "bad", string> = {
-  ok: "text-green-700 dark:text-green-400",
-  warn: "text-amber-700 dark:text-amber-400",
-  bad: "text-destructive",
-}
-
 interface LogDetailPaneProps {
   line: LogLine
   onClose: () => void
   className?: string
 }
 
-/** One log record laid out for reading: header, sections, raw JSON. */
+/**
+ * One log record laid out for reading: header, then the record's attrs as the
+ * module structured them (see log-detail.ts), or the raw JSON.
+ */
 export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) {
   const [raw, setRaw] = useState(false)
   const sections = detailSections(line.attrs)
@@ -67,14 +64,16 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
         )}
         {!raw &&
           sections.map((s) => (
-            <section key={s.title} className="border-b last:border-b-0">
-              <h4 className="bg-muted/40 px-4 py-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                {s.title}
-                {s.fields.length > 3 && <span className="ml-1 font-normal">· {s.fields.length}</span>}
-              </h4>
+            <section key={s.path} className="border-b last:border-b-0">
+              {s.path && (
+                <h4 className="bg-muted/40 px-4 py-1.5 font-mono text-[11px] font-semibold text-muted-foreground">
+                  {s.path}
+                  <span className="ml-1 font-normal">· {s.rows.length}</span>
+                </h4>
+              )}
               <dl className="divide-y">
-                {s.fields.map((f) => (
-                  <FieldRow key={f.key} field={f} error={s.title === "Error"} />
+                {s.rows.map((r) => (
+                  <FieldRow key={r.path} row={r} />
                 ))}
               </dl>
             </section>
@@ -95,30 +94,20 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
   )
 }
 
-function FieldRow({ field, error }: { field: DetailField; error: boolean }) {
-  const tone = field.key === "status" || field.key === "core_status" ? statusTone(field.value) : null
+function FieldRow({ row }: { row: DetailRow }) {
   return (
     <div className="group grid grid-cols-[minmax(7rem,38%)_1fr_auto] items-start gap-2 px-4 py-1.5 hover:bg-muted/40">
-      <dt className="truncate font-mono text-xs text-muted-foreground" title={field.key}>
-        {field.label}
+      <dt className="truncate font-mono text-xs text-muted-foreground" title={row.path}>
+        {row.label}
       </dt>
-      <dd
-        className={cn(
-          "min-w-0 font-mono text-xs break-all whitespace-pre-wrap",
-          error && "text-destructive",
-          tone && TONE[tone],
-          field.text === "(empty)" || field.text === "—" ? "text-muted-foreground italic" : "",
-        )}
-      >
-        {field.text}
+      <dd className="min-w-0 font-mono text-xs break-all whitespace-pre-wrap">
+        {row.text === "" ? <span className="text-muted-foreground">""</span> : row.text}
       </dd>
       <button
         type="button"
         className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
         title="Copy value"
-        onClick={() =>
-          copyToClipboard(typeof field.value === "string" ? field.value : JSON.stringify(field.value), field.label)
-        }
+        onClick={() => copyToClipboard(row.text, row.label)}
       >
         <CopyIcon className="size-3.5 text-muted-foreground hover:text-foreground" />
       </button>
