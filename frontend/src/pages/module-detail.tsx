@@ -119,6 +119,10 @@ export function ModuleDetailPage() {
             </div>
           ) : (
             <Tabs
+              // On the Logs tab it fills the page height, so the list takes
+              // exactly what is left below its toolbar. Other tabs keep their
+              // natural height and scroll as before.
+              className={tab === "logs" ? "min-h-0 flex-1" : undefined}
               value={tab}
               onValueChange={(v) => {
                 const next = new URLSearchParams(searchParams)
@@ -171,7 +175,7 @@ export function ModuleDetailPage() {
               </TabsContent>
               {/* Mounted only while selected: leaving the tab ends the stream. */}
               {tab === "logs" && module.management.capabilities.includes("logs") && (
-                <TabsContent value="logs">
+                <TabsContent value="logs" className="flex min-h-0 flex-col">
                   <LogsTab module={module} canRead={canReadLogs} />
                 </TabsContent>
               )}

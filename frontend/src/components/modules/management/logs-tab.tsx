@@ -125,7 +125,7 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           value={search}
@@ -185,14 +185,14 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={scrollRef}
           onScroll={(e) => {
             const el = e.currentTarget
             setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32)
           }}
-          className="h-[calc(100vh-15rem)] min-h-80 overflow-auto rounded-xl border bg-card font-mono text-xs"
+          className="min-h-80 flex-1 overflow-auto rounded-xl border bg-card font-mono text-xs"
         >
           {shown.length === 0 ? (
             <EmptyState hasLines={buf.lines.length > 0} streaming={buf.state === "STREAMING"} />
