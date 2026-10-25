@@ -39,7 +39,7 @@ type Module struct {
 	Status          string         `bson:"status" json:"status"`
 	RegisteredAt    time.Time      `bson:"registered_at" json:"registered_at"`
 	LastHeartbeatAt *time.Time     `bson:"last_heartbeat_at,omitempty" json:"last_heartbeat_at,omitempty"`
-	LastStatus      string         `bson:"last_status,omitempty" json:"last_status,omitempty"` // healthy|degraded|draining
+	LastStatus      string         `bson:"last_status,omitempty" json:"last_status,omitempty"` // healthy|degraded
 	LastMetrics     map[string]any `bson:"last_metrics,omitempty" json:"last_metrics,omitempty"`
 
 	DeregisteredAt   *time.Time `bson:"deregistered_at,omitempty" json:"deregistered_at,omitempty"`

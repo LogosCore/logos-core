@@ -7644,7 +7644,7 @@ type Module {
   # Lifecycle state: "registered" | "deregistered" | "dead".
   status: String!
   # Self-reported health on the most recent heartbeat:
-  # "healthy" | "degraded" | "draining". Empty until the first heartbeat.
+  # "healthy" | "degraded". Empty until the first heartbeat.
   lastStatus: String!
   registeredAt: String!
   # RFC3339 of the most recent heartbeat, or null if it has never beaten.
