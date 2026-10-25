@@ -29,7 +29,7 @@ export default defineConfig([
 
   // Pre-existing debt from eslint-plugin-react-hooks v7, whose rules are the
   // React Compiler's own analysis and stricter than the v6 set this code was
-  // written against. Nine errors across seven files, all predating the lint gate
+  // written against. Eight errors across six files, all predating the lint gate
   // in .github/workflows/ci-frontend.yml.
   //
   // Same policy core/.golangci.yml states for the Go side: a linter that fires
@@ -44,10 +44,6 @@ export default defineConfig([
   //     every time: useIsMobile wants useSyncExternalStore, sha1 is an async
   //     result landing in state, timeline is windowing bookkeeping, search-input
   //     and hash-details-dialog are syncing from props.
-  //   - react-hooks/refs fires on use-subscription.ts writing onDataRef during
-  //     render. That is deliberate and documented there — it keeps a changing
-  //     callback from reopening the socket — so this one may well end up an
-  //     explicit disable rather than a change.
   //   - only-export-components wants credential-validity-utils.tsx split into a
   //     module of components and a module of helpers; mechanical, but it touches
   //     every importer.
@@ -61,12 +57,6 @@ export default defineConfig([
     ],
     rules: {
       'react-hooks/set-state-in-effect': 'warn',
-    },
-  },
-  {
-    files: ['src/hooks/use-subscription.ts'],
-    rules: {
-      'react-hooks/refs': 'warn',
     },
   },
   {

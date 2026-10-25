@@ -11,6 +11,8 @@ import {
   UpdateModuleConfigDocument,
   InvokeModuleActionDocument,
   type ModuleQuery,
+  type ModulesQuery,
+  type ModuleChangedSubscription,
   type UpdateModuleConfigMutationVariables,
   type InvokeModuleActionMutationVariables,
 } from "@/graphql/gql/graphql"
@@ -52,21 +54,33 @@ export function useRemoveModule() {
   })
 }
 
+type ModuleEvent = ModuleChangedSubscription["moduleChanged"]
+
 /**
- * Subscribe to real-time module lifecycle changes.
- *
- * When a module registers, deregisters, or is declared dead — including the
- * "removed but still alive → re-registers" flip — the list query is invalidated
- * so the table refetches. The full row travels on the event, but since the list
- * is unpaginated a plain invalidate is simpler than surgically patching it.
+ * Applies a moduleChanged event to the cached module lists. Lifecycle events
+ * (register, deregister, dead) can move a row in or out of a status filter, so
+ * they refetch. Heartbeats and management changes only change the row, which
+ * travels on the event: it is patched in place, with no request — with every
+ * module heartbeating every 30s, refetching the list on each would be a
+ * steady stream of full list loads.
  */
+function applyToLists(queryClient: ReturnType<typeof useQueryClient>, ev: ModuleEvent) {
+  if ((ev.kind === "HEARTBEAT" || ev.kind === "CHANGED") && ev.module) {
+    const row = ev.module
+    queryClient.setQueriesData<ModulesQuery>({ queryKey: moduleKeys.lists() }, (old) =>
+      old ? { modules: old.modules.map((m) => (m.instance === row.instance ? { ...m, ...row } : m)) } : old,
+    )
+    return
+  }
+  queryClient.invalidateQueries({ queryKey: moduleKeys.lists() })
+}
+
+/** Keeps the Modules list live (see applyToLists). */
 export function useModuleChangedSubscription() {
   const queryClient = useQueryClient()
 
   useSubscription(ModuleChangedDocument, undefined, {
-    onData: () => {
-      queryClient.invalidateQueries({ queryKey: moduleKeys.lists() })
-    },
+    onData: (data) => applyToLists(queryClient, data.moduleChanged),
   })
 }
 
@@ -114,10 +128,11 @@ export function useModuleConfigChanges(instance: string) {
 }
 
 /**
- * Real-time updates for the detail page: any moduleChanged event for this
- * instance (lifecycle, heartbeats, config sync progress, actions) refetches
- * the detail, its config history and its action history. The list is refreshed too so
- * going back shows current rows.
+ * Real-time updates for the detail page. Every event for this instance
+ * refetches the detail (a heartbeat brings new status values, which the event
+ * row does not carry). Only real changes — config written or applied, action
+ * finished, lifecycle — also refetch the config and action histories; a
+ * heartbeat changes neither. Cached lists are kept current as on the list page.
  */
 export function useModuleDetailSubscription(instance: string) {
   const queryClient = useQueryClient()
@@ -125,16 +140,14 @@ export function useModuleDetailSubscription(instance: string) {
   useSubscription(ModuleChangedDocument, undefined, {
     enabled: instance !== "",
     onData: (data) => {
-      queryClient.invalidateQueries({ queryKey: moduleKeys.lists() })
-      if (data.moduleChanged.instance !== instance) return
+      const ev = data.moduleChanged
+      applyToLists(queryClient, ev)
+      if (ev.instance !== instance) return
       queryClient.invalidateQueries({ queryKey: moduleKeys.detail(instance) })
-      queryClient.invalidateQueries({
-        queryKey: moduleKeys.configChanges(instance),
-      })
+      if (ev.kind === "HEARTBEAT") return
+      queryClient.invalidateQueries({ queryKey: moduleKeys.configChanges(instance) })
       // Actions run by another admin (or from another tab) land here too.
-      queryClient.invalidateQueries({
-        queryKey: moduleKeys.invocations(instance),
-      })
+      queryClient.invalidateQueries({ queryKey: moduleKeys.invocations(instance) })
     },
   })
 }

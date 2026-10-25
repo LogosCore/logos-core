@@ -5,7 +5,7 @@
 // lives in the registry — this hook just attaches/detaches a listener for
 // the lifetime of the component.
 
-import { useEffect, useRef } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import type { TypedDocumentString } from "@/graphql/gql/graphql"
 import { subscribe } from "@/lib/subscription-registry"
 
@@ -28,9 +28,12 @@ export function useSubscription<TResult, TVariables>(
   // Keep the callback in a ref so changing its identity doesn't re-open
   // the underlying SSE connection.
   const onDataRef = useRef(options.onData)
-  onDataRef.current = options.onData
   const onErrorRef = useRef(options.onError)
-  onErrorRef.current = options.onError
+  // Updated after render, before effects and events can call them.
+  useLayoutEffect(() => {
+    onDataRef.current = options.onData
+    onErrorRef.current = options.onError
+  })
 
   // Serialize variables for stable useEffect deps.
   const variablesKey = JSON.stringify(variables ?? null)

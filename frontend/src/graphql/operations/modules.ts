@@ -40,6 +40,7 @@ export const ModuleChangedSubscription = graphql(`
   subscription ModuleChanged {
     moduleChanged {
       action
+      kind
       instance
       module {
         ...ModuleFields

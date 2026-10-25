@@ -4,15 +4,25 @@
 
 import type { ModuleLogLevel, ModuleLogStreamState } from "@/graphql/gql/graphql"
 
+/** Lines kept while following the tail. */
 export const MAX_LINES = 5000
+/**
+ * Lines kept at most. While the reader is scrolled up or paused the buffer is
+ * not trimmed (trimming shifts every row under them), up to this cap.
+ */
+export const HARD_MAX_LINES = 2 * MAX_LINES
 
 export interface LogLine {
-  id: number
+  id: number // ascending in buffer order
   time: string
   ms: number
   level: ModuleLogLevel
   message: string
   attrs: Record<string, unknown> | null
+  // Computed once at ingest: the one-line attrs preview and the lowercase
+  // text the filter searches, so renders and filtering stay cheap.
+  attrsText: string
+  searchText: string
 }
 
 export interface LogEventLike {
@@ -27,9 +37,10 @@ export interface LogEventLike {
 export interface LogBuffer {
   lines: LogLine[]
   nextId: number
-  // Time of the newest line, to skip backlog records already shown when the
-  // stream restarts (reconnect, level change keeps nothing).
+  // Newest record time, and the records seen at exactly that millisecond:
+  // a restarted stream resends its backlog, and only newer records are kept.
   lastMs: number
+  lastKeys: string[]
   dropped: number
   lost: number
   state: ModuleLogStreamState | null
@@ -40,39 +51,53 @@ export const emptyBuffer: LogBuffer = {
   lines: [],
   nextId: 1,
   lastMs: 0,
+  lastKeys: [],
   dropped: 0,
   lost: 0,
   state: null,
   reason: null,
 }
 
-/** Applies one subscription event; returns a new buffer. */
-export function applyEvent(buf: LogBuffer, ev: LogEventLike): LogBuffer {
-  let { nextId, lastMs } = buf
+/**
+ * Applies one subscription event; returns a new buffer. With trim, the buffer
+ * is cut back to MAX_LINES; without (reader scrolled up or paused), only to
+ * HARD_MAX_LINES.
+ */
+export function applyEvent(buf: LogBuffer, ev: LogEventLike, trim = true): LogBuffer {
+  let { nextId, lastMs, lastKeys } = buf
   const added: LogLine[] = []
   for (const r of ev.records) {
     const ms = Date.parse(r.time)
-    // A restarted stream resends its backlog; keep only what is newer.
-    if (ev.backlog && ms <= lastMs) continue
+    const key = `${r.time}\u0000${r.message}`
+    if (ev.backlog && (ms < lastMs || (ms === lastMs && lastKeys.includes(key)))) continue
+    if (ms > lastMs) {
+      lastMs = ms
+      lastKeys = [key]
+    } else if (ms === lastMs) {
+      lastKeys = [...lastKeys, key]
+    }
+    const attrs = isRecord(r.attrs) ? r.attrs : null
+    const attrsText = formatAttrs(attrs)
     added.push({
       id: nextId++,
       time: r.time,
       ms,
       level: r.level,
       message: r.message,
-      attrs: isRecord(r.attrs) ? r.attrs : null,
+      attrs,
+      attrsText,
+      searchText: `${r.level} ${r.message} ${attrsText}`.toLowerCase(),
     })
-    if (ms > lastMs) lastMs = ms
   }
   let lines = buf.lines
-  if (added.length > 0) {
-    lines = lines.concat(added)
-    if (lines.length > MAX_LINES) lines = lines.slice(lines.length - MAX_LINES)
-  }
+  if (added.length > 0) lines = lines.concat(added)
+  const max = trim ? MAX_LINES : HARD_MAX_LINES
+  if (lines.length > max) lines = lines.slice(lines.length - max)
   return {
     lines,
     nextId,
     lastMs,
+    lastKeys,
     dropped: buf.dropped + ev.dropped,
     lost: buf.lost + (ev.lost ? 1 : 0),
     state: ev.state ?? buf.state,
@@ -80,7 +105,12 @@ export function applyEvent(buf: LogBuffer, ev: LogEventLike): LogBuffer {
   }
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+/** Clears the lines and the drop counters, keeping stream state and dedupe. */
+export function clearLines(buf: LogBuffer): LogBuffer {
+  return { ...buf, lines: [], dropped: 0, lost: 0 }
+}
+
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
@@ -113,16 +143,35 @@ export function formatTime(ms: number): string {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`
 }
 
-/** Whether a line contains every whitespace-separated term (case-insensitive). */
-export function lineMatches(line: LogLine, query: string): boolean {
+/**
+ * A predicate for lines containing every whitespace-separated term
+ * (case-insensitive); the query is split once, not per line.
+ */
+export function lineMatcher(query: string): (line: LogLine) => boolean {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-  if (terms.length === 0) return true
-  const text = `${line.level} ${line.message} ${formatAttrs(line.attrs)}`.toLowerCase()
-  return terms.every((t) => text.includes(t))
+  if (terms.length === 0) return () => true
+  return (line) => terms.every((t) => line.searchText.includes(t))
+}
+
+/** Index of the first line with id > id (lines are sorted by id). */
+export function upperBound(lines: LogLine[], id: number): number {
+  let lo = 0
+  let hi = lines.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (lines[mid].id <= id) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/** The line with id, by binary search. */
+export function findLine(lines: LogLine[], id: number): LogLine | undefined {
+  const i = upperBound(lines, id) - 1
+  return i >= 0 && lines[i].id === id ? lines[i] : undefined
 }
 
 /** One line as plain text, for download. */
 export function lineText(line: LogLine): string {
-  const attrs = formatAttrs(line.attrs)
-  return `${line.time} ${line.level.padEnd(5)} ${line.message}${attrs ? " " + attrs : ""}`
+  return `${line.time} ${line.level.padEnd(5)} ${line.message}${line.attrsText ? " " + line.attrsText : ""}`
 }

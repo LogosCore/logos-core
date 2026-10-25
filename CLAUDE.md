@@ -98,7 +98,7 @@ than thinner search results.
 
 Frontend lint carries documented debt. `eslint-plugin-react-hooks` v7 applies
 the React Compiler's own analysis and is stricter than the set this code was
-written against, so nine pre-existing errors across seven files are downgraded
+written against, so eight pre-existing errors across six files are downgraded
 to warnings **per file** in `frontend/eslint.config.js`, with the reasoning for
 each. Scoping them per file rather than per rule keeps every rule at error
 everywhere else, so a new violation still fails; the list is meant to shrink.

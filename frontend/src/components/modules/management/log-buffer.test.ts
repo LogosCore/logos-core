@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { applyEvent, emptyBuffer, formatAttrs, lineMatches, lineText, MAX_LINES, type LogEventLike } from "./log-buffer"
+import {
+  applyEvent,
+  clearLines,
+  emptyBuffer,
+  findLine,
+  formatAttrs,
+  HARD_MAX_LINES,
+  lineMatcher,
+  lineText,
+  MAX_LINES,
+  type LogEventLike,
+} from "./log-buffer"
 
 const rec = (sec: number, message: string, attrs?: unknown) => ({
   time: new Date(Date.UTC(2026, 9, 25, 12, 0, sec)).toISOString(),
@@ -54,6 +65,30 @@ describe("applyEvent", () => {
     expect(b.lines).toHaveLength(MAX_LINES)
     expect(b.lines[0].message).toBe("m10")
   })
+
+  it("does not trim while the reader is scrolled up or paused, up to the hard cap", () => {
+    const many = Array.from({ length: MAX_LINES + 10 }, (_, i) => rec(0, `m${i}`))
+    expect(applyEvent(emptyBuffer, ev({ records: many }), false).lines).toHaveLength(MAX_LINES + 10)
+    const more = Array.from({ length: HARD_MAX_LINES + 5 }, (_, i) => rec(0, `n${i}`))
+    expect(applyEvent(emptyBuffer, ev({ records: more }), false).lines).toHaveLength(HARD_MAX_LINES)
+  })
+
+  it("dedupes a resent backlog within the same millisecond, keeping unseen records", () => {
+    let b = applyEvent(emptyBuffer, ev({ backlog: true, records: [rec(1, "a"), rec(1, "b")] }))
+    b = applyEvent(b, ev({ backlog: true, records: [rec(1, "a"), rec(1, "b"), rec(1, "c")] }))
+    expect(b.lines.map((l) => l.message)).toEqual(["a", "b", "c"])
+  })
+
+  it("clears lines and drop counters", () => {
+    const b = clearLines(applyEvent(emptyBuffer, ev({ records: [rec(1, "a")], dropped: 3, lost: true })))
+    expect([b.lines.length, b.dropped, b.lost]).toEqual([0, 0, 0])
+  })
+
+  it("finds lines by id", () => {
+    const b = applyEvent(emptyBuffer, ev({ records: [rec(1, "a"), rec(2, "b"), rec(3, "c")] }))
+    expect(findLine(b.lines, 2)?.message).toBe("b")
+    expect(findLine(b.lines, 9)).toBeUndefined()
+  })
 })
 
 describe("formatting and search", () => {
@@ -66,9 +101,9 @@ describe("formatting and search", () => {
   })
 
   it("matches every term across level, message and attrs", () => {
-    expect(lineMatches(line, "")).toBe(true)
-    expect(lineMatches(line, "FAILED unpack")).toBe(true)
-    expect(lineMatches(line, "info short")).toBe(true)
-    expect(lineMatches(line, "failed served")).toBe(false)
+    expect(lineMatcher("")(line)).toBe(true)
+    expect(lineMatcher("FAILED unpack")(line)).toBe(true)
+    expect(lineMatcher("info short")(line)).toBe(true)
+    expect(lineMatcher("failed served")(line)).toBe(false)
   })
 })

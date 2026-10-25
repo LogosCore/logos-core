@@ -3,12 +3,11 @@
 // as received — its top-level values first, then one section per nested
 // object (titled by its path), values verbatim.
 
-import type { LogLine } from "./log-buffer"
+import { isRecord, type LogLine } from "./log-buffer"
 
 export interface DetailRow {
   path: string // full path, e.g. "headers.accept"
   label: string // key within its section
-  value: unknown
   text: string // value as shown
 }
 
@@ -26,8 +25,8 @@ export function detailSections(attrs: Record<string, unknown> | null): DetailSec
     const nested: [string, Record<string, unknown>][] = []
     for (const [key, value] of Object.entries(obj)) {
       const p = path ? `${path}.${key}` : key
-      if (isObject(value)) nested.push([p, value])
-      else rows.push({ path: p, label: key, value, text: formatValue(value) })
+      if (isRecord(value)) nested.push([p, value])
+      else rows.push({ path: p, label: key, text: formatValue(value) })
     }
     if (rows.length > 0) out.push({ path, rows })
     for (const [p, value] of nested) walk(value, p)
@@ -41,10 +40,6 @@ export function formatValue(v: unknown): string {
   if (typeof v === "string") return v
   if (v === undefined) return "null"
   return JSON.stringify(v)
-}
-
-export function isObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
 /** The record as JSON, attrs exactly as the module sent them. */

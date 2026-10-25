@@ -44,6 +44,11 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
   // server data, so a refetch (after a conflict, or another admin's save
   // arriving via the subscription) updates them without losing edits.
   const [edits, setEdits] = useState<Record<string, Draft>>({})
+  // The revision the edits are based on, taken at the first edit. Saving
+  // sends it, so a change another admin saved meanwhile fails with CONFLICT
+  // instead of being silently overwritten (the detail refetches on every
+  // event, so management.revision alone would always look current).
+  const [baseRevision, setBaseRevision] = useState<number | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -72,19 +77,20 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
   const errorCount = Object.keys(errors).length
 
   function setDraft(key: string, draft: Draft) {
+    setBaseRevision((r) => r ?? management.revision)
     setEdits((prev) => ({ ...prev, [key]: draft }))
   }
 
   function undo(key: string) {
-    setEdits((prev) => {
-      const next = { ...prev }
-      delete next[key]
-      return next
-    })
+    const next = { ...edits }
+    delete next[key]
+    setEdits(next)
+    if (Object.keys(next).length === 0) setBaseRevision(null)
   }
 
   function discard() {
     setEdits({})
+    setBaseRevision(null)
   }
 
   async function save() {
@@ -92,10 +98,11 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
     try {
       const res = await update.mutateAsync({
         instance: module.instance,
-        expectedRevision: management.revision,
+        expectedRevision: baseRevision ?? management.revision,
         values: diff.map((d) => ({ key: d.key, value: d.new })),
       })
       setEdits({})
+      setBaseRevision(null)
       setConfirmOpen(false)
       const rev = res.updateModuleConfig.management?.revision
       toast.success("Configuration saved", {
@@ -105,6 +112,9 @@ export function ConfigTab({ module, management, canWrite, refetch }: ConfigTabPr
       const code = graphqlErrorCode(err)
       if (code === "CONFLICT") {
         setConfirmOpen(false)
+        // Rebase on what was just reloaded; the next save is a deliberate
+        // overwrite after reviewing it.
+        setBaseRevision(null)
         toast.error("Someone else changed this configuration", {
           description: "Reloaded the latest values — your edits are kept. Review and save again.",
         })
@@ -344,7 +354,7 @@ function ConfirmSaveDialog({
         <DialogHeader>
           <DialogTitle>Save configuration</DialogTitle>
           <DialogDescription>
-            {diff.length} {diff.length === 1 ? "change" : "changes"} to this channel's settings.
+            {diff.length} {diff.length === 1 ? "change" : "changes"} to this module's settings.
           </DialogDescription>
         </DialogHeader>
         <ul className="flex max-h-80 flex-col gap-2 overflow-y-auto">

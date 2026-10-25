@@ -170,8 +170,9 @@ function SelectLabel({
 }
 
 /**
- * `description` renders a muted second line under the label. It sits outside
- * `ItemText`, so the closed trigger still shows only the label.
+ * `description` renders a muted second line under the label. The closed
+ * trigger shows only the label: its text comes from `collectItemLabels`
+ * (Select above), which reads `children`, never `description`.
  */
 function SelectItem({
   className,

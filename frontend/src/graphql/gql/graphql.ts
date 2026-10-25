@@ -501,8 +501,16 @@ export type ModuleEnumOption = {
 export type ModuleEvent = {
   action: EventAction;
   instance: Scalars['ID']['output'];
+  kind: ModuleEventKind;
   module?: Maybe<Module>;
 };
+
+export type ModuleEventKind =
+  | 'CHANGED'
+  | 'DEAD'
+  | 'DEREGISTERED'
+  | 'HEARTBEAT'
+  | 'REGISTERED';
 
 export type ModuleField = {
   default?: Maybe<Scalars['JSON']['output']>;
@@ -2712,7 +2720,7 @@ export type RemoveModuleMutation = { removeModule: { instance: string, type: str
 export type ModuleChangedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 
-export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, instance: string, module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null } | null } };
+export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, kind: ModuleEventKind, instance: string, module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null } | null } };
 
 export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null };
 
@@ -5767,6 +5775,7 @@ export const ModuleChangedDocument = new TypedDocumentString(`
     subscription ModuleChanged {
   moduleChanged {
     action
+    kind
     instance
     module {
       ...ModuleFields

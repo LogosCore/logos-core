@@ -157,7 +157,8 @@ export function ModuleDetailPage() {
                 <ModuleIdentity module={module} />
                 <StatusValues management={module.management} />
               </TabsContent>
-              <TabsContent value="configuration">
+              {/* Kept mounted: unsaved edits survive a look at another tab. */}
+              <TabsContent value="configuration" keepMounted>
                 <ConfigTab
                   module={module}
                   management={module.management}

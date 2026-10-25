@@ -32,6 +32,9 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
     <aside
       className={cn("flex min-h-0 flex-col overflow-hidden rounded-xl border bg-card", className)}
       aria-label="Log line details"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose()
+      }}
     >
       <header className="flex items-start gap-2 border-b px-4 py-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -88,7 +91,7 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
           <BracesIcon />
           {raw ? "Show fields" : "Raw JSON"}
         </Button>
-        <span className="text-xs text-muted-foreground">↑ ↓ to move · Esc to close</span>
+        <span className="text-xs text-muted-foreground">↑ ↓ in the list to move · Esc to close</span>
       </footer>
     </aside>
   )

@@ -51,6 +51,8 @@ describe("recordJSON", () => {
       level: "INFO",
       message: "m",
       attrs: { headers: { accept: "*/*" }, "dotted.key": 1 },
+      attrsText: "",
+      searchText: "",
     }
     expect(JSON.parse(recordJSON(line))).toEqual({
       time: "2026-10-25T13:07:07Z",

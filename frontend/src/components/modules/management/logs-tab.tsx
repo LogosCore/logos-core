@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react"
+import { memo, useCallback, useMemo, useRef, useState, useLayoutEffect } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import {
   ArrowDownToLineIcon,
@@ -21,11 +21,13 @@ import {
 import { cn } from "@/lib/utils"
 import {
   applyEvent,
+  clearLines,
   emptyBuffer,
-  formatAttrs,
+  findLine,
   formatTime,
-  lineMatches,
+  lineMatcher,
   lineText,
+  upperBound,
   type LogBuffer,
   type LogLine,
 } from "./log-buffer"
@@ -77,17 +79,21 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
     { instance: module.instance, minLevel: level },
     {
       enabled: canRead && registered && !error,
-      onData: (data) => setBuf((b) => applyEvent(b, data.moduleLogs)),
+      // Trimming shifts every row; hold it while the reader is scrolled up
+      // or paused (bounded by HARD_MAX_LINES).
+      onData: (data) => setBuf((b) => applyEvent(b, data.moduleLogs, follow && pausedAt === null)),
       onError: (message) => setRejected({ message, registeredAt: module.registeredAt }),
     },
   )
 
   const shown = useMemo(() => {
-    const live = pausedAt === null ? buf.lines : buf.lines.filter((l) => l.id <= pausedAt)
-    return search ? live.filter((l) => lineMatches(l, search)) : live
+    // Ids ascend, so the paused view is a prefix of the buffer.
+    const live = pausedAt === null ? buf.lines : buf.lines.slice(0, upperBound(buf.lines, pausedAt))
+    return search ? live.filter(lineMatcher(search)) : live
   }, [buf.lines, pausedAt, search])
-  const pending = pausedAt === null ? 0 : buf.lines.filter((l) => l.id > pausedAt).length
-  const selected = selectedId === null ? undefined : buf.lines.find((l) => l.id === selectedId)
+  const lastId = buf.lines.at(-1)?.id ?? 0
+  const pending = pausedAt === null ? 0 : Math.max(0, lastId - pausedAt)
+  const selected = selectedId === null ? undefined : findLine(buf.lines, selectedId)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -95,38 +101,44 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 22,
     overscan: 20,
+    // Measured heights belong to lines, not positions: trimming or filtering
+    // must not hand a line another line's height.
+    getItemKey: (i) => shown[i].id,
   })
 
+  // Keyed on the newest shown line, not the count: at the cap the count stops
+  // changing while lines keep arriving.
+  const newestShownId = shown.at(-1)?.id
   useLayoutEffect(() => {
     if (follow && shown.length > 0) {
       virtualizer.scrollToIndex(shown.length - 1, { align: "end" })
     }
-  }, [follow, shown.length, virtualizer])
+  }, [follow, newestShownId, shown.length, virtualizer])
 
-  // Esc closes the pane; ↑/↓ move the selection through the shown lines.
-  // Ignored while typing in a field.
-  useEffect(() => {
-    if (selectedId === null) return
-    function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement | null
-      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return
-      if (e.key === "Escape") {
+  const toggleLine = useCallback((id: number) => {
+    setSelectedId((cur) => (cur === id ? null : id))
+    scrollRef.current?.focus({ preventScroll: true })
+  }, [])
+
+  // Keyboard on the focused list: ↑/↓ move the selection (from the newest
+  // line when none is selected), Esc closes the pane. Scoped to the list, so
+  // keys in the filter box or an open select are never taken.
+  function onListKey(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      if (selectedId !== null) {
+        e.preventDefault()
         setSelectedId(null)
-        return
       }
-      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return
-      const i = shown.findIndex((l) => l.id === selectedId)
-      if (i < 0) return
-      const next = i + (e.key === "ArrowDown" ? 1 : -1)
-      if (next < 0 || next >= shown.length) return
-      e.preventDefault()
-      setFollow(false)
-      setSelectedId(shown[next].id)
-      virtualizer.scrollToIndex(next, { align: "auto" })
+      return
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [selectedId, shown, virtualizer])
+    if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || shown.length === 0) return
+    e.preventDefault()
+    const i = selectedId === null ? -1 : shown.findIndex((l) => l.id === selectedId)
+    const next = i < 0 ? shown.length - 1 : Math.min(shown.length - 1, Math.max(0, i + (e.key === "ArrowDown" ? 1 : -1)))
+    setFollow(false)
+    setSelectedId(shown[next].id)
+    virtualizer.scrollToIndex(next, { align: "auto" })
+  }
 
   if (!canRead) {
     return (
@@ -151,7 +163,8 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
     a.href = url
     a.download = `${module.instance}-${new Date().toISOString().replace(/[:.]/g, "-")}.log`
     a.click()
-    URL.revokeObjectURL(url)
+    // Revoked later: revoking right after click() can cancel the download.
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   return (
@@ -187,7 +200,7 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
         <Button
           variant="outline"
           onClick={() => {
-            setBuf((b) => ({ ...b, lines: [] }))
+            setBuf(clearLines)
             setPausedAt(null)
           }}
           disabled={buf.lines.length === 0}
@@ -219,6 +232,10 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <div
             ref={scrollRef}
+            role="listbox"
+            aria-label="Log lines"
+            tabIndex={0}
+            onKeyDown={onListKey}
             onScroll={(e) => {
               const el = e.currentTarget
               setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32)
@@ -237,9 +254,7 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
                     measure={virtualizer.measureElement}
                     top={item.start}
                     selected={shown[item.index].id === selectedId}
-                    onSelect={() =>
-                      setSelectedId((id) => (id === shown[item.index].id ? null : shown[item.index].id))
-                    }
+                    onSelect={toggleLine}
                   />
                 ))}
               </div>
@@ -268,7 +283,9 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
   )
 }
 
-function LogRow({
+// Memoized: a new event re-renders the tab, but a row only when its line,
+// position or selection changed.
+const LogRow = memo(function LogRow({
   line,
   index,
   top,
@@ -281,17 +298,16 @@ function LogRow({
   top: number
   measure: (el: Element | null) => void
   selected: boolean
-  onSelect: () => void
+  onSelect: (id: number) => void
 }) {
-  const attrs = formatAttrs(line.attrs)
+  const attrs = line.attrsText
   return (
     <div
       ref={measure}
       data-index={index}
-      role="button"
-      tabIndex={-1}
-      aria-pressed={selected}
-      onClick={onSelect}
+      role="option"
+      aria-selected={selected}
+      onClick={() => onSelect(line.id)}
       className={cn(
         "absolute left-0 flex w-full cursor-pointer gap-3 border-l-2 px-3 py-0.5",
         selected ? "border-primary bg-accent" : "border-transparent hover:bg-muted/50",
@@ -308,7 +324,7 @@ function LogRow({
       </span>
     </div>
   )
-}
+})
 
 function StreamStatus({
   buf,
