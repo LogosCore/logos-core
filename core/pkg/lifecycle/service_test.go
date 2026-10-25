@@ -371,6 +371,32 @@ func TestHandleRegister_PublishesBusEvent(t *testing.T) {
 	}
 }
 
+func TestHandleHeartbeat_PublishesUpdatedEvent(t *testing.T) {
+	repo := newFakeRepo()
+	repo.rows["http-1"] = &models.Module{Instance: "http-1", Status: models.ModuleStatusRegistered}
+	pub := &fakePublisher{}
+	svc := NewService(repo, &fakeEmitter{}, nil, pub, Config{}, zap.NewNop())
+
+	if _, err := svc.HandleHeartbeat(context.Background(), envFor(t, OpHeartbeat, heartbeatRequest{
+		Instance: "http-1", Status: "healthy",
+	})); err != nil {
+		t.Fatalf("heartbeat error: %v", err)
+	}
+	if len(pub.events) != 1 || pub.events[0].Topic != eventbus.TopicModuleUpdated {
+		t.Fatalf("events = %+v, want one %q", pub.events, eventbus.TopicModuleUpdated)
+	}
+	if p, ok := pub.events[0].Payload.(eventbus.ModuleEventPayload); !ok || p.Instance != "http-1" {
+		t.Errorf("payload = %+v", pub.events[0].Payload)
+	}
+
+	// A rejected heartbeat (unknown instance) publishes nothing.
+	pub.events = nil
+	_, _ = svc.HandleHeartbeat(context.Background(), envFor(t, OpHeartbeat, heartbeatRequest{Instance: "ghost"}))
+	if len(pub.events) != 0 {
+		t.Errorf("unknown-instance heartbeat published %d events", len(pub.events))
+	}
+}
+
 func TestHandleDeregister_PublishesBusEvent(t *testing.T) {
 	repo := newFakeRepo()
 	pub := &fakePublisher{}

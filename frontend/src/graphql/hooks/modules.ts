@@ -115,8 +115,8 @@ export function useModuleConfigChanges(instance: string) {
 
 /**
  * Real-time updates for the detail page: any moduleChanged event for this
- * instance (lifecycle, heartbeat-driven status, config sync progress)
- * refetches the detail and its config history. The list is refreshed too so
+ * instance (lifecycle, heartbeats, config sync progress, actions) refetches
+ * the detail, its config history and its action history. The list is refreshed too so
  * going back shows current rows.
  */
 export function useModuleDetailSubscription(instance: string) {
@@ -130,6 +130,10 @@ export function useModuleDetailSubscription(instance: string) {
       queryClient.invalidateQueries({ queryKey: moduleKeys.detail(instance) })
       queryClient.invalidateQueries({
         queryKey: moduleKeys.configChanges(instance),
+      })
+      // Actions run by another admin (or from another tab) land here too.
+      queryClient.invalidateQueries({
+        queryKey: moduleKeys.invocations(instance),
       })
     },
   })

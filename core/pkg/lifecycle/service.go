@@ -283,6 +283,13 @@ func (s *Service) HandleHeartbeat(ctx context.Context, req messaging.Envelope) (
 		}
 	}
 
+	// Live UI: last heartbeat, health and status values just changed. The
+	// subscription refetches the row, so the payload only needs the instance;
+	// TouchHeartbeat matched, so the row is registered.
+	s.publishBus(eventbus.NewModuleUpdatedEvent(eventbus.ServiceActor(p.Instance), eventbus.ModuleEventPayload{
+		Instance: p.Instance, Status: models.ModuleStatusRegistered,
+	}))
+
 	// Drift repair: if the module's applied revision differs from the desired
 	// config revision, push in the background. config_changed stays false — core pushes, the
 	// module does not pull.

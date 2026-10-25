@@ -384,8 +384,9 @@ func NewModuleDeadEvent(actor Actor, p ModuleEventPayload) Event {
 	return NewEvent(TopicModuleDead, actor, p)
 }
 
-// NewModuleUpdatedEvent signals a management-state change on a module row
-// (config written, apply result recorded, action finished).
+// NewModuleUpdatedEvent signals a change on a module row other than a
+// lifecycle transition: a heartbeat (health, status values), config written,
+// apply result recorded, action finished.
 func NewModuleUpdatedEvent(actor Actor, p ModuleEventPayload) Event {
 	return NewEvent(TopicModuleUpdated, actor, p)
 }
