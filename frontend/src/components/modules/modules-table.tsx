@@ -98,7 +98,7 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
               {m.version || "—"}
             </div>
             <div>
-              <ModuleStatusIndicator status={m.status} />
+              <ModuleStatusIndicator status={m.status} lastHeartbeatAt={m.lastHeartbeatAt} />
             </div>
             <div className="truncate">
               <ModuleHealthIndicator health={m.lastStatus} registered={m.status === "registered"} />

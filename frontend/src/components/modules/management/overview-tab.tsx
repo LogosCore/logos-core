@@ -36,7 +36,7 @@ export function ModuleIdentity({ module }: { module: ModuleDetailFieldsFragment 
         <Row label="Version">{m.version || "—"}</Row>
         <Row label="Description">{m.description || "—"}</Row>
         <Row label="Status">
-          <ModuleStatusIndicator status={m.status} />
+          <ModuleStatusIndicator status={m.status} lastHeartbeatAt={m.lastHeartbeatAt} />
         </Row>
         <Row label="Health">
           <ModuleHealthIndicator health={m.lastStatus} registered={m.status === "registered"} />

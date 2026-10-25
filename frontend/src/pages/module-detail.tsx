@@ -70,10 +70,7 @@ export function ModuleDetailPage() {
               </span>
               {/* How it is: every state in the same dot-and-label style. */}
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:ml-auto">
-                <ModuleStatusIndicator
-                  status={module.status}
-                  title={module.lastHeartbeatAt ? `Last heartbeat ${new Date(module.lastHeartbeatAt).toLocaleString()}` : undefined}
-                />
+                <ModuleStatusIndicator status={module.status} lastHeartbeatAt={module.lastHeartbeatAt} />
                 <ModuleHealthIndicator health={module.lastStatus} registered={module.status === "registered"} />
                 {module.management && <ModuleSyncIndicator management={module.management} />}
               </div>
