@@ -32,6 +32,8 @@ type CredentialOutcome struct {
 	IDMap   map[uuid.UUID]uuid.UUID
 	Reused  int
 	Created int
+	// CreatedIDs are the new credentials' ids, for live-update events.
+	CreatedIDs []uuid.UUID
 	// Skipped counts payloads that could not be used (bad id, create
 	// failure). Their chips are dropped by the caller.
 	Skipped []uuid.UUID
@@ -77,6 +79,7 @@ func (r *CredentialReconciler) Reconcile(
 		}
 		out.IDMap[id] = created.CredentialID
 		out.Created++
+		out.CreatedIDs = append(out.CreatedIDs, created.CredentialID)
 	}
 	return out
 }

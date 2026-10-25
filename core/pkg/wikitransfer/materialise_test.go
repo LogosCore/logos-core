@@ -2,9 +2,11 @@ package wikitransfer_test
 
 import (
 	"context"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -455,5 +457,31 @@ func TestMaterialise_DrawingTakesTheSceneRoute(t *testing.T) {
 	}
 	if _, ok := h.ingestor.Images[doc.ImageReferences[0]]; !ok {
 		t.Error("image not ingested under the id the scene now references")
+	}
+}
+
+func TestMaterialise_CreatedCredentialsArePublished(t *testing.T) {
+	h := newHarness()
+	bus := eventbus.NewEventBus(zap.NewNop())
+	got := make(chan eventbus.Event, 4)
+	bus.Subscribe([]eventbus.Topic{eventbus.TopicCredentialCreated}, func(_ context.Context, e eventbus.Event) { got <- e })
+	bus.Start()
+	defer bus.Stop(context.Background())
+	h.m = wikitransfer.NewMaterialiser(h.docs, h.creds, h.hosts, nil, h.ingestor, h.rebaser, bus, zap.NewNop())
+
+	targetOp := uuid.New()
+	plan, _ := twoPagePlan(uuid.New()) // cross-operation: the credential is created on target
+	if _, err := h.m.Run(context.Background(), plan, wikitransfer.Target{OperationID: targetOp, CallerID: uuid.New()}, nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	child, _ := h.docs.ByTitle("Child")
+	select {
+	case e := <-got:
+		p, ok := e.Payload.(eventbus.CredentialEventPayload)
+		if !ok || p.OperationID != targetOp.String() || len(child.CredentialReferences) != 1 || p.CredentialID != child.CredentialReferences[0].String() {
+			t.Errorf("event payload = %+v, child refs = %v", e.Payload, child.CredentialReferences)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no credential.created event for the imported credential")
 	}
 }

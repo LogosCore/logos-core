@@ -231,6 +231,7 @@ func (r *run) reconcileCredentials(ctx context.Context) {
 	}
 	rec := NewCredentialReconciler(r.m.credRepo, r.target.OperationID)
 	out := rec.Reconcile(ctx, r.plan.Credentials, r.target.CallerID)
+	r.publishCredentialsCreated(out.CreatedIDs)
 	for src, dst := range out.IDMap {
 		r.idMap[src.String()] = dst.String()
 	}
@@ -489,6 +490,20 @@ func (r *run) advance() {
 	r.done++
 	if r.progress != nil {
 		r.progress(r.done, r.total)
+	}
+}
+
+// publishCredentialsCreated tells open credential views about credentials the
+// import created, like the createCredential mutation does.
+func (r *run) publishCredentialsCreated(ids []uuid.UUID) {
+	if r.m.bus == nil {
+		return
+	}
+	for _, id := range ids {
+		r.m.bus.Publish(eventbus.NewCredentialCreatedEvent(eventbus.UserActor(r.target.CallerID.String()), eventbus.CredentialEventPayload{
+			CredentialID: id.String(),
+			OperationID:  r.target.OperationID.String(),
+		}))
 	}
 }
 
