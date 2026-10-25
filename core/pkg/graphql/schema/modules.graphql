@@ -53,8 +53,21 @@ type Module {
 # changes). `module` carries the full post-transition row.
 type ModuleEvent {
   action: EventAction!
+  # What happened, more precisely than action: lets clients patch caches
+  # instead of refetching (a heartbeat changes no history).
+  kind: ModuleEventKind!
   instance: ID!
   module: Module
+}
+
+enum ModuleEventKind {
+  REGISTERED
+  DEREGISTERED
+  DEAD
+  # Config written, apply result recorded, action finished.
+  CHANGED
+  # Last heartbeat, health and status values.
+  HEARTBEAT
 }
 
 # --- Queries ---

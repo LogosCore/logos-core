@@ -101,7 +101,16 @@ type Service struct {
 	mu     sync.Mutex
 	pushes map[string]*pushState
 	wg     sync.WaitGroup // in-flight push goroutines (tests wait on it)
+
+	// ctx bounds background pushes; Stop cancels it so shutdown neither waits
+	// out retries nor records the closing RPC client as an apply error.
+	ctx    context.Context
+	cancel context.CancelFunc
 }
+
+// maxDriftBackoffShift caps the drift-check back-off at
+// DriftCheckInterval << 6 (about 10 minutes at the 10s default).
+const maxDriftBackoffShift = 6
 
 // pushState makes pushes single-flight per instance: while one runs, further
 // requests only mark it to run once more, with the newest actor.
@@ -110,6 +119,11 @@ type pushState struct {
 	again     bool
 	actor     models.ModuleActor
 	lastCheck time.Time // last heartbeat-triggered check
+	// failures counts consecutive failed pushes. Drift checks back off
+	// exponentially with it, so a module that keeps refusing a config is not
+	// re-pushed every heartbeat; a successful or unneeded push, or a new
+	// config write, resets it.
+	failures int
 }
 
 // NewService wires the service. bus may be nil (no subscriber fan-out).
@@ -135,7 +149,10 @@ func NewService(
 	if cfg.DriftCheckInterval <= 0 {
 		cfg.DriftCheckInterval = 10 * time.Second
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{
+		ctx:         ctx,
+		cancel:      cancel,
 		registry:    registry,
 		configs:     configs,
 		changes:     changes,
@@ -336,6 +353,8 @@ func (s *Service) UpdateConfig(ctx context.Context, req UpdateRequest) (*models.
 		Actor:      req.Actor,
 		At:         now,
 	}
+	// The config is committed: record it even if the client has gone away.
+	ctx = context.WithoutCancel(ctx)
 	if err := s.changes.Insert(ctx, change); err != nil {
 		// The write itself succeeded; losing its audit entry must not turn it
 		// into a client error that invites a retry at a stale revision.
@@ -364,6 +383,7 @@ func (s *Service) RequestPush(instance string, actor models.ModuleActor) {
 	s.mu.Lock()
 	st := s.state(instance)
 	st.actor = actor
+	st.failures = 0 // a new config deserves a prompt drift check again
 	if st.running {
 		st.again = true
 		s.mu.Unlock()
@@ -381,11 +401,12 @@ func (s *Service) RequestPush(instance string, actor models.ModuleActor) {
 // catchUp). Rate-limited per instance (DriftCheckInterval) and skipped while a
 // push is already running, so a module that keeps failing to apply is not
 // hammered on every heartbeat.
-func (s *Service) HeartbeatApplied(instance string, appliedRevision int64) {
+func (s *Service) HeartbeatApplied(instance string, _ int64) {
 	s.mu.Lock()
 	st := s.state(instance)
 	now := s.now()
-	if st.running || now.Sub(st.lastCheck) < s.cfg.DriftCheckInterval {
+	interval := s.cfg.DriftCheckInterval << min(st.failures, maxDriftBackoffShift)
+	if st.running || now.Sub(st.lastCheck) < interval {
 		s.mu.Unlock()
 		return
 	}
@@ -394,7 +415,7 @@ func (s *Service) HeartbeatApplied(instance string, appliedRevision int64) {
 	st.actor = systemActor
 	s.wg.Add(1)
 	s.mu.Unlock()
-	_ = appliedRevision // the drift check re-reads the row, which TouchHeartbeat just updated
+	// The drift check re-reads the row, which TouchHeartbeat just updated.
 	go s.runPushes(instance, true)
 }
 
@@ -410,6 +431,13 @@ func (s *Service) state(instance string) *pushState {
 // Wait blocks until background pushes finish. For tests and shutdown.
 func (s *Service) Wait() { s.wg.Wait() }
 
+// Stop cancels background pushes and waits for them. Call it before closing
+// the RPC client.
+func (s *Service) Stop() {
+	s.cancel()
+	s.wg.Wait()
+}
+
 func (s *Service) runPushes(instance string, onlyIfDrifted bool) {
 	defer s.wg.Done()
 	for {
@@ -419,10 +447,15 @@ func (s *Service) runPushes(instance string, onlyIfDrifted bool) {
 		st.again = false
 		s.mu.Unlock()
 
-		s.pushWithRetries(instance, actor, onlyIfDrifted)
+		ok := s.pushWithRetries(instance, actor, onlyIfDrifted)
 		onlyIfDrifted = false // a re-run was requested by a config write
 
 		s.mu.Lock()
+		if ok {
+			st.failures = 0
+		} else {
+			st.failures++
+		}
 		if !st.again {
 			st.running = false
 			s.mu.Unlock()
@@ -443,8 +476,10 @@ type errTerminal struct{ err error }
 func (e errTerminal) Error() string { return e.err.Error() }
 func (e errTerminal) Unwrap() error { return e.err }
 
-func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onlyIfDrifted bool) {
-	ctx := context.Background()
+// pushWithRetries pushes the config, retrying transient failures. It reports
+// whether the instance ended up with the config (or needed none).
+func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onlyIfDrifted bool) bool {
+	ctx := s.ctx
 	var lastErr error
 	var mod models.Module
 	backoff := s.cfg.RetryBackoff
@@ -453,10 +488,10 @@ func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onl
 		mod, err = s.pushOnce(ctx, instance, actor, onlyIfDrifted)
 		if err == nil {
 			s.publishUpdated(mod)
-			return
+			return true
 		}
 		if errors.Is(err, errNotPushable) {
-			return
+			return true
 		}
 		lastErr = err
 		var term errTerminal
@@ -470,6 +505,9 @@ func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onl
 		}
 		backoff *= 2
 	}
+	if ctx.Err() != nil {
+		return false // shutting down: not the module's failure
+	}
 	s.logger.Warn("config push failed", zap.String("instance", instance), zap.Error(lastErr))
 	if err := s.registry.RecordApplyError(ctx, instance, lastErr.Error(), s.now()); err != nil {
 		s.logger.Error("failed to record apply error", zap.String("instance", instance), zap.Error(err))
@@ -478,6 +516,7 @@ func (s *Service) pushWithRetries(instance string, actor models.ModuleActor, onl
 		mod.Instance = instance
 	}
 	s.publishUpdated(mod)
+	return false
 }
 
 // pushOnce sends the instance's current config once and records the reply.

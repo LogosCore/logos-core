@@ -287,7 +287,7 @@ func (s *Service) HandleHeartbeat(ctx context.Context, req messaging.Envelope) (
 	// subscription refetches the row, so the payload only needs the instance;
 	// TouchHeartbeat matched, so the row is registered.
 	s.publishBus(eventbus.NewModuleUpdatedEvent(eventbus.ServiceActor(p.Instance), eventbus.ModuleEventPayload{
-		Instance: p.Instance, Status: models.ModuleStatusRegistered,
+		Instance: p.Instance, Status: models.ModuleStatusRegistered, Heartbeat: true,
 	}))
 
 	// Drift repair: if the module's applied revision differs from the desired

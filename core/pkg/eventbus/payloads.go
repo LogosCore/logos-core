@@ -370,6 +370,9 @@ type ModuleEventPayload struct {
 	Instance string
 	Type     string // module_type: "channel" | "minion-factory"
 	Status   string // "registered" | "deregistered" | "dead"
+	// Heartbeat marks a module.updated that only carries a heartbeat (last
+	// seen, health, status values), so clients can skip history refetches.
+	Heartbeat bool
 }
 
 func NewModuleRegisteredEvent(actor Actor, p ModuleEventPayload) Event {

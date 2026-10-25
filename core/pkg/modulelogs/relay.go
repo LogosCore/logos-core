@@ -162,6 +162,13 @@ type stream struct {
 	// next successful renewal recreates it, with a backlog so the viewer sees
 	// what the module logged meanwhile (e.g. a restarted process's startup).
 	ended bool
+	// replaced is set when the module gave this stream's slot to a newer one
+	// (too many viewers). The stream then ends for good: recreating it would
+	// evict another viewer, who would do the same, forever.
+	replaced bool
+	// pending is a state change the viewer was too slow to take; it rides on
+	// the next event delivered, so the viewer never shows a stale state.
+	pending *Event
 }
 
 // start sends mgmt.logs.start; with backlog 0 it is a lease renewal.
@@ -197,6 +204,15 @@ func (s *stream) run(ctx context.Context, cancel context.CancelFunc, batches <-c
 		case <-ctx.Done():
 			return
 		case <-renew.C:
+			if batches == nil {
+				// The queue went with core's broker connection: bind a new
+				// one (the consumer re-dials) before asking for records.
+				reopened, err := s.relay.source.Open(ctx, s.id)
+				if err != nil {
+					continue
+				}
+				batches = reopened
+			}
 			// Renewal also recreates the stream after the module restarted
 			// or reconnected.
 			backlog := 0
@@ -214,12 +230,22 @@ func (s *stream) run(ctx context.Context, cancel context.CancelFunc, batches <-c
 			}
 		case body, ok := <-batches:
 			if !ok {
-				if ctx.Err() == nil {
-					s.emit(&Event{State: StateEnded, Reason: "log queue closed"})
+				if ctx.Err() != nil {
+					return
 				}
-				return
+				// Core lost its broker connection. Keep the viewer and
+				// reopen on the next renewal tick.
+				batches = nil
+				if connected {
+					connected = false
+					s.emit(&Event{State: StateDisconnected, Reason: "log queue lost; reconnecting"})
+				}
+				continue
 			}
 			s.handle(body)
+			if s.replaced {
+				return
+			}
 		}
 	}
 }
@@ -239,6 +265,7 @@ func (s *stream) handle(body []byte) {
 	if b.End {
 		ev.State, ev.Reason = StateEnded, b.EndReason
 		s.ended = true
+		s.replaced = b.EndReason == protocol.LogEndReplaced
 	}
 	s.emit(ev)
 }
@@ -247,11 +274,18 @@ func (s *stream) handle(body []byte) {
 // the event is dropped and counted into the next one.
 func (s *stream) emit(ev *Event) {
 	ev.Dropped += s.dropped
+	if ev.State == "" && s.pending != nil {
+		ev.State, ev.Reason = s.pending.State, s.pending.Reason
+	}
 	select {
 	case s.out <- ev:
 		s.dropped = 0
+		s.pending = nil
 	default:
 		s.dropped = ev.Dropped + int64(len(ev.Records))
+		if ev.State != "" {
+			s.pending = &Event{State: ev.State, Reason: ev.Reason} // latest wins
+		}
 	}
 }
 

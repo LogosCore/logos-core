@@ -517,3 +517,47 @@ func TestInvokeAction(t *testing.T) {
 		t.Errorf("dead instance err = %v", err)
 	}
 }
+
+// TestHeartbeatApplied_BacksOffWhileRefused: a module that keeps refusing its
+// config is re-pushed after DriftCheckInterval, then 2×, 4×… — not on every
+// heartbeat — and a new config write resets the back-off.
+func TestHeartbeatApplied_BacksOffWhileRefused(t *testing.T) {
+	behind := registered("http-1")
+	behind.AppliedRevision = 1
+	h := newHarness(behind)
+	h.configs.put("http-1", 3, map[string]any{"limit": float64(9)})
+	h.rpc.handler = func(rpcCall) (messaging.ReplyEnvelope, error) {
+		return errReply(protocol.CodeValidationFailed, "refused"), nil
+	}
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	h.svc.now = func() time.Time { return now }
+	interval := h.svc.cfg.DriftCheckInterval
+	pushes := func() int { return len(h.rpc.callsOf(protocol.TypeMgmtConfigApply)) }
+	beat := func(after time.Duration) int {
+		now = now.Add(after)
+		h.svc.HeartbeatApplied("http-1", 1)
+		h.svc.Wait()
+		return pushes()
+	}
+
+	if n := beat(0); n != 1 {
+		t.Fatalf("first drift check: pushes = %d, want 1", n)
+	}
+	if n := beat(interval); n != 1 {
+		t.Errorf("one interval after a refusal: pushes = %d, want still 1 (backing off 2×)", n)
+	}
+	if n := beat(interval); n != 2 {
+		t.Errorf("2× after the refusal: pushes = %d, want 2", n)
+	}
+	if n := beat(3 * interval); n != 2 {
+		t.Errorf("3× after the second refusal: pushes = %d, want still 2 (4×)", n)
+	}
+
+	// A config write resets the back-off: its own push, then prompt checks.
+	h.svc.RequestPush("http-1", alice)
+	h.svc.Wait()
+	base := pushes()
+	if n := beat(interval); n != base+1 {
+		t.Errorf("after a config write: pushes = %d, want %d", n, base+1)
+	}
+}

@@ -490,9 +490,21 @@ func toModuleEvent(event eventbus.Event) *model.ModuleEvent {
 	if event.Topic == eventbus.TopicModuleRegistered {
 		action = model.EventActionCreated
 	}
-	evt := &model.ModuleEvent{Action: action}
+	kind := model.ModuleEventKindChanged
+	switch event.Topic {
+	case eventbus.TopicModuleRegistered:
+		kind = model.ModuleEventKindRegistered
+	case eventbus.TopicModuleDeregistered:
+		kind = model.ModuleEventKindDeregistered
+	case eventbus.TopicModuleDead:
+		kind = model.ModuleEventKindDead
+	}
+	evt := &model.ModuleEvent{Action: action, Kind: kind}
 	if p, ok := event.Payload.(eventbus.ModuleEventPayload); ok {
 		evt.Instance = p.Instance
+		if p.Heartbeat && event.Topic == eventbus.TopicModuleUpdated {
+			evt.Kind = model.ModuleEventKindHeartbeat
+		}
 	}
 	return evt
 }

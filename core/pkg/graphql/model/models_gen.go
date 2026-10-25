@@ -305,9 +305,10 @@ type ModuleEnumOption struct {
 }
 
 type ModuleEvent struct {
-	Action   EventAction    `json:"action"`
-	Instance string         `json:"instance"`
-	Module   *models.Module `json:"module,omitempty"`
+	Action   EventAction     `json:"action"`
+	Kind     ModuleEventKind `json:"kind"`
+	Instance string          `json:"instance"`
+	Module   *models.Module  `json:"module,omitempty"`
 }
 
 type ModuleField struct {
@@ -1111,6 +1112,67 @@ func (e *ModuleActionStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e ModuleActionStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type ModuleEventKind string
+
+const (
+	ModuleEventKindRegistered   ModuleEventKind = "REGISTERED"
+	ModuleEventKindDeregistered ModuleEventKind = "DEREGISTERED"
+	ModuleEventKindDead         ModuleEventKind = "DEAD"
+	ModuleEventKindChanged      ModuleEventKind = "CHANGED"
+	ModuleEventKindHeartbeat    ModuleEventKind = "HEARTBEAT"
+)
+
+var AllModuleEventKind = []ModuleEventKind{
+	ModuleEventKindRegistered,
+	ModuleEventKindDeregistered,
+	ModuleEventKindDead,
+	ModuleEventKindChanged,
+	ModuleEventKindHeartbeat,
+}
+
+func (e ModuleEventKind) IsValid() bool {
+	switch e {
+	case ModuleEventKindRegistered, ModuleEventKindDeregistered, ModuleEventKindDead, ModuleEventKindChanged, ModuleEventKindHeartbeat:
+		return true
+	}
+	return false
+}
+
+func (e ModuleEventKind) String() string {
+	return string(e)
+}
+
+func (e *ModuleEventKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModuleEventKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModuleEventKind", str)
+	}
+	return nil
+}
+
+func (e ModuleEventKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ModuleEventKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ModuleEventKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

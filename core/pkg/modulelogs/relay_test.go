@@ -53,12 +53,20 @@ func (f *fakeRPC) ops() []call {
 }
 
 type fakeSource struct {
+	mu     sync.Mutex
 	ch     chan []byte
 	opened string
+	opens  int
 }
 
 func (f *fakeSource) Open(_ context.Context, id string) (<-chan []byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.opened = id
+	f.opens++
+	if f.opens > 1 {
+		f.ch = make(chan []byte, 8) // a fresh queue after the old one closed
+	}
 	return f.ch, nil
 }
 
@@ -68,7 +76,17 @@ func (f *fakeSource) send(t *testing.T, b protocol.LogBatch) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.ch <- body
+	f.mu.Lock()
+	ch := f.ch
+	f.mu.Unlock()
+	ch <- body
+}
+
+// lose closes the current queue, as a dropped broker connection does.
+func (f *fakeSource) lose() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	close(f.ch)
 }
 
 func module(caps ...string) models.Module {
@@ -221,5 +239,70 @@ func TestEmitCountsWhatTheViewerMissed(t *testing.T) {
 	s.emit(&Event{})
 	if ev := <-s.out; ev.Dropped != 4 {
 		t.Errorf("dropped = %d, want 4 (3 records + 1 module drop)", ev.Dropped)
+	}
+}
+
+func TestReplacedStreamEndsForGood(t *testing.T) {
+	r, rpc, src := newRelay(fakeRegistry{"http-1": module(protocol.CapabilityLogs)})
+	r.renew = 10 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := r.Stream(ctx, Request{Instance: "http-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next(t, events) // STREAMING
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 1, End: true, EndReason: protocol.LogEndReplaced})
+	if ev := next(t, events); ev.State != StateEnded || ev.Reason != protocol.LogEndReplaced {
+		t.Fatalf("end event = %+v", ev)
+	}
+	time.Sleep(60 * time.Millisecond) // several renew periods
+	starts := 0
+	for _, c := range rpc.ops() {
+		if c.op == protocol.TypeMgmtLogsStart {
+			starts++
+		}
+	}
+	if starts != 1 {
+		t.Errorf("starts = %d, want 1: a replaced stream must not reclaim its slot", starts)
+	}
+	select {
+	case ev := <-events:
+		t.Errorf("event after replacement: %+v", ev)
+	default:
+	}
+}
+
+func TestQueueLossReopens(t *testing.T) {
+	r, _, src := newRelay(fakeRegistry{"http-1": module(protocol.CapabilityLogs)})
+	r.renew = 10 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := r.Stream(ctx, Request{Instance: "http-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next(t, events) // STREAMING
+	src.lose()
+	if ev := next(t, events); ev.State != StateDisconnected {
+		t.Fatalf("after queue loss = %+v", ev)
+	}
+	if ev := next(t, events); ev.State != StateStreaming {
+		t.Fatalf("after reopen = %+v", ev)
+	}
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 1, Records: []protocol.LogRecord{{Message: "back"}}})
+	if ev := next(t, events); len(ev.Records) != 1 || ev.Records[0].Message != "back" {
+		t.Errorf("record after reopen = %+v", ev)
+	}
+}
+
+func TestEmitKeepsLatestStateForSlowViewer(t *testing.T) {
+	s := &stream{out: make(chan *Event, 1)}
+	s.emit(&Event{Records: make([]protocol.LogRecord, 1)})         // fills the buffer
+	s.emit(&Event{State: StateDisconnected, Reason: "unroutable"}) // dropped, remembered
+	<-s.out
+	s.emit(&Event{Records: make([]protocol.LogRecord, 2)})
+	if ev := <-s.out; ev.State != StateDisconnected || ev.Reason != "unroutable" {
+		t.Errorf("state not carried on the next event: %+v", ev)
 	}
 }

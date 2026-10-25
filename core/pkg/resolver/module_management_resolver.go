@@ -122,7 +122,7 @@ func (r *moduleResolver) ModuleActionInvocations(ctx context.Context, instance s
 	if r.mgmt == nil {
 		return []*model.ModuleActionInvocation{}, nil
 	}
-	rows, err := r.mgmt.Invocations(ctx, instance, historyLimit(limit))
+	rows, err := r.mgmt.Invocations(ctx, strings.TrimSpace(instance), historyLimit(limit))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list module action invocations: %w", err)
 	}

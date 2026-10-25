@@ -344,6 +344,10 @@ func (a *App) stopLifecycle() {
 	if a.rpcServer != nil {
 		a.rpcServer.Stop()
 	}
+	// Pushes in flight use the RPC client: cancel and drain them first.
+	if a.moduleMgmt != nil {
+		a.moduleMgmt.Stop()
+	}
 	if a.logConsumer != nil {
 		if err := a.logConsumer.Close(); err != nil {
 			a.logger.Warn("Error closing module log consumer", zap.Error(err))

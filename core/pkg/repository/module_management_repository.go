@@ -183,7 +183,8 @@ type moduleConfigChangeRepository struct {
 
 func NewModuleConfigChangeRepository(db database.Database) IModuleConfigChangeRepository {
 	db.EnsureIndexes(context.Background(), moduleConfigChangeCollection, []opts.IndexModel{
-		{Key: []string{"instance", "-at"}},
+		// -_id matches the query's tiebreak, so the index serves the sort.
+		{Key: []string{"instance", "-at", "-_id"}},
 	})
 	return &moduleConfigChangeRepository{coll: db.Collection(moduleConfigChangeCollection)}
 }
@@ -212,7 +213,7 @@ type moduleActionInvocationRepository struct {
 func NewModuleActionInvocationRepository(db database.Database) IModuleActionInvocationRepository {
 	db.EnsureIndexes(context.Background(), moduleActionInvocationCollection, []opts.IndexModel{
 		{Key: []string{"invocation_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
-		{Key: []string{"instance", "-started_at"}},
+		{Key: []string{"instance", "-started_at", "-_id"}},
 	})
 	return &moduleActionInvocationRepository{coll: db.Collection(moduleActionInvocationCollection)}
 }

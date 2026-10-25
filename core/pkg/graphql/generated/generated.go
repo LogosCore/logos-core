@@ -348,6 +348,7 @@ type ComplexityRoot struct {
 	ModuleEvent struct {
 		Action   func(childComplexity int) int
 		Instance func(childComplexity int) int
+		Kind     func(childComplexity int) int
 		Module   func(childComplexity int) int
 	}
 
@@ -2565,6 +2566,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleEvent.Instance(childComplexity), true
+	case "ModuleEvent.kind":
+		if e.ComplexityRoot.ModuleEvent.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleEvent.Kind(childComplexity), true
 	case "ModuleEvent.module":
 		if e.ComplexityRoot.ModuleEvent.Module == nil {
 			break
@@ -7822,8 +7829,21 @@ type Module {
 # changes). ` + "`" + `module` + "`" + ` carries the full post-transition row.
 type ModuleEvent {
   action: EventAction!
+  # What happened, more precisely than action: lets clients patch caches
+  # instead of refetching (a heartbeat changes no history).
+  kind: ModuleEventKind!
   instance: ID!
   module: Module
+}
+
+enum ModuleEventKind {
+  REGISTERED
+  DEREGISTERED
+  DEAD
+  # Config written, apply result recorded, action finished.
+  CHANGED
+  # Last heartbeat, health and status values.
+  HEARTBEAT
 }
 
 # --- Queries ---
@@ -18741,6 +18761,35 @@ func (ec *executionContext) fieldContext_ModuleEvent_action(_ context.Context, f
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type EventAction does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleEvent_kind(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleEvent_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNModuleEventKind2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEventKind,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleEvent_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModuleEventKind does not have child fields")
 		},
 	}
 	return fc, nil
@@ -35623,6 +35672,8 @@ func (ec *executionContext) fieldContext_Subscription_moduleChanged(_ context.Co
 			switch field.Name {
 			case "action":
 				return ec.fieldContext_ModuleEvent_action(ctx, field)
+			case "kind":
+				return ec.fieldContext_ModuleEvent_kind(ctx, field)
 			case "instance":
 				return ec.fieldContext_ModuleEvent_instance(ctx, field)
 			case "module":
@@ -49536,6 +49587,11 @@ func (ec *executionContext) _ModuleEvent(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "kind":
+			out.Values[i] = ec._ModuleEvent_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "instance":
 			out.Values[i] = ec._ModuleEvent_instance(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -58642,6 +58698,16 @@ func (ec *executionContext) marshalNModuleEvent2ᚖgithubᚗcomᚋlogoscoreᚋlo
 		return graphql.Null
 	}
 	return ec._ModuleEvent(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNModuleEventKind2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEventKind(ctx context.Context, v any) (model.ModuleEventKind, error) {
+	var res model.ModuleEventKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNModuleEventKind2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEventKind(ctx context.Context, sel ast.SelectionSet, v model.ModuleEventKind) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNModuleField2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleFieldᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleField) graphql.Marshaler {

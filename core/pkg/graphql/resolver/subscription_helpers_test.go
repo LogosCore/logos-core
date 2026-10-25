@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
+	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -365,5 +366,25 @@ func TestStream_SurvivesAnEventInFlightAtDisconnect(t *testing.T) {
 		default:
 		}
 		break
+	}
+}
+
+func TestToModuleEventKind(t *testing.T) {
+	p := eventbus.ModuleEventPayload{Instance: "http-1"}
+	hb := p
+	hb.Heartbeat = true
+	for _, c := range []struct {
+		ev   eventbus.Event
+		want model.ModuleEventKind
+	}{
+		{eventbus.NewModuleRegisteredEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindRegistered},
+		{eventbus.NewModuleDeregisteredEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindDeregistered},
+		{eventbus.NewModuleDeadEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindDead},
+		{eventbus.NewModuleUpdatedEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindChanged},
+		{eventbus.NewModuleUpdatedEvent(eventbus.ServiceActor("x"), hb), model.ModuleEventKindHeartbeat},
+	} {
+		if got := toModuleEvent(c.ev); got.Kind != c.want || got.Instance != "http-1" {
+			t.Errorf("%s: kind = %s, want %s", c.ev.Topic, got.Kind, c.want)
+		}
 	}
 }
