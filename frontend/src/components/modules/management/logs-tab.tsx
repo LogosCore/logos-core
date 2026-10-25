@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useLayoutEffect } from "react"
+import { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import {
   ArrowDownToLineIcon,
@@ -29,6 +29,7 @@ import {
   type LogBuffer,
   type LogLine,
 } from "./log-buffer"
+import { LogDetailPane } from "./log-detail-pane"
 
 const LEVELS: { value: ModuleLogLevel; label: string }[] = [
   { value: "DEBUG", label: "Debug" },
@@ -61,6 +62,9 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
   // Last line id shown while paused; null when live.
   const [pausedAt, setPausedAt] = useState<number | null>(null)
   const [follow, setFollow] = useState(true)
+  // The line shown in the detail pane; it closes once the line leaves the
+  // buffer (cleared, capped out, level changed).
+  const [selectedId, setSelectedId] = useState<number | null>(null)
   // A rejection is tied to the registration it happened in: a module that
   // registers again is worth another try.
   const [rejected, setRejected] = useState<{ message: string; registeredAt: string } | null>(null)
@@ -83,6 +87,7 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
     return search ? live.filter((l) => lineMatches(l, search)) : live
   }, [buf.lines, pausedAt, search])
   const pending = pausedAt === null ? 0 : buf.lines.filter((l) => l.id > pausedAt).length
+  const selected = selectedId === null ? undefined : buf.lines.find((l) => l.id === selectedId)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
@@ -97,6 +102,31 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
       virtualizer.scrollToIndex(shown.length - 1, { align: "end" })
     }
   }, [follow, shown.length, virtualizer])
+
+  // Esc closes the pane; ↑/↓ move the selection through the shown lines.
+  // Ignored while typing in a field.
+  useEffect(() => {
+    if (selectedId === null) return
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName))) return
+      if (e.key === "Escape") {
+        setSelectedId(null)
+        return
+      }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return
+      const i = shown.findIndex((l) => l.id === selectedId)
+      if (i < 0) return
+      const next = i + (e.key === "ArrowDown" ? 1 : -1)
+      if (next < 0 || next >= shown.length) return
+      e.preventDefault()
+      setFollow(false)
+      setSelectedId(shown[next].id)
+      virtualizer.scrollToIndex(next, { align: "auto" })
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [selectedId, shown, virtualizer])
 
   if (!canRead) {
     return (
@@ -185,40 +215,53 @@ export function LogsTab({ module, canRead }: LogsTabProps) {
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
-          ref={scrollRef}
-          onScroll={(e) => {
-            const el = e.currentTarget
-            setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32)
-          }}
-          className="min-h-80 flex-1 overflow-auto rounded-xl border bg-card font-mono text-xs"
-        >
-          {shown.length === 0 ? (
-            <EmptyState hasLines={buf.lines.length > 0} streaming={buf.state === "STREAMING"} />
-          ) : (
-            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-              {virtualizer.getVirtualItems().map((item) => (
-                <LogRow
-                  key={shown[item.index].id}
-                  line={shown[item.index]}
-                  index={item.index}
-                  measure={virtualizer.measureElement}
-                  top={item.start}
-                />
-              ))}
-            </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            ref={scrollRef}
+            onScroll={(e) => {
+              const el = e.currentTarget
+              setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 32)
+            }}
+            className="min-h-80 flex-1 overflow-auto rounded-xl border bg-card font-mono text-xs"
+          >
+            {shown.length === 0 ? (
+              <EmptyState hasLines={buf.lines.length > 0} streaming={buf.state === "STREAMING"} />
+            ) : (
+              <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+                {virtualizer.getVirtualItems().map((item) => (
+                  <LogRow
+                    key={shown[item.index].id}
+                    line={shown[item.index]}
+                    index={item.index}
+                    measure={virtualizer.measureElement}
+                    top={item.start}
+                    selected={shown[item.index].id === selectedId}
+                    onSelect={() =>
+                      setSelectedId((id) => (id === shown[item.index].id ? null : shown[item.index].id))
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          {!follow && shown.length > 0 && (
+            <Button
+              size="sm"
+              className="absolute bottom-3 right-5 shadow-md"
+              onClick={() => setFollow(true)}
+            >
+              <ArrowDownToLineIcon />
+              Latest
+            </Button>
           )}
         </div>
-        {!follow && shown.length > 0 && (
-          <Button
-            size="sm"
-            className="absolute bottom-3 right-5 shadow-md"
-            onClick={() => setFollow(true)}
-          >
-            <ArrowDownToLineIcon />
-            Latest
-          </Button>
+        {selected && (
+          <LogDetailPane
+            line={selected}
+            onClose={() => setSelectedId(null)}
+            className="max-lg:max-h-[50vh] lg:w-[28rem] lg:shrink-0"
+          />
         )}
       </div>
     </div>
@@ -230,18 +273,29 @@ function LogRow({
   index,
   top,
   measure,
+  selected,
+  onSelect,
 }: {
   line: LogLine
   index: number
   top: number
   measure: (el: Element | null) => void
+  selected: boolean
+  onSelect: () => void
 }) {
   const attrs = formatAttrs(line.attrs)
   return (
     <div
       ref={measure}
       data-index={index}
-      className="absolute left-0 flex w-full gap-3 px-3 py-0.5 hover:bg-muted/50"
+      role="button"
+      tabIndex={-1}
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={cn(
+        "absolute left-0 flex w-full cursor-pointer gap-3 border-l-2 px-3 py-0.5",
+        selected ? "border-primary bg-accent" : "border-transparent hover:bg-muted/50",
+      )}
       style={{ transform: `translateY(${top}px)` }}
     >
       <span className="shrink-0 tabular-nums text-muted-foreground" title={line.time}>
