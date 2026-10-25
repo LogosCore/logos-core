@@ -14,6 +14,8 @@ interface UseSubscriptionOptions<TResult> {
   onData: (data: TResult) => void
   /** Whether the subscription is active. Defaults to true. */
   enabled?: boolean
+  /** Called when the server rejects the subscription (it then stops delivering). */
+  onError?: (message: string) => void
 }
 
 export function useSubscription<TResult, TVariables>(
@@ -27,15 +29,24 @@ export function useSubscription<TResult, TVariables>(
   // the underlying SSE connection.
   const onDataRef = useRef(options.onData)
   onDataRef.current = options.onData
+  const onErrorRef = useRef(options.onError)
+  onErrorRef.current = options.onError
 
   // Serialize variables for stable useEffect deps.
   const variablesKey = JSON.stringify(variables ?? null)
 
   useEffect(() => {
     if (!enabled) return
-    return subscribe(document, variables, (data) => {
-      onDataRef.current(data)
-    })
+    return subscribe(
+      document,
+      variables,
+      (data) => {
+        onDataRef.current(data)
+      },
+      (message) => {
+        onErrorRef.current?.(message)
+      },
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document, variablesKey, enabled])
 }

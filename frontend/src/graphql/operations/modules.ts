@@ -82,6 +82,7 @@ export const ModuleDetailFields = graphql(`
       appliedRevision
       syncState
       lastApplyError
+      capabilities
       properties {
         field {
           ...ModuleFieldDefFields
@@ -193,6 +194,24 @@ export const InvokeModuleActionMutation = graphql(`
   mutation InvokeModuleAction($instance: ID!, $action: String!, $params: JSON) {
     invokeModuleAction(instance: $instance, action: $action, params: $params) {
       ...ModuleActionInvocationFields
+    }
+  }
+`)
+
+export const ModuleLogsSubscription = graphql(`
+  subscription ModuleLogs($instance: ID!, $minLevel: ModuleLogLevel) {
+    moduleLogs(instance: $instance, minLevel: $minLevel) {
+      backlog
+      dropped
+      lost
+      state
+      reason
+      records {
+        time
+        level
+        message
+        attrs
+      }
     }
   }
 `)

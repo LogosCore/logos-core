@@ -30,6 +30,7 @@ export const Permissions = {
   MODULE_CONFIG_WRITE: 'module:config:write',
   MODULE_ACTION_INVOKE: 'module:action:invoke',
   MODULE_ACTION_INVOKE_HIGH: 'module:action:invoke:high',
+  MODULE_LOGS_READ: 'module:logs:read',
 } as const;
 
 /**

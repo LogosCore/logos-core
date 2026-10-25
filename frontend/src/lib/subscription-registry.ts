@@ -24,6 +24,8 @@ import { getGraphQLWSClient } from "@/lib/graphql-ws-client"
 type AnyDocument = TypedDocumentString<unknown, unknown>
 
 type Listener<T> = (data: T) => void
+// Receives a server-side rejection of the subscription (joined messages).
+type ErrorListener = (message: string) => void
 
 interface SharedSubscription<T> {
   key: string
@@ -31,6 +33,7 @@ interface SharedSubscription<T> {
   operationName: string | undefined
   variables: unknown
   listeners: Set<Listener<T>>
+  errorListeners: Set<ErrorListener>
   dispose: (() => void) | null
 }
 
@@ -119,6 +122,7 @@ export function subscribe<TResult, TVariables>(
   document: TypedDocumentString<TResult, TVariables>,
   variables: TVariables | undefined,
   listener: Listener<TResult>,
+  onError?: ErrorListener,
 ): () => void {
   const doc = document as unknown as AnyDocument
   const key = keyFor(doc, variables)
@@ -131,12 +135,14 @@ export function subscribe<TResult, TVariables>(
       operationName: opNameFor(doc),
       variables,
       listeners: new Set(),
+      errorListeners: new Set(),
       dispose: null,
     }
     registry.set(key, sub)
   }
 
   sub.listeners.add(listener)
+  if (onError) sub.errorListeners.add(onError)
 
   // First listener on a fresh entry — open the underlying graphql-ws sub.
   if (sub.listeners.size === 1 && !sub.dispose) {
@@ -146,6 +152,7 @@ export function subscribe<TResult, TVariables>(
   return () => {
     if (!sub) return
     sub.listeners.delete(listener)
+    if (onError) sub.errorListeners.delete(onError)
     if (sub.listeners.size === 0) {
       teardown(sub)
     }
@@ -190,6 +197,9 @@ function openSubscription<T>(sub: SharedSubscription<T>) {
           console.error(
             `[graphql-ws] subscription "${sub.operationName ?? "(anonymous)"}" rejected: ${messages}`,
           )
+          for (const l of Array.from(sub.errorListeners)) {
+            l(messages)
+          }
         }
       },
       complete: () => {

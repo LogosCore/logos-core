@@ -14,8 +14,9 @@ import { ModuleIdentity, StatusValues } from "@/components/modules/management/ov
 import { ConfigTab } from "@/components/modules/management/config-tab"
 import { ActionsTab } from "@/components/modules/management/actions-tab"
 import { ActivityTab } from "@/components/modules/management/activity-tab"
+import { LogsTab } from "@/components/modules/management/logs-tab"
 
-const TABS = ["overview", "configuration", "actions", "activity"] as const
+const TABS = ["overview", "configuration", "actions", "activity", "logs"] as const
 type Tab = (typeof TABS)[number]
 
 export function ModuleDetailPage() {
@@ -37,6 +38,7 @@ export function ModuleDetailPage() {
   const canWrite = hasPermission(Permissions.MODULE_CONFIG_WRITE)
   const canInvoke = hasPermission(Permissions.MODULE_ACTION_INVOKE)
   const canInvokeHigh = hasPermission(Permissions.MODULE_ACTION_INVOKE_HIGH)
+  const canReadLogs = hasPermission(Permissions.MODULE_LOGS_READ)
 
   const { data, isLoading, error, refetch } = useModule(instance)
   const module = data?.module
@@ -140,6 +142,9 @@ export function ModuleDetailPage() {
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="activity">Activity</TabsTrigger>
+                {module.management.capabilities.includes("logs") && (
+                  <TabsTrigger value="logs">Logs</TabsTrigger>
+                )}
               </TabsList>
               <TabsContent value="overview" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <ModuleIdentity module={module} />
@@ -164,6 +169,12 @@ export function ModuleDetailPage() {
               <TabsContent value="activity">
                 <ActivityTab module={module} management={module.management} />
               </TabsContent>
+              {/* Mounted only while selected: leaving the tab ends the stream. */}
+              {tab === "logs" && module.management.capabilities.includes("logs") && (
+                <TabsContent value="logs">
+                  <LogsTab module={module} canRead={canReadLogs} />
+                </TabsContent>
+              )}
             </Tabs>
           )}
         </>
