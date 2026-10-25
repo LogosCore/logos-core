@@ -115,6 +115,7 @@ export const ModuleDetailFields = graphql(`
         description
         unit
         value
+        alert
       }
     }
   }

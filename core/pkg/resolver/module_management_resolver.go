@@ -224,6 +224,7 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 			Description: strPtr(st.Description),
 			Unit:        strPtr(st.Unit),
 			Value:       v,
+			Alert:       st.Alert,
 		})
 	}
 

@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/auth"
 import { Permissions } from "@/constants/permissions"
 import { useModule, useModuleDetailSubscription } from "@/graphql/hooks/modules"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
+import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { SyncStateBadge } from "@/components/modules/management/sync-state-badge"
 import { ModuleIdentity, StatusValues } from "@/components/modules/management/overview-tab"
 import { ConfigTab } from "@/components/modules/management/config-tab"
@@ -71,7 +72,10 @@ export function ModuleDetailPage() {
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                 <ModuleStatusIndicator status={module.status} />
-                <span>Health: {module.lastStatus || "—"}</span>
+                <span className="inline-flex items-center gap-1.5">
+                  Health:
+                  <ModuleHealthIndicator health={module.lastStatus} registered={module.status === "registered"} />
+                </span>
                 <span>
                   Last heartbeat:{" "}
                   {module.lastHeartbeatAt ? (

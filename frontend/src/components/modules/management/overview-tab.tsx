@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
+import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
+import { cn } from "@/lib/utils"
 import { formatValue } from "./field-values"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
@@ -36,7 +38,9 @@ export function ModuleIdentity({ module }: { module: ModuleDetailFieldsFragment 
         <Row label="Status">
           <ModuleStatusIndicator status={m.status} />
         </Row>
-        <Row label="Health">{m.lastStatus || "—"}</Row>
+        <Row label="Health">
+          <ModuleHealthIndicator health={m.lastStatus} registered={m.status === "registered"} />
+        </Row>
         <Row label="Registered">
           <DateOrDash date={m.registeredAt} />
         </Row>
@@ -85,11 +89,7 @@ export function StatusValues({ management }: { management: Management }) {
                 {s.label}
               </dt>
               <dd className="min-w-0 break-words">
-                {s.type === "bool" && typeof s.value === "boolean" ? (
-                  <Badge variant={s.value ? "secondary" : "outline"}>{s.value ? "Yes" : "No"}</Badge>
-                ) : (
-                  <span className="tabular-nums">{formatValue(s.type, s.value, s.unit)}</span>
-                )}
+                <StatusValue status={s} />
                 {s.description && (
                   <div className="text-xs text-muted-foreground">{s.description}</div>
                 )}
@@ -100,4 +100,36 @@ export function StatusValues({ management }: { management: Management }) {
       )}
     </section>
   )
+}
+
+type StatusEntry = Management["status"][number]
+
+// The module declares which value needs attention (`alert`); core never
+// guesses from the key or the value. With an alert declared, a matching value
+// is amber and any other green. Without one, values stay neutral.
+const TONE = {
+  alert: "border-amber-500/50 bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  ok: "border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-400",
+}
+
+function StatusValue({ status: s }: { status: StatusEntry }) {
+  const declared = s.alert !== null && s.alert !== undefined
+  const reported = s.value !== null && s.value !== undefined
+  const tone = declared && reported ? (s.value === s.alert ? "alert" : "ok") : null
+  if (s.type === "bool" && typeof s.value === "boolean") {
+    return (
+      <Badge variant={s.value ? "default" : "outline"} className={cn(tone && TONE[tone])}>
+        {s.value ? "Yes" : "No"}
+      </Badge>
+    )
+  }
+  const text = formatValue(s.type, s.value, s.unit)
+  if (tone) {
+    return (
+      <Badge variant="outline" className={TONE[tone]}>
+        {text}
+      </Badge>
+    )
+  }
+  return <span className="tabular-nums">{text}</span>
 }

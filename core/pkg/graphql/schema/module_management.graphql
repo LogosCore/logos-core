@@ -111,6 +111,9 @@ type ModuleStatusValue {
   unit: String
   # Latest reported value from heartbeat metrics; null if never reported.
   value: JSON
+  # The value the module declared as needing attention (bool, enum, string),
+  # or null. The UI highlights a matching value.
+  alert: JSON
 }
 
 type ModuleActor {

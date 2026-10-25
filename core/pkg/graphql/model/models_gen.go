@@ -375,6 +375,7 @@ type ModuleStatusValue struct {
 	Description *string `json:"description,omitempty"`
 	Unit        *string `json:"unit,omitempty"`
 	Value       any     `json:"value,omitempty"`
+	Alert       any     `json:"alert,omitempty"`
 }
 
 type Mutation struct {

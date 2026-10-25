@@ -16,6 +16,7 @@ import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { useAuthStore } from "@/stores/auth"
 import { useModuleStore } from "@/stores/modules"
 import { Permissions } from "@/constants/permissions"
+import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 
@@ -99,8 +100,8 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
             <div>
               <ModuleStatusIndicator status={m.status} />
             </div>
-            <div className="text-sm text-muted-foreground truncate">
-              {m.lastStatus || "—"}
+            <div className="truncate">
+              <ModuleHealthIndicator health={m.lastStatus} registered={m.status === "registered"} />
             </div>
             <div className="text-sm text-muted-foreground">
               {m.lastHeartbeatAt ? (

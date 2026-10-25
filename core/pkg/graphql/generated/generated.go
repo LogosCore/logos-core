@@ -410,6 +410,7 @@ type ComplexityRoot struct {
 	}
 
 	ModuleStatusValue struct {
+		Alert       func(childComplexity int) int
 		Description func(childComplexity int) int
 		Key         func(childComplexity int) int
 		Label       func(childComplexity int) int
@@ -2836,6 +2837,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleProperty.Value(childComplexity), true
 
+	case "ModuleStatusValue.alert":
+		if e.ComplexityRoot.ModuleStatusValue.Alert == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleStatusValue.Alert(childComplexity), true
 	case "ModuleStatusValue.description":
 		if e.ComplexityRoot.ModuleStatusValue.Description == nil {
 			break
@@ -7692,6 +7699,9 @@ type ModuleStatusValue {
   unit: String
   # Latest reported value from heartbeat metrics; null if never reported.
   value: JSON
+  # The value the module declared as needing attention (bool, enum, string),
+  # or null. The UI highlights a matching value.
+  alert: JSON
 }
 
 type ModuleActor {
@@ -19781,6 +19791,8 @@ func (ec *executionContext) fieldContext_ModuleManagement_status(_ context.Conte
 				return ec.fieldContext_ModuleStatusValue_unit(ctx, field)
 			case "value":
 				return ec.fieldContext_ModuleStatusValue_value(ctx, field)
+			case "alert":
+				return ec.fieldContext_ModuleStatusValue_alert(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleStatusValue", field.Name)
 		},
@@ -20359,6 +20371,35 @@ func (ec *executionContext) _ModuleStatusValue_value(ctx context.Context, field 
 }
 
 func (ec *executionContext) fieldContext_ModuleStatusValue_value(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleStatusValue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleStatusValue_alert(ctx context.Context, field graphql.CollectedField, obj *model.ModuleStatusValue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleStatusValue_alert,
+		func(ctx context.Context) (any, error) {
+			return obj.Alert, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleStatusValue_alert(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ModuleStatusValue",
 		Field:      field,
@@ -49983,6 +50024,8 @@ func (ec *executionContext) _ModuleStatusValue(ctx context.Context, sel ast.Sele
 			out.Values[i] = ec._ModuleStatusValue_unit(ctx, field, obj)
 		case "value":
 			out.Values[i] = ec._ModuleStatusValue_value(ctx, field, obj)
+		case "alert":
+			out.Values[i] = ec._ModuleStatusValue_alert(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
