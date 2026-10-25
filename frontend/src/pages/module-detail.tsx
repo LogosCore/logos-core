@@ -43,13 +43,44 @@ export function ModuleDetailPage() {
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <Link
-        to="/modules"
-        className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeftIcon className="size-4" />
-        Modules
-      </Link>
+      {/* Back link, identity and live status share one line; it wraps on
+          narrow screens. Before the module loads only the back link shows. */}
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Link
+            to="/modules"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeftIcon className="size-4" />
+            Modules
+          </Link>
+          {module && (
+            <>
+              <span className="h-5 w-px bg-border" aria-hidden />
+              <h1 className="font-mono text-xl font-semibold">{module.instance}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                {module.name && <Badge variant="default">{module.name}</Badge>}
+                <Badge variant="secondary">{module.type}</Badge>
+                {module.version && <Badge variant="outline">v{module.version.replace(/^v/, "")}</Badge>}
+                {module.management && <SyncStateBadge management={module.management} />}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                <ModuleStatusIndicator status={module.status} />
+                <span>Health: {module.lastStatus || "—"}</span>
+                <span>
+                  Last heartbeat:{" "}
+                  {module.lastHeartbeatAt ? (
+                    <FormattedDateTimeText date={module.lastHeartbeatAt} format="yyyy.mm.dd hh:MM:ss" />
+                  ) : (
+                    "never"
+                  )}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+        {module?.description && <p className="text-sm">{module.description}</p>}
+      </header>
 
       {isLoading ? (
         <div className="flex flex-col gap-3">
@@ -70,29 +101,6 @@ export function ModuleDetailPage() {
         </div>
       ) : (
         <>
-          <header className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-mono text-xl font-semibold">{module.instance}</h1>
-              {module.name && <Badge variant="default">{module.name}</Badge>}
-              <Badge variant="secondary">{module.type}</Badge>
-              {module.version && <Badge variant="outline">v{module.version.replace(/^v/, "")}</Badge>}
-              {module.management && <SyncStateBadge management={module.management} />}
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-              <ModuleStatusIndicator status={module.status} />
-              <span>Health: {module.lastStatus || "—"}</span>
-              <span>
-                Last heartbeat:{" "}
-                {module.lastHeartbeatAt ? (
-                  <FormattedDateTimeText date={module.lastHeartbeatAt} format="yyyy.mm.dd hh:MM:ss" />
-                ) : (
-                  "never"
-                )}
-              </span>
-            </div>
-            {module.description && <p className="text-sm">{module.description}</p>}
-          </header>
-
           {!module.management ? (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-10 text-center text-muted-foreground">
