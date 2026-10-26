@@ -2,7 +2,7 @@
 # Modules — module-instance registry (app-admin management)
 # =============================================================================
 #
-# A Module is one row in the durable registry: a channel or minion-factory
+# A Module is one row in the durable registry: a channel or factory
 # instance that registered over the AMQP control plane. This surface is the
 # app-admin Modules page — list every instance with its lifecycle state, and
 # remove (deregister) one.
@@ -23,7 +23,7 @@ type Module {
   # Unique per deployed instance — an operator may run several instances of the
   # same module, each with its own id.
   instance: ID!
-  # Module kind: "channel" | "minion-factory".
+  # Module kind: "channel" | "factory".
   type: String!
   # The module's hardcoded identity — its project/kind name (e.g. "http",
   # "telegram"), baked into the implementation and shared by every instance of

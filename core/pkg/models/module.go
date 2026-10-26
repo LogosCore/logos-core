@@ -29,7 +29,7 @@ const (
 type Module struct {
 	field.DefaultField `bson:",inline"`
 
-	Type        string `bson:"module_type" json:"module_type"` // channel | minion-factory
+	Type        string `bson:"module_type" json:"module_type"` // channel | factory
 	Name        string `bson:"module_name" json:"module_name"` // hardcoded module identity (http, telegram, ...); shared across all instances of that module
 	Instance    string `bson:"instance" json:"instance"`       // self-assigned, unique per deployed instance
 	Version     string `bson:"version" json:"version"`

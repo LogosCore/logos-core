@@ -48,7 +48,7 @@ func NewChannelController(c cache.Cache, gate RegistrationGate, log *zap.Logger)
 //
 // Request/response types come from the shared protocol module so core and module
 // authors agree on one definition. This is still a skeleton of the channel↔core
-// HTTP contract: core does not yet hold minion keys, run a minion factory, or
+// HTTP contract: core does not yet hold minion keys, run a factory, or
 // decide tasking, so the response always carries an empty/no-op encrypted_data.
 // The decrypt → factory → tasking → encrypt pipeline will hang off this handler.
 //
