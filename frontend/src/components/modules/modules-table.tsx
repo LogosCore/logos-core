@@ -83,8 +83,8 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
               if (e.key === "Enter") openDetail(m.instance)
             }}
           >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <ModuleIcon type={m.type} icon={m.icon} className="size-5 text-muted-foreground" />
+            <div className="flex min-w-0 items-center gap-3">
+              <ModuleIcon type={m.type} icon={m.icon} className="size-8 text-muted-foreground" />
               <div className="min-w-0">
                 <div className="font-medium truncate">{m.instance}</div>
                 {m.description && (

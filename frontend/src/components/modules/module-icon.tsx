@@ -42,8 +42,8 @@ export function KindName({
   className?: string
 }) {
   return (
-    <span className={cn("inline-flex min-w-0 items-center gap-1.5 align-middle", className)}>
-      <ModuleIcon type={type} icon={icon} />
+    <span className={cn("inline-flex min-w-0 items-center gap-2 align-middle", className)}>
+      <ModuleIcon type={type} icon={icon} className="size-5" />
       <span className="truncate font-mono">{name}</span>
     </span>
   )

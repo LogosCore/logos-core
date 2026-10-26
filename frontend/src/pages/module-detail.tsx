@@ -70,7 +70,7 @@ export function ModuleDetailPage() {
           {module && (
             <>
               <span className="h-5 w-px bg-border" aria-hidden />
-              <ModuleIcon type={module.type} icon={module.icon} className="size-6" />
+              <ModuleIcon type={module.type} icon={module.icon} className="size-8" />
               <h1 className="font-mono text-xl font-semibold">{module.instance}</h1>
               {/* What it is, as quiet text: details live on the Overview. */}
               <span className="text-sm text-muted-foreground">
