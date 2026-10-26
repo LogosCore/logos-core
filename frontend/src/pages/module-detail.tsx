@@ -10,6 +10,7 @@ import { useModule, useModuleDetailSubscription } from "@/graphql/hooks/modules"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleIcon } from "@/components/modules/module-icon"
+import { ModuleAdminDialogs, ModuleBlockButton } from "@/components/modules/module-admin-dialogs"
 import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
 import {
   BuildParameters,
@@ -45,6 +46,8 @@ export function ModuleDetailPage() {
   const canInvoke = hasPermission(Permissions.MODULE_ACTION_INVOKE)
   const canInvokeHigh = hasPermission(Permissions.MODULE_ACTION_INVOKE_HIGH)
   const canReadLogs = hasPermission(Permissions.MODULE_LOGS_READ)
+  // Blocking and unblocking share the module:delete permission.
+  const canAdmin = hasPermission(Permissions.MODULE_DELETE)
 
   const { data, isLoading, error, refetch } = useModule(instance)
   const module = data?.module
@@ -83,12 +86,14 @@ export function ModuleDetailPage() {
                 <ModuleStatusIndicator status={module.status} lastHeartbeatAt={module.lastHeartbeatAt} />
                 <ModuleHealthIndicator health={module.lastStatus} registered={module.status === "registered"} />
                 {module.management && <ModuleSyncIndicator management={module.management} />}
+                {canAdmin && <ModuleBlockButton module={module} />}
               </div>
             </>
           )}
         </div>
         {module?.description && <p className="text-sm">{module.description}</p>}
       </header>
+      <ModuleAdminDialogs />
 
       {isLoading ? (
         <div className="flex flex-col gap-3">

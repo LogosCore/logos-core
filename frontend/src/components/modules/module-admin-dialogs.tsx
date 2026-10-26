@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { BanIcon, ShieldCheckIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,6 +15,35 @@ import { Textarea } from "@/components/ui/textarea"
 import { useModuleStore } from "@/stores/modules"
 import { useBlockModule, useDeleteModule } from "@/graphql/hooks/modules"
 import { errorMessage } from "./management/api-errors"
+import { useUnblockWithToast } from "./use-unblock"
+
+/**
+ * Block (with the confirmation of ModuleAdminDialogs, rendered alongside) or
+ * Unblock for one instance, where it is shown on its own page.
+ */
+export function ModuleBlockButton({ module: m }: { module: { instance: string; type: string; status: string } }) {
+  const openDialog = useModuleStore((s) => s.openDialog)
+  const { unblock, pending } = useUnblockWithToast()
+  if (m.status === "blocked") {
+    return (
+      <Button variant="outline" size="sm" onClick={() => unblock(m.instance)} disabled={pending}>
+        <ShieldCheckIcon />
+        {pending ? "Unblocking..." : "Unblock"}
+      </Button>
+    )
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="text-destructive hover:text-destructive"
+      onClick={() => openDialog({ kind: "block", module: { instance: m.instance, type: m.type } })}
+    >
+      <BanIcon />
+      Block…
+    </Button>
+  )
+}
 
 /** The confirmations of the Modules page's Block and Delete. */
 export function ModuleAdminDialogs() {

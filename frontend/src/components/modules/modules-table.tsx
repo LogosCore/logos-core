@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router"
 import { BanIcon, BlocksIcon, EllipsisIcon, ShieldCheckIcon, SlidersHorizontalIcon, TrashIcon } from "lucide-react"
-import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,8 +21,7 @@ import { ModuleHealthIndicator } from "@/components/modules/module-health-indica
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { adminActions } from "@/components/modules/module-admin"
-import { errorMessage } from "@/components/modules/management/api-errors"
-import { useUnblockModule } from "@/graphql/hooks/modules"
+import { useUnblockWithToast } from "@/components/modules/use-unblock"
 import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 
 interface ModulesTableProps {
@@ -36,7 +34,7 @@ const GRID_COLS = "grid-cols-[1.5fr_1fr_1fr_90px_130px_1fr_1fr_1fr_48px]"
 export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const openDialog = useModuleStore((s) => s.openDialog)
-  const unblock = useUnblockModule()
+  const { unblock, pending: unblocking } = useUnblockWithToast()
 
   const navigate = useNavigate()
 
@@ -143,19 +141,7 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
                       <DropdownMenuSeparator />
                       {adminActions(m.status).map((action) =>
                         action === "unblock" ? (
-                          <DropdownMenuItem
-                            key={action}
-                            disabled={unblock.isPending}
-                            onClick={() =>
-                              unblock.mutate(
-                                { instance: m.instance },
-                                {
-                                  onSuccess: () => toast.success(`Unblocked ${m.instance}`),
-                                  onError: (err) => toast.error("Failed to unblock", { description: errorMessage(err, "Request failed") }),
-                                },
-                              )
-                            }
-                          >
+                          <DropdownMenuItem key={action} disabled={unblocking} onClick={() => unblock(m.instance)}>
                             <ShieldCheckIcon className="size-4" />
                             Unblock
                           </DropdownMenuItem>
