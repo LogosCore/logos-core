@@ -55,6 +55,7 @@ func (f *fakeModuleRepo) Upsert(context.Context, *models.Module) error { return 
 func (f *fakeModuleRepo) TouchHeartbeat(context.Context, string, string, map[string]any, *int64, time.Time) (bool, error) {
 	return false, nil
 }
+func (f *fakeModuleRepo) RecordStatus(context.Context, string, map[string]any) error { return nil }
 func (f *fakeModuleRepo) MarkDeregistered(context.Context, string, string, time.Time) (bool, error) {
 	return false, nil
 }

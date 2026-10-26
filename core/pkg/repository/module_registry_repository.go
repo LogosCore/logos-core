@@ -29,6 +29,11 @@ type IModuleRegistryRepository interface {
 	// it untouched). The bool is false when no registered instance matched
 	// (→ unknown_instance).
 	TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, appliedRevision *int64, at time.Time) (bool, error)
+	// RecordStatus replaces a registered instance's status values (the
+	// last_metrics a heartbeat sets) with ones read from it outside a
+	// heartbeat, such as right after an action. Liveness is untouched, and an
+	// instance no longer registered is left alone.
+	RecordStatus(ctx context.Context, instance string, status map[string]any) error
 	// MarkDeregistered transitions a registered instance to deregistered. The
 	// bool is false when no registered instance matched (→ unknown_instance).
 	MarkDeregistered(ctx context.Context, instance, reason string, at time.Time) (bool, error)
@@ -347,6 +352,14 @@ func (r *moduleRegistryRepository) TouchHeartbeat(ctx context.Context, instance,
 		return false, err
 	}
 	return true, nil
+}
+
+func (r *moduleRegistryRepository) RecordStatus(ctx context.Context, instance string, status map[string]any) error {
+	err := r.coll.UpdateOne(ctx, registeredInstanceFilter(instance), bson.M{"$set": bson.M{"last_metrics": status}})
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil
+	}
+	return err
 }
 
 func (r *moduleRegistryRepository) MarkDeregistered(ctx context.Context, instance, reason string, at time.Time) (bool, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
@@ -185,5 +186,64 @@ func TestManagementField_NullWithoutManifestAndHidesSecrets(t *testing.T) {
 	}
 	if got.Status[0].Value != int32(4) || got.Status[1].Value != nil {
 		t.Errorf("status = %+v %+v", got.Status[0], got.Status[1])
+	}
+}
+
+func TestManagementField_ActionAvailability(t *testing.T) {
+	level := protocol.FieldSpec{Key: "log_level", Type: protocol.FieldEnum, Label: "Log level", Default: "info",
+		Options: []protocol.EnumOption{{Value: "info"}, {Value: "debug"}}}
+	m := protocol.ManagementManifest{
+		SchemaVersion: "1",
+		Properties:    []protocol.PropertySpec{{FieldSpec: level, Apply: protocol.ApplyLive}},
+		Actions: []protocol.ActionSpec{
+			{Name: "drain", Risk: protocol.RiskHigh, AvailableWhen: []protocol.ActionCondition{
+				{Status: "draining", Op: protocol.OpEq, Value: false, Message: "Already draining"}}},
+			{Name: "resume", Risk: protocol.RiskLow, AvailableWhen: []protocol.ActionCondition{
+				{Status: "draining", Op: protocol.OpEq, Value: true}}},
+			{Name: "close", Risk: protocol.RiskHigh, AvailableWhen: []protocol.ActionCondition{
+				{Status: "open", Op: protocol.OpGt, Value: 0}}},
+			{Name: "trace", Risk: protocol.RiskLow, AvailableWhen: []protocol.ActionCondition{
+				{Property: "log_level", Op: protocol.OpEq, Value: "debug", Message: "Set the log level to debug first"}}},
+			{Name: "flush", Risk: protocol.RiskLow},
+		},
+		Status: []protocol.StatusSpec{{Key: "draining", Type: protocol.FieldBool, Label: "Draining"}, {Key: "open", Type: protocol.FieldInt}},
+	}
+	if err := protocol.ValidateManifest(m); err != nil {
+		t.Fatal(err)
+	}
+	mod := &models.Module{Instance: "http-1", Name: "http", Status: models.ModuleStatusRegistered,
+		Manifest: &models.ModuleManifest{ManagementManifest: m}}
+	availability := func(metrics map[string]any, config models.JSONMap) string {
+		t.Helper()
+		mod.LastMetrics = metrics
+		eff := modulemgmt.ComputeEffective(&m, &models.ModuleConfig{Revision: 1, Values: config})
+		r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, &fakeManager{eff: eff}, nil)
+		got, err := r.Management(context.Background(), mod)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, a := range got.Actions {
+			switch {
+			case a.Available && a.UnavailableReason == nil:
+				out = append(out, a.Name+": ok")
+			case !a.Available && a.UnavailableReason != nil:
+				out = append(out, a.Name+": "+*a.UnavailableReason)
+			default:
+				t.Fatalf("%s: available %v with reason %v", a.Name, a.Available, a.UnavailableReason)
+			}
+		}
+		return strings.Join(out, "\n")
+	}
+
+	// Status as stored from a heartbeat (BSON int32), config set to debug.
+	if got, want := availability(map[string]any{"draining": true, "open": int32(0)}, models.JSONMap{"log_level": "debug"}),
+		strings.Join([]string{"drain: Already draining", "resume: ok", "close: Requires open above 0", "trace: ok", "flush: ok"}, "\n"); got != want {
+		t.Errorf("availability:\n%s\nwant:\n%s", got, want)
+	}
+	// Nothing reported yet, config at its default: only the property decides.
+	if got, want := availability(nil, nil),
+		strings.Join([]string{"drain: ok", "resume: ok", "close: ok", "trace: Set the log level to debug first", "flush: ok"}, "\n"); got != want {
+		t.Errorf("availability:\n%s\nwant:\n%s", got, want)
 	}
 }

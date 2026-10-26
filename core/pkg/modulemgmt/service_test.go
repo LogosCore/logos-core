@@ -561,3 +561,70 @@ func TestHeartbeatApplied_BacksOffWhileRefused(t *testing.T) {
 		t.Errorf("after a config write: pushes = %d, want %d", n, base+1)
 	}
 }
+
+// TestInvokeActionRefreshesStatus: once a module answered an action, core
+// reads its status at once, so the action's effect (and which actions are
+// available) shows before the next heartbeat.
+func TestInvokeActionRefreshesStatus(t *testing.T) {
+	h := newHarness(registered("http-1"))
+	ctx := context.Background()
+	draining := false
+	h.rpc.handler = func(c rpcCall) (messaging.ReplyEnvelope, error) {
+		switch c.opType {
+		case protocol.TypeMgmtStateGet:
+			return okReply(protocol.StateGetReply{Status: map[string]any{"draining": draining}})
+		case protocol.TypeMgmtActionInvoke:
+			if draining {
+				return errReply(protocol.CodeActionUnavailable, "Already draining"), nil
+			}
+			draining = true
+		}
+		return okReply(protocol.ActionInvokeReply{})
+	}
+
+	inv, err := h.svc.InvokeAction(ctx, InvokeRequest{Instance: "http-1", Action: "wipe", AllowHighRisk: true})
+	if err != nil || inv.Status != models.ModuleActionSucceeded {
+		t.Fatalf("invoke: %+v, %v", inv, err)
+	}
+	if got := h.reg.row("http-1").LastMetrics["draining"]; got != true {
+		t.Fatalf("status after the action: draining = %v", got)
+	}
+	gets := h.rpc.callsOf(protocol.TypeMgmtStateGet)
+	if len(gets) != 1 || gets[0].queue != "q.http-1" || gets[0].timeout != StatusRefreshTimeout {
+		t.Fatalf("state.get calls %+v", gets)
+	}
+
+	// A refusal is an answer too: the status is read again.
+	inv, err = h.svc.InvokeAction(ctx, InvokeRequest{Instance: "http-1", Action: "wipe", AllowHighRisk: true})
+	if err != nil || inv.Status != models.ModuleActionFailed || inv.Error != "action_unavailable: Already draining" {
+		t.Fatalf("refused invoke: %+v, %v", inv, err)
+	}
+	if n := len(h.rpc.callsOf(protocol.TypeMgmtStateGet)); n != 2 {
+		t.Fatalf("state.get calls = %d, want 2", n)
+	}
+
+	// No answer: nothing to read.
+	h.rpc.handler = func(c rpcCall) (messaging.ReplyEnvelope, error) {
+		return messaging.ReplyEnvelope{}, messaging.ErrRPCTimeout
+	}
+	if inv, _ := h.svc.InvokeAction(ctx, InvokeRequest{Instance: "http-1", Action: "wipe", AllowHighRisk: true}); inv.Status != models.ModuleActionTimedOut {
+		t.Fatalf("timed out invoke: %+v", inv)
+	}
+	if n := len(h.rpc.callsOf(protocol.TypeMgmtStateGet)); n != 2 {
+		t.Fatalf("state.get after a timeout: %d calls", n)
+	}
+
+	// A failed read keeps the last known status.
+	h.rpc.handler = func(c rpcCall) (messaging.ReplyEnvelope, error) {
+		if c.opType == protocol.TypeMgmtStateGet {
+			return errReply(protocol.CodeInternalError, "boom"), nil
+		}
+		return okReply(protocol.ActionInvokeReply{})
+	}
+	if inv, _ := h.svc.InvokeAction(ctx, InvokeRequest{Instance: "http-1", Action: "wipe", AllowHighRisk: true}); inv.Status != models.ModuleActionSucceeded {
+		t.Fatalf("invoke: %+v", inv)
+	}
+	if got := h.reg.row("http-1").LastMetrics["draining"]; got != true {
+		t.Fatalf("status after a failed read: draining = %v", got)
+	}
+}

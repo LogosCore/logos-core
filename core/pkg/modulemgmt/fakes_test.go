@@ -68,6 +68,15 @@ func (r *fakeRegistry) RecordApplyError(_ context.Context, instance, msg string,
 	return nil
 }
 
+func (r *fakeRegistry) RecordStatus(_ context.Context, instance string, status map[string]any) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if m, ok := r.rows[instance]; ok {
+		m.LastMetrics = status
+	}
+	return nil
+}
+
 func (r *fakeRegistry) row(instance string) models.Module {
 	r.mu.Lock()
 	defer r.mu.Unlock()

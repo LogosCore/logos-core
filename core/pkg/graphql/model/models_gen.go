@@ -443,13 +443,15 @@ type Minion struct {
 }
 
 type ModuleAction struct {
-	Name           string         `json:"name"`
-	Label          string         `json:"label"`
-	Description    *string        `json:"description,omitempty"`
-	Risk           string         `json:"risk"`
-	Confirm        *string        `json:"confirm,omitempty"`
-	Params         []*ModuleField `json:"params"`
-	TimeoutSeconds int            `json:"timeoutSeconds"`
+	Name              string         `json:"name"`
+	Label             string         `json:"label"`
+	Description       *string        `json:"description,omitempty"`
+	Risk              string         `json:"risk"`
+	Confirm           *string        `json:"confirm,omitempty"`
+	Params            []*ModuleField `json:"params"`
+	TimeoutSeconds    int            `json:"timeoutSeconds"`
+	Available         bool           `json:"available"`
+	UnavailableReason *string        `json:"unavailableReason,omitempty"`
 }
 
 type ModuleActionInvocation struct {

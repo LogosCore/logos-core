@@ -109,6 +109,8 @@ export const ModuleDetailFields = graphql(`
         risk
         confirm
         timeoutSeconds
+        available
+        unavailableReason
         params {
           ...ModuleFieldDefFields
         }

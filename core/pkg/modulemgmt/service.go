@@ -50,6 +50,7 @@ type Registry interface {
 	FindByInstance(ctx context.Context, instance string) (models.Module, error)
 	RecordApplyResult(ctx context.Context, instance string, reply protocol.ConfigApplyReply, at time.Time) error
 	RecordApplyError(ctx context.Context, instance, message string, at time.Time) error
+	RecordStatus(ctx context.Context, instance string, status map[string]any) error
 }
 
 // EventPublisher fans management changes out to GraphQL subscribers.
@@ -656,8 +657,35 @@ func (s *Service) InvokeAction(ctx context.Context, req InvokeRequest) (*models.
 	}
 	s.logger.Info("module action finished", zap.String("instance", mod.Instance), zap.String("action", action.Name),
 		zap.String("status", status), zap.String("actor", req.Actor.ID))
+	if callErr == nil {
+		s.refreshStatus(callCtx, mod)
+	}
 	s.publishUpdated(mod)
 	return inv, nil
+}
+
+// StatusRefreshTimeout bounds the mgmt.state.get core sends after an action.
+const StatusRefreshTimeout = 3 * time.Second
+
+// refreshStatus reads a module's status values right after one of its
+// actions answered, so the action's effect, and which actions are available
+// now, show without waiting for the next heartbeat. Best effort: on any
+// failure the heartbeat catches up.
+func (s *Service) refreshStatus(ctx context.Context, mod models.Module) {
+	reply, err := s.rpc.Call(ctx, mod.RPCQueue, protocol.TypeMgmtStateGet, struct{}{}, StatusRefreshTimeout)
+	if err == nil && reply.Status != protocol.StatusOK {
+		err = errors.New(replyErrorText(reply))
+	}
+	var st protocol.StateGetReply
+	if err == nil {
+		err = json.Unmarshal(reply.Payload, &st)
+	}
+	if err == nil && st.Status != nil {
+		err = s.registry.RecordStatus(ctx, mod.Instance, st.Status)
+	}
+	if err != nil {
+		s.logger.Warn("status not refreshed after an action", zap.String("instance", mod.Instance), zap.Error(err))
+	}
 }
 
 // validateParams checks params against an action's declared params. It

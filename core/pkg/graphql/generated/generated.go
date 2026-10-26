@@ -462,13 +462,15 @@ type ComplexityRoot struct {
 	}
 
 	ModuleAction struct {
-		Confirm        func(childComplexity int) int
-		Description    func(childComplexity int) int
-		Label          func(childComplexity int) int
-		Name           func(childComplexity int) int
-		Params         func(childComplexity int) int
-		Risk           func(childComplexity int) int
-		TimeoutSeconds func(childComplexity int) int
+		Available         func(childComplexity int) int
+		Confirm           func(childComplexity int) int
+		Description       func(childComplexity int) int
+		Label             func(childComplexity int) int
+		Name              func(childComplexity int) int
+		Params            func(childComplexity int) int
+		Risk              func(childComplexity int) int
+		TimeoutSeconds    func(childComplexity int) int
+		UnavailableReason func(childComplexity int) int
 	}
 
 	ModuleActionInvocation struct {
@@ -3284,6 +3286,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Module.Version(childComplexity), true
 
+	case "ModuleAction.available":
+		if e.ComplexityRoot.ModuleAction.Available == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.Available(childComplexity), true
 	case "ModuleAction.confirm":
 		if e.ComplexityRoot.ModuleAction.Confirm == nil {
 			break
@@ -3326,6 +3334,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleAction.TimeoutSeconds(childComplexity), true
+	case "ModuleAction.unavailableReason":
+		if e.ComplexityRoot.ModuleAction.UnavailableReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleAction.UnavailableReason(childComplexity), true
 
 	case "ModuleActionInvocation.action":
 		if e.ComplexityRoot.ModuleActionInvocation.Action == nil {
@@ -9322,6 +9336,14 @@ type ModuleAction {
   confirm: String
   params: [ModuleField!]!
   timeoutSeconds: Int!
+  # Whether the action is available now: its conditions (available_when)
+  # against the latest status values and the effective config. Advisory: the
+  # module checks again when the action is invoked, and refuses it with
+  # action_unavailable.
+  available: Boolean!
+  # Why the action is unavailable: the module's message, or one made from the
+  # condition. Null while it is available.
+  unavailableReason: String
 }
 
 type ModuleStatusValue {
@@ -23549,6 +23571,64 @@ func (ec *executionContext) fieldContext_ModuleAction_timeoutSeconds(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleAction_available(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_available,
+		func(ctx context.Context) (any, error) {
+			return obj.Available, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_available(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleAction_unavailableReason(ctx context.Context, field graphql.CollectedField, obj *model.ModuleAction) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleAction_unavailableReason,
+		func(ctx context.Context) (any, error) {
+			return obj.UnavailableReason, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleAction_unavailableReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleAction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleActionInvocation_id(ctx context.Context, field graphql.CollectedField, obj *model.ModuleActionInvocation) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25548,6 +25628,10 @@ func (ec *executionContext) fieldContext_ModuleManagement_actions(_ context.Cont
 				return ec.fieldContext_ModuleAction_params(ctx, field)
 			case "timeoutSeconds":
 				return ec.fieldContext_ModuleAction_timeoutSeconds(ctx, field)
+			case "available":
+				return ec.fieldContext_ModuleAction_available(ctx, field)
+			case "unavailableReason":
+				return ec.fieldContext_ModuleAction_unavailableReason(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleAction", field.Name)
 		},
@@ -58298,6 +58382,13 @@ func (ec *executionContext) _ModuleAction(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "available":
+			out.Values[i] = ec._ModuleAction_available(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unavailableReason":
+			out.Values[i] = ec._ModuleAction_unavailableReason(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

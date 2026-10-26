@@ -190,8 +190,22 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 		props = append(props, mp)
 	}
 
+	// What the actions' conditions see: the latest status values and the
+	// effective config (secrets cannot be compared).
+	statusValues := make(map[string]any, len(mod.LastMetrics))
+	for k, v := range mod.LastMetrics {
+		statusValues[k] = plainJSON(v)
+	}
+	values := make(map[string]any, len(eff.Properties))
+	for _, p := range eff.Properties {
+		if p.Spec.Type != protocol.FieldSecret {
+			values[p.Spec.Key] = p.Effective
+		}
+	}
+
 	actions := make([]*model.ModuleAction, 0, len(m.Actions))
 	for _, a := range m.Actions {
+		available, reason := protocol.ActionAvailable(m, a, statusValues, values)
 		timeout := a.TimeoutSeconds
 		if timeout <= 0 {
 			timeout = int(modulemgmt.DefaultActionTimeout / time.Second)
@@ -201,13 +215,15 @@ func buildManagement(mod *models.Module, eff modulemgmt.EffectiveConfig) *model.
 			params = append(params, toFieldModel(f))
 		}
 		actions = append(actions, &model.ModuleAction{
-			Name:           a.Name,
-			Label:          orKey(a.Label, a.Name),
-			Description:    strPtr(a.Description),
-			Risk:           string(a.Risk),
-			Confirm:        strPtr(a.Confirm),
-			Params:         params,
-			TimeoutSeconds: timeout,
+			Name:              a.Name,
+			Label:             orKey(a.Label, a.Name),
+			Description:       strPtr(a.Description),
+			Risk:              string(a.Risk),
+			Confirm:           strPtr(a.Confirm),
+			Params:            params,
+			TimeoutSeconds:    timeout,
+			Available:         available,
+			UnavailableReason: strPtr(reason),
 		})
 	}
 

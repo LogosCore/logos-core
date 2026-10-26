@@ -40,6 +40,8 @@ func (f *fakeRepo) Upsert(_ context.Context, reg *models.Module) error {
 	return nil
 }
 
+func (f *fakeRepo) RecordStatus(context.Context, string, map[string]any) error { return nil }
+
 func (f *fakeRepo) TouchHeartbeat(_ context.Context, instance, status string, metrics map[string]any, applied *int64, at time.Time) (bool, error) {
 	if f.heartbeatErr != nil {
 		return false, f.heartbeatErr

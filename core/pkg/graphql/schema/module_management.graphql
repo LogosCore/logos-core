@@ -115,6 +115,14 @@ type ModuleAction {
   confirm: String
   params: [ModuleField!]!
   timeoutSeconds: Int!
+  # Whether the action is available now: its conditions (available_when)
+  # against the latest status values and the effective config. Advisory: the
+  # module checks again when the action is invoked, and refuses it with
+  # action_unavailable.
+  available: Boolean!
+  # Why the action is unavailable: the module's message, or one made from the
+  # condition. Null while it is available.
+  unavailableReason: String
 }
 
 type ModuleStatusValue {

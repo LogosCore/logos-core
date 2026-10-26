@@ -39,6 +39,7 @@ import {
   useInvokeModuleAction,
   useModuleActionInvocations,
 } from "@/graphql/hooks/modules"
+import { actionBlocker } from "./action-blocker"
 import { errorMessage, graphqlErrorCode } from "./api-errors"
 import {
   durationMs,
@@ -115,16 +116,9 @@ export function ActionsTab({ module, management, canInvoke, canInvokeHigh }: Act
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {management.actions.map((a) => {
             const high = a.risk === "high"
-            const allowed = canInvoke && (!high || canInvokeHigh)
             const runState = runs[a.name]
             const running = runState?.state === "running"
-            const reason = !canInvoke
-              ? "Requires module:action:invoke"
-              : !allowed
-                ? "High-risk actions require module:action:invoke:high"
-                : !registered
-                  ? "The instance is not registered"
-                  : undefined
+            const reason = actionBlocker(a, { canInvoke, canInvokeHigh, registered })
             return (
               <Card key={a.name} size="sm">
                 <CardHeader>
@@ -142,7 +136,7 @@ export function ActionsTab({ module, management, canInvoke, canInvokeHigh }: Act
                       size="sm"
                       variant={high ? "destructive" : "default"}
                       onClick={() => start(a)}
-                      disabled={!allowed || !registered || running}
+                      disabled={reason !== undefined || running}
                       title={reason}
                     >
                       {running ? <Loader2Icon className="animate-spin" /> : <PlayIcon />}
