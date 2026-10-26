@@ -8,6 +8,7 @@ import { GraphQLRequestError } from "@/lib/graphql-client"
 import {
   compareFields,
   emptyDraft,
+  formatValue,
   initialDraft,
   parseDraft,
   validateValue,
@@ -114,6 +115,26 @@ export function problemsFromError(err: unknown): Record<string, string> {
 /** File name for a downloaded endpoint. */
 export function exportFileName(name: string): string {
   return `${name}.endpoint.json`
+}
+
+/** One set value of an endpoint, as the list shows it. */
+export interface SettingRow {
+  key: string
+  label: string
+  text: string
+}
+
+/**
+ * An endpoint's set values in its kind's field order, formatted for display.
+ * Without a kind (the channel no longer declares one), its raw keys.
+ */
+export function settingRows(kind: Kind | null, values: Record<string, unknown>): SettingRow[] {
+  if (!kind) {
+    return Object.entries(values).map(([key, v]) => ({ key, label: key, text: formatValue("string", v) }))
+  }
+  return kind.fields
+    .filter((f) => values[f.key] !== undefined && values[f.key] !== null)
+    .map((f) => ({ key: f.key, label: f.label, text: formatValue(f.type, values[f.key], f.unit) }))
 }
 
 /** Endpoints grouped by channel kind, kinds in name order. */

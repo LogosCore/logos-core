@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { GraphQLRequestError } from "@/lib/graphql-client"
-import { endpointDrafts, evaluateEndpoint, groupByKind, nameError, problemsFromError } from "./endpoint-values"
+import {
+  endpointDrafts,
+  evaluateEndpoint,
+  groupByKind,
+  nameError,
+  problemsFromError,
+  settingRows,
+  type Kind,
+} from "./endpoint-values"
 import type { FieldDef } from "@/components/modules/management/field-values"
 
 function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef {
@@ -55,6 +63,34 @@ describe("evaluateEndpoint", () => {
   it("starts from stored values", () => {
     const drafts = endpointDrafts(fields, { base_url: "https://a.example.com", tls_verify: true })
     expect(evaluateEndpoint(fields, drafts).values).toEqual({ base_url: "https://a.example.com", tls_verify: true })
+  })
+})
+
+describe("settingRows", () => {
+  const kind: Kind = {
+    name: "http",
+    version: 2,
+    fields: [
+      { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
+      { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },
+      { key: "request_timeout", type: "duration", label: "Request timeout", order: 3, required: false },
+    ] as Kind["fields"],
+  }
+
+  it("lists set values in field order, formatted", () => {
+    const rows = settingRows(kind, { request_timeout: "40s", base_url: "https://edge.example.com", tls_verify: true, gone: 1 })
+    expect(rows).toEqual([
+      { key: "base_url", label: "Base URL", text: "https://edge.example.com" },
+      { key: "tls_verify", label: "Verify TLS certificate", text: "true" },
+      { key: "request_timeout", label: "Request timeout", text: "40s" },
+    ])
+  })
+
+  it("shows raw keys without a kind", () => {
+    expect(settingRows(null, { base_url: "https://edge.example.com", retries: 3 })).toEqual([
+      { key: "base_url", label: "base_url", text: "https://edge.example.com" },
+      { key: "retries", label: "retries", text: "3" },
+    ])
   })
 })
 
