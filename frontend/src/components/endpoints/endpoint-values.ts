@@ -49,6 +49,23 @@ export function kindsByName(
 /** Endpoint names: unique slugs. Mirrors the server's rule. */
 export const ENDPOINT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
 
+/** The longest endpoint name ENDPOINT_NAME_PATTERN allows. */
+const MAX_NAME_LENGTH = 63
+
+/**
+ * A free name for a duplicate of the endpoint called name: name-dup, or
+ * name-dup-2, -3… when that is taken, the base shortened to stay within the
+ * name length.
+ */
+export function duplicateName(name: string, taken: Iterable<string>): string {
+  const used = new Set(taken)
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? "-dup" : `-dup-${n}`
+    const candidate = name.slice(0, MAX_NAME_LENGTH - suffix.length) + suffix
+    if (!used.has(candidate)) return candidate
+  }
+}
+
 export function nameError(name: string): string | null {
   const n = name.trim()
   if (n === "") return "Required"

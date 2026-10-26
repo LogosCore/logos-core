@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
-import { CopyIcon, DownloadIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { CopyIcon, CopyPlusIcon, DownloadIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
@@ -23,7 +23,8 @@ const AMBER = "border-amber-600/40 text-amber-700 dark:text-amber-400"
  * The scoped operation's channel endpoints, one row each. A row opens the
  * endpoint (read-only without write access); its menu (right-click, or ⋯)
  * copies or downloads the connection settings as JSON with every default
- * filled in, edits or deletes.
+ * filled in, edits, duplicates (a new endpoint's form, filled in from it) or
+ * deletes.
  */
 export function EndpointsTable({
   endpoints,
@@ -69,7 +70,11 @@ export function EndpointsTable({
           gridCols={GRID_COLS}
           onOpen={() => open(ep)}
           menuLabel="Endpoint actions"
-          menu={endpointMenu(ep, canWrite, () => open(ep), () => onDelete(ep))}
+          menu={endpointMenu(ep, canWrite, {
+            edit: () => open(ep),
+            duplicate: () => navigate(`/endpoints/new?kind=${encodeURIComponent(ep.moduleName)}&from=${ep.id}`),
+            remove: () => onDelete(ep),
+          })}
         >
           {(menuButton) => (
             <>
@@ -142,8 +147,12 @@ function StatusCell({ endpoint: ep }: { endpoint: Endpoint }) {
   )
 }
 
-/** An endpoint's menu: export it, and for writers edit or delete it. */
-function endpointMenu(ep: Endpoint, canWrite: boolean, onEdit: () => void, onDelete: () => void): ReactNode {
+/** An endpoint's menu: export it, and for writers edit, duplicate or delete it. */
+function endpointMenu(
+  ep: Endpoint,
+  canWrite: boolean,
+  on: { edit: () => void; duplicate: () => void; remove: () => void },
+): ReactNode {
   // An endpoint that doesn't fit its channel's settings can't be exported.
   const exportable = ep.problems.length === 0
   return (
@@ -159,11 +168,15 @@ function endpointMenu(ep: Endpoint, canWrite: boolean, onEdit: () => void, onDel
       {canWrite && (
         <>
           <ContextMenuSeparator />
-          <ContextMenuItem onClick={onEdit}>
+          <ContextMenuItem onClick={on.edit}>
             <PencilIcon className="size-4" />
             Edit
           </ContextMenuItem>
-          <ContextMenuItem variant="destructive" onClick={onDelete}>
+          <ContextMenuItem onClick={on.duplicate}>
+            <CopyPlusIcon className="size-4" />
+            Duplicate
+          </ContextMenuItem>
+          <ContextMenuItem variant="destructive" onClick={on.remove}>
             <Trash2Icon className="size-4" />
             Delete
           </ContextMenuItem>

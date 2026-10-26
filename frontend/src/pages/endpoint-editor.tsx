@@ -16,6 +16,7 @@ import { useMyOperationRole } from "@/graphql/hooks/operations"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
 import {
   useChannelEndpoint,
+  useChannelEndpoints,
   useChannelKinds,
   useCreateChannelEndpoint,
   useUpdateChannelEndpoint,
@@ -26,6 +27,7 @@ import { errorMessage, graphqlErrorCode } from "@/components/modules/management/
 import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import {
+  duplicateName,
   endpointDrafts,
   evaluateEndpoint,
   kindsByName,
@@ -36,20 +38,35 @@ import {
 
 type Endpoint = ChannelEndpointFieldsFragment
 
-/** /endpoints/new?kind=http — a new endpoint in the scoped operation. */
+/**
+ * /endpoints/new?kind=http[&from=<id>] — a new endpoint in the scoped
+ * operation; with from, a duplicate of that endpoint: its values and
+ * description, and a free name with a -dup suffix.
+ */
 export function NewEndpointPage() {
   const scopedOperation = useScopedOperation()
   const [params] = useSearchParams()
-  const kindName = params.get("kind") ?? ""
+  const fromId = params.get("from") ?? ""
   const kinds = useChannelKinds()
+  const fromQuery = useChannelEndpoint(fromId)
+  const listQuery = useChannelEndpoints(fromId ? (scopedOperation?.id ?? "") : "")
+  const from = fromQuery.data?.channelEndpoint ?? null
+  const kindName = params.get("kind") ?? from?.moduleName ?? ""
 
   usePageMetadata({ title: "New endpoint", icon: { kind: "lucide", component: RadioTowerIcon } })
 
   if (!scopedOperation) return <GettingStartedPanel />
-  if (kinds.isLoading) return <EditorSkeleton />
+  if (kinds.isLoading || (fromId && (fromQuery.isLoading || listQuery.isLoading))) return <EditorSkeleton />
+  if (fromId && !from) return <NotFound text="The endpoint to duplicate does not exist." />
   const kind = kindsByName(kinds.data?.channelKinds ?? []).get(kindName)
   if (!kind) return <NotFound text={`No channel kind "${kindName}" declares connection settings.`} />
-  return <EndpointEditor operationId={scopedOperation.id} kind={kind} endpoint={null} />
+  const source = from && {
+    from: from.name,
+    name: duplicateName(from.name, (listQuery.data?.channelEndpoints ?? []).map((e) => e.name)),
+    description: from.description ?? "",
+    values: (from.values ?? {}) as Record<string, unknown>,
+  }
+  return <EndpointEditor operationId={scopedOperation.id} kind={kind} endpoint={null} source={source} />
 }
 
 /** /endpoints/:id — edit an endpoint (read-only below operator). */
@@ -117,10 +134,13 @@ function EndpointEditor({
   operationId,
   kind,
   endpoint,
+  source = null,
 }: {
   operationId: string
   kind: Kind
   endpoint: Endpoint | null
+  /** What a new endpoint starts from when it duplicates another. */
+  source?: { from: string; name: string; description: string; values: Record<string, unknown> } | null
 }) {
   const navigate = useNavigate()
   const hasPermission = useAuthStore((s) => s.hasPermission)
@@ -132,10 +152,10 @@ function EndpointEditor({
   const readOnly = !roleLoading && !canWrite
 
   const fields = kind.fields
-  const [name, setName] = useState(endpoint?.name ?? "")
-  const [description, setDescription] = useState(endpoint?.description ?? "")
+  const [name, setName] = useState(endpoint?.name ?? source?.name ?? "")
+  const [description, setDescription] = useState(endpoint?.description ?? source?.description ?? "")
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
-    endpointDrafts(fields, endpoint ? ((endpoint.values ?? {}) as Record<string, unknown>) : null),
+    endpointDrafts(fields, endpoint ? ((endpoint.values ?? {}) as Record<string, unknown>) : (source?.values ?? null)),
   )
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
@@ -227,6 +247,12 @@ function EndpointEditor({
         <h1 className="text-lg font-semibold">{endpoint ? endpoint.name : "New endpoint"}</h1>
         <span className="text-sm text-muted-foreground">
           <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
+          {source && (
+            <>
+              {" · duplicate of "}
+              <span className="font-mono">{source.from}</span>
+            </>
+          )}
         </span>
         <div className="flex items-center gap-2 sm:ml-auto">
           {readOnly ? (

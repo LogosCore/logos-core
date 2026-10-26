@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { GraphQLRequestError } from "@/lib/graphql-client"
 import {
+  duplicateName,
   endpointDrafts,
   evaluateEndpoint,
   groupByKind,
@@ -119,5 +120,23 @@ describe("problemsFromError", () => {
     ])
     expect(problemsFromError(err)).toEqual({ base_url: "bad", "": "general" })
     expect(problemsFromError(new Error("x"))).toEqual({})
+  })
+})
+
+describe("duplicateName", () => {
+  it("adds -dup, then a number while the name is taken", () => {
+    expect(duplicateName("edge", [])).toBe("edge-dup")
+    expect(duplicateName("edge", ["edge", "edge-dup"])).toBe("edge-dup-2")
+    expect(duplicateName("edge", ["edge-dup", "edge-dup-2", "edge-dup-3"])).toBe("edge-dup-4")
+  })
+
+  it("stays a valid name at the length limit", () => {
+    const long = "e".repeat(63)
+    const dup = duplicateName(long, [])
+    expect(dup).toHaveLength(63)
+    expect(dup.endsWith("-dup")).toBe(true)
+    expect(nameError(dup)).toBeNull()
+    expect(duplicateName(long, [dup])).toMatch(/^e+-dup-2$/)
+    expect(duplicateName(long, [dup])).toHaveLength(63)
   })
 })
