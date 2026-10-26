@@ -66,12 +66,15 @@ func (e *ConflictError) Error() string {
 type Registry interface {
 	LatestConnectionSchema(ctx context.Context, moduleName string) (*models.ModuleConnectionSchema, error)
 	LatestConnectionSchemas(ctx context.Context) (map[string]*models.ModuleConnectionSchema, error)
+	LatestIcons(ctx context.Context, moduleType string) (map[string]string, error)
 }
 
-// Kind is a channel kind and its current connection schema.
+// Kind is a channel kind, its current connection schema, and its icon (empty
+// when none of its instances sent one).
 type Kind struct {
 	ModuleName string
 	Schema     protocol.ConnectionSchema
+	Icon       string
 }
 
 // Service validates and stores channel endpoints.
@@ -132,9 +135,13 @@ func (s *Service) Kinds(ctx context.Context) ([]Kind, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load connection schemas: %w", err)
 	}
+	icons, err := s.registry.LatestIcons(ctx, protocol.ServiceChannel)
+	if err != nil {
+		return nil, fmt.Errorf("load channel icons: %w", err)
+	}
 	out := make([]Kind, 0, len(schemas))
 	for name, c := range schemas {
-		out = append(out, Kind{ModuleName: name, Schema: c.ConnectionSchema})
+		out = append(out, Kind{ModuleName: name, Schema: c.ConnectionSchema, Icon: icons[name]})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModuleName < out[j].ModuleName })
 	return out, nil

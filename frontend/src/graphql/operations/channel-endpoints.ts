@@ -29,6 +29,7 @@ export const ChannelKindsQuery = graphql(`
   query ChannelKinds {
     channelKinds {
       moduleName
+      icon
       schema {
         version
         fields {

@@ -213,6 +213,9 @@ func (f *fakeModuleRepo) LatestBuildSchema(context.Context, string) (*models.Mod
 	return nil, nil
 }
 
+func (f *fakeModuleRepo) LatestIcons(context.Context, string) (map[string]string, error) {
+	return nil, nil
+}
 func (f *fakeModuleRepo) LatestBuildSchemas(context.Context) (map[string]*models.ModuleBuildSchema, error) {
 	return nil, nil
 }

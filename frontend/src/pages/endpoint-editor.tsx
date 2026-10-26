@@ -20,6 +20,7 @@ import {
   useCreateChannelEndpoint,
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
+import { KindName } from "@/components/modules/module-icon"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
 import { FieldControl } from "@/components/modules/management/field-control"
@@ -225,7 +226,7 @@ function EndpointEditor({
         <span className="h-5 w-px bg-border" aria-hidden />
         <h1 className="text-lg font-semibold">{endpoint ? endpoint.name : "New endpoint"}</h1>
         <span className="text-sm text-muted-foreground">
-          <span className="font-mono">{kind.name}</span> · schema v{kind.version}
+          <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
         </span>
         <div className="flex items-center gap-2 sm:ml-auto">
           {readOnly ? (

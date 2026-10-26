@@ -37,7 +37,7 @@ type Documents = {
     "\n  fragment BuildFileFields on BuildFile {\n    id\n    operationId\n    name\n    size\n    sha256\n    mediaType\n    createdAt\n  }\n": typeof types.BuildFileFieldsFragmentDoc,
     "\n  fragment BuildPresetFields on BuildPreset {\n    id\n    operationId\n    name\n    description\n    moduleName\n    target\n    platform\n    values\n    connections {\n      endpointId\n      endpointName\n      values\n    }\n    schemaVersion\n    schemaChanged\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    updatedAt\n  }\n": typeof types.BuildPresetFieldsFragmentDoc,
     "\n  fragment BuildFields on Build {\n    id\n    operationId\n    moduleName\n    target\n    platform\n    schemaVersion\n    minionId\n    state\n    instance\n    factoryVersion\n    steps {\n      step\n      message\n      percent\n      at\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    capabilities\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n": typeof types.BuildFieldsFragmentDoc,
-    "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": typeof types.FactoryKindsDocument,
+    "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": typeof types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": typeof types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": typeof types.DeleteBuildFileDocument,
     "\n  query BuildPresets($operationId: ID!) {\n    buildPresets(operationId: $operationId) {\n      ...BuildPresetFields\n    }\n  }\n": typeof types.BuildPresetsDocument,
@@ -51,7 +51,7 @@ type Documents = {
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.CancelBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.ChannelEndpointFieldsFragmentDoc,
-    "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": typeof types.ChannelKindsDocument,
+    "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": typeof types.ChannelKindsDocument,
     "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.ChannelEndpointsDocument,
     "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.ChannelEndpointDocument,
     "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n": typeof types.ChannelEndpointExportDocument,
@@ -258,7 +258,7 @@ const documents: Documents = {
     "\n  fragment BuildFileFields on BuildFile {\n    id\n    operationId\n    name\n    size\n    sha256\n    mediaType\n    createdAt\n  }\n": types.BuildFileFieldsFragmentDoc,
     "\n  fragment BuildPresetFields on BuildPreset {\n    id\n    operationId\n    name\n    description\n    moduleName\n    target\n    platform\n    values\n    connections {\n      endpointId\n      endpointName\n      values\n    }\n    schemaVersion\n    schemaChanged\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    updatedAt\n  }\n": types.BuildPresetFieldsFragmentDoc,
     "\n  fragment BuildFields on Build {\n    id\n    operationId\n    moduleName\n    target\n    platform\n    schemaVersion\n    minionId\n    state\n    instance\n    factoryVersion\n    steps {\n      step\n      message\n      percent\n      at\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    capabilities\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n": types.BuildFieldsFragmentDoc,
-    "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": types.FactoryKindsDocument,
+    "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": types.DeleteBuildFileDocument,
     "\n  query BuildPresets($operationId: ID!) {\n    buildPresets(operationId: $operationId) {\n      ...BuildPresetFields\n    }\n  }\n": types.BuildPresetsDocument,
@@ -272,7 +272,7 @@ const documents: Documents = {
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.CancelBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": types.ChannelEndpointFieldsFragmentDoc,
-    "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": types.ChannelKindsDocument,
+    "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": types.ChannelKindsDocument,
     "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.ChannelEndpointsDocument,
     "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.ChannelEndpointDocument,
     "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n": types.ChannelEndpointExportDocument,
@@ -548,7 +548,7 @@ export function graphql(source: "\n  fragment BuildFields on Build {\n    id\n  
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n"): typeof import('./graphql').FactoryKindsDocument;
+export function graphql(source: "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n"): typeof import('./graphql').FactoryKindsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -604,7 +604,7 @@ export function graphql(source: "\n  fragment ChannelEndpointFields on ChannelEn
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n"): typeof import('./graphql').ChannelKindsDocument;
+export function graphql(source: "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n"): typeof import('./graphql').ChannelKindsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

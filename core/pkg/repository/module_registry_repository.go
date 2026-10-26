@@ -61,6 +61,10 @@ type IModuleRegistryRepository interface {
 	// LatestBuildSchema returns the build schema of a factory kind, picked
 	// like LatestConnectionSchema. Nil when no instance declared one.
 	LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error)
+	// LatestIcons returns the icon of each kind of a module type, by module
+	// name: the one its most recent registration that sent an icon carried.
+	// Kinds that never sent one are absent.
+	LatestIcons(ctx context.Context, moduleType string) (map[string]string, error)
 	// LatestBuildSchemas is LatestBuildSchema for every factory kind that
 	// declared one, by module name.
 	LatestBuildSchemas(ctx context.Context) (map[string]*models.ModuleBuildSchema, error)
@@ -313,6 +317,31 @@ func latestPerKind(mods []models.Module) map[string]*models.ModuleConnectionSche
 
 func latestConnectionFilter(moduleName string) bson.M {
 	return bson.M{"module_name": moduleName, "connection": bson.M{"$exists": true}}
+}
+
+func (r *moduleRegistryRepository) LatestIcons(ctx context.Context, moduleType string) (map[string]string, error) {
+	// Few rows (instances), so the newest per kind is picked here.
+	var mods []models.Module
+	err := r.coll.Find(ctx, bson.M{"module_type": moduleType, "icon": bson.M{"$exists": true}}).
+		Sort("module_name", "-registered_at").
+		Select(bson.M{"module_name": 1, "icon": 1}).
+		All(&mods)
+	if err != nil {
+		return nil, err
+	}
+	return latestIconPerKind(mods), nil
+}
+
+// latestIconPerKind keeps the first icon of each module name from rows sorted
+// newest first within a name.
+func latestIconPerKind(mods []models.Module) map[string]string {
+	out := map[string]string{}
+	for _, m := range mods {
+		if _, seen := out[m.Name]; !seen && m.Icon != "" {
+			out[m.Name] = m.Icon
+		}
+	}
+	return out
 }
 
 func (r *moduleRegistryRepository) LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error) {

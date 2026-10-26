@@ -28,3 +28,23 @@ export function ModuleIcon({ type, icon, className }: { type: string; icon?: str
   const Icon = DEFAULT_ICONS[defaultIconFor(type)]
   return <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
 }
+
+/** A channel or factory kind's name with its icon, where operators pick or see one. */
+export function KindName({
+  type,
+  name,
+  icon,
+  className,
+}: {
+  type: "channel" | "factory"
+  name: string
+  icon?: string | null
+  className?: string
+}) {
+  return (
+    <span className={cn("inline-flex min-w-0 items-center gap-1.5 align-middle", className)}>
+      <ModuleIcon type={type} icon={icon} />
+      <span className="truncate font-mono">{name}</span>
+    </span>
+  )
+}

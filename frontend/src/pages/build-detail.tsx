@@ -28,12 +28,13 @@ import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { artifactUrl } from "@/lib/build-file-upload"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import type { BuildQuery } from "@/graphql/gql/graphql"
-import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact } from "@/graphql/hooks/builds"
+import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact, useFactoryIcons } from "@/graphql/hooks/builds"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { formatElapsed, prettyJson } from "@/components/modules/management/field-values"
 import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { buildElapsed, platformLabel } from "@/components/builds/build-values"
+import { KindName } from "@/components/modules/module-icon"
 
 type Build = NonNullable<BuildQuery["build"]>
 
@@ -72,6 +73,7 @@ export function BuildDetailPage() {
 
 function BuildDetail({ build: b }: { build: Build }) {
   const navigate = useNavigate()
+  const icons = useFactoryIcons()
   const { canWrite } = useCanBuild(b.operationId)
   const cancel = useCancelBuild()
   const [deleting, setDeleting] = useState(false)
@@ -96,7 +98,7 @@ function BuildDetail({ build: b }: { build: Build }) {
         </Link>
         <span className="h-5 w-px bg-border" aria-hidden />
         <h1 className="text-lg font-semibold">
-          <span className="font-mono">{b.moduleName}</span> · {b.target}
+          <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} /> · {b.target}
         </h1>
         <BuildStateBadge build={b} />
         <div className="flex items-center gap-2 sm:ml-auto">

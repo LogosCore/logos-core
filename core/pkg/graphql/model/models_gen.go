@@ -245,6 +245,7 @@ type ChannelEndpointProblem struct {
 type ChannelKind struct {
 	ModuleName string                  `json:"moduleName"`
 	Schema     *ModuleConnectionSchema `json:"schema"`
+	Icon       string                  `json:"icon"`
 }
 
 type CreateAgentKeyInput struct {
@@ -368,6 +369,7 @@ type FactoryKind struct {
 	ModuleName string       `json:"moduleName"`
 	Schema     *BuildSchema `json:"schema"`
 	Instances  int          `json:"instances"`
+	Icon       string       `json:"icon"`
 }
 
 type HashConnection struct {

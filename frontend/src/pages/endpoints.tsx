@@ -28,6 +28,7 @@ import { useChannelEndpoints, useChannelKinds, useDeleteChannelEndpoint } from "
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { EndpointsTable } from "@/components/endpoints/endpoints-table"
+import { KindName } from "@/components/modules/module-icon"
 import { groupByKind, kindsByName, type Kind } from "@/components/endpoints/endpoint-values"
 
 type Endpoint = ChannelEndpointFieldsFragment
@@ -162,7 +163,7 @@ function NewEndpointButton({ kinds, onPick }: { kinds: Kind[]; onPick: (kind: st
       <DropdownMenuContent align="end">
         {kinds.map((k) => (
           <DropdownMenuItem key={k.name} onClick={() => onPick(k.name)}>
-            <span className="font-mono">{k.name}</span>
+            <KindName type="channel" name={k.name} icon={k.icon} />
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

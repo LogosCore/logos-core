@@ -73,6 +73,9 @@ type FactoryKind {
   # Registered instances declaring the current schema version; a build needs
   # one.
   instances: Int!
+  # The SVG icon the kind's latest registration that sent one carried (see
+  # Module.icon); empty when none did, and the UI shows the default.
+  icon: String!
 }
 
 # A file uploaded for a build's file fields.

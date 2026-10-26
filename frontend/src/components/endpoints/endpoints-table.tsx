@@ -16,6 +16,7 @@ import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtual
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
 import { fetchChannelEndpointExport } from "@/graphql/hooks/channel-endpoints"
 import { errorMessage } from "@/components/modules/management/api-errors"
+import { KindName } from "@/components/modules/module-icon"
 import { exportFileName, settingRows, type Kind } from "./endpoint-values"
 
 type Endpoint = ChannelEndpointFieldsFragment
@@ -83,9 +84,7 @@ export function EndpointsTable({
             {ep.description && <div className="truncate text-xs text-muted-foreground">{ep.description}</div>}
           </div>
           <div className="flex min-w-0 items-center gap-1.5">
-            <Badge variant="secondary" className="font-mono">
-              {ep.moduleName}
-            </Badge>
+            <KindName type="channel" name={ep.moduleName} icon={kinds.get(ep.moduleName)?.icon} />
             <span className="text-xs text-muted-foreground">v{ep.schemaVersion}</span>
           </div>
           <SettingsCell endpoint={ep} kind={kinds.get(ep.moduleName) ?? null} />

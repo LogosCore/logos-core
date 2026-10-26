@@ -290,6 +290,7 @@ export type ChannelEndpointProblem = {
 };
 
 export type ChannelKind = {
+  icon: Scalars['String']['output'];
   moduleName: Scalars['String']['output'];
   schema: ModuleConnectionSchema;
 };
@@ -482,6 +483,7 @@ export type EventAction =
   | 'UPDATED';
 
 export type FactoryKind = {
+  icon: Scalars['String']['output'];
   instances: Scalars['Int']['output'];
   moduleName: Scalars['String']['output'];
   schema: BuildSchema;
@@ -2720,7 +2722,7 @@ export type BuildFieldsFragment = { id: string, operationId: string, moduleName:
 export type FactoryKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, instances: number, schema: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } }> };
+export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, icon: string, instances: number, schema: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } }> };
 
 export type BuildFilesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -2817,7 +2819,7 @@ export type ChannelEndpointFieldsFragment = { id: string, operationId: string, n
 export type ChannelKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type ChannelKindsQuery = { channelKinds: Array<{ moduleName: string, schema: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } }> };
+export type ChannelKindsQuery = { channelKinds: Array<{ moduleName: string, icon: string, schema: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } }> };
 
 export type ChannelEndpointsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -5279,6 +5281,7 @@ export const FactoryKindsDocument = new TypedDocumentString(`
     query FactoryKinds {
   factoryKinds {
     moduleName
+    icon
     instances
     schema {
       ...BuildSchemaFields
@@ -5743,6 +5746,7 @@ export const ChannelKindsDocument = new TypedDocumentString(`
     query ChannelKinds {
   channelKinds {
     moduleName
+    icon
     schema {
       version
       fields {

@@ -69,6 +69,7 @@ describe("evaluateEndpoint", () => {
 describe("settingRows", () => {
   const kind: Kind = {
     name: "http",
+    icon: "",
     version: 2,
     fields: [
       { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },

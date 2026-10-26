@@ -11,11 +11,13 @@ import (
 
 // Kind is a factory kind and its current build schema: the highest version
 // any of its instances declared. Instances counts the registered instances
-// declaring that version; a build needs one.
+// declaring that version; a build needs one. Icon is empty when none of its
+// instances sent one.
 type Kind struct {
 	ModuleName string
 	Schema     protocol.BuildSchema
 	Instances  int
+	Icon       string
 }
 
 // Kinds returns every factory kind that declared a build schema, by name.
@@ -28,9 +30,13 @@ func (s *Service) Kinds(ctx context.Context) ([]Kind, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list registered modules: %w", err)
 	}
+	icons, err := s.registry.LatestIcons(ctx, protocol.ServiceFactory)
+	if err != nil {
+		return nil, fmt.Errorf("load factory icons: %w", err)
+	}
 	out := make([]Kind, 0, len(schemas))
 	for name, sc := range schemas {
-		out = append(out, Kind{ModuleName: name, Schema: sc.BuildSchema, Instances: len(declaring(active, name, sc.Version))})
+		out = append(out, Kind{ModuleName: name, Schema: sc.BuildSchema, Instances: len(declaring(active, name, sc.Version)), Icon: icons[name]})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModuleName < out[j].ModuleName })
 	return out, nil

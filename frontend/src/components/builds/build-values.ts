@@ -83,6 +83,8 @@ export interface Target {
 
 export interface FactoryKind {
   name: string
+  /** The kind's own SVG icon; "" for the default. */
+  icon: string
   version: number
   /** Registered instances declaring this version: a build needs one. */
   instances: number
@@ -99,12 +101,13 @@ const sorted = (fields: readonly FieldDef[]) => fields.map(asText).sort(compareF
 
 /** Factory kinds by name from the factoryKinds query. */
 export function factoryKindsByName(
-  kinds: readonly { moduleName: string; instances: number; schema: BuildSchemaFieldsFragment }[],
+  kinds: readonly { moduleName: string; icon?: string; instances: number; schema: BuildSchemaFieldsFragment }[],
 ): Map<string, FactoryKind> {
   const out = new Map<string, FactoryKind>()
   for (const k of kinds) {
     out.set(k.moduleName, {
       name: k.moduleName,
+      icon: k.icon ?? "",
       version: k.schema.version,
       instances: k.instances,
       crypto: k.schema.crypto,

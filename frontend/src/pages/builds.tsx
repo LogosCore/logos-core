@@ -39,11 +39,13 @@ import {
   useBuildPresets,
   useBuilds,
   useDeleteBuildPreset,
+  useFactoryIcons,
   useFactoryKinds,
 } from "@/graphql/hooks/builds"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { BUILDS_PATH, PRESETS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { KindName } from "@/components/modules/module-icon"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { formatElapsed } from "@/components/modules/management/field-values"
 import {
@@ -177,7 +179,7 @@ function KindMenu({
       <DropdownMenuContent align="end">
         {kinds.map((k) => (
           <DropdownMenuItem key={k.name} onClick={() => onPick(k.name)} disabled={!usable(k)}>
-            <span className="font-mono">{k.name}</span>
+            <KindName type="factory" name={k.name} icon={k.icon} />
             {!usable(k) && <span className="ml-2 text-xs text-muted-foreground">not running</span>}
           </DropdownMenuItem>
         ))}
@@ -191,6 +193,7 @@ function KindMenu({
 function BuildsTab({ operationId, kindsLoading, noKinds }: { operationId: string; kindsLoading: boolean; noKinds: boolean }) {
   const navigate = useNavigate()
   const { data, isLoading, error } = useBuilds(operationId)
+  const icons = useFactoryIcons()
   const builds = data?.builds ?? []
 
   if (isLoading || kindsLoading) return <Skeleton className="h-48" />
@@ -228,7 +231,7 @@ function BuildsTab({ operationId, kindsLoading, noKinds }: { operationId: string
                 <BuildStateBadge build={b} />
               </TableCell>
               <TableCell>
-                <span className="font-mono">{b.moduleName}</span>
+                <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
                 <span className="text-muted-foreground"> · {b.target}</span>
                 {b.error && (
                   <span className="block max-w-md truncate text-xs text-destructive" title={b.error.message}>
@@ -261,6 +264,7 @@ function PresetsTab({ operationId, canWrite }: { operationId: string; canWrite: 
   const navigate = useNavigate()
   const { data, isLoading, error } = useBuildPresets(operationId)
   const [deleting, setDeleting] = useState<Preset | null>(null)
+  const icons = useFactoryIcons()
   const presets = data?.buildPresets ?? []
 
   if (isLoading) return <Skeleton className="h-40" />
@@ -282,6 +286,7 @@ function PresetsTab({ operationId, canWrite }: { operationId: string; canWrite: 
             <PresetCard
               key={p.id}
               preset={p}
+              icon={icons.get(p.moduleName)}
               canWrite={canWrite}
               onBuild={() => navigate(`/builds/new?kind=${encodeURIComponent(p.moduleName)}&preset=${p.id}`)}
               onEdit={() => navigate(`${PRESETS_PATH}/${p.id}`)}
@@ -297,12 +302,14 @@ function PresetsTab({ operationId, canWrite }: { operationId: string; canWrite: 
 
 function PresetCard({
   preset: p,
+  icon,
   canWrite,
   onBuild,
   onEdit,
   onDelete,
 }: {
   preset: Preset
+  icon?: string
   canWrite: boolean
   onBuild: () => void
   onEdit: () => void
@@ -357,7 +364,7 @@ function PresetCard({
       <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
         <dt className="text-muted-foreground">Factory</dt>
         <dd>
-          <span className="font-mono">{p.moduleName}</span> · {p.target}
+          <KindName type="factory" name={p.moduleName} icon={icon} /> · {p.target}
         </dd>
         <dt className="text-muted-foreground">Platform</dt>
         <dd>{p.platform ? platformLabel(p.platform) : <span className="text-muted-foreground">chosen when building</span>}</dd>

@@ -414,6 +414,7 @@ type fakeRegistry struct {
 	mu      sync.Mutex
 	schemas map[string]*models.ModuleBuildSchema
 	active  []models.Module
+	icons   map[string]string // by module name, factories only
 }
 
 func (f *fakeRegistry) LatestBuildSchema(_ context.Context, name string) (*models.ModuleBuildSchema, error) {
@@ -426,6 +427,15 @@ func (f *fakeRegistry) LatestBuildSchemas(context.Context) (map[string]*models.M
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.schemas, nil
+}
+
+func (f *fakeRegistry) LatestIcons(_ context.Context, moduleType string) (map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if moduleType != protocol.ServiceFactory {
+		return nil, nil
+	}
+	return f.icons, nil
 }
 
 func (f *fakeRegistry) ListActive(context.Context) ([]models.Module, error) {

@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import {
@@ -25,6 +26,12 @@ export function useChannelKinds() {
     queryKey: channelEndpointKeys.kinds(),
     queryFn: () => graphqlClient(ChannelKindsDocument),
   })
+}
+
+/** Channel kinds' icons by module name ("" when a kind sent none). */
+export function useChannelIcons(): Map<string, string> {
+  const { data } = useChannelKinds()
+  return useMemo(() => new Map((data?.channelKinds ?? []).map((k) => [k.moduleName, k.icon])), [data])
 }
 
 /** An operation's endpoints, by kind and name. */

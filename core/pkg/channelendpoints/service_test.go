@@ -24,6 +24,17 @@ func (f fakeRegistry) LatestConnectionSchemas(context.Context) (map[string]*mode
 	return out, nil
 }
 
+// LatestIcons gives every channel kind an icon naming it.
+func (f fakeRegistry) LatestIcons(_ context.Context, moduleType string) (map[string]string, error) {
+	out := map[string]string{}
+	if moduleType == protocol.ServiceChannel {
+		for k := range f {
+			out[k] = "<svg " + k + "/>"
+		}
+	}
+	return out, nil
+}
+
 func (f fakeRegistry) LatestConnectionSchema(_ context.Context, moduleName string) (*models.ModuleConnectionSchema, error) {
 	s, ok := f[moduleName]
 	if !ok {
@@ -183,7 +194,7 @@ func TestNamesAreUniquePerOperation(t *testing.T) {
 		t.Errorf("operation B lists %d endpoints", len(list))
 	}
 	kinds, err := svc.Kinds(ctx)
-	if err != nil || len(kinds) != 1 || kinds[0].ModuleName != "http" {
+	if err != nil || len(kinds) != 1 || kinds[0].ModuleName != "http" || kinds[0].Icon != "<svg http/>" {
 		t.Errorf("kinds = %+v (%v)", kinds, err)
 	}
 }

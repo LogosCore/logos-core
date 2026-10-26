@@ -733,3 +733,17 @@ func TestDeleteOperationData(t *testing.T) {
 		t.Fatalf("the running build was not cancelled on its factory: %+v", last)
 	}
 }
+
+func TestKinds(t *testing.T) {
+	r := newRig(t)
+	r.reg.mu.Lock()
+	r.reg.icons = map[string]string{"bob": "<svg bob/>"}
+	r.reg.mu.Unlock()
+	kinds, err := r.svc.Kinds(context.Background())
+	if err != nil || len(kinds) != 1 {
+		t.Fatalf("kinds = %+v (%v)", kinds, err)
+	}
+	if k := kinds[0]; k.ModuleName != "bob" || k.Instances != 1 || k.Icon != "<svg bob/>" || k.Schema.Version != 1 {
+		t.Errorf("kind = %+v", k)
+	}
+}

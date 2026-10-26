@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import {
@@ -45,6 +46,12 @@ export function useFactoryKinds() {
     queryKey: buildKeys.kinds(),
     queryFn: () => graphqlClient(FactoryKindsDocument),
   })
+}
+
+/** Factory kinds' icons by module name ("" when a kind sent none). */
+export function useFactoryIcons(): Map<string, string> {
+  const { data } = useFactoryKinds()
+  return useMemo(() => new Map((data?.factoryKinds ?? []).map((k) => [k.moduleName, k.icon])), [data])
 }
 
 /** An operation's build files, newest first. */

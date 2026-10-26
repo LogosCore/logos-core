@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import type { BuildPresetFieldsFragment } from "@/graphql/gql/graphql"
-import { useChannelEndpoints, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
+import { useChannelEndpoints, useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import {
   useBuild,
   useBuildFiles,
@@ -51,6 +51,7 @@ import {
   type FormSource,
 } from "@/components/builds/build-values"
 import { PRESETS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { KindName } from "@/components/modules/module-icon"
 
 type Preset = BuildPresetFieldsFragment
 
@@ -238,6 +239,7 @@ function Editor({
   const backTo = mode === "build" ? "/builds" : PRESETS_PATH
   const endpointKinds = useMemo(() => new Map(endpoints.map((e) => [e.id, e.moduleName])), [endpoints])
   const endpointById = useMemo(() => new Map(endpoints.map((e) => [e.id, e])), [endpoints])
+  const channelIcons = useChannelIcons()
 
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, endpointKinds))
   const [name, setName] = useState(preset?.name ?? "")
@@ -368,7 +370,7 @@ function Editor({
             {mode === "build" ? "New build" : preset ? preset.name : "New preset"}
           </h1>
           <span className="text-sm text-muted-foreground">
-            <span className="font-mono">{kind.name}</span> · schema v{kind.version}
+            <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
             {mode === "build" && ` · ${kind.instances} running`}
           </span>
           <div className="flex items-center gap-2 sm:ml-auto">
@@ -504,7 +506,9 @@ function Editor({
                     <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
                       <span className="text-xs text-muted-foreground">{i + 1}.</span>
                       <span className="font-mono text-sm font-medium">{ep?.name ?? "(deleted)"}</span>
-                      {ep && <span className="text-xs text-muted-foreground">{ep.moduleName}</span>}
+                      {ep && (
+                        <KindName type="channel" name={ep.moduleName} icon={channelIcons.get(ep.moduleName)} className="text-xs text-muted-foreground" />
+                      )}
                       <div className="ml-auto flex items-center gap-1">
                         <Button type="button" variant="ghost" size="icon-sm" title="Earlier" aria-label="Earlier" disabled={disabled || i === 0}
                           onClick={() => setForm((f) => ({ ...f, connections: move(f.connections, i, -1) }))}>

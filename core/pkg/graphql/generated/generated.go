@@ -283,6 +283,7 @@ type ComplexityRoot struct {
 	}
 
 	ChannelKind struct {
+		Icon       func(childComplexity int) int
 		ModuleName func(childComplexity int) int
 		Schema     func(childComplexity int) int
 	}
@@ -347,6 +348,7 @@ type ComplexityRoot struct {
 	}
 
 	FactoryKind struct {
+		Icon       func(childComplexity int) int
 		Instances  func(childComplexity int) int
 		ModuleName func(childComplexity int) int
 		Schema     func(childComplexity int) int
@@ -2553,6 +2555,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ChannelEndpointProblem.Message(childComplexity), true
 
+	case "ChannelKind.icon":
+		if e.ComplexityRoot.ChannelKind.Icon == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelKind.Icon(childComplexity), true
 	case "ChannelKind.moduleName":
 		if e.ComplexityRoot.ChannelKind.ModuleName == nil {
 			break
@@ -2801,6 +2809,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CredentialProperty.Value(childComplexity), true
 
+	case "FactoryKind.icon":
+		if e.ComplexityRoot.FactoryKind.Icon == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FactoryKind.Icon(childComplexity), true
 	case "FactoryKind.instances":
 		if e.ComplexityRoot.FactoryKind.Instances == nil {
 			break
@@ -8009,6 +8023,9 @@ type FactoryKind {
   # Registered instances declaring the current schema version; a build needs
   # one.
   instances: Int!
+  # The SVG icon the kind's latest registration that sent one carried (see
+  # Module.icon); empty when none did, and the UI shows the default.
+  icon: String!
 }
 
 # A file uploaded for a build's file fields.
@@ -8278,6 +8295,9 @@ type ChannelKind {
   # The kind, e.g. "http".
   moduleName: String!
   schema: ModuleConnectionSchema!
+  # The SVG icon the kind's latest registration that sent one carried (see
+  # Module.icon); empty when none did, and the UI shows the default.
+  icon: String!
 }
 
 type ChannelEndpointProblem {
@@ -19158,6 +19178,35 @@ func (ec *executionContext) fieldContext_ChannelKind_schema(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _ChannelKind_icon(ctx context.Context, field graphql.CollectedField, obj *model.ChannelKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelKind_icon,
+		func(ctx context.Context) (any, error) {
+			return obj.Icon, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelKind_icon(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Credential_id(ctx context.Context, field graphql.CollectedField, obj *models.Credential) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20698,6 +20747,35 @@ func (ec *executionContext) fieldContext_FactoryKind_instances(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FactoryKind_icon(ctx context.Context, field graphql.CollectedField, obj *model.FactoryKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FactoryKind_icon,
+		func(ctx context.Context) (any, error) {
+			return obj.Icon, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FactoryKind_icon(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FactoryKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -35771,6 +35849,8 @@ func (ec *executionContext) fieldContext_Query_factoryKinds(_ context.Context, f
 				return ec.fieldContext_FactoryKind_schema(ctx, field)
 			case "instances":
 				return ec.fieldContext_FactoryKind_instances(ctx, field)
+			case "icon":
+				return ec.fieldContext_FactoryKind_icon(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FactoryKind", field.Name)
 		},
@@ -36392,6 +36472,8 @@ func (ec *executionContext) fieldContext_Query_channelKinds(_ context.Context, f
 				return ec.fieldContext_ChannelKind_moduleName(ctx, field)
 			case "schema":
 				return ec.fieldContext_ChannelKind_schema(ctx, field)
+			case "icon":
+				return ec.fieldContext_ChannelKind_icon(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ChannelKind", field.Name)
 		},
@@ -55974,6 +56056,11 @@ func (ec *executionContext) _ChannelKind(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "icon":
+			out.Values[i] = ec._ChannelKind_icon(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -56935,6 +57022,11 @@ func (ec *executionContext) _FactoryKind(ctx context.Context, sel ast.SelectionS
 			}
 		case "instances":
 			out.Values[i] = ec._FactoryKind_instances(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "icon":
+			out.Values[i] = ec._FactoryKind_icon(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
