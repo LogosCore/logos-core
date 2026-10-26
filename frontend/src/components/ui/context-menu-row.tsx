@@ -1,0 +1,84 @@
+import { useState, type ReactNode } from "react"
+import { EllipsisIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { dataTableRowClass } from "@/components/ui/virtualized-data-table"
+
+/**
+ * A data-table row with a menu. A click (or Enter) calls onOpen; right-clicking
+ * anywhere on the row opens the menu at the pointer, and the ⋯ button, given
+ * to children to place (usually in the last column), opens the same menu under
+ * itself. menu is the ContextMenuItems.
+ */
+export function ContextMenuRow({
+  gridCols,
+  onOpen,
+  menu,
+  menuLabel,
+  children,
+}: {
+  gridCols: string
+  onOpen: () => void
+  menu: ReactNode
+  /** The ⋯ button's accessible name, e.g. "Module actions". */
+  menuLabel: string
+  children: (menuButton: ReactNode) => ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  // The ⋯ button while the menu is open from it; null when it opened at the
+  // pointer.
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+
+  const menuButton = (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={menuLabel}
+      aria-haspopup="menu"
+      aria-expanded={open && anchor !== null}
+      // Inside the clickable row: open the menu, not the row.
+      onClick={(e) => {
+        e.stopPropagation()
+        setAnchor(e.currentTarget)
+        setOpen(true)
+      }}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <EllipsisIcon className="size-4" />
+    </Button>
+  )
+
+  return (
+    <ContextMenu
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setAnchor(null)
+      }}
+    >
+      <ContextMenuTrigger
+        render={
+          <div
+            className={`${dataTableRowClass(gridCols)} cursor-pointer`}
+            role="link"
+            tabIndex={0}
+            onClick={onOpen}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onOpen()
+            }}
+          />
+        }
+      >
+        {children(menuButton)}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        anchor={anchor ?? undefined}
+        side={anchor ? "bottom" : undefined}
+        align={anchor ? "end" : undefined}
+        sideOffset={anchor ? 4 : undefined}
+      >
+        {menu}
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+}

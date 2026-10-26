@@ -1,14 +1,9 @@
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
-import { DownloadIcon, EllipsisIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtualized-data-table"
+import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react"
+import { ContextMenuItem } from "@/components/ui/context-menu"
+import { ContextMenuRow } from "@/components/ui/context-menu-row"
+import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { BuildFieldsFragment } from "@/graphql/gql/graphql"
 import { isUnfinished } from "@/graphql/hooks/builds"
 import { artifactUrl } from "@/lib/build-file-upload"
@@ -21,9 +16,9 @@ import { buildElapsed, platformLabel } from "./build-values"
 const GRID_COLS = "grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,0.5fr)_48px]"
 
 /**
- * An operation's builds, newest first. A row opens the build; its menu also
- * downloads the artifact and starts a new build from the same settings, as
- * the build's page does.
+ * An operation's builds, newest first. A row opens the build; its menu
+ * (right-click, or ⋯) also downloads the artifact and starts a new build from
+ * the same settings, as the build's page does.
  */
 export function BuildsTable({
   builds,
@@ -71,66 +66,60 @@ export function BuildsTable({
       }
       emptyState={emptyState}
       renderRow={(b) => (
-        <div
-          className={`${dataTableRowClass(GRID_COLS)} cursor-pointer`}
-          role="link"
-          tabIndex={0}
-          onClick={() => open(b)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") open(b)
-          }}
+        <ContextMenuRow
+          gridCols={GRID_COLS}
+          onOpen={() => open(b)}
+          menuLabel="Build actions"
+          menu={
+            <>
+              <ContextMenuItem onClick={() => open(b)}>
+                <ExternalLinkIcon className="size-4" />
+                Open
+              </ContextMenuItem>
+              {canWrite && b.artifact && !b.artifact.deleted && (
+                <ContextMenuItem onClick={() => download(b)}>
+                  <DownloadIcon className="size-4" />
+                  Download artifact
+                </ContextMenuItem>
+              )}
+              {canWrite && !isUnfinished(b.state) && (
+                <ContextMenuItem onClick={() => again(b)}>
+                  <RotateCcwIcon className="size-4" />
+                  Build again
+                </ContextMenuItem>
+              )}
+            </>
+          }
         >
-          <div className="min-w-0">
-            <BuildStateBadge build={b} />
-          </div>
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center">
-              <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
-              <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
-            </div>
-            {b.error && (
-              <div className="truncate text-xs text-destructive" title={b.error.message}>
-                {b.error.code}: {b.error.message}
+          {(menuButton) => (
+            <>
+              <div className="min-w-0">
+                <BuildStateBadge build={b} />
               </div>
-            )}
-          </div>
-          <div className="truncate text-sm">{platformLabel(b.platform)}</div>
-          <div className="truncate font-mono text-xs" title={b.minionId}>
-            {b.minionId.slice(0, 8)}
-          </div>
-          <div className="truncate text-sm text-muted-foreground">
-            {relativeTime(b.createdAt)}
-            {b.createdBy.name && <span> by {b.createdBy.name}</span>}
-          </div>
-          <div className="text-right text-sm text-muted-foreground">{formatElapsed(buildElapsed(b))}</div>
-          {/* The menu sits inside the clickable row: keep its clicks and keys
-              from also opening the build. */}
-          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Build actions" />}>
-                <EllipsisIcon className="size-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => open(b)}>
-                  <ExternalLinkIcon className="size-4" />
-                  Open
-                </DropdownMenuItem>
-                {canWrite && b.artifact && !b.artifact.deleted && (
-                  <DropdownMenuItem onClick={() => download(b)}>
-                    <DownloadIcon className="size-4" />
-                    Download artifact
-                  </DropdownMenuItem>
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center">
+                  <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
+                  <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
+                </div>
+                {b.error && (
+                  <div className="truncate text-xs text-destructive" title={b.error.message}>
+                    {b.error.code}: {b.error.message}
+                  </div>
                 )}
-                {canWrite && !isUnfinished(b.state) && (
-                  <DropdownMenuItem onClick={() => again(b)}>
-                    <RotateCcwIcon className="size-4" />
-                    Build again
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+              </div>
+              <div className="truncate text-sm">{platformLabel(b.platform)}</div>
+              <div className="truncate font-mono text-xs" title={b.minionId}>
+                {b.minionId.slice(0, 8)}
+              </div>
+              <div className="truncate text-sm text-muted-foreground">
+                {relativeTime(b.createdAt)}
+                {b.createdBy.name && <span> by {b.createdBy.name}</span>}
+              </div>
+              <div className="text-right text-sm text-muted-foreground">{formatElapsed(buildElapsed(b))}</div>
+              <div>{menuButton}</div>
+            </>
+          )}
+        </ContextMenuRow>
       )}
     />
   )

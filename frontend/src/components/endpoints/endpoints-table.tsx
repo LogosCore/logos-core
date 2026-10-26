@@ -1,18 +1,12 @@
-import { useState, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
-import { CopyIcon, DownloadIcon, EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { CopyIcon, DownloadIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
+import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
-import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtualized-data-table"
+import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
 import { fetchChannelEndpointExport } from "@/graphql/hooks/channel-endpoints"
 import { errorMessage } from "@/components/modules/management/api-errors"
@@ -27,8 +21,9 @@ const AMBER = "border-amber-600/40 text-amber-700 dark:text-amber-400"
 
 /**
  * The scoped operation's channel endpoints, one row each. A row opens the
- * endpoint (read-only without write access); its menu copies or downloads the
- * connection settings as JSON with every default filled in, edits or deletes.
+ * endpoint (read-only without write access); its menu (right-click, or ⋯)
+ * copies or downloads the connection settings as JSON with every default
+ * filled in, edits or deletes.
  */
 export function EndpointsTable({
   endpoints,
@@ -70,40 +65,36 @@ export function EndpointsTable({
       }
       emptyState={emptyState}
       renderRow={(ep) => (
-        <div
-          className={`${dataTableRowClass(GRID_COLS)} cursor-pointer`}
-          role="link"
-          tabIndex={0}
-          onClick={() => open(ep)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") open(ep)
-          }}
+        <ContextMenuRow
+          gridCols={GRID_COLS}
+          onOpen={() => open(ep)}
+          menuLabel="Endpoint actions"
+          menu={endpointMenu(ep, canWrite, () => open(ep), () => onDelete(ep))}
         >
-          <div className="min-w-0">
-            <div className="truncate font-mono font-medium">{ep.name}</div>
-            {ep.description && <div className="truncate text-xs text-muted-foreground">{ep.description}</div>}
-          </div>
-          <div className="flex min-w-0 items-center gap-1.5">
-            <KindName type="channel" name={ep.moduleName} icon={kinds.get(ep.moduleName)?.icon} />
-            <span className="text-xs text-muted-foreground">v{ep.schemaVersion}</span>
-          </div>
-          <SettingsCell endpoint={ep} kind={kinds.get(ep.moduleName) ?? null} />
-          <StatusCell endpoint={ep} />
-          <div className="truncate text-sm text-muted-foreground" title={ep.updatedBy?.name ? `by ${ep.updatedBy.name}` : undefined}>
-            <FormattedDateTimeText date={ep.updatedAt} />
-          </div>
-          {/* The menu sits inside the clickable row: keep its clicks and keys
-              from also opening the endpoint. */}
-          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-            <RowMenu endpoint={ep} canWrite={canWrite} onEdit={() => open(ep)} onDelete={() => onDelete(ep)} />
-          </div>
-        </div>
+          {(menuButton) => (
+            <>
+              <div className="min-w-0">
+                <div className="truncate font-mono font-medium">{ep.name}</div>
+                {ep.description && <div className="truncate text-xs text-muted-foreground">{ep.description}</div>}
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <KindName type="channel" name={ep.moduleName} icon={kinds.get(ep.moduleName)?.icon} />
+                <span className="text-xs text-muted-foreground">v{ep.schemaVersion}</span>
+              </div>
+              <SettingsCell endpoint={ep} kind={kinds.get(ep.moduleName) ?? null} />
+              <StatusCell endpoint={ep} />
+              <div className="truncate text-sm text-muted-foreground" title={ep.updatedBy?.name ? `by ${ep.updatedBy.name}` : undefined}>
+                <FormattedDateTimeText date={ep.updatedAt} />
+              </div>
+              <div>{menuButton}</div>
+            </>
+          )}
+        </ContextMenuRow>
       )}
     />
   )
 }
 
-/** The set values on one line; all of them, one per line, on hover. */
 function SettingsCell({ endpoint, kind }: { endpoint: Endpoint; kind: Kind | null }) {
   const rows = settingRows(kind, (endpoint.values ?? {}) as Record<string, unknown>)
   if (rows.length === 0) {
@@ -151,77 +142,59 @@ function StatusCell({ endpoint: ep }: { endpoint: Endpoint }) {
   )
 }
 
-function RowMenu({
-  endpoint: ep,
-  canWrite,
-  onEdit,
-  onDelete,
-}: {
-  endpoint: Endpoint
-  canWrite: boolean
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const [busy, setBusy] = useState(false)
+/** An endpoint's menu: export it, and for writers edit or delete it. */
+function endpointMenu(ep: Endpoint, canWrite: boolean, onEdit: () => void, onDelete: () => void): ReactNode {
   // An endpoint that doesn't fit its channel's settings can't be exported.
   const exportable = ep.problems.length === 0
-
-  async function withJSON(handle: (json: string) => Promise<void> | void) {
-    setBusy(true)
-    try {
-      const doc = await fetchChannelEndpointExport(ep.id)
-      await handle(JSON.stringify(doc, null, 2) + "\n")
-    } catch (err) {
-      toast.error("Could not get the endpoint", { description: errorMessage(err, "Request failed") })
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const download = () =>
-    withJSON((json) => {
-      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }))
-      const a = document.createElement("a")
-      a.href = url
-      a.download = exportFileName(ep.name)
-      a.click()
-      URL.revokeObjectURL(url)
-    })
-
-  const copy = () =>
-    withJSON(async (json) => {
-      await navigator.clipboard.writeText(json)
-      toast.success("Copied", { description: "Connection settings with every default filled in." })
-    })
-
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Endpoint actions" />}>
-        <EllipsisIcon className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={copy} disabled={busy || !exportable}>
-          <CopyIcon className="size-4" />
-          Copy as JSON
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={download} disabled={busy || !exportable}>
-          <DownloadIcon className="size-4" />
-          Download as JSON
-        </DropdownMenuItem>
-        {canWrite && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onEdit}>
-              <PencilIcon className="size-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={onDelete}>
-              <Trash2Icon className="size-4" />
-              Delete
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <ContextMenuItem onClick={() => void exportEndpoint(ep, "copy")} disabled={!exportable}>
+        <CopyIcon className="size-4" />
+        Copy as JSON
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => void exportEndpoint(ep, "download")} disabled={!exportable}>
+        <DownloadIcon className="size-4" />
+        Download as JSON
+      </ContextMenuItem>
+      {canWrite && (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={onEdit}>
+            <PencilIcon className="size-4" />
+            Edit
+          </ContextMenuItem>
+          <ContextMenuItem variant="destructive" onClick={onDelete}>
+            <Trash2Icon className="size-4" />
+            Delete
+          </ContextMenuItem>
+        </>
+      )}
+    </>
   )
+}
+
+/** Copies or downloads an endpoint's connection settings, every default filled in. */
+async function exportEndpoint(ep: Endpoint, mode: "copy" | "download") {
+  let json: string
+  try {
+    json = JSON.stringify(await fetchChannelEndpointExport(ep.id), null, 2) + "\n"
+  } catch (err) {
+    toast.error("Could not get the endpoint", { description: errorMessage(err, "Request failed") })
+    return
+  }
+  if (mode === "download") {
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = exportFileName(ep.name)
+    a.click()
+    URL.revokeObjectURL(url)
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(json)
+    toast.success("Copied", { description: "Connection settings with every default filled in." })
+  } catch {
+    toast.error("Could not copy to the clipboard")
+  }
 }

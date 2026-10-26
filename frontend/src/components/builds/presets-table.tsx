@@ -1,17 +1,11 @@
 import type { ReactNode } from "react"
 import { useNavigate } from "react-router"
-import { EllipsisIcon, ExternalLinkIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react"
+import { ExternalLinkIcon, PencilIcon, PlayIcon, Trash2Icon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
+import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
-import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtualized-data-table"
+import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { BuildPresetFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
 import { PRESETS_PATH } from "./build-access"
@@ -25,7 +19,8 @@ const AMBER = "border-amber-600/40 text-amber-700 dark:text-amber-400"
 
 /**
  * An operation's build presets. A row opens the preset (read-only without
- * write access); its menu starts a build from it, edits or deletes it.
+ * write access); its menu (right-click, or ⋯) starts a build from it, edits or
+ * deletes it.
  */
 export function PresetsTable({
   presets,
@@ -71,71 +66,63 @@ export function PresetsTable({
       renderRow={(p) => {
         const values = Object.keys((p.values ?? {}) as Record<string, unknown>)
         return (
-          <div
-            className={`${dataTableRowClass(GRID_COLS)} cursor-pointer`}
-            role="link"
-            tabIndex={0}
-            onClick={() => open(p)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") open(p)
-            }}
-          >
-            <div className="min-w-0" title={values.length > 0 ? `Values: ${values.join(", ")}` : undefined}>
-              <div className="truncate font-mono font-medium">{p.name}</div>
-              {p.description && <div className="truncate text-xs text-muted-foreground">{p.description}</div>}
-            </div>
-            <div className="flex min-w-0 items-center">
-              <KindName type="factory" name={p.moduleName} icon={icons.get(p.moduleName)} />
-              <span className="truncate text-muted-foreground">&nbsp;· {p.target}</span>
-            </div>
-            <div className="truncate text-sm">
-              {p.platform ? platformLabel(p.platform) : <span className="text-muted-foreground">When building</span>}
-            </div>
-            <div className="truncate font-mono text-xs" title={p.connections.map((c) => c.endpointName ?? "(deleted)").join(" → ")}>
-              {p.connections.length === 0 ? (
-                <span className="font-sans text-sm text-muted-foreground">When building</span>
+          <ContextMenuRow
+            gridCols={GRID_COLS}
+            onOpen={() => open(p)}
+            menuLabel="Preset actions"
+            menu={
+              canWrite ? (
+                <>
+                  <ContextMenuItem onClick={() => build(p)}>
+                    <PlayIcon className="size-4" />
+                    Build from preset
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => open(p)}>
+                    <PencilIcon className="size-4" />
+                    Edit
+                  </ContextMenuItem>
+                  <ContextMenuItem variant="destructive" onClick={() => onDelete(p)}>
+                    <Trash2Icon className="size-4" />
+                    Delete
+                  </ContextMenuItem>
+                </>
               ) : (
-                p.connections.map((c) => c.endpointName ?? "(deleted)").join(" → ")
-              )}
-            </div>
-            <StatusCell preset={p} />
-            <div className="truncate text-sm text-muted-foreground" title={p.updatedBy?.name ? `by ${p.updatedBy.name}` : undefined}>
-              <FormattedDateTimeText date={p.updatedAt} />
-            </div>
-            {/* The menu sits inside the clickable row: keep its clicks and
-                keys from also opening the preset. */}
-            <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Preset actions" />}>
-                  <EllipsisIcon className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {canWrite ? (
-                    <>
-                      <DropdownMenuItem onClick={() => build(p)}>
-                        <PlayIcon className="size-4" />
-                        Build from preset
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => open(p)}>
-                        <PencilIcon className="size-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" onClick={() => onDelete(p)}>
-                        <Trash2Icon className="size-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </>
+                <ContextMenuItem onClick={() => open(p)}>
+                  <ExternalLinkIcon className="size-4" />
+                  Open
+                </ContextMenuItem>
+              )
+            }
+          >
+            {(menuButton) => (
+              <>
+                <div className="min-w-0" title={values.length > 0 ? `Values: ${values.join(", ")}` : undefined}>
+                  <div className="truncate font-mono font-medium">{p.name}</div>
+                  {p.description && <div className="truncate text-xs text-muted-foreground">{p.description}</div>}
+                </div>
+                <div className="flex min-w-0 items-center">
+                  <KindName type="factory" name={p.moduleName} icon={icons.get(p.moduleName)} />
+                  <span className="truncate text-muted-foreground">&nbsp;· {p.target}</span>
+                </div>
+                <div className="truncate text-sm">
+                  {p.platform ? platformLabel(p.platform) : <span className="text-muted-foreground">When building</span>}
+                </div>
+                <div className="truncate font-mono text-xs" title={p.connections.map((c) => c.endpointName ?? "(deleted)").join(" → ")}>
+                  {p.connections.length === 0 ? (
+                    <span className="font-sans text-sm text-muted-foreground">When building</span>
                   ) : (
-                    <DropdownMenuItem onClick={() => open(p)}>
-                      <ExternalLinkIcon className="size-4" />
-                      Open
-                    </DropdownMenuItem>
+                    p.connections.map((c) => c.endpointName ?? "(deleted)").join(" → ")
                   )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
+                </div>
+                <StatusCell preset={p} />
+                <div className="truncate text-sm text-muted-foreground" title={p.updatedBy?.name ? `by ${p.updatedBy.name}` : undefined}>
+                  <FormattedDateTimeText date={p.updatedAt} />
+                </div>
+                <div>{menuButton}</div>
+              </>
+            )}
+          </ContextMenuRow>
         )
       }}
     />
