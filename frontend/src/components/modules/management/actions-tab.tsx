@@ -19,9 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
-import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -253,16 +251,17 @@ function ActionDialogBody({
   onRun: (action: Action, params: Record<string, unknown> | null) => void
 }) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => initialParamDrafts(action.params))
-  const [typed, setTyped] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const high = action.risk === "high"
+  // A high-risk action, or one with a confirm prompt, opens to be confirmed;
+  // others open only for their params.
+  const confirming = high || !!action.confirm
   const { values, errors } = evaluateParams(action.params, drafts)
   const hasErrors = Object.keys(errors).length > 0
-  const typedOk = !high || typed === instance
 
   function submit() {
     setSubmitted(true)
-    if (hasErrors || !typedOk) return
+    if (hasErrors) return
     onRun(action, action.params.length > 0 ? values : null)
   }
 
@@ -291,7 +290,7 @@ function ActionDialogBody({
         />
       )}
 
-      {(action.confirm || high) && (
+      {confirming && (
         <div
           className={
             high
@@ -303,31 +302,12 @@ function ActionDialogBody({
         </div>
       )}
 
-      {high && (
-        <Field>
-          <FieldLabel htmlFor="action-confirm-instance">
-            Type <code className="font-mono">{instance}</code> to confirm
-          </FieldLabel>
-          <Input
-            id="action-confirm-instance"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </Field>
-      )}
-
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          type="submit"
-          variant={high ? "destructive" : "default"}
-          disabled={!typedOk || (submitted && hasErrors)}
-        >
-          Run
+        <Button type="submit" variant={high ? "destructive" : "default"} disabled={submitted && hasErrors}>
+          {confirming ? "Confirm" : "Run"}
         </Button>
       </DialogFooter>
     </form>
