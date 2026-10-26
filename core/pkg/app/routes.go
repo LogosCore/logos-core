@@ -136,7 +136,16 @@ func (a *App) mountHumanRoutes(v1 *gin.RouterGroup, c *controllers, res *resolve
 	v1.POST("/logout", middleware.RBAC(permissions.BasicPermission), c.auth.Logout)
 
 	a.mountWikiRoutes(v1, c)
+	a.mountBuildRoutes(v1, c)
 	a.mountGraphQLRoutes(v1, res)
+}
+
+// mountBuildRoutes registers the byte paths of minion builds: build file
+// uploads and artifact downloads. Both authorize against the operation the
+// file or build belongs to; everything else about builds is GraphQL.
+func (a *App) mountBuildRoutes(v1 *gin.RouterGroup, c *controllers) {
+	v1.POST("/build-files", c.build.UploadFile)
+	v1.GET("/builds/:id/artifact", c.build.DownloadArtifact)
 }
 
 // mountWikiRoutes registers the wiki REST surface. Every route here authorizes
@@ -189,7 +198,7 @@ func (a *App) mountGraphQLRoutes(v1 *gin.RouterGroup, res *resolvers) {
 	gqlHandler := gql.NewHandler(
 		res.user, res.operation, res.session, res.wikiDoc, res.wikiVisit,
 		res.credential, res.hash, res.host, res.task, res.timeline,
-		res.apiKey, res.agentKey, res.focus, res.agentAction, res.module, res.skill, res.endpoint,
+		res.apiKey, res.agentKey, res.focus, res.agentAction, res.module, res.skill, res.endpoint, res.builds,
 		a.eventBus,
 		a.repos.User, a.repos.Operation, a.repos.Session, a.repos.WikiDocument,
 		a.repos.Credential, a.repos.Hash, a.repos.Host, a.repos.Task, a.repos.ModuleRegistry,

@@ -49,6 +49,7 @@ type Resolver struct {
 	ModuleResolver            resolver.IModuleResolver
 	SkillResolver             resolver.ISkillResolver
 	ChannelEndpointResolver   resolver.IChannelEndpointResolver
+	BuildResolver             resolver.IBuildResolver
 
 	// Subscription dependencies — event bus for real-time events,
 	// repos for fetching full entities to include in event payloads.

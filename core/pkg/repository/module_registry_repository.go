@@ -53,6 +53,12 @@ type IModuleRegistryRepository interface {
 	// LatestConnectionSchemas is LatestConnectionSchema for every channel
 	// kind that declared one, by module name.
 	LatestConnectionSchemas(ctx context.Context) (map[string]*models.ModuleConnectionSchema, error)
+	// LatestBuildSchema returns the build schema of a factory kind, picked
+	// like LatestConnectionSchema. Nil when no instance declared one.
+	LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error)
+	// LatestBuildSchemas is LatestBuildSchema for every factory kind that
+	// declared one, by module name.
+	LatestBuildSchemas(ctx context.Context) (map[string]*models.ModuleBuildSchema, error)
 
 	// --- module management ---
 
@@ -168,6 +174,11 @@ func takeoverUpdate(reg *models.Module) bson.M {
 		set["connection"] = reg.Connection
 	} else {
 		unset["connection"] = ""
+	}
+	if reg.Build != nil {
+		set["build"] = reg.Build
+	} else {
+		unset["build"] = ""
 	}
 	return bson.M{"$set": set, "$unset": unset}
 }
@@ -292,6 +303,39 @@ func latestPerKind(mods []models.Module) map[string]*models.ModuleConnectionSche
 
 func latestConnectionFilter(moduleName string) bson.M {
 	return bson.M{"module_name": moduleName, "connection": bson.M{"$exists": true}}
+}
+
+func (r *moduleRegistryRepository) LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error) {
+	var mod models.Module
+	err := r.coll.Find(ctx, bson.M{"module_name": moduleName, "build": bson.M{"$exists": true}}).
+		Sort("-build.version", "-registered_at").
+		Select(bson.M{"build": 1}).
+		One(&mod)
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return mod.Build, nil
+}
+
+func (r *moduleRegistryRepository) LatestBuildSchemas(ctx context.Context) (map[string]*models.ModuleBuildSchema, error) {
+	var mods []models.Module
+	err := r.coll.Find(ctx, bson.M{"build": bson.M{"$exists": true}}).
+		Sort("module_name", "-build.version", "-registered_at").
+		Select(bson.M{"module_name": 1, "build": 1}).
+		All(&mods)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]*models.ModuleBuildSchema{}
+	for i := range mods {
+		if _, seen := out[mods[i].Name]; !seen && mods[i].Build != nil {
+			out[mods[i].Name] = mods[i].Build
+		}
+	}
+	return out, nil
 }
 
 func (r *moduleRegistryRepository) TouchHeartbeat(ctx context.Context, instance, status string, metrics map[string]any, appliedRevision *int64, at time.Time) (bool, error) {

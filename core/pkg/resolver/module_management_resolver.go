@@ -269,6 +269,12 @@ func toFieldModel(f protocol.FieldSpec) *model.ModuleField {
 		mi := f.MaxItems
 		out.MaxItems = &mi
 	}
+	if len(f.Accept) > 0 {
+		out.Accept = f.Accept
+	}
+	if f.MaxSize > 0 {
+		out.MaxSize = f.MaxSize
+	}
 	if len(f.Options) > 0 {
 		out.Options = make([]*model.ModuleEnumOption, len(f.Options))
 		for i, o := range f.Options {

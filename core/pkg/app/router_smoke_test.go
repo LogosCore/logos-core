@@ -48,6 +48,7 @@ func TestRouteTable(t *testing.T) {
 	want := []string{
 		"DELETE /api/v1/mcp",
 		"GET /api/v1/",
+		"GET /api/v1/builds/:id/artifact",
 		"GET /api/v1/graphql/ws",
 		"GET /api/v1/login/me",
 		"GET /api/v1/mcp",
@@ -63,6 +64,7 @@ func TestRouteTable(t *testing.T) {
 		"GET /swagger/*any",
 		"OPTIONS /api/v1/mcp",
 		"POST /api/channel/sync",
+		"POST /api/v1/build-files",
 		"POST /api/v1/enroll",
 		"POST /api/v1/graphql",
 		"POST /api/v1/internal/wiki/webhook",
@@ -104,6 +106,7 @@ func TestRouteAuthTiers(t *testing.T) {
 	want := map[string]int{
 		// Behind AuthN.
 		"DELETE /api/v1/mcp":                          401,
+		"GET /api/v1/builds/:id/artifact":             401,
 		"GET /api/v1/graphql/ws":                      401,
 		"GET /api/v1/login/me":                        401,
 		"GET /api/v1/mcp":                             401,
@@ -116,6 +119,7 @@ func TestRouteAuthTiers(t *testing.T) {
 		"GET /api/v1/wiki/transfer/jobs/:id":          401,
 		"GET /api/v1/wiki/transfer/jobs/:id/download": 401,
 		"OPTIONS /api/v1/mcp":                         401,
+		"POST /api/v1/build-files":                    401,
 		"POST /api/v1/graphql":                        401,
 		"POST /api/v1/logout":                         401,
 		"POST /api/v1/mcp":                            401,

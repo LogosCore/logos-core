@@ -64,6 +64,7 @@ type operationResolver struct {
 	credRepo       repository.ICredentialRepository         // needed for cascade delete
 	hostRepo       repository.IHostRepository               // needed for cascade delete
 	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
+	buildCleanup   BuildCleanup                             // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
 
@@ -120,6 +121,20 @@ func WithHostRepo(repo repository.IHostRepository) OperationResolverOption {
 func WithChannelEndpointRepo(repo repository.IChannelEndpointRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.endpointRepo = repo
+	}
+}
+
+// BuildCleanup removes what minion builds keep for an operation (presets,
+// builds and their artifacts, build files, minions). Satisfied by
+// *builds.Service.
+type BuildCleanup interface {
+	DeleteOperationData(ctx context.Context, operationID uuid.UUID) error
+}
+
+// WithBuildCleanup adds the build data cleanup for cascade delete.
+func WithBuildCleanup(c BuildCleanup) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.buildCleanup = c
 	}
 }
 
@@ -270,6 +285,14 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.endpointRepo != nil {
 		if err := r.endpointRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's channel endpoints: %w", err)
+		}
+	}
+
+	// Cascade delete: remove the operation's presets, builds, artifacts, build
+	// files and minions
+	if r.buildCleanup != nil {
+		if err := r.buildCleanup.DeleteOperationData(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's builds: %w", err)
 		}
 	}
 

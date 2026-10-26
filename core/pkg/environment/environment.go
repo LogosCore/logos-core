@@ -84,6 +84,18 @@ type EnvironmentSettings struct {
 	SkillBucket  string
 	SkillMaxSize int64 // bytes; cap on one uploaded skill bundle
 
+	// Minion builds (contracts/minion-build.md): build files and artifacts
+	// in one bucket, under files/ and artifacts/.
+	BuildBucket string
+	// BuildStorageEndpoint is the S3 address the presigned URLs handed to
+	// factories point at: the one factories reach, which may differ from
+	// SEAWEEDFS_S3_ENDPOINT. Defaults to it.
+	BuildStorageEndpoint string
+	// BuildTimeout bounds the time a build spends queued, and then building.
+	BuildTimeout         time.Duration
+	BuildFileMaxSize     int64 // bytes; cap on one uploaded build file
+	BuildArtifactMaxSize int64 // bytes; the max_size factories are given
+
 	// Wiki transfer (export/import jobs)
 	WikiImportZipMaxSize    int64         // bytes; cap on an uploaded import archive
 	WikiTransferArtifactTTL time.Duration // how long finished jobs and their archives are kept
@@ -171,6 +183,10 @@ func init() {
 	viper.SetDefault("WIKI_IMAGE_MAX_DIMENSION", 2560)
 	viper.SetDefault("WIKI_IMAGE_SWEEPER_INTERVAL", "24h")
 	viper.SetDefault("WIKI_IMAGE_SWEEPER_GRACE", "168h")
+	viper.SetDefault("BUILD_BUCKET", "logos-builds")
+	viper.SetDefault("BUILD_TIMEOUT", "30m")
+	viper.SetDefault("BUILD_FILE_MAX_SIZE", int64(64<<20))
+	viper.SetDefault("BUILD_ARTIFACT_MAX_SIZE", int64(256<<20))
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
 	viper.SetDefault("WIKI_FILE_MAX_SIZE", int64(50*1024*1024))
 	viper.SetDefault("WIKI_FILE_DENIED_CONTENT_TYPES", "")
@@ -268,6 +284,13 @@ func init() {
 		// Community skills
 		SkillBucket:  viper.GetString("SKILL_BUCKET"),
 		SkillMaxSize: viper.GetInt64("SKILL_MAX_SIZE"),
+
+		// Minion builds
+		BuildBucket:          viper.GetString("BUILD_BUCKET"),
+		BuildStorageEndpoint: firstNonEmpty(viper.GetString("BUILD_STORAGE_ENDPOINT"), viper.GetString("SEAWEEDFS_S3_ENDPOINT")),
+		BuildTimeout:         parseDurationOrFatal("BUILD_TIMEOUT", viper.GetString("BUILD_TIMEOUT")),
+		BuildFileMaxSize:     sizeUpTo("BUILD_FILE_MAX_SIZE", viper.GetInt64("BUILD_FILE_MAX_SIZE"), 1<<30),
+		BuildArtifactMaxSize: sizeUpTo("BUILD_ARTIFACT_MAX_SIZE", viper.GetInt64("BUILD_ARTIFACT_MAX_SIZE"), 1<<30),
 
 		// Wiki transfer
 		WikiImportZipMaxSize:    viper.GetInt64("WIKI_IMPORT_ZIP_MAX_SIZE"),
@@ -408,4 +431,23 @@ func parseCSV(raw string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+// firstNonEmpty returns the first of values that is not empty.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// sizeUpTo is a byte size setting from 1 to limit (sizes reach the GraphQL
+// API as 32-bit integers).
+func sizeUpTo(key string, v, limit int64) int64 {
+	if v < 1 || v > limit {
+		log.Fatalf("%s must be 1..%d bytes, got %d", key, limit, v)
+	}
+	return v
 }

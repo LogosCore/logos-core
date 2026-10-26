@@ -67,4 +67,9 @@ type Module struct {
 	// latest module.register (channels only; see channel_endpoint.go); nil
 	// when it declared none. Replaced (or cleared) by every register.
 	Connection *ModuleConnectionSchema `bson:"connection,omitempty" json:"connection,omitempty"`
+
+	// Build is the build schema the instance declared at its latest
+	// module.register (factories only; see build.go); nil when it declared
+	// none. Replaced (or cleared) by every register.
+	Build *ModuleBuildSchema `bson:"build,omitempty" json:"build,omitempty"`
 }

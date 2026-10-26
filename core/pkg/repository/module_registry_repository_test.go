@@ -194,6 +194,15 @@ func TestTakeoverUpdate_ManagementFields(t *testing.T) {
 	if u["$set"].(bson.M)["connection"] != conn {
 		t.Error("connection not set when declared")
 	}
+	if _, ok := u["$unset"].(bson.M)["build"]; !ok {
+		t.Error("build should be unset when not declared")
+	}
+
+	build := &models.ModuleBuildSchema{BuildSchema: protocol.BuildSchema{SchemaVersion: "1", Version: 1}}
+	u = takeoverUpdate(&models.Module{Instance: "bob-1", Build: build})
+	if u["$set"].(bson.M)["build"] != build {
+		t.Error("build not set when declared")
+	}
 }
 
 func TestHeartbeatUpdate_AppliedRevision(t *testing.T) {

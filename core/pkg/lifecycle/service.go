@@ -138,6 +138,8 @@ type registerRequest struct {
 	AppliedRevision int64 `json:"applied_revision"`
 	// Connection is the optional minion connection schema (channels).
 	Connection *protocol.ConnectionSchema `json:"connection"`
+	// Build is the optional build schema (factories).
+	Build *protocol.BuildSchema `json:"build"`
 }
 
 type registerReply struct {
@@ -217,6 +219,15 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 			return nil, validationErr("invalid connection schema: " + err.Error())
 		}
 		reg.Connection = &models.ModuleConnectionSchema{ConnectionSchema: *p.Connection}
+	}
+	if p.Build != nil {
+		if p.ModuleType != protocol.ServiceFactory {
+			return nil, validationErr("only factories declare a build schema")
+		}
+		if err := protocol.ValidateBuildSchema(*p.Build); err != nil {
+			return nil, validationErr("invalid build schema: " + err.Error())
+		}
+		reg.Build = &models.ModuleBuildSchema{BuildSchema: *p.Build}
 	}
 	if err := s.repo.Upsert(ctx, reg); err != nil {
 		return nil, fmt.Errorf("persist registration: %w", err)

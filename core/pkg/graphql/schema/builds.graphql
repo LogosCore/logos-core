@@ -1,0 +1,306 @@
+# =============================================================================
+# Minion builds — factories, build files, presets, builds and minions
+# =============================================================================
+#
+# A factory declares a build schema at module.register (see
+# logos-golang-protocol/protocol/build.go and the docs repo's
+# contracts/minion-build.md): its targets, their fields, the channel kinds its
+# minions speak with the factory's own connection parameters for each. The
+# schema belongs to the factory kind (module name, e.g. "bob"); a kind's
+# current schema is the highest version any of its instances declared.
+#
+# An operation keeps build files (uploads for file fields, through
+# POST /api/v1/build-files) and presets (ready-to-use build settings, like
+# endpoints are ready-to-use connection values). A build asks a factory
+# instance for one minion: core queues it, offers it to a live instance, follows
+# its progress and result, checks the artifact, and a successful build creates
+# the minion. Its artifact downloads from GET /api/v1/builds/{id}/artifact.
+#
+# Viewers of an operation read all of it; operators and admins upload, build,
+# cancel and delete. Agent API keys may read but not write.
+
+extend type Module {
+  # The build schema this instance declared; null when it declared none (only
+  # factories do).
+  build: BuildSchema
+}
+
+type BuildSchema {
+  # Version of the factory kind's parameter set.
+  version: Int!
+  # Channel kinds the minions speak.
+  channels: [BuildChannel!]!
+  # Payload crypto suites the minions implement.
+  crypto: [String!]!
+  # Build parameters every target shares.
+  fields: [ModuleField!]!
+  targets: [BuildTarget!]!
+}
+
+type BuildChannel {
+  moduleName: String!
+  # Connection schema versions the minions read.
+  versions: [Int!]!
+  # The factory's connection parameters for this channel kind, set per
+  # endpoint of a build.
+  fields: [ModuleField!]!
+}
+
+type BuildChannelVersions {
+  moduleName: String!
+  versions: [Int!]!
+}
+
+type BuildTarget {
+  id: String!
+  label: String!
+  description: String
+  # What the artifact is: exe, dll, elf, bin, json, ...
+  format: String!
+  # os/arch pairs, Go names; "any" stands for either half.
+  platforms: [String!]!
+  # The target's own fields; BuildSchema.fields come first.
+  fields: [ModuleField!]!
+  # The channel kinds this target can connect through.
+  channels: [BuildChannelVersions!]!
+}
+
+# A factory kind minions can be built with.
+type FactoryKind {
+  # The kind, e.g. "bob".
+  moduleName: String!
+  schema: BuildSchema!
+  # Registered instances declaring the current schema version; a build needs
+  # one.
+  instances: Int!
+}
+
+# A file uploaded for a build's file fields.
+type BuildFile {
+  id: ID!
+  operationId: ID!
+  name: String!
+  size: Int!
+  sha256: String!
+  mediaType: String
+  uploadedBy: ModuleActor!
+  createdAt: String!
+}
+
+type BuildProblem {
+  # Where the problem is: "target", "platform", "values.<key>", "connections",
+  # "connections[<i>]", "connections[<i>].values.<key>"; null when it is not
+  # one place's.
+  key: String
+  message: String!
+}
+
+type BuildPresetConnection {
+  endpointId: ID!
+  # The endpoint's current name; null when it was deleted.
+  endpointName: String
+  # Connection parameter values by key.
+  values: JSON!
+}
+
+# Ready-to-use build settings: they fill in the build form.
+type BuildPreset {
+  id: ID!
+  operationId: ID!
+  # Unique within the operation.
+  name: String!
+  description: String
+  # The factory kind.
+  moduleName: String!
+  target: String!
+  # Optional: may be left for the build form.
+  platform: String
+  # Values by field key; file fields hold build file ids.
+  values: JSON!
+  connections: [BuildPresetConnection!]!
+  # Build schema version the preset was saved against.
+  schemaVersion: Int!
+  # The kind now declares another schema version.
+  schemaChanged: Boolean!
+  # Why the preset does not fit the kind's current schema or endpoints;
+  # empty when it does.
+  problems: [BuildProblem!]!
+  # Grows with every change; updateBuildPreset compares against it.
+  revision: Int!
+  createdBy: ModuleActor!
+  updatedBy: ModuleActor!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input BuildConnectionInput {
+  endpointId: ID!
+  # Connection parameter values by key. null, "" and [] leave a parameter
+  # unset (its default applies).
+  values: JSON
+}
+
+input BuildPresetInput {
+  name: String!
+  description: String
+  target: String!
+  platform: String
+  # Values by field key; null, "" and [] leave a field unset.
+  values: JSON!
+  connections: [BuildConnectionInput!]!
+}
+
+input BuildInput {
+  moduleName: String!
+  target: String!
+  platform: String!
+  # Values by field key; null, "" and [] leave a field unset (its default
+  # applies). File fields take build file ids.
+  values: JSON!
+  # The endpoints, in the order the minion tries them.
+  connections: [BuildConnectionInput!]!
+  # The preset the form was filled from, if any; recorded only.
+  presetId: ID
+}
+
+type BuildStep {
+  step: String!
+  message: String
+  percent: Int
+  at: String!
+}
+
+type BuildArtifact {
+  filename: String!
+  size: Int!
+  sha256: String!
+  mediaType: String
+  # The bytes were deleted; the record stays.
+  deleted: Boolean!
+}
+
+type BuildError {
+  # The factory's own code, or core's: timeout, factory_lost,
+  # artifact_mismatch, schema_changed, refused.
+  code: String!
+  message: String!
+}
+
+type Build {
+  # The build id factories know it by (a ULID).
+  id: ID!
+  operationId: ID!
+  # The factory kind.
+  moduleName: String!
+  target: String!
+  platform: String!
+  schemaVersion: Int!
+  # Every field with a value or a default, as the factory got them.
+  values: JSON!
+  # The endpoints as copied: [{endpoint: <export>, values: {...}}].
+  connections: JSON!
+  # The id the minion sends on the data plane.
+  minionId: String!
+  # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
+  state: String!
+  # The factory instance building it.
+  instance: String
+  factoryVersion: String
+  # The last progress steps, oldest first.
+  steps: [BuildStep!]!
+  artifact: BuildArtifact
+  capabilities: [String!]!
+  warnings: [String!]!
+  # The build output, its last 64 KiB.
+  log: String
+  error: BuildError
+  presetId: ID
+  createdBy: ModuleActor!
+  cancelledBy: ModuleActor
+  createdAt: String!
+  startedAt: String
+  finishedAt: String
+  # When core stops waiting: for a factory to take it, then for its result.
+  deadline: String!
+}
+
+# What a successful build created.
+type Minion {
+  id: ID!
+  operationId: ID!
+  buildId: ID!
+  # The factory kind that built it.
+  moduleName: String!
+  target: String!
+  platform: String!
+  capabilities: [String!]!
+  createdBy: ModuleActor!
+  createdAt: String!
+}
+
+extend type Query {
+  # Factory kinds that declared a build schema, with their current one.
+  factoryKinds: [FactoryKind!]!
+    @hasPermission(permission: "operation:member")
+
+  # An operation's build files, newest first. Needs at least viewer.
+  buildFiles(operationId: ID!): [BuildFile!]!
+    @hasPermission(permission: "operation:member")
+
+  # An operation's presets by kind and name; one kind's when moduleName is
+  # set. Needs at least viewer.
+  buildPresets(operationId: ID!, moduleName: String): [BuildPreset!]!
+    @hasPermission(permission: "operation:member")
+
+  # One preset; null when it does not exist. Needs at least viewer.
+  buildPreset(id: ID!): BuildPreset
+    @hasPermission(permission: "operation:member")
+
+  # An operation's builds, newest first, at most limit (default 50).
+  # Needs at least viewer.
+  builds(operationId: ID!, limit: Int): [Build!]!
+    @hasPermission(permission: "operation:member")
+
+  # One build; null when it does not exist. Needs at least viewer.
+  build(id: ID!): Build
+    @hasPermission(permission: "operation:member")
+
+  # An operation's minions, newest first. Needs at least viewer.
+  minions(operationId: ID!): [Minion!]!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Mutation {
+  # Fails while a preset or build refers to the file. Needs at least
+  # operator; agent API keys are rejected.
+  deleteBuildFile(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+
+  # Validated against the kind's current schema; problems are in the error's
+  # extensions.problems. Needs at least operator; agent API keys are
+  # rejected.
+  createBuildPreset(operationId: ID!, moduleName: String!, input: BuildPresetInput!): BuildPreset!
+    @hasPermission(permission: "operation:member")
+
+  # expectedRevision is the revision the caller read; a mismatch fails with
+  # CONFLICT.
+  updateBuildPreset(id: ID!, input: BuildPresetInput!, expectedRevision: Int!): BuildPreset!
+    @hasPermission(permission: "operation:member")
+
+  deleteBuildPreset(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+
+  # Queues a build. Validated against the kind's current schema; problems are
+  # in the error's extensions.problems. Needs at least operator; agent API
+  # keys are rejected.
+  createBuild(operationId: ID!, input: BuildInput!): Build!
+    @hasPermission(permission: "operation:member")
+
+  # Stops a queued or running build.
+  cancelBuild(id: ID!): Build!
+    @hasPermission(permission: "operation:member")
+
+  # Removes a finished build's artifact bytes; the build stays.
+  deleteBuildArtifact(id: ID!): Build!
+    @hasPermission(permission: "operation:member")
+}

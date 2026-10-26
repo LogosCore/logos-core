@@ -166,6 +166,20 @@ func (m *ModuleConnectionSchema) UnmarshalBSON(data []byte) error {
 	return bsonDocToJSON(data, &m.ConnectionSchema)
 }
 
+// ModuleBuildSchema is the stored build schema of a factory, JSON-encoded
+// like the manifest so it round-trips exactly.
+type ModuleBuildSchema struct {
+	protocol.BuildSchema
+}
+
+func (m ModuleBuildSchema) MarshalBSON() ([]byte, error) {
+	return jsonToBSONDoc(m.BuildSchema)
+}
+
+func (m *ModuleBuildSchema) UnmarshalBSON(data []byte) error {
+	return bsonDocToJSON(data, &m.BuildSchema)
+}
+
 // JSONMap is a string-keyed map of JSON values with the same JSON-faithful BSON
 // encoding as ModuleManifest. Used for property values and action params.
 type JSONMap map[string]any

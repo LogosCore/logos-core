@@ -53,6 +53,148 @@ type AgentKeyWithSecret struct {
 	Token    string           `json:"token"`
 }
 
+type Build struct {
+	ID             string         `json:"id"`
+	OperationID    string         `json:"operationId"`
+	ModuleName     string         `json:"moduleName"`
+	Target         string         `json:"target"`
+	Platform       string         `json:"platform"`
+	SchemaVersion  int            `json:"schemaVersion"`
+	Values         any            `json:"values"`
+	Connections    any            `json:"connections"`
+	MinionID       string         `json:"minionId"`
+	State          string         `json:"state"`
+	Instance       *string        `json:"instance,omitempty"`
+	FactoryVersion *string        `json:"factoryVersion,omitempty"`
+	Steps          []*BuildStep   `json:"steps"`
+	Artifact       *BuildArtifact `json:"artifact,omitempty"`
+	Capabilities   []string       `json:"capabilities"`
+	Warnings       []string       `json:"warnings"`
+	Log            *string        `json:"log,omitempty"`
+	Error          *BuildError    `json:"error,omitempty"`
+	PresetID       *string        `json:"presetId,omitempty"`
+	CreatedBy      *ModuleActor   `json:"createdBy"`
+	CancelledBy    *ModuleActor   `json:"cancelledBy,omitempty"`
+	CreatedAt      string         `json:"createdAt"`
+	StartedAt      *string        `json:"startedAt,omitempty"`
+	FinishedAt     *string        `json:"finishedAt,omitempty"`
+	Deadline       string         `json:"deadline"`
+}
+
+type BuildArtifact struct {
+	Filename  string  `json:"filename"`
+	Size      int     `json:"size"`
+	Sha256    string  `json:"sha256"`
+	MediaType *string `json:"mediaType,omitempty"`
+	Deleted   bool    `json:"deleted"`
+}
+
+type BuildChannel struct {
+	ModuleName string         `json:"moduleName"`
+	Versions   []int          `json:"versions"`
+	Fields     []*ModuleField `json:"fields"`
+}
+
+type BuildChannelVersions struct {
+	ModuleName string `json:"moduleName"`
+	Versions   []int  `json:"versions"`
+}
+
+type BuildConnectionInput struct {
+	EndpointID string `json:"endpointId"`
+	Values     any    `json:"values,omitempty"`
+}
+
+type BuildError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type BuildFile struct {
+	ID          string       `json:"id"`
+	OperationID string       `json:"operationId"`
+	Name        string       `json:"name"`
+	Size        int          `json:"size"`
+	Sha256      string       `json:"sha256"`
+	MediaType   *string      `json:"mediaType,omitempty"`
+	UploadedBy  *ModuleActor `json:"uploadedBy"`
+	CreatedAt   string       `json:"createdAt"`
+}
+
+type BuildInput struct {
+	ModuleName  string                  `json:"moduleName"`
+	Target      string                  `json:"target"`
+	Platform    string                  `json:"platform"`
+	Values      any                     `json:"values"`
+	Connections []*BuildConnectionInput `json:"connections"`
+	PresetID    *string                 `json:"presetId,omitempty"`
+}
+
+type BuildPreset struct {
+	ID            string                   `json:"id"`
+	OperationID   string                   `json:"operationId"`
+	Name          string                   `json:"name"`
+	Description   *string                  `json:"description,omitempty"`
+	ModuleName    string                   `json:"moduleName"`
+	Target        string                   `json:"target"`
+	Platform      *string                  `json:"platform,omitempty"`
+	Values        any                      `json:"values"`
+	Connections   []*BuildPresetConnection `json:"connections"`
+	SchemaVersion int                      `json:"schemaVersion"`
+	SchemaChanged bool                     `json:"schemaChanged"`
+	Problems      []*BuildProblem          `json:"problems"`
+	Revision      int                      `json:"revision"`
+	CreatedBy     *ModuleActor             `json:"createdBy"`
+	UpdatedBy     *ModuleActor             `json:"updatedBy"`
+	CreatedAt     string                   `json:"createdAt"`
+	UpdatedAt     string                   `json:"updatedAt"`
+}
+
+type BuildPresetConnection struct {
+	EndpointID   string  `json:"endpointId"`
+	EndpointName *string `json:"endpointName,omitempty"`
+	Values       any     `json:"values"`
+}
+
+type BuildPresetInput struct {
+	Name        string                  `json:"name"`
+	Description *string                 `json:"description,omitempty"`
+	Target      string                  `json:"target"`
+	Platform    *string                 `json:"platform,omitempty"`
+	Values      any                     `json:"values"`
+	Connections []*BuildConnectionInput `json:"connections"`
+}
+
+type BuildProblem struct {
+	Key     *string `json:"key,omitempty"`
+	Message string  `json:"message"`
+}
+
+type BuildSchema struct {
+	Version  int             `json:"version"`
+	Channels []*BuildChannel `json:"channels"`
+	Crypto   []string        `json:"crypto"`
+	Fields   []*ModuleField  `json:"fields"`
+	Targets  []*BuildTarget  `json:"targets"`
+}
+
+type BuildStep struct {
+	Step    string  `json:"step"`
+	Message *string `json:"message,omitempty"`
+	Percent *int    `json:"percent,omitempty"`
+	At      string  `json:"at"`
+}
+
+type BuildTarget struct {
+	ID          string                  `json:"id"`
+	Label       string                  `json:"label"`
+	Description *string                 `json:"description,omitempty"`
+	Format      string                  `json:"format"`
+	Platforms   []string                `json:"platforms"`
+	Fields      []*ModuleField          `json:"fields"`
+	Channels    []*BuildChannelVersions `json:"channels"`
+}
+
 type BulkImportHashesInput struct {
 	Text    string   `json:"text"`
 	Tags    []string `json:"tags,omitempty"`
@@ -222,6 +364,12 @@ type CredentialPropertyInput struct {
 	Value string `json:"value"`
 }
 
+type FactoryKind struct {
+	ModuleName string       `json:"moduleName"`
+	Schema     *BuildSchema `json:"schema"`
+	Instances  int          `json:"instances"`
+}
+
 type HashConnection struct {
 	Edges      []*HashEdge          `json:"edges"`
 	PageInfo   *pagination.PageInfo `json:"pageInfo"`
@@ -280,6 +428,18 @@ type LoginInput struct {
 type MarkHashCrackedInput struct {
 	CredentialID  *string                `json:"credentialId,omitempty"`
 	NewCredential *CreateCredentialInput `json:"newCredential,omitempty"`
+}
+
+type Minion struct {
+	ID           string       `json:"id"`
+	OperationID  string       `json:"operationId"`
+	BuildID      string       `json:"buildId"`
+	ModuleName   string       `json:"moduleName"`
+	Target       string       `json:"target"`
+	Platform     string       `json:"platform"`
+	Capabilities []string     `json:"capabilities"`
+	CreatedBy    *ModuleActor `json:"createdBy"`
+	CreatedAt    string       `json:"createdAt"`
 }
 
 type ModuleAction struct {
@@ -368,6 +528,8 @@ type ModuleField struct {
 	KeyPattern  *string             `json:"keyPattern,omitempty"`
 	MaxItems    *int                `json:"maxItems,omitempty"`
 	Options     []*ModuleEnumOption `json:"options,omitempty"`
+	Accept      []string            `json:"accept,omitempty"`
+	MaxSize     any                 `json:"maxSize,omitempty"`
 }
 
 type ModuleLogEvent struct {

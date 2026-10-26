@@ -21,6 +21,7 @@ type controllers struct {
 	status   controller.IStatusController
 	channel  controller.IChannelController
 	skill    *controller.SkillController
+	build    *controller.BuildController
 	wiki     *controller.WikiController
 	transfer *controller.WikiTransferController
 	webhook  *wiki.WebhookHandler
@@ -55,6 +56,7 @@ type resolvers struct {
 	module      resolver.IModuleResolver
 	skill       resolver.ISkillResolver
 	endpoint    resolver.IChannelEndpointResolver
+	builds      resolver.IBuildResolver
 }
 
 // buildControllers constructs every REST handler. Order is not significant
@@ -80,6 +82,7 @@ func (a *App) buildControllers() *controllers {
 		}),
 		channel: controller.NewChannelController(a.cache, a.moduleGate, a.logger),
 		skill:   controller.NewSkillController(a.skillService, a.logger),
+		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
 		wiki:    controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
 		// The runner and its pipeline are built in NewApp; this controller only
@@ -165,6 +168,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithCredentialRepo(a.repos.Credential),
 			resolver.WithHostRepo(a.repos.Host),
 			resolver.WithChannelEndpointRepo(a.repos.ChannelEndpoint),
+			resolver.WithBuildCleanup(a.builds),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -190,5 +194,7 @@ func (a *App) buildResolvers() *resolvers {
 		skill:  resolver.NewSkillResolver(a.skillService, a.repos.Skill, a.repos.SkillSubscription, a.repos.User),
 		// Channel endpoints are operation data, authorized by operation role.
 		endpoint: resolver.NewChannelEndpointResolver(a.endpoints, a.repos.Operation),
+		// Builds too: operation data, authorized by operation role.
+		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
 	}
 }

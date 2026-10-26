@@ -8,12 +8,15 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/auth"
 	"github.com/logoscore/logos-core/core/pkg/auth/oidc"
 	"github.com/logoscore/logos-core/core/pkg/blob"
+	"github.com/logoscore/logos-core/core/pkg/builds"
 	"github.com/logoscore/logos-core/core/pkg/cache"
+	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/events"
+	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -78,6 +81,10 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		ModuleConfigChange: repository.NewModuleConfigChangeRepository(db),
 		ModuleInvocation:   repository.NewModuleActionInvocationRepository(db),
 		ChannelEndpoint:    repository.NewChannelEndpointRepository(db),
+		BuildFile:          repository.NewBuildFileRepository(db),
+		BuildPreset:        repository.NewBuildPresetRepository(db),
+		Build:              repository.NewBuildRepository(db),
+		Minion:             repository.NewMinionRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed
@@ -400,4 +407,35 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 	} else if n > 0 {
 		l.Info("credential validity backfill complete", zap.Int64("rows", n))
 	}
+}
+
+// newBuildService stands up minion builds: the build bucket, the signer for
+// the URLs factories use (pointed at the address factories reach), and the
+// service. A store that cannot be reached is fatal, as for the wiki stores.
+func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l *zap.Logger, repos *Repositories,
+	endpoints *channelendpoints.Service, rpc *messaging.RPCClient) (*builds.Service, error) {
+	store, err := blob.NewS3Store(ctx, blob.S3Config{
+		Endpoint:  e.SeaweedFSS3Endpoint,
+		AccessKey: e.SeaweedFSS3AccessKey,
+		SecretKey: e.SeaweedFSS3SecretKey,
+		Bucket:    e.BuildBucket,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize the build store: %w", err)
+	}
+	signer, err := blob.NewPresigner(blob.S3Config{
+		Endpoint:  e.BuildStorageEndpoint,
+		AccessKey: e.SeaweedFSS3AccessKey,
+		SecretKey: e.SeaweedFSS3SecretKey,
+		Bucket:    e.BuildBucket,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize the build URL signer: %w", err)
+	}
+	return builds.NewService(
+		builds.Repos{Files: repos.BuildFile, Presets: repos.BuildPreset, Builds: repos.Build, Minions: repos.Minion},
+		repos.ModuleRegistry, endpoints, rpc, store, signer,
+		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
+		l.Named("builds"),
+	), nil
 }

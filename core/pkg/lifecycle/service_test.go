@@ -509,3 +509,11 @@ func (f *fakeRepo) LatestConnectionSchema(context.Context, string) (*models.Modu
 func (f *fakeRepo) LatestConnectionSchemas(context.Context) (map[string]*models.ModuleConnectionSchema, error) {
 	return nil, nil
 }
+
+func (f *fakeRepo) LatestBuildSchema(context.Context, string) (*models.ModuleBuildSchema, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) LatestBuildSchemas(context.Context) (map[string]*models.ModuleBuildSchema, error) {
+	return nil, nil
+}

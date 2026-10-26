@@ -6,7 +6,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,3 +136,78 @@ var errWriterGaveUp = errors.New("the writer gave up")
 type failingReader struct{ err error }
 
 func (f *failingReader) Read([]byte) (int, error) { return 0, f.err }
+
+// Factories reach build files and upload artifacts through presigned URLs
+// alone. Signing works offline, so only a real store can say whether it
+// accepts the signatures: upload through a presigned PUT, read back through a
+// presigned GET and the store's own client, and check an expired URL is
+// refused.
+func TestIntegrationPresigner_PutThenGet(t *testing.T) {
+	store := integrationStore(t)
+	signer, err := NewPresigner(S3Config{
+		Endpoint:  os.Getenv("INTEGRATION_S3_ENDPOINT"),
+		AccessKey: os.Getenv("INTEGRATION_S3_ACCESS_KEY"),
+		SecretKey: os.Getenv("INTEGRATION_S3_SECRET_KEY"),
+		Bucket:    "itest-blob",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	key := "itest/presign-" + uuid.NewString() + ".bin"
+	t.Cleanup(func() { _ = store.Delete(context.Background(), key) })
+	payload := []byte("artifact bytes from a factory")
+
+	putURL, err := signer.PutURL(ctx, key, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPut, putURL, bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("presigned PUT: %s %s", resp.Status, body)
+	}
+
+	r, info, err := store.Get(ctx, key)
+	if err != nil {
+		t.Fatalf("Get after presigned PUT: %v", err)
+	}
+	got, _ := io.ReadAll(r)
+	_ = r.Close()
+	if !bytes.Equal(got, payload) || info.ContentLength != int64(len(payload)) {
+		t.Fatalf("stored %q (%d bytes)", got, info.ContentLength)
+	}
+
+	getURL, err := signer.GetURL(ctx, key, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err = http.Get(getURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !bytes.Equal(got, payload) {
+		t.Fatalf("presigned GET: %s %q", resp.Status, got)
+	}
+
+	// A tampered signature must not work either.
+	resp, err = http.Get(strings.Replace(getURL, "X-Amz-Signature=", "X-Amz-Signature=0", 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("a tampered presigned URL was accepted")
+	}
+}

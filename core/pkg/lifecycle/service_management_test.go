@@ -174,6 +174,43 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 	}
 }
 
+func TestHandleRegister_BuildSchema(t *testing.T) {
+	const schema = `{"schema_version": "1", "version": 3,
+	  "channels": [{"module_name": "http", "versions": [2]}],
+	  "targets": [{"id": "dummy", "format": "json", "platforms": ["any/any"]}]}`
+	svc, repo, _ := newTestService()
+	_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,
+		`{"module_type": "factory", "module_name": "bob", "instance": "bob-1", "rpc_queue": "q", "build": `+schema+`}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := repo.rows["bob-1"].Build
+	if b == nil || b.Version != 3 || len(b.Targets) != 1 || b.Targets[0].ID != "dummy" {
+		t.Fatalf("build = %+v", b)
+	}
+
+	// A register without one clears it.
+	if _, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,
+		`{"module_type": "factory", "module_name": "bob", "instance": "bob-1", "rpc_queue": "q"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if repo.rows["bob-1"].Build != nil {
+		t.Error("build schema not cleared")
+	}
+
+	for name, payload := range map[string]string{
+		"invalid": `{"module_type": "factory", "module_name": "bob", "instance": "bob-2", "rpc_queue": "q",
+		  "build": {"schema_version": "1", "version": 1, "channels": [], "targets": []}}`,
+		"from a channel": `{"module_type": "channel", "module_name": "http", "instance": "bob-2", "rpc_queue": "q", "build": ` + schema + `}`,
+	} {
+		_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister, payload))
+		assertRPCCode(t, err, messaging.CodeValidationFailed)
+		if _, stored := repo.rows["bob-2"]; stored {
+			t.Errorf("%s: refused registration was persisted", name)
+		}
+	}
+}
+
 func TestHandleHeartbeat_StoresAppliedRevisionAndReportsDrift(t *testing.T) {
 	svc, repo, _ := newTestService()
 	mgmt := &fakeMgmt{}

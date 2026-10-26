@@ -12,6 +12,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/auth"
 	"github.com/logoscore/logos-core/core/pkg/auth/oidc"
 	"github.com/logoscore/logos-core/core/pkg/blob"
+	"github.com/logoscore/logos-core/core/pkg/builds"
 	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/controller"
@@ -29,6 +30,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
 	transferjob "github.com/logoscore/logos-core/core/pkg/wikitransfer/job"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 
 	"go.uber.org/zap"
 )
@@ -70,6 +72,10 @@ type Repositories struct {
 	ModuleConfigChange repository.IModuleConfigChangeRepository
 	ModuleInvocation   repository.IModuleActionInvocationRepository
 	ChannelEndpoint    repository.IChannelEndpointRepository
+	BuildFile          repository.IBuildFileRepository
+	BuildPreset        repository.IBuildPresetRepository
+	Build              repository.IBuildRepository
+	Minion             repository.IMinionRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
@@ -130,6 +136,9 @@ type App struct {
 	moduleMgmt  *modulemgmt.Service
 	// endpoints holds the values minions are given to reach a channel.
 	endpoints *channelendpoints.Service
+	// builds runs minion builds: presets, build files, builds offered to
+	// factory instances, and the minions they create.
+	builds *builds.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -192,6 +201,16 @@ func NewApp() (*App, error) {
 	logConsumer := messaging.NewLogConsumer(mqConfig(e), l)
 	moduleLogs := modulelogs.New(repos.ModuleRegistry, rpcClient, logConsumer, l)
 
+	// Minion builds: offered to factories over the same RPC client; their
+	// progress and results come back on logos.core.rpc.
+	endpoints := channelendpoints.NewService(repos.ChannelEndpoint, repos.ModuleRegistry)
+	buildSvc, err := newBuildService(ctx, e, l, repos, endpoints, rpcClient)
+	if err != nil {
+		return nil, err
+	}
+	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
+	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
+
 	// --- Future integration patterns ---
 	//
 	// SSE (subscribes to event bus):
@@ -241,7 +260,8 @@ func NewApp() (*App, error) {
 		moduleMgmt:      moduleMgmt,
 		logConsumer:     logConsumer,
 		moduleLogs:      moduleLogs,
-		endpoints:       channelendpoints.NewService(repos.ChannelEndpoint, repos.ModuleRegistry),
+		endpoints:       endpoints,
+		builds:          buildSvc,
 	}, nil
 }
 
@@ -338,6 +358,7 @@ func (a *App) startLifecycle() {
 	if a.reaper != nil {
 		a.reaper.Start()
 	}
+	a.builds.Start()
 }
 
 // stopLifecycle tears down the reaper, RPC server, and broker connection. All
@@ -348,6 +369,10 @@ func (a *App) stopLifecycle() {
 	}
 	if a.rpcServer != nil {
 		a.rpcServer.Stop()
+	}
+	// Build offers and cancels use the RPC client too.
+	if a.builds != nil {
+		a.builds.Stop()
 	}
 	// Pushes in flight use the RPC client: cancel and drain them first.
 	if a.moduleMgmt != nil {
