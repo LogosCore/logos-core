@@ -124,7 +124,7 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
       ) : error ? (
         <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
       ) : total === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
           <RadioTowerIcon className="size-8 opacity-50" />
           <p className="text-sm">No endpoints in this operation yet.</p>
           <p className="max-w-md text-xs">

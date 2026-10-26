@@ -115,10 +115,10 @@ function BuildsPageInner({ operationId, tab }: { operationId: string; tab: "buil
             </div>
           )}
         </div>
-        <TabsContent value="builds" className="flex min-h-0 flex-col">
+        <TabsContent value="builds" className="flex min-h-0 flex-1 flex-col">
           <BuildsTab operationId={operationId} kindsLoading={kindsQuery.isLoading} noKinds={kinds.length === 0} />
         </TabsContent>
-        <TabsContent value="presets" className="flex min-h-0 flex-col">
+        <TabsContent value="presets" className="flex min-h-0 flex-1 flex-col">
           <PresetsTab operationId={operationId} canWrite={canWrite} />
         </TabsContent>
       </Tabs>
@@ -197,7 +197,7 @@ function BuildsTab({ operationId, kindsLoading, noKinds }: { operationId: string
   if (error) return <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
   if (builds.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
         <HammerIcon className="size-8 opacity-50" />
         <p className="text-sm">No builds in this operation yet.</p>
         <p className="max-w-md text-xs">
@@ -268,7 +268,7 @@ function PresetsTab({ operationId, canWrite }: { operationId: string; canWrite: 
   return (
     <>
       {presets.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-12 text-center text-muted-foreground">
           <BookmarkIcon className="size-8 opacity-50" />
           <p className="text-sm">No presets in this operation yet.</p>
           <p className="max-w-md text-xs">
