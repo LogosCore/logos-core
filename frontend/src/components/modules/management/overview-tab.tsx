@@ -5,17 +5,19 @@ import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { cn } from "@/lib/utils"
-import { formatValue } from "./field-values"
+import { platformLabel } from "@/components/builds/build-values"
+import { compareFields, formatValue, type FieldDef } from "./field-values"
+import { channelsText, fieldNotes, versionsText } from "./schema-notes"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
 type Connection = NonNullable<ModuleDetailFieldsFragment["connection"]>
+type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
 
 /**
  * The minion connection settings this instance declared (read-only). Operators
  * fill them in as endpoints on an operation's Endpoints page.
  */
 export function ConnectionSchema({ connection }: { connection: Connection }) {
-  const fields = [...connection.fields].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
   return (
     <section className="rounded-xl border bg-card">
       <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
@@ -23,26 +25,112 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
         <span className="text-xs font-normal text-muted-foreground">schema v{connection.version}</span>
       </h3>
       <dl className="divide-y">
-        {fields.map((f) => (
-          <div key={f.key} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
-            <dt className="min-w-0 truncate text-muted-foreground" title={f.description ?? undefined}>
-              {f.label}
-              {f.required && <span className="text-destructive">*</span>}
-            </dt>
-            <dd className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-              <code className="font-mono text-xs">{f.key}</code>
-              <span className="text-xs text-muted-foreground">{f.type}</span>
-              {f.default !== null && f.default !== undefined && (
-                <span className="text-xs text-muted-foreground">
-                  default {formatValue(f.type === "secret" ? "string" : f.type, f.default, f.unit)}
-                </span>
-              )}
-            </dd>
-          </div>
-        ))}
+        <FieldRows fields={connection.fields} />
       </dl>
     </section>
   )
+}
+
+/**
+ * The build parameters this factory instance declared (read-only): the targets
+ * it builds, the parameters each takes, and the connection parameters per
+ * channel kind. Operators fill them in on an operation's Builds page.
+ */
+export function BuildParameters({ build }: { build: Build }) {
+  return (
+    <section className="rounded-xl border bg-card">
+      <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
+        Build parameters
+        <span className="text-xs font-normal text-muted-foreground">schema v{build.version}</span>
+      </h3>
+      <div className="divide-y">
+        <SchemaGroup title="Targets">
+          {build.targets.map((t) => (
+            <div key={t.id} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
+              <dt className="min-w-0 truncate text-muted-foreground" title={t.description ?? undefined}>
+                {t.label}
+              </dt>
+              <dd className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex flex-wrap items-baseline gap-x-2">
+                  <code className="font-mono text-xs">{t.id}</code>
+                  <span className="text-xs text-muted-foreground">{t.format}</span>
+                  <span className="text-xs text-muted-foreground">{t.platforms.map(platformLabel).join(", ")}</span>
+                  {t.channels.length > 0 && (
+                    <span className="text-xs text-muted-foreground">speaks {channelsText(t.channels)}</span>
+                  )}
+                </span>
+                {t.description && <span className="text-xs text-muted-foreground">{t.description}</span>}
+              </dd>
+            </div>
+          ))}
+        </SchemaGroup>
+        {build.fields.length > 0 && (
+          <SchemaGroup title="Parameters of every target">
+            <FieldRows fields={build.fields} />
+          </SchemaGroup>
+        )}
+        {build.targets
+          .filter((t) => t.fields.length > 0)
+          .map((t) => (
+            <SchemaGroup key={t.id} title={`${t.label} parameters`}>
+              <FieldRows fields={t.fields} />
+            </SchemaGroup>
+          ))}
+        {build.channels.map((c) => (
+          <SchemaGroup
+            key={c.moduleName}
+            title={`${c.moduleName} connection parameters`}
+            note={`connection schema ${versionsText(c.versions)}`}
+          >
+            {c.fields.length > 0 ? (
+              <FieldRows fields={c.fields} />
+            ) : (
+              <div className="px-4 py-2 text-sm text-muted-foreground">None: endpoints are used as they are.</div>
+            )}
+          </SchemaGroup>
+        ))}
+        <dl>
+          <div className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
+            <dt className="text-muted-foreground">Payload crypto</dt>
+            <dd className="min-w-0 break-words">{build.crypto.length > 0 ? build.crypto.join(", ") : "None"}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+  )
+}
+
+function SchemaGroup({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+  return (
+    <div>
+      <h4 className="flex items-baseline gap-2 px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground">
+        {title}
+        {note && <span className="font-normal">{note}</span>}
+      </h4>
+      <dl className="divide-y">{children}</dl>
+    </div>
+  )
+}
+
+/** A schema's fields in their declared order, as read-only rows. */
+function FieldRows({ fields }: { fields: readonly FieldDef[] }) {
+  return [...fields].sort(compareFields).map((f) => (
+    <div key={f.key} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
+      <dt className="min-w-0 truncate text-muted-foreground" title={f.description ?? undefined}>
+        {f.label}
+        {f.required && <span className="text-destructive">*</span>}
+      </dt>
+      <dd className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <code className="font-mono text-xs">{f.key}</code>
+        <span className="text-xs text-muted-foreground">{f.type}</span>
+        {fieldNotes(f).map((n) => (
+          <span key={n} className="text-xs text-muted-foreground">
+            {n}
+          </span>
+        ))}
+      </dd>
+    </div>
+  ))
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {

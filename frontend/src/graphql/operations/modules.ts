@@ -131,6 +131,9 @@ export const ModuleDetailFields = graphql(`
         ...ModuleFieldDefFields
       }
     }
+    build {
+      ...BuildSchemaFields
+    }
   }
 `)
 

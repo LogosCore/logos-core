@@ -10,7 +10,12 @@ import { useModule, useModuleDetailSubscription } from "@/graphql/hooks/modules"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
-import { ConnectionSchema, ModuleIdentity, StatusValues } from "@/components/modules/management/overview-tab"
+import {
+  BuildParameters,
+  ConnectionSchema,
+  ModuleIdentity,
+  StatusValues,
+} from "@/components/modules/management/overview-tab"
 import { ConfigTab } from "@/components/modules/management/config-tab"
 import { ActionsTab } from "@/components/modules/management/actions-tab"
 import { ActivityTab } from "@/components/modules/management/activity-tab"
@@ -44,6 +49,7 @@ export function ModuleDetailPage() {
   const module = data?.module
   const management = module?.management
   const connection = module?.connection
+  const build = module?.build
 
   return (
     // On the Logs tab the page is held to the viewport (min-h-0): its list and
@@ -116,6 +122,7 @@ export function ModuleDetailPage() {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <ModuleIdentity module={module} />
                 {connection && <ConnectionSchema connection={connection} />}
+                {build && <BuildParameters build={build} />}
               </div>
             </div>
           ) : (
@@ -155,6 +162,7 @@ export function ModuleDetailPage() {
                 <ModuleIdentity module={module} />
                 <StatusValues management={management} />
                 {connection && <ConnectionSchema connection={connection} />}
+                {build && <BuildParameters build={build} />}
               </TabsContent>
               {/* Kept mounted: unsaved edits survive a look at another tab. */}
               <TabsContent value="configuration" keepMounted>
