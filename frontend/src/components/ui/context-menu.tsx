@@ -25,6 +25,9 @@ function ContextMenuTrigger({
 function ContextMenuContent({
   className,
   anchor,
+  side,
+  align,
+  sideOffset,
   ...props
 }: MenuPrimitive.Popup.Props & {
   // Explicit anchor for a controlled context menu (no trigger). Base UI's
@@ -32,10 +35,21 @@ function ContextMenuContent({
   // a virtual element here places the menu at the cursor. Omit it for the
   // ordinary trigger-driven usage.
   anchor?: ContextMenuPrimitive.Positioner.Props["anchor"]
+  // Placement against an element anchor (e.g. under a "more" button, like a
+  // dropdown). Omit them to keep the context-menu placement at the pointer.
+  side?: ContextMenuPrimitive.Positioner.Props["side"]
+  align?: ContextMenuPrimitive.Positioner.Props["align"]
+  sideOffset?: ContextMenuPrimitive.Positioner.Props["sideOffset"]
 }) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Positioner anchor={anchor} className="isolate z-50 outline-none">
+      <ContextMenuPrimitive.Positioner
+        anchor={anchor}
+        side={side}
+        align={align}
+        sideOffset={sideOffset}
+        className="isolate z-50 outline-none"
+      >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
           className={cn(
