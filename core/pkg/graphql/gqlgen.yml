@@ -488,6 +488,10 @@ models:
         resolver: true         # *time.Time -> *String (nullable)
       declaredDeadAt:
         resolver: true         # *time.Time -> *String (nullable)
+      blockedAt:
+        resolver: true         # *time.Time -> *String (nullable)
+      blockedBy:
+        resolver: true         # *models.ModuleActor -> *ModuleActor
 
   # --- Timeline ---
 

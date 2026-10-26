@@ -1,11 +1,13 @@
 import { useNavigate } from "react-router"
-import { BlocksIcon, EllipsisIcon, SlidersHorizontalIcon, TrashIcon } from "lucide-react"
+import { BanIcon, BlocksIcon, EllipsisIcon, ShieldCheckIcon, SlidersHorizontalIcon, TrashIcon } from "lucide-react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -19,6 +21,9 @@ import { Permissions } from "@/constants/permissions"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleIcon } from "@/components/modules/module-icon"
+import { adminActions } from "@/components/modules/module-admin"
+import { errorMessage } from "@/components/modules/management/api-errors"
+import { useUnblockModule } from "@/graphql/hooks/modules"
 import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 
 interface ModulesTableProps {
@@ -30,11 +35,13 @@ const GRID_COLS = "grid-cols-[1.5fr_1fr_1fr_90px_130px_1fr_1fr_1fr_48px]"
 
 export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
-  const openRemoveDialog = useModuleStore((s) => s.openRemoveDialog)
+  const openDialog = useModuleStore((s) => s.openDialog)
+  const unblock = useUnblockModule()
 
   const navigate = useNavigate()
 
-  const canRemove = hasPermission(Permissions.MODULE_DELETE)
+  // Blocking, unblocking and deleting share the module:delete permission.
+  const canAdmin = hasPermission(Permissions.MODULE_DELETE)
   // The row menu always has "Manage", so the actions column is always there.
   const gridCols = GRID_COLS
   const openDetail = (instance: string) =>
@@ -70,9 +77,6 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
         </>
       }
       renderRow={(m) => {
-        // Removal only makes sense for a live registration — the server rejects
-        // deregistering an already-dead/deregistered instance.
-        const isRegistered = m.status === "registered"
         return (
           <div
             className={`${dataTableRowClass(gridCols)} cursor-pointer`}
@@ -134,17 +138,39 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
                     <SlidersHorizontalIcon className="size-4" />
                     Manage
                   </DropdownMenuItem>
-                  {canRemove && (
-                    <DropdownMenuItem
-                      variant="destructive"
-                      disabled={!isRegistered}
-                      onClick={() =>
-                        openRemoveDialog({ instance: m.instance, type: m.type })
-                      }
-                    >
-                      <TrashIcon className="size-4" />
-                      Remove
-                    </DropdownMenuItem>
+                  {canAdmin && (
+                    <>
+                      <DropdownMenuSeparator />
+                      {adminActions(m.status).map((action) =>
+                        action === "unblock" ? (
+                          <DropdownMenuItem
+                            key={action}
+                            disabled={unblock.isPending}
+                            onClick={() =>
+                              unblock.mutate(
+                                { instance: m.instance },
+                                {
+                                  onSuccess: () => toast.success(`Unblocked ${m.instance}`),
+                                  onError: (err) => toast.error("Failed to unblock", { description: errorMessage(err, "Request failed") }),
+                                },
+                              )
+                            }
+                          >
+                            <ShieldCheckIcon className="size-4" />
+                            Unblock
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            key={action}
+                            variant="destructive"
+                            onClick={() => openDialog({ kind: action, module: { instance: m.instance, type: m.type } })}
+                          >
+                            {action === "block" ? <BanIcon className="size-4" /> : <TrashIcon className="size-4" />}
+                            {action === "block" ? "Block…" : "Delete…"}
+                          </DropdownMenuItem>
+                        ),
+                      )}
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>

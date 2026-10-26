@@ -10,6 +10,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	"go.uber.org/zap"
@@ -32,6 +33,9 @@ func (f *fakeRepo) Upsert(_ context.Context, reg *models.Module) error {
 	if f.upsertErr != nil {
 		return f.upsertErr
 	}
+	if row, ok := f.rows[reg.Instance]; ok && row.Status == models.ModuleStatusBlocked {
+		return repository.ErrInstanceBlocked
+	}
 	reg.Status = models.ModuleStatusRegistered
 	reg.DeregisteredAt = nil
 	reg.DeclaredDeadAt = nil
@@ -41,6 +45,34 @@ func (f *fakeRepo) Upsert(_ context.Context, reg *models.Module) error {
 }
 
 func (f *fakeRepo) RecordStatus(context.Context, string, map[string]any) error { return nil }
+
+func (f *fakeRepo) Block(_ context.Context, instance, reason string, by models.ModuleActor, at time.Time) (bool, error) {
+	row, ok := f.rows[instance]
+	if !ok || row.Status == models.ModuleStatusBlocked {
+		return false, nil
+	}
+	row.Status, row.BlockReason, row.BlockedBy, row.BlockedAt = models.ModuleStatusBlocked, reason, &by, &at
+	return true, nil
+}
+
+func (f *fakeRepo) Unblock(_ context.Context, instance string, at time.Time) (bool, error) {
+	row, ok := f.rows[instance]
+	if !ok || row.Status != models.ModuleStatusBlocked {
+		return false, nil
+	}
+	row.Status, row.DeregisteredAt, row.DeregisterReason = models.ModuleStatusDeregistered, &at, "unblocked"
+	row.BlockReason, row.BlockedBy, row.BlockedAt = "", nil, nil
+	return true, nil
+}
+
+func (f *fakeRepo) Delete(_ context.Context, instance string) (bool, error) {
+	row, ok := f.rows[instance]
+	if !ok || (row.Status != models.ModuleStatusDeregistered && row.Status != models.ModuleStatusDead) {
+		return false, nil
+	}
+	delete(f.rows, instance)
+	return true, nil
+}
 
 func (f *fakeRepo) TouchHeartbeat(_ context.Context, instance, status string, metrics map[string]any, applied *int64, at time.Time) (bool, error) {
 	if f.heartbeatErr != nil {
@@ -542,4 +574,91 @@ func (f *fakeRepo) LatestIcons(context.Context, string) (map[string]string, erro
 
 func (f *fakeRepo) LatestBuildSchemas(context.Context) (map[string]*models.ModuleBuildSchema, error) {
 	return nil, nil
+}
+
+func TestBlockUnblockDelete(t *testing.T) {
+	repo := newFakeRepo()
+	emitter := &fakeEmitter{}
+	inv := &fakeInvalidator{}
+	pub := &fakePublisher{}
+	svc := NewService(repo, emitter, inv, pub, Config{HeartbeatInterval: 30 * time.Second, HeartbeatGraceMisses: 3}, zap.NewNop())
+	ctx := context.Background()
+	register := func() error {
+		_, err := svc.HandleRegister(ctx, envFor(t, OpRegister, registerRequest{
+			ModuleType: "channel", ModuleName: "http", Instance: "http-1", RPCQueue: "q.http-1",
+		}))
+		return err
+	}
+	if err := register(); err != nil {
+		t.Fatal(err)
+	}
+	ana := models.ModuleActor{Type: "user", ID: "u-1", Name: "ana"}
+
+	// Blocking a running instance cuts it off at once.
+	if ok, err := svc.Block(ctx, "http-1", "not ours", ana, eventbus.UserActor("u-1")); !ok || err != nil {
+		t.Fatalf("Block: %v %v", ok, err)
+	}
+	row := repo.rows["http-1"]
+	if row.Status != models.ModuleStatusBlocked || row.BlockReason != "not ours" || row.BlockedBy == nil || row.BlockedBy.Name != "ana" || row.BlockedAt == nil {
+		t.Fatalf("row = %+v", row)
+	}
+	if len(inv.instances) != 1 || inv.instances[0] != "http-1" {
+		t.Errorf("gate not busted: %v", inv.instances)
+	}
+	if last := emitter.events[len(emitter.events)-1]; last.routingKey != "channel.http-1.blocked" {
+		t.Errorf("audit event %q", last.routingKey)
+	}
+	if last := pub.events[len(pub.events)-1]; last.Topic != eventbus.TopicModuleBlocked {
+		t.Errorf("bus event %s", last.Topic)
+	}
+	// It can neither come back nor heartbeat.
+	assertRPCCode(t, register(), messaging.CodeInstanceBlocked)
+	_, err := svc.HandleHeartbeat(ctx, envFor(t, OpHeartbeat, heartbeatRequest{Instance: "http-1"}))
+	assertRPCCode(t, err, messaging.CodeUnknownInstance)
+	if ok, _ := svc.Block(ctx, "http-1", "", ana, eventbus.UserActor("u-1")); ok {
+		t.Error("blocked twice")
+	}
+	if ok, _ := svc.Delete(ctx, "http-1", eventbus.UserActor("u-1")); ok {
+		t.Error("a blocked instance's row deleted")
+	}
+
+	// Unblocked, it registers again.
+	if ok, err := svc.Unblock(ctx, "http-1", eventbus.UserActor("u-1")); !ok || err != nil {
+		t.Fatalf("Unblock: %v %v", ok, err)
+	}
+	if row := repo.rows["http-1"]; row.Status != models.ModuleStatusDeregistered || row.BlockedBy != nil {
+		t.Fatalf("row = %+v", row)
+	}
+	if last := pub.events[len(pub.events)-1]; last.Topic != eventbus.TopicModuleUnblocked {
+		t.Errorf("bus event %s", last.Topic)
+	}
+	if err := register(); err != nil {
+		t.Fatalf("register after unblock: %v", err)
+	}
+	if ok, _ := svc.Unblock(ctx, "http-1", eventbus.UserActor("u-1")); ok {
+		t.Error("unblocked an instance that is not blocked")
+	}
+
+	// A registered instance's row stays; a gone one's goes.
+	if ok, _ := svc.Delete(ctx, "http-1", eventbus.UserActor("u-1")); ok {
+		t.Error("a registered instance's row deleted")
+	}
+	if _, err := svc.HandleDeregister(ctx, envFor(t, OpDeregister, deregisterRequest{Instance: "http-1"})); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := svc.Delete(ctx, "http-1", eventbus.UserActor("u-1")); !ok || err != nil {
+		t.Fatalf("Delete: %v %v", ok, err)
+	}
+	if _, ok := repo.rows["http-1"]; ok {
+		t.Error("row still there")
+	}
+	if last := emitter.events[len(emitter.events)-1]; last.routingKey != "channel.http-1.deleted" {
+		t.Errorf("audit event %q", last.routingKey)
+	}
+	if last := pub.events[len(pub.events)-1]; last.Topic != eventbus.TopicModuleDeleted {
+		t.Errorf("bus event %s", last.Topic)
+	}
+	if ok, _ := svc.Block(ctx, "ghost", "", ana, eventbus.UserActor("u-1")); ok {
+		t.Error("blocked an unknown instance")
+	}
 }

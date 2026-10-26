@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,6 +35,9 @@ const (
 	EventRegistered   = "registered"
 	EventDeregistered = "deregistered"
 	EventDeclaredDead = "declared_dead"
+	EventBlocked      = "blocked"
+	EventUnblocked    = "unblocked"
+	EventDeleted      = "deleted"
 	eventEnvelopeType = "module." // type becomes "module.<event>"
 	eventVersion      = "1.0"
 )
@@ -241,6 +245,13 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 		}
 	}
 	if err := s.repo.Upsert(ctx, reg); err != nil {
+		if errors.Is(err, repository.ErrInstanceBlocked) {
+			s.logger.Info("registration refused: the instance is blocked", zap.String("instance", p.Instance))
+			return nil, &messaging.RPCError{
+				Code:    messaging.CodeInstanceBlocked,
+				Message: fmt.Sprintf("an operator blocked instance %q; core refuses it until it is unblocked", p.Instance),
+			}
+		}
 		return nil, fmt.Errorf("persist registration: %w", err)
 	}
 
@@ -360,11 +371,10 @@ func (s *Service) HandleDeregister(ctx context.Context, req messaging.Envelope) 
 // Deregister transitions a registered instance to deregistered and fans the
 // change out to every observer: it busts the data-plane registration-gate
 // cache, emits the AMQP audit event, and publishes a module.deregistered event
-// on the in-process bus. Shared by the module.deregister RPC handler
-// (module-initiated) and the GraphQL removeModule mutation (admin-initiated);
-// the actor distinguishes the two on the event stream. Returns false (with a
-// nil error) when the instance has no active registration — callers map that to
-// their own not-found signal (RPC unknown_instance / GraphQL error).
+// on the in-process bus. Called by the module.deregister RPC handler: a module
+// leaving on a clean shutdown. Returns false (with a nil error) when the
+// instance has no active registration, which the handler answers with
+// unknown_instance.
 func (s *Service) Deregister(ctx context.Context, instance, reason string, actor eventbus.Actor) (bool, error) {
 	// Look up first so the audit event can carry the module_type.
 	existing, err := s.repo.FindByInstance(ctx, instance)
@@ -394,6 +404,70 @@ func (s *Service) Deregister(ctx context.Context, instance, reason string, actor
 		zap.String("reason", reason))
 
 	return found, nil
+}
+
+// Block blocks an instance whatever its state, recording by and reason: core
+// refuses its registrations (instance_blocked), heartbeats (unknown_instance,
+// which only leads it to ask to register again) and traffic. A running
+// instance is cut off at once: the registration-gate cache is busted. Returns
+// false when there is no such instance or it is blocked already.
+func (s *Service) Block(ctx context.Context, instance, reason string, by models.ModuleActor, actor eventbus.Actor) (bool, error) {
+	existing, _ := s.repo.FindByInstance(ctx, instance)
+	ok, err := s.repo.Block(ctx, instance, reason, by, s.now())
+	if err != nil {
+		return false, fmt.Errorf("block: %w", err)
+	}
+	if !ok {
+		return false, nil
+	}
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(ctx, instance)
+	}
+	s.emit(ctx, existing.Type, instance, EventBlocked)
+	s.publishBus(eventbus.NewModuleBlockedEvent(actor,
+		eventbus.ModuleEventPayload{Instance: instance, Type: existing.Type, Status: models.ModuleStatusBlocked}))
+	s.logger.Info("module blocked", zap.String("instance", instance), zap.String("by", by.ID), zap.String("reason", reason))
+	return true, nil
+}
+
+// Unblock lifts a block: the instance is deregistered, free to register again
+// (a running one does when it next asks). Returns false when it is not
+// blocked.
+func (s *Service) Unblock(ctx context.Context, instance string, actor eventbus.Actor) (bool, error) {
+	existing, _ := s.repo.FindByInstance(ctx, instance)
+	ok, err := s.repo.Unblock(ctx, instance, s.now())
+	if err != nil {
+		return false, fmt.Errorf("unblock: %w", err)
+	}
+	if !ok {
+		return false, nil
+	}
+	s.emit(ctx, existing.Type, instance, EventUnblocked)
+	s.publishBus(eventbus.NewModuleUnblockedEvent(actor,
+		eventbus.ModuleEventPayload{Instance: instance, Type: existing.Type, Status: models.ModuleStatusDeregistered}))
+	s.logger.Info("module unblocked", zap.String("instance", instance))
+	return true, nil
+}
+
+// Delete removes the row of an instance that is gone (deregistered or dead).
+// Its stored configuration and history are not touched. Returns false for any
+// other state.
+func (s *Service) Delete(ctx context.Context, instance string, actor eventbus.Actor) (bool, error) {
+	existing, _ := s.repo.FindByInstance(ctx, instance)
+	ok, err := s.repo.Delete(ctx, instance)
+	if err != nil {
+		return false, fmt.Errorf("delete: %w", err)
+	}
+	if !ok {
+		return false, nil
+	}
+	if s.invalidator != nil {
+		s.invalidator.Invalidate(ctx, instance)
+	}
+	s.emit(ctx, existing.Type, instance, EventDeleted)
+	s.publishBus(eventbus.NewModuleDeletedEvent(actor, eventbus.ModuleEventPayload{Instance: instance, Type: existing.Type}))
+	s.logger.Info("module deleted", zap.String("instance", instance))
+	return true, nil
 }
 
 // publishBus fans a module lifecycle change out to the in-process event bus for

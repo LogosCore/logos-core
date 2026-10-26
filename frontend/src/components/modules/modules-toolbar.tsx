@@ -13,6 +13,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "registered", label: "Registered" },
   { value: "deregistered", label: "Deregistered" },
   { value: "dead", label: "Dead" },
+  { value: "blocked", label: "Blocked" },
 ]
 
 export function ModulesToolbar() {

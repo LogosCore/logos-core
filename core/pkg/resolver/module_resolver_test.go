@@ -3,11 +3,12 @@ package resolver
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
@@ -39,6 +40,12 @@ func (f *fakeModuleRepo) List(_ context.Context, statuses []string) ([]models.Mo
 	return out, nil
 }
 
+func (f *fakeModuleRepo) Block(context.Context, string, string, models.ModuleActor, time.Time) (bool, error) {
+	return false, nil
+}
+func (f *fakeModuleRepo) Unblock(context.Context, string, time.Time) (bool, error) { return false, nil }
+func (f *fakeModuleRepo) Delete(context.Context, string) (bool, error)             { return false, nil }
+
 func (f *fakeModuleRepo) FindByInstance(_ context.Context, instance string) (models.Module, error) {
 	if f.findErr != nil {
 		return models.Module{}, f.findErr
@@ -65,22 +72,33 @@ func (f *fakeModuleRepo) FindStaleRegistered(context.Context, time.Time, int64) 
 func (f *fakeModuleRepo) MarkDead(context.Context, []string, time.Time) error { return nil }
 func (f *fakeModuleRepo) ListActive(context.Context) ([]models.Module, error) { return nil, nil }
 
-// fakeDeregistrar records calls and returns a scripted (found, err).
-type fakeDeregistrar struct {
-	found    bool
-	err      error
-	instance string
-	reason   string
-	actor    eventbus.Actor
-	calls    int
+// fakeAdmin records an operator's lifecycle changes and returns a scripted
+// (ok, err).
+type fakeAdmin struct {
+	ok     bool
+	err    error
+	calls  []string // "block http-1", "unblock http-1", "delete http-1"
+	reason string
+	by     models.ModuleActor
+	actor  eventbus.Actor
 }
 
-func (f *fakeDeregistrar) Deregister(_ context.Context, instance, reason string, actor eventbus.Actor) (bool, error) {
-	f.calls++
-	f.instance = instance
-	f.reason = reason
+func (f *fakeAdmin) Block(_ context.Context, instance, reason string, by models.ModuleActor, actor eventbus.Actor) (bool, error) {
+	f.calls = append(f.calls, "block "+instance)
+	f.reason, f.by, f.actor = reason, by, actor
+	return f.ok, f.err
+}
+
+func (f *fakeAdmin) Unblock(_ context.Context, instance string, actor eventbus.Actor) (bool, error) {
+	f.calls = append(f.calls, "unblock "+instance)
 	f.actor = actor
-	return f.found, f.err
+	return f.ok, f.err
+}
+
+func (f *fakeAdmin) Delete(_ context.Context, instance string, actor eventbus.Actor) (bool, error) {
+	f.calls = append(f.calls, "delete "+instance)
+	f.actor = actor
+	return f.ok, f.err
 }
 
 func TestModules_PassesStatusFilterThrough(t *testing.T) {
@@ -88,7 +106,7 @@ func TestModules_PassesStatusFilterThrough(t *testing.T) {
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},
 		{Instance: "tg-1", Status: models.ModuleStatusDead},
 	}}
-	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil, nil)
+	r := NewModuleResolver(repo, &fakeAdmin{}, nil, nil)
 
 	out, err := r.Modules(context.Background(), []string{models.ModuleStatusRegistered})
 	if err != nil {
@@ -107,7 +125,7 @@ func TestModules_NilFilterReturnsAll(t *testing.T) {
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},
 		{Instance: "tg-1", Status: models.ModuleStatusDead},
 	}}
-	r := NewModuleResolver(repo, &fakeDeregistrar{}, nil, nil)
+	r := NewModuleResolver(repo, &fakeAdmin{}, nil, nil)
 
 	out, err := r.Modules(context.Background(), nil)
 	if err != nil {
@@ -118,61 +136,121 @@ func TestModules_NilFilterReturnsAll(t *testing.T) {
 	}
 }
 
-func TestRemoveModule_DeregistersAndReturnsUpdatedRow(t *testing.T) {
+func TestBlockModule(t *testing.T) {
 	repo := &fakeModuleRepo{rows: []models.Module{
-		{Instance: "http-1", Type: "channel", Status: models.ModuleStatusDeregistered},
+		{Instance: "http-1", Type: "channel", Status: models.ModuleStatusRegistered},
+		{Instance: "http-2", Type: "channel", Status: models.ModuleStatusBlocked},
 	}}
-	dereg := &fakeDeregistrar{found: true}
-	r := NewModuleResolver(repo, dereg, nil, nil)
+	admin := &fakeAdmin{ok: true}
+	r := NewModuleResolver(repo, admin, nil, nil)
+	ctx := userCtx("admin")
 
-	mod, err := r.RemoveModule(adminCtx(uuid.New()), "http-1")
-	if err != nil {
-		t.Fatalf("RemoveModule error: %v", err)
+	reason := "  not one of ours  "
+	if _, err := r.BlockModule(ctx, " http-1 ", &reason); err != nil {
+		t.Fatalf("BlockModule: %v", err)
 	}
-	if mod.Instance != "http-1" || mod.Status != models.ModuleStatusDeregistered {
-		t.Errorf("returned row = %+v, want deregistered http-1", mod)
+	// The reason is trimmed, and the block is the calling user's.
+	if len(admin.calls) != 1 || admin.calls[0] != "block http-1" || admin.reason != "not one of ours" ||
+		admin.by.ID != "u-1" || admin.by.Name != "alice" || admin.actor.Type != eventbus.ActorUser {
+		t.Errorf("admin = %+v", admin)
 	}
-	if dereg.calls != 1 || dereg.instance != "http-1" || dereg.reason != removeModuleReason {
-		t.Errorf("deregistrar call = %+v", dereg)
-	}
-	// Admin removal must be attributed to the calling user, not the instance.
-	if dereg.actor.Type != eventbus.ActorUser {
-		t.Errorf("actor type = %q, want user", dereg.actor.Type)
-	}
-}
 
-func TestRemoveModule_NotRegisteredIsError(t *testing.T) {
-	dereg := &fakeDeregistrar{found: false}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil, nil)
-
-	if _, err := r.RemoveModule(adminCtx(uuid.New()), "ghost"); err == nil {
-		t.Fatal("expected error when instance is not currently registered")
+	long := strings.Repeat("x", maxBlockReason+1)
+	for name, c := range map[string]struct {
+		instance string
+		reason   *string
+		code     string
+	}{
+		"blank instance":  {"  ", nil, errCodeBadUserInput},
+		"unknown":         {"ghost", nil, errCodeNotFound},
+		"blocked already": {"http-2", nil, errCodeConflict},
+		"long reason":     {"http-1", &long, errCodeBadUserInput},
+	} {
+		if _, err := r.BlockModule(ctx, c.instance, c.reason); gqlCode(err) != c.code {
+			t.Errorf("%s: %v, want %s", name, err, c.code)
+		}
 	}
-}
-
-func TestRemoveModule_BlankInstanceRejectedBeforeDeregister(t *testing.T) {
-	dereg := &fakeDeregistrar{found: true}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil, nil)
-
-	if _, err := r.RemoveModule(adminCtx(uuid.New()), "   "); err == nil {
-		t.Fatal("expected error for blank instance")
-	}
-	if dereg.calls != 0 {
-		t.Errorf("deregistrar called %d times for blank instance, want 0", dereg.calls)
+	if len(admin.calls) != 1 {
+		t.Errorf("admin called for refused blocks: %v", admin.calls)
 	}
 }
 
-func TestRemoveModule_PropagatesDeregisterError(t *testing.T) {
-	dereg := &fakeDeregistrar{err: errors.New("mongo down")}
-	r := NewModuleResolver(&fakeModuleRepo{}, dereg, nil, nil)
+func TestUnblockModule(t *testing.T) {
+	repo := &fakeModuleRepo{rows: []models.Module{
+		{Instance: "http-1", Status: models.ModuleStatusRegistered},
+		{Instance: "http-2", Status: models.ModuleStatusBlocked},
+	}}
+	admin := &fakeAdmin{ok: true}
+	r := NewModuleResolver(repo, admin, nil, nil)
+	if _, err := r.UnblockModule(userCtx("admin"), "http-2"); err != nil || len(admin.calls) != 1 || admin.calls[0] != "unblock http-2" {
+		t.Fatalf("UnblockModule: %v, calls %v", err, admin.calls)
+	}
+	if _, err := r.UnblockModule(userCtx("admin"), "http-1"); gqlCode(err) != errCodeConflict {
+		t.Errorf("unblocking a module that is not blocked: %v", err)
+	}
+}
 
-	if _, err := r.RemoveModule(adminCtx(uuid.New()), "http-1"); err == nil {
-		t.Fatal("expected deregister error to propagate")
+func TestDeleteModule(t *testing.T) {
+	repo := &fakeModuleRepo{rows: []models.Module{
+		{Instance: "live", Status: models.ModuleStatusRegistered},
+		{Instance: "blocked", Status: models.ModuleStatusBlocked},
+		{Instance: "gone", Status: models.ModuleStatusDeregistered},
+		{Instance: "dead", Status: models.ModuleStatusDead},
+	}}
+	admin := &fakeAdmin{ok: true}
+	r := NewModuleResolver(repo, admin, nil, nil)
+	ctx := userCtx("admin")
+	for _, instance := range []string{"gone", "dead"} {
+		if ok, err := r.DeleteModule(ctx, instance); !ok || err != nil {
+			t.Errorf("DeleteModule(%s): %v %v", instance, ok, err)
+		}
+	}
+	for _, instance := range []string{"live", "blocked"} {
+		if _, err := r.DeleteModule(ctx, instance); gqlCode(err) != errCodeConflict {
+			t.Errorf("DeleteModule(%s): %v, want a conflict", instance, err)
+		}
+	}
+	if len(admin.calls) != 2 {
+		t.Errorf("calls = %v", admin.calls)
+	}
+	// It registered again between the read and the delete.
+	admin.ok = false
+	if _, err := r.DeleteModule(ctx, "gone"); gqlCode(err) != errCodeConflict {
+		t.Errorf("a raced delete: %v", err)
+	}
+	admin.err = errors.New("mongo down")
+	if _, err := r.DeleteModule(ctx, "gone"); err == nil {
+		t.Error("the admin's error was dropped")
+	}
+}
+
+// agentCtx is a delegated agent key's context, whatever its owner's role.
+func agentCtx() context.Context {
+	return gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{
+		UserID: "u-1", Roles: []string{"admin"}, Agent: &gqlctx.AgentInfo{AgentKeyID: "a-1"},
+	})
+}
+
+func TestModuleAdminRefusesAgentKeys(t *testing.T) {
+	repo := &fakeModuleRepo{rows: []models.Module{{Instance: "gone", Status: models.ModuleStatusDeregistered}}}
+	admin := &fakeAdmin{ok: true}
+	r := NewModuleResolver(repo, admin, nil, nil)
+	ctx := agentCtx()
+	_, errBlock := r.BlockModule(ctx, "gone", nil)
+	_, errUnblock := r.UnblockModule(ctx, "gone")
+	_, errDelete := r.DeleteModule(ctx, "gone")
+	for _, err := range []error{errBlock, errUnblock, errDelete} {
+		if gqlCode(err) != errCodeForbidden {
+			t.Errorf("an agent key: %v", err)
+		}
+	}
+	if len(admin.calls) != 0 {
+		t.Errorf("calls = %v", admin.calls)
 	}
 }
 
 func TestModuleFieldResolvers_FormatTimestamps(t *testing.T) {
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, nil, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeAdmin{}, nil, nil)
 	hb := time.Date(2026, 6, 27, 12, 0, 0, 0, time.UTC)
 	mod := &models.Module{
 		RegisteredAt:    time.Date(2026, 6, 27, 11, 0, 0, 0, time.UTC),

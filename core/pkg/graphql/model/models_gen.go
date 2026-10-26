@@ -1331,6 +1331,9 @@ const (
 	ModuleEventKindRegistered   ModuleEventKind = "REGISTERED"
 	ModuleEventKindDeregistered ModuleEventKind = "DEREGISTERED"
 	ModuleEventKindDead         ModuleEventKind = "DEAD"
+	ModuleEventKindBlocked      ModuleEventKind = "BLOCKED"
+	ModuleEventKindUnblocked    ModuleEventKind = "UNBLOCKED"
+	ModuleEventKindDeleted      ModuleEventKind = "DELETED"
 	ModuleEventKindChanged      ModuleEventKind = "CHANGED"
 	ModuleEventKindHeartbeat    ModuleEventKind = "HEARTBEAT"
 )
@@ -1339,13 +1342,16 @@ var AllModuleEventKind = []ModuleEventKind{
 	ModuleEventKindRegistered,
 	ModuleEventKindDeregistered,
 	ModuleEventKindDead,
+	ModuleEventKindBlocked,
+	ModuleEventKindUnblocked,
+	ModuleEventKindDeleted,
 	ModuleEventKindChanged,
 	ModuleEventKindHeartbeat,
 }
 
 func (e ModuleEventKind) IsValid() bool {
 	switch e {
-	case ModuleEventKindRegistered, ModuleEventKindDeregistered, ModuleEventKindDead, ModuleEventKindChanged, ModuleEventKindHeartbeat:
+	case ModuleEventKindRegistered, ModuleEventKindDeregistered, ModuleEventKindDead, ModuleEventKindBlocked, ModuleEventKindUnblocked, ModuleEventKindDeleted, ModuleEventKindChanged, ModuleEventKindHeartbeat:
 		return true
 	}
 	return false

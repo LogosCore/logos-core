@@ -34,6 +34,7 @@ const (
 	CodeValidationFailed   = protocol.CodeValidationFailed
 	CodeUnsupportedVersion = protocol.CodeUnsupportedVersion
 	CodeUnknownInstance    = protocol.CodeUnknownInstance
+	CodeInstanceBlocked    = protocol.CodeInstanceBlocked
 	CodeInternalError      = protocol.CodeInternalError
 )
 

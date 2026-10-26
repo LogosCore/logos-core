@@ -33,9 +33,29 @@ func (r *moduleResolver) DeclaredDeadAt(ctx context.Context, obj *models.Module)
 	return r.ModuleResolver.DeclaredDeadAt(ctx, obj)
 }
 
-// RemoveModule is the resolver for the removeModule field.
-func (r *mutationResolver) RemoveModule(ctx context.Context, instance string) (*models.Module, error) {
-	return r.ModuleResolver.RemoveModule(ctx, instance)
+// BlockedAt is the resolver for the blockedAt field.
+func (r *moduleResolver) BlockedAt(ctx context.Context, obj *models.Module) (*string, error) {
+	return r.ModuleResolver.BlockedAt(ctx, obj)
+}
+
+// BlockedBy is the resolver for the blockedBy field.
+func (r *moduleResolver) BlockedBy(ctx context.Context, obj *models.Module) (*model.ModuleActor, error) {
+	return r.ModuleResolver.BlockedBy(ctx, obj)
+}
+
+// BlockModule is the resolver for the blockModule field.
+func (r *mutationResolver) BlockModule(ctx context.Context, instance string, reason *string) (*models.Module, error) {
+	return r.ModuleResolver.BlockModule(ctx, instance, reason)
+}
+
+// UnblockModule is the resolver for the unblockModule field.
+func (r *mutationResolver) UnblockModule(ctx context.Context, instance string) (*models.Module, error) {
+	return r.ModuleResolver.UnblockModule(ctx, instance)
+}
+
+// DeleteModule is the resolver for the deleteModule field.
+func (r *mutationResolver) DeleteModule(ctx context.Context, instance string) (bool, error) {
+	return r.ModuleResolver.DeleteModule(ctx, instance)
 }
 
 // Modules is the resolver for the modules field.

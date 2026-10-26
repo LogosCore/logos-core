@@ -184,6 +184,13 @@ export function ModuleIdentity({ module }: { module: ModuleDetailFieldsFragment 
             <DateOrDash date={m.declaredDeadAt} />
           </Row>
         )}
+        {m.blockedAt && (
+          <Row label="Blocked">
+            <DateOrDash date={m.blockedAt} />
+            {m.blockedBy?.name && <span className="text-muted-foreground"> by {m.blockedBy.name}</span>}
+            {m.blockReason && <div className="text-muted-foreground">{m.blockReason}</div>}
+          </Row>
+        )}
         {m.management && (
           <>
             <Row label="Manifest schema">{m.management.schemaVersion}</Row>

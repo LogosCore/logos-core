@@ -105,9 +105,11 @@ type Documents = {
     "\n  mutation UpdateHost($id: ID!, $input: UpdateHostInput!) {\n    updateHost(id: $id, input: $input) {\n      ...HostFields\n    }\n  }\n": typeof types.UpdateHostDocument,
     "\n  mutation DeleteHost($id: ID!) {\n    deleteHost(id: $id)\n  }\n": typeof types.DeleteHostDocument,
     "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n": typeof types.HostChangedDocument,
-    "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n  }\n": typeof types.ModuleFieldsFragmentDoc,
+    "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": typeof types.ModuleFieldsFragmentDoc,
     "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": typeof types.ModulesDocument,
-    "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": typeof types.RemoveModuleDocument,
+    "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": typeof types.BlockModuleDocument,
+    "\n  mutation UnblockModule($instance: ID!) {\n    unblockModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": typeof types.UnblockModuleDocument,
+    "\n  mutation DeleteModule($instance: ID!) {\n    deleteModule(instance: $instance)\n  }\n": typeof types.DeleteModuleDocument,
     "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      kind\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n": typeof types.ModuleChangedDocument,
     "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    format\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    keyPattern\n    maxItems\n    options {\n      value\n      label\n      description\n    }\n    accept\n    maxSize\n  }\n": typeof types.ModuleFieldDefFieldsFragmentDoc,
     "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        available\n        unavailableReason\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n    connection {\n      version\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n    build {\n      ...BuildSchemaFields\n    }\n  }\n": typeof types.ModuleDetailFieldsFragmentDoc,
@@ -326,9 +328,11 @@ const documents: Documents = {
     "\n  mutation UpdateHost($id: ID!, $input: UpdateHostInput!) {\n    updateHost(id: $id, input: $input) {\n      ...HostFields\n    }\n  }\n": types.UpdateHostDocument,
     "\n  mutation DeleteHost($id: ID!) {\n    deleteHost(id: $id)\n  }\n": types.DeleteHostDocument,
     "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n": types.HostChangedDocument,
-    "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n  }\n": types.ModuleFieldsFragmentDoc,
+    "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": types.ModuleFieldsFragmentDoc,
     "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": types.ModulesDocument,
-    "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": types.RemoveModuleDocument,
+    "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": types.BlockModuleDocument,
+    "\n  mutation UnblockModule($instance: ID!) {\n    unblockModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": types.UnblockModuleDocument,
+    "\n  mutation DeleteModule($instance: ID!) {\n    deleteModule(instance: $instance)\n  }\n": types.DeleteModuleDocument,
     "\n  subscription ModuleChanged {\n    moduleChanged {\n      action\n      kind\n      instance\n      module {\n        ...ModuleFields\n      }\n    }\n  }\n": types.ModuleChangedDocument,
     "\n  fragment ModuleFieldDefFields on ModuleField {\n    key\n    type\n    label\n    description\n    group\n    order\n    unit\n    placeholder\n    format\n    required\n    default\n    min\n    max\n    pattern\n    maxLength\n    keyPattern\n    maxItems\n    options {\n      value\n      label\n      description\n    }\n    accept\n    maxSize\n  }\n": types.ModuleFieldDefFieldsFragmentDoc,
     "\n  fragment ModuleDetailFields on Module {\n    ...ModuleFields\n    management {\n      schemaVersion\n      revision\n      appliedRevision\n      syncState\n      lastApplyError\n      capabilities\n      properties {\n        field {\n          ...ModuleFieldDefFields\n        }\n        apply\n        effective\n        source\n        value\n        isSet\n        rejectedReason\n        restartRequired\n      }\n      actions {\n        name\n        label\n        description\n        risk\n        confirm\n        timeoutSeconds\n        available\n        unavailableReason\n        params {\n          ...ModuleFieldDefFields\n        }\n      }\n      status {\n        key\n        type\n        label\n        description\n        unit\n        value\n        alert\n      }\n    }\n    connection {\n      version\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n    build {\n      ...BuildSchemaFields\n    }\n  }\n": types.ModuleDetailFieldsFragmentDoc,
@@ -820,7 +824,7 @@ export function graphql(source: "\n  subscription HostChanged($operationId: ID!)
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n  }\n"): typeof import('./graphql').ModuleFieldsFragmentDoc;
+export function graphql(source: "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n"): typeof import('./graphql').ModuleFieldsFragmentDoc;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -828,7 +832,15 @@ export function graphql(source: "\n  query Modules($status: [String!]) {\n    mo
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  mutation RemoveModule($instance: ID!) {\n    removeModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n"): typeof import('./graphql').RemoveModuleDocument;
+export function graphql(source: "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n"): typeof import('./graphql').BlockModuleDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation UnblockModule($instance: ID!) {\n    unblockModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n"): typeof import('./graphql').UnblockModuleDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteModule($instance: ID!) {\n    deleteModule(instance: $instance)\n  }\n"): typeof import('./graphql').DeleteModuleDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

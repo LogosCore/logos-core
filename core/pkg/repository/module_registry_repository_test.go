@@ -270,3 +270,34 @@ func TestLatestIconPerKind(t *testing.T) {
 		t.Errorf("icons = %v", got)
 	}
 }
+
+func TestBlockUpdates(t *testing.T) {
+	at := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	by := models.ModuleActor{Type: "user", ID: "u-1", Name: "ana"}
+	u := blockUpdate("not ours", by, at)
+	set, unset := u["$set"].(bson.M), u["$unset"].(bson.M)
+	if set["status"] != models.ModuleStatusBlocked || set["blocked_at"] != at || set["blocked_by"] != by || set["block_reason"] != "not ours" {
+		t.Errorf("$set = %v", set)
+	}
+	if _, ok := unset["last_metrics"]; !ok {
+		t.Error("a blocked instance keeps its status values")
+	}
+	if u := blockUpdate("", by, at); u["$unset"].(bson.M)["block_reason"] == nil {
+		t.Error("an old reason survives a block without one")
+	}
+	u = unblockUpdate(at)
+	if s := u["$set"].(bson.M); s["status"] != models.ModuleStatusDeregistered || s["deregistered_at"] != at {
+		t.Errorf("unblock $set = %v", s)
+	}
+	for _, k := range []string{"blocked_at", "blocked_by", "block_reason"} {
+		if _, ok := u["$unset"].(bson.M)[k]; !ok {
+			t.Errorf("unblock keeps %s", k)
+		}
+		if _, ok := takeoverUpdate(&models.Module{Instance: "http-1"})["$unset"].(bson.M)[k]; !ok {
+			t.Errorf("a registration keeps %s", k)
+		}
+	}
+	if f := notBlockedFilter("http-1"); f["status"].(bson.M)["$ne"] != models.ModuleStatusBlocked {
+		t.Errorf("filter = %v", f)
+	}
+}

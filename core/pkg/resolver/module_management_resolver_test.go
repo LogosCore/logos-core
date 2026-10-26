@@ -67,7 +67,7 @@ func gqlCode(err error) string {
 
 func TestUpdateModuleConfig_RejectsAgentKeys(t *testing.T) {
 	mgr := &fakeManager{}
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, mgr, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeAdmin{}, mgr, nil)
 	ctx := gqlctx.WithAuthInfo(context.Background(), gqlctx.AuthInfo{
 		UserID: "u-1", Roles: []string{"admin"}, Agent: &gqlctx.AgentInfo{AgentKeyID: "a-1"},
 	})
@@ -86,7 +86,7 @@ func TestUpdateModuleConfig_RejectsAgentKeys(t *testing.T) {
 
 func TestUpdateModuleConfig_MapsErrorsAndPassesActor(t *testing.T) {
 	mgr := &fakeManager{}
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, mgr, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeAdmin{}, mgr, nil)
 
 	mod, err := r.UpdateModuleConfig(userCtx("admin"), "http-1",
 		[]*model.ModuleConfigValueInput{{Key: "limit", Value: json.Number("5")}, {Key: "mode", Value: nil}}, 3)
@@ -114,7 +114,7 @@ func TestUpdateModuleConfig_MapsErrorsAndPassesActor(t *testing.T) {
 
 func TestInvokeModuleAction_HighRiskPermissionAndNormalFailure(t *testing.T) {
 	mgr := &fakeManager{}
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, mgr, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeAdmin{}, mgr, nil)
 
 	inv, err := r.InvokeModuleAction(userCtx("user"), "http-1", "wipe", map[string]any{"x": 1})
 	if err != nil {
@@ -157,7 +157,7 @@ func TestManagementField_NullWithoutManifestAndHidesSecrets(t *testing.T) {
 	}
 	eff := modulemgmt.ComputeEffective(&m,
 		&models.ModuleConfig{Revision: 3, Values: models.JSONMap{"token": "s3cret", "limit": float64(50)}})
-	r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, &fakeManager{eff: eff}, nil)
+	r := NewModuleResolver(&fakeModuleRepo{}, &fakeAdmin{}, &fakeManager{eff: eff}, nil)
 
 	if got, err := r.Management(context.Background(), &models.Module{Instance: "bare"}); got != nil || err != nil {
 		t.Errorf("no manifest → %+v, %v; want null", got, err)
@@ -217,7 +217,7 @@ func TestManagementField_ActionAvailability(t *testing.T) {
 		t.Helper()
 		mod.LastMetrics = metrics
 		eff := modulemgmt.ComputeEffective(&m, &models.ModuleConfig{Revision: 1, Values: config})
-		r := NewModuleResolver(&fakeModuleRepo{}, &fakeDeregistrar{}, &fakeManager{eff: eff}, nil)
+		r := NewModuleResolver(&fakeModuleRepo{}, &fakeAdmin{}, &fakeManager{eff: eff}, nil)
 		got, err := r.Management(context.Background(), mod)
 		if err != nil {
 			t.Fatal(err)

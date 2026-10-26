@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,15 +12,19 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/qiniu/qmgo"
 )
 
-// ModuleDeregistrar performs the shared deregister transition: registry update,
-// data-plane gate-cache bust, AMQP audit event, and in-process bus event.
-// Satisfied by *lifecycle.Service. Kept as a narrow interface so the resolver
-// does not import the whole control-plane package and stays unit-testable with
-// a fake.
-type ModuleDeregistrar interface {
-	Deregister(ctx context.Context, instance, reason string, actor eventbus.Actor) (bool, error)
+// ModuleAdmin performs an operator's lifecycle changes on an instance: each
+// with the registry update, the data-plane gate-cache bust, the AMQP audit
+// event and the in-process bus event. Each returns false when the instance is
+// not in a state the change applies to. Satisfied by *lifecycle.Service. Kept
+// as a narrow interface so the resolver does not import the whole
+// control-plane package and stays unit-testable with a fake.
+type ModuleAdmin interface {
+	Block(ctx context.Context, instance, reason string, by models.ModuleActor, actor eventbus.Actor) (bool, error)
+	Unblock(ctx context.Context, instance string, actor eventbus.Actor) (bool, error)
+	Delete(ctx context.Context, instance string, actor eventbus.Actor) (bool, error)
 }
 
 // IModuleResolver is the business logic for the Module entity — the app-admin
@@ -34,7 +39,9 @@ type IModuleResolver interface {
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
 
 	// Mutations
-	RemoveModule(ctx context.Context, instance string) (*models.Module, error)
+	BlockModule(ctx context.Context, instance string, reason *string) (*models.Module, error)
+	UnblockModule(ctx context.Context, instance string) (*models.Module, error)
+	DeleteModule(ctx context.Context, instance string) (bool, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 
@@ -51,18 +58,18 @@ type IModuleResolver interface {
 	LastHeartbeatAt(ctx context.Context, obj *models.Module) (*string, error)
 	DeregisteredAt(ctx context.Context, obj *models.Module) (*string, error)
 	DeclaredDeadAt(ctx context.Context, obj *models.Module) (*string, error)
+	BlockedAt(ctx context.Context, obj *models.Module) (*string, error)
+	BlockedBy(ctx context.Context, obj *models.Module) (*model.ModuleActor, error)
 }
 
-// removeModuleReason is recorded as the deregister_reason when an admin removes
-// a module from the UI, distinguishing an operator eviction from a module's own
-// graceful shutdown in the audit trail.
-const removeModuleReason = "removed by admin"
+// maxBlockReason bounds the reason an operator gives for a block.
+const maxBlockReason = 500
 
 type moduleResolver struct {
-	repo        repository.IModuleRegistryRepository
-	deregistrar ModuleDeregistrar
-	mgmt        ModuleManager
-	logs        ModuleLogStreamer
+	repo  repository.IModuleRegistryRepository
+	admin ModuleAdmin
+	mgmt  ModuleManager
+	logs  ModuleLogStreamer
 }
 
 // NewModuleResolver builds the Module resolver. deregistrar is the lifecycle
@@ -70,8 +77,8 @@ type moduleResolver struct {
 // deregister path share one transition. mgmt is the module-management service
 // (nil disables management: Module.management is null, mutations error).
 // logs is the live log relay (nil disables moduleLogs).
-func NewModuleResolver(repo repository.IModuleRegistryRepository, deregistrar ModuleDeregistrar, mgmt ModuleManager, logs ModuleLogStreamer) IModuleResolver {
-	return &moduleResolver{repo: repo, deregistrar: deregistrar, mgmt: mgmt, logs: logs}
+func NewModuleResolver(repo repository.IModuleRegistryRepository, admin ModuleAdmin, mgmt ModuleManager, logs ModuleLogStreamer) IModuleResolver {
+	return &moduleResolver{repo: repo, admin: admin, mgmt: mgmt, logs: logs}
 }
 
 // Modules lists module instances filtered to the given lifecycle statuses,
@@ -93,27 +100,92 @@ func (r *moduleResolver) Modules(ctx context.Context, status []string) ([]*model
 // on its next reconnect and reappears as registered — the all-states list makes
 // that flip visible. Returns an error when the instance is not currently
 // registered (already deregistered/dead, or never seen).
-func (r *moduleResolver) RemoveModule(ctx context.Context, instance string) (*models.Module, error) {
+// adminTarget is the instance an operator's lifecycle change names, read
+// first so a refusal can say why. Agent keys are refused: like management,
+// blocking and deleting modules is operator-only.
+func (r *moduleResolver) adminTarget(ctx context.Context, instance string) (gqlctx.AuthInfo, models.Module, error) {
+	auth, err := refuseAgent(ctx)
+	if err != nil {
+		return auth, models.Module{}, err
+	}
 	instance = strings.TrimSpace(instance)
 	if instance == "" {
-		return nil, fmt.Errorf("instance is required")
+		return auth, models.Module{}, moduleGQLError(ctx, errCodeBadUserInput, "instance is required")
 	}
-
-	auth := gqlctx.AuthFromContext(ctx)
-	found, err := r.deregistrar.Deregister(ctx, instance, removeModuleReason, eventActor(auth))
+	mod, err := r.repo.FindByInstance(ctx, instance)
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return auth, mod, moduleGQLError(ctx, errCodeNotFound, "module not found")
+	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to remove module: %w", err)
+		return auth, mod, fmt.Errorf("failed to load module: %w", err)
 	}
-	if !found {
-		return nil, fmt.Errorf("module %q is not currently registered", instance)
-	}
+	return auth, mod, nil
+}
 
-	// Return the post-removal row so the client can seed its cache.
+// reread returns an instance's row after a change, for the client's cache.
+func (r *moduleResolver) reread(ctx context.Context, instance string) (*models.Module, error) {
 	mod, err := r.repo.FindByInstance(ctx, instance)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load module after removal: %w", err)
+		return nil, fmt.Errorf("failed to load module: %w", err)
 	}
 	return &mod, nil
+}
+
+func (r *moduleResolver) BlockModule(ctx context.Context, instance string, reason *string) (*models.Module, error) {
+	auth, mod, err := r.adminTarget(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+	text := ""
+	if reason != nil {
+		text = strings.TrimSpace(*reason)
+	}
+	if len(text) > maxBlockReason {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the reason is longer than %d characters", maxBlockReason))
+	}
+	if mod.Status == models.ModuleStatusBlocked {
+		return nil, moduleGQLError(ctx, errCodeConflict, "the module is blocked already")
+	}
+	if _, err := r.admin.Block(ctx, mod.Instance, text, managementActor(auth), eventActor(auth)); err != nil {
+		return nil, fmt.Errorf("failed to block module: %w", err)
+	}
+	return r.reread(ctx, mod.Instance)
+}
+
+func (r *moduleResolver) UnblockModule(ctx context.Context, instance string) (*models.Module, error) {
+	auth, mod, err := r.adminTarget(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+	if mod.Status != models.ModuleStatusBlocked {
+		return nil, moduleGQLError(ctx, errCodeConflict, "the module is not blocked")
+	}
+	if _, err := r.admin.Unblock(ctx, mod.Instance, eventActor(auth)); err != nil {
+		return nil, fmt.Errorf("failed to unblock module: %w", err)
+	}
+	return r.reread(ctx, mod.Instance)
+}
+
+func (r *moduleResolver) DeleteModule(ctx context.Context, instance string) (bool, error) {
+	auth, mod, err := r.adminTarget(ctx, instance)
+	if err != nil {
+		return false, err
+	}
+	switch mod.Status {
+	case models.ModuleStatusRegistered:
+		return false, moduleGQLError(ctx, errCodeConflict,
+			"the module is registered and would only register again: block it, or stop it first")
+	case models.ModuleStatusBlocked:
+		return false, moduleGQLError(ctx, errCodeConflict, "the module is blocked: its row is the block, so unblock it first")
+	}
+	ok, err := r.admin.Delete(ctx, mod.Instance, eventActor(auth))
+	if err != nil {
+		return false, fmt.Errorf("failed to delete module: %w", err)
+	}
+	if !ok {
+		return false, moduleGQLError(ctx, errCodeConflict, "the module registered or was blocked meanwhile")
+	}
+	return true, nil
 }
 
 // RegisteredAt converts the registration timestamp to an RFC3339 string.
@@ -134,6 +206,19 @@ func (r *moduleResolver) DeregisteredAt(_ context.Context, obj *models.Module) (
 // DeclaredDeadAt is null until the reaper declares the instance dead.
 func (r *moduleResolver) DeclaredDeadAt(_ context.Context, obj *models.Module) (*string, error) {
 	return rfc3339Ptr(obj.DeclaredDeadAt), nil
+}
+
+// BlockedAt is null unless the instance is blocked.
+func (r *moduleResolver) BlockedAt(_ context.Context, obj *models.Module) (*string, error) {
+	return rfc3339Ptr(obj.BlockedAt), nil
+}
+
+// BlockedBy is null unless the instance is blocked.
+func (r *moduleResolver) BlockedBy(_ context.Context, obj *models.Module) (*model.ModuleActor, error) {
+	if obj.BlockedBy == nil {
+		return nil, nil
+	}
+	return toActorModel(*obj.BlockedBy), nil
 }
 
 // rfc3339Ptr formats an optional timestamp as a nullable RFC3339 string.

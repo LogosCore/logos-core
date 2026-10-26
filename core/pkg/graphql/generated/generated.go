@@ -446,6 +446,9 @@ type ComplexityRoot struct {
 	}
 
 	Module struct {
+		BlockReason      func(childComplexity int) int
+		BlockedAt        func(childComplexity int) int
+		BlockedBy        func(childComplexity int) int
 		Build            func(childComplexity int) int
 		Connection       func(childComplexity int) int
 		DeclaredDeadAt   func(childComplexity int) int
@@ -606,6 +609,7 @@ type ComplexityRoot struct {
 		AddTaskWikiReference          func(childComplexity int, taskID string, wikiID string) int
 		AdminRevokeAllUserSessions    func(childComplexity int, userID string) int
 		AdminRevokeSession            func(childComplexity int, id string) int
+		BlockModule                   func(childComplexity int, instance string, reason *string) int
 		BulkImportHashes              func(childComplexity int, operationID string, input model.BulkImportHashesInput) int
 		CancelBuild                   func(childComplexity int, id string) int
 		ChangeTaskStage               func(childComplexity int, input model.ChangeTaskStageInput) int
@@ -634,6 +638,7 @@ type ComplexityRoot struct {
 		DeleteCustomTimelineEvent     func(childComplexity int, id string) int
 		DeleteHash                    func(childComplexity int, id string) int
 		DeleteHost                    func(childComplexity int, id string) int
+		DeleteModule                  func(childComplexity int, instance string) int
 		DeleteMyAPIKey                func(childComplexity int) int
 		DeleteOperation               func(childComplexity int, id string) int
 		DeleteTask                    func(childComplexity int, id string) int
@@ -652,7 +657,6 @@ type ComplexityRoot struct {
 		RecordIconUse                 func(childComplexity int, name string) int
 		RegenerateAgentKey            func(childComplexity int, id string) int
 		RegenerateMyAPIKey            func(childComplexity int) int
-		RemoveModule                  func(childComplexity int, instance string) int
 		RemoveOperationMember         func(childComplexity int, operationID string, userID string) int
 		RemoveSkill                   func(childComplexity int, name string) int
 		ReorderWikiDocumentSiblings   func(childComplexity int, input model.ReorderWikiDocumentSiblingsInput) int
@@ -673,6 +677,7 @@ type ComplexityRoot struct {
 		TouchRecentOperation          func(childComplexity int, operationID string) int
 		TrackWikiDocumentVisit        func(childComplexity int, documentID string) int
 		TransferSkill                 func(childComplexity int, name string, userID string) int
+		UnblockModule                 func(childComplexity int, instance string) int
 		UpdateAgentKey                func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
 		UpdateBuildPreset             func(childComplexity int, id string, input model.BuildPresetInput, expectedRevision int) int
 		UpdateChannelEndpoint         func(childComplexity int, id string, input model.ChannelEndpointInput, expectedRevision int) int
@@ -1301,6 +1306,9 @@ type ModuleResolver interface {
 	DeregisteredAt(ctx context.Context, obj *models.Module) (*string, error)
 
 	DeclaredDeadAt(ctx context.Context, obj *models.Module) (*string, error)
+	BlockedAt(ctx context.Context, obj *models.Module) (*string, error)
+	BlockedBy(ctx context.Context, obj *models.Module) (*model.ModuleActor, error)
+
 	Build(ctx context.Context, obj *models.Module) (*model.BuildSchema, error)
 	Connection(ctx context.Context, obj *models.Module) (*model.ModuleConnectionSchema, error)
 	Management(ctx context.Context, obj *models.Module) (*model.ModuleManagement, error)
@@ -1357,7 +1365,9 @@ type MutationResolver interface {
 	DeleteHost(ctx context.Context, id string) (bool, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
-	RemoveModule(ctx context.Context, instance string) (*models.Module, error)
+	BlockModule(ctx context.Context, instance string, reason *string) (*models.Module, error)
+	UnblockModule(ctx context.Context, instance string) (*models.Module, error)
+	DeleteModule(ctx context.Context, instance string) (bool, error)
 	RevokeSession(ctx context.Context, id string) (bool, error)
 	RevokeAllMySessions(ctx context.Context) (int, error)
 	AdminRevokeSession(ctx context.Context, id string) (bool, error)
@@ -3210,6 +3220,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Minion.Target(childComplexity), true
 
+	case "Module.blockReason":
+		if e.ComplexityRoot.Module.BlockReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.BlockReason(childComplexity), true
+	case "Module.blockedAt":
+		if e.ComplexityRoot.Module.BlockedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.BlockedAt(childComplexity), true
+	case "Module.blockedBy":
+		if e.ComplexityRoot.Module.BlockedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.BlockedBy(childComplexity), true
 	case "Module.build":
 		if e.ComplexityRoot.Module.Build == nil {
 			break
@@ -3940,6 +3968,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AdminRevokeSession(childComplexity, args["id"].(string)), true
+	case "Mutation.blockModule":
+		if e.ComplexityRoot.Mutation.BlockModule == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_blockModule_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.BlockModule(childComplexity, args["instance"].(string), args["reason"].(*string)), true
 	case "Mutation.bulkImportHashes":
 		if e.ComplexityRoot.Mutation.BulkImportHashes == nil {
 			break
@@ -4243,6 +4282,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteHost(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteModule":
+		if e.ComplexityRoot.Mutation.DeleteModule == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteModule_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteModule(childComplexity, args["instance"].(string)), true
 	case "Mutation.deleteMyAPIKey":
 		if e.ComplexityRoot.Mutation.DeleteMyAPIKey == nil {
 			break
@@ -4431,17 +4481,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RegenerateMyAPIKey(childComplexity), true
-	case "Mutation.removeModule":
-		if e.ComplexityRoot.Mutation.RemoveModule == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_removeModule_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.RemoveModule(childComplexity, args["instance"].(string)), true
 	case "Mutation.removeOperationMember":
 		if e.ComplexityRoot.Mutation.RemoveOperationMember == nil {
 			break
@@ -4657,6 +4696,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.TransferSkill(childComplexity, args["name"].(string), args["userId"].(string)), true
+	case "Mutation.unblockModule":
+		if e.ComplexityRoot.Mutation.UnblockModule == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_unblockModule_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UnblockModule(childComplexity, args["instance"].(string)), true
 	case "Mutation.updateAgentKey":
 		if e.ComplexityRoot.Mutation.UpdateAgentKey == nil {
 			break
@@ -9505,7 +9555,7 @@ type Module {
   # scripts or outside references). Empty when it sent none; the UI then shows
   # its type's default. Drawn as a single-colour glyph in the text colour.
   icon: String!
-  # Lifecycle state: "registered" | "deregistered" | "dead".
+  # Lifecycle state: "registered" | "deregistered" | "dead" | "blocked".
   status: String!
   # Self-reported health on the most recent heartbeat:
   # "healthy" | "degraded". Empty until the first heartbeat.
@@ -9518,6 +9568,10 @@ type Module {
   deregisterReason: String!
   # Populated once the reaper declares the instance dead; null otherwise.
   declaredDeadAt: String
+  # While blocked: when, by whom and why (reason empty when none was given).
+  blockedAt: String
+  blockedBy: ModuleActor
+  blockReason: String!
 }
 
 # Streamed on the moduleChanged subscription. REGISTERED maps to CREATED;
@@ -9536,6 +9590,10 @@ enum ModuleEventKind {
   REGISTERED
   DEREGISTERED
   DEAD
+  # An operator blocked the instance, lifted the block, or deleted its row.
+  BLOCKED
+  UNBLOCKED
+  DELETED
   # Config written, apply result recorded, action finished.
   CHANGED
   # Last heartbeat, health and status values.
@@ -9554,9 +9612,19 @@ extend type Query {
 # --- Mutations ---
 
 extend type Mutation {
-  # Soft-remove (deregister) a module instance. Returns the updated row. Errors
-  # if the instance is not currently registered.
-  removeModule(instance: ID!): Module!
+  # Block an instance, whatever its state: core refuses its registrations,
+  # heartbeats and traffic until it is unblocked, so a running one is cut off
+  # at once and cannot come back. reason is shown with the block.
+  blockModule(instance: ID!, reason: String): Module!
+    @hasPermission(permission: "module:delete")
+  # Lift a block: the instance is deregistered, free to register again (a
+  # running one does on its next attempt).
+  unblockModule(instance: ID!): Module!
+    @hasPermission(permission: "module:delete")
+  # Delete the row of an instance that is gone (deregistered or dead). Its
+  # stored configuration and history stay; if it registers again it appears
+  # again. A registered instance would only register again: block it instead.
+  deleteModule(instance: ID!): Boolean!
     @hasPermission(permission: "module:delete")
 }
 
@@ -11549,6 +11617,22 @@ func (ec *executionContext) field_Mutation_adminRevokeSession_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_blockModule_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "reason", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["reason"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_bulkImportHashes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11911,6 +11995,17 @@ func (ec *executionContext) field_Mutation_deleteHost_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteModule_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteOperation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -12134,17 +12229,6 @@ func (ec *executionContext) field_Mutation_regenerateAgentKey_args(ctx context.C
 		return nil, err
 	}
 	args["id"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_removeModule_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["instance"] = arg0
 	return args, nil
 }
 
@@ -12404,6 +12488,17 @@ func (ec *executionContext) field_Mutation_transferSkill_args(ctx context.Contex
 		return nil, err
 	}
 	args["userId"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_unblockModule_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "instance", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["instance"] = arg0
 	return args, nil
 }
 
@@ -23319,6 +23414,101 @@ func (ec *executionContext) fieldContext_Module_declaredDeadAt(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Module_blockedAt(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_blockedAt,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Module().BlockedAt(ctx, obj)
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_blockedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Module_blockedBy(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_blockedBy,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Module().BlockedBy(ctx, obj)
+		},
+		nil,
+		ec.marshalOModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_blockedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "type":
+				return ec.fieldContext_ModuleActor_type(ctx, field)
+			case "id":
+				return ec.fieldContext_ModuleActor_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ModuleActor_name(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Module_blockReason(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_blockReason,
+		func(ctx context.Context) (any, error) {
+			return obj.BlockReason, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_blockReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Module_build(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24733,6 +24923,12 @@ func (ec *executionContext) fieldContext_ModuleEvent_module(_ context.Context, f
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
 			case "build":
 				return ec.fieldContext_Module_build(ctx, field)
 			case "connection":
@@ -30402,6 +30598,12 @@ func (ec *executionContext) fieldContext_Mutation_updateModuleConfig(ctx context
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
 			case "build":
 				return ec.fieldContext_Module_build(ctx, field)
 			case "connection":
@@ -30513,15 +30715,15 @@ func (ec *executionContext) fieldContext_Mutation_invokeModuleAction(ctx context
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_removeModule(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_blockModule(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Mutation_removeModule,
+		ec.fieldContext_Mutation_blockModule,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().RemoveModule(ctx, fc.Args["instance"].(string))
+			return ec.Resolvers.Mutation().BlockModule(ctx, fc.Args["instance"].(string), fc.Args["reason"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -30548,7 +30750,7 @@ func (ec *executionContext) _Mutation_removeModule(ctx context.Context, field gr
 	)
 }
 
-func (ec *executionContext) fieldContext_Mutation_removeModule(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_blockModule(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -30582,6 +30784,12 @@ func (ec *executionContext) fieldContext_Mutation_removeModule(ctx context.Conte
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
 			case "build":
 				return ec.fieldContext_Module_build(ctx, field)
 			case "connection":
@@ -30599,7 +30807,165 @@ func (ec *executionContext) fieldContext_Mutation_removeModule(ctx context.Conte
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_removeModule_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_blockModule_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_unblockModule(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_unblockModule,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UnblockModule(ctx, fc.Args["instance"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:delete")
+				if err != nil {
+					var zeroVal *models.Module
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *models.Module
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_unblockModule(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "instance":
+				return ec.fieldContext_Module_instance(ctx, field)
+			case "type":
+				return ec.fieldContext_Module_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Module_name(ctx, field)
+			case "version":
+				return ec.fieldContext_Module_version(ctx, field)
+			case "description":
+				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
+			case "status":
+				return ec.fieldContext_Module_status(ctx, field)
+			case "lastStatus":
+				return ec.fieldContext_Module_lastStatus(ctx, field)
+			case "registeredAt":
+				return ec.fieldContext_Module_registeredAt(ctx, field)
+			case "lastHeartbeatAt":
+				return ec.fieldContext_Module_lastHeartbeatAt(ctx, field)
+			case "deregisteredAt":
+				return ec.fieldContext_Module_deregisteredAt(ctx, field)
+			case "deregisterReason":
+				return ec.fieldContext_Module_deregisterReason(ctx, field)
+			case "declaredDeadAt":
+				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
+			case "build":
+				return ec.fieldContext_Module_build(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_unblockModule_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteModule(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteModule,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteModule(ctx, fc.Args["instance"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "module:delete")
+				if err != nil {
+					var zeroVal bool
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal bool
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteModule(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteModule_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -37773,6 +38139,12 @@ func (ec *executionContext) fieldContext_Query_module(ctx context.Context, field
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
 			case "build":
 				return ec.fieldContext_Module_build(ctx, field)
 			case "connection":
@@ -38020,6 +38392,12 @@ func (ec *executionContext) fieldContext_Query_modules(ctx context.Context, fiel
 				return ec.fieldContext_Module_deregisterReason(ctx, field)
 			case "declaredDeadAt":
 				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
 			case "build":
 				return ec.fieldContext_Module_build(ctx, field)
 			case "connection":
@@ -58367,6 +58745,77 @@ func (ec *executionContext) _Module(ctx context.Context, sel ast.SelectionSet, o
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "blockedAt":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Module_blockedAt(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "blockedBy":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Module_blockedBy(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "blockReason":
+			out.Values[i] = ec._Module_blockReason(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "build":
 			field := field
 
@@ -59694,9 +60143,23 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "removeModule":
+		case "blockModule":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_removeModule(ctx, field)
+				return ec._Mutation_blockModule(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unblockModule":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_unblockModule(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteModule":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteModule(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

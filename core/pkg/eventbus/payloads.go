@@ -369,7 +369,7 @@ func NewSkillRemovedEvent(actor Actor, p SkillEventPayload) Event {
 type ModuleEventPayload struct {
 	Instance string
 	Type     string // module_type: "channel" | "factory"
-	Status   string // "registered" | "deregistered" | "dead"
+	Status   string // "registered" | "deregistered" | "dead" | "blocked"; "" once deleted
 	// Heartbeat marks a module.updated that only carries a heartbeat (last
 	// seen, health, status values), so clients can skip history refetches.
 	Heartbeat bool
@@ -385,6 +385,18 @@ func NewModuleDeregisteredEvent(actor Actor, p ModuleEventPayload) Event {
 
 func NewModuleDeadEvent(actor Actor, p ModuleEventPayload) Event {
 	return NewEvent(TopicModuleDead, actor, p)
+}
+
+func NewModuleBlockedEvent(actor Actor, p ModuleEventPayload) Event {
+	return NewEvent(TopicModuleBlocked, actor, p)
+}
+
+func NewModuleUnblockedEvent(actor Actor, p ModuleEventPayload) Event {
+	return NewEvent(TopicModuleUnblocked, actor, p)
+}
+
+func NewModuleDeletedEvent(actor Actor, p ModuleEventPayload) Event {
+	return NewEvent(TopicModuleDeleted, actor, p)
 }
 
 // NewModuleUpdatedEvent signals a change on a module row other than a

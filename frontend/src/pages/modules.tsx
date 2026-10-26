@@ -5,7 +5,7 @@ import { useModuleStore } from "@/stores/modules"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { ModulesToolbar } from "@/components/modules/modules-toolbar"
 import { ModulesTable } from "@/components/modules/modules-table"
-import { RemoveModuleDialog } from "@/components/modules/remove-module-dialog"
+import { ModuleAdminDialogs } from "@/components/modules/module-admin-dialogs"
 
 export function ModulesPage() {
   usePageMetadata({
@@ -13,9 +13,8 @@ export function ModulesPage() {
     icon: { kind: "lucide", component: BlocksIcon },
   })
 
-  // Real-time: a module registering, deregistering, or dying invalidates the
-  // list so the table refetches — including the "removed but still alive →
-  // re-registers" flip.
+  // Real-time: a module registering, deregistering, dying, being blocked or
+  // deleted refetches the list.
   useModuleChangedSubscription()
 
   const search = useModuleStore((s) => s.search)
@@ -41,7 +40,7 @@ export function ModulesPage() {
     <div className="flex flex-1 flex-col gap-2 p-2">
       <ModulesToolbar />
       <ModulesTable modules={modules} isLoading={isLoading} />
-      <RemoveModuleDialog />
+      <ModuleAdminDialogs />
     </div>
   )
 }

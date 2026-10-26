@@ -617,6 +617,9 @@ export type Minion = {
 };
 
 export type Module = {
+  blockReason: Scalars['String']['output'];
+  blockedAt?: Maybe<Scalars['String']['output']>;
+  blockedBy?: Maybe<ModuleActor>;
   build?: Maybe<BuildSchema>;
   connection?: Maybe<ModuleConnectionSchema>;
   declaredDeadAt?: Maybe<Scalars['String']['output']>;
@@ -711,11 +714,14 @@ export type ModuleEvent = {
 };
 
 export type ModuleEventKind =
+  | 'BLOCKED'
   | 'CHANGED'
   | 'DEAD'
+  | 'DELETED'
   | 'DEREGISTERED'
   | 'HEARTBEAT'
-  | 'REGISTERED';
+  | 'REGISTERED'
+  | 'UNBLOCKED';
 
 export type ModuleField = {
   accept?: Maybe<Array<Scalars['String']['output']>>;
@@ -811,6 +817,7 @@ export type Mutation = {
   addTaskWikiReference: Task;
   adminRevokeAllUserSessions: Scalars['Int']['output'];
   adminRevokeSession: Scalars['Boolean']['output'];
+  blockModule: Module;
   bulkImportHashes: BulkImportHashesResult;
   cancelBuild: Build;
   changeTaskStage: Task;
@@ -839,6 +846,7 @@ export type Mutation = {
   deleteCustomTimelineEvent: Scalars['Boolean']['output'];
   deleteHash: Scalars['Boolean']['output'];
   deleteHost: Scalars['Boolean']['output'];
+  deleteModule: Scalars['Boolean']['output'];
   deleteMyAPIKey: Scalars['Boolean']['output'];
   deleteOperation: Scalars['Boolean']['output'];
   deleteTask: Scalars['Boolean']['output'];
@@ -857,7 +865,6 @@ export type Mutation = {
   recordIconUse: User;
   regenerateAgentKey: AgentKeyWithSecret;
   regenerateMyAPIKey: ApiKeyWithSecret;
-  removeModule: Module;
   removeOperationMember: Operation;
   removeSkill: Skill;
   reorderWikiDocumentSiblings: Array<WikiDocument>;
@@ -878,6 +885,7 @@ export type Mutation = {
   touchRecentOperation: User;
   trackWikiDocumentVisit: WikiDocumentVisit;
   transferSkill: Skill;
+  unblockModule: Module;
   updateAgentKey: AgentKey;
   updateBuildPreset: BuildPreset;
   updateChannelEndpoint: ChannelEndpoint;
@@ -922,6 +930,12 @@ export type MutationAdminRevokeAllUserSessionsArgs = {
 
 export type MutationAdminRevokeSessionArgs = {
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationBlockModuleArgs = {
+  instance: Scalars['ID']['input'];
+  reason?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -1073,6 +1087,11 @@ export type MutationDeleteHostArgs = {
 };
 
 
+export type MutationDeleteModuleArgs = {
+  instance: Scalars['ID']['input'];
+};
+
+
 export type MutationDeleteOperationArgs = {
   id: Scalars['ID']['input'];
 };
@@ -1160,11 +1179,6 @@ export type MutationRecordIconUseArgs = {
 
 export type MutationRegenerateAgentKeyArgs = {
   id: Scalars['ID']['input'];
-};
-
-
-export type MutationRemoveModuleArgs = {
-  instance: Scalars['ID']['input'];
 };
 
 
@@ -1270,6 +1284,11 @@ export type MutationTrackWikiDocumentVisitArgs = {
 export type MutationTransferSkillArgs = {
   name: Scalars['String']['input'];
   userId: Scalars['ID']['input'];
+};
+
+
+export type MutationUnblockModuleArgs = {
+  instance: Scalars['ID']['input'];
 };
 
 
@@ -3197,37 +3216,52 @@ export type HostChangedSubscriptionVariables = Exact<{
 
 export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
 
-export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null };
+export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
 export type ModulesQueryVariables = Exact<{
   status?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
 }>;
 
 
-export type ModulesQuery = { modules: Array<{ instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null }> };
+export type ModulesQuery = { modules: Array<{ instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null }> };
 
-export type RemoveModuleMutationVariables = Exact<{
+export type BlockModuleMutationVariables = Exact<{
+  instance: Scalars['ID']['input'];
+  reason?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type BlockModuleMutation = { blockModule: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null } };
+
+export type UnblockModuleMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
 }>;
 
 
-export type RemoveModuleMutation = { removeModule: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null } };
+export type UnblockModuleMutation = { unblockModule: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null } };
+
+export type DeleteModuleMutationVariables = Exact<{
+  instance: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteModuleMutation = { deleteModule: boolean };
 
 export type ModuleChangedSubscriptionVariables = Exact<{ [key: string]: never; }>;
 
 
-export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, kind: ModuleEventKind, instance: string, module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null } | null } };
+export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, kind: ModuleEventKind, instance: string, module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null } | null } };
 
 export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null };
 
-export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null, build?: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } | null };
+export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null, build?: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
 export type ModuleQueryVariables = Exact<{
   instance: Scalars['ID']['input'];
 }>;
 
 
-export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null, build?: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } | null } | null };
+export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null, build?: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } | null };
 
 export type ModuleActionInvocationFieldsFragment = { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } };
 
@@ -3254,7 +3288,7 @@ export type UpdateModuleConfigMutationVariables = Exact<{
 }>;
 
 
-export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null, build?: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } | null } };
+export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null, build?: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } };
 
 export type InvokeModuleActionMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
@@ -4494,6 +4528,13 @@ export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
   deregisteredAt
   deregisterReason
   declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
 }
     `, {"fragmentName":"ModuleFields"}) as unknown as TypedDocumentString<ModuleFieldsFragment, unknown>;
 export const ModuleFieldDefFieldsFragmentDoc = new TypedDocumentString(`
@@ -4676,6 +4717,13 @@ fragment ModuleFields on Module {
   deregisteredAt
   deregisterReason
   declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
 }
 fragment ModuleFieldDefFields on ModuleField {
   key
@@ -7094,10 +7142,17 @@ export const ModulesDocument = new TypedDocumentString(`
   deregisteredAt
   deregisterReason
   declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
 }`) as unknown as TypedDocumentString<ModulesQuery, ModulesQueryVariables>;
-export const RemoveModuleDocument = new TypedDocumentString(`
-    mutation RemoveModule($instance: ID!) {
-  removeModule(instance: $instance) {
+export const BlockModuleDocument = new TypedDocumentString(`
+    mutation BlockModule($instance: ID!, $reason: String) {
+  blockModule(instance: $instance, reason: $reason) {
     ...ModuleFields
   }
 }
@@ -7115,7 +7170,47 @@ export const RemoveModuleDocument = new TypedDocumentString(`
   deregisteredAt
   deregisterReason
   declaredDeadAt
-}`) as unknown as TypedDocumentString<RemoveModuleMutation, RemoveModuleMutationVariables>;
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
+}`) as unknown as TypedDocumentString<BlockModuleMutation, BlockModuleMutationVariables>;
+export const UnblockModuleDocument = new TypedDocumentString(`
+    mutation UnblockModule($instance: ID!) {
+  unblockModule(instance: $instance) {
+    ...ModuleFields
+  }
+}
+    fragment ModuleFields on Module {
+  instance
+  type
+  name
+  version
+  description
+  icon
+  status
+  lastStatus
+  registeredAt
+  lastHeartbeatAt
+  deregisteredAt
+  deregisterReason
+  declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
+}`) as unknown as TypedDocumentString<UnblockModuleMutation, UnblockModuleMutationVariables>;
+export const DeleteModuleDocument = new TypedDocumentString(`
+    mutation DeleteModule($instance: ID!) {
+  deleteModule(instance: $instance)
+}
+    `) as unknown as TypedDocumentString<DeleteModuleMutation, DeleteModuleMutationVariables>;
 export const ModuleChangedDocument = new TypedDocumentString(`
     subscription ModuleChanged {
   moduleChanged {
@@ -7141,6 +7236,13 @@ export const ModuleChangedDocument = new TypedDocumentString(`
   deregisteredAt
   deregisterReason
   declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
 }`) as unknown as TypedDocumentString<ModuleChangedSubscription, ModuleChangedSubscriptionVariables>;
 export const ModuleDocument = new TypedDocumentString(`
     query Module($instance: ID!) {
@@ -7190,6 +7292,13 @@ fragment ModuleFields on Module {
   deregisteredAt
   deregisterReason
   declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
 }
 fragment ModuleFieldDefFields on ModuleField {
   key
@@ -7365,6 +7474,13 @@ fragment ModuleFields on Module {
   deregisteredAt
   deregisterReason
   declaredDeadAt
+  blockedAt
+  blockedBy {
+    type
+    id
+    name
+  }
+  blockReason
 }
 fragment ModuleFieldDefFields on ModuleField {
   key

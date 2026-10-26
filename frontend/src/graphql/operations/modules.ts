@@ -15,6 +15,13 @@ export const ModuleFields = graphql(`
     deregisteredAt
     deregisterReason
     declaredDeadAt
+    blockedAt
+    blockedBy {
+      type
+      id
+      name
+    }
+    blockReason
   }
 `)
 
@@ -26,11 +33,25 @@ export const ModulesQuery = graphql(`
   }
 `)
 
-export const RemoveModuleMutation = graphql(`
-  mutation RemoveModule($instance: ID!) {
-    removeModule(instance: $instance) {
+export const BlockModuleMutation = graphql(`
+  mutation BlockModule($instance: ID!, $reason: String) {
+    blockModule(instance: $instance, reason: $reason) {
       ...ModuleFields
     }
+  }
+`)
+
+export const UnblockModuleMutation = graphql(`
+  mutation UnblockModule($instance: ID!) {
+    unblockModule(instance: $instance) {
+      ...ModuleFields
+    }
+  }
+`)
+
+export const DeleteModuleMutation = graphql(`
+  mutation DeleteModule($instance: ID!) {
+    deleteModule(instance: $instance)
   }
 `)
 

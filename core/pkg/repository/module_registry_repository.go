@@ -17,6 +17,9 @@ import (
 
 const moduleRegistryCollection = "module_registry"
 
+// ErrInstanceBlocked refuses the registration of a blocked instance.
+var ErrInstanceBlocked = errors.New("instance is blocked")
+
 // IModuleRegistryRepository is the durable system-of-record for module
 // instances and their lifecycle state. Keyed by Instance (globally unique).
 type IModuleRegistryRepository interface {
@@ -24,6 +27,15 @@ type IModuleRegistryRepository interface {
 	// refreshes registered_at, and clears any prior dead/deregistered markers so
 	// re-registering an instance revives it.
 	Upsert(ctx context.Context, reg *models.Module) error
+	// Block blocks an instance whatever its state, recording who and why;
+	// false when there is no such instance or it is blocked already.
+	Block(ctx context.Context, instance, reason string, by models.ModuleActor, at time.Time) (bool, error)
+	// Unblock returns a blocked instance to deregistered, so it may register
+	// again; false when it is not blocked.
+	Unblock(ctx context.Context, instance string, at time.Time) (bool, error)
+	// Delete removes a deregistered or dead instance's row; false for any
+	// other state, or no such instance.
+	Delete(ctx context.Context, instance string) (bool, error)
 	// TouchHeartbeat refreshes liveness fields on a registered instance, and
 	// the applied config revision when the heartbeat reported one (nil leaves
 	// it untouched). The bool is false when no registered instance matched
@@ -171,6 +183,9 @@ func takeoverUpdate(reg *models.Module) bson.M {
 		"rejected":          "",
 		"restart_required":  "",
 		"last_apply_error":  "",
+		"blocked_at":        "",
+		"blocked_by":        "",
+		"block_reason":      "",
 	}
 	if reg.Manifest != nil {
 		set["manifest"] = reg.Manifest
@@ -259,7 +274,7 @@ func (r *moduleRegistryRepository) Upsert(ctx context.Context, reg *models.Modul
 	// concurrent insert falls back to update.
 	_, err := r.FindByInstance(ctx, reg.Instance)
 	if err == nil {
-		return r.coll.UpdateOne(ctx, instanceFilter(reg.Instance), takeoverUpdate(reg))
+		return r.takeover(ctx, reg)
 	}
 	if !errors.Is(err, qmgo.ErrNoSuchDocuments) {
 		return err
@@ -269,9 +284,63 @@ func (r *moduleRegistryRepository) Upsert(ctx context.Context, reg *models.Modul
 	if err != nil && mongo.IsDuplicateKeyError(err) {
 		// Lost the insert race: an instance row appeared between our find and
 		// insert. Retry as an in-place update.
-		return r.coll.UpdateOne(ctx, instanceFilter(reg.Instance), takeoverUpdate(reg))
+		return r.takeover(ctx, reg)
 	}
 	return err
+}
+
+// takeover updates an existing row in place, unless it is blocked: the
+// filter makes that check and the update one step, so a block landing between
+// a find and an update cannot be undone by a registration.
+func (r *moduleRegistryRepository) takeover(ctx context.Context, reg *models.Module) error {
+	err := r.coll.UpdateOne(ctx, notBlockedFilter(reg.Instance), takeoverUpdate(reg))
+	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
+		return ErrInstanceBlocked
+	}
+	return err
+}
+
+func notBlockedFilter(instance string) bson.M {
+	return bson.M{"instance": instance, "status": bson.M{"$ne": models.ModuleStatusBlocked}}
+}
+
+func (r *moduleRegistryRepository) Block(ctx context.Context, instance, reason string, by models.ModuleActor, at time.Time) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, notBlockedFilter(instance), blockUpdate(reason, by, at)))
+}
+
+// blockUpdate blocks an instance. Its liveness fields go: a blocked instance
+// is not running as far as core is concerned.
+func blockUpdate(reason string, by models.ModuleActor, at time.Time) bson.M {
+	set := bson.M{"status": models.ModuleStatusBlocked, "blocked_at": at, "blocked_by": by}
+	unset := bson.M{"last_status": "", "last_metrics": ""}
+	if reason != "" {
+		set["block_reason"] = reason
+	} else {
+		unset["block_reason"] = ""
+	}
+	return bson.M{"$set": set, "$unset": unset}
+}
+
+func (r *moduleRegistryRepository) Unblock(ctx context.Context, instance string, at time.Time) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, bson.M{"instance": instance, "status": models.ModuleStatusBlocked}, unblockUpdate(at)))
+}
+
+// unblockUpdate leaves the instance deregistered: free to register again.
+func unblockUpdate(at time.Time) bson.M {
+	return bson.M{
+		"$set":   bson.M{"status": models.ModuleStatusDeregistered, "deregistered_at": at, "deregister_reason": "unblocked"},
+		"$unset": bson.M{"blocked_at": "", "blocked_by": "", "block_reason": ""},
+	}
+}
+
+func (r *moduleRegistryRepository) Delete(ctx context.Context, instance string) (bool, error) {
+	return matched(r.coll.Remove(ctx, deletableFilter(instance)))
+}
+
+// deletableFilter matches an instance that is gone: deregistered or dead. A
+// registered one would only register again, and a blocked one is the block.
+func deletableFilter(instance string) bson.M {
+	return bson.M{"instance": instance, "status": bson.M{"$in": []string{models.ModuleStatusDeregistered, models.ModuleStatusDead}}}
 }
 
 func (r *moduleRegistryRepository) LatestConnectionSchema(ctx context.Context, moduleName string) (*models.ModuleConnectionSchema, error) {

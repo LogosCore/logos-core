@@ -102,6 +102,12 @@ const (
 	TopicModuleRegistered   Topic = "module.registered"
 	TopicModuleDeregistered Topic = "module.deregistered"
 	TopicModuleDead         Topic = "module.dead"
+	// TopicModuleBlocked / TopicModuleUnblocked: an operator blocked an
+	// instance (core refuses it) or lifted the block.
+	TopicModuleBlocked   Topic = "module.blocked"
+	TopicModuleUnblocked Topic = "module.unblocked"
+	// TopicModuleDeleted: an operator deleted a gone instance's row.
+	TopicModuleDeleted Topic = "module.deleted"
 	// TopicModuleUpdated is a change to a module's management state (desired
 	// config, apply result, action invocation) — the row survives with the
 	// same lifecycle status. Emitted by pkg/modulemgmt.

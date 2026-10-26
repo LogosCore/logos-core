@@ -477,18 +477,24 @@ var moduleTopics = []eventbus.Topic{
 	eventbus.TopicModuleRegistered,
 	eventbus.TopicModuleDeregistered,
 	eventbus.TopicModuleDead,
+	eventbus.TopicModuleBlocked,
+	eventbus.TopicModuleUnblocked,
+	eventbus.TopicModuleDeleted,
 	eventbus.TopicModuleUpdated,
 }
 
-// toModuleEvent converts an event bus Event to a GraphQL ModuleEvent. A module
-// row is never hard-deleted: registered (incl. revival) maps to CREATED, while
-// deregistered and dead are status updates on a surviving row → UPDATED. The
-// subscription resolver refetches the full row for every event, so action is
-// purely advisory for the client.
+// toModuleEvent converts an event bus Event to a GraphQL ModuleEvent.
+// Registered (incl. revival) maps to CREATED and an operator's delete to
+// DELETED; everything else changes a surviving row → UPDATED. The
+// subscription resolver refetches the full row for every event (none once
+// deleted), so action is purely advisory for the client.
 func toModuleEvent(event eventbus.Event) *model.ModuleEvent {
 	action := model.EventActionUpdated
-	if event.Topic == eventbus.TopicModuleRegistered {
+	switch event.Topic {
+	case eventbus.TopicModuleRegistered:
 		action = model.EventActionCreated
+	case eventbus.TopicModuleDeleted:
+		action = model.EventActionDeleted
 	}
 	kind := model.ModuleEventKindChanged
 	switch event.Topic {
@@ -498,6 +504,12 @@ func toModuleEvent(event eventbus.Event) *model.ModuleEvent {
 		kind = model.ModuleEventKindDeregistered
 	case eventbus.TopicModuleDead:
 		kind = model.ModuleEventKindDead
+	case eventbus.TopicModuleBlocked:
+		kind = model.ModuleEventKindBlocked
+	case eventbus.TopicModuleUnblocked:
+		kind = model.ModuleEventKindUnblocked
+	case eventbus.TopicModuleDeleted:
+		kind = model.ModuleEventKindDeleted
 	}
 	evt := &model.ModuleEvent{Action: action, Kind: kind}
 	if p, ok := event.Payload.(eventbus.ModuleEventPayload); ok {

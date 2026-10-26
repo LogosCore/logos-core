@@ -3,7 +3,9 @@ import { graphqlClient } from "@/lib/graphql-client"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
   ModulesDocument,
-  RemoveModuleDocument,
+  BlockModuleDocument,
+  UnblockModuleDocument,
+  DeleteModuleDocument,
   ModuleChangedDocument,
   ModuleDocument,
   ModuleActionInvocationsDocument,
@@ -39,19 +41,34 @@ export function useModules(status: string[] | null) {
 }
 
 /**
- * Soft-remove (deregister) a module instance. The list is invalidated by the
- * moduleChanged subscription, but we also invalidate here so the table reflects
- * the change immediately even if the subscription stream is momentarily paused.
+ * An operator's lifecycle change on an instance. The moduleChanged subscription
+ * refreshes the lists and the instance's page too; invalidating here as well
+ * keeps the table right even if the stream is momentarily paused.
  */
-export function useRemoveModule() {
+function useModuleAdminMutation<V>(run: (vars: V & { instance: string }) => Promise<unknown>) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (instance: string) =>
-      graphqlClient(RemoveModuleDocument, { instance }),
-    onSuccess: () => {
+    mutationFn: run,
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: moduleKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: moduleKeys.detail(vars.instance) })
     },
   })
+}
+
+/** Block an instance: core refuses its registrations and traffic until unblocked. */
+export function useBlockModule() {
+  return useModuleAdminMutation<{ reason: string | null }>((v) => graphqlClient(BlockModuleDocument, v))
+}
+
+/** Lift a block: the instance may register again. */
+export function useUnblockModule() {
+  return useModuleAdminMutation<object>((v) => graphqlClient(UnblockModuleDocument, { instance: v.instance }))
+}
+
+/** Delete a gone (deregistered or dead) instance's row. */
+export function useDeleteModule() {
+  return useModuleAdminMutation<object>((v) => graphqlClient(DeleteModuleDocument, { instance: v.instance }))
 }
 
 type ModuleEvent = ModuleChangedSubscription["moduleChanged"]

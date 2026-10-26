@@ -93,7 +93,12 @@ func (f *fakeRepo) FindStaleRegistered(context.Context, time.Time, int64) ([]mod
 	return nil, nil
 }
 func (f *fakeRepo) MarkDead(context.Context, []string, time.Time) error { return nil }
-func (f *fakeRepo) ListActive(context.Context) ([]models.Module, error) { return nil, nil }
+func (f *fakeRepo) Block(context.Context, string, string, models.ModuleActor, time.Time) (bool, error) {
+	return false, nil
+}
+func (f *fakeRepo) Unblock(context.Context, string, time.Time) (bool, error) { return false, nil }
+func (f *fakeRepo) Delete(context.Context, string) (bool, error)             { return false, nil }
+func (f *fakeRepo) ListActive(context.Context) ([]models.Module, error)      { return nil, nil }
 func (f *fakeRepo) List(context.Context, []string) ([]models.Module, error) {
 	return nil, nil
 }

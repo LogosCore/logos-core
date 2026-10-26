@@ -11,6 +11,9 @@ const (
 	ModuleStatusRegistered   = "registered"
 	ModuleStatusDead         = "dead"
 	ModuleStatusDeregistered = "deregistered"
+	// ModuleStatusBlocked is set by an operator: core refuses the instance's
+	// registrations, heartbeats and traffic until it is unblocked.
+	ModuleStatusBlocked = "blocked"
 )
 
 // Module is one row per module instance in the durable registry —
@@ -76,4 +79,10 @@ type Module struct {
 	// module.register (factories only; see build.go); nil when it declared
 	// none. Replaced (or cleared) by every register.
 	Build *ModuleBuildSchema `bson:"build,omitempty" json:"build,omitempty"`
+
+	// BlockedAt, BlockedBy and BlockReason say who blocked the instance, when
+	// and why, while its status is blocked.
+	BlockedAt   *time.Time   `bson:"blocked_at,omitempty" json:"blocked_at,omitempty"`
+	BlockedBy   *ModuleActor `bson:"blocked_by,omitempty" json:"blocked_by,omitempty"`
+	BlockReason string       `bson:"block_reason,omitempty" json:"block_reason,omitempty"`
 }

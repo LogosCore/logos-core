@@ -37,7 +37,7 @@ type Module {
   # scripts or outside references). Empty when it sent none; the UI then shows
   # its type's default. Drawn as a single-colour glyph in the text colour.
   icon: String!
-  # Lifecycle state: "registered" | "deregistered" | "dead".
+  # Lifecycle state: "registered" | "deregistered" | "dead" | "blocked".
   status: String!
   # Self-reported health on the most recent heartbeat:
   # "healthy" | "degraded". Empty until the first heartbeat.
@@ -50,6 +50,10 @@ type Module {
   deregisterReason: String!
   # Populated once the reaper declares the instance dead; null otherwise.
   declaredDeadAt: String
+  # While blocked: when, by whom and why (reason empty when none was given).
+  blockedAt: String
+  blockedBy: ModuleActor
+  blockReason: String!
 }
 
 # Streamed on the moduleChanged subscription. REGISTERED maps to CREATED;
@@ -68,6 +72,10 @@ enum ModuleEventKind {
   REGISTERED
   DEREGISTERED
   DEAD
+  # An operator blocked the instance, lifted the block, or deleted its row.
+  BLOCKED
+  UNBLOCKED
+  DELETED
   # Config written, apply result recorded, action finished.
   CHANGED
   # Last heartbeat, health and status values.
@@ -86,9 +94,19 @@ extend type Query {
 # --- Mutations ---
 
 extend type Mutation {
-  # Soft-remove (deregister) a module instance. Returns the updated row. Errors
-  # if the instance is not currently registered.
-  removeModule(instance: ID!): Module!
+  # Block an instance, whatever its state: core refuses its registrations,
+  # heartbeats and traffic until it is unblocked, so a running one is cut off
+  # at once and cannot come back. reason is shown with the block.
+  blockModule(instance: ID!, reason: String): Module!
+    @hasPermission(permission: "module:delete")
+  # Lift a block: the instance is deregistered, free to register again (a
+  # running one does on its next attempt).
+  unblockModule(instance: ID!): Module!
+    @hasPermission(permission: "module:delete")
+  # Delete the row of an instance that is gone (deregistered or dead). Its
+  # stored configuration and history stay; if it registers again it appears
+  # again. A registered instance would only register again: block it instead.
+  deleteModule(instance: ID!): Boolean!
     @hasPermission(permission: "module:delete")
 }
 

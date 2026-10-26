@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -380,11 +381,36 @@ func TestToModuleEventKind(t *testing.T) {
 		{eventbus.NewModuleRegisteredEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindRegistered},
 		{eventbus.NewModuleDeregisteredEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindDeregistered},
 		{eventbus.NewModuleDeadEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindDead},
+		{eventbus.NewModuleBlockedEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindBlocked},
+		{eventbus.NewModuleUnblockedEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindUnblocked},
+		{eventbus.NewModuleDeletedEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindDeleted},
 		{eventbus.NewModuleUpdatedEvent(eventbus.ServiceActor("x"), p), model.ModuleEventKindChanged},
 		{eventbus.NewModuleUpdatedEvent(eventbus.ServiceActor("x"), hb), model.ModuleEventKindHeartbeat},
 	} {
 		if got := toModuleEvent(c.ev); got.Kind != c.want || got.Instance != "http-1" {
 			t.Errorf("%s: kind = %s, want %s", c.ev.Topic, got.Kind, c.want)
+		}
+	}
+}
+
+func TestToModuleEventAction(t *testing.T) {
+	p := eventbus.ModuleEventPayload{Instance: "http-1"}
+	for _, c := range []struct {
+		ev   eventbus.Event
+		want model.EventAction
+	}{
+		{eventbus.NewModuleRegisteredEvent(eventbus.ServiceActor("x"), p), model.EventActionCreated},
+		{eventbus.NewModuleBlockedEvent(eventbus.ServiceActor("x"), p), model.EventActionUpdated},
+		{eventbus.NewModuleDeletedEvent(eventbus.ServiceActor("x"), p), model.EventActionDeleted},
+	} {
+		if got := toModuleEvent(c.ev); got.Action != c.want {
+			t.Errorf("%s: action = %s, want %s", c.ev.Topic, got.Action, c.want)
+		}
+	}
+	// The stream carries every module topic.
+	for _, topic := range []eventbus.Topic{eventbus.TopicModuleBlocked, eventbus.TopicModuleUnblocked, eventbus.TopicModuleDeleted} {
+		if !slices.Contains(moduleTopics, topic) {
+			t.Errorf("moduleTopics lacks %s", topic)
 		}
 	}
 }
