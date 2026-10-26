@@ -131,6 +131,8 @@ type registerRequest struct {
 	Version     string `json:"version"`
 	RPCQueue    string `json:"rpc_queue"`
 	Description string `json:"description"`
+	// Icon is the module's optional SVG icon.
+	Icon string `json:"icon"`
 	// Management is the optional management manifest.
 	Management *protocol.ManagementManifest `json:"management"`
 	// AppliedRevision is the config revision the process has applied (0 for
@@ -228,6 +230,15 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 			return nil, validationErr("invalid build schema: " + err.Error())
 		}
 		reg.Build = &models.ModuleBuildSchema{BuildSchema: *p.Build}
+	}
+	if p.Icon != "" {
+		// An icon is cosmetic: a module with a broken one still registers,
+		// and the UI shows its type's default.
+		if err := protocol.ValidateIcon(p.Icon); err != nil {
+			s.logger.Warn("module icon refused", zap.String("instance", p.Instance), zap.Error(err))
+		} else {
+			reg.Icon = p.Icon
+		}
 	}
 	if err := s.repo.Upsert(ctx, reg); err != nil {
 		return nil, fmt.Errorf("persist registration: %w", err)

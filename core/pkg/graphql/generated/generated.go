@@ -450,6 +450,7 @@ type ComplexityRoot struct {
 		DeregisterReason func(childComplexity int) int
 		DeregisteredAt   func(childComplexity int) int
 		Description      func(childComplexity int) int
+		Icon             func(childComplexity int) int
 		Instance         func(childComplexity int) int
 		LastHeartbeatAt  func(childComplexity int) int
 		LastStatus       func(childComplexity int) int
@@ -3231,6 +3232,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Module.Description(childComplexity), true
+	case "Module.icon":
+		if e.ComplexityRoot.Module.Icon == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.Icon(childComplexity), true
 	case "Module.instance":
 		if e.ComplexityRoot.Module.Instance == nil {
 			break
@@ -9474,6 +9481,10 @@ type Module {
   # Free-text, self-reported description the module supplies at registration.
   # Empty if the module declared none.
   description: String!
+  # The module's own SVG icon from its registration (checked: shapes only, no
+  # scripts or outside references). Empty when it sent none; the UI then shows
+  # its type's default. Drawn as a single-colour glyph in the text colour.
+  icon: String!
   # Lifecycle state: "registered" | "deregistered" | "dead".
   status: String!
   # Self-reported health on the most recent heartbeat:
@@ -22998,6 +23009,35 @@ func (ec *executionContext) fieldContext_Module_description(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Module_icon(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_icon,
+		func(ctx context.Context) (any, error) {
+			return obj.Icon, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_icon(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Module_status(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24599,6 +24639,8 @@ func (ec *executionContext) fieldContext_ModuleEvent_module(_ context.Context, f
 				return ec.fieldContext_Module_version(ctx, field)
 			case "description":
 				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -30266,6 +30308,8 @@ func (ec *executionContext) fieldContext_Mutation_updateModuleConfig(ctx context
 				return ec.fieldContext_Module_version(ctx, field)
 			case "description":
 				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -30444,6 +30488,8 @@ func (ec *executionContext) fieldContext_Mutation_removeModule(ctx context.Conte
 				return ec.fieldContext_Module_version(ctx, field)
 			case "description":
 				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -37629,6 +37675,8 @@ func (ec *executionContext) fieldContext_Query_module(ctx context.Context, field
 				return ec.fieldContext_Module_version(ctx, field)
 			case "description":
 				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -37874,6 +37922,8 @@ func (ec *executionContext) fieldContext_Query_modules(ctx context.Context, fiel
 				return ec.fieldContext_Module_version(ctx, field)
 			case "description":
 				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -58067,6 +58117,11 @@ func (ec *executionContext) _Module(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "description":
 			out.Values[i] = ec._Module_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "icon":
+			out.Values[i] = ec._Module_icon(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

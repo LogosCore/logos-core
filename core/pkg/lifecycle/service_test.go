@@ -226,6 +226,28 @@ func TestHandleRegister_NewInstance(t *testing.T) {
 	}
 }
 
+func TestHandleRegister_Icon(t *testing.T) {
+	svc, repo, _ := newTestService()
+	const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>`
+	register := func(instance, icon string) *models.Module {
+		t.Helper()
+		_, err := svc.HandleRegister(context.Background(), envFor(t, OpRegister, registerRequest{
+			ModuleType: "channel", ModuleName: "http", Instance: instance, RPCQueue: "q." + instance, Icon: icon,
+		}))
+		if err != nil {
+			t.Fatalf("HandleRegister: %v", err)
+		}
+		return repo.rows[instance]
+	}
+	if row := register("http-1", icon); row.Icon != icon {
+		t.Errorf("icon = %q, want the one sent", row.Icon)
+	}
+	// A broken icon does not cost the registration; the UI shows the default.
+	if row := register("http-2", `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`); row == nil || row.Icon != "" {
+		t.Errorf("row = %+v, want registered without an icon", row)
+	}
+}
+
 func TestHandleRegister_IdempotentTakeoverRevivesDead(t *testing.T) {
 	svc, repo, _ := newTestService()
 	dead := time.Now().Add(-time.Hour)

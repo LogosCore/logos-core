@@ -189,6 +189,13 @@ func TestTakeoverUpdate_ManagementFields(t *testing.T) {
 		t.Error("connection should be unset when not declared")
 	}
 
+	if _, ok := unset["icon"]; !ok {
+		t.Error("icon should be unset when not sent")
+	}
+	if u := takeoverUpdate(&models.Module{Instance: "http-1", Icon: "<svg/>"}); u["$set"].(bson.M)["icon"] != "<svg/>" {
+		t.Error("icon not set when sent")
+	}
+
 	conn := &models.ModuleConnectionSchema{ConnectionSchema: protocol.ConnectionSchema{SchemaVersion: "1", Version: 1}}
 	u = takeoverUpdate(&models.Module{Instance: "http-1", Connection: conn})
 	if u["$set"].(bson.M)["connection"] != conn {

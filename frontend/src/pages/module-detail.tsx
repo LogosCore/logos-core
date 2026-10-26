@@ -9,6 +9,7 @@ import { Permissions } from "@/constants/permissions"
 import { useModule, useModuleDetailSubscription } from "@/graphql/hooks/modules"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
+import { ModuleIcon } from "@/components/modules/module-icon"
 import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
 import {
   BuildParameters,
@@ -69,6 +70,7 @@ export function ModuleDetailPage() {
           {module && (
             <>
               <span className="h-5 w-px bg-border" aria-hidden />
+              <ModuleIcon type={module.type} icon={module.icon} className="size-6" />
               <h1 className="font-mono text-xl font-semibold">{module.instance}</h1>
               {/* What it is, as quiet text: details live on the Overview. */}
               <span className="text-sm text-muted-foreground">

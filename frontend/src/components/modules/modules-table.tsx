@@ -18,6 +18,7 @@ import { useModuleStore } from "@/stores/modules"
 import { Permissions } from "@/constants/permissions"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
+import { ModuleIcon } from "@/components/modules/module-icon"
 import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 
 interface ModulesTableProps {
@@ -82,13 +83,16 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
               if (e.key === "Enter") openDetail(m.instance)
             }}
           >
-            <div className="min-w-0">
-              <div className="font-medium truncate">{m.instance}</div>
-              {m.description && (
-                <div className="text-xs text-muted-foreground truncate">
-                  {m.description}
-                </div>
-              )}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <ModuleIcon type={m.type} icon={m.icon} className="size-5 text-muted-foreground" />
+              <div className="min-w-0">
+                <div className="font-medium truncate">{m.instance}</div>
+                {m.description && (
+                  <div className="text-xs text-muted-foreground truncate">
+                    {m.description}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <Badge variant="secondary">{m.type}</Badge>

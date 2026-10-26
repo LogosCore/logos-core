@@ -185,6 +185,11 @@ func takeoverUpdate(reg *models.Module) bson.M {
 	} else {
 		unset["build"] = ""
 	}
+	if reg.Icon != "" {
+		set["icon"] = reg.Icon
+	} else {
+		unset["icon"] = ""
+	}
 	return bson.M{"$set": set, "$unset": unset}
 }
 

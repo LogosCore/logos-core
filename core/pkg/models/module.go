@@ -35,6 +35,10 @@ type Module struct {
 	Version     string `bson:"version" json:"version"`
 	RPCQueue    string `bson:"rpc_queue" json:"rpc_queue"`                         // core→module callback queue
 	Description string `bson:"description,omitempty" json:"description,omitempty"` // self-reported, human-facing
+	// Icon is the module's own SVG icon from its latest registration, checked
+	// with protocol.ValidateIcon; empty when it sent none (or an invalid one),
+	// and the UI shows its type's default.
+	Icon string `bson:"icon,omitempty" json:"icon,omitempty"`
 
 	Status          string         `bson:"status" json:"status"`
 	RegisteredAt    time.Time      `bson:"registered_at" json:"registered_at"`
