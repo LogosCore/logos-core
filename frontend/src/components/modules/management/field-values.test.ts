@@ -12,10 +12,12 @@ import {
   initialDrafts,
   initialParamDrafts,
   initialValue,
+  localInputToRFC3339,
   mergeActivity,
   parseDraft,
   parseGoDuration,
   resetDraft,
+  rfc3339ToLocalInput,
   splitBytes,
   validateValue,
   type Draft,
@@ -375,5 +377,44 @@ describe("string_map", () => {
 
   it("formats as key: value pairs", () => {
     expect(formatValue("string_map", { "X-A": "1", "X-B": "2" })).toBe("X-A: 1, X-B: 2")
+  })
+})
+
+describe("datetime, enum_list and file fields", () => {
+  const datetime = { key: "kill_date", type: "datetime", label: "Kill date", order: 0, required: false,
+    min: "2026-01-01T00:00:00Z", max: "2030-01-01T00:00:00Z" } as FieldDef
+  const options = { key: "punches", type: "enum_list", label: "Punches", order: 0, required: true, maxItems: 2,
+    options: [{ value: "jab" }, { value: "cross" }, { value: "hook" }] } as FieldDef
+  const file = { key: "badge", type: "file", label: "Badge", order: 0, required: false } as FieldDef
+
+  it("edits a datetime in local time and sends it in UTC", () => {
+    const draft = initialDraft(datetime, "2027-01-31T00:00:00Z")
+    expect(draft.kind).toBe("text")
+    // Whatever the local zone, the round trip is the same instant.
+    expect(checkDraft(datetime, draft)).toEqual({ ok: true, value: "2027-01-31T00:00:00Z" })
+    expect(localInputToRFC3339(rfc3339ToLocalInput("2027-06-15T12:30:45Z"))).toBe("2027-06-15T12:30:45Z")
+    expect(checkDraft(datetime, { kind: "text", text: "31.01.2027" })).toEqual({ ok: false, error: "Not a date and time" })
+    expect(checkDraft(datetime, { kind: "text", text: "" })).toEqual({ ok: true, value: null })
+    expect(validateValue(datetime, "2025-12-31T23:59:59Z")).toMatch(/at least/i)
+    expect(validateValue(datetime, "2031-01-01T00:00:00Z")).toMatch(/at most/i)
+    expect(validateValue(datetime, "2027-01-31")).toBe("Must be a date and time")
+  })
+
+  it("keeps enum_list picks in the declared order", () => {
+    expect(initialDraft(options, ["hook", "jab"])).toEqual({ kind: "set", values: ["hook", "jab"] })
+    expect(checkDraft(options, { kind: "set", values: ["hook", "jab"] })).toEqual({ ok: true, value: ["jab", "hook"] })
+    expect(checkDraft(options, { kind: "set", values: [] })).toEqual({ ok: false, error: "Required" })
+    expect(validateValue(options, ["jab", "cross", "hook"])).toBe("At most 2")
+    expect(validateValue(options, ["uppercut"])).toMatch(/not one of/)
+    expect(validateValue(options, ["jab", "jab"])).toMatch(/twice/)
+    expect(formatValue("enum_list", ["jab", "hook"])).toBe("jab, hook")
+  })
+
+  it("holds a file by its id", () => {
+    expect(initialDraft(file, "f-1")).toEqual({ kind: "file", id: "f-1" })
+    expect(initialDraft(file, null)).toEqual({ kind: "file", id: null })
+    expect(checkDraft(file, { kind: "file", id: "f-1" })).toEqual({ ok: true, value: "f-1" })
+    expect(checkDraft(file, { kind: "file", id: null })).toEqual({ ok: true, value: null })
+    expect(checkDraft({ ...file, required: true }, { kind: "file", id: null })).toEqual({ ok: false, error: "Required" })
   })
 })

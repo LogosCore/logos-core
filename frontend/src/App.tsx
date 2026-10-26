@@ -35,6 +35,11 @@ const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
 const EndpointsPage = page(() => import("@/pages/endpoints"), "EndpointsPage")
 const NewEndpointPage = page(() => import("@/pages/endpoint-editor"), "NewEndpointPage")
 const EditEndpointPage = page(() => import("@/pages/endpoint-editor"), "EditEndpointPage")
+const BuildsPage = page(() => import("@/pages/builds"), "BuildsPage")
+const NewBuildPage = page(() => import("@/pages/build-editor"), "NewBuildPage")
+const NewPresetPage = page(() => import("@/pages/build-editor"), "NewPresetPage")
+const EditPresetPage = page(() => import("@/pages/build-editor"), "EditPresetPage")
+const BuildDetailPage = page(() => import("@/pages/build-detail"), "BuildDetailPage")
 const AgentsPage = page(() => import("@/pages/agents"), "AgentsPage")
 const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
 
@@ -89,6 +94,14 @@ function App() {
               <Route path="endpoints" element={<EndpointsPage />} />
               <Route path="endpoints/new" element={<NewEndpointPage />} />
               <Route path="endpoints/:id" element={<EditEndpointPage />} />
+              {/* Builds and Presets are tabs of one page: one element for both
+                  paths, as for agents. */}
+              <Route path="builds" element={<BuildsPage />} />
+              <Route path="builds/presets" element={<BuildsPage />} />
+              <Route path="builds/new" element={<NewBuildPage />} />
+              <Route path="builds/presets/new" element={<NewPresetPage />} />
+              <Route path="builds/presets/:id" element={<EditPresetPage />} />
+              <Route path="builds/:id" element={<BuildDetailPage />} />
               <Route path="timeline" element={<TimelinePage />} />
               {/* One route for both tabs: the page reads the tab off the
                   pathname, and a single element means switching tabs

@@ -1,0 +1,328 @@
+import { useState } from "react"
+import { Link, useNavigate, useParams } from "react-router"
+import {
+  ArrowLeftIcon,
+  CopyIcon,
+  DownloadIcon,
+  HammerIcon,
+  RotateCcwIcon,
+  SquareIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react"
+import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Skeleton } from "@/components/ui/skeleton"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
+import { formatBytes } from "@/lib/format-bytes"
+import { formatAbsolute, relativeTime } from "@/lib/relative-time"
+import { artifactUrl } from "@/lib/build-file-upload"
+import { usePageMetadata } from "@/hooks/use-page-metadata"
+import type { BuildQuery } from "@/graphql/gql/graphql"
+import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact } from "@/graphql/hooks/builds"
+import { errorMessage } from "@/components/modules/management/api-errors"
+import { formatElapsed, prettyJson } from "@/components/modules/management/field-values"
+import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { BuildStateBadge } from "@/components/builds/build-state-badge"
+import { buildElapsed, platformLabel } from "@/components/builds/build-values"
+
+type Build = NonNullable<BuildQuery["build"]>
+
+/** /builds/:id — one build: its state while it runs, then its outcome. */
+export function BuildDetailPage() {
+  const { id = "" } = useParams<{ id: string }>()
+  const { data, isLoading, error } = useBuild(id)
+  const build = data?.build ?? null
+
+  usePageMetadata({
+    title: build ? `${build.moduleName} · ${build.target} · Builds` : "Builds",
+    icon: { kind: "lucide", component: HammerIcon },
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4 p-4">
+        <Skeleton className="h-8 w-80" />
+        <Skeleton className="h-96 w-full max-w-4xl" />
+      </div>
+    )
+  }
+  if (error || !build) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+        <HammerIcon className="size-8 opacity-50" />
+        <p className="max-w-md text-sm">{error ? error.message : "This build does not exist."}</p>
+        <Link to={BUILDS_PATH} className="text-sm underline underline-offset-4">
+          Back to builds
+        </Link>
+      </div>
+    )
+  }
+  return <BuildDetail build={build} />
+}
+
+function BuildDetail({ build: b }: { build: Build }) {
+  const navigate = useNavigate()
+  const { canWrite } = useCanBuild(b.operationId)
+  const cancel = useCancelBuild()
+  const [deleting, setDeleting] = useState(false)
+  const running = isUnfinished(b.state)
+  const artifact = b.artifact && !b.artifact.deleted ? b.artifact : null
+
+  async function stop() {
+    try {
+      await cancel.mutateAsync(b.id)
+      toast.success("Build cancelled")
+    } catch (err) {
+      toast.error("Could not cancel the build", { description: errorMessage(err, "Request failed") })
+    }
+  }
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-3">
+        <Link to={BUILDS_PATH} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeftIcon className="size-4" />
+          Builds
+        </Link>
+        <span className="h-5 w-px bg-border" aria-hidden />
+        <h1 className="text-lg font-semibold">
+          <span className="font-mono">{b.moduleName}</span> · {b.target}
+        </h1>
+        <BuildStateBadge build={b} />
+        <div className="flex items-center gap-2 sm:ml-auto">
+          {canWrite && running && (
+            <Button variant="outline" onClick={stop} disabled={cancel.isPending}>
+              <SquareIcon />
+              {cancel.isPending ? "Cancelling..." : "Cancel"}
+            </Button>
+          )}
+          {canWrite && !running && (
+            <Button variant="outline" onClick={() => navigate(`/builds/new?kind=${encodeURIComponent(b.moduleName)}&from=${b.id}`)}>
+              <RotateCcwIcon />
+              Build again
+            </Button>
+          )}
+          {canWrite && artifact && (
+            <Button render={<a href={artifactUrl(b.id)} download={artifact.filename} />}>
+              <DownloadIcon />
+              Download
+            </Button>
+          )}
+        </div>
+      </header>
+
+      <div className="flex min-w-0 max-w-4xl flex-col gap-6 px-4 py-6">
+        {b.error && (
+          <div className="flex items-start gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+            <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
+            <div>
+              <code className="font-mono font-medium">{b.error.code}</code>: {b.error.message}
+            </div>
+          </div>
+        )}
+        {b.warnings.length > 0 && (
+          <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+            <ul className="list-inside list-disc">
+              {b.warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <Section title="Overview">
+          <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-6 gap-y-2 py-3 text-sm">
+            <Item label="Platform">{platformLabel(b.platform)}</Item>
+            <Item label="Minion">
+              <span className="inline-flex items-center gap-1">
+                <code className="font-mono text-xs">{b.minionId}</code>
+                <Button variant="ghost" size="icon-sm" title="Copy" aria-label="Copy the minion id" onClick={() => copyToClipboard(b.minionId, "Minion id")}>
+                  <CopyIcon />
+                </Button>
+              </span>
+            </Item>
+            <Item label="Factory instance">
+              {b.instance ? (
+                <>
+                  <span className="font-mono">{b.instance}</span>
+                  {b.factoryVersion && <span className="text-muted-foreground"> · {b.factoryVersion}</span>}
+                </>
+              ) : (
+                <span className="text-muted-foreground">not taken yet</span>
+              )}
+            </Item>
+            <Item label="Started">
+              {formatAbsolute(b.createdAt)}
+              {b.createdBy.name && <span className="text-muted-foreground"> by {b.createdBy.name}</span>}
+            </Item>
+            {b.finishedAt ? (
+              <Item label="Finished">
+                {formatAbsolute(b.finishedAt)} <span className="text-muted-foreground">· took {formatElapsed(buildElapsed(b))}</span>
+                {b.cancelledBy?.name && <span className="text-muted-foreground"> · cancelled by {b.cancelledBy.name}</span>}
+              </Item>
+            ) : (
+              <Item label="Deadline">
+                {formatAbsolute(b.deadline)} <span className="text-muted-foreground">({relativeTime(b.deadline)})</span>
+              </Item>
+            )}
+            <Item label="Build id">
+              <code className="font-mono text-xs">{b.id}</code>
+            </Item>
+          </dl>
+        </Section>
+
+        {b.steps.length > 0 && (
+          <Section title="Progress">
+            <ol className="flex flex-col gap-1.5 py-3 text-sm">
+              {b.steps.map((s, i) => (
+                <li key={`${s.at}-${i}`} className="grid grid-cols-[6rem_minmax(0,1fr)_auto] items-baseline gap-3">
+                  <span className="font-mono text-xs text-muted-foreground">{new Date(s.at).toLocaleTimeString()}</span>
+                  <span>
+                    <span className="font-medium">{s.step}</span>
+                    {s.message && <span className="text-muted-foreground"> — {s.message}</span>}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{typeof s.percent === "number" ? `${s.percent}%` : ""}</span>
+                </li>
+              ))}
+            </ol>
+          </Section>
+        )}
+
+        {b.artifact && (
+          <Section title="Artifact">
+            <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-6 gap-y-2 py-3 text-sm">
+              <Item label="File">
+                <span className="font-mono">{b.artifact.filename}</span>{" "}
+                <span className="text-muted-foreground">· {formatBytes(b.artifact.size)}</span>
+                {b.artifact.mediaType && <span className="text-muted-foreground"> · {b.artifact.mediaType}</span>}
+              </Item>
+              <Item label="SHA-256">
+                <code className="break-all font-mono text-xs">{b.artifact.sha256}</code>
+              </Item>
+              <Item label="Capabilities">
+                {b.capabilities.length === 0 ? (
+                  <span className="text-muted-foreground">none reported</span>
+                ) : (
+                  <span className="flex flex-wrap gap-1">
+                    {b.capabilities.map((c) => (
+                      <Badge key={c} variant="secondary" className="font-mono">
+                        {c}
+                      </Badge>
+                    ))}
+                  </span>
+                )}
+              </Item>
+            </dl>
+            {b.artifact.deleted ? (
+              <p className="pb-3 text-sm text-muted-foreground">The artifact's bytes were deleted; the build record stays.</p>
+            ) : (
+              canWrite && (
+                <div className="pb-3">
+                  <Button variant="outline" size="sm" onClick={() => setDeleting(true)}>
+                    <Trash2Icon />
+                    Delete the artifact
+                  </Button>
+                </div>
+              )
+            )}
+          </Section>
+        )}
+
+        {b.log && (
+          <Section title="Build log">
+            <pre className="my-3 max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5 whitespace-pre-wrap">{b.log}</pre>
+          </Section>
+        )}
+
+        <Section title="What the factory was given">
+          <div className="flex flex-col gap-3 py-3">
+            <p className="text-sm text-muted-foreground">
+              Every value with the defaults filled in, and the endpoints as they were copied into the build.
+            </p>
+            <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5">
+              {prettyJson({ values: b.values, connections: b.connections })}
+            </pre>
+          </div>
+        </Section>
+      </div>
+
+      <DeleteArtifactDialog build={deleting ? b : null} onClose={() => setDeleting(false)} />
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+      <div className="rounded-xl border bg-card px-4">{children}</div>
+    </section>
+  )
+}
+
+function Item({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="min-w-0">{children}</dd>
+    </>
+  )
+}
+
+function DeleteArtifactDialog({ build, onClose }: { build: Build | null; onClose: () => void }) {
+  const del = useDeleteBuildArtifact()
+  const [error, setError] = useState<string | null>(null)
+
+  async function confirm() {
+    if (!build) return
+    setError(null)
+    try {
+      await del.mutateAsync(build.id)
+      toast.success("Artifact deleted")
+      onClose()
+    } catch (err) {
+      setError(errorMessage(err, "Failed to delete the artifact"))
+    }
+  }
+
+  return (
+    <Dialog
+      open={build !== null}
+      onOpenChange={(o) => {
+        if (!o && !del.isPending) {
+          setError(null)
+          onClose()
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete the artifact?</DialogTitle>
+          <DialogDescription>
+            Its bytes are removed and cannot be downloaded again; the build record and the minion stay. A minion already
+            deployed keeps working.
+          </DialogDescription>
+        </DialogHeader>
+        {error && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error}</div>}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={del.isPending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={confirm} disabled={del.isPending}>
+            {del.isPending ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

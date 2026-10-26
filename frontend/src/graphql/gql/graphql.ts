@@ -100,6 +100,148 @@ export type AgentKeyWithSecret = {
   token: Scalars['String']['output'];
 };
 
+export type Build = {
+  artifact?: Maybe<BuildArtifact>;
+  cancelledBy?: Maybe<ModuleActor>;
+  capabilities: Array<Scalars['String']['output']>;
+  connections: Scalars['JSON']['output'];
+  createdAt: Scalars['String']['output'];
+  createdBy: ModuleActor;
+  deadline: Scalars['String']['output'];
+  error?: Maybe<BuildError>;
+  factoryVersion?: Maybe<Scalars['String']['output']>;
+  finishedAt?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  instance?: Maybe<Scalars['String']['output']>;
+  log?: Maybe<Scalars['String']['output']>;
+  minionId: Scalars['String']['output'];
+  moduleName: Scalars['String']['output'];
+  operationId: Scalars['ID']['output'];
+  platform: Scalars['String']['output'];
+  presetId?: Maybe<Scalars['ID']['output']>;
+  schemaVersion: Scalars['Int']['output'];
+  startedAt?: Maybe<Scalars['String']['output']>;
+  state: Scalars['String']['output'];
+  steps: Array<BuildStep>;
+  target: Scalars['String']['output'];
+  values: Scalars['JSON']['output'];
+  warnings: Array<Scalars['String']['output']>;
+};
+
+export type BuildArtifact = {
+  deleted: Scalars['Boolean']['output'];
+  filename: Scalars['String']['output'];
+  mediaType?: Maybe<Scalars['String']['output']>;
+  sha256: Scalars['String']['output'];
+  size: Scalars['Int']['output'];
+};
+
+export type BuildChannel = {
+  fields: Array<ModuleField>;
+  moduleName: Scalars['String']['output'];
+  versions: Array<Scalars['Int']['output']>;
+};
+
+export type BuildChannelVersions = {
+  moduleName: Scalars['String']['output'];
+  versions: Array<Scalars['Int']['output']>;
+};
+
+export type BuildConnectionInput = {
+  endpointId: Scalars['ID']['input'];
+  values?: InputMaybe<Scalars['JSON']['input']>;
+};
+
+export type BuildError = {
+  code: Scalars['String']['output'];
+  message: Scalars['String']['output'];
+};
+
+export type BuildFile = {
+  createdAt: Scalars['String']['output'];
+  id: Scalars['ID']['output'];
+  mediaType?: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  operationId: Scalars['ID']['output'];
+  sha256: Scalars['String']['output'];
+  size: Scalars['Int']['output'];
+  uploadedBy: ModuleActor;
+};
+
+export type BuildInput = {
+  connections: Array<BuildConnectionInput>;
+  moduleName: Scalars['String']['input'];
+  platform: Scalars['String']['input'];
+  presetId?: InputMaybe<Scalars['ID']['input']>;
+  target: Scalars['String']['input'];
+  values: Scalars['JSON']['input'];
+};
+
+export type BuildPreset = {
+  connections: Array<BuildPresetConnection>;
+  createdAt: Scalars['String']['output'];
+  createdBy: ModuleActor;
+  description?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  moduleName: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  operationId: Scalars['ID']['output'];
+  platform?: Maybe<Scalars['String']['output']>;
+  problems: Array<BuildProblem>;
+  revision: Scalars['Int']['output'];
+  schemaChanged: Scalars['Boolean']['output'];
+  schemaVersion: Scalars['Int']['output'];
+  target: Scalars['String']['output'];
+  updatedAt: Scalars['String']['output'];
+  updatedBy: ModuleActor;
+  values: Scalars['JSON']['output'];
+};
+
+export type BuildPresetConnection = {
+  endpointId: Scalars['ID']['output'];
+  endpointName?: Maybe<Scalars['String']['output']>;
+  values: Scalars['JSON']['output'];
+};
+
+export type BuildPresetInput = {
+  connections: Array<BuildConnectionInput>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
+  platform?: InputMaybe<Scalars['String']['input']>;
+  target: Scalars['String']['input'];
+  values: Scalars['JSON']['input'];
+};
+
+export type BuildProblem = {
+  key?: Maybe<Scalars['String']['output']>;
+  message: Scalars['String']['output'];
+};
+
+export type BuildSchema = {
+  channels: Array<BuildChannel>;
+  crypto: Array<Scalars['String']['output']>;
+  fields: Array<ModuleField>;
+  targets: Array<BuildTarget>;
+  version: Scalars['Int']['output'];
+};
+
+export type BuildStep = {
+  at: Scalars['String']['output'];
+  message?: Maybe<Scalars['String']['output']>;
+  percent?: Maybe<Scalars['Int']['output']>;
+  step: Scalars['String']['output'];
+};
+
+export type BuildTarget = {
+  channels: Array<BuildChannelVersions>;
+  description?: Maybe<Scalars['String']['output']>;
+  fields: Array<ModuleField>;
+  format: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  label: Scalars['String']['output'];
+  platforms: Array<Scalars['String']['output']>;
+};
+
 export type BulkImportHashesInput = {
   comment?: InputMaybe<Scalars['String']['input']>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
@@ -339,6 +481,12 @@ export type EventAction =
   | 'DELETED'
   | 'UPDATED';
 
+export type FactoryKind = {
+  instances: Scalars['Int']['output'];
+  moduleName: Scalars['String']['output'];
+  schema: BuildSchema;
+};
+
 export type Hash = {
   backlinkCount: Scalars['Int']['output'];
   backlinks: Array<WikiDocument>;
@@ -454,7 +602,20 @@ export type MarkHashCrackedInput = {
   newCredential?: InputMaybe<CreateCredentialInput>;
 };
 
+export type Minion = {
+  buildId: Scalars['ID']['output'];
+  capabilities: Array<Scalars['String']['output']>;
+  createdAt: Scalars['String']['output'];
+  createdBy: ModuleActor;
+  id: Scalars['ID']['output'];
+  moduleName: Scalars['String']['output'];
+  operationId: Scalars['ID']['output'];
+  platform: Scalars['String']['output'];
+  target: Scalars['String']['output'];
+};
+
 export type Module = {
+  build?: Maybe<BuildSchema>;
   connection?: Maybe<ModuleConnectionSchema>;
   declaredDeadAt?: Maybe<Scalars['String']['output']>;
   deregisterReason: Scalars['String']['output'];
@@ -552,6 +713,7 @@ export type ModuleEventKind =
   | 'REGISTERED';
 
 export type ModuleField = {
+  accept?: Maybe<Array<Scalars['String']['output']>>;
   default?: Maybe<Scalars['JSON']['output']>;
   description?: Maybe<Scalars['String']['output']>;
   format?: Maybe<Scalars['String']['output']>;
@@ -562,6 +724,7 @@ export type ModuleField = {
   max?: Maybe<Scalars['JSON']['output']>;
   maxItems?: Maybe<Scalars['Int']['output']>;
   maxLength?: Maybe<Scalars['Int']['output']>;
+  maxSize?: Maybe<Scalars['JSON']['output']>;
   min?: Maybe<Scalars['JSON']['output']>;
   options?: Maybe<Array<ModuleEnumOption>>;
   order: Scalars['Int']['output'];
@@ -644,9 +807,12 @@ export type Mutation = {
   adminRevokeAllUserSessions: Scalars['Int']['output'];
   adminRevokeSession: Scalars['Boolean']['output'];
   bulkImportHashes: BulkImportHashesResult;
+  cancelBuild: Build;
   changeTaskStage: Task;
   completeGuide: User;
   createAgentKey: AgentKeyWithSecret;
+  createBuild: Build;
+  createBuildPreset: BuildPreset;
   createChannelEndpoint: ChannelEndpoint;
   createCredential: Credential;
   createCustomTimelineEvent: TimelineEvent;
@@ -659,6 +825,9 @@ export type Mutation = {
   createWikiDocument: WikiDocument;
   createWikiDocumentBackup: WikiDocumentBackup;
   deleteAgentKey: Scalars['Boolean']['output'];
+  deleteBuildArtifact: Build;
+  deleteBuildFile: Scalars['Boolean']['output'];
+  deleteBuildPreset: Scalars['Boolean']['output'];
   deleteChannelEndpoint: Scalars['Boolean']['output'];
   deleteCredential: Scalars['Boolean']['output'];
   deleteCredentialComment: Credential;
@@ -705,6 +874,7 @@ export type Mutation = {
   trackWikiDocumentVisit: WikiDocumentVisit;
   transferSkill: Skill;
   updateAgentKey: AgentKey;
+  updateBuildPreset: BuildPreset;
   updateChannelEndpoint: ChannelEndpoint;
   updateCredential: Credential;
   updateCredentialComment: Credential;
@@ -756,6 +926,11 @@ export type MutationBulkImportHashesArgs = {
 };
 
 
+export type MutationCancelBuildArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
 export type MutationChangeTaskStageArgs = {
   input: ChangeTaskStageInput;
 };
@@ -768,6 +943,19 @@ export type MutationCompleteGuideArgs = {
 
 export type MutationCreateAgentKeyArgs = {
   input: CreateAgentKeyInput;
+};
+
+
+export type MutationCreateBuildArgs = {
+  input: BuildInput;
+  operationId: Scalars['ID']['input'];
+};
+
+
+export type MutationCreateBuildPresetArgs = {
+  input: BuildPresetInput;
+  moduleName: Scalars['String']['input'];
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -830,6 +1018,21 @@ export type MutationCreateWikiDocumentBackupArgs = {
 
 
 export type MutationDeleteAgentKeyArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteBuildArtifactArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteBuildFileArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteBuildPresetArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -1071,6 +1274,13 @@ export type MutationUpdateAgentKeyArgs = {
 };
 
 
+export type MutationUpdateBuildPresetArgs = {
+  expectedRevision: Scalars['Int']['input'];
+  id: Scalars['ID']['input'];
+  input: BuildPresetInput;
+};
+
+
 export type MutationUpdateChannelEndpointArgs = {
   expectedRevision: Scalars['Int']['input'];
   id: Scalars['ID']['input'];
@@ -1255,6 +1465,11 @@ export type PresenceAction =
   | 'LEFT';
 
 export type Query = {
+  build?: Maybe<Build>;
+  buildFiles: Array<BuildFile>;
+  buildPreset?: Maybe<BuildPreset>;
+  buildPresets: Array<BuildPreset>;
+  builds: Array<Build>;
   channelEndpoint?: Maybe<ChannelEndpoint>;
   channelEndpointExport: Scalars['JSON']['output'];
   channelEndpoints: Array<ChannelEndpoint>;
@@ -1262,12 +1477,14 @@ export type Query = {
   credential: Credential;
   credentialTags: Array<Scalars['String']['output']>;
   credentials: CredentialConnection;
+  factoryKinds: Array<FactoryKind>;
   hash: Hash;
   hashTags: Array<Scalars['String']['output']>;
   hashes: HashConnection;
   host: Host;
   hosts: HostConnection;
   me: User;
+  minions: Array<Minion>;
   module?: Maybe<Module>;
   moduleActionInvocations: Array<ModuleActionInvocation>;
   moduleConfigChanges: Array<ModuleConfigChange>;
@@ -1323,6 +1540,33 @@ export type Query = {
   wikiOperationPresence: Array<WikiDocumentPresence>;
   wikiSearch: WikiSearchConnection;
   wikiTemplates: Array<WikiDocument>;
+};
+
+
+export type QueryBuildArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryBuildFilesArgs = {
+  operationId: Scalars['ID']['input'];
+};
+
+
+export type QueryBuildPresetArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type QueryBuildPresetsArgs = {
+  moduleName?: InputMaybe<Scalars['String']['input']>;
+  operationId: Scalars['ID']['input'];
+};
+
+
+export type QueryBuildsArgs = {
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -1405,6 +1649,11 @@ export type QueryHostsArgs = {
   search?: InputMaybe<Scalars['String']['input']>;
   sortBy?: InputMaybe<HostSortField>;
   sortDirection?: InputMaybe<SortDirection>;
+};
+
+
+export type QueryMinionsArgs = {
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -2457,12 +2706,115 @@ export type DeleteMyApiKeyMutationVariables = Exact<{ [key: string]: never; }>;
 
 export type DeleteMyApiKeyMutation = { deleteMyAPIKey: boolean };
 
+export type BuildSchemaFieldsFragment = { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> };
+
+export type BuildFileFieldsFragment = { id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string };
+
+export type BuildPresetFieldsFragment = { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ endpointId: string, endpointName?: string | null, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
+
+export type BuildFieldsFragment = { id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } };
+
+export type FactoryKindsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, instances: number, schema: { version: number, crypto: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number> }> }> } }> };
+
+export type BuildFilesQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type BuildFilesQuery = { buildFiles: Array<{ id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string }> };
+
+export type DeleteBuildFileMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteBuildFileMutation = { deleteBuildFile: boolean };
+
+export type BuildPresetsQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type BuildPresetsQuery = { buildPresets: Array<{ id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ endpointId: string, endpointName?: string | null, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } }> };
+
+export type BuildPresetQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type BuildPresetQuery = { buildPreset?: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ endpointId: string, endpointName?: string | null, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } | null };
+
+export type CreateBuildPresetMutationVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  moduleName: Scalars['String']['input'];
+  input: BuildPresetInput;
+}>;
+
+
+export type CreateBuildPresetMutation = { createBuildPreset: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ endpointId: string, endpointName?: string | null, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
+
+export type UpdateBuildPresetMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  input: BuildPresetInput;
+  expectedRevision: Scalars['Int']['input'];
+}>;
+
+
+export type UpdateBuildPresetMutation = { updateBuildPreset: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ endpointId: string, endpointName?: string | null, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
+
+export type DeleteBuildPresetMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteBuildPresetMutation = { deleteBuildPreset: boolean };
+
+export type BuildsQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  limit?: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type BuildsQuery = { builds: Array<{ id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } }> };
+
+export type BuildQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type BuildQuery = { build?: { values: unknown, connections: unknown, warnings: Array<string>, log?: string | null, presetId?: string | null, id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+
+export type CreateBuildMutationVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  input: BuildInput;
+}>;
+
+
+export type CreateBuildMutation = { createBuild: { id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+
+export type CancelBuildMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type CancelBuildMutation = { cancelBuild: { id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+
+export type DeleteBuildArtifactMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteBuildArtifactMutation = { deleteBuildArtifact: { id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+
 export type ChannelEndpointFieldsFragment = { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
 
 export type ChannelKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type ChannelKindsQuery = { channelKinds: Array<{ moduleName: string, schema: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } }> };
+export type ChannelKindsQuery = { channelKinds: Array<{ moduleName: string, schema: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } }> };
 
 export type ChannelEndpointsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -2861,16 +3213,16 @@ export type ModuleChangedSubscriptionVariables = Exact<{ [key: string]: never; }
 
 export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, kind: ModuleEventKind, instance: string, module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null } | null } };
 
-export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null };
+export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null };
 
-export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null };
+export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null };
 
 export type ModuleQueryVariables = Exact<{
   instance: Scalars['ID']['input'];
 }>;
 
 
-export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null } | null };
+export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null } | null };
 
 export type ModuleActionInvocationFieldsFragment = { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } };
 
@@ -2897,7 +3249,7 @@ export type UpdateModuleConfigMutationVariables = Exact<{
 }>;
 
 
-export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null } };
+export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> } | null } };
 
 export type InvokeModuleActionMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
@@ -3789,6 +4141,171 @@ export const ApiKeyFieldsFragmentDoc = new TypedDocumentString(`
   updatedAt
 }
     `, {"fragmentName":"APIKeyFields"}) as unknown as TypedDocumentString<ApiKeyFieldsFragment, unknown>;
+export const ModuleFieldDefFieldsFragmentDoc = new TypedDocumentString(`
+    fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  format
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  keyPattern
+  maxItems
+  options {
+    value
+    label
+    description
+  }
+  accept
+  maxSize
+}
+    `, {"fragmentName":"ModuleFieldDefFields"}) as unknown as TypedDocumentString<ModuleFieldDefFieldsFragment, unknown>;
+export const BuildSchemaFieldsFragmentDoc = new TypedDocumentString(`
+    fragment BuildSchemaFields on BuildSchema {
+  version
+  crypto
+  fields {
+    ...ModuleFieldDefFields
+  }
+  channels {
+    moduleName
+    versions
+    fields {
+      ...ModuleFieldDefFields
+    }
+  }
+  targets {
+    id
+    label
+    description
+    format
+    platforms
+    fields {
+      ...ModuleFieldDefFields
+    }
+    channels {
+      moduleName
+      versions
+    }
+  }
+}
+    fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  format
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  keyPattern
+  maxItems
+  options {
+    value
+    label
+    description
+  }
+  accept
+  maxSize
+}`, {"fragmentName":"BuildSchemaFields"}) as unknown as TypedDocumentString<BuildSchemaFieldsFragment, unknown>;
+export const BuildFileFieldsFragmentDoc = new TypedDocumentString(`
+    fragment BuildFileFields on BuildFile {
+  id
+  operationId
+  name
+  size
+  sha256
+  mediaType
+  createdAt
+}
+    `, {"fragmentName":"BuildFileFields"}) as unknown as TypedDocumentString<BuildFileFieldsFragment, unknown>;
+export const BuildPresetFieldsFragmentDoc = new TypedDocumentString(`
+    fragment BuildPresetFields on BuildPreset {
+  id
+  operationId
+  name
+  description
+  moduleName
+  target
+  platform
+  values
+  connections {
+    endpointId
+    endpointName
+    values
+  }
+  schemaVersion
+  schemaChanged
+  problems {
+    key
+    message
+  }
+  revision
+  updatedBy {
+    type
+    id
+    name
+  }
+  updatedAt
+}
+    `, {"fragmentName":"BuildPresetFields"}) as unknown as TypedDocumentString<BuildPresetFieldsFragment, unknown>;
+export const BuildFieldsFragmentDoc = new TypedDocumentString(`
+    fragment BuildFields on Build {
+  id
+  operationId
+  moduleName
+  target
+  platform
+  schemaVersion
+  minionId
+  state
+  instance
+  factoryVersion
+  steps {
+    step
+    message
+    percent
+    at
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  capabilities
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}
+    `, {"fragmentName":"BuildFields"}) as unknown as TypedDocumentString<BuildFieldsFragment, unknown>;
 export const ChannelEndpointFieldsFragmentDoc = new TypedDocumentString(`
     fragment ChannelEndpointFields on ChannelEndpoint {
   id
@@ -4056,32 +4573,6 @@ export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
   declaredDeadAt
 }
     `, {"fragmentName":"ModuleFields"}) as unknown as TypedDocumentString<ModuleFieldsFragment, unknown>;
-export const ModuleFieldDefFieldsFragmentDoc = new TypedDocumentString(`
-    fragment ModuleFieldDefFields on ModuleField {
-  key
-  type
-  label
-  description
-  group
-  order
-  unit
-  placeholder
-  format
-  required
-  default
-  min
-  max
-  pattern
-  maxLength
-  keyPattern
-  maxItems
-  options {
-    value
-    label
-    description
-  }
-}
-    `, {"fragmentName":"ModuleFieldDefFields"}) as unknown as TypedDocumentString<ModuleFieldDefFieldsFragment, unknown>;
 export const ModuleDetailFieldsFragmentDoc = new TypedDocumentString(`
     fragment ModuleDetailFields on Module {
   ...ModuleFields
@@ -4169,6 +4660,8 @@ fragment ModuleFieldDefFields on ModuleField {
     label
     description
   }
+  accept
+  maxSize
 }`, {"fragmentName":"ModuleDetailFields"}) as unknown as TypedDocumentString<ModuleDetailFieldsFragment, unknown>;
 export const ModuleActionInvocationFieldsFragmentDoc = new TypedDocumentString(`
     fragment ModuleActionInvocationFields on ModuleActionInvocation {
@@ -4744,6 +5237,470 @@ export const DeleteMyApiKeyDocument = new TypedDocumentString(`
   deleteMyAPIKey
 }
     `) as unknown as TypedDocumentString<DeleteMyApiKeyMutation, DeleteMyApiKeyMutationVariables>;
+export const FactoryKindsDocument = new TypedDocumentString(`
+    query FactoryKinds {
+  factoryKinds {
+    moduleName
+    instances
+    schema {
+      ...BuildSchemaFields
+    }
+  }
+}
+    fragment BuildSchemaFields on BuildSchema {
+  version
+  crypto
+  fields {
+    ...ModuleFieldDefFields
+  }
+  channels {
+    moduleName
+    versions
+    fields {
+      ...ModuleFieldDefFields
+    }
+  }
+  targets {
+    id
+    label
+    description
+    format
+    platforms
+    fields {
+      ...ModuleFieldDefFields
+    }
+    channels {
+      moduleName
+      versions
+    }
+  }
+}
+fragment ModuleFieldDefFields on ModuleField {
+  key
+  type
+  label
+  description
+  group
+  order
+  unit
+  placeholder
+  format
+  required
+  default
+  min
+  max
+  pattern
+  maxLength
+  keyPattern
+  maxItems
+  options {
+    value
+    label
+    description
+  }
+  accept
+  maxSize
+}`) as unknown as TypedDocumentString<FactoryKindsQuery, FactoryKindsQueryVariables>;
+export const BuildFilesDocument = new TypedDocumentString(`
+    query BuildFiles($operationId: ID!) {
+  buildFiles(operationId: $operationId) {
+    ...BuildFileFields
+  }
+}
+    fragment BuildFileFields on BuildFile {
+  id
+  operationId
+  name
+  size
+  sha256
+  mediaType
+  createdAt
+}`) as unknown as TypedDocumentString<BuildFilesQuery, BuildFilesQueryVariables>;
+export const DeleteBuildFileDocument = new TypedDocumentString(`
+    mutation DeleteBuildFile($id: ID!) {
+  deleteBuildFile(id: $id)
+}
+    `) as unknown as TypedDocumentString<DeleteBuildFileMutation, DeleteBuildFileMutationVariables>;
+export const BuildPresetsDocument = new TypedDocumentString(`
+    query BuildPresets($operationId: ID!) {
+  buildPresets(operationId: $operationId) {
+    ...BuildPresetFields
+  }
+}
+    fragment BuildPresetFields on BuildPreset {
+  id
+  operationId
+  name
+  description
+  moduleName
+  target
+  platform
+  values
+  connections {
+    endpointId
+    endpointName
+    values
+  }
+  schemaVersion
+  schemaChanged
+  problems {
+    key
+    message
+  }
+  revision
+  updatedBy {
+    type
+    id
+    name
+  }
+  updatedAt
+}`) as unknown as TypedDocumentString<BuildPresetsQuery, BuildPresetsQueryVariables>;
+export const BuildPresetDocument = new TypedDocumentString(`
+    query BuildPreset($id: ID!) {
+  buildPreset(id: $id) {
+    ...BuildPresetFields
+  }
+}
+    fragment BuildPresetFields on BuildPreset {
+  id
+  operationId
+  name
+  description
+  moduleName
+  target
+  platform
+  values
+  connections {
+    endpointId
+    endpointName
+    values
+  }
+  schemaVersion
+  schemaChanged
+  problems {
+    key
+    message
+  }
+  revision
+  updatedBy {
+    type
+    id
+    name
+  }
+  updatedAt
+}`) as unknown as TypedDocumentString<BuildPresetQuery, BuildPresetQueryVariables>;
+export const CreateBuildPresetDocument = new TypedDocumentString(`
+    mutation CreateBuildPreset($operationId: ID!, $moduleName: String!, $input: BuildPresetInput!) {
+  createBuildPreset(
+    operationId: $operationId
+    moduleName: $moduleName
+    input: $input
+  ) {
+    ...BuildPresetFields
+  }
+}
+    fragment BuildPresetFields on BuildPreset {
+  id
+  operationId
+  name
+  description
+  moduleName
+  target
+  platform
+  values
+  connections {
+    endpointId
+    endpointName
+    values
+  }
+  schemaVersion
+  schemaChanged
+  problems {
+    key
+    message
+  }
+  revision
+  updatedBy {
+    type
+    id
+    name
+  }
+  updatedAt
+}`) as unknown as TypedDocumentString<CreateBuildPresetMutation, CreateBuildPresetMutationVariables>;
+export const UpdateBuildPresetDocument = new TypedDocumentString(`
+    mutation UpdateBuildPreset($id: ID!, $input: BuildPresetInput!, $expectedRevision: Int!) {
+  updateBuildPreset(id: $id, input: $input, expectedRevision: $expectedRevision) {
+    ...BuildPresetFields
+  }
+}
+    fragment BuildPresetFields on BuildPreset {
+  id
+  operationId
+  name
+  description
+  moduleName
+  target
+  platform
+  values
+  connections {
+    endpointId
+    endpointName
+    values
+  }
+  schemaVersion
+  schemaChanged
+  problems {
+    key
+    message
+  }
+  revision
+  updatedBy {
+    type
+    id
+    name
+  }
+  updatedAt
+}`) as unknown as TypedDocumentString<UpdateBuildPresetMutation, UpdateBuildPresetMutationVariables>;
+export const DeleteBuildPresetDocument = new TypedDocumentString(`
+    mutation DeleteBuildPreset($id: ID!) {
+  deleteBuildPreset(id: $id)
+}
+    `) as unknown as TypedDocumentString<DeleteBuildPresetMutation, DeleteBuildPresetMutationVariables>;
+export const BuildsDocument = new TypedDocumentString(`
+    query Builds($operationId: ID!, $limit: Int) {
+  builds(operationId: $operationId, limit: $limit) {
+    ...BuildFields
+  }
+}
+    fragment BuildFields on Build {
+  id
+  operationId
+  moduleName
+  target
+  platform
+  schemaVersion
+  minionId
+  state
+  instance
+  factoryVersion
+  steps {
+    step
+    message
+    percent
+    at
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  capabilities
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}`) as unknown as TypedDocumentString<BuildsQuery, BuildsQueryVariables>;
+export const BuildDocument = new TypedDocumentString(`
+    query Build($id: ID!) {
+  build(id: $id) {
+    ...BuildFields
+    values
+    connections
+    warnings
+    log
+    presetId
+    cancelledBy {
+      type
+      id
+      name
+    }
+  }
+}
+    fragment BuildFields on Build {
+  id
+  operationId
+  moduleName
+  target
+  platform
+  schemaVersion
+  minionId
+  state
+  instance
+  factoryVersion
+  steps {
+    step
+    message
+    percent
+    at
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  capabilities
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}`) as unknown as TypedDocumentString<BuildQuery, BuildQueryVariables>;
+export const CreateBuildDocument = new TypedDocumentString(`
+    mutation CreateBuild($operationId: ID!, $input: BuildInput!) {
+  createBuild(operationId: $operationId, input: $input) {
+    ...BuildFields
+  }
+}
+    fragment BuildFields on Build {
+  id
+  operationId
+  moduleName
+  target
+  platform
+  schemaVersion
+  minionId
+  state
+  instance
+  factoryVersion
+  steps {
+    step
+    message
+    percent
+    at
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  capabilities
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}`) as unknown as TypedDocumentString<CreateBuildMutation, CreateBuildMutationVariables>;
+export const CancelBuildDocument = new TypedDocumentString(`
+    mutation CancelBuild($id: ID!) {
+  cancelBuild(id: $id) {
+    ...BuildFields
+  }
+}
+    fragment BuildFields on Build {
+  id
+  operationId
+  moduleName
+  target
+  platform
+  schemaVersion
+  minionId
+  state
+  instance
+  factoryVersion
+  steps {
+    step
+    message
+    percent
+    at
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  capabilities
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}`) as unknown as TypedDocumentString<CancelBuildMutation, CancelBuildMutationVariables>;
+export const DeleteBuildArtifactDocument = new TypedDocumentString(`
+    mutation DeleteBuildArtifact($id: ID!) {
+  deleteBuildArtifact(id: $id) {
+    ...BuildFields
+  }
+}
+    fragment BuildFields on Build {
+  id
+  operationId
+  moduleName
+  target
+  platform
+  schemaVersion
+  minionId
+  state
+  instance
+  factoryVersion
+  steps {
+    step
+    message
+    percent
+    at
+  }
+  artifact {
+    filename
+    size
+    sha256
+    mediaType
+    deleted
+  }
+  capabilities
+  error {
+    code
+    message
+  }
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  startedAt
+  finishedAt
+  deadline
+}`) as unknown as TypedDocumentString<DeleteBuildArtifactMutation, DeleteBuildArtifactMutationVariables>;
 export const ChannelKindsDocument = new TypedDocumentString(`
     query ChannelKinds {
   channelKinds {
@@ -4779,6 +5736,8 @@ export const ChannelKindsDocument = new TypedDocumentString(`
     label
     description
   }
+  accept
+  maxSize
 }`) as unknown as TypedDocumentString<ChannelKindsQuery, ChannelKindsQueryVariables>;
 export const ChannelEndpointsDocument = new TypedDocumentString(`
     query ChannelEndpoints($operationId: ID!, $moduleName: String) {
@@ -6181,6 +7140,8 @@ fragment ModuleFieldDefFields on ModuleField {
     label
     description
   }
+  accept
+  maxSize
 }
 fragment ModuleDetailFields on Module {
   ...ModuleFields
@@ -6320,6 +7281,8 @@ fragment ModuleFieldDefFields on ModuleField {
     label
     description
   }
+  accept
+  maxSize
 }
 fragment ModuleDetailFields on Module {
   ...ModuleFields

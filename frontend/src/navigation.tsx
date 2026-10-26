@@ -2,6 +2,7 @@ import {
   BlocksIcon,
   BookOpenIcon,
   FileCode2Icon,
+  HammerIcon,
   KanbanSquareIcon,
   PackageIcon,
   RadioTowerIcon,
@@ -60,6 +61,12 @@ export const navigationOperationItems: NavigationItem[] = [
     url: "/endpoints",
     permission: null,
     icon: RadioTowerIcon,
+  },
+  {
+    title: "Builds",
+    url: "/builds",
+    permission: null,
+    icon: HammerIcon,
   },
 ];
 

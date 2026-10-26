@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -11,6 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { PlusIcon, XIcon } from "lucide-react"
+import { BuildFileControl } from "@/components/builds/build-file-control"
 import { UserAgentGenerator } from "./user-agent-generator"
 import {
   BYTE_UNITS,
@@ -18,6 +20,7 @@ import {
   byteUnitFactor,
   formatValue,
   humanizeBytes,
+  localInputToRFC3339,
   type ByteUnit,
   type Draft,
   type FieldDef,
@@ -98,6 +101,31 @@ export function FieldControl({
           disabled={disabled}
           invalid={invalid}
           placeholder={placeholder}
+        />
+      )
+
+    case "set":
+      return (
+        <OptionsControl
+          id={id}
+          field={field}
+          draft={draft}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={invalid}
+          defaultValue={defaultValue}
+        />
+      )
+
+    case "file":
+      return (
+        <BuildFileControl
+          id={id}
+          field={field}
+          draft={draft}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={invalid}
         />
       )
 
@@ -190,6 +218,26 @@ export function FieldControl({
         </div>
       )
 
+    case "datetime": {
+      const utc = text.trim() === "" ? null : localInputToRFC3339(text.trim())
+      return (
+        <div className="flex flex-col gap-1">
+          <Input
+            id={id}
+            type="datetime-local"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            className="w-full max-w-72"
+          />
+          <span className="text-xs text-muted-foreground">
+            {utc ? `${utc} (UTC)` : defaultText !== undefined ? `Default: ${defaultText}` : "In your local time"}
+          </span>
+        </div>
+      )
+    }
+
     case "int":
     case "number":
       return (
@@ -239,6 +287,66 @@ export function FieldControl({
       return input
     }
   }
+}
+
+/**
+ * enum_list: one checkbox per option, with its description. Past max_items
+ * the unchecked ones are disabled.
+ */
+function OptionsControl({
+  id,
+  field,
+  draft,
+  onChange,
+  disabled,
+  invalid,
+  defaultValue,
+}: {
+  id: string
+  field: FieldDef
+  draft: Extract<Draft, { kind: "set" }>
+  onChange: (d: Draft) => void
+  disabled?: boolean
+  invalid?: boolean
+  defaultValue?: unknown
+}) {
+  const options = field.options ?? []
+  const picked = new Set(draft.values)
+  const full = field.maxItems != null && draft.values.length >= field.maxItems
+  const defaults = Array.isArray(defaultValue) ? defaultValue.map(String) : []
+  return (
+    <div id={id} role="group" aria-invalid={invalid || undefined} className="flex flex-col gap-2">
+      {options.map((o) => {
+        const checked = picked.has(o.value)
+        return (
+          <label key={o.value} className="flex items-start gap-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={checked}
+              disabled={disabled || (!checked && full)}
+              onCheckedChange={(on) =>
+                onChange({
+                  kind: "set",
+                  values: on ? [...draft.values, o.value] : draft.values.filter((v) => v !== o.value),
+                })
+              }
+            />
+            <span className="flex flex-col">
+              <span>{o.label || o.value}</span>
+              {o.description && <span className="text-xs text-muted-foreground">{o.description}</span>}
+            </span>
+          </label>
+        )
+      })}
+      {(draft.values.length === 0 && defaults.length > 0) || field.maxItems != null ? (
+        <span className="text-xs text-muted-foreground">
+          {draft.values.length === 0 && defaults.length > 0 && `Default: ${defaults.join(", ")}`}
+          {draft.values.length === 0 && defaults.length > 0 && field.maxItems != null && " · "}
+          {field.maxItems != null && `At most ${field.maxItems}`}
+        </span>
+      ) : null}
+    </div>
+  )
 }
 
 function BytesControl({

@@ -75,6 +75,8 @@ export const ModuleFieldDefFields = graphql(`
       label
       description
     }
+    accept
+    maxSize
   }
 `)
 

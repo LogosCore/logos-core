@@ -12,7 +12,11 @@
 //   duration                     → Go duration string ("30s", "1m30s")
 //   string_list                  → string[]
 //   string_map                   → { [key: string]: string }
-// Bounds (min / max) are numbers, or duration strings for duration.
+//   datetime                     → RFC 3339 timestamp ("2027-01-31T00:00:00Z")
+//   enum_list                    → string[] of option values
+//   file                         → a build file's id (build schemas only)
+// Bounds (min / max) are numbers, duration strings for duration, RFC 3339
+// strings for datetime.
 
 import type {
   ModuleActionInvocationFieldsFragment,
@@ -34,6 +38,9 @@ export type FieldType =
   | "duration"
   | "string_list"
   | "string_map"
+  | "datetime"
+  | "enum_list"
+  | "file"
 
 // ---------------------------------------------------------------------------
 // Bytes
@@ -112,6 +119,40 @@ export function parseGoDuration(input: string): number | null {
 export const DURATION_HINT = 'Go duration, e.g. "500ms", "30s", "1m30s", "2h"'
 
 // ---------------------------------------------------------------------------
+// Datetimes: RFC 3339 on the wire, local time in the control
+// ---------------------------------------------------------------------------
+
+const pad = (n: number) => String(n).padStart(2, "0")
+
+/**
+ * What a datetime-local input shows for an RFC 3339 value: the same instant
+ * in local time, seconds only when there are some. "" when it does not parse.
+ */
+export function rfc3339ToLocalInput(value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ""
+  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return d.getSeconds() ? `${base}:${pad(d.getSeconds())}` : base
+}
+
+/** The RFC 3339 (UTC) value of a datetime-local input's text, or null. */
+export function localInputToRFC3339(text: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(text)) return null
+  const d = new Date(text) // no offset: local time
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z")
+}
+
+/** RFC 3339 → milliseconds, or null. Go accepts any offset; so does this. */
+function rfc3339Millis(value: unknown): number | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i.test(value)) {
+    return null
+  }
+  const ms = Date.parse(value)
+  return Number.isNaN(ms) ? null : ms
+}
+
+// ---------------------------------------------------------------------------
 // Drafts — what a control holds while the user edits
 // ---------------------------------------------------------------------------
 
@@ -127,6 +168,10 @@ export type Draft =
   | { kind: "bytes"; text: string; unit: ByteUnit }
   | { kind: "secret"; mode: "keep" | "replace" | "clear"; text: string }
   | { kind: "map"; entries: MapEntry[] }
+  // enum_list: the checked options; none means not set.
+  | { kind: "set"; values: string[] }
+  // file: a build file's id; null when not set.
+  | { kind: "file"; id: string | null }
 
 /** One row of a string_map control. */
 export interface MapEntry {
@@ -168,6 +213,15 @@ export function initialDraft(
     if (typeof value === "number") return { kind: "bytes", ...splitBytes(value) }
     return { kind: "bytes", text: "", unit: defaultByteUnit(field) }
   }
+  if (type === "enum_list") {
+    return { kind: "set", values: Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [] }
+  }
+  if (type === "file") {
+    return { kind: "file", id: typeof value === "string" && value !== "" ? value : null }
+  }
+  if (type === "datetime") {
+    return { kind: "text", text: typeof value === "string" ? rfc3339ToLocalInput(value) : "" }
+  }
   return { kind: "text", text: valueToText(type, value) }
 }
 
@@ -204,6 +258,17 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
       return { ok: true, value: draft.text === "" ? undefined : draft.text }
     case "bool":
       return { ok: true, value: draft.value }
+    case "set": {
+      if (draft.values.length === 0) return { ok: true, value: null }
+      // In the order the options are declared, each once.
+      const order = (field.options ?? []).map((o) => o.value)
+      const picked = new Set(draft.values)
+      const known = order.filter((v) => picked.has(v))
+      const unknown = draft.values.filter((v, i) => !order.includes(v) && draft.values.indexOf(v) === i)
+      return { ok: true, value: [...known, ...unknown] }
+    }
+    case "file":
+      return { ok: true, value: draft.id }
     case "map": {
       const out: Record<string, string> = {}
       for (const e of draft.entries) {
@@ -247,6 +312,10 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
         if (parseGoDuration(t) === null) return { ok: false, error: `Invalid duration. ${DURATION_HINT}` }
         return { ok: true, value: t }
       }
+      if (type === "datetime") {
+        const v = localInputToRFC3339(t)
+        return v === null ? { ok: false, error: "Not a date and time" } : { ok: true, value: v }
+      }
       // string / url / enum / secret-as-text keep inner whitespace verbatim.
       return { ok: true, value: type === "enum" ? t : raw }
     }
@@ -262,11 +331,13 @@ function boundNumber(type: FieldType, bound: unknown): number | null {
   if (type === "duration") {
     return typeof bound === "string" ? parseGoDuration(bound) : null
   }
+  if (type === "datetime") return rfc3339Millis(bound)
   return typeof bound === "number" ? bound : null
 }
 
 function formatBound(type: FieldType, bound: unknown): string {
   if (type === "bytes" && typeof bound === "number") return humanizeBytes(bound)
+  if (type === "datetime") return formatValue(type, bound)
   return String(bound)
 }
 
@@ -287,7 +358,7 @@ export function validateValue(
 ): string | null {
   const type = field.type as FieldType
   if (value === undefined) return null // secret kept as-is
-  if (value === null || value === "") {
+  if (value === null || value === "" || (Array.isArray(value) && value.length === 0 && type === "enum_list")) {
     const hasFallback = opts.fallback !== null && opts.fallback !== undefined
     if (field.required && !hasFallback) return "Required"
     return null
@@ -327,6 +398,23 @@ export function validateValue(
       if (ns === null) return `Invalid duration. ${DURATION_HINT}`
       return checkBounds(field, type, ns)
     }
+    case "datetime": {
+      const ms = rfc3339Millis(value)
+      if (ms === null) return "Must be a date and time"
+      return checkBounds(field, type, ms)
+    }
+    case "enum_list": {
+      if (!Array.isArray(value)) return "Must be a list of options"
+      if (field.maxItems != null && value.length > field.maxItems) return `At most ${field.maxItems}`
+      const options = field.options ?? []
+      for (const [i, item] of value.entries()) {
+        if (!options.some((o) => o.value === item)) return `"${String(item)}" is not one of the allowed options`
+        if (value.indexOf(item) !== i) return `"${String(item)}" is picked twice`
+      }
+      return null
+    }
+    case "file":
+      return typeof value === "string" && value !== "" ? null : "Must be a file"
     case "string_list": {
       if (!Array.isArray(value)) return "Must be a list"
       if (field.maxItems != null && value.length > field.maxItems) return `At most ${field.maxItems} items`
@@ -418,6 +506,12 @@ export function formatValue(type: string, value: unknown, unit?: string | null):
   if (value === null || value === undefined) return "—"
   if (type === "secret") return SECRET_MASK
   if (type === "bytes" && typeof value === "number") return humanizeBytes(value)
+  if (type === "datetime" && typeof value === "string") {
+    const ms = Date.parse(value)
+    return Number.isNaN(ms)
+      ? value
+      : new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  }
   if (type === "bool" && typeof value === "boolean") return value ? "true" : "false"
   if (Array.isArray(value)) {
     return value.length === 0 ? "(empty)" : value.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(", ")
