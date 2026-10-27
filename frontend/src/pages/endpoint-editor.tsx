@@ -262,11 +262,14 @@ function EndpointEditor({
           Endpoints
         </Link>
         <span className="h-5 w-px bg-border" aria-hidden />
-        <h1 className="text-lg font-semibold">{endpoint ? endpoint.name : "New endpoint"}</h1>
-        <span className="text-sm text-muted-foreground">
-          <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
-          {source && <> · {source.label}</>}
-        </span>
+        {/* The title and the channel kind share a baseline. */}
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-lg font-semibold">{endpoint ? endpoint.name : "New endpoint"}</h1>
+          <span className="text-sm text-muted-foreground">
+            <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
+            {source && <> · {source.label}</>}
+          </span>
+        </div>
         <div className="flex items-center gap-2 sm:ml-auto">
           {readOnly ? (
             <span className="text-sm text-muted-foreground">Read-only — needs operator in this operation</span>

@@ -324,11 +324,14 @@ function Editor({
             Builds
           </Link>
           <span className="h-5 w-px bg-border" aria-hidden />
-          <h1 className="text-lg font-semibold">New build</h1>
-          <span className="text-sm text-muted-foreground">
-            <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version} · {kind.instances}{" "}
-            running
-          </span>
+          {/* The title and what it builds with share a baseline. */}
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="text-lg font-semibold">New build</h1>
+            <span className="text-sm text-muted-foreground">
+              <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version} · {kind.instances}{" "}
+              running
+            </span>
+          </div>
           <div className="flex items-center gap-2 sm:ml-auto">
             {readOnly ? (
               <span className="text-sm text-muted-foreground">Read-only — needs operator in this operation</span>
