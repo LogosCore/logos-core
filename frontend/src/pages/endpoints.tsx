@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
-import { ChevronDownIcon, PlusIcon, RadioTowerIcon } from "lucide-react"
+import { ChevronDownIcon, FileUpIcon, PlusIcon, RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,6 +28,7 @@ import { useChannelEndpoints, useChannelKinds, useDeleteChannelEndpoint } from "
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { EndpointsTable } from "@/components/endpoints/endpoints-table"
+import { ImportEndpointDialog } from "@/components/endpoints/import-endpoint-dialog"
 import { KindName } from "@/components/modules/module-icon"
 import { groupByKind, kindsByName, type Kind } from "@/components/endpoints/endpoint-values"
 
@@ -66,6 +67,7 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
   const [search, setSearch] = useState("")
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState<Endpoint | null>(null)
+  const [importing, setImporting] = useState(false)
   const kinds = useMemo(() => kindsByName(kindsQuery.data?.channelKinds ?? []), [kindsQuery.data])
 
   const endpoints = useMemo(
@@ -88,7 +90,11 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
           />
         )}
         {canWrite && (
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" onClick={() => setImporting(true)} disabled={kinds.size === 0}>
+              <FileUpIcon />
+              Import
+            </Button>
             <NewEndpointButton
               kinds={[...kinds.values()]}
               onPick={(kind) => navigate(`/endpoints/new?kind=${encodeURIComponent(kind)}`)}
@@ -127,6 +133,12 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
       )}
 
       <DeleteEndpointDialog endpoint={deleting} onClose={() => setDeleting(null)} />
+      <ImportEndpointDialog
+        open={importing}
+        onClose={() => setImporting(false)}
+        kinds={kinds}
+        taken={(data?.channelEndpoints ?? []).map((e) => e.name)}
+      />
     </div>
   )
 }

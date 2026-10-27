@@ -53,17 +53,124 @@ export const ENDPOINT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
 const MAX_NAME_LENGTH = 63
 
 /**
- * A free name for a duplicate of the endpoint called name: name-dup, or
- * name-dup-2, -3… when that is taken, the base shortened to stay within the
- * name length.
+ * The first free name of name+tag, name+tag-2, -3…, the base shortened to
+ * stay within the name length. tag is "" or starts with "-".
  */
-export function duplicateName(name: string, taken: Iterable<string>): string {
+function freeName(name: string, taken: Iterable<string>, tag: string): string {
   const used = new Set(taken)
   for (let n = 1; ; n++) {
-    const suffix = n === 1 ? "-dup" : `-dup-${n}`
+    const suffix = n === 1 ? tag : `${tag}-${n}`
     const candidate = name.slice(0, MAX_NAME_LENGTH - suffix.length) + suffix
     if (!used.has(candidate)) return candidate
   }
+}
+
+/**
+ * A free name for a duplicate of the endpoint called name: name-dup, or
+ * name-dup-2, -3… when that is taken.
+ */
+export function duplicateName(name: string, taken: Iterable<string>): string {
+  return freeName(name, taken, "-dup")
+}
+
+/** The export format of an endpoint (Copy / Download as JSON), as imports take it. */
+export const ENDPOINT_EXPORT_FORMAT = "logos.channel-endpoint.v1"
+
+/** The router state with which an import opens the New endpoint form. */
+export interface EndpointImportState {
+  endpointImport: { name: string; values: Record<string, unknown>; notes: string[] }
+}
+
+/** The import a location's state carries, if any. */
+export function endpointImportFrom(state: unknown): EndpointImportState["endpointImport"] | null {
+  if (!isRecord(state) || !isRecord(state.endpointImport)) return null
+  const { name, values, notes } = state.endpointImport
+  if (typeof name !== "string" || !isRecord(values) || !Array.isArray(notes)) return null
+  return { name, values, notes: notes.filter((n): n is string => typeof n === "string") }
+}
+
+/** What an endpoint export becomes: a new endpoint's form, filled in. */
+export interface EndpointImport {
+  kind: Kind
+  name: string
+  values: Record<string, unknown>
+  /** What the form should say about it: settings left out, another version. */
+  notes: string[]
+}
+
+/**
+ * Reads an endpoint export (Copy / Download as JSON) for a new endpoint of
+ * the same channel kind. Its name becomes a valid, free one; settings the kind
+ * does not declare are left out, and values equal to the kind's defaults too,
+ * so those fields keep following the defaults (an export fills every default
+ * in).
+ */
+export function parseEndpointImport(
+  text: string,
+  kinds: ReadonlyMap<string, Kind>,
+  taken: Iterable<string>,
+): { ok: true; value: EndpointImport } | { ok: false; error: string } {
+  let doc: unknown
+  try {
+    doc = JSON.parse(text)
+  } catch (err) {
+    return { ok: false, error: `Not JSON: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  if (!isRecord(doc) || doc.format !== ENDPOINT_EXPORT_FORMAT) {
+    return { ok: false, error: `Not an endpoint export: its "format" must be "${ENDPOINT_EXPORT_FORMAT}".` }
+  }
+  const channel = isRecord(doc.channel) ? doc.channel : {}
+  const moduleName = typeof channel.module_name === "string" ? channel.module_name : ""
+  if (moduleName === "") return { ok: false, error: 'The export names no channel ("channel.module_name").' }
+  const kind = kinds.get(moduleName)
+  if (!kind) return { ok: false, error: `No "${moduleName}" channel declares connection settings here.` }
+  if (doc.params !== undefined && !isRecord(doc.params)) {
+    return { ok: false, error: 'Its "params" must be an object of settings.' }
+  }
+
+  const notes: string[] = []
+  if (typeof channel.schema_version === "number" && channel.schema_version !== kind.version) {
+    notes.push(
+      `Exported for ${moduleName} schema v${channel.schema_version}; this channel is at v${kind.version}. Check the values.`,
+    )
+  }
+  const fields = new Map(kind.fields.map((f) => [f.key, f]))
+  const values: Record<string, unknown> = {}
+  const unknown: string[] = []
+  for (const [key, value] of Object.entries(doc.params ?? {})) {
+    const field = fields.get(key)
+    if (!field) unknown.push(key)
+    else if (value !== null && !sameJSON(value, field.default)) values[key] = value
+  }
+  if (unknown.length > 0) {
+    notes.push(`Left out, not settings of ${moduleName} v${kind.version}: ${unknown.sort().join(", ")}.`)
+  }
+  const name = typeof doc.name === "string" ? slug(doc.name) : ""
+  return { ok: true, value: { kind, name: freeName(name || "imported", taken, ""), values, notes } }
+}
+
+/** name as an endpoint name: lowercase, other characters as "-". */
+function slug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[^a-z0-9]+/, "")
+    .slice(0, MAX_NAME_LENGTH)
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
+}
+
+/** Whether two JSON values are equal (key order aside). */
+function sameJSON(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJSON(v, b[i]))
+  if (isRecord(a) && isRecord(b)) {
+    const ka = Object.keys(a)
+    return ka.length === Object.keys(b).length && ka.every((k) => sameJSON(a[k], b[k]))
+  }
+  return false
 }
 
 export function nameError(name: string): string | null {

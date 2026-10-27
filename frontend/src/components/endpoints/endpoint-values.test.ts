@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
 import { GraphQLRequestError } from "@/lib/graphql-client"
 import {
+  ENDPOINT_EXPORT_FORMAT,
   duplicateName,
   endpointDrafts,
+  endpointImportFrom,
   evaluateEndpoint,
   groupByKind,
   nameError,
+  parseEndpointImport,
   problemsFromError,
   settingRows,
   type Kind,
@@ -138,5 +141,89 @@ describe("duplicateName", () => {
     expect(nameError(dup)).toBeNull()
     expect(duplicateName(long, [dup])).toMatch(/^e+-dup-2$/)
     expect(duplicateName(long, [dup])).toHaveLength(63)
+  })
+})
+
+describe("parseEndpointImport", () => {
+  const http: Kind = {
+    name: "http",
+    icon: "",
+    version: 2,
+    fields: [
+      { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
+      { key: "tls_verify", type: "bool", label: "Verify TLS", order: 2, required: false, default: false },
+      { key: "request_timeout", type: "duration", label: "Request timeout", order: 3, required: false, default: "40s" },
+      { key: "headers", type: "string_map", label: "Headers", order: 4, required: false },
+    ] as Kind["fields"],
+  }
+  const kinds = new Map([["http", http]])
+  const exported = (doc: Record<string, unknown>) =>
+    JSON.stringify({ format: ENDPOINT_EXPORT_FORMAT, name: "edge", channel: { module_name: "http", schema_version: 2 }, ...doc })
+
+  it("reads an export back: the values that are not defaults", () => {
+    const r = parseEndpointImport(
+      exported({
+        params: { base_url: "https://edge.example.com", tls_verify: false, request_timeout: "60s", headers: { "X-A": "1" } },
+      }),
+      kinds,
+      [],
+    )
+    expect(r).toEqual({
+      ok: true,
+      value: {
+        kind: http,
+        name: "edge",
+        values: { base_url: "https://edge.example.com", request_timeout: "60s", headers: { "X-A": "1" } },
+        notes: [],
+      },
+    })
+  })
+
+  it("picks a free, valid name", () => {
+    const name = (doc: Record<string, unknown>, taken: string[]) => {
+      const r = parseEndpointImport(exported(doc), kinds, taken)
+      return r.ok ? r.value.name : r.error
+    }
+    expect(name({}, ["edge"])).toBe("edge-2")
+    expect(name({}, ["edge", "edge-2"])).toBe("edge-3")
+    expect(name({ name: "EU CDN / Edge" }, [])).toBe("eu-cdn-edge")
+    expect(name({ name: "--" }, [])).toBe("imported")
+    expect(name({ name: 7 }, ["imported"])).toBe("imported-2")
+  })
+
+  it("says what it left out or could not match", () => {
+    const r = parseEndpointImport(
+      exported({ channel: { module_name: "http", schema_version: 1 }, params: { base_url: "https://a.example", proxy_auth: "x", zz: 1 } }),
+      kinds,
+      [],
+    )
+    expect(r.ok && r.value.notes).toEqual([
+      "Exported for http schema v1; this channel is at v2. Check the values.",
+      "Left out, not settings of http v2: proxy_auth, zz.",
+    ])
+    expect(r.ok && r.value.values).toEqual({ base_url: "https://a.example" })
+  })
+
+  it("refuses what is not an endpoint export it can use", () => {
+    const error = (text: string) => {
+      const r = parseEndpointImport(text, kinds, [])
+      return r.ok ? "accepted" : r.error
+    }
+    expect(error("{oops")).toMatch(/^Not JSON/)
+    expect(error("[]")).toMatch(/Not an endpoint export/)
+    expect(error(JSON.stringify({ format: "other" }))).toMatch(/Not an endpoint export/)
+    expect(error(JSON.stringify({ format: ENDPOINT_EXPORT_FORMAT }))).toMatch(/names no channel/)
+    expect(error(exported({ channel: { module_name: "dns" } }))).toMatch(/No "dns" channel/)
+    expect(error(exported({ params: ["a"] }))).toMatch(/must be an object/)
+  })
+})
+
+describe("endpointImportFrom", () => {
+  it("reads the import a location carries, and nothing else", () => {
+    const imp = { name: "edge", values: { base_url: "https://a.example" }, notes: ["x", 3] }
+    expect(endpointImportFrom({ endpointImport: imp })).toEqual({ name: "edge", values: imp.values, notes: ["x"] })
+    expect(endpointImportFrom(null)).toBeNull()
+    expect(endpointImportFrom({ endpointImport: { name: "edge" } })).toBeNull()
+    expect(endpointImportFrom({ other: 1 })).toBeNull()
   })
 })

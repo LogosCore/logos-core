@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router"
 import { ArrowLeftIcon, RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -29,6 +29,7 @@ import { groupByField, type Draft, type FieldDef } from "@/components/modules/ma
 import {
   duplicateName,
   endpointDrafts,
+  endpointImportFrom,
   evaluateEndpoint,
   kindsByName,
   nameError,
@@ -38,14 +39,27 @@ import {
 
 type Endpoint = ChannelEndpointFieldsFragment
 
+/** What a new endpoint starts from: a duplicate, or an import. */
+interface EditorSource {
+  /** Shown after the kind in the header, e.g. "duplicate of edge". */
+  label: React.ReactNode
+  name: string
+  description: string
+  values: Record<string, unknown>
+  /** Shown above the form, e.g. what an import left out. */
+  notes: string[]
+}
+
 /**
  * /endpoints/new?kind=http[&from=<id>] — a new endpoint in the scoped
  * operation; with from, a duplicate of that endpoint: its values and
- * description, and a free name with a -dup suffix.
+ * description, and a free name with a -dup suffix. An import (Endpoints →
+ * Import) arrives in the location's state instead.
  */
 export function NewEndpointPage() {
   const scopedOperation = useScopedOperation()
   const [params] = useSearchParams()
+  const imported = endpointImportFrom(useLocation().state)
   const fromId = params.get("from") ?? ""
   const kinds = useChannelKinds()
   const fromQuery = useChannelEndpoint(fromId)
@@ -60,12 +74,19 @@ export function NewEndpointPage() {
   if (fromId && !from) return <NotFound text="The endpoint to duplicate does not exist." />
   const kind = kindsByName(kinds.data?.channelKinds ?? []).get(kindName)
   if (!kind) return <NotFound text={`No channel kind "${kindName}" declares connection settings.`} />
-  const source = from && {
-    from: from.name,
-    name: duplicateName(from.name, (listQuery.data?.channelEndpoints ?? []).map((e) => e.name)),
-    description: from.description ?? "",
-    values: (from.values ?? {}) as Record<string, unknown>,
-  }
+  const source: EditorSource | null = from
+    ? {
+        label: (
+          <>
+            duplicate of <span className="font-mono">{from.name}</span>
+          </>
+        ),
+        name: duplicateName(from.name, (listQuery.data?.channelEndpoints ?? []).map((e) => e.name)),
+        description: from.description ?? "",
+        values: (from.values ?? {}) as Record<string, unknown>,
+        notes: [],
+      }
+    : imported && { label: "imported from JSON", name: imported.name, description: "", values: imported.values, notes: imported.notes }
   return <EndpointEditor operationId={scopedOperation.id} kind={kind} endpoint={null} source={source} />
 }
 
@@ -140,7 +161,7 @@ function EndpointEditor({
   kind: Kind
   endpoint: Endpoint | null
   /** What a new endpoint starts from when it duplicates another. */
-  source?: { from: string; name: string; description: string; values: Record<string, unknown> } | null
+  source?: EditorSource | null
 }) {
   const navigate = useNavigate()
   const hasPermission = useAuthStore((s) => s.hasPermission)
@@ -247,12 +268,7 @@ function EndpointEditor({
         <h1 className="text-lg font-semibold">{endpoint ? endpoint.name : "New endpoint"}</h1>
         <span className="text-sm text-muted-foreground">
           <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
-          {source && (
-            <>
-              {" · duplicate of "}
-              <span className="font-mono">{source.from}</span>
-            </>
-          )}
+          {source && <> · {source.label}</>}
         </span>
         <div className="flex items-center gap-2 sm:ml-auto">
           {readOnly ? (
@@ -308,6 +324,13 @@ function EndpointEditor({
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
           {saveError && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>
+          )}
+          {source && source.notes.length > 0 && (
+            <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+              {source.notes.map((n) => (
+                <p key={n}>{n}</p>
+              ))}
+            </div>
           )}
 
           <SettingsSection id={sectionId(GENERAL)} title={GENERAL}>
