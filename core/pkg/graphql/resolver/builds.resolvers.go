@@ -48,8 +48,8 @@ func (r *queryResolver) BuildFiles(ctx context.Context, operationID string) ([]*
 }
 
 // Builds is the resolver for the builds field.
-func (r *queryResolver) Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error) {
-	return r.BuildResolver.Builds(ctx, operationID, limit)
+func (r *queryResolver) Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error) {
+	return r.BuildResolver.Builds(ctx, operationID, limit, search)
 }
 
 // Build is the resolver for the build field.

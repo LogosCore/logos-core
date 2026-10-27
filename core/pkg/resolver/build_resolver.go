@@ -30,7 +30,7 @@ type BuildManager interface {
 	Files(ctx context.Context, op uuid.UUID) ([]models.BuildFile, error)
 	File(ctx context.Context, id string) (*models.BuildFile, error)
 	DeleteFile(ctx context.Context, id string) error
-	Builds(ctx context.Context, op uuid.UUID, limit int64) ([]models.Build, error)
+	Builds(ctx context.Context, op uuid.UUID, limit int64, search string) ([]models.Build, error)
 	Build(ctx context.Context, id string) (*models.Build, error)
 	CreateBuild(ctx context.Context, op uuid.UUID, in builds.BuildInput) (*models.Build, error)
 	CancelBuild(ctx context.Context, id string, actor models.ModuleActor) (*models.Build, error)
@@ -44,7 +44,7 @@ type IBuildResolver interface {
 	FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error)
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
 	DeleteBuildFile(ctx context.Context, id string) (bool, error)
-	Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error)
+	Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
@@ -141,7 +141,7 @@ func (r *buildResolver) DeleteBuildFile(ctx context.Context, id string) (bool, e
 
 // --- builds ---
 
-func (r *buildResolver) Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error) {
+func (r *buildResolver) Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error) {
 	op, err := r.authorizeID(ctx, operationID, models.OperationRoleViewer, false)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (r *buildResolver) Builds(ctx context.Context, operationID string, limit *i
 	if limit != nil && *limit > 0 {
 		n = min(*limit, maxBuildsLimit)
 	}
-	bs, err := r.builds.Builds(ctx, op, int64(n))
+	bs, err := r.builds.Builds(ctx, op, int64(n), deref(search))
 	if err != nil {
 		return nil, err
 	}

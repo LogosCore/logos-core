@@ -125,8 +125,28 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 }
 
 // Builds returns an operation's builds, newest first, at most limit (0: all).
-func (s *Service) Builds(ctx context.Context, op uuid.UUID, limit int64) ([]models.Build, error) {
-	return s.repos.Builds.List(ctx, op, limit)
+// With a search, they are the builds that match every word of it (see
+// search.go), from all of the operation's builds.
+func (s *Service) Builds(ctx context.Context, op uuid.UUID, limit int64, search string) ([]models.Build, error) {
+	words := searchWords(search)
+	if len(words) == 0 {
+		return s.repos.Builds.List(ctx, op, limit)
+	}
+	all, err := s.repos.Builds.ListWithoutLogs(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	out := all[:0]
+	for i := range all {
+		if !matches(&all[i], words) {
+			continue
+		}
+		out = append(out, all[i])
+		if int64(len(out)) == limit {
+			break
+		}
+	}
+	return out, nil
 }
 
 // Build returns one build, by its id: its minion's.

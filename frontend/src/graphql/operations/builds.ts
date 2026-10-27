@@ -116,8 +116,8 @@ export const DeleteBuildFileMutation = graphql(`
 `)
 
 export const BuildsQuery = graphql(`
-  query Builds($operationId: ID!, $limit: Int) {
-    builds(operationId: $operationId, limit: $limit) {
+  query Builds($operationId: ID!, $limit: Int, $search: String) {
+    builds(operationId: $operationId, limit: $limit, search: $search) {
       ...BuildFields
     }
   }

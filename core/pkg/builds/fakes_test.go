@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -119,10 +120,28 @@ func (f *fakeBuilds) sorted(keep func(*models.Build) bool) []models.Build {
 	return out
 }
 
-func (f *fakeBuilds) List(_ context.Context, op uuid.UUID, _ int64) ([]models.Build, error) {
+// List is newest first, at most limit (0: all), as the repository's.
+func (f *fakeBuilds) List(_ context.Context, op uuid.UUID, limit int64) ([]models.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.sorted(func(b *models.Build) bool { return b.OperationID == op }), nil
+	out := f.sorted(func(b *models.Build) bool { return b.OperationID == op })
+	slices.Reverse(out)
+	if limit > 0 && int64(len(out)) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// ListWithoutLogs drops the logs, as the repository's projection does.
+func (f *fakeBuilds) ListWithoutLogs(_ context.Context, op uuid.UUID) ([]models.Build, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := f.sorted(func(b *models.Build) bool { return b.OperationID == op })
+	slices.Reverse(out) // newest first
+	for i := range out {
+		out[i].Log = ""
+	}
+	return out, nil
 }
 
 func (f *fakeBuilds) ListUnfinished(context.Context) ([]models.Build, error) {

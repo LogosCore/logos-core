@@ -739,7 +739,7 @@ type ComplexityRoot struct {
 	Query struct {
 		Build                              func(childComplexity int, id string) int
 		BuildFiles                         func(childComplexity int, operationID string) int
-		Builds                             func(childComplexity int, operationID string, limit *int) int
+		Builds                             func(childComplexity int, operationID string, limit *int, search *string) int
 		ChannelEndpoint                    func(childComplexity int, id string) int
 		ChannelEndpointExport              func(childComplexity int, id string) int
 		ChannelEndpoints                   func(childComplexity int, operationID string, moduleName *string) int
@@ -1396,7 +1396,7 @@ type QueryResolver interface {
 	MyAPIKey(ctx context.Context) (*models.APIKey, error)
 	FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error)
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
-	Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error)
+	Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
@@ -4983,7 +4983,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Builds(childComplexity, args["operationId"].(string), args["limit"].(*int)), true
+		return e.ComplexityRoot.Query.Builds(childComplexity, args["operationId"].(string), args["limit"].(*int), args["search"].(*string)), true
 	case "Query.channelEndpoint":
 		if e.ComplexityRoot.Query.ChannelEndpoint == nil {
 			break
@@ -7756,7 +7756,7 @@ extend type Mutation {
 
 # APIKey is the public, listable representation. The secret is never on it.
 type APIKey {
-  id: ID!                  # Mongo row UUID
+  id: ID!                  # Stable row UUID. Survives regeneration, unlike keyId.
   keyId: String!           # Public prefix carried in the raw token, e.g. "lgs_a1b2c3d4e5f6"
   enabled: Boolean!        # Disabled keys return 401 on use
   lastUsedAt: String       # ISO 8601 — null if never used
@@ -8036,9 +8036,14 @@ extend type Query {
   buildFiles(operationId: ID!): [BuildFile!]!
     @hasPermission(permission: "operation:member")
 
-  # An operation's builds, newest first, at most limit (default 50).
-  # Needs at least viewer.
-  builds(operationId: ID!, limit: Int): [Build!]!
+  # An operation's builds, newest first, at most limit (default 50). With a
+  # search, the builds that hold every word of it, case aside, in what the
+  # Builds page shows of them (factory, target, id, description, the stage
+  # they are on or stopped at, platform, who started them), their state,
+  # factory instance, error and artifact name, or what they were made of:
+  # their values and their connections' names, channels, settings, values and
+  # descriptions. Needs at least viewer.
+  builds(operationId: ID!, limit: Int, search: String): [Build!]!
     @hasPermission(permission: "operation:member")
 
   # One build; null when it does not exist. Needs at least viewer.
@@ -12518,6 +12523,11 @@ func (ec *executionContext) field_Query_builds_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["limit"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg2
 	return args, nil
 }
 
@@ -35197,7 +35207,7 @@ func (ec *executionContext) _Query_builds(ctx context.Context, field graphql.Col
 		ec.fieldContext_Query_builds,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Builds(ctx, fc.Args["operationId"].(string), fc.Args["limit"].(*int))
+			return ec.Resolvers.Query().Builds(ctx, fc.Args["operationId"].(string), fc.Args["limit"].(*int), fc.Args["search"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next

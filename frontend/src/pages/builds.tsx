@@ -16,7 +16,7 @@ import { GettingStartedPanel } from "@/components/onboarding/getting-started-pan
 import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
 import { KindName } from "@/components/modules/module-icon"
-import { buildSearchText, factoryKindsByName, matchesQuery, type FactoryKind } from "@/components/builds/build-values"
+import { factoryKindsByName, type FactoryKind } from "@/components/builds/build-values"
 
 /**
  * Minion builds of the scoped operation, live while builds run: each asks a
@@ -40,28 +40,20 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
   const { canWrite } = useCanBuild(operationId)
   const kindsQuery = useFactoryKinds()
   const kinds = useMemo(() => [...factoryKindsByName(kindsQuery.data?.factoryKinds ?? []).values()], [kindsQuery.data])
-  const { data, isLoading, error } = useBuilds(operationId)
-  const icons = useFactoryIcons()
+  // The server searches all of the operation's builds (see the builds query).
   const [search, setSearch] = useState("")
-  const builds = useMemo(
-    () => (data?.builds ?? []).filter((b) => matchesQuery(buildSearchText(b), search)),
-    [data, search],
-  )
-  const total = data?.builds.length ?? 0
+  const { data, isLoading, error } = useBuilds(operationId, search.trim())
+  const icons = useFactoryIcons()
+  const builds = data?.builds ?? []
+  const searching = search.trim() !== ""
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
       {/* Toolbar, as on the other pages: search on the left, actions right. */}
-      {(total > 0 || canWrite) && (
+      {(builds.length > 0 || searching || canWrite) && (
         <div className="flex flex-wrap items-center gap-2">
-          {total > 0 && (
-            <SearchInput
-              value={search}
-              onValueChange={setSearch}
-              placeholder="Search builds..."
-              debounceMs={100}
-              title=""
-            />
+          {(builds.length > 0 || searching) && (
+            <SearchInput value={search} onValueChange={setSearch} placeholder="Search builds..." title="" />
           )}
           {canWrite && (
             <div className="ml-auto">
@@ -79,7 +71,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
           isLoading={isLoading || kindsQuery.isLoading}
           canWrite={canWrite}
           emptyState={
-            total === 0 ? (
+            !searching ? (
               <>
                 <HammerIcon className="size-8 opacity-50" />
                 <p className="text-sm">No builds in this operation yet.</p>

@@ -39,7 +39,7 @@ type Documents = {
     "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": typeof types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": typeof types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": typeof types.DeleteBuildFileDocument,
-    "\n  query Builds($operationId: ID!, $limit: Int) {\n    builds(operationId: $operationId, limit: $limit) {\n      ...BuildFields\n    }\n  }\n": typeof types.BuildsDocument,
+    "\n  query Builds($operationId: ID!, $limit: Int, $search: String) {\n    builds(operationId: $operationId, limit: $limit, search: $search) {\n      ...BuildFields\n    }\n  }\n": typeof types.BuildsDocument,
     "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": typeof types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.CancelBuildDocument,
@@ -256,7 +256,7 @@ const documents: Documents = {
     "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": types.DeleteBuildFileDocument,
-    "\n  query Builds($operationId: ID!, $limit: Int) {\n    builds(operationId: $operationId, limit: $limit) {\n      ...BuildFields\n    }\n  }\n": types.BuildsDocument,
+    "\n  query Builds($operationId: ID!, $limit: Int, $search: String) {\n    builds(operationId: $operationId, limit: $limit, search: $search) {\n      ...BuildFields\n    }\n  }\n": types.BuildsDocument,
     "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.CancelBuildDocument,
@@ -548,7 +548,7 @@ export function graphql(source: "\n  mutation DeleteBuildFile($id: ID!) {\n    d
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Builds($operationId: ID!, $limit: Int) {\n    builds(operationId: $operationId, limit: $limit) {\n      ...BuildFields\n    }\n  }\n"): typeof import('./graphql').BuildsDocument;
+export function graphql(source: "\n  query Builds($operationId: ID!, $limit: Int, $search: String) {\n    builds(operationId: $operationId, limit: $limit, search: $search) {\n      ...BuildFields\n    }\n  }\n"): typeof import('./graphql').BuildsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

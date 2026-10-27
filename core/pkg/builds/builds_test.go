@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -796,5 +797,63 @@ func TestBuildByID(t *testing.T) {
 		if _, err := r.svc.Build(context.Background(), id); !errors.Is(err, ErrBuildNotFound) {
 			t.Errorf("%q: %v, want not found", id, err)
 		}
+	}
+}
+
+// TestBuildsSearch pins what a build is found by: what the Builds page shows
+// of it and what it was made of, values but not their keys, every word of the
+// search, case aside. A search reads all of the operation's builds, not only
+// the latest page.
+func TestBuildsSearch(t *testing.T) {
+	r := newRig(t)
+	eu := r.queue(t, nil) // the EU front's dry run, through https://edge.example.com
+	r.clock = r.clock.Add(time.Minute)
+	us := r.queue(t, func(in *BuildInput) {
+		in.Description = "Second wave"
+		in.Values = map[string]any{"punches": []any{"hook"}, "greeting": "hola"}
+		in.Connections[0].Settings = map[string]any{"base_url": "https://cdn.other.net"}
+		in.Connections[0].Description = "US front"
+	})
+	found := func(search string, limit int64) []uuid.UUID {
+		t.Helper()
+		bs, err := r.svc.Builds(context.Background(), opID, limit, search)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]uuid.UUID, len(bs))
+		for i, b := range bs {
+			ids[i] = b.MinionID
+		}
+		return ids
+	}
+	both, onlyEU, onlyUS := []uuid.UUID{us.MinionID, eu.MinionID}, []uuid.UUID{eu.MinionID}, []uuid.UUID{us.MinionID}
+	for search, want := range map[string][]uuid.UUID{
+		"   ":                    both,   // no search: newest first
+		"edge.example.com":       onlyEU, // a connection's setting
+		"OTHER.NET":              onlyUS, // case aside
+		"us front":               onlyUS, // a connection's note, every word
+		"dry run edge":           onlyEU, // description and connection name
+		"hola":                   onlyUS, // a value
+		"jab":                    onlyEU,
+		"hello from bob":         onlyEU, // a default the other build overrode
+		"post 40s":               both,   // defaults of the connection
+		eu.MinionID.String()[:8]: onlyEU,
+		"queued alice bob dummy": both, // state, who, factory, target
+		"base_url":               nil,  // keys do not count
+		"punches":                nil,
+	} {
+		if got := found(search, 0); !slices.Equal(got, want) {
+			t.Errorf("%q: %v, want %v", search, got, want)
+		}
+	}
+	// The latest page holds only the newest build; a search finds the older.
+	if got := found("", 1); !slices.Equal(got, onlyUS) {
+		t.Errorf("latest page %v", got)
+	}
+	if got := found("edge.example.com", 1); !slices.Equal(got, onlyEU) {
+		t.Errorf("search past the latest page: %v", got)
+	}
+	if got := found("bob", 1); !slices.Equal(got, onlyUS) {
+		t.Errorf("a search is cut at the limit, newest first: %v", got)
 	}
 }

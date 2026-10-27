@@ -117,6 +117,9 @@ type IBuildRepository interface {
 	// List returns an operation's builds, newest first, at most limit (0:
 	// all).
 	List(ctx context.Context, operationID uuid.UUID, limit int64) ([]models.Build, error)
+	// ListWithoutLogs returns all of an operation's builds, newest first,
+	// without their logs: what a search reads.
+	ListWithoutLogs(ctx context.Context, operationID uuid.UUID) ([]models.Build, error)
 	// ListUnfinished returns every queued or building build: the
 	// scheduler's input.
 	ListUnfinished(ctx context.Context) ([]models.Build, error)
@@ -188,6 +191,12 @@ func (r *buildRepository) List(ctx context.Context, operationID uuid.UUID, limit
 		q = q.Limit(limit)
 	}
 	return out, q.All(&out)
+}
+
+func (r *buildRepository) ListWithoutLogs(ctx context.Context, operationID uuid.UUID) ([]models.Build, error) {
+	out := []models.Build{}
+	err := r.coll.Find(ctx, bson.M{"operation_id": operationID}).Select(bson.M{"log": 0}).Sort("-created_at").All(&out)
+	return out, err
 }
 
 func (r *buildRepository) ListUnfinished(ctx context.Context) ([]models.Build, error) {

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -74,5 +75,36 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	}
 	if got, _ := repo.FindByMinionID(ctx, b.MinionID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil {
 		t.Errorf("after unoffer: plan %+v, reports %+v", got.Plan, got.StepReports)
+	}
+}
+
+// TestIntegrationBuildsWithoutLogs pins what a build search reads: every
+// build of the operation, newest first, without the logs (up to 64 KiB each).
+func TestIntegrationBuildsWithoutLogs(t *testing.T) {
+	db := integrationDB(t)
+	ctx := context.Background()
+	repo := NewBuildRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("index setup: %v", err)
+	}
+	op, now := uuid.New(), time.Now().UTC().Truncate(time.Millisecond)
+	for i := range 3 {
+		b := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "bob", Description: fmt.Sprint("build ", i),
+			State: models.BuildStateFailed, Log: "a long log", CreatedAt: now.Add(time.Duration(i) * time.Minute)}
+		if err := repo.Insert(ctx, b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.Insert(ctx, &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	bs, err := repo.ListWithoutLogs(ctx, op)
+	if err != nil || len(bs) != 3 {
+		t.Fatalf("%d builds: %v", len(bs), err)
+	}
+	for i, b := range bs {
+		if b.Log != "" || b.Description != fmt.Sprint("build ", 2-i) {
+			t.Errorf("build %d: log %q, description %q", i, b.Log, b.Description)
+		}
 	}
 }

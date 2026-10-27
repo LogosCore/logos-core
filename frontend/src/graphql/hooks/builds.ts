@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import {
   FactoryKindsDocument,
@@ -68,10 +68,12 @@ export function useDeleteBuildFile() {
 }
 
 /** An operation's builds, newest first; refreshed while any is unfinished. */
-export function useBuilds(operationId: string) {
+export function useBuilds(operationId: string, search = "") {
   return useQuery({
-    queryKey: buildKeys.list(operationId),
-    queryFn: () => graphqlClient(BuildsDocument, { operationId, limit: 100 }),
+    queryKey: [...buildKeys.list(operationId), search],
+    queryFn: () => graphqlClient(BuildsDocument, { operationId, limit: 100, search: search || null }),
+    // The last results stay while the next search loads.
+    placeholderData: keepPreviousData,
     enabled: operationId !== "",
     refetchInterval: (query) =>
       query.state.data?.builds.some((b) => isUnfinished(b.state)) ? LIVE_LIST_MS : false,

@@ -1526,6 +1526,7 @@ export type QueryBuildFilesArgs = {
 export type QueryBuildsArgs = {
   limit?: InputMaybe<Scalars['Int']['input']>;
   operationId: Scalars['ID']['input'];
+  search?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -2693,6 +2694,7 @@ export type DeleteBuildFileMutation = { deleteBuildFile: boolean };
 export type BuildsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
   limit?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
@@ -5278,8 +5280,8 @@ export const DeleteBuildFileDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<DeleteBuildFileMutation, DeleteBuildFileMutationVariables>;
 export const BuildsDocument = new TypedDocumentString(`
-    query Builds($operationId: ID!, $limit: Int) {
-  builds(operationId: $operationId, limit: $limit) {
+    query Builds($operationId: ID!, $limit: Int, $search: String) {
+  builds(operationId: $operationId, limit: $limit, search: $search) {
     ...BuildFields
   }
 }

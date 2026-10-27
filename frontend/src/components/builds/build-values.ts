@@ -325,45 +325,7 @@ export function endpointSearchText(
   return [ep.name, ep.description ?? "", ep.moduleName, ...settings].join("\n").toLowerCase()
 }
 
-/**
- * What a build is found by on the Builds page, lowercased: what its row shows
- * (factory, target, minion id, description, where its pipeline is, platform,
- * who started it) and its state, factory instance, error and artifact.
- */
-export function buildSearchText(b: {
-  id: string
-  description: string
-  moduleName: string
-  target: string
-  platform: string
-  state: string
-  instance?: string | null
-  stages: readonly StageLike[]
-  error?: { code: string; message: string } | null
-  artifact?: { filename: string } | null
-  createdBy: { name?: string | null }
-}): string {
-  return [
-    b.id,
-    b.description,
-    b.moduleName,
-    b.target,
-    b.platform,
-    platformLabel(b.platform),
-    b.state,
-    currentStage(b.stages)?.label,
-    b.instance,
-    b.createdBy.name,
-    b.error?.code,
-    b.error?.message,
-    b.artifact?.filename,
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .toLowerCase()
-}
-
-/** Whether text (from endpointSearchText or buildSearchText) holds every word of query, case aside. */
+/** Whether text (from endpointSearchText) holds every word of query, case aside. */
 export function matchesQuery(text: string, query: string): boolean {
   return query
     .toLowerCase()

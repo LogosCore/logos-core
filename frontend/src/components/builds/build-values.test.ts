@@ -5,7 +5,6 @@ import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 import {
   acceptText,
   buildConnectionRows,
-  buildSearchText,
   channelUnusable,
   connectionDraft,
   connectionNames,
@@ -479,40 +478,5 @@ describe("helpers", () => {
     expect(platformLabel("any/any")).toBe("Any platform")
     expect(platformLabel("windows/amd64")).toBe("Windows amd64")
     expect(platformLabel("darwin/any")).toBe("macOS (any arch)")
-  })
-})
-
-describe("buildSearchText", () => {
-  const failed = {
-    id: "963d8460-2a4b-4f53-9d8e-1c5f0b7a2e31",
-    description: "Dry run for the EU front",
-    moduleName: "bob",
-    target: "dummy",
-    platform: "windows/amd64",
-    state: "FAILED",
-    instance: "bob-2",
-    stages: [
-      { id: "core.queue", label: "Queued", core: true, state: "SUCCEEDED" },
-      { id: "punches", label: "Take punches", core: false, state: "FAILED" },
-    ],
-    error: { code: "knocked_out", message: "BOB is set to fail every build" },
-    artifact: null,
-    createdBy: { name: "admin" },
-  }
-
-  it("finds a build by what its row shows and why it stopped", () => {
-    const text = buildSearchText(failed)
-    for (const q of ["eu front", "BOB dummy", "963d8460", "windows", "Windows amd64", "failed", "take punches", "bob-2", "admin", "knocked_out", "fail every"]) {
-      expect(matchesQuery(text, q), q).toBe(true)
-    }
-    for (const q of ["us front", "linux", "succeeded", "bob-1"]) expect(matchesQuery(text, q), q).toBe(false)
-  })
-
-  it("leaves out what a build does not have yet", () => {
-    const queued = { ...failed, state: "QUEUED", instance: null, error: null, stages: [], artifact: { filename: "bob-963d8460.json" } }
-    const text = buildSearchText(queued)
-    expect(text).not.toContain("null")
-    expect(matchesQuery(text, "bob-963d8460.json")).toBe(true)
-    expect(matchesQuery(text, "bob-2")).toBe(false)
   })
 })

@@ -236,9 +236,14 @@ extend type Query {
   buildFiles(operationId: ID!): [BuildFile!]!
     @hasPermission(permission: "operation:member")
 
-  # An operation's builds, newest first, at most limit (default 50).
-  # Needs at least viewer.
-  builds(operationId: ID!, limit: Int): [Build!]!
+  # An operation's builds, newest first, at most limit (default 50). With a
+  # search, the builds that hold every word of it, case aside, in what the
+  # Builds page shows of them (factory, target, id, description, the stage
+  # they are on or stopped at, platform, who started them), their state,
+  # factory instance, error and artifact name, or what they were made of:
+  # their values and their connections' names, channels, settings, values and
+  # descriptions. Needs at least viewer.
+  builds(operationId: ID!, limit: Int, search: String): [Build!]!
     @hasPermission(permission: "operation:member")
 
   # One build; null when it does not exist. Needs at least viewer.
