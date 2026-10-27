@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	"go.uber.org/zap"
@@ -99,9 +101,10 @@ func (f *fakeRepo) Block(context.Context, string, string, models.ModuleActor, ti
 func (f *fakeRepo) Unblock(context.Context, string, time.Time) (bool, error) { return false, nil }
 func (f *fakeRepo) Delete(context.Context, string) (bool, error)             { return false, nil }
 func (f *fakeRepo) ListActive(context.Context) ([]models.Module, error)      { return nil, nil }
-func (f *fakeRepo) List(context.Context, []string) ([]models.Module, error) {
+func (f *fakeRepo) FindWithCursor(context.Context, repository.ModuleFilter, *pagination.Cursor, int64, bool) ([]models.Module, error) {
 	return nil, nil
 }
+func (f *fakeRepo) Count(context.Context, repository.ModuleFilter) (int64, error) { return 0, nil }
 
 func newGate(repo *fakeRepo, c *memCache) *Gate {
 	return New(repo, c, time.Minute, zap.NewNop())

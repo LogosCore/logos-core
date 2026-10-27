@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -10,34 +11,36 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 )
 
-// fakeModuleRepo is an in-memory IModuleRegistryRepository. Only List and
-// FindByInstance are exercised by the resolver; the rest satisfy the interface.
+// fakeModuleRepo is an in-memory IModuleRegistryRepository. Only the list
+// and FindByInstance are exercised by the resolver; the rest satisfy the
+// interface. The list applies the status filter; search and paging are the
+// repository's, tested against Mongo.
 type fakeModuleRepo struct {
 	rows       []models.Module
-	lastStatus []string // captured arg from the last List call
+	lastFilter repository.ModuleFilter // captured from the last list call
 	findErr    error
 }
 
-func (f *fakeModuleRepo) List(_ context.Context, statuses []string) ([]models.Module, error) {
-	f.lastStatus = statuses
-	if len(statuses) == 0 {
-		return f.rows, nil
-	}
-	want := map[string]struct{}{}
-	for _, s := range statuses {
-		want[s] = struct{}{}
-	}
+func (f *fakeModuleRepo) FindWithCursor(_ context.Context, filter repository.ModuleFilter, _ *pagination.Cursor, _ int64, _ bool) ([]models.Module, error) {
+	f.lastFilter = filter
 	var out []models.Module
 	for _, m := range f.rows {
-		if _, ok := want[m.Status]; ok {
+		if len(filter.Statuses) == 0 || slices.Contains(filter.Statuses, m.Status) {
 			out = append(out, m)
 		}
 	}
 	return out, nil
+}
+
+func (f *fakeModuleRepo) Count(ctx context.Context, filter repository.ModuleFilter) (int64, error) {
+	rows, err := f.FindWithCursor(ctx, filter, nil, 0, true)
+	return int64(len(rows)), err
 }
 
 func (f *fakeModuleRepo) Block(context.Context, string, string, models.ModuleActor, time.Time) (bool, error) {
@@ -108,15 +111,17 @@ func TestModules_PassesStatusFilterThrough(t *testing.T) {
 	}}
 	r := NewModuleResolver(repo, &fakeAdmin{}, nil, nil)
 
-	out, err := r.Modules(context.Background(), []string{models.ModuleStatusRegistered})
+	search := " http "
+	out, err := r.Modules(context.Background(), &search, []string{models.ModuleStatusRegistered}, []string{"channel"}, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Modules error: %v", err)
 	}
-	if len(out) != 1 || out[0].Instance != "http-1" {
+	if len(out.Edges) != 1 || out.Edges[0].Node.Instance != "http-1" || out.TotalCount != 1 {
 		t.Fatalf("filtered list = %+v, want [http-1]", out)
 	}
-	if len(repo.lastStatus) != 1 || repo.lastStatus[0] != models.ModuleStatusRegistered {
-		t.Errorf("status filter passed to repo = %v, want [registered]", repo.lastStatus)
+	if f := repo.lastFilter; len(f.Statuses) != 1 || f.Statuses[0] != models.ModuleStatusRegistered || f.Search != "http" ||
+		len(f.Types) != 1 || f.Types[0] != "channel" {
+		t.Errorf("filter passed to repo = %+v, want registered channels searched for http", f)
 	}
 }
 
@@ -127,12 +132,12 @@ func TestModules_NilFilterReturnsAll(t *testing.T) {
 	}}
 	r := NewModuleResolver(repo, &fakeAdmin{}, nil, nil)
 
-	out, err := r.Modules(context.Background(), nil)
+	out, err := r.Modules(context.Background(), nil, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Modules error: %v", err)
 	}
-	if len(out) != 2 {
-		t.Fatalf("unfiltered list len = %d, want 2", len(out))
+	if len(out.Edges) != 2 || out.TotalCount != 2 {
+		t.Fatalf("unfiltered list len = %d, want 2", len(out.Edges))
 	}
 }
 

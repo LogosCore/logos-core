@@ -10,6 +10,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
@@ -150,9 +151,9 @@ func (f *fakeRepo) ListActive(_ context.Context) ([]models.Module, error) {
 	return out, nil
 }
 
-func (f *fakeRepo) List(_ context.Context, statuses []string) ([]models.Module, error) {
-	want := make(map[string]struct{}, len(statuses))
-	for _, s := range statuses {
+func (f *fakeRepo) FindWithCursor(_ context.Context, filter repository.ModuleFilter, _ *pagination.Cursor, _ int64, _ bool) ([]models.Module, error) {
+	want := make(map[string]struct{}, len(filter.Statuses))
+	for _, s := range filter.Statuses {
 		want[s] = struct{}{}
 	}
 	var out []models.Module
@@ -165,6 +166,11 @@ func (f *fakeRepo) List(_ context.Context, statuses []string) ([]models.Module, 
 		out = append(out, *row)
 	}
 	return out, nil
+}
+
+func (f *fakeRepo) Count(ctx context.Context, filter repository.ModuleFilter) (int64, error) {
+	rows, err := f.FindWithCursor(ctx, filter, nil, 0, true)
+	return int64(len(rows)), err
 }
 
 // fakeEmitter records published events.

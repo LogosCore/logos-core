@@ -102,16 +102,16 @@ func TestTakeoverUpdate_RevivesByUnsettingEndState(t *testing.T) {
 }
 
 func TestListFilter_EmptyMatchesAll(t *testing.T) {
-	if f := listFilter(nil); len(f) != 0 {
-		t.Errorf("nil statuses → %v, want empty filter (all rows)", f)
+	if f := listFilter(ModuleFilter{}); len(f) != 0 {
+		t.Errorf("no filter → %v, want empty filter (all rows)", f)
 	}
-	if f := listFilter([]string{}); len(f) != 0 {
-		t.Errorf("empty statuses → %v, want empty filter (all rows)", f)
+	if f := listFilter(ModuleFilter{Statuses: []string{}, Types: []string{}}); len(f) != 0 {
+		t.Errorf("empty statuses and types → %v, want empty filter (all rows)", f)
 	}
 }
 
 func TestListFilter_ScopesToStatuses(t *testing.T) {
-	f := listFilter([]string{models.ModuleStatusRegistered, models.ModuleStatusDead})
+	f := listFilter(ModuleFilter{Statuses: []string{models.ModuleStatusRegistered, models.ModuleStatusDead}})
 	cond, ok := f["status"].(bson.M)
 	if !ok {
 		t.Fatalf("status condition = %T, want bson.M", f["status"])

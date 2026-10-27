@@ -59,8 +59,8 @@ func (r *mutationResolver) DeleteModule(ctx context.Context, instance string) (b
 }
 
 // Modules is the resolver for the modules field.
-func (r *queryResolver) Modules(ctx context.Context, status []string) ([]*models.Module, error) {
-	return r.ModuleResolver.Modules(ctx, status)
+func (r *queryResolver) Modules(ctx context.Context, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) (*model.ModuleConnection, error) {
+	return r.ModuleResolver.Modules(ctx, search, status, typeArg, first, after, last, before)
 }
 
 // ModuleChanged is the resolver for the moduleChanged field.

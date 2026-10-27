@@ -1,6 +1,6 @@
-import { useMemo } from "react"
 import { BlocksIcon } from "lucide-react"
-import { useModules, useModuleChangedSubscription } from "@/graphql/hooks/modules"
+import { useInfiniteModules, useModuleChangedSubscription } from "@/graphql/hooks/modules"
+import { useConnectionNodes } from "@/hooks/use-connection-nodes"
 import { useModuleStore } from "@/stores/modules"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { ModulesToolbar } from "@/components/modules/modules-toolbar"
@@ -17,29 +17,28 @@ export function ModulesPage() {
   // deleted refetches the list.
   useModuleChangedSubscription()
 
+  // The server searches and filters (see the modules query).
   const search = useModuleStore((s) => s.search)
   const statusFilter = useModuleStore((s) => s.statusFilter)
-
-  const { data, isLoading } = useModules(statusFilter ? [statusFilter] : null)
-
-  // Search is client-side over the (small) list: instance, type, or version.
-  const modules = useMemo(() => {
-    const all = data?.modules ?? []
-    const q = search.trim().toLowerCase()
-    if (!q) return all
-    return all.filter(
-      (m) =>
-        m.instance.toLowerCase().includes(q) ||
-        m.type.toLowerCase().includes(q) ||
-        m.version.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q),
-    )
-  }, [data, search])
+  const typeFilter = useModuleStore((s) => s.typeFilter)
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteModules({
+    search: search.trim() || null,
+    status: statusFilter ? [statusFilter] : null,
+    type: typeFilter ? [typeFilter] : null,
+  })
+  const modules = useConnectionNodes(data, (p) => p.modules)
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
       <ModulesToolbar />
-      <ModulesTable modules={modules} isLoading={isLoading} />
+      <ModulesTable
+        modules={modules}
+        isLoading={isLoading}
+        isFetchingNextPage={isFetchingNextPage}
+        hasNextPage={hasNextPage}
+        fetchNextPage={fetchNextPage}
+        filtered={search.trim() !== "" || statusFilter !== null || typeFilter !== null}
+      />
       <ModuleAdminDialogs />
     </div>
   )

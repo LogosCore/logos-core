@@ -13,11 +13,16 @@ import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 interface ModulesTableProps {
   modules: ModuleFieldsFragment[]
   isLoading: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  fetchNextPage: () => void
+  /** A search or filter is on: an empty list says nothing matches. */
+  filtered: boolean
 }
 
 const GRID_COLS = "grid-cols-[1.5fr_1fr_1fr_90px_130px_1fr_1fr_1fr_48px]"
 
-export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
+export function ModulesTable({ modules, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, filtered }: ModulesTableProps) {
   const hasPermission = useAuthStore((s) => s.hasPermission)
 
   // Blocking, unblocking and deleting share the module:delete permission.
@@ -29,10 +34,9 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
     <VirtualizedDataTable
       items={modules}
       isLoading={isLoading}
-      // The module list is small and unpaginated — there is no next page.
-      isFetchingNextPage={false}
-      hasNextPage={false}
-      fetchNextPage={() => {}}
+      isFetchingNextPage={isFetchingNextPage}
+      hasNextPage={hasNextPage}
+      fetchNextPage={fetchNextPage}
       gridCols={gridCols}
       entityNoun="modules"
       header={
@@ -49,10 +53,14 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
         </>
       }
       emptyState={
-        <>
-          <BlocksIcon className="size-8 opacity-50" />
-          <p className="text-sm">No modules found.</p>
-        </>
+        filtered ? (
+          <p className="text-sm">No modules match the search and filters.</p>
+        ) : (
+          <>
+            <BlocksIcon className="size-8 opacity-50" />
+            <p className="text-sm">No modules have registered yet.</p>
+          </>
+        )
       }
       renderRow={(m) => (
         <ModuleRow module={m} gridCols={gridCols} canAdmin={canAdmin}>

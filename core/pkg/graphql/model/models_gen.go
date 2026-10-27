@@ -487,9 +487,20 @@ type ModuleConfigValueInput struct {
 	Value any    `json:"value,omitempty"`
 }
 
+type ModuleConnection struct {
+	Edges      []*ModuleEdge        `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+}
+
 type ModuleConnectionSchema struct {
 	Version int            `json:"version"`
 	Fields  []*ModuleField `json:"fields"`
+}
+
+type ModuleEdge struct {
+	Node   *models.Module `json:"node"`
+	Cursor string         `json:"cursor"`
 }
 
 type ModuleEnumOption struct {

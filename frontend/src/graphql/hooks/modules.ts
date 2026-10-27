@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
@@ -19,12 +19,11 @@ import {
   type InvokeModuleActionMutationVariables,
 } from "@/graphql/gql/graphql"
 
-// Query key factory. The module list is small and unpaginated, so a single
-// list namespace keyed by the status filter is enough.
+// Query key factory: the list is keyed by its search and filters.
 export const moduleKeys = {
   all: ["modules"] as const,
   lists: () => [...moduleKeys.all, "list"] as const,
-  list: (status: string[] | null) => [...moduleKeys.lists(), status] as const,
+  list: (params: ModuleListParams) => [...moduleKeys.lists(), params] as const,
   details: () => [...moduleKeys.all, "detail"] as const,
   detail: (instance: string) => [...moduleKeys.details(), instance] as const,
   invocations: (instance: string) =>
@@ -33,10 +32,23 @@ export const moduleKeys = {
     [...moduleKeys.all, "config-changes", instance] as const,
 }
 
-export function useModules(status: string[] | null) {
-  return useQuery({
-    queryKey: moduleKeys.list(status),
-    queryFn: () => graphqlClient(ModulesDocument, { status }),
+/** What the Modules page lists: the server searches and filters. */
+export interface ModuleListParams {
+  search: string | null
+  /** Lifecycle states; all when null. */
+  status: string[] | null
+  /** Module types (channel, factory); all when null. */
+  type: string[] | null
+}
+
+/** Module instances, newest registration first, a page at a time as the table scrolls. */
+export function useInfiniteModules(params: ModuleListParams) {
+  return useInfiniteQuery({
+    queryKey: moduleKeys.list(params),
+    queryFn: ({ pageParam }) => graphqlClient(ModulesDocument, { ...params, first: 20, after: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.modules.pageInfo.hasNextPage ? (lastPage.modules.pageInfo.endCursor ?? undefined) : undefined,
   })
 }
 
@@ -84,8 +96,20 @@ type ModuleEvent = ModuleChangedSubscription["moduleChanged"]
 function applyToLists(queryClient: ReturnType<typeof useQueryClient>, ev: ModuleEvent) {
   if ((ev.kind === "HEARTBEAT" || ev.kind === "CHANGED") && ev.module) {
     const row = ev.module
-    queryClient.setQueriesData<ModulesQuery>({ queryKey: moduleKeys.lists() }, (old) =>
-      old ? { modules: old.modules.map((m) => (m.instance === row.instance ? { ...m, ...row } : m)) } : old,
+    queryClient.setQueriesData<InfiniteData<ModulesQuery>>({ queryKey: moduleKeys.lists() }, (old) =>
+      old
+        ? {
+            ...old,
+            pages: old.pages.map((p) => ({
+              modules: {
+                ...p.modules,
+                edges: p.modules.edges.map((e) =>
+                  e.node.instance === row.instance ? { ...e, node: { ...e.node, ...row } } : e,
+                ),
+              },
+            })),
+          }
+        : old,
     )
     return
   }

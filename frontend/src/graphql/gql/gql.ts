@@ -101,7 +101,7 @@ type Documents = {
     "\n  mutation DeleteHost($id: ID!) {\n    deleteHost(id: $id)\n  }\n": typeof types.DeleteHostDocument,
     "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n": typeof types.HostChangedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": typeof types.ModuleFieldsFragmentDoc,
-    "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": typeof types.ModulesDocument,
+    "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": typeof types.BlockModuleDocument,
     "\n  mutation UnblockModule($instance: ID!) {\n    unblockModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": typeof types.UnblockModuleDocument,
     "\n  mutation DeleteModule($instance: ID!) {\n    deleteModule(instance: $instance)\n  }\n": typeof types.DeleteModuleDocument,
@@ -319,7 +319,7 @@ const documents: Documents = {
     "\n  mutation DeleteHost($id: ID!) {\n    deleteHost(id: $id)\n  }\n": types.DeleteHostDocument,
     "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n": types.HostChangedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": types.ModuleFieldsFragmentDoc,
-    "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n": types.ModulesDocument,
+    "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": types.BlockModuleDocument,
     "\n  mutation UnblockModule($instance: ID!) {\n    unblockModule(instance: $instance) {\n      ...ModuleFields\n    }\n  }\n": types.UnblockModuleDocument,
     "\n  mutation DeleteModule($instance: ID!) {\n    deleteModule(instance: $instance)\n  }\n": types.DeleteModuleDocument,
@@ -798,7 +798,7 @@ export function graphql(source: "\n  fragment ModuleFields on Module {\n    inst
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Modules($status: [String!]) {\n    modules(status: $status) {\n      ...ModuleFields\n    }\n  }\n"): typeof import('./graphql').ModulesDocument;
+export function graphql(source: "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').ModulesDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

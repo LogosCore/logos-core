@@ -26,9 +26,19 @@ export const ModuleFields = graphql(`
 `)
 
 export const ModulesQuery = graphql(`
-  query Modules($status: [String!]) {
-    modules(status: $status) {
-      ...ModuleFields
+  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
+    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {
+      edges {
+        node {
+          ...ModuleFields
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
     }
   }
 `)

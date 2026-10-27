@@ -3,10 +3,12 @@ package repository
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
@@ -56,12 +58,13 @@ type IModuleRegistryRepository interface {
 	MarkDead(ctx context.Context, instances []string, at time.Time) error
 	FindByInstance(ctx context.Context, instance string) (models.Module, error)
 	ListActive(ctx context.Context) ([]models.Module, error)
-	// List returns module rows filtered to the given lifecycle statuses, newest
-	// registration first. A nil/empty statuses slice returns every row (all
-	// states) — the admin Modules page shows registered, deregistered, and dead
-	// together. Distinct from ListActive, which is the registered-only hot path
-	// used by the active-set lookups.
-	List(ctx context.Context, statuses []string) ([]models.Module, error)
+	// FindWithCursor returns a page of module instances for the Modules
+	// list, newest registration first: those filter lets through (an empty
+	// filter: every state), past cursor, at most limit. Distinct from
+	// ListActive, the registered-only hot path of the active-set lookups.
+	FindWithCursor(ctx context.Context, filter ModuleFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Module, error)
+	// Count counts the module instances filter lets through.
+	Count(ctx context.Context, filter ModuleFilter) (int64, error)
 	// LatestConnectionSchema returns the minion connection schema of a channel
 	// kind: the highest version any instance of moduleName declared, from the
 	// most recent registration among those (rows of every lifecycle state
@@ -102,6 +105,8 @@ func NewModuleRegistryRepository(db database.Database) IModuleRegistryRepository
 		// Reaper scans by status; module_type for operator queries.
 		{Key: []string{"status"}},
 		{Key: []string{"module_type"}},
+		// The Modules list's order: newest registration first, _id breaking ties.
+		{Key: []string{"-registered_at", "-_id"}},
 	})
 
 	return &moduleRegistryRepository{coll: coll}
@@ -234,11 +239,40 @@ func applyResultUpdate(reply protocol.ConfigApplyReply, at time.Time) bson.M {
 
 // listFilter scopes a registry listing to the given statuses. Empty/nil returns
 // every row (no status constraint).
-func listFilter(statuses []string) bson.M {
-	if len(statuses) == 0 {
-		return bson.M{}
+// ModuleFilter narrows the Modules list. Search is the app's search
+// (searchPattern) over the instance, kind, type, version and description;
+// Statuses are lifecycle states, Types module types (channel, factory).
+type ModuleFilter struct {
+	Search   string
+	Statuses []string
+	Types    []string
+}
+
+// moduleListSort orders the Modules list: newest registration first.
+var moduleListSort = pagination.SortKey{Field: "registered_at"}
+
+// ModuleCursor is a module instance's position in the Modules list.
+func ModuleCursor(m *models.Module) string { return pagination.EncodeCursor(m.RegisteredAt, m.Id) }
+
+func listFilter(f ModuleFilter) bson.M {
+	q := bson.M{}
+	if len(f.Statuses) > 0 {
+		q["status"] = bson.M{"$in": f.Statuses}
 	}
-	return bson.M{"status": bson.M{"$in": statuses}}
+	if len(f.Types) > 0 {
+		q["module_type"] = bson.M{"$in": f.Types}
+	}
+	if f.Search != "" {
+		rx := bson.M{"$regex": searchPattern(f.Search), "$options": "i"}
+		q["$or"] = bson.A{
+			bson.M{"instance": rx},
+			bson.M{"module_name": rx},
+			bson.M{"module_type": rx},
+			bson.M{"version": rx},
+			bson.M{"description": rx},
+		}
+	}
+	return q
 }
 
 // staleRegisteredFilter matches registered rows whose effective last-seen time
@@ -509,10 +543,23 @@ func (r *moduleRegistryRepository) ListActive(ctx context.Context) ([]models.Mod
 	return out, err
 }
 
-func (r *moduleRegistryRepository) List(ctx context.Context, statuses []string) ([]models.Module, error) {
-	var out []models.Module
-	err := r.coll.Find(ctx, listFilter(statuses)).Sort("-registered_at").All(&out)
+func (r *moduleRegistryRepository) FindWithCursor(ctx context.Context, filter ModuleFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Module, error) {
+	if err := moduleListSort.ValidateCursor(cursor); err != nil {
+		return nil, err
+	}
+	out := []models.Module{}
+	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(listFilter(filter), cursor, forward, moduleListSort)).
+		Sort(pagination.SortFieldsKey(forward, moduleListSort)...).
+		Limit(limit).
+		All(&out)
+	if !forward {
+		slices.Reverse(out)
+	}
 	return out, err
+}
+
+func (r *moduleRegistryRepository) Count(ctx context.Context, filter ModuleFilter) (int64, error) {
+	return r.coll.Count(ctx, listFilter(filter))
 }
 
 // RecordApplyResult and RecordApplyError match the instance in any lifecycle

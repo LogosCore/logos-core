@@ -17,6 +17,17 @@
 # without marshalling gymnastics. Known values: "registered", "deregistered",
 # "dead".
 
+type ModuleEdge {
+  node: Module!
+  cursor: String!
+}
+
+type ModuleConnection {
+  edges: [ModuleEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
 type Module {
   # Self-assigned, globally-unique instance id (e.g. "http-channel-1"). The
   # identity used by heartbeat/deregister and the data-plane registration gate.
@@ -85,9 +96,20 @@ enum ModuleEventKind {
 # --- Queries ---
 
 extend type Query {
-  # Every module instance, newest registration first. Pass `status` to filter
-  # to a subset of lifecycle states (e.g. ["registered"]); omit for all states.
-  modules(status: [String!]): [Module!]!
+  # Module instances, newest registration first, a page at a time. search is
+  # the app's search (a substring, case aside; "quotes" for whole words) over
+  # the instance, kind, type, version and description. status narrows to
+  # lifecycle states (e.g. ["registered"]) and type to module types
+  # ("channel", "factory"); omit them for all.
+  modules(
+    search: String
+    status: [String!]
+    type: [String!]
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): ModuleConnection!
     @hasPermission(permission: "module:read")
 }
 

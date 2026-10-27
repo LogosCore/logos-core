@@ -687,9 +687,20 @@ export type ModuleConfigValueInput = {
   value?: InputMaybe<Scalars['JSON']['input']>;
 };
 
+export type ModuleConnection = {
+  edges: Array<ModuleEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+};
+
 export type ModuleConnectionSchema = {
   fields: Array<ModuleField>;
   version: Scalars['Int']['output'];
+};
+
+export type ModuleEdge = {
+  cursor: Scalars['String']['output'];
+  node: Module;
 };
 
 export type ModuleEnumOption = {
@@ -1481,7 +1492,7 @@ export type Query = {
   module?: Maybe<Module>;
   moduleActionInvocations: Array<ModuleActionInvocation>;
   moduleConfigChanges: Array<ModuleConfigChange>;
-  modules: Array<Module>;
+  modules: ModuleConnection;
   myAPIKey?: Maybe<ApiKey>;
   myAgentActions: AgentActionConnection;
   myAgentActivitySummary: Array<AgentActivitySummary>;
@@ -1675,7 +1686,13 @@ export type QueryModuleConfigChangesArgs = {
 
 
 export type QueryModulesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<Array<Scalars['String']['input']>>;
+  type?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
 
@@ -3170,11 +3187,15 @@ export type HostChangedSubscription = { hostChanged: { action: EventAction, host
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
 export type ModulesQueryVariables = Exact<{
+  search?: InputMaybe<Scalars['String']['input']>;
   status?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  type?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type ModulesQuery = { modules: Array<{ instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null }> };
+export type ModulesQuery = { modules: { totalCount: number, edges: Array<{ cursor: string, node: { instance: string, type: string, name: string, version: string, description: string, icon: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type BlockModuleMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
@@ -6955,9 +6976,25 @@ export const HostChangedDocument = new TypedDocumentString(`
   updatedAt
 }`) as unknown as TypedDocumentString<HostChangedSubscription, HostChangedSubscriptionVariables>;
 export const ModulesDocument = new TypedDocumentString(`
-    query Modules($status: [String!]) {
-  modules(status: $status) {
-    ...ModuleFields
+    query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
+  modules(
+    search: $search
+    status: $status
+    type: $type
+    first: $first
+    after: $after
+  ) {
+    edges {
+      node {
+        ...ModuleFields
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
   }
 }
     fragment ModuleFields on Module {

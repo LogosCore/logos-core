@@ -511,9 +511,20 @@ type ComplexityRoot struct {
 		Old func(childComplexity int) int
 	}
 
+	ModuleConnection struct {
+		Edges      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		TotalCount func(childComplexity int) int
+	}
+
 	ModuleConnectionSchema struct {
 		Fields  func(childComplexity int) int
 		Version func(childComplexity int) int
+	}
+
+	ModuleEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
 	}
 
 	ModuleEnumOption struct {
@@ -781,7 +792,7 @@ type ComplexityRoot struct {
 		Module                             func(childComplexity int, instance string) int
 		ModuleActionInvocations            func(childComplexity int, instance string, limit *int) int
 		ModuleConfigChanges                func(childComplexity int, instance string, limit *int) int
-		Modules                            func(childComplexity int, status []string) int
+		Modules                            func(childComplexity int, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) int
 		MyAPIKey                           func(childComplexity int) int
 		MyAgentActions                     func(childComplexity int, agentKeyID *string, operationID *string, writesOnly *bool, outcomes []model.AgentActionOutcome, first *int, after *string, last *int, before *string) int
 		MyAgentActivitySummary             func(childComplexity int) int
@@ -1444,7 +1455,7 @@ type QueryResolver interface {
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
-	Modules(ctx context.Context, status []string) ([]*models.Module, error)
+	Modules(ctx context.Context, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) (*model.ModuleConnection, error)
 	MySessions(ctx context.Context, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Sessions(ctx context.Context, userID *string, search *string, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Session(ctx context.Context, id string) (*models.Session, error)
@@ -3470,6 +3481,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleConfigKeyChange.Old(childComplexity), true
 
+	case "ModuleConnection.edges":
+		if e.ComplexityRoot.ModuleConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnection.Edges(childComplexity), true
+	case "ModuleConnection.pageInfo":
+		if e.ComplexityRoot.ModuleConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnection.PageInfo(childComplexity), true
+	case "ModuleConnection.totalCount":
+		if e.ComplexityRoot.ModuleConnection.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnection.TotalCount(childComplexity), true
+
 	case "ModuleConnectionSchema.fields":
 		if e.ComplexityRoot.ModuleConnectionSchema.Fields == nil {
 			break
@@ -3482,6 +3512,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleConnectionSchema.Version(childComplexity), true
+
+	case "ModuleEdge.cursor":
+		if e.ComplexityRoot.ModuleEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleEdge.Cursor(childComplexity), true
+	case "ModuleEdge.node":
+		if e.ComplexityRoot.ModuleEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleEdge.Node(childComplexity), true
 
 	case "ModuleEnumOption.description":
 		if e.ComplexityRoot.ModuleEnumOption.Description == nil {
@@ -5277,7 +5320,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Modules(childComplexity, args["status"].([]string)), true
+		return e.ComplexityRoot.Query.Modules(childComplexity, args["search"].(*string), args["status"].([]string), args["type"].([]string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.myAPIKey":
 		if e.ComplexityRoot.Query.MyAPIKey == nil {
 			break
@@ -9450,6 +9493,17 @@ extend type Mutation {
 # without marshalling gymnastics. Known values: "registered", "deregistered",
 # "dead".
 
+type ModuleEdge {
+  node: Module!
+  cursor: String!
+}
+
+type ModuleConnection {
+  edges: [ModuleEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
 type Module {
   # Self-assigned, globally-unique instance id (e.g. "http-channel-1"). The
   # identity used by heartbeat/deregister and the data-plane registration gate.
@@ -9518,9 +9572,20 @@ enum ModuleEventKind {
 # --- Queries ---
 
 extend type Query {
-  # Every module instance, newest registration first. Pass ` + "`" + `status` + "`" + ` to filter
-  # to a subset of lifecycle states (e.g. ["registered"]); omit for all states.
-  modules(status: [String!]): [Module!]!
+  # Module instances, newest registration first, a page at a time. search is
+  # the app's search (a substring, case aside; "quotes" for whole words) over
+  # the instance, kind, type, version and description. status narrows to
+  # lifecycle states (e.g. ["registered"]) and type to module types
+  # ("channel", "factory"); omit them for all.
+  modules(
+    search: String
+    status: [String!]
+    type: [String!]
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): ModuleConnection!
     @hasPermission(permission: "module:read")
 }
 
@@ -13062,11 +13127,41 @@ func (ec *executionContext) field_Query_module_args(ctx context.Context, rawArgs
 func (ec *executionContext) field_Query_modules_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "status", ec.unmarshalOString2ᚕstringᚄ)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["status"] = arg0
+	args["search"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "status", ec.unmarshalOString2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["status"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "type", ec.unmarshalOString2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["type"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg6
 	return args, nil
 }
 
@@ -24368,6 +24463,109 @@ func (ec *executionContext) fieldContext_ModuleConfigKeyChange_new(_ context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnection_edges,
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		ec.marshalNModuleEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEdgeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "node":
+				return ec.fieldContext_ModuleEdge_node(ctx, field)
+			case "cursor":
+				return ec.fieldContext_ModuleEdge_cursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleEdge", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnection_pageInfo,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNPageInfo2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋpaginationᚐPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_PageInfo_hasPreviousPage(ctx, field)
+			case "startCursor":
+				return ec.fieldContext_PageInfo_startCursor(ctx, field)
+			case "endCursor":
+				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnection_totalCount,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnection_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleConnectionSchema_version(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24463,6 +24661,104 @@ func (ec *executionContext) fieldContext_ModuleConnectionSchema_fields(_ context
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleEdge_node,
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		ec.marshalNModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "instance":
+				return ec.fieldContext_Module_instance(ctx, field)
+			case "type":
+				return ec.fieldContext_Module_type(ctx, field)
+			case "name":
+				return ec.fieldContext_Module_name(ctx, field)
+			case "version":
+				return ec.fieldContext_Module_version(ctx, field)
+			case "description":
+				return ec.fieldContext_Module_description(ctx, field)
+			case "icon":
+				return ec.fieldContext_Module_icon(ctx, field)
+			case "status":
+				return ec.fieldContext_Module_status(ctx, field)
+			case "lastStatus":
+				return ec.fieldContext_Module_lastStatus(ctx, field)
+			case "registeredAt":
+				return ec.fieldContext_Module_registeredAt(ctx, field)
+			case "lastHeartbeatAt":
+				return ec.fieldContext_Module_lastHeartbeatAt(ctx, field)
+			case "deregisteredAt":
+				return ec.fieldContext_Module_deregisteredAt(ctx, field)
+			case "deregisterReason":
+				return ec.fieldContext_Module_deregisterReason(ctx, field)
+			case "declaredDeadAt":
+				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
+			case "blockedAt":
+				return ec.fieldContext_Module_blockedAt(ctx, field)
+			case "blockedBy":
+				return ec.fieldContext_Module_blockedBy(ctx, field)
+			case "blockReason":
+				return ec.fieldContext_Module_blockReason(ctx, field)
+			case "build":
+				return ec.fieldContext_Module_build(ctx, field)
+			case "connection":
+				return ec.fieldContext_Module_connection(ctx, field)
+			case "management":
+				return ec.fieldContext_Module_management(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.ModuleEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleEdge_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -37652,7 +37948,7 @@ func (ec *executionContext) _Query_modules(ctx context.Context, field graphql.Co
 		ec.fieldContext_Query_modules,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Modules(ctx, fc.Args["status"].([]string))
+			return ec.Resolvers.Query().Modules(ctx, fc.Args["search"].(*string), fc.Args["status"].([]string), fc.Args["type"].([]string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -37660,11 +37956,11 @@ func (ec *executionContext) _Query_modules(ctx context.Context, field graphql.Co
 			directive1 := func(ctx context.Context) (any, error) {
 				permission, err := ec.unmarshalNString2string(ctx, "module:read")
 				if err != nil {
-					var zeroVal []*models.Module
+					var zeroVal *model.ModuleConnection
 					return zeroVal, err
 				}
 				if ec.Directives.HasPermission == nil {
-					var zeroVal []*models.Module
+					var zeroVal *model.ModuleConnection
 					return zeroVal, errors.New("directive hasPermission is not implemented")
 				}
 				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
@@ -37673,7 +37969,7 @@ func (ec *executionContext) _Query_modules(ctx context.Context, field graphql.Co
 			next = directive1
 			return next
 		},
-		ec.marshalNModule2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModuleᚄ,
+		ec.marshalNModuleConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnection,
 		true,
 		true,
 	)
@@ -37687,46 +37983,14 @@ func (ec *executionContext) fieldContext_Query_modules(ctx context.Context, fiel
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "instance":
-				return ec.fieldContext_Module_instance(ctx, field)
-			case "type":
-				return ec.fieldContext_Module_type(ctx, field)
-			case "name":
-				return ec.fieldContext_Module_name(ctx, field)
-			case "version":
-				return ec.fieldContext_Module_version(ctx, field)
-			case "description":
-				return ec.fieldContext_Module_description(ctx, field)
-			case "icon":
-				return ec.fieldContext_Module_icon(ctx, field)
-			case "status":
-				return ec.fieldContext_Module_status(ctx, field)
-			case "lastStatus":
-				return ec.fieldContext_Module_lastStatus(ctx, field)
-			case "registeredAt":
-				return ec.fieldContext_Module_registeredAt(ctx, field)
-			case "lastHeartbeatAt":
-				return ec.fieldContext_Module_lastHeartbeatAt(ctx, field)
-			case "deregisteredAt":
-				return ec.fieldContext_Module_deregisteredAt(ctx, field)
-			case "deregisterReason":
-				return ec.fieldContext_Module_deregisterReason(ctx, field)
-			case "declaredDeadAt":
-				return ec.fieldContext_Module_declaredDeadAt(ctx, field)
-			case "blockedAt":
-				return ec.fieldContext_Module_blockedAt(ctx, field)
-			case "blockedBy":
-				return ec.fieldContext_Module_blockedBy(ctx, field)
-			case "blockReason":
-				return ec.fieldContext_Module_blockReason(ctx, field)
-			case "build":
-				return ec.fieldContext_Module_build(ctx, field)
-			case "connection":
-				return ec.fieldContext_Module_connection(ctx, field)
-			case "management":
-				return ec.fieldContext_Module_management(ctx, field)
+			case "edges":
+				return ec.fieldContext_ModuleConnection_edges(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_ModuleConnection_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_ModuleConnection_totalCount(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Module", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type ModuleConnection", field.Name)
 		},
 	}
 	defer func() {
@@ -58547,6 +58811,55 @@ func (ec *executionContext) _ModuleConfigKeyChange(ctx context.Context, sel ast.
 	return out
 }
 
+var moduleConnectionImplementors = []string{"ModuleConnection"}
+
+func (ec *executionContext) _ModuleConnection(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleConnection")
+		case "edges":
+			out.Values[i] = ec._ModuleConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._ModuleConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._ModuleConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var moduleConnectionSchemaImplementors = []string{"ModuleConnectionSchema"}
 
 func (ec *executionContext) _ModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConnectionSchema) graphql.Marshaler {
@@ -58565,6 +58878,50 @@ func (ec *executionContext) _ModuleConnectionSchema(ctx context.Context, sel ast
 			}
 		case "fields":
 			out.Values[i] = ec._ModuleConnectionSchema_fields(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var moduleEdgeImplementors = []string{"ModuleEdge"}
+
+func (ec *executionContext) _ModuleEdge(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleEdge")
+		case "node":
+			out.Values[i] = ec._ModuleEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._ModuleEdge_cursor(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -68288,22 +68645,6 @@ func (ec *executionContext) marshalNModule2githubᚗcomᚋlogoscoreᚋlogosᚑco
 	return ec._Module(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNModule2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModuleᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.Module) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
 func (ec *executionContext) marshalNModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v *models.Module) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -68462,6 +68803,20 @@ func (ec *executionContext) unmarshalNModuleConfigValueInput2ᚖgithubᚗcomᚋl
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNModuleConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnection(ctx context.Context, sel ast.SelectionSet, v model.ModuleConnection) graphql.Marshaler {
+	return ec._ModuleConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNModuleConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnection(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleConnection(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNModuleConnectionSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConnectionSchema) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -68470,6 +68825,32 @@ func (ec *executionContext) marshalNModuleConnectionSchema2ᚖgithubᚗcomᚋlog
 		return graphql.Null
 	}
 	return ec._ModuleConnectionSchema(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEdge(ctx context.Context, sel ast.SelectionSet, v *model.ModuleEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleEdge(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNModuleEnumOption2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleEnumOption(ctx context.Context, sel ast.SelectionSet, v *model.ModuleEnumOption) graphql.Marshaler {

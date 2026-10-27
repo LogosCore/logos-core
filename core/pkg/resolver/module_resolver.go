@@ -12,6 +12,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/qiniu/qmgo"
 )
@@ -34,7 +35,7 @@ type ModuleAdmin interface {
 // no further permission checks.
 type IModuleResolver interface {
 	// Queries
-	Modules(ctx context.Context, status []string) ([]*models.Module, error)
+	Modules(ctx context.Context, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) (*model.ModuleConnection, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
@@ -82,18 +83,30 @@ func NewModuleResolver(repo repository.IModuleRegistryRepository, admin ModuleAd
 	return &moduleResolver{repo: repo, admin: admin, mgmt: mgmt, logs: logs}
 }
 
-// Modules lists module instances filtered to the given lifecycle statuses,
-// newest registration first. An empty/nil status list returns every row.
-func (r *moduleResolver) Modules(ctx context.Context, status []string) ([]*models.Module, error) {
-	mods, err := r.repo.List(ctx, status)
+// Modules lists a page of module instances, newest registration first,
+// searched and narrowed to lifecycle statuses and module types (empty: all).
+func (r *moduleResolver) Modules(ctx context.Context, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) (*model.ModuleConnection, error) {
+	args, err := pagination.ParseArgs(first, after, last, before)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pagination args: %w", err)
+	}
+	filter := repository.ModuleFilter{Statuses: status, Types: typeArg}
+	if search != nil {
+		filter.Search = strings.TrimSpace(*search)
+	}
+	total, err := r.repo.Count(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count modules: %w", err)
+	}
+	mods, err := r.repo.FindWithCursor(ctx, filter, args.Cursor, args.Limit+1, args.Forward)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list modules: %w", err)
 	}
-	out := make([]*models.Module, len(mods))
-	for i := range mods {
-		out[i] = &mods[i]
-	}
-	return out, nil
+	edges, pageInfo := pagination.BuildEdges(mods, args, repository.ModuleCursor,
+		func(m *models.Module, cursor string) *model.ModuleEdge {
+			return &model.ModuleEdge{Node: m, Cursor: cursor}
+		})
+	return &model.ModuleConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
 // RemoveModule soft-removes (deregisters) a module instance and returns the
