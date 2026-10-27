@@ -39,6 +39,7 @@ import { BuildFilesContext, type BuildFilesContextValue } from "@/components/bui
 import { FieldRow } from "@/components/builds/build-field-row"
 import { ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
 import { ConnectionPickerDialog } from "@/components/builds/connection-picker-dialog"
+import { SaveEndpointDialog } from "@/components/builds/save-endpoint-dialog"
 import {
   channelUnusable,
   connectionDraft,
@@ -229,6 +230,8 @@ function Editor({
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
   // The endpoint picker: adding a connection, or filling the one keyed fill.
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
+  // Saving the connection keyed key as an endpoint.
+  const [saving, setSaving] = useState<{ open: boolean; key: string | null }>({ open: false, key: null })
   const [name, setName] = useState(preset?.name ?? "")
   const [description, setDescription] = useState(preset?.description ?? "")
   const [submitted, setSubmitted] = useState(false)
@@ -363,6 +366,8 @@ function Editor({
   const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
   const usable = speaks.filter((c) => c.why === null).map((c) => c.name)
   const filling = form.connections.findIndex((c) => c.key === picker.fill)
+  const savingIndex = form.connections.findIndex((c) => c.key === saving.key)
+  const savingConnection = savingIndex < 0 ? undefined : form.connections[savingIndex]
   const pick: Omit<ComponentProps<typeof ConnectionPickerDialog>, "open" | "onClose" | "channels" | "channelIcons"> =
     filling < 0
       ? {
@@ -585,6 +590,7 @@ function Editor({
                     }
                     onParam={(key, d) => updateConnection(i, (x) => ({ ...x, drafts: { ...x.drafts, [key]: d } }), `${at}.values.${key}`)}
                     onFill={() => setPicker({ open: true, fill: c.key })}
+                    onSave={() => setSaving({ open: true, key: c.key })}
                     onMove={(by) => setConnections((cs) => move(cs, i, by))}
                     onRemove={() => setConnections((cs) => cs.filter((_, j) => j !== i))}
                   />
@@ -608,6 +614,17 @@ function Editor({
             channels={channels}
             channelIcons={channelIcons}
             {...pick}
+          />
+          <SaveEndpointDialog
+            open={saving.open && savingIndex >= 0}
+            onClose={() => setSaving((s) => ({ ...s, open: false }))}
+            operationId={operationId}
+            factory={kind.name}
+            channel={savingConnection && channels.get(savingConnection.moduleName)}
+            channelIcon={savingConnection && channelIcons.get(savingConnection.moduleName)}
+            connection={savingConnection}
+            index={savingIndex}
+            taken={endpoints.map((e) => e.name)}
           />
         </div>
         </div>

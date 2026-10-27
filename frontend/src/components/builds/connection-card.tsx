@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react"
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, CopyIcon, XIcon } from "lucide-react"
+import { ArrowDownIcon, ArrowUpIcon, BookmarkPlusIcon, ChevronRightIcon, CopyIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -42,6 +42,7 @@ export function ConnectionCard({
   onSetting,
   onParam,
   onFill,
+  onSave,
   onMove,
   onRemove,
 }: {
@@ -66,6 +67,8 @@ export function ConnectionCard({
   onParam: (key: string, d: Draft) => void
   /** Asks for an endpoint to fill the settings from. */
   onFill: () => void
+  /** Asks to save the settings as a new endpoint. */
+  onSave: () => void
   onMove: (by: -1 | 1) => void
   onRemove: () => void
 }) {
@@ -111,6 +114,17 @@ export function ConnectionCard({
           >
             <CopyIcon />
             Fill from endpoint…
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled || !channel}
+            title="Keep these settings as an endpoint of the operation, to fill connections from later"
+            onClick={onSave}
+          >
+            <BookmarkPlusIcon />
+            Save as endpoint…
           </Button>
           <Button type="button" variant="ghost" size="icon-sm" title="Earlier" aria-label="Earlier" disabled={disabled || index === 0} onClick={() => onMove(-1)}>
             <ArrowUpIcon />

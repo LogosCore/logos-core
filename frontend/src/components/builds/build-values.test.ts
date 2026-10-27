@@ -8,6 +8,7 @@ import {
   channelUnusable,
   connectionDraft,
   connectionNames,
+  endpointFromConnection,
   endpointSearchText,
   evaluateForm,
   factoryKindsByName,
@@ -311,6 +312,32 @@ describe("fillFromEndpoint", () => {
     expect(filled.drafts.method).toEqual({ kind: "text", text: "GET" })
     expect(filled.notes).toEqual([])
     expect(filled.key).toBe(c.key)
+  })
+})
+
+describe("endpointFromConnection", () => {
+  it("takes the settings, not the factory's parameters, under a free name", () => {
+    const c = connection("http", {
+      name: "edge",
+      description: " EU front ",
+      settings: { base_url: "https://edge.example.com", request_timeout: "10s" },
+      params: { path_prefix: "/cdn/" },
+    })
+    expect(endpointFromConnection(c, 0, http, ["edge", "other"])).toEqual({
+      name: "edge-2",
+      description: "EU front",
+      values: { base_url: "https://edge.example.com", request_timeout: "10s" },
+      problems: [],
+    })
+  })
+
+  it("names an unnamed one as the build does, and says what an endpoint cannot take", () => {
+    const d = endpointFromConnection(connection("http", { settings: { request_timeout: "soon" } }), 2, http, [])
+    expect(d.name).toBe("http-3")
+    expect(d.problems).toEqual([
+      { label: "base_url", message: "Required" },
+      { label: "request_timeout", message: expect.stringMatching(/invalid duration/i) },
+    ])
   })
 })
 

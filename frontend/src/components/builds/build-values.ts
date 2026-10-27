@@ -15,7 +15,15 @@ import {
   type Draft,
   type FieldDef,
 } from "@/components/modules/management/field-values"
-import { freeName, isRecord, nameError, sameJSON, settingRows, type Kind } from "@/components/endpoints/endpoint-values"
+import {
+  evaluateEndpoint,
+  freeName,
+  isRecord,
+  nameError,
+  sameJSON,
+  settingRows,
+  type Kind,
+} from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 
 // Secrets in a build are operation data, edited as text like the rest.
@@ -262,6 +270,33 @@ export function fillFromEndpoint(
     filledFrom: ep.name,
     settings: draftsFor(ch.fields, isRecord(ep.values) ? ep.values : null),
     notes: [],
+  }
+}
+
+/** A connection as a new endpoint of its channel, and what keeps it from being one. */
+export interface EndpointDraft {
+  /** The connection's name, or its default, made free of taken. */
+  name: string
+  description: string
+  /** The settings set, as an endpoint stores them; the factory's parameters are no endpoint's. */
+  values: Record<string, unknown>
+  /** Settings an endpoint cannot take as they are: it needs every required one, valid. */
+  problems: { label: string; message: string }[]
+}
+
+/** What saving connection i (c) as an endpoint makes; taken are the operation's endpoint names. */
+export function endpointFromConnection(
+  c: ConnectionDraft,
+  i: number,
+  channel: ChannelKind,
+  taken: Iterable<string>,
+): EndpointDraft {
+  const { values, errors } = evaluateEndpoint(channel.fields, c.settings)
+  return {
+    name: freeName(c.name.trim() || defaultConnectionName(c.moduleName, i), taken, ""),
+    description: c.description.trim(),
+    values,
+    problems: channel.fields.filter((f) => errors[f.key]).map((f) => ({ label: f.label, message: errors[f.key] })),
   }
 }
 
