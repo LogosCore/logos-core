@@ -12,12 +12,11 @@ import { relativeTime } from "@/lib/relative-time"
 import { formatElapsed } from "@/components/modules/management/field-values"
 import { KindName } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
-import { BuildStateBadge } from "./build-state-badge"
 import { PipelineDots } from "./build-pipeline"
 import { buildElapsed, currentStage, platformLabel } from "./build-values"
 
 const GRID_COLS =
-  "grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_48px]"
+  "grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_48px]"
 
 /**
  * An operation's builds, newest first. A row opens the build; its menu
@@ -60,9 +59,8 @@ export function BuildsTable({
       entityNoun="builds"
       header={
         <>
-          <div>State</div>
-          <div>Pipeline</div>
           <div>Factory · target</div>
+          <div>Pipeline</div>
           <div>Platform</div>
           <div>Minion</div>
           <div>Started</div>
@@ -102,17 +100,6 @@ export function BuildsTable({
             {(menuButton) => (
               <>
                 <div className="min-w-0">
-                  <BuildStateBadge build={b} />
-                </div>
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <PipelineDots stages={b.stages} now={now} />
-                  {at && (
-                    <span className={cn("truncate text-xs", at.state === "FAILED" ? "text-destructive" : "text-muted-foreground")}>
-                      {at.label}
-                    </span>
-                  )}
-                </div>
-                <div className="min-w-0">
                   <div className="flex min-w-0 items-center">
                     <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
                     <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
@@ -121,6 +108,14 @@ export function BuildsTable({
                     <div className="truncate text-xs text-destructive" title={b.error.message}>
                       {b.error.code}: {b.error.message}
                     </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <PipelineDots stages={b.stages} now={now} />
+                  {at && (
+                    <span className={cn("truncate text-xs", at.state === "FAILED" ? "text-destructive" : "text-muted-foreground")}>
+                      {at.label}
+                    </span>
                   )}
                 </div>
                 <div className="truncate text-sm">{platformLabel(b.platform)}</div>
