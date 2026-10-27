@@ -141,13 +141,18 @@ function BuildDetail({ build: b }: { build: Build }) {
             </div>
           </div>
         )}
+        {/* What the factory warns about with its result. */}
         {b.warnings.length > 0 && (
-          <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
-            <ul className="list-inside list-disc">
-              {b.warnings.map((w) => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
+          <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+            <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
+            <div className="flex min-w-0 flex-col gap-1">
+              <p className="font-medium">Warnings</p>
+              <ul className="list-inside list-disc">
+                {b.warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
 
