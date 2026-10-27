@@ -89,6 +89,8 @@ export function RecordModal({
     >
       <DialogContent
         showCloseButton={false}
+        // The page behind it blurred, so the record in front is what reads.
+        overlayClassName="backdrop-blur-sm"
         className="flex h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100svh-4rem)] sm:max-w-[calc(100%-4rem)] max-sm:h-svh max-sm:max-w-none max-sm:rounded-none"
       >
         <RequestCloseContext.Provider value={onClose}>
