@@ -63,7 +63,7 @@ export function BuildsTable({
           <div>Pipeline</div>
           <div>Platform</div>
           <div>Minion</div>
-          <div>Started</div>
+          <div>Date</div>
           <div className="text-right">Took</div>
           <div />
         </>
