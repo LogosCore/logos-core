@@ -1,7 +1,8 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { ChevronDownIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SearchInput } from "@/components/ui/search-input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import { GettingStartedPanel } from "@/components/onboarding/getting-started-pan
 import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
 import { KindName } from "@/components/modules/module-icon"
-import { factoryKindsByName, type FactoryKind } from "@/components/builds/build-values"
+import { buildSearchText, factoryKindsByName, matchesQuery, type FactoryKind } from "@/components/builds/build-values"
 
 /**
  * Minion builds of the scoped operation, live while builds run: each asks a
@@ -41,37 +42,59 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
   const kinds = useMemo(() => [...factoryKindsByName(kindsQuery.data?.factoryKinds ?? []).values()], [kindsQuery.data])
   const { data, isLoading, error } = useBuilds(operationId)
   const icons = useFactoryIcons()
+  const [search, setSearch] = useState("")
+  const builds = useMemo(
+    () => (data?.builds ?? []).filter((b) => matchesQuery(buildSearchText(b), search)),
+    [data, search],
+  )
+  const total = data?.builds.length ?? 0
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
-      {canWrite && (
+      {/* Toolbar, as on the other pages: search on the left, actions right. */}
+      {(total > 0 || canWrite) && (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="ml-auto">
-            <NewBuildButton kinds={kinds} onPick={(k) => navigate(`${BUILDS_PATH}/new?kind=${encodeURIComponent(k)}`)} />
-          </div>
+          {total > 0 && (
+            <SearchInput
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Search builds..."
+              debounceMs={100}
+              title=""
+            />
+          )}
+          {canWrite && (
+            <div className="ml-auto">
+              <NewBuildButton kinds={kinds} onPick={(k) => navigate(`${BUILDS_PATH}/new?kind=${encodeURIComponent(k)}`)} />
+            </div>
+          )}
         </div>
       )}
       {error ? (
         <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
       ) : (
         <BuildsTable
-          builds={data?.builds ?? []}
+          builds={builds}
           icons={icons}
           isLoading={isLoading || kindsQuery.isLoading}
           canWrite={canWrite}
           emptyState={
-            <>
-              <HammerIcon className="size-8 opacity-50" />
-              <p className="text-sm">No builds in this operation yet.</p>
-              <p className="max-w-md text-center text-xs">
-                A build asks a factory for one minion: pick what to build and the connections it reaches its channels
-                through, and the factory builds it. Each build is a new minion with its own identity; "Build again"
-                on a build starts the next one from its settings.
-              </p>
-              {kinds.length === 0 && (
-                <p className="max-w-md text-center text-xs">No factory has declared what it builds yet.</p>
-              )}
-            </>
+            total === 0 ? (
+              <>
+                <HammerIcon className="size-8 opacity-50" />
+                <p className="text-sm">No builds in this operation yet.</p>
+                <p className="max-w-md text-center text-xs">
+                  A build asks a factory for one minion: pick what to build and the connections it reaches its
+                  channels through, and the factory builds it. Each build is a new minion with its own identity;
+                  "Build again" on a build starts the next one from its settings.
+                </p>
+                {kinds.length === 0 && (
+                  <p className="max-w-md text-center text-xs">No factory has declared what it builds yet.</p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm">No builds match “{search}”.</p>
+            )
           }
         />
       )}
