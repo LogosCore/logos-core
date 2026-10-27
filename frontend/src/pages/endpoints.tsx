@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react"
-import { useNavigate } from "react-router"
 import { ChevronDownIcon, FileUpIcon, PlusIcon, RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -22,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
@@ -66,7 +66,7 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
   const canWrite = role === "ADMIN" || role === "OPERATOR" || hasPermission(Permissions.OPERATION_DELETE)
 
   const kindsQuery = useChannelKinds()
-  const navigate = useNavigate()
+  const modals = useRecordModals()
   const [deleting, setDeleting] = useState<Endpoint | null>(null)
   const [importing, setImporting] = useState(false)
   const kinds = useMemo(() => kindsByName(kindsQuery.data?.channelKinds ?? []), [kindsQuery.data])
@@ -110,7 +110,7 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
             </Button>
             <NewEndpointButton
               kinds={[...kinds.values()]}
-              onPick={(kind) => navigate(`/endpoints/new?kind=${encodeURIComponent(kind)}`)}
+              onPick={(kind) => modals.open({ kind: "new-endpoint", channel: kind, from: null })}
             />
           </div>
         )}

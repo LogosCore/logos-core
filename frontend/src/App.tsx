@@ -1,5 +1,5 @@
 import { lazy, useEffect, useRef, type ComponentType } from "react"
-import { BrowserRouter, Navigate, Route, Routes } from "react-router"
+import { BrowserRouter, Navigate, Route, Routes, useParams, useSearchParams } from "react-router"
 import { QueryProvider } from "@/providers/query-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -10,6 +10,7 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { useAuthStore } from "@/stores/auth"
 import { useConnectivityStore } from "@/stores/connectivity"
 import { RecoveryRecheckGate } from "@/lib/recovery-recheck"
+import { searchOf, withRecordModal, type RecordModal } from "@/lib/record-modals"
 
 // Every page is its own chunk, fetched the first time it is visited, so the
 // first paint waits for the shell and one page rather than for all of them.
@@ -33,13 +34,26 @@ const WikiPrintPage = page(() => import("@/pages/wiki-print"), "WikiPrintPage")
 const FindingsPage = page(() => import("@/pages/findings"), "FindingsPage")
 const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
 const EndpointsPage = page(() => import("@/pages/endpoints"), "EndpointsPage")
-const NewEndpointPage = page(() => import("@/pages/endpoint-editor"), "NewEndpointPage")
-const EditEndpointPage = page(() => import("@/pages/endpoint-editor"), "EditEndpointPage")
 const BuildsPage = page(() => import("@/pages/builds"), "BuildsPage")
-const NewBuildPage = page(() => import("@/pages/build-editor"), "NewBuildPage")
-const BuildDetailPage = page(() => import("@/pages/build-detail"), "BuildDetailPage")
 const AgentsPage = page(() => import("@/pages/agents"), "AgentsPage")
 const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
+
+/**
+ * Where a build or an endpoint had its own page (/builds/:id,
+ * /builds/new?kind=&from=, the same for endpoints): the same record in its
+ * modal over the list.
+ */
+function RecordPageRedirect({ list }: { list: "builds" | "endpoints" }) {
+  const { id } = useParams()
+  const [query] = useSearchParams()
+  const kind = query.get("kind") ?? ""
+  const from = query.get("from")
+  const modal: RecordModal =
+    list === "builds"
+      ? id ? { kind: "build", id } : { kind: "new-build", factory: kind, from }
+      : id ? { kind: "endpoint", id } : { kind: "new-endpoint", channel: kind, from }
+  return <Navigate to={`/${list}${searchOf(withRecordModal(new URLSearchParams(), modal))}`} replace />
+}
 
 function App() {
   const checkAuth = useAuthStore((s) => s.checkAuth)
@@ -90,11 +104,13 @@ function App() {
               <Route path="findings" element={<FindingsPage />} />
               <Route path="tasks" element={<TasksPage />} />
               <Route path="endpoints" element={<EndpointsPage />} />
-              <Route path="endpoints/new" element={<NewEndpointPage />} />
-              <Route path="endpoints/:id" element={<EditEndpointPage />} />
               <Route path="builds" element={<BuildsPage />} />
-              <Route path="builds/new" element={<NewBuildPage />} />
-              <Route path="builds/:id" element={<BuildDetailPage />} />
+              {/* Builds and endpoints open in modals now (?build=<id>, …);
+                  their old pages, for anyone's bookmark. */}
+              <Route path="endpoints/new" element={<RecordPageRedirect list="endpoints" />} />
+              <Route path="endpoints/:id" element={<RecordPageRedirect list="endpoints" />} />
+              <Route path="builds/new" element={<RecordPageRedirect list="builds" />} />
+              <Route path="builds/:id" element={<RecordPageRedirect list="builds" />} />
               <Route path="timeline" element={<TimelinePage />} />
               {/* One route for both tabs: the page reads the tab off the
                   pathname, and a single element means switching tabs

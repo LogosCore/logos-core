@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { useNavigate } from "react-router"
 import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react"
 import { ContextMenuItem } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
@@ -8,6 +7,7 @@ import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { BuildFieldsFragment } from "@/graphql/gql/graphql"
 import { isUnfinished } from "@/graphql/hooks/builds"
 import { useNow } from "@/hooks/use-now"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { artifactUrl } from "@/lib/build-file-upload"
 import { ModuleIconCell } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
@@ -40,10 +40,10 @@ export function BuildsTable({
   canWrite: boolean
   emptyState: ReactNode
 }) {
-  const navigate = useNavigate()
+  const modals = useRecordModals()
   const now = useNow()
-  const open = (b: BuildFieldsFragment) => navigate(`/builds/${b.id}`)
-  const again = (b: BuildFieldsFragment) => navigate(`/builds/new?kind=${encodeURIComponent(b.moduleName)}&from=${b.id}`)
+  const open = (b: BuildFieldsFragment) => modals.open({ kind: "build", id: b.id })
+  const again = (b: BuildFieldsFragment) => modals.open({ kind: "new-build", factory: b.moduleName, from: b.id })
   const download = (b: BuildFieldsFragment) => {
     const a = document.createElement("a")
     a.href = artifactUrl(b.id)

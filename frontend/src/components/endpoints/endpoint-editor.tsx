@@ -1,17 +1,24 @@
-import { useMemo, useState } from "react"
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router"
-import { ArrowLeftIcon, RadioTowerIcon } from "lucide-react"
+import { useMemo, useRef, useState } from "react"
+import { useLocation } from "react-router"
+import { RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  RecordModalBody,
+  RecordModalHeader,
+  RecordModalMessage,
+  RecordModalTitle,
+  useCloseGuard,
+  useRequestClose,
+} from "@/components/ui/record-modal"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { SettingsNav } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
-import { usePageMetadata } from "@/hooks/use-page-metadata"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
@@ -23,7 +30,6 @@ import {
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
 import { KindName } from "@/components/modules/module-icon"
-import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
 import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
@@ -51,31 +57,30 @@ interface EditorSource {
 }
 
 /**
- * /endpoints/new?kind=http[&from=<id>] — a new endpoint in the scoped
- * operation; with from, a duplicate of that endpoint: its values and
- * description, and a free name with a -dup suffix. An import (Endpoints →
- * Import) arrives in the location's state instead.
+ * A new endpoint in the scoped operation (the endpoint modal,
+ * ?newEndpoint=<channel>); with from, a duplicate of that endpoint: its values
+ * and description, and a free name with a -dup suffix. An import (Endpoints
+ * → Import) arrives in the history entry's state instead.
  */
-export function NewEndpointPage() {
+export function NewEndpoint({ channel, from: fromId }: { channel: string; from: string | null }) {
   const scopedOperation = useScopedOperation()
-  const [params] = useSearchParams()
   const imported = endpointImportFrom(useLocation().state)
-  const fromId = params.get("from") ?? ""
   const kinds = useChannelKinds()
-  const fromQuery = useChannelEndpoint(fromId)
+  const fromQuery = useChannelEndpoint(fromId ?? "")
   const from = fromQuery.data?.channelEndpoint ?? null
-  const kindName = params.get("kind") ?? from?.moduleName ?? ""
+  const kindName = channel || (from?.moduleName ?? "")
   // A copy or an import starts with a name the operation does not use yet.
   const wanted = from ? from.name : (imported?.name ?? "")
   const freeName = useFreeChannelEndpointName(scopedOperation?.id ?? "", wanted, from ? "-dup" : "", wanted !== "")
 
-  usePageMetadata({ title: "New endpoint", icon: { kind: "lucide", component: RadioTowerIcon } })
-
-  if (!scopedOperation) return <GettingStartedPanel />
-  if (kinds.isLoading || (fromId && fromQuery.isLoading) || (wanted !== "" && freeName === null)) return <EditorSkeleton />
-  if (fromId && !from) return <NotFound text="The endpoint to duplicate does not exist." />
+  if (!scopedOperation) {
+    return <NotFound title="New endpoint" text="Endpoints belong to an operation: pick one first, in the sidebar." />
+  }
+  // Empty while loading, as the tables are.
+  if (kinds.isLoading || (fromId && fromQuery.isLoading) || (wanted !== "" && freeName === null)) return null
+  if (fromId && !from) return <NotFound title="New endpoint" text="The endpoint to duplicate does not exist." />
   const kind = kindsByName(kinds.data?.channelKinds ?? []).get(kindName)
-  if (!kind) return <NotFound text={`No channel kind "${kindName}" declares connection settings.`} />
+  if (!kind) return <NotFound title="New endpoint" text={`No channel kind "${kindName}" declares connection settings.`} />
   const source: EditorSource | null = from
     ? {
         label: (
@@ -98,47 +103,30 @@ export function NewEndpointPage() {
   return <EndpointEditor operationId={scopedOperation.id} kind={kind} endpoint={null} source={source} />
 }
 
-/** /endpoints/:id — edit an endpoint (read-only below operator). */
-export function EditEndpointPage() {
-  const { id = "" } = useParams<{ id: string }>()
+/** An endpoint (the endpoint modal, ?endpoint=<id>): its editor, read-only below operator. */
+export function EditEndpoint({ id }: { id: string }) {
   const endpointQuery = useChannelEndpoint(id)
   const kinds = useChannelKinds()
   const endpoint = endpointQuery.data?.channelEndpoint ?? null
 
-  usePageMetadata({
-    title: endpoint ? `${endpoint.name} · Endpoints` : "Endpoints",
-    icon: { kind: "lucide", component: RadioTowerIcon },
-  })
-
-  if (endpointQuery.isLoading || kinds.isLoading) return <EditorSkeleton />
-  if (endpointQuery.error) return <NotFound text={endpointQuery.error.message} />
-  if (!endpoint) return <NotFound text="This endpoint does not exist." />
+  // Empty while loading, as the tables are.
+  if (endpointQuery.isLoading || kinds.isLoading) return null
+  if (endpointQuery.error) return <NotFound title="Endpoint" text={endpointQuery.error.message} />
+  if (!endpoint) return <NotFound title="Endpoint" text="This endpoint does not exist." />
   const kind = kindsByName(kinds.data?.channelKinds ?? []).get(endpoint.moduleName)
   if (!kind) {
-    return <NotFound text={`No "${endpoint.moduleName}" channel declares connection settings any more, so this endpoint can't be edited.`} />
+    return (
+      <NotFound
+        title={endpoint.name}
+        text={`No "${endpoint.moduleName}" channel declares connection settings any more, so this endpoint can't be edited.`}
+      />
+    )
   }
   return <EndpointEditor operationId={endpoint.operationId} kind={kind} endpoint={endpoint} />
 }
 
-function EditorSkeleton() {
-  return (
-    <div className="flex flex-col gap-4 p-4">
-      <Skeleton className="h-8 w-80" />
-      <Skeleton className="h-96 w-full max-w-3xl" />
-    </div>
-  )
-}
-
-function NotFound({ text }: { text: string }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-      <RadioTowerIcon className="size-8 opacity-50" />
-      <p className="max-w-md text-sm">{text}</p>
-      <Link to="/endpoints" className="text-sm underline underline-offset-4">
-        Back to endpoints
-      </Link>
-    </div>
-  )
+function NotFound({ title, text }: { title: string; text: string }) {
+  return <RecordModalMessage icon={<RadioTowerIcon className="size-8 opacity-50" />} title={title} text={text} />
 }
 
 const GENERAL = "General"
@@ -167,7 +155,8 @@ function EndpointEditor({
   /** What a new endpoint starts from when it duplicates another. */
   source?: EditorSource | null
 }) {
-  const navigate = useNavigate()
+  const { close } = useRecordModals()
+  const requestClose = useRequestClose()
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const { data: roleData, isLoading: roleLoading } = useMyOperationRole(operationId)
   const role = roleData?.myOperationRole ?? null
@@ -182,6 +171,11 @@ function EndpointEditor({
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
     endpointDrafts(fields, endpoint ? ((endpoint.values ?? {}) as Record<string, unknown>) : (source?.values ?? null)),
   )
+  // Changed from how it opened: closing then asks before throwing it away.
+  const snapshot = JSON.stringify({ name, description, drafts })
+  const [initial] = useState(snapshot)
+  useCloseGuard(snapshot !== initial)
+  const body = useRef<HTMLDivElement>(null)
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -202,7 +196,10 @@ function EndpointEditor({
     ],
     [fields],
   )
-  const [active, goTo] = useActiveSection(sections.map((s) => s.id))
+  const [active, goTo] = useActiveSection(
+    sections.map((s) => s.id),
+    body,
+  )
 
   function setDraft(key: string, d: Draft) {
     setDrafts((prev) => ({ ...prev, [key]: d }))
@@ -227,7 +224,7 @@ function EndpointEditor({
         await create.mutateAsync({ operationId, moduleName: kind.name, input })
         toast.success("Endpoint created")
       }
-      navigate("/endpoints")
+      close()
     } catch (err) {
       if (graphqlErrorCode(err) === "CONFLICT") {
         setSaveError("Someone else changed this endpoint meanwhile. Reload the page to see their version.")
@@ -254,24 +251,16 @@ function EndpointEditor({
 
   return (
     <form
-      className="flex flex-1 flex-col"
+      className="flex min-h-0 flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault()
         save()
       }}
     >
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-3">
-        <Link
-          to="/endpoints"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeftIcon className="size-4" />
-          Endpoints
-        </Link>
-        <span className="h-5 w-px bg-border" aria-hidden />
+      <RecordModalHeader>
         {/* The title and the channel kind share a baseline. */}
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="text-lg font-semibold">{endpoint ? endpoint.name : "New endpoint"}</h1>
+          <RecordModalTitle>{endpoint ? endpoint.name : "New endpoint"}</RecordModalTitle>
           <span className="text-sm text-muted-foreground">
             <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
             {source && <> · {source.label}</>}
@@ -285,7 +274,7 @@ function EndpointEditor({
               {submitted && hasErrors && (
                 <span className="text-sm text-destructive">Fix the marked fields</span>
               )}
-              <Button type="button" variant="outline" onClick={() => navigate("/endpoints")} disabled={pending}>
+              <Button type="button" variant="outline" onClick={requestClose} disabled={pending}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>
@@ -294,8 +283,9 @@ function EndpointEditor({
             </>
           )}
         </div>
-      </header>
+      </RecordModalHeader>
 
+      <RecordModalBody ref={body}>
       <div className="flex gap-10 px-4 py-6">
         <SettingsNav
           sections={sections.map((s) => ({ id: s.id, title: s.title, state: sectionState(s) }))}
@@ -378,6 +368,7 @@ function EndpointEditor({
         </div>
         </div>
       </div>
+      </RecordModalBody>
     </form>
   )
 }

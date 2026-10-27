@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 /** A titled card of setting rows; id lets a section list scroll to it. */
 export function SettingsSection({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
   return (
-    <section id={id} className={id ? "scroll-mt-20" : undefined} aria-labelledby={id ? `${id}-title` : undefined}>
+    <section id={id} className={id ? "scroll-mt-6" : undefined} aria-labelledby={id ? `${id}-title` : undefined}>
       <h2 id={id ? `${id}-title` : undefined} className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </h2>

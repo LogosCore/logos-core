@@ -1,5 +1,4 @@
 import { useRef, useState } from "react"
-import { useNavigate } from "react-router"
 import { FileUpIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { ENDPOINT_EXPORT_FORMAT, parseEndpointImport, type EndpointImportState, type Kind } from "./endpoint-values"
 
 /**
@@ -38,7 +38,7 @@ export function ImportEndpointDialog({
 }
 
 function ImportBody({ kinds, onClose }: { kinds: ReadonlyMap<string, Kind>; onClose: () => void }) {
-  const navigate = useNavigate()
+  const modals = useRecordModals()
   const file = useRef<HTMLInputElement>(null)
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -52,7 +52,7 @@ function ImportBody({ kinds, onClose }: { kinds: ReadonlyMap<string, Kind>; onCl
     const { kind, name, values, notes } = r.value
     const state: EndpointImportState = { endpointImport: { name, values, notes } }
     onClose()
-    navigate(`/endpoints/new?kind=${encodeURIComponent(kind.name)}`, { state })
+    modals.open({ kind: "new-endpoint", channel: kind.name, from: null }, state)
   }
 
   return (

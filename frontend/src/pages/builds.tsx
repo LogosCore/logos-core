@@ -1,5 +1,4 @@
 import { useMemo } from "react"
-import { useNavigate } from "react-router"
 import { ChevronDownIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/ui/search-input"
@@ -11,12 +10,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useFactoryIcons, useFactoryKinds, useInfiniteBuilds } from "@/graphql/hooks/builds"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
 import { useBuildStore } from "@/stores/builds"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
-import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
 import { KindName } from "@/components/modules/module-icon"
 import { factoryKindsByName, STATE_LABEL, type FactoryKind } from "@/components/builds/build-values"
@@ -39,7 +39,7 @@ export function BuildsPage() {
 }
 
 function BuildsPageInner({ operationId }: { operationId: string }) {
-  const navigate = useNavigate()
+  const modals = useRecordModals()
   const { canWrite } = useCanBuild(operationId)
   const kindsQuery = useFactoryKinds()
   const kinds = useMemo(() => [...factoryKindsByName(kindsQuery.data?.factoryKinds ?? []).values()], [kindsQuery.data])
@@ -93,7 +93,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
         </Select>
         {canWrite && (
           <div className="ml-auto">
-            <NewBuildButton kinds={kinds} onPick={(k) => navigate(`${BUILDS_PATH}/new?kind=${encodeURIComponent(k)}`)} />
+            <NewBuildButton kinds={kinds} onPick={(k) => modals.open({ kind: "new-build", factory: k, from: null })} />
           </div>
         )}
       </div>

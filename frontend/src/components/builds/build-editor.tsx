@@ -1,6 +1,5 @@
-import { useMemo, useState, type ComponentProps } from "react"
-import { Link, useNavigate, useSearchParams } from "react-router"
-import { ArrowLeftIcon, HammerIcon, PlusIcon } from "lucide-react"
+import { useMemo, useRef, useState, type ComponentProps } from "react"
+import { HammerIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,17 +9,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  RecordModalBody,
+  RecordModalHeader,
+  RecordModalMessage,
+  RecordModalTitle,
+  useCloseGuard,
+  useRequestClose,
+} from "@/components/ui/record-modal"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
-import { usePageMetadata } from "@/hooks/use-page-metadata"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useBuild, useBuildFiles, useCreateBuild, useFactoryKinds, useInvalidateBuildFiles } from "@/graphql/hooks/builds"
 import { uploadBuildFile } from "@/lib/build-file-upload"
-import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
 import { kindsByName, problemsFromError } from "@/components/endpoints/endpoint-values"
@@ -49,24 +54,24 @@ import {
   type FactoryKind,
   type FormSource,
 } from "@/components/builds/build-values"
-import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { useCanBuild } from "@/components/builds/build-access"
 import { KindName } from "@/components/modules/module-icon"
 
 /**
- * /builds/new?kind=bob[&from=<build id>] — a build in the scoped operation;
+ * A new build in the scoped operation (the build modal, ?newBuild=<factory>);
  * with from, filled in from that earlier build ("Build again").
  */
-export function NewBuildPage() {
+export function BuildEditor({ factory, from: fromId }: { factory: string; from: string | null }) {
   const scopedOperation = useScopedOperation()
-  const [params] = useSearchParams()
-  const fromQuery = useBuild(params.get("from") ?? "")
-  usePageMetadata({ title: "New build", icon: { kind: "lucide", component: HammerIcon } })
+  const fromQuery = useBuild(fromId ?? "")
 
-  if (!scopedOperation) return <GettingStartedPanel />
-  if (fromQuery.isLoading) return <EditorSkeleton />
+  if (!scopedOperation) {
+    return <NotFound text="Builds belong to an operation: pick one first, in the sidebar." />
+  }
+  // Empty while loading, as the tables are.
+  if (fromQuery.isLoading) return null
   const from = fromQuery.data?.build ?? null
-  const kindName = params.get("kind") ?? from?.moduleName ?? ""
-  return <EditorLoader operationId={scopedOperation.id} kindName={kindName} from={from} />
+  return <EditorLoader operationId={scopedOperation.id} kindName={factory} from={from} />
 }
 
 /** Loads what the form needs: the factory kind, the channels, the files. */
@@ -84,9 +89,7 @@ function EditorLoader({
   const channelKinds = useChannelKinds()
   const filesQuery = useBuildFiles(operationId)
 
-  if (kinds.isLoading || channelKinds.isLoading || filesQuery.isLoading) {
-    return <EditorSkeleton />
-  }
+  if (kinds.isLoading || channelKinds.isLoading || filesQuery.isLoading) return null
   const kind = factoryKindsByName(kinds.data?.factoryKinds ?? []).get(kindName)
   if (!kind) return <NotFound text={`No "${kindName}" factory declares what it builds.`} />
   const channels = kindsByName(channelKinds.data?.channelKinds ?? [])
@@ -102,25 +105,8 @@ function EditorLoader({
   )
 }
 
-function EditorSkeleton() {
-  return (
-    <div className="flex flex-col gap-4 p-4">
-      <Skeleton className="h-8 w-80" />
-      <Skeleton className="h-96 w-full max-w-3xl" />
-    </div>
-  )
-}
-
 function NotFound({ text }: { text: string }) {
-  return (
-    <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-      <HammerIcon className="size-8 opacity-50" />
-      <p className="max-w-md text-sm">{text}</p>
-      <Link to={BUILDS_PATH} className="text-sm underline underline-offset-4">
-        Back to builds
-      </Link>
-    </div>
-  )
+  return <RecordModalMessage icon={<HammerIcon className="size-8 opacity-50" />} title="New build" text={text} />
 }
 
 function Editor({
@@ -136,12 +122,17 @@ function Editor({
   channels: ReadonlyMap<string, ChannelKind>
   files: BuildFilesContextValue["files"]
 }) {
-  const navigate = useNavigate()
+  const { open } = useRecordModals()
+  const requestClose = useRequestClose()
   const { canWrite, loading: roleLoading } = useCanBuild(operationId)
   const readOnly = !roleLoading && !canWrite
   const channelIcons = useChannelIcons()
 
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
+  // Changed from how it opened: closing then asks before throwing it away.
+  const [initial] = useState(() => JSON.stringify(form))
+  useCloseGuard(JSON.stringify(form) !== initial)
+  const body = useRef<HTMLDivElement>(null)
   // The endpoint picker: adding a connection, or filling the one keyed fill.
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
   // Saving the connection keyed key as an endpoint.
@@ -234,7 +225,7 @@ function Editor({
         },
       })
       toast.success("Build queued")
-      navigate(`${BUILDS_PATH}/${res.createBuild.id}`)
+      open({ kind: "build", id: res.createBuild.id })
     } catch (err) {
       const problems = problemsFromError(err)
       setServerErrors(problems)
@@ -303,26 +294,24 @@ function Editor({
           : null,
     },
   ]
-  const [active, goTo] = useActiveSection(navSections.map((s) => s.id))
+  const [active, goTo] = useActiveSection(
+    navSections.map((s) => s.id),
+    body,
+  )
 
   return (
     <BuildFilesContext.Provider value={filesCtx}>
       <form
-        className="flex flex-1 flex-col"
+        className="flex min-h-0 flex-1 flex-col"
         onSubmit={(e) => {
           e.preventDefault()
           void submit()
         }}
       >
-        <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-3">
-          <Link to={BUILDS_PATH} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-            <ArrowLeftIcon className="size-4" />
-            Builds
-          </Link>
-          <span className="h-5 w-px bg-border" aria-hidden />
+        <RecordModalHeader>
           {/* The title and what it builds with share a baseline. */}
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="text-lg font-semibold">New build</h1>
+            <RecordModalTitle>New build</RecordModalTitle>
             <span className="text-sm text-muted-foreground">
               <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version} · {kind.instances}{" "}
               running
@@ -334,7 +323,7 @@ function Editor({
             ) : (
               <>
                 {submitted && hasErrors && <span className="text-sm text-destructive">Fix the marked fields</span>}
-                <Button type="button" variant="outline" onClick={() => navigate(BUILDS_PATH)} disabled={pending}>
+                <Button type="button" variant="outline" onClick={requestClose} disabled={pending}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={pending}>
@@ -343,8 +332,9 @@ function Editor({
               </>
             )}
           </div>
-        </header>
+        </RecordModalHeader>
 
+        <RecordModalBody ref={body}>
         <div className="flex gap-10 px-4 py-6">
         <SettingsNav sections={navSections} active={active} onPick={goTo} />
         <div className="@container/settings min-w-0 flex-1">
@@ -430,7 +420,7 @@ function Editor({
             </SettingsSection>
           ))}
 
-          <section id={sectionId(CONNECTIONS)} className="scroll-mt-20" aria-labelledby={`${sectionId(CONNECTIONS)}-title`}>
+          <section id={sectionId(CONNECTIONS)} className="scroll-mt-6" aria-labelledby={`${sectionId(CONNECTIONS)}-title`}>
             <h2 id={`${sectionId(CONNECTIONS)}-title`} className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {CONNECTIONS}
             </h2>
@@ -505,6 +495,7 @@ function Editor({
         </div>
         </div>
         </div>
+        </RecordModalBody>
       </form>
     </BuildFilesContext.Provider>
   )

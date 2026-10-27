@@ -1,7 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate, useParams } from "react-router"
 import {
-  ArrowLeftIcon,
   CopyIcon,
   DownloadIcon,
   HammerIcon,
@@ -21,20 +19,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  RecordModalBody,
+  RecordModalHeader,
+  RecordModalMessage,
+  RecordModalTitle,
+} from "@/components/ui/record-modal"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatBytes } from "@/lib/format-bytes"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { artifactUrl } from "@/lib/build-file-upload"
 import { useNow } from "@/hooks/use-now"
-import { usePageMetadata } from "@/hooks/use-page-metadata"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import type { BuildQuery } from "@/graphql/gql/graphql"
 import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact, useFactoryIcons } from "@/graphql/hooks/builds"
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { formatElapsed, prettyJson } from "@/components/modules/management/field-values"
-import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { useCanBuild } from "@/components/builds/build-access"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { buildConnectionRows, buildElapsed, platformLabel } from "@/components/builds/build-values"
 import { BuildPipeline } from "@/components/builds/build-pipeline"
@@ -42,41 +45,27 @@ import { KindName } from "@/components/modules/module-icon"
 
 type Build = NonNullable<BuildQuery["build"]>
 
-/** /builds/:id — one build: its state while it runs, then its outcome. */
-export function BuildDetailPage() {
-  const { id = "" } = useParams<{ id: string }>()
+/** One build (the build modal, ?build=<id>): its state while it runs, then its outcome. */
+export function BuildDetails({ id }: { id: string }) {
   const { data, isLoading, error } = useBuild(id)
   const build = data?.build ?? null
 
-  usePageMetadata({
-    title: build ? `${build.moduleName} · ${build.target} · Builds` : "Builds",
-    icon: { kind: "lucide", component: HammerIcon },
-  })
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-8 w-80" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    )
-  }
+  // Empty while loading, as the tables are.
+  if (isLoading) return null
   if (error || !build) {
     return (
-      <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
-        <HammerIcon className="size-8 opacity-50" />
-        <p className="max-w-md text-sm">{error ? error.message : "This build does not exist."}</p>
-        <Link to={BUILDS_PATH} className="text-sm underline underline-offset-4">
-          Back to builds
-        </Link>
-      </div>
+      <RecordModalMessage
+        icon={<HammerIcon className="size-8 opacity-50" />}
+        title="Build"
+        text={error ? error.message : "This build does not exist."}
+      />
     )
   }
   return <BuildDetail build={build} />
 }
 
 function BuildDetail({ build: b }: { build: Build }) {
-  const navigate = useNavigate()
+  const { open } = useRecordModals()
   const now = useNow()
   const icons = useFactoryIcons()
   const channelIcons = useChannelIcons()
@@ -98,16 +87,11 @@ function BuildDetail({ build: b }: { build: Build }) {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-3">
-        <Link to={BUILDS_PATH} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeftIcon className="size-4" />
-          Builds
-        </Link>
-        <span className="h-5 w-px bg-border" aria-hidden />
-        <h1 className="text-lg font-semibold">
+    <>
+      <RecordModalHeader>
+        <RecordModalTitle>
           <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} /> · {b.target}
-        </h1>
+        </RecordModalTitle>
         <BuildStateBadge build={b} />
         <div className="flex items-center gap-2 sm:ml-auto">
           {canWrite && running && (
@@ -117,7 +101,7 @@ function BuildDetail({ build: b }: { build: Build }) {
             </Button>
           )}
           {canWrite && !running && (
-            <Button variant="outline" onClick={() => navigate(`/builds/new?kind=${encodeURIComponent(b.moduleName)}&from=${b.id}`)}>
+            <Button variant="outline" onClick={() => open({ kind: "new-build", factory: b.moduleName, from: b.id })}>
               <RotateCcwIcon />
               Build again
             </Button>
@@ -129,9 +113,10 @@ function BuildDetail({ build: b }: { build: Build }) {
             </Button>
           )}
         </div>
-      </header>
+      </RecordModalHeader>
 
-      {/* The page's full width: a long pipeline fits on one line instead of scrolling. */}
+      <RecordModalBody>
+      {/* The modal's full width: a long pipeline fits on one line instead of scrolling. */}
       <div className="flex min-w-0 flex-col gap-6 px-4 py-6">
         {b.error && (
           <div className="flex items-start gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
@@ -282,9 +267,10 @@ function BuildDetail({ build: b }: { build: Build }) {
           </div>
         </Section>
       </div>
+      </RecordModalBody>
 
       <DeleteArtifactDialog build={deleting ? b : null} onClose={() => setDeleting(false)} />
-    </div>
+    </>
   )
 }
 

@@ -1,21 +1,25 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 
 /** The id of a form section, from its title: "Dummy builds" → "section-dummy-builds". */
 export function sectionId(title: string): string {
   return `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
 }
 
-/** How far below the viewport top a section's heading counts as reached. */
+/** How far below the scroll area's top a section's heading counts as reached. */
 const SPY_OFFSET = 120
 
 /**
  * The section the reader is in, and a way to go to one. Reading position: the
  * last section whose top has scrolled above SPY_OFFSET, or the last section
- * once the page is scrolled to its end (short last sections never reach the
- * top). A section picked from the list stays highlighted until the reader
- * scrolls themselves: near the end of the page it may not move at all.
+ * once the scroll area is scrolled to its end (short last sections never
+ * reach the top). A section picked from the list stays highlighted until the
+ * reader scrolls themselves: near the end it may not move at all. root is the
+ * scroll area (a modal's body); without it, the viewport.
  */
-export function useActiveSection(ids: string[]): [string | null, (id: string) => void] {
+export function useActiveSection(
+  ids: string[],
+  root?: RefObject<HTMLElement | null>,
+): [string | null, (id: string) => void] {
   const [active, setActive] = useState<string | null>(ids[0] ?? null)
   const idsRef = useRef(ids)
   const pickedRef = useRef(false)
@@ -30,15 +34,16 @@ export function useActiveSection(ids: string[]): [string | null, (id: string) =>
         .map((id) => document.getElementById(id))
         .filter((el): el is HTMLElement => el !== null)
       if (els.length === 0) return
+      const area = root?.current?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight }
       const last = els[els.length - 1]
       // At the end: the last section has fully come into view.
-      if (last.getBoundingClientRect().bottom <= window.innerHeight + 1) {
+      if (last.getBoundingClientRect().bottom <= area.bottom + 1) {
         setActive(last.id)
         return
       }
       let current = els[0].id
       for (const el of els) {
-        if (el.getBoundingClientRect().top <= SPY_OFFSET) current = el.id
+        if (el.getBoundingClientRect().top - area.top <= SPY_OFFSET) current = el.id
       }
       setActive(current)
     }
@@ -60,7 +65,7 @@ export function useActiveSection(ids: string[]): [string | null, (id: string) =>
         window.removeEventListener(ev, release)
       }
     }
-  }, [])
+  }, [root])
 
   const goTo = (id: string) => {
     pickedRef.current = true

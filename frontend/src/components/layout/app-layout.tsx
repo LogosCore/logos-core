@@ -1,5 +1,6 @@
 import { Outlet } from "react-router"
 import { PageBoundary } from "@/components/page-boundary"
+import { RecordModals } from "@/components/layout/record-modals"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import {
   SidebarInset,
@@ -124,6 +125,8 @@ export function AppLayout() {
           {/* Inside the shell, so the sidebar stays while a page loads. */}
           <PageBoundary>
             <Outlet />
+            {/* The build and endpoint modals, over any page (?build=<id>, …). */}
+            <RecordModals />
           </PageBoundary>
           {/* Floated over the page rather than placed in it: every surface
               should show what the agent is doing, and no page owns the

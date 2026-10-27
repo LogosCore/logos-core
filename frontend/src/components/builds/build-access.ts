@@ -2,8 +2,6 @@ import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
 
-export const BUILDS_PATH = "/builds"
-
 /**
  * Whether the caller may build in the operation, and change its build files:
  * its operators and admins, and app admins (the server allows them in any

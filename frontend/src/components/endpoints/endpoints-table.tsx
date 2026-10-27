@@ -1,5 +1,4 @@
 import type { ReactNode } from "react"
-import { useNavigate } from "react-router"
 import { CopyIcon, CopyPlusIcon, DownloadIcon, PencilIcon, Trash2Icon } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +8,7 @@ import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
 import { fetchChannelEndpointExport } from "@/graphql/hooks/channel-endpoints"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { ModuleIconCell } from "@/components/modules/module-icon"
 import { exportFileName, settingRows, type Kind } from "./endpoint-values"
@@ -47,8 +47,8 @@ export function EndpointsTable({
   emptyState: ReactNode
   onDelete: (endpoint: Endpoint) => void
 }) {
-  const navigate = useNavigate()
-  const open = (ep: Endpoint) => navigate(`/endpoints/${ep.id}`)
+  const modals = useRecordModals()
+  const open = (ep: Endpoint) => modals.open({ kind: "endpoint", id: ep.id })
 
   return (
     <VirtualizedDataTable
@@ -77,7 +77,7 @@ export function EndpointsTable({
           menuLabel="Endpoint actions"
           menu={endpointMenu(ep, canWrite, {
             edit: () => open(ep),
-            duplicate: () => navigate(`/endpoints/new?kind=${encodeURIComponent(ep.moduleName)}&from=${ep.id}`),
+            duplicate: () => modals.open({ kind: "new-endpoint", channel: ep.moduleName, from: ep.id }),
             remove: () => onDelete(ep),
           })}
         >

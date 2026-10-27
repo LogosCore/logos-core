@@ -24,7 +24,7 @@ export function SettingsNav({
   onPick: (id: string) => void
 }) {
   return (
-    <nav className="sticky top-20 hidden w-40 shrink-0 self-start md:block" aria-label="Sections">
+    <nav className="sticky top-6 hidden w-40 shrink-0 self-start md:block" aria-label="Sections">
       <ul className="flex flex-col gap-0.5">
         {sections.map((s) => (
           <li key={s.id}>
