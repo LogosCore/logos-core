@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import {
   FactoryKindsDocument,
@@ -18,6 +18,7 @@ export const buildKeys = {
   kinds: () => [...buildKeys.all, "kinds"] as const,
   files: (operationId: string) => [...buildKeys.all, "files", operationId] as const,
   list: (operationId: string) => [...buildKeys.all, "list", operationId] as const,
+  infiniteList: (params: BuildListParams) => [...buildKeys.list(params.operationId), params] as const,
   detail: (id: string) => [...buildKeys.all, "detail", id] as const,
 }
 
@@ -67,16 +68,29 @@ export function useDeleteBuildFile() {
   })
 }
 
-/** An operation's builds, newest first; refreshed while any is unfinished. */
-export function useBuilds(operationId: string, search = "") {
-  return useQuery({
-    queryKey: [...buildKeys.list(operationId), search],
-    queryFn: () => graphqlClient(BuildsDocument, { operationId, limit: 100, search: search || null }),
-    // The last results stay while the next search loads.
-    placeholderData: keepPreviousData,
-    enabled: operationId !== "",
+/** What the Builds page lists: the server searches and filters. */
+export interface BuildListParams {
+  operationId: string
+  search: string | null
+  states: string[] | null
+  moduleNames: string[] | null
+}
+
+/**
+ * An operation's builds, newest first, a page at a time as the table scrolls.
+ * The loaded pages refresh while any of their builds is unfinished.
+ */
+export function useInfiniteBuilds(params: BuildListParams) {
+  return useInfiniteQuery({
+    queryKey: buildKeys.infiniteList(params),
+    queryFn: ({ pageParam }) =>
+      graphqlClient(BuildsDocument, { ...params, first: 20, after: pageParam }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.builds.pageInfo.hasNextPage ? (lastPage.builds.pageInfo.endCursor ?? undefined) : undefined,
+    enabled: params.operationId !== "",
     refetchInterval: (query) =>
-      query.state.data?.builds.some((b) => isUnfinished(b.state)) ? LIVE_LIST_MS : false,
+      query.state.data?.pages.some((p) => p.builds.edges.some((e) => isUnfinished(e.node.state))) ? LIVE_LIST_MS : false,
   })
 }
 

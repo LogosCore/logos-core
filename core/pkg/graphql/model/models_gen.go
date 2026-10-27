@@ -100,12 +100,23 @@ type BuildChannelVersions struct {
 	Versions   []int  `json:"versions"`
 }
 
+type BuildConnection struct {
+	Edges      []*BuildEdge         `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+}
+
 type BuildConnectionInput struct {
 	ModuleName  string  `json:"moduleName"`
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Settings    any     `json:"settings,omitempty"`
 	Values      any     `json:"values,omitempty"`
+}
+
+type BuildEdge struct {
+	Node   *Build `json:"node"`
+	Cursor string `json:"cursor"`
 }
 
 type BuildError struct {

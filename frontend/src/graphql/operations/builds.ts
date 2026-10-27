@@ -116,9 +116,33 @@ export const DeleteBuildFileMutation = graphql(`
 `)
 
 export const BuildsQuery = graphql(`
-  query Builds($operationId: ID!, $limit: Int, $search: String) {
-    builds(operationId: $operationId, limit: $limit, search: $search) {
-      ...BuildFields
+  query Builds(
+    $operationId: ID!
+    $search: String
+    $states: [String!]
+    $moduleNames: [String!]
+    $first: Int
+    $after: String
+  ) {
+    builds(
+      operationId: $operationId
+      search: $search
+      states: $states
+      moduleNames: $moduleNames
+      first: $first
+      after: $after
+    ) {
+      edges {
+        node {
+          ...BuildFields
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
     }
   }
 `)

@@ -2,12 +2,15 @@ package repository
 
 import (
 	"context"
-	"fmt"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-golang-protocol/protocol"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // TestIntegrationBuildStepReports pins how a build's plan and step reports
@@ -78,9 +81,12 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	}
 }
 
-// TestIntegrationBuildsWithoutLogs pins what a build search reads: every
-// build of the operation, newest first, without the logs (up to 64 KiB each).
-func TestIntegrationBuildsWithoutLogs(t *testing.T) {
+// TestIntegrationBuildsList pins the Builds page's query: newest first, a
+// page at a time; the app's search over the build's fields, its plan, its
+// connections' notes and its search text (minion id, values, connection
+// settings), but not the keys of those; state and factory filters; and the
+// backfill that gives older builds their search text.
+func TestIntegrationBuildsList(t *testing.T) {
 	db := integrationDB(t)
 	ctx := context.Background()
 	repo := NewBuildRepository(db)
@@ -88,23 +94,98 @@ func TestIntegrationBuildsWithoutLogs(t *testing.T) {
 		t.Fatalf("index setup: %v", err)
 	}
 	op, now := uuid.New(), time.Now().UTC().Truncate(time.Millisecond)
-	for i := range 3 {
-		b := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "bob", Description: fmt.Sprint("build ", i),
-			State: models.BuildStateFailed, Log: "a long log", CreatedAt: now.Add(time.Duration(i) * time.Minute)}
+	conn := func(baseURL string) models.BuildConnections {
+		return models.BuildConnections{Items: []protocol.BuildConnection{{
+			Endpoint: protocol.ChannelEndpointExport{Format: protocol.ChannelEndpointExportV1, Name: "edge",
+				Channel: protocol.ExportChannel{ModuleName: "http", SchemaVersion: 2}, Params: map[string]any{"base_url": baseURL}},
+			Values: map[string]any{"path_prefix": "/cdn/"},
+		}}}
+	}
+	eu := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "bob", Target: "dummy", Platform: "any/any",
+		Description: "Dry run for the EU front", State: models.BuildStateFailed, Instance: "bob-local",
+		Values: models.JSONMap{"greeting": "hello", "punches": []any{"jab", "hook"}}, Connections: conn("https://edge-eu.example.com"),
+		ConnectionDescriptions: []string{"EU CDN front"}, Plan: []models.BuildPlanStep{{ID: "punches", Label: "Take punches"}},
+		Error: &models.BuildError{Code: "knocked_out", Message: "BOB is set to fail"}, CreatedAt: now}
+	us := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "bob", Target: "dummy2", Platform: "windows/amd64",
+		Description: "Second wave", State: models.BuildStateSucceeded, Connections: conn("https://cdn.other.net"),
+		Artifact: &models.BuildArtifact{Filename: "minion.exe"}, CreatedAt: now.Add(time.Minute)}
+	tank := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "tank", Target: "dummy", Platform: "linux/amd64",
+		Description: "Third", State: models.BuildStateQueued, Connections: conn("https://tank.example.org"), CreatedAt: now.Add(2 * time.Minute)}
+	elsewhere := &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob", Description: "Dry run elsewhere", CreatedAt: now}
+	for _, b := range []*models.Build{eu, us, tank, elsewhere} {
 		if err := repo.Insert(ctx, b); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := repo.Insert(ctx, &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), CreatedAt: now}); err != nil {
+
+	list := func(f BuildFilter) []string {
+		t.Helper()
+		bs, err := repo.FindByOperationIDWithCursor(ctx, op, f, nil, 10, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err := repo.CountByOperationID(ctx, op, f)
+		if err != nil || n != int64(len(bs)) {
+			t.Fatalf("count %d %v, listed %d", n, err, len(bs))
+		}
+		out := make([]string, len(bs))
+		for i, b := range bs {
+			out[i] = b.Description
+		}
+		return out
+	}
+	for name, c := range map[string]struct {
+		filter BuildFilter
+		want   []string
+	}{
+		"all, newest first":        {BuildFilter{}, []string{"Third", "Second wave", "Dry run for the EU front"}},
+		"description, case aside":  {BuildFilter{Search: "dry RUN"}, []string{"Dry run for the EU front"}},
+		"a connection's setting":   {BuildFilter{Search: "edge-eu.example.com"}, []string{"Dry run for the EU front"}},
+		"a value in a list":        {BuildFilter{Search: "hook"}, []string{"Dry run for the EU front"}},
+		"a connection's note":      {BuildFilter{Search: "cdn front"}, []string{"Dry run for the EU front"}},
+		"a plan step":              {BuildFilter{Search: "take punches"}, []string{"Dry run for the EU front"}},
+		"the error":                {BuildFilter{Search: "knocked_out"}, []string{"Dry run for the EU front"}},
+		"the artifact":             {BuildFilter{Search: "minion.exe"}, []string{"Second wave"}},
+		"the factory instance":     {BuildFilter{Search: "bob-local"}, []string{"Dry run for the EU front"}},
+		"the platform":             {BuildFilter{Search: "windows"}, []string{"Second wave"}},
+		"the minion id":            {BuildFilter{Search: us.MinionID.String()[:13]}, []string{"Second wave"}},
+		"a setting's key: nothing": {BuildFilter{Search: "base_url"}, []string{}},
+		"a quoted whole word":      {BuildFilter{Search: `"dummy"`}, []string{"Third", "Dry run for the EU front"}},
+		"by state":                 {BuildFilter{States: []string{models.BuildStateFailed, models.BuildStateQueued}}, []string{"Third", "Dry run for the EU front"}},
+		"by factory":               {BuildFilter{ModuleNames: []string{"bob"}}, []string{"Second wave", "Dry run for the EU front"}},
+		"search and filters":       {BuildFilter{Search: "example", ModuleNames: []string{"bob"}}, []string{"Dry run for the EU front"}},
+	} {
+		if got := list(c.filter); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
+	}
+
+	// A page at a time: the next page starts past the last build's cursor.
+	page, err := repo.FindByOperationIDWithCursor(ctx, op, BuildFilter{}, nil, 2, true)
+	if err != nil || len(page) != 2 {
+		t.Fatalf("first page %d: %v", len(page), err)
+	}
+	cur, err := pagination.DecodeCursor(BuildCursor(&page[1]))
+	if err != nil {
 		t.Fatal(err)
 	}
-	bs, err := repo.ListWithoutLogs(ctx, op)
-	if err != nil || len(bs) != 3 {
-		t.Fatalf("%d builds: %v", len(bs), err)
+	next, err := repo.FindByOperationIDWithCursor(ctx, op, BuildFilter{}, &cur, 2, true)
+	if err != nil || len(next) != 1 || next[0].MinionID != eu.MinionID {
+		t.Fatalf("next page %+v: %v", next, err)
 	}
-	for i, b := range bs {
-		if b.Log != "" || b.Description != fmt.Sprint("build ", 2-i) {
-			t.Errorf("build %d: log %q, description %q", i, b.Log, b.Description)
-		}
+
+	// A build stored before builds had a search text is given one.
+	raw := db.Collection(buildCollection)
+	if err := raw.UpdateOne(ctx, bson.M{"minion_id": tank.MinionID}, bson.M{"$unset": bson.M{"search_text": ""}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := list(BuildFilter{Search: "tank.example.org"}); len(got) != 0 {
+		t.Fatalf("found without a search text: %q", got)
+	}
+	if n, err := repo.BackfillSearchText(ctx); n != 1 || err != nil {
+		t.Fatalf("backfill: %d %v", n, err)
+	}
+	if got := list(BuildFilter{Search: "tank.example.org"}); !slices.Equal(got, []string{"Third"}) {
+		t.Fatalf("after the backfill: %q", got)
 	}
 }

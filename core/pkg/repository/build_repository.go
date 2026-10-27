@@ -3,11 +3,14 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
@@ -117,9 +120,13 @@ type IBuildRepository interface {
 	// List returns an operation's builds, newest first, at most limit (0:
 	// all).
 	List(ctx context.Context, operationID uuid.UUID, limit int64) ([]models.Build, error)
-	// ListWithoutLogs returns all of an operation's builds, newest first,
-	// without their logs: what a search reads.
-	ListWithoutLogs(ctx context.Context, operationID uuid.UUID) ([]models.Build, error)
+	// FindByOperationIDWithCursor returns a page of an operation's builds,
+	// newest first: those filter lets through, past cursor, at most limit.
+	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, filter BuildFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Build, error)
+	// CountByOperationID counts an operation's builds filter lets through.
+	CountByOperationID(ctx context.Context, operationID uuid.UUID, filter BuildFilter) (int64, error)
+	// BackfillSearchText gives the builds stored without a search text one.
+	BackfillSearchText(ctx context.Context) (int64, error)
 	// ListUnfinished returns every queued or building build: the
 	// scheduler's input.
 	ListUnfinished(ctx context.Context) ([]models.Build, error)
@@ -162,7 +169,8 @@ type buildRepository struct{ coll database.Collection }
 func NewBuildRepository(db database.Database) IBuildRepository {
 	db.EnsureIndexes(context.Background(), buildCollection, []opts.IndexModel{
 		{Key: []string{"minion_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
-		{Key: []string{"operation_id", "-created_at"}},
+		// -_id matches the list's tiebreak, so the index serves the sort.
+		{Key: []string{"operation_id", "-created_at", "-_id"}},
 		{Key: []string{"state", "created_at"}},
 		{Key: []string{"file_ids"}},
 	})
@@ -172,6 +180,7 @@ func NewBuildRepository(db database.Database) IBuildRepository {
 var unfinishedStates = []string{models.BuildStateQueued, models.BuildStateBuilding}
 
 func (r *buildRepository) Insert(ctx context.Context, b *models.Build) error {
+	b.SearchText = models.BuildSearchText(b)
 	_, err := r.coll.InsertOne(ctx, b)
 	return err
 }
@@ -193,16 +202,90 @@ func (r *buildRepository) List(ctx context.Context, operationID uuid.UUID, limit
 	return out, q.All(&out)
 }
 
-func (r *buildRepository) ListWithoutLogs(ctx context.Context, operationID uuid.UUID) ([]models.Build, error) {
-	out := []models.Build{}
-	err := r.coll.Find(ctx, bson.M{"operation_id": operationID}).Select(bson.M{"log": 0}).Sort("-created_at").All(&out)
-	return out, err
-}
-
 func (r *buildRepository) ListUnfinished(ctx context.Context) ([]models.Build, error) {
 	out := []models.Build{}
 	err := r.coll.Find(ctx, bson.M{"state": bson.M{"$in": unfinishedStates}}).Sort("created_at").All(&out)
 	return out, err
+}
+
+// BuildFilter narrows an operation's builds list. Search is the app's
+// search (searchPattern) over what the Builds page shows of a build (factory,
+// target, description, platform, state, factory instance, who started it, its
+// plan's steps), its error and artifact name, the operators' notes on its
+// connections, and its search text: its minion id, values and connections
+// (models.BuildSearchText).
+type BuildFilter struct {
+	Search      string
+	States      []string
+	ModuleNames []string
+}
+
+// buildListSort orders the builds list: newest first.
+var buildListSort = pagination.SortKey{Field: "created_at"}
+
+// BuildCursor is a build's position in the builds list.
+func BuildCursor(b *models.Build) string { return pagination.EncodeCursor(b.CreatedAt, b.Id) }
+
+func buildListFilter(operationID uuid.UUID, f BuildFilter) bson.M {
+	q := bson.M{"operation_id": operationID}
+	if len(f.States) > 0 {
+		q["state"] = bson.M{"$in": f.States}
+	}
+	if len(f.ModuleNames) > 0 {
+		q["module_name"] = bson.M{"$in": f.ModuleNames}
+	}
+	if f.Search != "" {
+		rx := bson.M{"$regex": searchPattern(f.Search), "$options": "i"}
+		or := bson.A{}
+		for _, field := range []string{
+			"description", "module_name", "target", "platform", "state", "instance", "created_by.name",
+			"plan.label", "error.code", "error.message", "artifact.filename", "connection_descriptions", "search_text",
+		} {
+			or = append(or, bson.M{field: rx})
+		}
+		q["$or"] = or
+	}
+	return q
+}
+
+func (r *buildRepository) FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, filter BuildFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Build, error) {
+	if err := buildListSort.ValidateCursor(cursor); err != nil {
+		return nil, err
+	}
+	out := []models.Build{}
+	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(buildListFilter(operationID, filter), cursor, forward, buildListSort)).
+		Sort(pagination.SortFieldsKey(forward, buildListSort)...).
+		Limit(limit).
+		All(&out)
+	if !forward {
+		slices.Reverse(out)
+	}
+	return out, err
+}
+
+func (r *buildRepository) CountByOperationID(ctx context.Context, operationID uuid.UUID, filter BuildFilter) (int64, error) {
+	return r.coll.Count(ctx, buildListFilter(operationID, filter))
+}
+
+// BackfillSearchText gives the builds stored before builds had a search text
+// one. Idempotent: it only reads builds without one.
+func (r *buildRepository) BackfillSearchText(ctx context.Context) (int64, error) {
+	var bs []models.Build
+	if err := r.coll.Find(ctx, bson.M{"search_text": bson.M{"$exists": false}}).All(&bs); err != nil {
+		return 0, fmt.Errorf("find builds without a search text: %w", err)
+	}
+	var n int64
+	for i := range bs {
+		ok, err := matched(r.coll.UpdateOne(ctx, bson.M{"_id": bs[i].Id, "search_text": bson.M{"$exists": false}},
+			bson.M{"$set": bson.M{"search_text": models.BuildSearchText(&bs[i])}}))
+		if err != nil {
+			return n, fmt.Errorf("give build %s its search text: %w", bs[i].MinionID, err)
+		}
+		if ok {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // claimFilter matches a queued build no live claim holds.

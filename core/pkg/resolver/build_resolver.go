@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -13,6 +14,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -30,7 +32,8 @@ type BuildManager interface {
 	Files(ctx context.Context, op uuid.UUID) ([]models.BuildFile, error)
 	File(ctx context.Context, id string) (*models.BuildFile, error)
 	DeleteFile(ctx context.Context, id string) error
-	Builds(ctx context.Context, op uuid.UUID, limit int64, search string) ([]models.Build, error)
+	Builds(ctx context.Context, op uuid.UUID, filter repository.BuildFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Build, error)
+	CountBuilds(ctx context.Context, op uuid.UUID, filter repository.BuildFilter) (int64, error)
 	Build(ctx context.Context, id string) (*models.Build, error)
 	CreateBuild(ctx context.Context, op uuid.UUID, in builds.BuildInput) (*models.Build, error)
 	CancelBuild(ctx context.Context, id string, actor models.ModuleActor) (*models.Build, error)
@@ -44,19 +47,13 @@ type IBuildResolver interface {
 	FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error)
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
 	DeleteBuildFile(ctx context.Context, id string) (bool, error)
-	Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error)
+	Builds(ctx context.Context, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.BuildConnection, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 }
-
-// Default and largest number of builds one builds query returns.
-const (
-	defaultBuildsLimit = 50
-	maxBuildsLimit     = 500
-)
 
 type buildResolver struct {
 	builds        BuildManager
@@ -141,24 +138,29 @@ func (r *buildResolver) DeleteBuildFile(ctx context.Context, id string) (bool, e
 
 // --- builds ---
 
-func (r *buildResolver) Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error) {
+func (r *buildResolver) Builds(ctx context.Context, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.BuildConnection, error) {
 	op, err := r.authorizeID(ctx, operationID, models.OperationRoleViewer, false)
 	if err != nil {
 		return nil, err
 	}
-	n := defaultBuildsLimit
-	if limit != nil && *limit > 0 {
-		n = min(*limit, maxBuildsLimit)
-	}
-	bs, err := r.builds.Builds(ctx, op, int64(n), deref(search))
+	args, err := pagination.ParseArgs(first, after, last, before)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid pagination args: %w", err)
 	}
-	out := make([]*model.Build, len(bs))
-	for i := range bs {
-		out[i] = toBuildModel(&bs[i])
+	filter := repository.BuildFilter{Search: strings.TrimSpace(deref(search)), States: states, ModuleNames: moduleNames}
+	total, err := r.builds.CountBuilds(ctx, op, filter)
+	if err != nil {
+		return nil, fmt.Errorf("count builds: %w", err)
 	}
-	return out, nil
+	bs, err := r.builds.Builds(ctx, op, filter, args.Cursor, args.Limit+1, args.Forward)
+	if err != nil {
+		return nil, fmt.Errorf("list builds: %w", err)
+	}
+	edges, pageInfo := pagination.BuildEdges(bs, args, repository.BuildCursor,
+		func(b *models.Build, cursor string) *model.BuildEdge {
+			return &model.BuildEdge{Node: toBuildModel(b), Cursor: cursor}
+		})
+	return &model.BuildConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
 func (r *buildResolver) Build(ctx context.Context, id string) (*model.Build, error) {

@@ -182,6 +182,17 @@ type ComplexityRoot struct {
 		Versions   func(childComplexity int) int
 	}
 
+	BuildConnection struct {
+		Edges      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		TotalCount func(childComplexity int) int
+	}
+
+	BuildEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
+	}
+
 	BuildError struct {
 		Code    func(childComplexity int) int
 		Message func(childComplexity int) int
@@ -739,7 +750,7 @@ type ComplexityRoot struct {
 	Query struct {
 		Build                              func(childComplexity int, id string) int
 		BuildFiles                         func(childComplexity int, operationID string) int
-		Builds                             func(childComplexity int, operationID string, limit *int, search *string) int
+		Builds                             func(childComplexity int, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) int
 		ChannelEndpoint                    func(childComplexity int, id string) int
 		ChannelEndpointExport              func(childComplexity int, id string) int
 		ChannelEndpoints                   func(childComplexity int, operationID string, moduleName *string) int
@@ -1396,7 +1407,7 @@ type QueryResolver interface {
 	MyAPIKey(ctx context.Context) (*models.APIKey, error)
 	FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error)
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
-	Builds(ctx context.Context, operationID string, limit *int, search *string) ([]*model.Build, error)
+	Builds(ctx context.Context, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.BuildConnection, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
@@ -2117,6 +2128,38 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildChannelVersions.Versions(childComplexity), true
+
+	case "BuildConnection.edges":
+		if e.ComplexityRoot.BuildConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildConnection.Edges(childComplexity), true
+	case "BuildConnection.pageInfo":
+		if e.ComplexityRoot.BuildConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildConnection.PageInfo(childComplexity), true
+	case "BuildConnection.totalCount":
+		if e.ComplexityRoot.BuildConnection.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildConnection.TotalCount(childComplexity), true
+
+	case "BuildEdge.cursor":
+		if e.ComplexityRoot.BuildEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildEdge.Cursor(childComplexity), true
+	case "BuildEdge.node":
+		if e.ComplexityRoot.BuildEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildEdge.Node(childComplexity), true
 
 	case "BuildError.code":
 		if e.ComplexityRoot.BuildError.Code == nil {
@@ -4983,7 +5026,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Builds(childComplexity, args["operationId"].(string), args["limit"].(*int), args["search"].(*string)), true
+		return e.ComplexityRoot.Query.Builds(childComplexity, args["operationId"].(string), args["search"].(*string), args["states"].([]string), args["moduleNames"].([]string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.channelEndpoint":
 		if e.ComplexityRoot.Query.ChannelEndpoint == nil {
 			break
@@ -7971,6 +8014,17 @@ type BuildError {
   message: String!
 }
 
+type BuildEdge {
+  node: Build!
+  cursor: String!
+}
+
+type BuildConnection {
+  edges: [BuildEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
 type Build {
   # The build's id, and the minion's: factories know the build by it, and the
   # minion sends it on the data plane.
@@ -8036,14 +8090,23 @@ extend type Query {
   buildFiles(operationId: ID!): [BuildFile!]!
     @hasPermission(permission: "operation:member")
 
-  # An operation's builds, newest first, at most limit (default 50). With a
-  # search, the builds that hold every word of it, case aside, in what the
-  # Builds page shows of them (factory, target, id, description, the stage
-  # they are on or stopped at, platform, who started them), their state,
-  # factory instance, error and artifact name, or what they were made of:
-  # their values and their connections' names, channels, settings, values and
-  # descriptions. Needs at least viewer.
-  builds(operationId: ID!, limit: Int, search: String): [Build!]!
+  # An operation's builds, newest first, a page at a time. search is the
+  # app's search (a substring, case aside; "quotes" for whole words) over the
+  # factory, target, id, description, platform, state, factory instance, who
+  # started it, its plan's steps, error, artifact name, values and
+  # connections (names, channels, settings, values and the operators' notes).
+  # states and moduleNames (factory kinds) narrow the list. Needs at least
+  # viewer.
+  builds(
+    operationId: ID!
+    search: String
+    states: [String!]
+    moduleNames: [String!]
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): BuildConnection!
     @hasPermission(permission: "operation:member")
 
   # One build; null when it does not exist. Needs at least viewer.
@@ -12518,16 +12581,41 @@ func (ec *executionContext) field_Query_builds_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["operationId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "limit", ec.unmarshalOInt2ᚖint)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["limit"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	args["search"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "states", ec.unmarshalOString2ᚕstringᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["search"] = arg2
+	args["states"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "moduleNames", ec.unmarshalOString2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["moduleNames"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg7
 	return args, nil
 }
 
@@ -16756,6 +16844,219 @@ func (ec *executionContext) fieldContext_BuildChannelVersions_versions(_ context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.BuildConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildConnection_edges,
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		ec.marshalNBuildEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildEdgeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "node":
+				return ec.fieldContext_BuildEdge_node(ctx, field)
+			case "cursor":
+				return ec.fieldContext_BuildEdge_cursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildEdge", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.BuildConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildConnection_pageInfo,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNPageInfo2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋpaginationᚐPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_PageInfo_hasPreviousPage(ctx, field)
+			case "startCursor":
+				return ec.fieldContext_PageInfo_startCursor(ctx, field)
+			case "endCursor":
+				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.BuildConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildConnection_totalCount,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildConnection_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.BuildEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildEdge_node,
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		ec.marshalNBuild2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuild,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Build_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_Build_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_Build_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_Build_platform(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_Build_schemaVersion(ctx, field)
+			case "values":
+				return ec.fieldContext_Build_values(ctx, field)
+			case "connections":
+				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "state":
+				return ec.fieldContext_Build_state(ctx, field)
+			case "instance":
+				return ec.fieldContext_Build_instance(ctx, field)
+			case "factoryVersion":
+				return ec.fieldContext_Build_factoryVersion(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
+			case "artifact":
+				return ec.fieldContext_Build_artifact(ctx, field)
+			case "capabilities":
+				return ec.fieldContext_Build_capabilities(ctx, field)
+			case "warnings":
+				return ec.fieldContext_Build_warnings(ctx, field)
+			case "log":
+				return ec.fieldContext_Build_log(ctx, field)
+			case "error":
+				return ec.fieldContext_Build_error(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_Build_createdBy(ctx, field)
+			case "cancelledBy":
+				return ec.fieldContext_Build_cancelledBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Build_createdAt(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_Build_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_Build_finishedAt(ctx, field)
+			case "deadline":
+				return ec.fieldContext_Build_deadline(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Build", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.BuildEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildEdge_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -35207,7 +35508,7 @@ func (ec *executionContext) _Query_builds(ctx context.Context, field graphql.Col
 		ec.fieldContext_Query_builds,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Builds(ctx, fc.Args["operationId"].(string), fc.Args["limit"].(*int), fc.Args["search"].(*string))
+			return ec.Resolvers.Query().Builds(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["states"].([]string), fc.Args["moduleNames"].([]string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -35215,11 +35516,11 @@ func (ec *executionContext) _Query_builds(ctx context.Context, field graphql.Col
 			directive1 := func(ctx context.Context) (any, error) {
 				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
 				if err != nil {
-					var zeroVal []*model.Build
+					var zeroVal *model.BuildConnection
 					return zeroVal, err
 				}
 				if ec.Directives.HasPermission == nil {
-					var zeroVal []*model.Build
+					var zeroVal *model.BuildConnection
 					return zeroVal, errors.New("directive hasPermission is not implemented")
 				}
 				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
@@ -35228,7 +35529,7 @@ func (ec *executionContext) _Query_builds(ctx context.Context, field graphql.Col
 			next = directive1
 			return next
 		},
-		ec.marshalNBuild2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildᚄ,
+		ec.marshalNBuildConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildConnection,
 		true,
 		true,
 	)
@@ -35242,58 +35543,14 @@ func (ec *executionContext) fieldContext_Query_builds(ctx context.Context, field
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "id":
-				return ec.fieldContext_Build_id(ctx, field)
-			case "operationId":
-				return ec.fieldContext_Build_operationId(ctx, field)
-			case "description":
-				return ec.fieldContext_Build_description(ctx, field)
-			case "moduleName":
-				return ec.fieldContext_Build_moduleName(ctx, field)
-			case "target":
-				return ec.fieldContext_Build_target(ctx, field)
-			case "platform":
-				return ec.fieldContext_Build_platform(ctx, field)
-			case "schemaVersion":
-				return ec.fieldContext_Build_schemaVersion(ctx, field)
-			case "values":
-				return ec.fieldContext_Build_values(ctx, field)
-			case "connections":
-				return ec.fieldContext_Build_connections(ctx, field)
-			case "connectionDescriptions":
-				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
-			case "state":
-				return ec.fieldContext_Build_state(ctx, field)
-			case "instance":
-				return ec.fieldContext_Build_instance(ctx, field)
-			case "factoryVersion":
-				return ec.fieldContext_Build_factoryVersion(ctx, field)
-			case "stages":
-				return ec.fieldContext_Build_stages(ctx, field)
-			case "artifact":
-				return ec.fieldContext_Build_artifact(ctx, field)
-			case "capabilities":
-				return ec.fieldContext_Build_capabilities(ctx, field)
-			case "warnings":
-				return ec.fieldContext_Build_warnings(ctx, field)
-			case "log":
-				return ec.fieldContext_Build_log(ctx, field)
-			case "error":
-				return ec.fieldContext_Build_error(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_Build_createdBy(ctx, field)
-			case "cancelledBy":
-				return ec.fieldContext_Build_cancelledBy(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Build_createdAt(ctx, field)
-			case "startedAt":
-				return ec.fieldContext_Build_startedAt(ctx, field)
-			case "finishedAt":
-				return ec.fieldContext_Build_finishedAt(ctx, field)
-			case "deadline":
-				return ec.fieldContext_Build_deadline(ctx, field)
+			case "edges":
+				return ec.fieldContext_BuildConnection_edges(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_BuildConnection_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_BuildConnection_totalCount(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Build", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type BuildConnection", field.Name)
 		},
 	}
 	defer func() {
@@ -54399,6 +54656,99 @@ func (ec *executionContext) _BuildChannelVersions(ctx context.Context, sel ast.S
 	return out
 }
 
+var buildConnectionImplementors = []string{"BuildConnection"}
+
+func (ec *executionContext) _BuildConnection(ctx context.Context, sel ast.SelectionSet, obj *model.BuildConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildConnection")
+		case "edges":
+			out.Values[i] = ec._BuildConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._BuildConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._BuildConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var buildEdgeImplementors = []string{"BuildEdge"}
+
+func (ec *executionContext) _BuildEdge(ctx context.Context, sel ast.SelectionSet, obj *model.BuildEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildEdge")
+		case "node":
+			out.Values[i] = ec._BuildEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._BuildEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var buildErrorImplementors = []string{"BuildError"}
 
 func (ec *executionContext) _BuildError(ctx context.Context, sel ast.SelectionSet, obj *model.BuildError) graphql.Marshaler {
@@ -66462,22 +66812,6 @@ func (ec *executionContext) marshalNBuild2githubᚗcomᚋlogoscoreᚋlogosᚑcor
 	return ec._Build(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNBuild2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Build) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNBuild2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuild(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
 func (ec *executionContext) marshalNBuild2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuild(ctx context.Context, sel ast.SelectionSet, v *model.Build) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -66540,6 +66874,20 @@ func (ec *executionContext) marshalNBuildChannelVersions2ᚖgithubᚗcomᚋlogos
 	return ec._BuildChannelVersions(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNBuildConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildConnection(ctx context.Context, sel ast.SelectionSet, v model.BuildConnection) graphql.Marshaler {
+	return ec._BuildConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNBuildConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildConnection(ctx context.Context, sel ast.SelectionSet, v *model.BuildConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BuildConnection(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBuildConnectionInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildConnectionInputᚄ(ctx context.Context, v any) ([]*model.BuildConnectionInput, error) {
 	var vSlice []any
 	vSlice = graphql.CoerceList(v)
@@ -66558,6 +66906,32 @@ func (ec *executionContext) unmarshalNBuildConnectionInput2ᚕᚖgithubᚗcomᚋ
 func (ec *executionContext) unmarshalNBuildConnectionInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildConnectionInput(ctx context.Context, v any) (*model.BuildConnectionInput, error) {
 	res, err := ec.unmarshalInputBuildConnectionInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNBuildEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBuildEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBuildEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildEdge(ctx context.Context, sel ast.SelectionSet, v *model.BuildEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BuildEdge(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBuildFile2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildFileᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildFile) graphql.Marshaler {

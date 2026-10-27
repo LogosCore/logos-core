@@ -25,12 +25,18 @@ export function BuildsTable({
   builds,
   icons,
   isLoading,
+  isFetchingNextPage,
+  hasNextPage,
+  fetchNextPage,
   canWrite,
   emptyState,
 }: {
   builds: BuildFieldsFragment[]
   icons: ReadonlyMap<string, string>
   isLoading: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  fetchNextPage: () => void
   canWrite: boolean
   emptyState: ReactNode
 }) {
@@ -49,10 +55,9 @@ export function BuildsTable({
     <VirtualizedDataTable
       items={builds}
       isLoading={isLoading}
-      // The latest builds come in one page.
-      isFetchingNextPage={false}
-      hasNextPage={false}
-      fetchNextPage={() => {}}
+      isFetchingNextPage={isFetchingNextPage}
+      hasNextPage={hasNextPage}
+      fetchNextPage={fetchNextPage}
       gridCols={GRID_COLS}
       entityNoun="builds"
       header={

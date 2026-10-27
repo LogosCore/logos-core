@@ -79,6 +79,9 @@ type Build struct {
 	// what the factory gets, so a note never ends up in an artifact.
 	ConnectionDescriptions []string    `bson:"connection_descriptions,omitempty" json:"connection_descriptions,omitempty"`
 	FileIDs                []uuid.UUID `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
+	// SearchText is what the builds list search reads of the build beyond
+	// its fields (BuildSearchText), set when the build is stored.
+	SearchText string `bson:"search_text,omitempty" json:"-"`
 
 	State string `bson:"state" json:"state"`
 	// Instance is the factory instance building it (set when it accepted).

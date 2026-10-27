@@ -33,6 +33,9 @@ type ChannelEndpoint struct {
 	// against.
 	SchemaVersion int     `bson:"schema_version" json:"schema_version"`
 	Values        JSONMap `bson:"values" json:"values"`
+	// SearchText is the values as the endpoints list search reads them
+	// (EndpointSearchText), set whenever they are stored.
+	SearchText string `bson:"search_text,omitempty" json:"-"`
 	// Revision grows with every write; updates compare against it.
 	Revision  int64       `bson:"revision" json:"revision"`
 	CreatedBy ModuleActor `bson:"created_by" json:"created_by"`

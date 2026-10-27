@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
@@ -124,29 +125,15 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	return b, nil
 }
 
-// Builds returns an operation's builds, newest first, at most limit (0: all).
-// With a search, they are the builds that match every word of it (see
-// search.go), from all of the operation's builds.
-func (s *Service) Builds(ctx context.Context, op uuid.UUID, limit int64, search string) ([]models.Build, error) {
-	words := searchWords(search)
-	if len(words) == 0 {
-		return s.repos.Builds.List(ctx, op, limit)
-	}
-	all, err := s.repos.Builds.ListWithoutLogs(ctx, op)
-	if err != nil {
-		return nil, err
-	}
-	out := all[:0]
-	for i := range all {
-		if !matches(&all[i], words) {
-			continue
-		}
-		out = append(out, all[i])
-		if int64(len(out)) == limit {
-			break
-		}
-	}
-	return out, nil
+// Builds returns a page of an operation's builds, newest first: those filter
+// lets through, past cursor, at most limit.
+func (s *Service) Builds(ctx context.Context, op uuid.UUID, filter repository.BuildFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Build, error) {
+	return s.repos.Builds.FindByOperationIDWithCursor(ctx, op, filter, cursor, limit, forward)
+}
+
+// CountBuilds counts an operation's builds filter lets through.
+func (s *Service) CountBuilds(ctx context.Context, op uuid.UUID, filter repository.BuildFilter) (int64, error) {
+	return s.repos.Builds.CountByOperationID(ctx, op, filter)
 }
 
 // Build returns one build, by its id: its minion's.

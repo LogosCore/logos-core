@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/blob"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/minio/minio-go/v7"
@@ -132,17 +133,28 @@ func (f *fakeBuilds) List(_ context.Context, op uuid.UUID, limit int64) ([]model
 	return out, nil
 }
 
-// ListWithoutLogs drops the logs, as the repository's projection does.
-func (f *fakeBuilds) ListWithoutLogs(_ context.Context, op uuid.UUID) ([]models.Build, error) {
+// FindByOperationIDWithCursor pages newest first; only the state and module
+// filters are faked (search is the repository's, tested against Mongo).
+func (f *fakeBuilds) FindByOperationIDWithCursor(_ context.Context, op uuid.UUID, filter repository.BuildFilter, _ *pagination.Cursor, limit int64, _ bool) ([]models.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	out := f.sorted(func(b *models.Build) bool { return b.OperationID == op })
-	slices.Reverse(out) // newest first
-	for i := range out {
-		out[i].Log = ""
+	out := f.sorted(func(b *models.Build) bool {
+		return b.OperationID == op && (len(filter.States) == 0 || slices.Contains(filter.States, b.State)) &&
+			(len(filter.ModuleNames) == 0 || slices.Contains(filter.ModuleNames, b.ModuleName))
+	})
+	slices.Reverse(out)
+	if limit > 0 && int64(len(out)) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }
+
+func (f *fakeBuilds) CountByOperationID(ctx context.Context, op uuid.UUID, filter repository.BuildFilter) (int64, error) {
+	bs, err := f.FindByOperationIDWithCursor(ctx, op, filter, nil, 0, true)
+	return int64(len(bs)), err
+}
+
+func (f *fakeBuilds) BackfillSearchText(context.Context) (int64, error) { return 0, nil }
 
 func (f *fakeBuilds) ListUnfinished(context.Context) ([]models.Build, error) {
 	f.mu.Lock()

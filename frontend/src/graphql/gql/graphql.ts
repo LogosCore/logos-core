@@ -147,12 +147,23 @@ export type BuildChannelVersions = {
   versions: Array<Scalars['Int']['output']>;
 };
 
+export type BuildConnection = {
+  edges: Array<BuildEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+};
+
 export type BuildConnectionInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   moduleName: Scalars['String']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
   settings?: InputMaybe<Scalars['JSON']['input']>;
   values?: InputMaybe<Scalars['JSON']['input']>;
+};
+
+export type BuildEdge = {
+  cursor: Scalars['String']['output'];
+  node: Build;
 };
 
 export type BuildError = {
@@ -1439,7 +1450,7 @@ export type PresenceAction =
 export type Query = {
   build?: Maybe<Build>;
   buildFiles: Array<BuildFile>;
-  builds: Array<Build>;
+  builds: BuildConnection;
   channelEndpoint?: Maybe<ChannelEndpoint>;
   channelEndpointExport: Scalars['JSON']['output'];
   channelEndpoints: Array<ChannelEndpoint>;
@@ -1524,9 +1535,14 @@ export type QueryBuildFilesArgs = {
 
 
 export type QueryBuildsArgs = {
-  limit?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  moduleNames?: InputMaybe<Array<Scalars['String']['input']>>;
   operationId: Scalars['ID']['input'];
   search?: InputMaybe<Scalars['String']['input']>;
+  states?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
 
@@ -2693,12 +2709,15 @@ export type DeleteBuildFileMutation = { deleteBuildFile: boolean };
 
 export type BuildsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
-  limit?: InputMaybe<Scalars['Int']['input']>;
   search?: InputMaybe<Scalars['String']['input']>;
+  states?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  moduleNames?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type BuildsQuery = { builds: Array<{ id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } }> };
+export type BuildsQuery = { builds: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type BuildQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5280,9 +5299,26 @@ export const DeleteBuildFileDocument = new TypedDocumentString(`
 }
     `) as unknown as TypedDocumentString<DeleteBuildFileMutation, DeleteBuildFileMutationVariables>;
 export const BuildsDocument = new TypedDocumentString(`
-    query Builds($operationId: ID!, $limit: Int, $search: String) {
-  builds(operationId: $operationId, limit: $limit, search: $search) {
-    ...BuildFields
+    query Builds($operationId: ID!, $search: String, $states: [String!], $moduleNames: [String!], $first: Int, $after: String) {
+  builds(
+    operationId: $operationId
+    search: $search
+    states: $states
+    moduleNames: $moduleNames
+    first: $first
+    after: $after
+  ) {
+    edges {
+      node {
+        ...BuildFields
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
   }
 }
     fragment BuildFields on Build {

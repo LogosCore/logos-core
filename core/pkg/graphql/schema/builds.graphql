@@ -171,6 +171,17 @@ type BuildError {
   message: String!
 }
 
+type BuildEdge {
+  node: Build!
+  cursor: String!
+}
+
+type BuildConnection {
+  edges: [BuildEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
 type Build {
   # The build's id, and the minion's: factories know the build by it, and the
   # minion sends it on the data plane.
@@ -236,14 +247,23 @@ extend type Query {
   buildFiles(operationId: ID!): [BuildFile!]!
     @hasPermission(permission: "operation:member")
 
-  # An operation's builds, newest first, at most limit (default 50). With a
-  # search, the builds that hold every word of it, case aside, in what the
-  # Builds page shows of them (factory, target, id, description, the stage
-  # they are on or stopped at, platform, who started them), their state,
-  # factory instance, error and artifact name, or what they were made of:
-  # their values and their connections' names, channels, settings, values and
-  # descriptions. Needs at least viewer.
-  builds(operationId: ID!, limit: Int, search: String): [Build!]!
+  # An operation's builds, newest first, a page at a time. search is the
+  # app's search (a substring, case aside; "quotes" for whole words) over the
+  # factory, target, id, description, platform, state, factory instance, who
+  # started it, its plan's steps, error, artifact name, values and
+  # connections (names, channels, settings, values and the operators' notes).
+  # states and moduleNames (factory kinds) narrow the list. Needs at least
+  # viewer.
+  builds(
+    operationId: ID!
+    search: String
+    states: [String!]
+    moduleNames: [String!]
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): BuildConnection!
     @hasPermission(permission: "operation:member")
 
   # One build; null when it does not exist. Needs at least viewer.

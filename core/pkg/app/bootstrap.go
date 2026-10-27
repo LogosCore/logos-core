@@ -417,6 +417,8 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		"module invocation ids":    repos.ModuleInvocation.ConvertLegacyIDs,
 		"wiki visit ids":           repos.WikiDocumentVisit.BackfillVisitIDs,
 		"API key ids":              repos.APIKey.BackfillAPIKeyIDs,
+		// What the list searches read of records' values (models/search_text.go).
+		"build search texts": repos.Build.BackfillSearchText,
 	} {
 		if n, err := backfill(ctx); err != nil {
 			l.Warn(name+" backfill failed", zap.Error(err))

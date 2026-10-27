@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import { useNavigate } from "react-router"
 import { ChevronDownIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/ui/search-input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,12 +12,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
-import { useBuilds, useFactoryIcons, useFactoryKinds } from "@/graphql/hooks/builds"
+import { useFactoryIcons, useFactoryKinds, useInfiniteBuilds } from "@/graphql/hooks/builds"
+import { useConnectionNodes } from "@/hooks/use-connection-nodes"
+import { useBuildStore } from "@/stores/builds"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
 import { KindName } from "@/components/modules/module-icon"
-import { factoryKindsByName, type FactoryKind } from "@/components/builds/build-values"
+import { factoryKindsByName, STATE_LABEL, type FactoryKind } from "@/components/builds/build-values"
 
 /**
  * Minion builds of the scoped operation, live while builds run: each asks a
@@ -40,28 +43,60 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
   const { canWrite } = useCanBuild(operationId)
   const kindsQuery = useFactoryKinds()
   const kinds = useMemo(() => [...factoryKindsByName(kindsQuery.data?.factoryKinds ?? []).values()], [kindsQuery.data])
-  // The server searches all of the operation's builds (see the builds query).
-  const [search, setSearch] = useState("")
-  const { data, isLoading, error } = useBuilds(operationId, search.trim())
   const icons = useFactoryIcons()
-  const builds = data?.builds ?? []
-  const searching = search.trim() !== ""
+  // The server searches and filters (see the builds query).
+  const search = useBuildStore((s) => s.search)
+  const setSearch = useBuildStore((s) => s.setSearch)
+  const stateFilter = useBuildStore((s) => s.stateFilter)
+  const setStateFilter = useBuildStore((s) => s.setStateFilter)
+  const factoryFilter = useBuildStore((s) => s.factoryFilter)
+  const setFactoryFilter = useBuildStore((s) => s.setFactoryFilter)
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } = useInfiniteBuilds({
+    operationId,
+    search: search.trim() || null,
+    states: stateFilter ? [stateFilter] : null,
+    moduleNames: factoryFilter ? [factoryFilter] : null,
+  })
+  const builds = useConnectionNodes(data, (p) => p.builds)
+  const filtered = search.trim() !== "" || stateFilter !== null || factoryFilter !== null
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
-      {/* Toolbar, as on the other pages: search on the left, actions right. */}
-      {(builds.length > 0 || searching || canWrite) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {(builds.length > 0 || searching) && (
-            <SearchInput value={search} onValueChange={setSearch} placeholder="Search builds..." title="" />
-          )}
-          {canWrite && (
-            <div className="ml-auto">
-              <NewBuildButton kinds={kinds} onPick={(k) => navigate(`${BUILDS_PATH}/new?kind=${encodeURIComponent(k)}`)} />
-            </div>
-          )}
-        </div>
-      )}
+      {/* Toolbar, as on the other pages: search and filters on the left, actions right. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchInput value={search} onValueChange={setSearch} placeholder="Search builds..." />
+        <Select value={stateFilter ?? "all"} onValueChange={(v) => setStateFilter(v === "all" ? null : v)}>
+          <SelectTrigger className="w-40" aria-label="State">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All states</SelectItem>
+            {Object.entries(STATE_LABEL).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={factoryFilter ?? "all"} onValueChange={(v) => setFactoryFilter(v === "all" ? null : v)}>
+          <SelectTrigger className="w-40" aria-label="Factory">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All factories</SelectItem>
+            {kinds.map((k) => (
+              <SelectItem key={k.name} value={k.name}>
+                <KindName type="factory" name={k.name} icon={k.icon} />
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {canWrite && (
+          <div className="ml-auto">
+            <NewBuildButton kinds={kinds} onPick={(k) => navigate(`${BUILDS_PATH}/new?kind=${encodeURIComponent(k)}`)} />
+          </div>
+        )}
+      </div>
       {error ? (
         <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
       ) : (
@@ -69,9 +104,12 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
           builds={builds}
           icons={icons}
           isLoading={isLoading || kindsQuery.isLoading}
+          isFetchingNextPage={isFetchingNextPage}
+          hasNextPage={hasNextPage}
+          fetchNextPage={fetchNextPage}
           canWrite={canWrite}
           emptyState={
-            !searching ? (
+            !filtered ? (
               <>
                 <HammerIcon className="size-8 opacity-50" />
                 <p className="text-sm">No builds in this operation yet.</p>
@@ -85,7 +123,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
                 )}
               </>
             ) : (
-              <p className="text-sm">No builds match “{search}”.</p>
+              <p className="text-sm">No builds match the search and filters.</p>
             )
           }
         />
