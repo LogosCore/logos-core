@@ -9,7 +9,7 @@ import type { BuildFieldsFragment } from "@/graphql/gql/graphql"
 import { isUnfinished } from "@/graphql/hooks/builds"
 import { useNow } from "@/hooks/use-now"
 import { artifactUrl } from "@/lib/build-file-upload"
-import { KindName } from "@/components/modules/module-icon"
+import { ModuleIcon } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
 import { currentStage, platformLabel } from "./build-values"
@@ -96,13 +96,17 @@ export function BuildsTable({
           >
             {(menuButton) => (
               <>
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-center">
-                    <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
-                    <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
-                  </div>
-                  <div className="truncate font-mono text-xs text-muted-foreground" title="Build id">
-                    {b.id}
+                {/* The factory's icon as tall as the two lines beside it. */}
+                <div className="flex min-w-0 items-center gap-3">
+                  <ModuleIcon type="factory" icon={icons.get(b.moduleName)} className="size-9" />
+                  <div className="flex min-w-0 flex-col">
+                    <div className="flex min-w-0 items-baseline">
+                      <span className="truncate font-mono">{b.moduleName}</span>
+                      <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
+                    </div>
+                    <div className="truncate font-mono text-xs text-muted-foreground" title="Build id">
+                      {b.id}
+                    </div>
                   </div>
                 </div>
                 <div className="truncate text-sm" title={b.description || undefined}>
