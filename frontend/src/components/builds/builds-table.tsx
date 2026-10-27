@@ -3,12 +3,12 @@ import { useNavigate } from "react-router"
 import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react"
 import { ContextMenuItem } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
+import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { BuildFieldsFragment } from "@/graphql/gql/graphql"
 import { isUnfinished } from "@/graphql/hooks/builds"
 import { useNow } from "@/hooks/use-now"
 import { artifactUrl } from "@/lib/build-file-upload"
-import { relativeTime } from "@/lib/relative-time"
 import { KindName } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
@@ -124,7 +124,7 @@ export function BuildsTable({
                   {b.minionId.slice(0, 8)}
                 </div>
                 <div className="truncate text-sm text-muted-foreground">
-                  {relativeTime(b.createdAt)}
+                  <FormattedDateTimeText date={b.createdAt} />
                   {b.createdBy.name && <span> by {b.createdBy.name}</span>}
                 </div>
                 <div>{menuButton}</div>
