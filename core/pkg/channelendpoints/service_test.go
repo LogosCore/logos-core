@@ -3,11 +3,13 @@ package channelendpoints
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
@@ -48,15 +50,33 @@ type fakeRepo struct {
 	rows map[uuid.UUID]*models.ChannelEndpoint
 }
 
-func (f *fakeRepo) List(_ context.Context, operationID uuid.UUID, moduleName string) ([]models.ChannelEndpoint, error) {
+// FindByOperationIDWithCursor applies the kind filter; paging and search are
+// the repository's, tested against Mongo.
+func (f *fakeRepo) FindByOperationIDWithCursor(_ context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter, _ *pagination.Cursor, _ int64, _ bool) ([]models.ChannelEndpoint, error) {
 	var out []models.ChannelEndpoint
 	for _, ep := range f.rows {
-		if ep.OperationID == operationID && (moduleName == "" || ep.ModuleName == moduleName) {
+		if ep.OperationID == operationID && (len(filter.ModuleNames) == 0 || slices.Contains(filter.ModuleNames, ep.ModuleName)) {
 			out = append(out, *ep)
 		}
 	}
 	return out, nil
 }
+
+func (f *fakeRepo) CountByOperationID(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter) (int64, error) {
+	eps, err := f.FindByOperationIDWithCursor(ctx, operationID, filter, nil, 0, true)
+	return int64(len(eps)), err
+}
+
+func (f *fakeRepo) NameTaken(_ context.Context, operationID uuid.UUID, name string) (bool, error) {
+	for _, ep := range f.rows {
+		if ep.OperationID == operationID && ep.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (f *fakeRepo) BackfillSearchText(context.Context) (int64, error) { return 0, nil }
 
 func (f *fakeRepo) FindByEndpointID(_ context.Context, id uuid.UUID) (*models.ChannelEndpoint, error) {
 	ep, ok := f.rows[id]
@@ -210,7 +230,7 @@ func TestNamesAreUniquePerOperation(t *testing.T) {
 	if _, err := svc.Create(ctx, opA, "http", in); !errors.As(err, &ve) {
 		t.Errorf("duplicate in one operation: %v", err)
 	}
-	if list, _ := svc.List(ctx, opB, ""); len(list) != 1 {
+	if list, _ := svc.List(ctx, opB, repository.ChannelEndpointFilter{}, nil, 20, true); len(list) != 1 {
 		t.Errorf("operation B lists %d endpoints", len(list))
 	}
 	kinds, err := svc.Kinds(ctx)
@@ -254,7 +274,7 @@ func TestExportAndProblems(t *testing.T) {
 	}
 
 	delete(reg, "http")
-	list, err := svc.List(ctx, opA, "http")
+	list, err := svc.List(ctx, opA, repository.ChannelEndpointFilter{ModuleNames: []string{"http"}}, nil, 20, true)
 	if err != nil || len(list) != 1 || list[0].Problems[""] == "" {
 		t.Errorf("no schema left: %v %+v", err, list)
 	}
@@ -263,5 +283,31 @@ func TestExportAndProblems(t *testing.T) {
 	}
 	if err := svc.Delete(ctx, v.EndpointID.String()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("second delete: %v", err)
+	}
+}
+
+// TestFreeName pins the names the forms suggest: name+tag, then -2, -3… past
+// the taken ones, the base shortened so the whole fits a name.
+func TestFreeName(t *testing.T) {
+	svc, repo, _ := newService()
+	ctx := context.Background()
+	for _, name := range []string{"edge", "edge-dup", "edge-dup-2", strings.Repeat("a", 63)} {
+		repo.rows[uuid.New()] = &models.ChannelEndpoint{OperationID: opA, Name: name}
+	}
+	for _, c := range []struct{ name, tag, want string }{
+		{"fresh", "", "fresh"},
+		{"edge", "", "edge-2"},
+		{"edge", "-dup", "edge-dup-3"},
+		{"edge", "-x", "edge-x"},
+		{strings.Repeat("a", 70), "", strings.Repeat("a", 61) + "-2"},
+		{strings.Repeat("b", 70), "-dup", strings.Repeat("b", 59) + "-dup"},
+	} {
+		got, err := svc.FreeName(ctx, opA, c.name, c.tag)
+		if err != nil || got != c.want {
+			t.Errorf("FreeName(%q, %q) = %q %v, want %q", c.name, c.tag, got, err, c.want)
+		}
+	}
+	if got, _ := svc.FreeName(ctx, opB, "edge", ""); got != "edge" {
+		t.Errorf("another operation's names count: %q", got)
 	}
 }

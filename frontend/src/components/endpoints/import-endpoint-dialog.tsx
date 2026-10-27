@@ -22,40 +22,29 @@ export function ImportEndpointDialog({
   open,
   onClose,
   kinds,
-  taken,
 }: {
   open: boolean
   onClose: () => void
   kinds: ReadonlyMap<string, Kind>
-  /** The operation's endpoint names, for a free name. */
-  taken: readonly string[]
 }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         {/* Keyed so each opening starts empty. */}
-        {open && <ImportBody key="import" kinds={kinds} taken={taken} onClose={onClose} />}
+        {open && <ImportBody key="import" kinds={kinds} onClose={onClose} />}
       </DialogContent>
     </Dialog>
   )
 }
 
-function ImportBody({
-  kinds,
-  taken,
-  onClose,
-}: {
-  kinds: ReadonlyMap<string, Kind>
-  taken: readonly string[]
-  onClose: () => void
-}) {
+function ImportBody({ kinds, onClose }: { kinds: ReadonlyMap<string, Kind>; onClose: () => void }) {
   const navigate = useNavigate()
   const file = useRef<HTMLInputElement>(null)
   const [text, setText] = useState("")
   const [error, setError] = useState<string | null>(null)
 
   function proceed() {
-    const r = parseEndpointImport(text, kinds, taken)
+    const r = parseEndpointImport(text, kinds)
     if (!r.ok) {
       setError(r.error)
       return

@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { KindName } from "@/components/modules/module-icon"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
-import { useCreateChannelEndpoint } from "@/graphql/hooks/channel-endpoints"
+import { useCreateChannelEndpoint, useFreeChannelEndpointName } from "@/graphql/hooks/channel-endpoints"
 import { endpointFromConnection, type ChannelKind, type ConnectionDraft } from "./build-values"
 
 /**
@@ -25,7 +25,6 @@ export function SaveEndpointDialog({
   channelIcon,
   connection,
   index,
-  taken,
 }: {
   open: boolean
   onClose: () => void
@@ -36,8 +35,6 @@ export function SaveEndpointDialog({
   channelIcon?: string
   connection: ConnectionDraft | undefined
   index: number
-  /** The operation's endpoint names: the new one must be free. */
-  taken: readonly string[]
 }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -52,7 +49,6 @@ export function SaveEndpointDialog({
             channelIcon={channelIcon}
             connection={connection}
             index={index}
-            taken={taken}
             onClose={onClose}
           />
         )}
@@ -61,32 +57,43 @@ export function SaveEndpointDialog({
   )
 }
 
-function SaveBody({
-  operationId,
-  factory,
-  channel,
-  channelIcon,
-  connection,
-  index,
-  taken,
-  onClose,
-}: {
+interface SaveBodyProps {
   operationId: string
   factory: string
   channel: ChannelKind
   channelIcon?: string
   connection: ConnectionDraft
   index: number
-  taken: readonly string[]
   onClose: () => void
-}) {
+}
+
+/** Asks the server for a free name like the connection's, then shows the form. */
+function SaveBody(props: SaveBodyProps) {
+  const [draft] = useState(() => endpointFromConnection(props.connection, props.index, props.channel))
+  const freeName = useFreeChannelEndpointName(props.operationId, draft.name, "")
+  if (freeName === null) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+  }
+  return <SaveForm {...props} draft={draft} initialName={freeName} />
+}
+
+function SaveForm({
+  operationId,
+  factory,
+  channel,
+  channelIcon,
+  index,
+  onClose,
+  draft,
+  initialName,
+}: SaveBodyProps & { draft: ReturnType<typeof endpointFromConnection>; initialName: string }) {
   const create = useCreateChannelEndpoint()
-  const [draft] = useState(() => endpointFromConnection(connection, index, channel, taken))
-  const [name, setName] = useState(draft.name)
+  const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(draft.description)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const nameErr = nameError(name) ?? (taken.includes(name.trim()) ? "This operation already has an endpoint with this name" : null)
+  // The server checks the name is free again when it saves.
+  const nameErr = nameError(name)
   const blocked = draft.problems.length > 0
 
   async function save() {

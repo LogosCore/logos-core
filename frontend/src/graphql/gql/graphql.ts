@@ -260,6 +260,17 @@ export type ChannelEndpoint = {
   values: Scalars['JSON']['output'];
 };
 
+export type ChannelEndpointConnection = {
+  edges: Array<ChannelEndpointEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+};
+
+export type ChannelEndpointEdge = {
+  cursor: Scalars['String']['output'];
+  node: ChannelEndpoint;
+};
+
 export type ChannelEndpointInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
@@ -1453,12 +1464,13 @@ export type Query = {
   builds: BuildConnection;
   channelEndpoint?: Maybe<ChannelEndpoint>;
   channelEndpointExport: Scalars['JSON']['output'];
-  channelEndpoints: Array<ChannelEndpoint>;
+  channelEndpoints: ChannelEndpointConnection;
   channelKinds: Array<ChannelKind>;
   credential: Credential;
   credentialTags: Array<Scalars['String']['output']>;
   credentials: CredentialConnection;
   factoryKinds: Array<FactoryKind>;
+  freeChannelEndpointName: Scalars['String']['output'];
   hash: Hash;
   hashTags: Array<Scalars['String']['output']>;
   hashes: HashConnection;
@@ -1557,8 +1569,13 @@ export type QueryChannelEndpointExportArgs = {
 
 
 export type QueryChannelEndpointsArgs = {
-  moduleName?: InputMaybe<Scalars['String']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  moduleNames?: InputMaybe<Array<Scalars['String']['input']>>;
   operationId: Scalars['ID']['input'];
+  search?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -1585,6 +1602,13 @@ export type QueryCredentialsArgs = {
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<CredentialType>;
   validity?: InputMaybe<Array<CredentialValidity>>;
+};
+
+
+export type QueryFreeChannelEndpointNameArgs = {
+  name: Scalars['String']['input'];
+  operationId: Scalars['ID']['input'];
+  tag?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -2757,11 +2781,23 @@ export type ChannelKindsQuery = { channelKinds: Array<{ moduleName: string, icon
 
 export type ChannelEndpointsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
-  moduleName?: InputMaybe<Scalars['String']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  moduleNames?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type ChannelEndpointsQuery = { channelEndpoints: Array<{ id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } }> };
+export type ChannelEndpointsQuery = { channelEndpoints: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
+export type FreeChannelEndpointNameQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  name: Scalars['String']['input'];
+  tag?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type FreeChannelEndpointNameQuery = { freeChannelEndpointName: string };
 
 export type ChannelEndpointQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5605,9 +5641,25 @@ export const ChannelKindsDocument = new TypedDocumentString(`
   maxSize
 }`) as unknown as TypedDocumentString<ChannelKindsQuery, ChannelKindsQueryVariables>;
 export const ChannelEndpointsDocument = new TypedDocumentString(`
-    query ChannelEndpoints($operationId: ID!, $moduleName: String) {
-  channelEndpoints(operationId: $operationId, moduleName: $moduleName) {
-    ...ChannelEndpointFields
+    query ChannelEndpoints($operationId: ID!, $search: String, $moduleNames: [String!], $first: Int, $after: String) {
+  channelEndpoints(
+    operationId: $operationId
+    search: $search
+    moduleNames: $moduleNames
+    first: $first
+    after: $after
+  ) {
+    edges {
+      node {
+        ...ChannelEndpointFields
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
   }
 }
     fragment ChannelEndpointFields on ChannelEndpoint {
@@ -5632,6 +5684,11 @@ export const ChannelEndpointsDocument = new TypedDocumentString(`
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<ChannelEndpointsQuery, ChannelEndpointsQueryVariables>;
+export const FreeChannelEndpointNameDocument = new TypedDocumentString(`
+    query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {
+  freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)
+}
+    `) as unknown as TypedDocumentString<FreeChannelEndpointNameQuery, FreeChannelEndpointNameQueryVariables>;
 export const ChannelEndpointDocument = new TypedDocumentString(`
     query ChannelEndpoint($id: ID!) {
   channelEndpoint(id: $id) {

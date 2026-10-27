@@ -213,6 +213,17 @@ type ChannelEndpoint struct {
 	UpdatedAt     string                    `json:"updatedAt"`
 }
 
+type ChannelEndpointConnection struct {
+	Edges      []*ChannelEndpointEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo   `json:"pageInfo"`
+	TotalCount int                    `json:"totalCount"`
+}
+
+type ChannelEndpointEdge struct {
+	Node   *ChannelEndpoint `json:"node"`
+	Cursor string           `json:"cursor"`
+}
+
 type ChannelEndpointInput struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`

@@ -10,13 +10,11 @@ import {
   connectionNames,
   currentStage,
   endpointFromConnection,
-  endpointSearchText,
   evaluateForm,
   factoryKindsByName,
   fileFits,
   fillFromEndpoint,
   initialForm,
-  matchesQuery,
   move,
   platformLabel,
   settingsSummary,
@@ -319,15 +317,15 @@ describe("fillFromEndpoint", () => {
 })
 
 describe("endpointFromConnection", () => {
-  it("takes the settings, not the factory's parameters, under a free name", () => {
+  it("takes the settings, not the factory's parameters, under the connection's name", () => {
     const c = connection("http", {
       name: "edge",
       description: " EU front ",
       settings: { base_url: "https://edge.example.com", request_timeout: "10s" },
       params: { path_prefix: "/cdn/" },
     })
-    expect(endpointFromConnection(c, 0, http, ["edge", "other"])).toEqual({
-      name: "edge-2",
+    expect(endpointFromConnection(c, 0, http)).toEqual({
+      name: "edge",
       description: "EU front",
       values: { base_url: "https://edge.example.com", request_timeout: "10s" },
       problems: [],
@@ -335,7 +333,7 @@ describe("endpointFromConnection", () => {
   })
 
   it("names an unnamed one as the build does, and says what an endpoint cannot take", () => {
-    const d = endpointFromConnection(connection("http", { settings: { request_timeout: "soon" } }), 2, http, [])
+    const d = endpointFromConnection(connection("http", { settings: { request_timeout: "soon" } }), 2, http)
     expect(d.name).toBe("http-3")
     expect(d.problems).toEqual([
       { label: "base_url", message: "Required" },
@@ -344,23 +342,13 @@ describe("endpointFromConnection", () => {
   })
 })
 
-describe("finding endpoints", () => {
+describe("endpoint summaries", () => {
   const eu = {
     name: "eu-front",
     description: "CDN in Frankfurt",
     moduleName: "http",
     values: { base_url: "https://cdn.eu.example.com", request_timeout: "10s", token: "s3cret" },
   }
-
-  it("searches names, descriptions, channels and settings, every word", () => {
-    const text = endpointSearchText(eu, http)
-    for (const q of ["", "  ", "EU", "frankfurt", "http", "cdn.eu.example", "10s", "eu cdn", "Front  Frankfurt"]) {
-      expect(matchesQuery(text, q), q).toBe(true)
-    }
-    for (const q of ["us", "eu paris", "dns"]) expect(matchesQuery(text, q), q).toBe(false)
-    // Without the channel's settings, its raw values still count.
-    expect(matchesQuery(endpointSearchText(eu, undefined), "cdn.eu")).toBe(true)
-  })
 
   it("sums up the first settings", () => {
     expect(settingsSummary(http, eu.values)).toBe("https://cdn.eu.example.com · 10s")

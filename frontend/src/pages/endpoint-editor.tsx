@@ -17,9 +17,9 @@ import { useMyOperationRole } from "@/graphql/hooks/operations"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
 import {
   useChannelEndpoint,
-  useChannelEndpoints,
   useChannelKinds,
   useCreateChannelEndpoint,
+  useFreeChannelEndpointName,
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
 import { KindName } from "@/components/modules/module-icon"
@@ -28,7 +28,6 @@ import { errorMessage, graphqlErrorCode } from "@/components/modules/management/
 import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import {
-  duplicateName,
   endpointDrafts,
   endpointImportFrom,
   evaluateEndpoint,
@@ -64,14 +63,16 @@ export function NewEndpointPage() {
   const fromId = params.get("from") ?? ""
   const kinds = useChannelKinds()
   const fromQuery = useChannelEndpoint(fromId)
-  const listQuery = useChannelEndpoints(fromId ? (scopedOperation?.id ?? "") : "")
   const from = fromQuery.data?.channelEndpoint ?? null
   const kindName = params.get("kind") ?? from?.moduleName ?? ""
+  // A copy or an import starts with a name the operation does not use yet.
+  const wanted = from ? from.name : (imported?.name ?? "")
+  const freeName = useFreeChannelEndpointName(scopedOperation?.id ?? "", wanted, from ? "-dup" : "", wanted !== "")
 
   usePageMetadata({ title: "New endpoint", icon: { kind: "lucide", component: RadioTowerIcon } })
 
   if (!scopedOperation) return <GettingStartedPanel />
-  if (kinds.isLoading || (fromId && (fromQuery.isLoading || listQuery.isLoading))) return <EditorSkeleton />
+  if (kinds.isLoading || (fromId && fromQuery.isLoading) || (wanted !== "" && freeName === null)) return <EditorSkeleton />
   if (fromId && !from) return <NotFound text="The endpoint to duplicate does not exist." />
   const kind = kindsByName(kinds.data?.channelKinds ?? []).get(kindName)
   if (!kind) return <NotFound text={`No channel kind "${kindName}" declares connection settings.`} />
@@ -82,12 +83,18 @@ export function NewEndpointPage() {
             duplicate of <span className="font-mono">{from.name}</span>
           </>
         ),
-        name: duplicateName(from.name, (listQuery.data?.channelEndpoints ?? []).map((e) => e.name)),
+        name: freeName ?? from.name,
         description: from.description ?? "",
         values: (from.values ?? {}) as Record<string, unknown>,
         notes: [],
       }
-    : imported && { label: "imported from JSON", name: imported.name, description: "", values: imported.values, notes: imported.notes }
+    : imported && {
+        label: "imported from JSON",
+        name: freeName ?? imported.name,
+        description: "",
+        values: imported.values,
+        notes: imported.notes,
+      }
   return <EndpointEditor operationId={scopedOperation.id} kind={kind} endpoint={null} source={source} />
 }
 

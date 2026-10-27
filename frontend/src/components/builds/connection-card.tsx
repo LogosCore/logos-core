@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { SettingRow } from "@/components/ui/settings-rows"
 import { KindName } from "@/components/modules/module-icon"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
+import { useChannelEndpointCount } from "@/graphql/hooks/channel-endpoints"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
 import { defaultConnectionName, settingsSummary, type ChannelKind, type ConnectionDraft, type FactoryKind } from "./build-values"
@@ -26,13 +27,13 @@ export interface EndpointOption {
  * with errors stays open.
  */
 export function ConnectionCard({
+  operationId,
   index,
   count,
   connection: c,
   kind,
   channel,
   channelIcon,
-  endpointCount,
   settings,
   errors,
   disabled,
@@ -45,6 +46,8 @@ export function ConnectionCard({
   onMove,
   onRemove,
 }: {
+  /** The operation whose endpoints the connection can be filled from. */
+  operationId: string
   index: number
   count: number
   connection: ConnectionDraft
@@ -52,8 +55,6 @@ export function ConnectionCard({
   /** The channel kind; undefined when it declares no settings now. */
   channel: ChannelKind | undefined
   channelIcon?: string
-  /** How many of the operation's endpoints are of the connection's channel kind. */
-  endpointCount: number
   /** The settings as the form submits them, for the folded line. */
   settings: Record<string, unknown>
   /** The form's errors, keyed like the server's problems. */
@@ -70,6 +71,8 @@ export function ConnectionCard({
   onMove: (by: -1 | 1) => void
   onRemove: () => void
 }) {
+  // How many of the operation's endpoints the connection can be filled from.
+  const endpointCount = useChannelEndpointCount(operationId, [c.moduleName])
   const [folded, setFolded] = useState(false)
   const at = `connections[${index}]`
   const hasError = Object.keys(errors).some((k) => k === at || k.startsWith(`${at}.`))

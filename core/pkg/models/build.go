@@ -81,7 +81,7 @@ type Build struct {
 	FileIDs                []uuid.UUID `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
-	SearchText string `bson:"search_text,omitempty" json:"-"`
+	SearchText string `bson:"search_text" json:"-"`
 
 	State string `bson:"state" json:"state"`
 	// Instance is the factory instance building it (set when it accepted).

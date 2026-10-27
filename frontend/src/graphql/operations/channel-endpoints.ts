@@ -41,10 +41,32 @@ export const ChannelKindsQuery = graphql(`
 `)
 
 export const ChannelEndpointsQuery = graphql(`
-  query ChannelEndpoints($operationId: ID!, $moduleName: String) {
-    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {
-      ...ChannelEndpointFields
+  query ChannelEndpoints($operationId: ID!, $search: String, $moduleNames: [String!], $first: Int, $after: String) {
+    channelEndpoints(
+      operationId: $operationId
+      search: $search
+      moduleNames: $moduleNames
+      first: $first
+      after: $after
+    ) {
+      edges {
+        node {
+          ...ChannelEndpointFields
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
     }
+  }
+`)
+
+export const FreeChannelEndpointNameQuery = graphql(`
+  query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {
+    freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)
   }
 `)
 

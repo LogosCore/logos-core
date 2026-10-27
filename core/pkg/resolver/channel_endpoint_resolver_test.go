@@ -9,6 +9,8 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -42,8 +44,14 @@ type fakeEndpoints struct {
 }
 
 func (f *fakeEndpoints) Kinds(context.Context) ([]channelendpoints.Kind, error) { return nil, nil }
-func (f *fakeEndpoints) List(context.Context, uuid.UUID, string) ([]channelendpoints.View, error) {
+func (f *fakeEndpoints) List(context.Context, uuid.UUID, repository.ChannelEndpointFilter, *pagination.Cursor, int64, bool) ([]channelendpoints.View, error) {
 	return nil, nil
+}
+func (f *fakeEndpoints) Count(context.Context, uuid.UUID, repository.ChannelEndpointFilter) (int64, error) {
+	return 0, nil
+}
+func (f *fakeEndpoints) FreeName(_ context.Context, _ uuid.UUID, name, tag string) (string, error) {
+	return name + tag, nil
 }
 func (f *fakeEndpoints) Get(context.Context, string) (channelendpoints.View, error) {
 	return channelendpoints.View{ChannelEndpoint: models.ChannelEndpoint{OperationID: f.op}}, nil
@@ -75,7 +83,7 @@ func TestChannelEndpointRoles(t *testing.T) {
 
 	// A viewer reads and exports, but cannot change anything.
 	r, eps := newResolver(models.OperationRoleViewer)
-	if _, err := r.ChannelEndpoints(ctx, opID.String(), nil); err != nil {
+	if _, err := r.ChannelEndpoints(ctx, opID.String(), nil, nil, nil, nil, nil, nil); err != nil {
 		t.Errorf("viewer list: %v", err)
 	}
 	if _, err := r.ChannelEndpointExport(ctx, "x"); err != nil {

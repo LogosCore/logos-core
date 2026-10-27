@@ -14,6 +14,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -28,7 +29,9 @@ import (
 // Satisfied by *channelendpoints.Service.
 type ChannelEndpointManager interface {
 	Kinds(ctx context.Context) ([]channelendpoints.Kind, error)
-	List(ctx context.Context, operationID uuid.UUID, moduleName string) ([]channelendpoints.View, error)
+	List(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]channelendpoints.View, error)
+	Count(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter) (int64, error)
+	FreeName(ctx context.Context, operationID uuid.UUID, name, tag string) (string, error)
 	Get(ctx context.Context, id string) (channelendpoints.View, error)
 	Create(ctx context.Context, operationID uuid.UUID, moduleName string, in channelendpoints.Input) (channelendpoints.View, error)
 	Update(ctx context.Context, id string, expectedRevision int64, in channelendpoints.Input) (channelendpoints.View, error)
@@ -40,7 +43,8 @@ type ChannelEndpointManager interface {
 // channel_endpoints.graphql.
 type IChannelEndpointResolver interface {
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
-	ChannelEndpoints(ctx context.Context, operationID string, moduleName *string) ([]*model.ChannelEndpoint, error)
+	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
+	FreeChannelEndpointName(ctx context.Context, operationID string, name string, tag *string) (string, error)
 	ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error)
 	ChannelEndpointExport(ctx context.Context, id string) (any, error)
 	CreateChannelEndpoint(ctx context.Context, operationID string, moduleName string, input model.ChannelEndpointInput) (*model.ChannelEndpoint, error)
@@ -91,7 +95,7 @@ func (r *channelEndpointResolver) ChannelKinds(ctx context.Context) ([]*model.Ch
 	return out, nil
 }
 
-func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operationID string, moduleName *string) ([]*model.ChannelEndpoint, error) {
+func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error) {
 	opID, err := uuid.Parse(operationID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid operation ID: %w", err)
@@ -99,19 +103,43 @@ func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operatio
 	if err := r.authorize(ctx, opID, models.OperationRoleViewer, false); err != nil {
 		return nil, err
 	}
-	name := ""
-	if moduleName != nil {
-		name = *moduleName
+	args, err := pagination.ParseArgs(first, after, last, before)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pagination args: %w", err)
 	}
-	views, err := r.endpoints.List(ctx, opID, name)
+	filter := repository.ChannelEndpointFilter{ModuleNames: moduleNames}
+	if search != nil {
+		filter.Search = strings.TrimSpace(*search)
+	}
+	total, err := r.endpoints.Count(ctx, opID, filter)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*model.ChannelEndpoint, len(views))
-	for i, v := range views {
-		out[i] = toEndpointModel(v)
+	views, err := r.endpoints.List(ctx, opID, filter, args.Cursor, args.Limit+1, args.Forward)
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	edges, pageInfo := pagination.BuildEdges(views, args,
+		func(v *channelendpoints.View) string { return repository.ChannelEndpointCursor(&v.ChannelEndpoint) },
+		func(v *channelendpoints.View, cursor string) *model.ChannelEndpointEdge {
+			return &model.ChannelEndpointEdge{Node: toEndpointModel(*v), Cursor: cursor}
+		})
+	return &model.ChannelEndpointConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
+}
+
+func (r *channelEndpointResolver) FreeChannelEndpointName(ctx context.Context, operationID string, name string, tag *string) (string, error) {
+	opID, err := uuid.Parse(operationID)
+	if err != nil {
+		return "", fmt.Errorf("invalid operation ID: %w", err)
+	}
+	if err := r.authorize(ctx, opID, models.OperationRoleViewer, false); err != nil {
+		return "", err
+	}
+	free, err := r.endpoints.FreeName(ctx, opID, name, deref(tag))
+	if err != nil {
+		return "", mapEndpointError(ctx, err)
+	}
+	return free, nil
 }
 
 func (r *channelEndpointResolver) ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error) {

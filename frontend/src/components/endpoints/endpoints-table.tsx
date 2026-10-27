@@ -30,6 +30,9 @@ export function EndpointsTable({
   endpoints,
   kinds,
   isLoading,
+  isFetchingNextPage,
+  hasNextPage,
+  fetchNextPage,
   canWrite,
   emptyState,
   onDelete,
@@ -37,6 +40,9 @@ export function EndpointsTable({
   endpoints: Endpoint[]
   kinds: Map<string, Kind>
   isLoading: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  fetchNextPage: () => void
   canWrite: boolean
   emptyState: ReactNode
   onDelete: (endpoint: Endpoint) => void
@@ -48,10 +54,9 @@ export function EndpointsTable({
     <VirtualizedDataTable
       items={endpoints}
       isLoading={isLoading}
-      // An operation's endpoints come in one page.
-      isFetchingNextPage={false}
-      hasNextPage={false}
-      fetchNextPage={() => {}}
+      isFetchingNextPage={isFetchingNextPage}
+      hasNextPage={hasNextPage}
+      fetchNextPage={fetchNextPage}
       gridCols={GRID_COLS}
       entityNoun="endpoints"
       header={

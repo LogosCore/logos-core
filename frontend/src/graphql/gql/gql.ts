@@ -46,7 +46,8 @@ type Documents = {
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.ChannelEndpointFieldsFragmentDoc,
     "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": typeof types.ChannelKindsDocument,
-    "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.ChannelEndpointsDocument,
+    "\n  query ChannelEndpoints($operationId: ID!, $search: String, $moduleNames: [String!], $first: Int, $after: String) {\n    channelEndpoints(\n      operationId: $operationId\n      search: $search\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...ChannelEndpointFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.ChannelEndpointsDocument,
+    "\n  query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {\n    freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)\n  }\n": typeof types.FreeChannelEndpointNameDocument,
     "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.ChannelEndpointDocument,
     "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n": typeof types.ChannelEndpointExportDocument,
     "\n  mutation CreateChannelEndpoint($operationId: ID!, $moduleName: String!, $input: ChannelEndpointInput!) {\n    createChannelEndpoint(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...ChannelEndpointFields\n    }\n  }\n": typeof types.CreateChannelEndpointDocument,
@@ -263,7 +264,8 @@ const documents: Documents = {
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": types.ChannelEndpointFieldsFragmentDoc,
     "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": types.ChannelKindsDocument,
-    "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.ChannelEndpointsDocument,
+    "\n  query ChannelEndpoints($operationId: ID!, $search: String, $moduleNames: [String!], $first: Int, $after: String) {\n    channelEndpoints(\n      operationId: $operationId\n      search: $search\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...ChannelEndpointFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.ChannelEndpointsDocument,
+    "\n  query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {\n    freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)\n  }\n": types.FreeChannelEndpointNameDocument,
     "\n  query ChannelEndpoint($id: ID!) {\n    channelEndpoint(id: $id) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.ChannelEndpointDocument,
     "\n  query ChannelEndpointExport($id: ID!) {\n    channelEndpointExport(id: $id)\n  }\n": types.ChannelEndpointExportDocument,
     "\n  mutation CreateChannelEndpoint($operationId: ID!, $moduleName: String!, $input: ChannelEndpointInput!) {\n    createChannelEndpoint(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...ChannelEndpointFields\n    }\n  }\n": types.CreateChannelEndpointDocument,
@@ -576,7 +578,11 @@ export function graphql(source: "\n  query ChannelKinds {\n    channelKinds {\n 
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query ChannelEndpoints($operationId: ID!, $moduleName: String) {\n    channelEndpoints(operationId: $operationId, moduleName: $moduleName) {\n      ...ChannelEndpointFields\n    }\n  }\n"): typeof import('./graphql').ChannelEndpointsDocument;
+export function graphql(source: "\n  query ChannelEndpoints($operationId: ID!, $search: String, $moduleNames: [String!], $first: Int, $after: String) {\n    channelEndpoints(\n      operationId: $operationId\n      search: $search\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...ChannelEndpointFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').ChannelEndpointsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {\n    freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)\n  }\n"): typeof import('./graphql').FreeChannelEndpointNameDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

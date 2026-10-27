@@ -287,16 +287,14 @@ export interface EndpointDraft {
   problems: { label: string; message: string }[]
 }
 
-/** What saving connection i (c) as an endpoint makes; taken are the operation's endpoint names. */
-export function endpointFromConnection(
-  c: ConnectionDraft,
-  i: number,
-  channel: ChannelKind,
-  taken: Iterable<string>,
-): EndpointDraft {
+/**
+ * What saving connection i (c) as an endpoint makes. Its name is the
+ * connection's; the form asks the server for a free one like it.
+ */
+export function endpointFromConnection(c: ConnectionDraft, i: number, channel: ChannelKind): EndpointDraft {
   const { values, errors } = evaluateEndpoint(channel.fields, c.settings)
   return {
-    name: freeName(c.name.trim() || defaultConnectionName(c.moduleName, i), taken, ""),
+    name: c.name.trim() || defaultConnectionName(c.moduleName, i),
     description: c.description.trim(),
     values,
     problems: channel.fields.filter((f) => errors[f.key]).map((f) => ({ label: f.label, message: errors[f.key] })),
@@ -314,23 +312,6 @@ export function settingsSummary(channel: ChannelKind | undefined, values: unknow
     .slice(0, count)
     .map((r) => r.text)
     .join(" · ")
-}
-
-/** What a search for an endpoint looks through: its name, description, channel and settings. */
-export function endpointSearchText(
-  ep: { name: string; description?: string | null; moduleName: string; values?: unknown },
-  channel: ChannelKind | undefined,
-): string {
-  const settings = settingRows(channel ?? null, isRecord(ep.values) ? ep.values : {}).map((r) => r.text)
-  return [ep.name, ep.description ?? "", ep.moduleName, ...settings].join("\n").toLowerCase()
-}
-
-/** Whether text (from endpointSearchText) holds every word of query, case aside. */
-export function matchesQuery(text: string, query: string): boolean {
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .every((w) => text.includes(w))
 }
 
 /** The name the server gives connection i when it has none. */

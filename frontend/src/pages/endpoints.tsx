@@ -18,19 +18,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SearchInput } from "@/components/ui/search-input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
-import { useChannelEndpoints, useChannelKinds, useDeleteChannelEndpoint } from "@/graphql/hooks/channel-endpoints"
+import { useChannelKinds, useDeleteChannelEndpoint, useInfiniteChannelEndpoints } from "@/graphql/hooks/channel-endpoints"
+import { useConnectionNodes } from "@/hooks/use-connection-nodes"
+import { useEndpointStore } from "@/stores/endpoints"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { EndpointsTable } from "@/components/endpoints/endpoints-table"
 import { ImportEndpointDialog } from "@/components/endpoints/import-endpoint-dialog"
 import { KindName } from "@/components/modules/module-icon"
-import { groupByKind, kindsByName, type Kind } from "@/components/endpoints/endpoint-values"
+import { kindsByName, type Kind } from "@/components/endpoints/endpoint-values"
 
 type Endpoint = ChannelEndpointFieldsFragment
 
@@ -63,32 +66,42 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
   const canWrite = role === "ADMIN" || role === "OPERATOR" || hasPermission(Permissions.OPERATION_DELETE)
 
   const kindsQuery = useChannelKinds()
-  const { data, isLoading, error } = useChannelEndpoints(operationId)
-  const [search, setSearch] = useState("")
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState<Endpoint | null>(null)
   const [importing, setImporting] = useState(false)
   const kinds = useMemo(() => kindsByName(kindsQuery.data?.channelKinds ?? []), [kindsQuery.data])
 
-  const endpoints = useMemo(
-    () => groupByKind(filterEndpoints(data?.channelEndpoints ?? [], search)).flatMap(([, items]) => items),
-    [data, search],
-  )
-  const total = data?.channelEndpoints.length ?? 0
+  // The server searches and filters (see the channelEndpoints query).
+  const search = useEndpointStore((s) => s.search)
+  const setSearch = useEndpointStore((s) => s.setSearch)
+  const kindFilter = useEndpointStore((s) => s.kindFilter)
+  const setKindFilter = useEndpointStore((s) => s.setKindFilter)
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } = useInfiniteChannelEndpoints({
+    operationId,
+    search: search.trim() || null,
+    moduleNames: kindFilter ? [kindFilter] : null,
+  })
+  const endpoints = useConnectionNodes(data, (p) => p.channelEndpoints)
+  const filtered = search.trim() !== "" || kindFilter !== null
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
-      {/* Toolbar, as on the other pages: search on the left, actions right. */}
+      {/* Toolbar, as on the other pages: search and filters on the left, actions right. */}
       <div className="flex flex-wrap items-center gap-2">
-        {total > 0 && (
-          <SearchInput
-            value={search}
-            onValueChange={setSearch}
-            placeholder="Search endpoints..."
-            debounceMs={100}
-            title=""
-          />
-        )}
+        <SearchInput value={search} onValueChange={setSearch} placeholder="Search endpoints..." />
+        <Select value={kindFilter ?? "all"} onValueChange={(v) => setKindFilter(v === "all" ? null : v)}>
+          <SelectTrigger className="w-40" aria-label="Channel">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All channels</SelectItem>
+            {[...kinds.values()].map((k) => (
+              <SelectItem key={k.name} value={k.name}>
+                <KindName type="channel" name={k.name} icon={k.icon} />
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {canWrite && (
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" onClick={() => setImporting(true)} disabled={kinds.size === 0}>
@@ -110,10 +123,13 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
           endpoints={endpoints}
           kinds={kinds}
           isLoading={isLoading || kindsQuery.isLoading}
+          isFetchingNextPage={isFetchingNextPage}
+          hasNextPage={hasNextPage}
+          fetchNextPage={fetchNextPage}
           canWrite={canWrite}
           onDelete={setDeleting}
           emptyState={
-            total === 0 ? (
+            !filtered ? (
               <>
                 <RadioTowerIcon className="size-8 opacity-50" />
                 <p className="text-sm">No endpoints in this operation yet.</p>
@@ -126,7 +142,7 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
                 )}
               </>
             ) : (
-              <p className="text-sm">No endpoints match “{search}”.</p>
+              <p className="text-sm">No endpoints match the search and filters.</p>
             )
           }
         />
@@ -137,7 +153,6 @@ function EndpointsPageInner({ operationId }: { operationId: string }) {
         open={importing}
         onClose={() => setImporting(false)}
         kinds={kinds}
-        taken={(data?.channelEndpoints ?? []).map((e) => e.name)}
       />
     </div>
   )
@@ -228,17 +243,4 @@ function DeleteEndpointDialog({ endpoint, onClose }: { endpoint: Endpoint | null
       </DialogContent>
     </Dialog>
   )
-}
-
-/** Endpoints whose name, description, kind or values contain every term. */
-function filterEndpoints(endpoints: readonly Endpoint[], query: string): Endpoint[] {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
-  if (terms.length === 0) return [...endpoints]
-  return endpoints.filter((ep) => {
-    const text = [ep.name, ep.description, ep.moduleName, JSON.stringify(ep.values)]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
-    return terms.every((t) => text.includes(t))
-  })
 }

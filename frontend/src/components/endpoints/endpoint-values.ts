@@ -65,14 +65,6 @@ export function freeName(name: string, taken: Iterable<string>, tag: string): st
   }
 }
 
-/**
- * A free name for a duplicate of the endpoint called name: name-dup, or
- * name-dup-2, -3… when that is taken.
- */
-export function duplicateName(name: string, taken: Iterable<string>): string {
-  return freeName(name, taken, "-dup")
-}
-
 /** The export format of an endpoint (Copy / Download as JSON), as imports take it. */
 export const ENDPOINT_EXPORT_FORMAT = "logos.channel-endpoint.v1"
 
@@ -100,15 +92,14 @@ export interface EndpointImport {
 
 /**
  * Reads an endpoint export (Copy / Download as JSON) for a new endpoint of
- * the same channel kind. Its name becomes a valid, free one; settings the kind
- * does not declare are left out, and values equal to the kind's defaults too,
- * so those fields keep following the defaults (an export fills every default
- * in).
+ * the same channel kind. Its name becomes a valid one (the form then asks the
+ * server for a free one like it); settings the kind does not declare are left
+ * out, and values equal to the kind's defaults too, so those fields keep
+ * following the defaults (an export fills every default in).
  */
 export function parseEndpointImport(
   text: string,
   kinds: ReadonlyMap<string, Kind>,
-  taken: Iterable<string>,
 ): { ok: true; value: EndpointImport } | { ok: false; error: string } {
   let doc: unknown
   try {
@@ -146,7 +137,7 @@ export function parseEndpointImport(
     notes.push(`Left out, not settings of ${moduleName} v${kind.version}: ${unknown.sort().join(", ")}.`)
   }
   const name = typeof doc.name === "string" ? slug(doc.name) : ""
-  return { ok: true, value: { kind, name: freeName(name || "imported", taken, ""), values, notes } }
+  return { ok: true, value: { kind, name: name || "imported", values, notes } }
 }
 
 /** name as an endpoint name: lowercase, other characters as "-". */
@@ -262,15 +253,4 @@ export function settingRows(kind: Kind | null, values: Record<string, unknown>):
   return kind.fields
     .filter((f) => values[f.key] !== undefined && values[f.key] !== null)
     .map((f) => ({ key: f.key, label: f.label, text: formatValue(f.type, values[f.key], f.unit) }))
-}
-
-/** Endpoints grouped by channel kind, kinds in name order. */
-export function groupByKind<T extends { moduleName: string }>(items: readonly T[]): [string, T[]][] {
-  const groups = new Map<string, T[]>()
-  for (const item of items) {
-    const list = groups.get(item.moduleName)
-    if (list) list.push(item)
-    else groups.set(item.moduleName, [item])
-  }
-  return [...groups].sort(([a], [b]) => a.localeCompare(b))
 }

@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
@@ -36,8 +37,11 @@ const ExportFormat = "logos.channel-endpoint.v1"
 // MaxDescriptionLength bounds an endpoint's description.
 const MaxDescriptionLength = 500
 
-// namePattern: endpoints are picked by name, so it is a plain slug.
+// namePattern: endpoints are picked by name, so it is a plain slug of at
+// most maxNameLength characters.
 var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
+
+const maxNameLength = 63
 
 // ErrNotFound is mapped to a client error by the GraphQL layer.
 var ErrNotFound = errors.New("channel endpoint not found")
@@ -147,10 +151,11 @@ func (s *Service) Kinds(ctx context.Context) ([]Kind, error) {
 	return out, nil
 }
 
-// List returns an operation's endpoints by kind and name, all kinds or one
-// (moduleName "").
-func (s *Service) List(ctx context.Context, operationID uuid.UUID, moduleName string) ([]View, error) {
-	eps, err := s.repo.List(ctx, operationID, strings.TrimSpace(moduleName))
+// List returns a page of an operation's endpoints by name: those filter lets
+// through, past cursor, at most limit; each checked against its kind's
+// current schema.
+func (s *Service) List(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]View, error) {
+	eps, err := s.repo.FindByOperationIDWithCursor(ctx, operationID, filter, cursor, limit, forward)
 	if err != nil {
 		return nil, fmt.Errorf("list channel endpoints: %w", err)
 	}
@@ -167,6 +172,42 @@ func (s *Service) List(ctx context.Context, operationID uuid.UUID, moduleName st
 		out[i] = view(ep, schema)
 	}
 	return out, nil
+}
+
+// Count counts an operation's endpoints filter lets through.
+func (s *Service) Count(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter) (int64, error) {
+	n, err := s.repo.CountByOperationID(ctx, operationID, filter)
+	if err != nil {
+		return 0, fmt.Errorf("count channel endpoints: %w", err)
+	}
+	return n, nil
+}
+
+// maxFreeNameTries bounds FreeName's search for a free suffix.
+const maxFreeNameTries = 1000
+
+// FreeName is the first of name+tag, name+tag-2, -3… that no endpoint of the
+// operation is called, the base shortened to fit a name: what the forms
+// suggest for a copy, an import, or a connection saved as an endpoint. tag
+// is "" or starts with "-".
+func (s *Service) FreeName(ctx context.Context, operationID uuid.UUID, name, tag string) (string, error) {
+	base := []rune(strings.TrimSpace(name))
+	for n := 1; n <= maxFreeNameTries; n++ {
+		suffix := tag
+		if n > 1 {
+			suffix = fmt.Sprintf("%s-%d", tag, n)
+		}
+		room := max(0, maxNameLength-utf8.RuneCountInString(suffix))
+		candidate := string(base[:min(len(base), room)]) + suffix
+		taken, err := s.repo.NameTaken(ctx, operationID, candidate)
+		if err != nil {
+			return "", fmt.Errorf("check endpoint name: %w", err)
+		}
+		if !taken {
+			return candidate, nil
+		}
+	}
+	return "", invalid("no free name like %q", name)
 }
 
 // Get returns one endpoint.

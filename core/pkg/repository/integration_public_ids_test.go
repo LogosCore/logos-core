@@ -44,7 +44,7 @@ func TestIntegrationPublicIDs(t *testing.T) {
 
 	ids := func() map[string]uuid.UUID {
 		t.Helper()
-		eps, err := repo.List(ctx, op, "")
+		eps, err := repo.FindByOperationIDWithCursor(ctx, op, ChannelEndpointFilter{}, nil, 100, true)
 		if err != nil {
 			t.Fatal(err)
 		}

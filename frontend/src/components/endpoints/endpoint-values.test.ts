@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest"
 import { GraphQLRequestError } from "@/lib/graphql-client"
 import {
   ENDPOINT_EXPORT_FORMAT,
-  duplicateName,
   endpointDrafts,
   endpointImportFrom,
   evaluateEndpoint,
-  groupByKind,
+  freeName,
   nameError,
   parseEndpointImport,
   problemsFromError,
@@ -99,20 +98,6 @@ describe("settingRows", () => {
   })
 })
 
-describe("groupByKind", () => {
-  it("groups by module name in name order", () => {
-    const groups = groupByKind([
-      { moduleName: "http", n: 1 },
-      { moduleName: "dns", n: 2 },
-      { moduleName: "http", n: 3 },
-    ])
-    expect(groups.map(([k, items]) => [k, items.map((i) => i.n)])).toEqual([
-      ["dns", [2]],
-      ["http", [1, 3]],
-    ])
-  })
-})
-
 describe("problemsFromError", () => {
   it("reads extensions.problems", () => {
     const err = new GraphQLRequestError([
@@ -126,21 +111,21 @@ describe("problemsFromError", () => {
   })
 })
 
-describe("duplicateName", () => {
-  it("adds -dup, then a number while the name is taken", () => {
-    expect(duplicateName("edge", [])).toBe("edge-dup")
-    expect(duplicateName("edge", ["edge", "edge-dup"])).toBe("edge-dup-2")
-    expect(duplicateName("edge", ["edge-dup", "edge-dup-2", "edge-dup-3"])).toBe("edge-dup-4")
+describe("freeName", () => {
+  it("adds the tag, then a number while the name is taken", () => {
+    expect(freeName("edge", [], "-dup")).toBe("edge-dup")
+    expect(freeName("edge", ["edge", "edge-dup"], "-dup")).toBe("edge-dup-2")
+    expect(freeName("edge", ["edge", "edge-2"], "")).toBe("edge-3")
   })
 
   it("stays a valid name at the length limit", () => {
     const long = "e".repeat(63)
-    const dup = duplicateName(long, [])
+    const dup = freeName(long, [], "-dup")
     expect(dup).toHaveLength(63)
     expect(dup.endsWith("-dup")).toBe(true)
     expect(nameError(dup)).toBeNull()
-    expect(duplicateName(long, [dup])).toMatch(/^e+-dup-2$/)
-    expect(duplicateName(long, [dup])).toHaveLength(63)
+    expect(freeName(long, [dup], "-dup")).toMatch(/^e+-dup-2$/)
+    expect(freeName(long, [dup], "-dup")).toHaveLength(63)
   })
 })
 
@@ -166,7 +151,6 @@ describe("parseEndpointImport", () => {
         params: { base_url: "https://edge.example.com", tls_verify: false, request_timeout: "60s", headers: { "X-A": "1" } },
       }),
       kinds,
-      [],
     )
     expect(r).toEqual({
       ok: true,
@@ -179,23 +163,21 @@ describe("parseEndpointImport", () => {
     })
   })
 
-  it("picks a free, valid name", () => {
-    const name = (doc: Record<string, unknown>, taken: string[]) => {
-      const r = parseEndpointImport(exported(doc), kinds, taken)
+  it("picks a valid name (the form makes it a free one)", () => {
+    const name = (doc: Record<string, unknown>) => {
+      const r = parseEndpointImport(exported(doc), kinds)
       return r.ok ? r.value.name : r.error
     }
-    expect(name({}, ["edge"])).toBe("edge-2")
-    expect(name({}, ["edge", "edge-2"])).toBe("edge-3")
-    expect(name({ name: "EU CDN / Edge" }, [])).toBe("eu-cdn-edge")
-    expect(name({ name: "--" }, [])).toBe("imported")
-    expect(name({ name: 7 }, ["imported"])).toBe("imported-2")
+    expect(name({})).toBe("edge")
+    expect(name({ name: "EU CDN / Edge" })).toBe("eu-cdn-edge")
+    expect(name({ name: "--" })).toBe("imported")
+    expect(name({ name: 7 })).toBe("imported")
   })
 
   it("says what it left out or could not match", () => {
     const r = parseEndpointImport(
       exported({ channel: { module_name: "http", schema_version: 1 }, params: { base_url: "https://a.example", proxy_auth: "x", zz: 1 } }),
       kinds,
-      [],
     )
     expect(r.ok && r.value.notes).toEqual([
       "Exported for http schema v1; this channel is at v2. Check the values.",
@@ -206,7 +188,7 @@ describe("parseEndpointImport", () => {
 
   it("refuses what is not an endpoint export it can use", () => {
     const error = (text: string) => {
-      const r = parseEndpointImport(text, kinds, [])
+      const r = parseEndpointImport(text, kinds)
       return r.ok ? "accepted" : r.error
     }
     expect(error("{oops")).toMatch(/^Not JSON/)

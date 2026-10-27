@@ -17,7 +17,7 @@ import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-n
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
-import { useChannelEndpoints, useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
+import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useBuild, useBuildFiles, useCreateBuild, useFactoryKinds, useInvalidateBuildFiles } from "@/graphql/hooks/builds"
 import { uploadBuildFile } from "@/lib/build-file-upload"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
@@ -69,7 +69,7 @@ export function NewBuildPage() {
   return <EditorLoader operationId={scopedOperation.id} kindName={kindName} from={from} />
 }
 
-/** Loads what the form needs: the factory kind, the channels, the endpoints, the files. */
+/** Loads what the form needs: the factory kind, the channels, the files. */
 function EditorLoader({
   operationId,
   kindName,
@@ -82,10 +82,9 @@ function EditorLoader({
 }) {
   const kinds = useFactoryKinds()
   const channelKinds = useChannelKinds()
-  const endpointsQuery = useChannelEndpoints(operationId)
   const filesQuery = useBuildFiles(operationId)
 
-  if (kinds.isLoading || channelKinds.isLoading || endpointsQuery.isLoading || filesQuery.isLoading) {
+  if (kinds.isLoading || channelKinds.isLoading || filesQuery.isLoading) {
     return <EditorSkeleton />
   }
   const kind = factoryKindsByName(kinds.data?.factoryKinds ?? []).get(kindName)
@@ -98,7 +97,6 @@ function EditorLoader({
       kind={kind}
       source={from && sourceFromBuild(kind, from, channels)}
       channels={channels}
-      endpoints={endpointsQuery.data?.channelEndpoints ?? []}
       files={(filesQuery.data?.buildFiles ?? []).map((f) => ({ id: f.id, name: f.name, size: f.size, mediaType: f.mediaType }))}
     />
   )
@@ -130,15 +128,12 @@ function Editor({
   kind,
   source,
   channels,
-  endpoints,
   files,
 }: {
   operationId: string
   kind: FactoryKind
   source: FormSource | null
   channels: ReadonlyMap<string, ChannelKind>
-  /** The operation's endpoints, which connections can be filled from. */
-  endpoints: readonly EndpointOption[]
   files: BuildFilesContextValue["files"]
 }) {
   const navigate = useNavigate()
@@ -259,13 +254,15 @@ function Editor({
   const filling = form.connections.findIndex((c) => c.key === picker.fill)
   const savingIndex = form.connections.findIndex((c) => c.key === saving.key)
   const savingConnection = savingIndex < 0 ? undefined : form.connections[savingIndex]
-  const pick: Omit<ComponentProps<typeof ConnectionPickerDialog>, "open" | "onClose" | "channels" | "channelIcons"> =
+  const pick: Omit<
+    ComponentProps<typeof ConnectionPickerDialog>,
+    "open" | "onClose" | "operationId" | "channels" | "channelIcons"
+  > =
     filling < 0
       ? {
           title: "Add connection",
           description: "Pick an endpoint to copy its settings, then change what you need, or start a blank connection.",
           kinds: usable,
-          endpoints: endpoints.filter((e) => usable.includes(e.moduleName)),
           blank: speaks,
           onEndpoint: (ep) => addConnection(ep.moduleName, ep),
           onBlank: (moduleName) => addConnection(moduleName, null),
@@ -274,7 +271,6 @@ function Editor({
           title: `Fill connection ${filling + 1} from an endpoint`,
           description: `Its settings become a copy of the endpoint's, and its name and description the endpoint's unless you wrote your own. The ${kind.name} parameters stay as they are.`,
           kinds: [form.connections[filling].moduleName],
-          endpoints: endpoints.filter((e) => e.moduleName === form.connections[filling].moduleName),
           onEndpoint: (ep) => fillConnection(form.connections[filling].key, ep),
         }
 
@@ -451,13 +447,13 @@ function Editor({
                 return (
                   <ConnectionCard
                     key={c.key}
+                    operationId={operationId}
                     index={i}
                     count={form.connections.length}
                     connection={c}
                     kind={kind}
                     channel={ch}
                     channelIcon={channelIcons.get(c.moduleName)}
-                    endpointCount={endpoints.filter((e) => e.moduleName === c.moduleName).length}
                     settings={input.connections[i]?.settings ?? {}}
                     errors={shown}
                     disabled={disabled}
@@ -491,6 +487,7 @@ function Editor({
           <ConnectionPickerDialog
             open={picker.open}
             onClose={() => setPicker((p) => ({ ...p, open: false }))}
+            operationId={operationId}
             channels={channels}
             channelIcons={channelIcons}
             {...pick}
@@ -504,7 +501,6 @@ function Editor({
             channelIcon={savingConnection && channelIcons.get(savingConnection.moduleName)}
             connection={savingConnection}
             index={savingIndex}
-            taken={endpoints.map((e) => e.name)}
           />
         </div>
         </div>
