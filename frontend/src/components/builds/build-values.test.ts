@@ -6,13 +6,17 @@ import {
   acceptText,
   channelUnusable,
   connectionDraft,
+  connectionNames,
+  endpointSearchText,
   evaluateForm,
   factoryKindsByName,
   fileFits,
   fillFromEndpoint,
   initialForm,
+  matchesQuery,
   move,
   platformLabel,
+  settingsSummary,
   sourceFromBuild,
   withTarget,
   type BuildForm,
@@ -249,6 +253,7 @@ describe("fillFromEndpoint", () => {
   it("copies the endpoint's settings and name, until the operator names the connection", () => {
     const c = fillFromEndpoint(connection("http", { settings: { token: "typed" } }), http, eu)
     expect(c.name).toBe("eu")
+    expect(c.named).toBe(false)
     expect(c.filledFrom).toBe("eu")
     expect(c.settings).toEqual({
       base_url: { kind: "text", text: "https://eu.example.com" },
@@ -256,7 +261,20 @@ describe("fillFromEndpoint", () => {
       token: { kind: "text", text: "" },
     })
     expect(fillFromEndpoint(c, http, us).name).toBe("us")
-    expect(fillFromEndpoint({ ...c, name: "primary" }, http, us).name).toBe("primary")
+    expect(fillFromEndpoint({ ...c, name: "primary", named: true }, http, us).name).toBe("primary")
+    // A preset's or build's own name counts as the operator's.
+    expect(fillFromEndpoint(connection("http", { name: "primary" }), http, us).name).toBe("primary")
+  })
+
+  it("gives the endpoint's name free of the other connections'", () => {
+    const blank = connection("http")
+    expect(fillFromEndpoint(blank, http, eu, ["eu", "eu-2", "http-1"]).name).toBe("eu-3")
+    expect(fillFromEndpoint(blank, http, eu, ["us"]).name).toBe("eu")
+    expect(connectionNames([connection("http", { name: " eu " }), connection("http"), connection("dns")])).toEqual([
+      "eu",
+      "http-2",
+      "dns-3",
+    ])
   })
 
   it("leaves the factory's parameters and drops old notes", () => {
@@ -265,6 +283,31 @@ describe("fillFromEndpoint", () => {
     expect(filled.drafts.method).toEqual({ kind: "text", text: "GET" })
     expect(filled.notes).toEqual([])
     expect(filled.key).toBe(c.key)
+  })
+})
+
+describe("finding endpoints", () => {
+  const eu = {
+    name: "eu-front",
+    description: "CDN in Frankfurt",
+    moduleName: "http",
+    values: { base_url: "https://cdn.eu.example.com", request_timeout: "10s", token: "s3cret" },
+  }
+
+  it("searches names, descriptions, channels and settings, every word", () => {
+    const text = endpointSearchText(eu, http)
+    for (const q of ["", "  ", "EU", "frankfurt", "http", "cdn.eu.example", "10s", "eu cdn", "Front  Frankfurt"]) {
+      expect(matchesQuery(text, q), q).toBe(true)
+    }
+    for (const q of ["us", "eu paris", "dns"]) expect(matchesQuery(text, q), q).toBe(false)
+    // Without the channel's settings, its raw values still count.
+    expect(matchesQuery(endpointSearchText(eu, undefined), "cdn.eu")).toBe(true)
+  })
+
+  it("sums up the first settings", () => {
+    expect(settingsSummary(http, eu.values)).toBe("https://cdn.eu.example.com · 10s")
+    expect(settingsSummary(http, {})).toBe("")
+    expect(settingsSummary(http, null)).toBe("")
   })
 })
 

@@ -56,7 +56,7 @@ const MAX_NAME_LENGTH = 63
  * The first free name of name+tag, name+tag-2, -3…, the base shortened to
  * stay within the name length. tag is "" or starts with "-".
  */
-function freeName(name: string, taken: Iterable<string>, tag: string): string {
+export function freeName(name: string, taken: Iterable<string>, tag: string): string {
   const used = new Set(taken)
   for (let n = 1; ; n++) {
     const suffix = n === 1 ? tag : `${tag}-${n}`

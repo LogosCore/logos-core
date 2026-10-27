@@ -15,7 +15,7 @@ import {
   type Draft,
   type FieldDef,
 } from "@/components/modules/management/field-values"
-import { isRecord, nameError, sameJSON, type Kind } from "@/components/endpoints/endpoint-values"
+import { freeName, isRecord, nameError, sameJSON, settingRows, type Kind } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 
 // Secrets in a build are operation data, edited as text like the rest.
@@ -172,6 +172,8 @@ export interface ConnectionDraft {
   moduleName: string
   /** What the minion calls the connection; "" for "<channel>-<position>". */
   name: string
+  /** The name is the operator's, not one a fill gave: the next fill keeps it. */
+  named: boolean
   /** The endpoint the settings were last filled from. */
   filledFrom: string | null
   /** The channel's connection settings. */
@@ -226,6 +228,7 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
     key: `connection-${++lastKey}`,
     moduleName: source.moduleName,
     name: source.name ?? "",
+    named: !!source.name?.trim(),
     filledFrom: null,
     settings: draftsFor(ch?.fields ?? [], source.settings),
     drafts: draftsFor(kind.channelFields.get(source.moduleName) ?? [], source.values),
@@ -235,21 +238,52 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
 
 /**
  * The connection with its settings replaced by an endpoint's values. It takes
- * the endpoint's name too, unless the operator named it.
+ * the endpoint's name too, unless the operator named it: the first of name,
+ * name-2, -3… no other connection is called (taken).
  */
 export function fillFromEndpoint(
   c: ConnectionDraft,
   ch: ChannelKind,
   ep: { name: string; values?: unknown },
+  taken: Iterable<string> = [],
 ): ConnectionDraft {
-  const named = c.name.trim() !== "" && c.name !== c.filledFrom
   return {
     ...c,
-    name: named ? c.name : ep.name,
+    name: c.named ? c.name : freeName(ep.name, taken, ""),
     filledFrom: ep.name,
     settings: draftsFor(ch.fields, isRecord(ep.values) ? ep.values : null),
     notes: [],
   }
+}
+
+/** The names the connections go by, theirs or the server's default. */
+export function connectionNames(connections: readonly Pick<ConnectionDraft, "moduleName" | "name">[]): string[] {
+  return connections.map((c, i) => c.name.trim() || defaultConnectionName(c.moduleName, i))
+}
+
+/** The first settings with a value, for one line: "https://edge.example.com · 10s". */
+export function settingsSummary(channel: ChannelKind | undefined, values: unknown): string {
+  return settingRows(channel ?? null, isRecord(values) ? values : {})
+    .slice(0, 2)
+    .map((r) => r.text)
+    .join(" · ")
+}
+
+/** What a search for an endpoint looks through: its name, description, channel and settings. */
+export function endpointSearchText(
+  ep: { name: string; description?: string | null; moduleName: string; values?: unknown },
+  channel: ChannelKind | undefined,
+): string {
+  const settings = settingRows(channel ?? null, isRecord(ep.values) ? ep.values : {}).map((r) => r.text)
+  return [ep.name, ep.description ?? "", ep.moduleName, ...settings].join("\n").toLowerCase()
+}
+
+/** Whether text (from endpointSearchText) holds every word of query, case aside. */
+export function matchesQuery(text: string, query: string): boolean {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .every((w) => text.includes(w))
 }
 
 /** The name the server gives connection i when it has none. */

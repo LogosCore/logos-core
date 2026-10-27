@@ -1,31 +1,13 @@
 import { useState, type ReactNode } from "react"
-import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, PlusIcon, XIcon } from "lucide-react"
+import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, CopyIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SettingRow } from "@/components/ui/settings-rows"
-import { KindName, ModuleIcon } from "@/components/modules/module-icon"
+import { KindName } from "@/components/modules/module-icon"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
-import { settingRows } from "@/components/endpoints/endpoint-values"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
-import {
-  channelUnusable,
-  defaultConnectionName,
-  type ChannelKind,
-  type ConnectionDraft,
-  type FactoryKind,
-  type Target,
-} from "./build-values"
+import { defaultConnectionName, settingsSummary, type ChannelKind, type ConnectionDraft, type FactoryKind } from "./build-values"
 
 /** An operation's endpoint, as a connection is filled from it. */
 export interface EndpointOption {
@@ -49,7 +31,7 @@ export function ConnectionCard({
   kind,
   channel,
   channelIcon,
-  endpoints,
+  endpointCount,
   settings,
   errors,
   disabled,
@@ -68,8 +50,8 @@ export function ConnectionCard({
   /** The channel kind; undefined when it declares no settings now. */
   channel: ChannelKind | undefined
   channelIcon?: string
-  /** The operation's endpoints of the connection's channel kind. */
-  endpoints: readonly EndpointOption[]
+  /** How many of the operation's endpoints are of the connection's channel kind. */
+  endpointCount: number
   /** The settings as the form submits them, for the folded line. */
   settings: Record<string, unknown>
   /** The form's errors, keyed like the server's problems. */
@@ -79,7 +61,8 @@ export function ConnectionCard({
   onName: (name: string) => void
   onSetting: (key: string, d: Draft) => void
   onParam: (key: string, d: Draft) => void
-  onFill: (endpoint: EndpointOption) => void
+  /** Asks for an endpoint to fill the settings from. */
+  onFill: () => void
   onMove: (by: -1 | 1) => void
   onRemove: () => void
 }) {
@@ -89,10 +72,7 @@ export function ConnectionCard({
   const open = !folded || hasError
   const defaultName = defaultConnectionName(c.moduleName, index)
   const params = kind.channelFields.get(c.moduleName) ?? []
-  const summary = settingRows(channel ?? null, settings)
-    .slice(0, 2)
-    .map((r) => r.text)
-    .join(" · ")
+  const summary = settingsSummary(channel, settings)
   const idPrefix = `connection-${c.key}`
 
   return (
@@ -118,31 +98,17 @@ export function ConnectionCard({
             : summary && <span className="truncate font-mono text-xs text-muted-foreground">{summary}</span>}
         </button>
         <div className="flex items-center gap-1">
-          <Select
-            value={null}
-            onValueChange={(v) => {
-              const ep = endpoints.find((e) => e.id === v)
-              if (ep) onFill(ep)
-            }}
-            disabled={disabled || !channel || endpoints.length === 0}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled || !channel || endpointCount === 0}
+            title={endpointCount === 0 ? `No ${c.moduleName} endpoints in this operation` : "Replace the settings with an endpoint's"}
+            onClick={onFill}
           >
-            <SelectTrigger size="sm" aria-label="Fill the settings from an endpoint">
-              <SelectValue placeholder={endpoints.length === 0 ? `No ${c.moduleName} endpoints` : "Fill from endpoint…"} />
-            </SelectTrigger>
-            <SelectContent>
-              {endpoints.map((e) => (
-                <SelectItem
-                  key={e.id}
-                  value={e.id}
-                  description={
-                    e.problems.length > 0 ? "Doesn't fit the channel's current settings: check them after filling" : (e.description ?? undefined)
-                  }
-                >
-                  {e.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <CopyIcon />
+            Fill from endpoint…
+          </Button>
           <Button type="button" variant="ghost" size="icon-sm" title="Earlier" aria-label="Earlier" disabled={disabled || index === 0} onClick={() => onMove(-1)}>
             <ArrowUpIcon />
           </Button>
@@ -226,75 +192,5 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
       <div className="divide-y">{children}</div>
     </div>
-  )
-}
-
-/**
- * Adds a connection: blank, through a channel the target speaks, or filled
- * from one of the operation's endpoints.
- */
-export function AddConnectionMenu({
-  target,
-  channels,
-  channelIcons,
-  endpoints,
-  disabled,
-  onAdd,
-}: {
-  target: Target | undefined
-  channels: ReadonlyMap<string, ChannelKind>
-  channelIcons: ReadonlyMap<string, string>
-  endpoints: readonly EndpointOption[]
-  disabled: boolean
-  onAdd: (moduleName: string, endpoint: EndpointOption | null) => void
-}) {
-  const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
-  const usable = new Set(speaks.filter((c) => c.why === null).map((c) => c.name))
-  const fillable = endpoints.filter((e) => usable.has(e.moduleName))
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button type="button" variant="outline" className="self-start" disabled={disabled || speaks.length === 0}>
-            <PlusIcon />
-            Add connection
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="start" className="min-w-64">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Blank</DropdownMenuLabel>
-          {speaks.map((c) => (
-            <DropdownMenuItem key={c.name} disabled={c.why !== null} onClick={() => onAdd(c.name, null)}>
-              <ModuleIcon type="channel" icon={channelIcons.get(c.name)} />
-              <span className="flex min-w-0 flex-col">
-                <span className="font-mono">{c.name}</span>
-                {c.why && <span className="text-xs whitespace-normal text-muted-foreground">{c.why}</span>}
-              </span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-        {fillable.length > 0 && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>From an endpoint</DropdownMenuLabel>
-              {fillable.map((e) => (
-                <DropdownMenuItem key={e.id} onClick={() => onAdd(e.moduleName, e)}>
-                  <ModuleIcon type="channel" icon={channelIcons.get(e.moduleName)} />
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate">{e.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {e.moduleName}
-                      {e.problems.length > 0 && " · doesn't fit the current settings"}
-                    </span>
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }

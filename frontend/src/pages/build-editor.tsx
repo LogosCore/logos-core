@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ComponentProps } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router"
-import { ArrowLeftIcon, HammerIcon } from "lucide-react"
+import { ArrowLeftIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,9 +37,12 @@ import { groupByField, type Draft } from "@/components/modules/management/field-
 import { kindsByName, nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
 import { BuildFilesContext, type BuildFilesContextValue } from "@/components/builds/build-files-context"
 import { FieldRow } from "@/components/builds/build-field-row"
-import { AddConnectionMenu, ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
+import { ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
+import { ConnectionPickerDialog } from "@/components/builds/connection-picker-dialog"
 import {
+  channelUnusable,
   connectionDraft,
+  connectionNames,
   evaluateForm,
   factoryKindsByName,
   fillFromEndpoint,
@@ -222,6 +225,8 @@ function Editor({
   const channelIcons = useChannelIcons()
 
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
+  // The endpoint picker: adding a connection, or filling the one keyed fill.
+  const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
   const [name, setName] = useState(preset?.name ?? "")
   const [description, setDescription] = useState(preset?.description ?? "")
   const [submitted, setSubmitted] = useState(false)
@@ -282,10 +287,20 @@ function Editor({
   }
 
   function addConnection(moduleName: string, ep: EndpointOption | null) {
+    setPicker((p) => ({ ...p, open: false }))
     const ch = channels.get(moduleName)
     if (!ch) return
     const c = connectionDraft(kind, ch, { moduleName })
-    setConnections((cs) => [...cs, ep ? fillFromEndpoint(c, ch, ep) : c])
+    setConnections((cs) => [...cs, ep ? fillFromEndpoint(c, ch, ep, connectionNames(cs)) : c])
+  }
+
+  function fillConnection(key: string, ep: EndpointOption) {
+    setPicker((p) => ({ ...p, open: false }))
+    const i = form.connections.findIndex((c) => c.key === key)
+    const ch = channels.get(ep.moduleName)
+    if (i < 0 || !ch) return
+    const taken = connectionNames(form.connections).filter((_, j) => j !== i)
+    updateConnection(i, (c) => fillFromEndpoint(c, ch, ep, taken), `connections[${i}].settings.`, `connections[${i}].name`)
   }
 
   async function submit() {
@@ -342,6 +357,28 @@ function Editor({
   }
 
   const groups = groupByField(fields, (f) => f)
+  // The channels the target speaks, for a new connection, and their endpoints.
+  const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
+  const usable = speaks.filter((c) => c.why === null).map((c) => c.name)
+  const filling = form.connections.findIndex((c) => c.key === picker.fill)
+  const pick: Omit<ComponentProps<typeof ConnectionPickerDialog>, "open" | "onClose" | "channels" | "channelIcons"> =
+    filling < 0
+      ? {
+          title: "Add connection",
+          description: "Pick an endpoint to copy its settings, then change what you need, or start a blank connection.",
+          kinds: usable,
+          endpoints: endpoints.filter((e) => usable.includes(e.moduleName)),
+          blank: speaks,
+          onEndpoint: (ep) => addConnection(ep.moduleName, ep),
+          onBlank: (moduleName) => addConnection(moduleName, null),
+        }
+      : {
+          title: `Fill connection ${filling + 1} from an endpoint`,
+          description: `Its settings become a copy of the endpoint's, and its name the endpoint's unless you named it. The ${kind.name} parameters stay as they are.`,
+          kinds: [form.connections[filling].moduleName],
+          endpoints: endpoints.filter((e) => e.moduleName === form.connections[filling].moduleName),
+          onEndpoint: (ep) => fillConnection(form.connections[filling].key, ep),
+        }
 
   // Side list: what to build, each group of fields, the connections, with a
   // dot for errors or for values set.
@@ -532,34 +569,41 @@ function Editor({
                     kind={kind}
                     channel={ch}
                     channelIcon={channelIcons.get(c.moduleName)}
-                    endpoints={endpoints.filter((e) => e.moduleName === c.moduleName)}
+                    endpointCount={endpoints.filter((e) => e.moduleName === c.moduleName).length}
                     settings={input.connections[i]?.settings ?? {}}
                     errors={shown}
                     disabled={disabled}
                     partial={mode === "preset"}
-                    onName={(name) => updateConnection(i, (x) => ({ ...x, name }), `${at}.name`)}
+                    onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
                     onSetting={(key, d) =>
                       updateConnection(i, (x) => ({ ...x, settings: { ...x.settings, [key]: d } }), `${at}.settings.${key}`)
                     }
                     onParam={(key, d) => updateConnection(i, (x) => ({ ...x, drafts: { ...x.drafts, [key]: d } }), `${at}.values.${key}`)}
-                    onFill={(ep) => {
-                      if (ch) updateConnection(i, (x) => fillFromEndpoint(x, ch, ep), `${at}.settings.`, `${at}.name`)
-                    }}
+                    onFill={() => setPicker({ open: true, fill: c.key })}
                     onMove={(by) => setConnections((cs) => move(cs, i, by))}
                     onRemove={() => setConnections((cs) => cs.filter((_, j) => j !== i))}
                   />
                 )
               })}
-              <AddConnectionMenu
-                target={target}
-                channels={channels}
-                channelIcons={channelIcons}
-                endpoints={endpoints}
-                disabled={disabled}
-                onAdd={addConnection}
-              />
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start"
+                disabled={disabled || speaks.length === 0}
+                onClick={() => setPicker({ open: true, fill: null })}
+              >
+                <PlusIcon />
+                Add connection
+              </Button>
             </div>
           </section>
+          <ConnectionPickerDialog
+            open={picker.open}
+            onClose={() => setPicker((p) => ({ ...p, open: false }))}
+            channels={channels}
+            channelIcons={channelIcons}
+            {...pick}
+          />
         </div>
         </div>
         </div>
