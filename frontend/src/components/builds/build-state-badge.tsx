@@ -2,7 +2,7 @@ import { Loader2Icon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { isUnfinished } from "@/graphql/hooks/builds"
-import { STATE_LABEL, lastPercent } from "./build-values"
+import { STATE_LABEL } from "./build-values"
 
 const STATE_STYLE: Record<string, string> = {
   QUEUED: "border-muted-foreground/30 text-muted-foreground",
@@ -12,18 +12,12 @@ const STATE_STYLE: Record<string, string> = {
   CANCELLED: "border-muted-foreground/30 text-muted-foreground",
 }
 
-/** A build's state, with its last reported progress while it runs. */
-export function BuildStateBadge({
-  build,
-}: {
-  build: { state: string; steps: readonly { percent?: number | null }[] }
-}) {
-  const pct = build.state === "BUILDING" ? lastPercent(build.steps) : null
+/** A build's state. Where it is in its pipeline is the pipeline's to show. */
+export function BuildStateBadge({ build }: { build: { state: string } }) {
   return (
     <Badge variant="outline" className={cn("gap-1", STATE_STYLE[build.state])}>
       {isUnfinished(build.state) && <Loader2Icon className="size-3 animate-spin" />}
       {STATE_LABEL[build.state] ?? build.state}
-      {pct !== null && ` ${pct}%`}
     </Badge>
   )
 }

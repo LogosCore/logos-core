@@ -26,6 +26,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatBytes } from "@/lib/format-bytes"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { artifactUrl } from "@/lib/build-file-upload"
+import { useNow } from "@/hooks/use-now"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import type { BuildQuery } from "@/graphql/gql/graphql"
 import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact, useFactoryIcons } from "@/graphql/hooks/builds"
@@ -36,6 +37,7 @@ import { formatElapsed, prettyJson } from "@/components/modules/management/field
 import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { buildConnectionRows, buildElapsed, platformLabel } from "@/components/builds/build-values"
+import { BuildPipeline } from "@/components/builds/build-pipeline"
 import { KindName } from "@/components/modules/module-icon"
 
 type Build = NonNullable<BuildQuery["build"]>
@@ -75,6 +77,7 @@ export function BuildDetailPage() {
 
 function BuildDetail({ build: b }: { build: Build }) {
   const navigate = useNavigate()
+  const now = useNow()
   const icons = useFactoryIcons()
   const channelIcons = useChannelIcons()
   const channelKinds = useChannelKinds()
@@ -147,6 +150,12 @@ function BuildDetail({ build: b }: { build: Build }) {
           </div>
         )}
 
+        <Section title="Pipeline">
+          <div className="py-3">
+            <BuildPipeline stages={b.stages} now={now} />
+          </div>
+        </Section>
+
         <Section title="Overview">
           <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-6 gap-y-2 py-3 text-sm">
             <Item label="Platform">{platformLabel(b.platform)}</Item>
@@ -187,23 +196,6 @@ function BuildDetail({ build: b }: { build: Build }) {
             </Item>
           </dl>
         </Section>
-
-        {b.steps.length > 0 && (
-          <Section title="Progress">
-            <ol className="flex flex-col gap-1.5 py-3 text-sm">
-              {b.steps.map((s, i) => (
-                <li key={`${s.at}-${i}`} className="grid grid-cols-[6rem_minmax(0,1fr)_auto] items-baseline gap-3">
-                  <span className="font-mono text-xs text-muted-foreground">{new Date(s.at).toLocaleTimeString()}</span>
-                  <span>
-                    <span className="font-medium">{s.step}</span>
-                    {s.message && <span className="text-muted-foreground"> — {s.message}</span>}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{typeof s.percent === "number" ? `${s.percent}%` : ""}</span>
-                </li>
-              ))}
-            </ol>
-          </Section>
-        )}
 
         {b.artifact && (
           <Section title="Artifact">

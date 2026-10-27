@@ -175,8 +175,27 @@ func (s *Service) offerTo(ctx context.Context, b *models.Build, inst models.Modu
 	if json.Unmarshal(rep.Payload, &accepted) != nil || !accepted.Accepted || accepted.BuildID != b.BuildID {
 		return false
 	}
-	s.logger.Info("build started", zap.String("build_id", b.BuildID), zap.String("instance", inst.Instance))
+	s.setPlan(ctx, b.BuildID, inst.Instance, accepted.Steps)
+	s.logger.Info("build started", zap.String("build_id", b.BuildID), zap.String("instance", inst.Instance),
+		zap.Int("steps", len(accepted.Steps)))
 	return true
+}
+
+// setPlan stores the plan an instance accepted a build with. Without a valid
+// one the build is still built, and shows as a single step.
+func (s *Service) setPlan(ctx context.Context, buildID, instance string, steps []protocol.BuildStep) {
+	if err := protocol.ValidateBuildSteps(steps); err != nil {
+		s.logger.Warn("a factory accepted a build without a valid plan", zap.String("build_id", buildID),
+			zap.String("instance", instance), zap.Error(err))
+		return
+	}
+	plan := make([]models.BuildPlanStep, len(steps))
+	for i, st := range steps {
+		plan[i] = models.BuildPlanStep{ID: st.ID, Label: st.Label}
+	}
+	if _, err := s.repos.Builds.SetPlan(ctx, buildID, instance, plan); err != nil {
+		s.logger.Warn("store a build's plan", zap.String("build_id", buildID), zap.Error(err))
+	}
 }
 
 // request is the factory.build request of b, with URLs valid until deadline.

@@ -8,6 +8,7 @@ import {
   channelUnusable,
   connectionDraft,
   connectionNames,
+  currentStage,
   endpointFromConnection,
   endpointSearchText,
   evaluateForm,
@@ -20,6 +21,7 @@ import {
   platformLabel,
   settingsSummary,
   sourceFromBuild,
+  stageDuration,
   withTarget,
   type BuildForm,
 } from "./build-values"
@@ -427,6 +429,32 @@ describe("sourceFromBuild", () => {
     const source = sourceFromBuild(kind, { target: "dummy", platform: "any/any", values: null, connections: [null, { endpoint: 1 }] }, channels)
     expect(source.values).toEqual({})
     expect(source.connections?.map((c) => c.moduleName)).toEqual(["", ""])
+  })
+})
+
+describe("pipeline stages", () => {
+  const stage = (state: string, startedAt?: string, finishedAt?: string) => ({
+    id: state.toLowerCase(),
+    label: state,
+    core: false,
+    state,
+    startedAt: startedAt ?? null,
+    finishedAt: finishedAt ?? null,
+  })
+  const now = Date.parse("2026-10-27T09:00:20Z")
+
+  it("times a stage, a running one until now", () => {
+    expect(stageDuration(stage("SUCCEEDED", "2026-10-27T09:00:10Z", "2026-10-27T09:00:12.5Z"), now)).toBe(2500)
+    expect(stageDuration(stage("RUNNING", "2026-10-27T09:00:15Z"), now)).toBe(5000)
+    expect(stageDuration(stage("SUCCEEDED"), now)).toBeNull() // done without a report
+    expect(stageDuration(stage("FAILED", "2026-10-27T09:00:15Z"), now)).toBeNull() // no end known
+  })
+
+  it("finds where a build is: running, or where it stopped", () => {
+    expect(currentStage([stage("SUCCEEDED"), stage("RUNNING"), stage("PENDING")])?.state).toBe("RUNNING")
+    expect(currentStage([stage("SUCCEEDED"), stage("FAILED"), stage("SKIPPED")])?.state).toBe("FAILED")
+    expect(currentStage([stage("SUCCEEDED"), stage("CANCELLED"), stage("SKIPPED")])?.state).toBe("CANCELLED")
+    expect(currentStage([stage("SUCCEEDED"), stage("SUCCEEDED")])).toBeNull()
   })
 })
 

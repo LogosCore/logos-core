@@ -25,9 +25,7 @@ func (s *Service) HandleProgress(ctx context.Context, req messaging.Envelope) (a
 	if err := p.Validate(); err != nil {
 		return nil, rpcErr(protocol.CodeValidationFailed, err.Error())
 	}
-	ok, err := s.repos.Builds.AppendStep(ctx, p.BuildID, req.Source.Instance, models.BuildStep{
-		Step: p.Step, Message: p.Message, Percent: p.Percent, At: s.now(),
-	}, keepSteps)
+	ok, err := s.repos.Builds.ReportStep(ctx, p.BuildID, req.Source.Instance, p.Step, p.Message, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record progress: %w", err)
 	}
@@ -90,7 +88,7 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		Filename: r.Artifact.Filename, Size: r.Artifact.Size, SHA256: r.Artifact.SHA256,
 		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.BuildID),
 	}
-	ok, err := s.repos.Builds.RecordResult(ctx, b.BuildID, instance, art, r.Capabilities, r.Warnings, r.Log)
+	ok, err := s.repos.Builds.RecordResult(ctx, b.BuildID, instance, art, r.Capabilities, r.Warnings, r.Log, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record a build result: %w", err)
 	}

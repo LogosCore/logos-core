@@ -404,8 +404,29 @@ func TestReportBeforeAcceptance(t *testing.T) {
 	if progress != nil {
 		t.Fatalf("progress sent right after accepting: %v", progress)
 	}
-	if got := r.get(t, b.BuildID, models.BuildStateBuilding); len(got.Steps) != 1 {
-		t.Fatalf("steps %+v", got.Steps)
+	// The report came before the plan: both are kept.
+	if got := r.get(t, b.BuildID, models.BuildStateBuilding); len(got.StepReports) != 1 || len(got.Plan) != len(bobPlan) {
+		t.Fatalf("reports %+v, plan %+v", got.StepReports, got.Plan)
+	}
+}
+
+func TestOfferWithoutAValidPlan(t *testing.T) {
+	r := newRig(t)
+	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) {
+		req := c.payload.(protocol.BuildRequest)
+		rep, _ := protocol.NewReply(protocol.Envelope{Type: c.op, Version: protocol.EnvelopeVersionV1}, protocol.Source{Service: "factory"},
+			protocol.BuildReply{BuildID: req.BuildID, Accepted: true, Steps: []protocol.BuildStep{{ID: "Bad Id", Label: "x"}}})
+		return rep, nil
+	}
+	b := r.queue(t, nil)
+	r.svc.Tick(context.Background())
+	// Built all the same, shown as one step.
+	got := r.get(t, b.BuildID, models.BuildStateBuilding)
+	if got.Plan != nil {
+		t.Fatalf("plan %+v", got.Plan)
+	}
+	if st := Pipeline(got); len(st) != 3 || st[1].ID != "build" || st[1].State != StageRunning {
+		t.Fatalf("pipeline %+v", st)
 	}
 }
 
@@ -468,17 +489,27 @@ func TestOfferWithoutInstances(t *testing.T) {
 func TestProgress(t *testing.T) {
 	r := newRig(t)
 	b := r.started(t)
-	pct := 40
-	for i := range keepSteps + 5 {
-		p := protocol.BuildProgress{BuildID: b.BuildID, Step: "render", Message: strings.Repeat("x", i), Percent: &pct}
+	report := func(step, message string) {
+		t.Helper()
+		p := protocol.BuildProgress{BuildID: b.BuildID, Step: step, Message: message}
 		rep, err := r.svc.HandleProgress(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildProgress, p))
 		if err != nil || !rep.(protocol.BuildProgressReply).Ack {
-			t.Fatalf("progress %d: %v", i, err)
+			t.Fatalf("progress %s: %v", step, err)
 		}
 	}
+	first := r.clock
+	report("render", "1 of 3")
+	r.clock = r.clock.Add(time.Second)
+	report("render", "2 of 3") // a step's time is its first report's; its message the latest
+	report("upload", "")
 	got := r.get(t, b.BuildID, "")
-	if len(got.Steps) != keepSteps || len(got.Steps[0].Message) != 5 || *got.Steps[0].Percent != 40 {
-		t.Fatalf("%d steps, first %+v", len(got.Steps), got.Steps[0])
+	if rr := got.StepReports["render"]; !rr.StartedAt.Equal(first) || rr.Message != "2 of 3" || len(got.StepReports) != 2 {
+		t.Fatalf("reports %+v", got.StepReports)
+	}
+	// The plan's first step was never reported: it is done all the same.
+	st := Pipeline(got)
+	if st[1].ID != "badge" || st[1].State != StageSucceeded || st[2].State != StageSucceeded || st[3].State != StageRunning {
+		t.Fatalf("pipeline %+v", st)
 	}
 
 	p := protocol.BuildProgress{BuildID: b.BuildID, Step: "render"}

@@ -155,9 +155,9 @@ type ComplexityRoot struct {
 		OperationID            func(childComplexity int) int
 		Platform               func(childComplexity int) int
 		SchemaVersion          func(childComplexity int) int
+		Stages                 func(childComplexity int) int
 		StartedAt              func(childComplexity int) int
 		State                  func(childComplexity int) int
-		Steps                  func(childComplexity int) int
 		Target                 func(childComplexity int) int
 		Values                 func(childComplexity int) int
 		Warnings               func(childComplexity int) int
@@ -211,11 +211,14 @@ type ComplexityRoot struct {
 		Version  func(childComplexity int) int
 	}
 
-	BuildStep struct {
-		At      func(childComplexity int) int
-		Message func(childComplexity int) int
-		Percent func(childComplexity int) int
-		Step    func(childComplexity int) int
+	BuildStage struct {
+		Core       func(childComplexity int) int
+		FinishedAt func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Label      func(childComplexity int) int
+		Message    func(childComplexity int) int
+		StartedAt  func(childComplexity int) int
+		State      func(childComplexity int) int
 	}
 
 	BuildTarget struct {
@@ -2016,6 +2019,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.SchemaVersion(childComplexity), true
+	case "Build.stages":
+		if e.ComplexityRoot.Build.Stages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Stages(childComplexity), true
 	case "Build.startedAt":
 		if e.ComplexityRoot.Build.StartedAt == nil {
 			break
@@ -2028,12 +2037,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.State(childComplexity), true
-	case "Build.steps":
-		if e.ComplexityRoot.Build.Steps == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Build.Steps(childComplexity), true
 	case "Build.target":
 		if e.ComplexityRoot.Build.Target == nil {
 			break
@@ -2222,30 +2225,48 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BuildSchema.Version(childComplexity), true
 
-	case "BuildStep.at":
-		if e.ComplexityRoot.BuildStep.At == nil {
+	case "BuildStage.core":
+		if e.ComplexityRoot.BuildStage.Core == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildStep.At(childComplexity), true
-	case "BuildStep.message":
-		if e.ComplexityRoot.BuildStep.Message == nil {
+		return e.ComplexityRoot.BuildStage.Core(childComplexity), true
+	case "BuildStage.finishedAt":
+		if e.ComplexityRoot.BuildStage.FinishedAt == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildStep.Message(childComplexity), true
-	case "BuildStep.percent":
-		if e.ComplexityRoot.BuildStep.Percent == nil {
+		return e.ComplexityRoot.BuildStage.FinishedAt(childComplexity), true
+	case "BuildStage.id":
+		if e.ComplexityRoot.BuildStage.ID == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildStep.Percent(childComplexity), true
-	case "BuildStep.step":
-		if e.ComplexityRoot.BuildStep.Step == nil {
+		return e.ComplexityRoot.BuildStage.ID(childComplexity), true
+	case "BuildStage.label":
+		if e.ComplexityRoot.BuildStage.Label == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildStep.Step(childComplexity), true
+		return e.ComplexityRoot.BuildStage.Label(childComplexity), true
+	case "BuildStage.message":
+		if e.ComplexityRoot.BuildStage.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildStage.Message(childComplexity), true
+	case "BuildStage.startedAt":
+		if e.ComplexityRoot.BuildStage.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildStage.StartedAt(childComplexity), true
+	case "BuildStage.state":
+		if e.ComplexityRoot.BuildStage.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildStage.State(childComplexity), true
 
 	case "BuildTarget.channels":
 		if e.ComplexityRoot.BuildTarget.Channels == nil {
@@ -7917,11 +7938,24 @@ input BuildInput {
   connections: [BuildConnectionInput!]!
 }
 
-type BuildStep {
-  step: String!
+# One stage of a build's pipeline: core's queue, then the factory's steps
+# (its plan for the build, sent when it took it), then core's artifact check.
+# A step the factory has not reported yet is taken as done once it reports a
+# later one.
+type BuildStage {
+  # The factory's step id, or core's own: "core.queue", "core.check".
+  id: String!
+  label: String!
+  # Core's own stage (the queue, the artifact check), not the factory's.
+  core: Boolean!
+  # PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED | SKIPPED (not run:
+  # the build ended before it)
+  state: String!
+  # The factory's latest message for its step.
   message: String
-  percent: Int
-  at: String!
+  # Null when not known: a step done without being reported has no times.
+  startedAt: String
+  finishedAt: String
 }
 
 type BuildArtifact {
@@ -7964,8 +7998,8 @@ type Build {
   # The factory instance building it.
   instance: String
   factoryVersion: String
-  # The last progress steps, oldest first.
-  steps: [BuildStep!]!
+  # The build's pipeline, in order.
+  stages: [BuildStage!]!
   artifact: BuildArtifact
   capabilities: [String!]!
   warnings: [String!]!
@@ -15989,23 +16023,23 @@ func (ec *executionContext) fieldContext_Build_factoryVersion(_ context.Context,
 	return fc, nil
 }
 
-func (ec *executionContext) _Build_steps(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+func (ec *executionContext) _Build_stages(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Build_steps,
+		ec.fieldContext_Build_stages,
 		func(ctx context.Context) (any, error) {
-			return obj.Steps, nil
+			return obj.Stages, nil
 		},
 		nil,
-		ec.marshalNBuildStep2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStepᚄ,
+		ec.marshalNBuildStage2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStageᚄ,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Build_steps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Build_stages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Build",
 		Field:      field,
@@ -16013,16 +16047,22 @@ func (ec *executionContext) fieldContext_Build_steps(_ context.Context, field gr
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "step":
-				return ec.fieldContext_BuildStep_step(ctx, field)
+			case "id":
+				return ec.fieldContext_BuildStage_id(ctx, field)
+			case "label":
+				return ec.fieldContext_BuildStage_label(ctx, field)
+			case "core":
+				return ec.fieldContext_BuildStage_core(ctx, field)
+			case "state":
+				return ec.fieldContext_BuildStage_state(ctx, field)
 			case "message":
-				return ec.fieldContext_BuildStep_message(ctx, field)
-			case "percent":
-				return ec.fieldContext_BuildStep_percent(ctx, field)
-			case "at":
-				return ec.fieldContext_BuildStep_at(ctx, field)
+				return ec.fieldContext_BuildStage_message(ctx, field)
+			case "startedAt":
+				return ec.fieldContext_BuildStage_startedAt(ctx, field)
+			case "finishedAt":
+				return ec.fieldContext_BuildStage_finishedAt(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildStep", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type BuildStage", field.Name)
 		},
 	}
 	return fc, nil
@@ -17280,14 +17320,14 @@ func (ec *executionContext) fieldContext_BuildSchema_targets(_ context.Context, 
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildStep_step(ctx context.Context, field graphql.CollectedField, obj *model.BuildStep) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildStage_id(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildStep_step,
+		ec.fieldContext_BuildStage_id,
 		func(ctx context.Context) (any, error) {
-			return obj.Step, nil
+			return obj.ID, nil
 		},
 		nil,
 		ec.marshalNString2string,
@@ -17296,9 +17336,9 @@ func (ec *executionContext) _BuildStep_step(ctx context.Context, field graphql.C
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildStep_step(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildStage_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "BuildStep",
+		Object:     "BuildStage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -17309,12 +17349,99 @@ func (ec *executionContext) fieldContext_BuildStep_step(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildStep_message(ctx context.Context, field graphql.CollectedField, obj *model.BuildStep) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildStage_label(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildStep_message,
+		ec.fieldContext_BuildStage_label,
+		func(ctx context.Context) (any, error) {
+			return obj.Label, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildStage_label(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildStage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildStage_core(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildStage_core,
+		func(ctx context.Context) (any, error) {
+			return obj.Core, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildStage_core(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildStage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildStage_state(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildStage_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildStage_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildStage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildStage_message(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildStage_message,
 		func(ctx context.Context) (any, error) {
 			return obj.Message, nil
 		},
@@ -17325,9 +17452,9 @@ func (ec *executionContext) _BuildStep_message(ctx context.Context, field graphq
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildStep_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildStage_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "BuildStep",
+		Object:     "BuildStage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -17338,54 +17465,54 @@ func (ec *executionContext) fieldContext_BuildStep_message(_ context.Context, fi
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildStep_percent(ctx context.Context, field graphql.CollectedField, obj *model.BuildStep) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildStage_startedAt(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildStep_percent,
+		ec.fieldContext_BuildStage_startedAt,
 		func(ctx context.Context) (any, error) {
-			return obj.Percent, nil
+			return obj.StartedAt, nil
 		},
 		nil,
-		ec.marshalOInt2ᚖint,
+		ec.marshalOString2ᚖstring,
 		true,
 		false,
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildStep_percent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildStage_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "BuildStep",
+		Object:     "BuildStage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildStep_at(ctx context.Context, field graphql.CollectedField, obj *model.BuildStep) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildStage_finishedAt(ctx context.Context, field graphql.CollectedField, obj *model.BuildStage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildStep_at,
+		ec.fieldContext_BuildStage_finishedAt,
 		func(ctx context.Context) (any, error) {
-			return obj.At, nil
+			return obj.FinishedAt, nil
 		},
 		nil,
-		ec.marshalNString2string,
+		ec.marshalOString2ᚖstring,
 		true,
-		true,
+		false,
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildStep_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildStage_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "BuildStep",
+		Object:     "BuildStage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -27563,8 +27690,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
-			case "steps":
-				return ec.fieldContext_Build_steps(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
 				return ec.fieldContext_Build_artifact(ctx, field)
 			case "capabilities":
@@ -27674,8 +27801,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
-			case "steps":
-				return ec.fieldContext_Build_steps(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
 				return ec.fieldContext_Build_artifact(ctx, field)
 			case "capabilities":
@@ -27785,8 +27912,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
-			case "steps":
-				return ec.fieldContext_Build_steps(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
 				return ec.fieldContext_Build_artifact(ctx, field)
 			case "capabilities":
@@ -35162,8 +35289,8 @@ func (ec *executionContext) fieldContext_Query_builds(ctx context.Context, field
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
-			case "steps":
-				return ec.fieldContext_Build_steps(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
 				return ec.fieldContext_Build_artifact(ctx, field)
 			case "capabilities":
@@ -35273,8 +35400,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_instance(ctx, field)
 			case "factoryVersion":
 				return ec.fieldContext_Build_factoryVersion(ctx, field)
-			case "steps":
-				return ec.fieldContext_Build_steps(ctx, field)
+			case "stages":
+				return ec.fieldContext_Build_stages(ctx, field)
 			case "artifact":
 				return ec.fieldContext_Build_artifact(ctx, field)
 			case "capabilities":
@@ -54074,8 +54201,8 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = ec._Build_instance(ctx, field, obj)
 		case "factoryVersion":
 			out.Values[i] = ec._Build_factoryVersion(ctx, field, obj)
-		case "steps":
-			out.Values[i] = ec._Build_steps(ctx, field, obj)
+		case "stages":
+			out.Values[i] = ec._Build_stages(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -54503,31 +54630,43 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
-var buildStepImplementors = []string{"BuildStep"}
+var buildStageImplementors = []string{"BuildStage"}
 
-func (ec *executionContext) _BuildStep(ctx context.Context, sel ast.SelectionSet, obj *model.BuildStep) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, buildStepImplementors)
+func (ec *executionContext) _BuildStage(ctx context.Context, sel ast.SelectionSet, obj *model.BuildStage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildStageImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("BuildStep")
-		case "step":
-			out.Values[i] = ec._BuildStep_step(ctx, field, obj)
+			out.Values[i] = graphql.MarshalString("BuildStage")
+		case "id":
+			out.Values[i] = ec._BuildStage_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "label":
+			out.Values[i] = ec._BuildStage_label(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "core":
+			out.Values[i] = ec._BuildStage_core(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._BuildStage_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "message":
-			out.Values[i] = ec._BuildStep_message(ctx, field, obj)
-		case "percent":
-			out.Values[i] = ec._BuildStep_percent(ctx, field, obj)
-		case "at":
-			out.Values[i] = ec._BuildStep_at(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
+			out.Values[i] = ec._BuildStage_message(ctx, field, obj)
+		case "startedAt":
+			out.Values[i] = ec._BuildStage_startedAt(ctx, field, obj)
+		case "finishedAt":
+			out.Values[i] = ec._BuildStage_finishedAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -66483,11 +66622,11 @@ func (ec *executionContext) marshalNBuildSchema2ᚖgithubᚗcomᚋlogoscoreᚋlo
 	return ec._BuildSchema(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNBuildStep2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStepᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildStep) graphql.Marshaler {
+func (ec *executionContext) marshalNBuildStage2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStageᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildStage) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
 		fc.Result = &v[i]
-		return ec.marshalNBuildStep2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStep(ctx, sel, v[i])
+		return ec.marshalNBuildStage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStage(ctx, sel, v[i])
 	})
 
 	for _, e := range ret {
@@ -66499,14 +66638,14 @@ func (ec *executionContext) marshalNBuildStep2ᚕᚖgithubᚗcomᚋlogoscoreᚋl
 	return ret
 }
 
-func (ec *executionContext) marshalNBuildStep2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStep(ctx context.Context, sel ast.SelectionSet, v *model.BuildStep) graphql.Marshaler {
+func (ec *executionContext) marshalNBuildStage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildStage(ctx context.Context, sel ast.SelectionSet, v *model.BuildStage) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
-	return ec._BuildStep(ctx, sel, v)
+	return ec._BuildStage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNBuildTarget2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildTargetᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildTarget) graphql.Marshaler {

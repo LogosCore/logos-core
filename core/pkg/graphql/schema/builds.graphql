@@ -131,11 +131,24 @@ input BuildInput {
   connections: [BuildConnectionInput!]!
 }
 
-type BuildStep {
-  step: String!
+# One stage of a build's pipeline: core's queue, then the factory's steps
+# (its plan for the build, sent when it took it), then core's artifact check.
+# A step the factory has not reported yet is taken as done once it reports a
+# later one.
+type BuildStage {
+  # The factory's step id, or core's own: "core.queue", "core.check".
+  id: String!
+  label: String!
+  # Core's own stage (the queue, the artifact check), not the factory's.
+  core: Boolean!
+  # PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED | SKIPPED (not run:
+  # the build ended before it)
+  state: String!
+  # The factory's latest message for its step.
   message: String
-  percent: Int
-  at: String!
+  # Null when not known: a step done without being reported has no times.
+  startedAt: String
+  finishedAt: String
 }
 
 type BuildArtifact {
@@ -178,8 +191,8 @@ type Build {
   # The factory instance building it.
   instance: String
   factoryVersion: String
-  # The last progress steps, oldest first.
-  steps: [BuildStep!]!
+  # The build's pipeline, in order.
+  stages: [BuildStage!]!
   artifact: BuildArtifact
   capabilities: [String!]!
   warnings: [String!]!

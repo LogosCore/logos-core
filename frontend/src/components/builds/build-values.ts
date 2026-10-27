@@ -575,11 +575,27 @@ export function buildElapsed(b: { createdAt: string; finishedAt?: string | null 
   return Math.max(0, end - Date.parse(b.createdAt))
 }
 
-/** The last reported percent of a running build, if any. */
-export function lastPercent(steps: readonly { percent?: number | null }[]): number | null {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const p = steps[i].percent
-    if (typeof p === "number") return p
-  }
-  return null
+/** One stage of a build's pipeline, as Build.stages has it. */
+export interface StageLike {
+  id: string
+  label: string
+  /** Core's own stage (the queue, the artifact check), not the factory's. */
+  core: boolean
+  /** PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED | SKIPPED */
+  state: string
+  message?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+}
+
+/** How long a stage took, or has been running; null when its times are not known. */
+export function stageDuration(s: StageLike, now = Date.now()): number | null {
+  if (!s.startedAt) return null
+  const end = s.finishedAt ? Date.parse(s.finishedAt) : s.state === "RUNNING" ? now : null
+  return end === null ? null : Math.max(0, end - Date.parse(s.startedAt))
+}
+
+/** The stage a build is at: the running one, or the one it stopped in when it did not succeed. */
+export function currentStage<S extends StageLike>(stages: readonly S[]): S | null {
+  return stages.find((s) => s.state === "RUNNING") ?? stages.find((s) => s.state === "FAILED" || s.state === "CANCELLED") ?? null
 }

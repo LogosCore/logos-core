@@ -55,11 +55,14 @@ export const BuildFields = graphql(`
     state
     instance
     factoryVersion
-    steps {
-      step
+    stages {
+      id
+      label
+      core
+      state
       message
-      percent
-      at
+      startedAt
+      finishedAt
     }
     artifact {
       filename

@@ -88,10 +88,18 @@ type Build struct {
 	// while queued, for the result once building.
 	Deadline time.Time `bson:"deadline" json:"deadline"`
 	// ResultReceived is set when a succeeded result arrived and its artifact
-	// is being checked.
-	ResultReceived bool `bson:"result_received,omitempty" json:"-"`
+	// is being checked; ResultAt is when.
+	ResultReceived bool       `bson:"result_received,omitempty" json:"-"`
+	ResultAt       *time.Time `bson:"result_at,omitempty" json:"result_at,omitempty"`
 
-	Steps        []BuildStep    `bson:"steps,omitempty" json:"steps,omitempty"`
+	// Plan is the factory's plan for the build, from the instance's
+	// acceptance: its steps, in order. Empty until then.
+	Plan []BuildPlanStep `bson:"plan,omitempty" json:"plan,omitempty"`
+	// StepReports are the factory's progress reports by step id: when it
+	// first said it was on the step, and its latest message. They may
+	// arrive before the plan, and a step outside the plan is never shown.
+	StepReports map[string]BuildStepReport `bson:"step_reports,omitempty" json:"step_reports,omitempty"`
+
 	Artifact     *BuildArtifact `bson:"artifact,omitempty" json:"artifact,omitempty"`
 	Capabilities []string       `bson:"capabilities,omitempty" json:"capabilities,omitempty"`
 	Warnings     []string       `bson:"warnings,omitempty" json:"warnings,omitempty"`
@@ -132,12 +140,18 @@ func (c *BuildConnections) UnmarshalBSON(data []byte) error {
 	return bsonDocToJSON(data, c)
 }
 
-// BuildStep is one progress report of a running build.
-type BuildStep struct {
-	Step    string    `bson:"step" json:"step"`
-	Message string    `bson:"message,omitempty" json:"message,omitempty"`
-	Percent *int      `bson:"percent,omitempty" json:"percent,omitempty"`
-	At      time.Time `bson:"at" json:"at"`
+// BuildPlanStep is one step of the factory's plan for a build. Its id is a
+// slug without dots, so it keys StepReports.
+type BuildPlanStep struct {
+	ID    string `bson:"id" json:"id"`
+	Label string `bson:"label" json:"label"`
+}
+
+// BuildStepReport is what the factory reported of one step.
+type BuildStepReport struct {
+	// StartedAt is when the factory first said it was on the step.
+	StartedAt time.Time `bson:"started_at" json:"started_at"`
+	Message   string    `bson:"message,omitempty" json:"message,omitempty"`
 }
 
 // BuildArtifact is a build's artifact: what the factory reported, checked

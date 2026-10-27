@@ -86,7 +86,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	}
 	for !b.Finished() {
 		if ctx.Err() != nil {
-			t.Fatalf("the build did not finish: %s, steps %+v", b.State, b.Steps)
+			t.Fatalf("the build did not finish: %s, pipeline %+v", b.State, Pipeline(b))
 		}
 		time.Sleep(250 * time.Millisecond)
 		if b, err = svc.Build(ctx, b.BuildID); err != nil {
@@ -96,7 +96,17 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	if b.State != models.BuildStateSucceeded {
 		t.Fatalf("build %s: %+v\nlog: %s", b.State, b.Error, b.Log)
 	}
-	t.Logf("built by %s (%s): %d steps, capabilities %v", b.Instance, b.FactoryVersion, len(b.Steps), b.Capabilities)
+	t.Logf("built by %s (%s): plan %+v, capabilities %v", b.Instance, b.FactoryVersion, b.Plan, b.Capabilities)
+	// BOB's plan: the badge was given, so it was checked; the last step is the
+	// upload. Every stage succeeded.
+	if len(b.Plan) < 3 || b.Plan[0].ID != "badge" || b.Plan[len(b.Plan)-1].ID != "upload" {
+		t.Fatalf("plan %+v", b.Plan)
+	}
+	for _, st := range Pipeline(b) {
+		if st.State != StageSucceeded {
+			t.Fatalf("stage %+v of %+v", st, Pipeline(b))
+		}
+	}
 
 	minions, err := svc.Minions(ctx, op)
 	if err != nil || len(minions) != 1 || minions[0].MinionID != b.MinionID {

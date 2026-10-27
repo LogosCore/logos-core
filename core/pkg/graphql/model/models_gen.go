@@ -67,7 +67,7 @@ type Build struct {
 	State                  string         `json:"state"`
 	Instance               *string        `json:"instance,omitempty"`
 	FactoryVersion         *string        `json:"factoryVersion,omitempty"`
-	Steps                  []*BuildStep   `json:"steps"`
+	Stages                 []*BuildStage  `json:"stages"`
 	Artifact               *BuildArtifact `json:"artifact,omitempty"`
 	Capabilities           []string       `json:"capabilities"`
 	Warnings               []string       `json:"warnings"`
@@ -145,11 +145,14 @@ type BuildSchema struct {
 	Targets  []*BuildTarget  `json:"targets"`
 }
 
-type BuildStep struct {
-	Step    string  `json:"step"`
-	Message *string `json:"message,omitempty"`
-	Percent *int    `json:"percent,omitempty"`
-	At      string  `json:"at"`
+type BuildStage struct {
+	ID         string  `json:"id"`
+	Label      string  `json:"label"`
+	Core       bool    `json:"core"`
+	State      string  `json:"state"`
+	Message    *string `json:"message,omitempty"`
+	StartedAt  *string `json:"startedAt,omitempty"`
+	FinishedAt *string `json:"finishedAt,omitempty"`
 }
 
 type BuildTarget struct {

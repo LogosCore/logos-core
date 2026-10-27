@@ -107,9 +107,6 @@ func (c Config) withDefaults() Config {
 	return c
 }
 
-// keepSteps is how many progress steps a build keeps.
-const keepSteps = 50
-
 // Errors the API layer maps to client errors.
 var (
 	ErrFileNotFound  = errors.New("build file not found")

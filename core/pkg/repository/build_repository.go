@@ -133,13 +133,17 @@ type IBuildRepository interface {
 	// claimed until leaseUntil, unless the instance already reported a
 	// result. False when it is no longer building there.
 	Unoffer(ctx context.Context, buildID, instance string, leaseUntil time.Time) (bool, error)
-	// AppendStep records progress while instance builds it, keeping the
-	// last keep steps. False when it is not building there.
-	AppendStep(ctx context.Context, buildID, instance string, step models.BuildStep, keep int) (bool, error)
-	// RecordResult stores a succeeded result whose artifact is still to be
-	// checked. False when the build is not building on instance, or a
-	// result was already recorded.
-	RecordResult(ctx context.Context, buildID, instance string, artifact models.BuildArtifact, capabilities, warnings []string, log string) (bool, error)
+	// SetPlan stores the factory's plan for the build while instance builds
+	// it. False when it is not building there.
+	SetPlan(ctx context.Context, buildID, instance string, plan []models.BuildPlanStep) (bool, error)
+	// ReportStep records that instance is on step (an id of the plan, a slug
+	// without dots) at at: the step's first report time is kept, its message
+	// replaced. False when the build is not building there.
+	ReportStep(ctx context.Context, buildID, instance, step, message string, at time.Time) (bool, error)
+	// RecordResult stores a succeeded result, received at at, whose artifact
+	// is still to be checked. False when the build is not building on
+	// instance, or a result was already recorded.
+	RecordResult(ctx context.Context, buildID, instance string, artifact models.BuildArtifact, capabilities, warnings []string, log string, at time.Time) (bool, error)
 	// Finish moves a build in one of the from states to a final one. False
 	// when it was in none of them.
 	Finish(ctx context.Context, buildID string, from []string, out BuildOutcome) (bool, error)
@@ -244,7 +248,7 @@ func (r *buildRepository) Unoffer(ctx context.Context, buildID, instance string,
 	filter["result_received"] = bson.M{"$ne": true}
 	return matched(r.coll.UpdateOne(ctx, filter, bson.M{
 		"$set":   bson.M{"state": models.BuildStateQueued, "lease_until": leaseUntil},
-		"$unset": bson.M{"instance": "", "factory_version": "", "started_at": "", "steps": ""},
+		"$unset": bson.M{"instance": "", "factory_version": "", "started_at": "", "plan": "", "step_reports": ""},
 	}))
 }
 
@@ -253,16 +257,32 @@ func buildingOn(buildID, instance string) bson.M {
 	return bson.M{"build_id": buildID, "state": models.BuildStateBuilding, "instance": instance}
 }
 
-func (r *buildRepository) AppendStep(ctx context.Context, buildID, instance string, step models.BuildStep, keep int) (bool, error) {
-	return matched(r.coll.UpdateOne(ctx, buildingOn(buildID, instance), bson.M{
-		"$push": bson.M{"steps": bson.M{"$each": []models.BuildStep{step}, "$slice": -keep}},
-	}))
+func (r *buildRepository) SetPlan(ctx context.Context, buildID, instance string, plan []models.BuildPlanStep) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, buildingOn(buildID, instance), bson.M{"$set": bson.M{"plan": plan}}))
 }
 
-func (r *buildRepository) RecordResult(ctx context.Context, buildID, instance string, artifact models.BuildArtifact, capabilities, warnings []string, log string) (bool, error) {
+func (r *buildRepository) ReportStep(ctx context.Context, buildID, instance, step, message string, at time.Time) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, buildingOn(buildID, instance), reportStepUpdate(step, message, at)))
+}
+
+// reportStepUpdate is the update of ReportStep. Reports of different steps
+// touch different keys, and $min keeps a step's first time whatever the
+// order they arrive in.
+func reportStepUpdate(step, message string, at time.Time) bson.M {
+	key := "step_reports." + step
+	u := bson.M{"$min": bson.M{key + ".started_at": at}}
+	if message != "" {
+		u["$set"] = bson.M{key + ".message": message}
+	} else {
+		u["$unset"] = bson.M{key + ".message": ""}
+	}
+	return u
+}
+
+func (r *buildRepository) RecordResult(ctx context.Context, buildID, instance string, artifact models.BuildArtifact, capabilities, warnings []string, log string, at time.Time) (bool, error) {
 	filter := buildingOn(buildID, instance)
 	filter["result_received"] = bson.M{"$ne": true}
-	set := bson.M{"result_received": true, "artifact": artifact, "log": log}
+	set := bson.M{"result_received": true, "result_at": at, "artifact": artifact, "log": log}
 	if len(capabilities) > 0 {
 		set["capabilities"] = capabilities
 	}

@@ -342,7 +342,7 @@ func toBuildModel(b *models.Build) *model.Build {
 		Platform: b.Platform, SchemaVersion: b.SchemaVersion, Values: copyMap(b.Values),
 		Connections: b.Connections.Items, MinionID: b.MinionID, State: b.State,
 		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion),
-		Steps: []*model.BuildStep{}, Capabilities: orEmpty(b.Capabilities), Warnings: orEmpty(b.Warnings),
+		Stages: []*model.BuildStage{}, Capabilities: orEmpty(b.Capabilities), Warnings: orEmpty(b.Warnings),
 		Log: strPtr(b.Log), CreatedBy: toActorModel(b.CreatedBy),
 		CreatedAt: b.CreatedAt.Format(time.RFC3339), StartedAt: timePtr(b.StartedAt), FinishedAt: timePtr(b.FinishedAt),
 		Deadline: b.Deadline.Format(time.RFC3339),
@@ -352,8 +352,11 @@ func toBuildModel(b *models.Build) *model.Build {
 	}
 	out.ConnectionDescriptions = make([]string, len(b.Connections.Items))
 	copy(out.ConnectionDescriptions, b.ConnectionDescriptions)
-	for _, s := range b.Steps {
-		out.Steps = append(out.Steps, &model.BuildStep{Step: s.Step, Message: strPtr(s.Message), Percent: s.Percent, At: s.At.Format(time.RFC3339)})
+	for _, st := range builds.Pipeline(b) {
+		out.Stages = append(out.Stages, &model.BuildStage{
+			ID: st.ID, Label: st.Label, Core: st.Core, State: st.State, Message: strPtr(st.Message),
+			StartedAt: stageTime(st.StartedAt), FinishedAt: stageTime(st.FinishedAt),
+		})
 	}
 	if a := b.Artifact; a != nil && (b.State == models.BuildStateSucceeded || a.Deleted) {
 		out.Artifact = &model.BuildArtifact{Filename: a.Filename, Size: int(a.Size), Sha256: a.SHA256, MediaType: strPtr(a.MediaType), Deleted: a.Deleted}
@@ -380,6 +383,16 @@ func orEmpty(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// stageTime keeps a stage's time to the millisecond core stores: a step can
+// take less than a second.
+func stageTime(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339Nano)
+	return &s
 }
 
 func timePtr(t *time.Time) *string {

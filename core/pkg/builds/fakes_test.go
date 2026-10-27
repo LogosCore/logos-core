@@ -173,32 +173,51 @@ func (f *fakeBuilds) Unoffer(_ context.Context, id, instance string, until time.
 	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance || b.ResultReceived {
 		return false, nil
 	}
-	b.State, b.LeaseUntil, b.Instance, b.FactoryVersion, b.StartedAt, b.Steps = models.BuildStateQueued, &until, "", "", nil, nil
+	b.State, b.LeaseUntil, b.Instance, b.FactoryVersion, b.StartedAt = models.BuildStateQueued, &until, "", "", nil
+	b.Plan, b.StepReports = nil, nil
 	return true, nil
 }
 
-func (f *fakeBuilds) AppendStep(_ context.Context, id, instance string, step models.BuildStep, keep int) (bool, error) {
+func (f *fakeBuilds) SetPlan(_ context.Context, id, instance string, plan []models.BuildPlanStep) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
 	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance {
 		return false, nil
 	}
-	b.Steps = append(b.Steps, step)
-	if len(b.Steps) > keep {
-		b.Steps = b.Steps[len(b.Steps)-keep:]
-	}
+	b.Plan = plan
 	return true, nil
 }
 
-func (f *fakeBuilds) RecordResult(_ context.Context, id, instance string, art models.BuildArtifact, caps, warnings []string, log string) (bool, error) {
+// ReportStep keeps a step's first time and its latest message, as the
+// repository's $min and $set do.
+func (f *fakeBuilds) ReportStep(_ context.Context, id, instance, step, message string, at time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, ok := f.rows[id]
+	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance {
+		return false, nil
+	}
+	if b.StepReports == nil {
+		b.StepReports = map[string]models.BuildStepReport{}
+	}
+	r, seen := b.StepReports[step]
+	if !seen || at.Before(r.StartedAt) {
+		r.StartedAt = at
+	}
+	r.Message = message
+	b.StepReports[step] = r
+	return true, nil
+}
+
+func (f *fakeBuilds) RecordResult(_ context.Context, id, instance string, art models.BuildArtifact, caps, warnings []string, log string, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
 	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance || b.ResultReceived {
 		return false, nil
 	}
-	b.ResultReceived, b.Artifact, b.Capabilities, b.Warnings, b.Log = true, &art, caps, warnings, log
+	b.ResultReceived, b.ResultAt, b.Artifact, b.Capabilities, b.Warnings, b.Log = true, &at, &art, caps, warnings, log
 	return true, nil
 }
 
@@ -402,13 +421,16 @@ func (f *fakeCaller) recorded() []call {
 	return append([]call(nil), f.calls...)
 }
 
+// bobPlan is the plan bob-1 accepts builds with.
+var bobPlan = []protocol.BuildStep{{ID: "badge", Label: "Check the badge"}, {ID: "render", Label: "Describe the minion"}, {ID: "upload", Label: "Upload"}}
+
 // accept is a factory's yes to a build or a cancel.
 func accept(c call) protocol.ReplyEnvelope {
 	req := protocol.Envelope{Type: c.op, Version: protocol.EnvelopeVersionV1}
 	var payload any = struct{}{}
 	switch p := c.payload.(type) {
 	case protocol.BuildRequest:
-		payload = protocol.BuildReply{BuildID: p.BuildID, Accepted: true}
+		payload = protocol.BuildReply{BuildID: p.BuildID, Accepted: true, Steps: bobPlan}
 	case protocol.BuildCancelRequest:
 		payload = protocol.BuildCancelReply{BuildID: p.BuildID, Cancelled: true}
 	}
