@@ -9,7 +9,7 @@ import type { BuildFieldsFragment } from "@/graphql/gql/graphql"
 import { isUnfinished } from "@/graphql/hooks/builds"
 import { useNow } from "@/hooks/use-now"
 import { artifactUrl } from "@/lib/build-file-upload"
-import { ModuleIcon } from "@/components/modules/module-icon"
+import { ModuleIconCell } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
 import { currentStage, platformLabel } from "./build-values"
@@ -96,19 +96,18 @@ export function BuildsTable({
           >
             {(menuButton) => (
               <>
-                {/* The factory's icon as tall as the two lines beside it. */}
-                <div className="flex min-w-0 items-center gap-3">
-                  <ModuleIcon type="factory" icon={icons.get(b.moduleName)} className="size-9" />
-                  <div className="flex min-w-0 flex-col">
-                    <div className="flex min-w-0 items-baseline">
-                      <span className="truncate font-mono">{b.moduleName}</span>
+                <ModuleIconCell
+                  type="factory"
+                  icon={icons.get(b.moduleName)}
+                  title={
+                    <>
+                      <span className="truncate font-mono font-medium">{b.moduleName}</span>
                       <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
-                    </div>
-                    <div className="truncate font-mono text-xs text-muted-foreground" title="Build id">
-                      {b.id}
-                    </div>
-                  </div>
-                </div>
+                    </>
+                  }
+                  subtitle={<span className="font-mono">{b.id}</span>}
+                  subtitleTitle="Build id"
+                />
                 <div className="truncate text-sm" title={b.description || undefined}>
                   {b.description || <span className="text-muted-foreground">—</span>}
                 </div>

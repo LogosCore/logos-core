@@ -10,12 +10,12 @@ import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { ChannelEndpointFieldsFragment } from "@/graphql/gql/graphql"
 import { fetchChannelEndpointExport } from "@/graphql/hooks/channel-endpoints"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import { KindName } from "@/components/modules/module-icon"
+import { ModuleIconCell } from "@/components/modules/module-icon"
 import { exportFileName, settingRows, type Kind } from "./endpoint-values"
 
 type Endpoint = ChannelEndpointFieldsFragment
 
-const GRID_COLS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,2.2fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_48px]"
+const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,0.5fr)_minmax(0,2.1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_48px]"
 
 const AMBER = "border-amber-600/40 text-amber-700 dark:text-amber-400"
 
@@ -78,12 +78,15 @@ export function EndpointsTable({
         >
           {(menuButton) => (
             <>
-              <div className="min-w-0">
-                <div className="truncate font-mono font-medium">{ep.name}</div>
-                {ep.description && <div className="truncate text-xs text-muted-foreground">{ep.description}</div>}
-              </div>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <KindName type="channel" name={ep.moduleName} icon={kinds.get(ep.moduleName)?.icon} />
+              <ModuleIconCell
+                type="channel"
+                icon={kinds.get(ep.moduleName)?.icon}
+                title={<span className="truncate font-mono font-medium">{ep.name}</span>}
+                subtitle={ep.description}
+                subtitleTitle={ep.description ?? undefined}
+              />
+              <div className="flex min-w-0 items-baseline gap-1.5">
+                <span className="truncate font-mono">{ep.moduleName}</span>
                 <span className="text-xs text-muted-foreground">v{ep.schemaVersion}</span>
               </div>
               <SettingsCell endpoint={ep} kind={kinds.get(ep.moduleName) ?? null} />

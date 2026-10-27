@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import { BlocksIcon, FactoryIcon, RadioTowerIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { defaultIconFor, iconMaskImage } from "./module-icon-values"
@@ -46,5 +46,39 @@ export function KindName({
       <ModuleIcon type={type} icon={icon} className="size-5" />
       <span className="truncate font-mono">{name}</span>
     </span>
+  )
+}
+
+/**
+ * The lead cell of a table row about a module or what one serves (Modules,
+ * Endpoints, Builds): the icon in the text colour, as tall as the two lines
+ * beside it, a title line and a muted second line.
+ */
+export function ModuleIconCell({
+  type,
+  icon,
+  title,
+  subtitle,
+  subtitleTitle,
+}: {
+  type: string
+  icon?: string | null
+  title: ReactNode
+  subtitle?: ReactNode
+  /** The second line's full text on hover. */
+  subtitleTitle?: string
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <ModuleIcon type={type} icon={icon} className="size-9" />
+      <div className="flex min-w-0 flex-col">
+        <div className="flex min-w-0 items-baseline">{title}</div>
+        {subtitle && (
+          <div className="truncate text-xs text-muted-foreground" title={subtitleTitle}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

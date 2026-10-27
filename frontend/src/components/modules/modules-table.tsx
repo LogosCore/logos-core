@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/auth"
 import { Permissions } from "@/constants/permissions"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
-import { ModuleIcon } from "@/components/modules/module-icon"
+import { ModuleIconCell } from "@/components/modules/module-icon"
 import { ModuleRow } from "@/components/modules/module-row-menu"
 import type { ModuleFieldsFragment } from "@/graphql/gql/graphql"
 
@@ -58,17 +58,13 @@ export function ModulesTable({ modules, isLoading }: ModulesTableProps) {
         <ModuleRow module={m} gridCols={gridCols} canAdmin={canAdmin}>
           {(menuButton) => (
             <>
-              <div className="flex min-w-0 items-center gap-3">
-                <ModuleIcon type={m.type} icon={m.icon} className="size-8 text-muted-foreground" />
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{m.instance}</div>
-                  {m.description && (
-                    <div className="text-xs text-muted-foreground truncate">
-                      {m.description}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ModuleIconCell
+                type={m.type}
+                icon={m.icon}
+                title={<span className="truncate font-mono font-medium">{m.instance}</span>}
+                subtitle={m.description}
+                subtitleTitle={m.description ?? undefined}
+              />
               <div>
                 <Badge variant="secondary">{m.type}</Badge>
               </div>
