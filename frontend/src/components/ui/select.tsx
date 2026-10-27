@@ -117,14 +117,21 @@ function SelectTrigger({
   )
 }
 
+/**
+ * The list opens below the trigger, at least as wide as it, like the app's
+ * menus and popovers. Base UI can instead lay the list over the trigger with
+ * the selected item on top of it, as a macOS select does (shadcn's default):
+ * that hides the trigger, under the first item when nothing is selected, and
+ * no other popup here behaves so. Pass alignItemWithTrigger to have it anyway.
+ */
 function SelectContent({
   className,
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
