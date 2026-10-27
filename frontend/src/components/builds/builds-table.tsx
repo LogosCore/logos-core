@@ -104,20 +104,19 @@ export function BuildsTable({
                   <div className="truncate font-mono text-xs text-muted-foreground" title="Build id">
                     {b.id}
                   </div>
-                  {b.error && (
-                    <div className="truncate text-xs text-destructive" title={b.error.message}>
-                      {b.error.code}: {b.error.message}
-                    </div>
-                  )}
                 </div>
                 <div className="truncate text-sm" title={b.description || undefined}>
                   {b.description || <span className="text-muted-foreground">—</span>}
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <PipelineDots stages={b.stages} now={now} />
-                  {at && (
-                    <span className={cn("truncate text-xs", at.state === "FAILED" ? "text-destructive" : "text-muted-foreground")}>
-                      {at.label}
+                  {/* Where the build is, or where it stopped and why. */}
+                  {(at || b.error) && (
+                    <span
+                      className={cn("truncate text-xs", b.error || at?.state === "FAILED" ? "text-destructive" : "text-muted-foreground")}
+                      title={b.error ? `${b.error.code}: ${b.error.message}` : undefined}
+                    >
+                      {[at?.label, b.error && `${b.error.code}: ${b.error.message}`].filter(Boolean).join(" · ")}
                     </span>
                   )}
                 </div>
