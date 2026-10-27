@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
@@ -32,6 +33,36 @@ const (
 	// right fix is editing the referrers, not paginating the list.
 	maxBacklinks = 200
 )
+
+// The title and search caps count characters, as their messages say: a byte
+// count refused half as much Cyrillic as the forms allow.
+
+// checkTitle refuses a title over the cap.
+func checkTitle(title string) error {
+	if utf8.RuneCountInString(title) > maxTitleLength {
+		return fmt.Errorf("title exceeds maximum length of %d characters", maxTitleLength)
+	}
+	return nil
+}
+
+// copyTitle is a duplicate's title: "Copy of " and the source's, cut to the
+// cap between characters, never inside one.
+func copyTitle(title string) string {
+	t := []rune("Copy of " + title)
+	if len(t) > maxTitleLength {
+		t = t[:maxTitleLength]
+	}
+	return string(t)
+}
+
+// searchQuery is a search as run: trimmed, and refused over the cap.
+func searchQuery(raw string) (string, error) {
+	q := strings.TrimSpace(raw)
+	if utf8.RuneCountInString(q) > maxSearchLength {
+		return "", fmt.Errorf("search query exceeds %d characters", maxSearchLength)
+	}
+	return q, nil
+}
 
 // IWikiDocumentResolver defines the business logic methods for wiki documents and backups.
 type IWikiDocumentResolver interface {
@@ -313,8 +344,8 @@ func (r *wikiDocumentResolver) CreateWikiDocument(ctx context.Context, operation
 	}
 
 	// Validate title length
-	if len(input.Title) > maxTitleLength {
-		return nil, fmt.Errorf("title exceeds maximum length of %d characters", maxTitleLength)
+	if err := checkTitle(input.Title); err != nil {
+		return nil, err
 	}
 
 	// A drawing's body is an Excalidraw scene written by the canvas over the
@@ -491,8 +522,8 @@ func (r *wikiDocumentResolver) UpdateWikiDocument(ctx context.Context, id string
 	previousParentID := doc.ParentDocumentID
 
 	if input.Title != nil {
-		if len(*input.Title) > maxTitleLength {
-			return nil, fmt.Errorf("title exceeds maximum length of %d characters", maxTitleLength)
+		if err := checkTitle(*input.Title); err != nil {
+			return nil, err
 		}
 		updates["title"] = *input.Title
 		updates["title_lower"] = strings.ToLower(*input.Title)
@@ -987,11 +1018,8 @@ func (r *wikiDocumentResolver) DuplicateWikiDocument(ctx context.Context, id str
 	cascade := withChildren != nil && *withChildren
 
 	// "Copy of " prefix on the root only; descendants keep their original
-	// titles. Truncate so the prefixed title still respects the cap.
-	rootTitle := "Copy of " + source.Title
-	if len(rootTitle) > maxTitleLength {
-		rootTitle = rootTitle[:maxTitleLength]
-	}
+	// titles.
+	rootTitle := copyTitle(source.Title)
 
 	now := time.Now().UTC()
 
@@ -1236,8 +1264,8 @@ func (r *wikiDocumentResolver) InstantiateTemplate(ctx context.Context, template
 			instanceTitle = trimmed
 		}
 	}
-	if len(instanceTitle) > maxTitleLength {
-		return nil, fmt.Errorf("title exceeds maximum length of %d characters", maxTitleLength)
+	if err := checkTitle(instanceTitle); err != nil {
+		return nil, err
 	}
 
 	// Icon: inherit each glyph from the template unless the operator overrode it
@@ -1849,9 +1877,9 @@ func (r *wikiDocumentResolver) WikiDocuments(ctx context.Context, operationID st
 		filter.ParentDocumentID = &pid
 	}
 	if search != nil {
-		trimmed := strings.TrimSpace(*search)
-		if len(trimmed) > maxSearchLength {
-			return nil, fmt.Errorf("search query exceeds %d characters", maxSearchLength)
+		trimmed, err := searchQuery(*search)
+		if err != nil {
+			return nil, err
 		}
 		filter.Search = trimmed
 	}
@@ -1921,9 +1949,9 @@ func (r *wikiDocumentResolver) WikiSearch(
 		return nil, err
 	}
 
-	trimmed := strings.TrimSpace(query)
-	if len(trimmed) > maxSearchLength {
-		return nil, fmt.Errorf("search query exceeds %d characters", maxSearchLength)
+	trimmed, err := searchQuery(query)
+	if err != nil {
+		return nil, err
 	}
 
 	var scopeUID *uuid.UUID

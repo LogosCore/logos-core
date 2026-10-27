@@ -369,13 +369,23 @@ func (r *run) materialise(
 	return doc
 }
 
-func (r *run) newDocument(page *Page, parentID *uuid.UUID, parentPath []uuid.UUID, sortOrder, humanPath string) *models.WikiDocument {
-	title := strings.TrimSpace(page.Title)
+// pageTitle is a page's title as stored: trimmed, "Untitled" when empty, and
+// cut to the title cap in characters, the way the app counts it, never inside
+// one (a byte cut left half a Cyrillic letter at the end).
+func pageTitle(raw string) (title string, truncated bool) {
+	title = strings.TrimSpace(raw)
 	if title == "" {
-		title = "Untitled"
+		return "Untitled", false
 	}
-	if len(title) > maxTitleLength {
-		title = title[:maxTitleLength-1] + "…"
+	if r := []rune(title); len(r) > maxTitleLength {
+		return string(r[:maxTitleLength-1]) + "…", true
+	}
+	return title, false
+}
+
+func (r *run) newDocument(page *Page, parentID *uuid.UUID, parentPath []uuid.UUID, sortOrder, humanPath string) *models.WikiDocument {
+	title, truncated := pageTitle(page.Title)
+	if truncated {
 		r.report.warn(humanPath, "title_truncated")
 	}
 	emoji, icon, color := page.Emoji, page.Icon, page.Color

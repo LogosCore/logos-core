@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
@@ -979,10 +980,10 @@ func normalizeCredentialProperties(in []*model.CredentialPropertyInput) ([]model
 		if name == "" {
 			return nil, fmt.Errorf("property name is required")
 		}
-		if len(name) > maxCredentialPropertyNameLen {
+		if utf8.RuneCountInString(name) > maxCredentialPropertyNameLen {
 			return nil, fmt.Errorf("property name %q exceeds %d characters", name, maxCredentialPropertyNameLen)
 		}
-		if len(value) > maxCredentialPropertyValueLen {
+		if utf8.RuneCountInString(value) > maxCredentialPropertyValueLen {
 			return nil, fmt.Errorf("property %q value exceeds %d characters", name, maxCredentialPropertyValueLen)
 		}
 		if _, dup := seen[name]; dup {

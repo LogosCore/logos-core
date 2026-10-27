@@ -454,16 +454,18 @@ func SanitizeUploadFilename(raw string) string {
 	cleaned = strings.TrimLeft(cleaned, " ")
 	cleaned = strings.TrimRight(cleaned, ". ")
 
+	// 255 bytes, what file systems allow a name; cut between characters, as
+	// a cut inside one leaves invalid UTF-8 (ToValidUTF8 drops the half).
 	const maxLen = 255
 	if len(cleaned) > maxLen {
 		// Preserve the extension when possible so the browser still picks a
 		// sensible default app to open it with.
 		ext := filepath.Ext(cleaned)
 		if len(ext) > 0 && len(ext) < 20 {
-			head := cleaned[:maxLen-len(ext)]
+			head := strings.ToValidUTF8(cleaned[:maxLen-len(ext)], "")
 			cleaned = head + ext
 		} else {
-			cleaned = cleaned[:maxLen]
+			cleaned = strings.ToValidUTF8(cleaned[:maxLen], "")
 		}
 	}
 	return cleaned

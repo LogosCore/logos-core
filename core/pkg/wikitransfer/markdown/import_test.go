@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/wikitransfer"
@@ -135,5 +136,13 @@ func TestReadPlan_WarningsReachTheReport(t *testing.T) {
 	}
 	if len(report.Warnings) != 2 || report.Warnings[0].Path != "outline-export/" || report.Warnings[1].Path != "col/folder/" {
 		t.Errorf("warnings = %+v", report.Warnings)
+	}
+}
+
+func TestSanitizeImportFilename_CutsBetweenCharacters(t *testing.T) {
+	// "ж" is two bytes: the 255-byte budget would end inside one.
+	got := sanitizeImportFilename(strings.Repeat("ж", 300))
+	if len(got) > 255 || !utf8.ValidString(got) || got == "" {
+		t.Errorf("%d bytes, valid %v: %q", len(got), utf8.ValidString(got), got)
 	}
 }

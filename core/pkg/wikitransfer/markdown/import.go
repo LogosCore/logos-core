@@ -247,9 +247,11 @@ func sanitizeImportFilename(raw string) string {
 	}
 	cleaned := strings.Join(strings.Fields(sb.String()), " ")
 	cleaned = strings.TrimRight(cleaned, ". ")
+	// 255 bytes, what file systems allow a name, cut between characters:
+	// ToValidUTF8 drops a character the cut split.
 	const maxLen = 255
 	if len(cleaned) > maxLen {
-		cleaned = cleaned[:maxLen]
+		cleaned = strings.ToValidUTF8(cleaned[:maxLen], "")
 	}
 	return cleaned
 }

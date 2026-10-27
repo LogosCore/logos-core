@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
@@ -26,6 +27,23 @@ const (
 	maxTaskNameLen        = 200
 	maxTaskDescriptionLen = 16 * 1024
 )
+
+// checkTaskName and checkTaskDescription refuse text over its cap, counted
+// in characters as the messages say: a byte count refused half as much
+// Cyrillic as the form allowed.
+func checkTaskName(name string) error {
+	if utf8.RuneCountInString(name) > maxTaskNameLen {
+		return fmt.Errorf("name exceeds %d characters", maxTaskNameLen)
+	}
+	return nil
+}
+
+func checkTaskDescription(description string) error {
+	if utf8.RuneCountInString(description) > maxTaskDescriptionLen {
+		return fmt.Errorf("description exceeds %d characters", maxTaskDescriptionLen)
+	}
+	return nil
+}
 
 // maxTaskAssignees / maxTaskReferences bound the multikey arrays so a
 // single task can't balloon into a giant BSON document. Chosen to be
@@ -159,13 +177,13 @@ func (r *taskResolver) CreateTask(ctx context.Context, input model.CreateTaskInp
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
-	if len(name) > maxTaskNameLen {
-		return nil, fmt.Errorf("name exceeds %d characters", maxTaskNameLen)
+	if err := checkTaskName(name); err != nil {
+		return nil, err
 	}
 
 	description := strDeref(input.Description)
-	if len(description) > maxTaskDescriptionLen {
-		return nil, fmt.Errorf("description exceeds %d characters", maxTaskDescriptionLen)
+	if err := checkTaskDescription(description); err != nil {
+		return nil, err
 	}
 
 	if err := validateScoreInput(input.RiskScore, "risk"); err != nil {
@@ -274,14 +292,14 @@ func (r *taskResolver) UpdateTask(ctx context.Context, id string, input model.Up
 		if name == "" {
 			return nil, fmt.Errorf("name cannot be empty")
 		}
-		if len(name) > maxTaskNameLen {
-			return nil, fmt.Errorf("name exceeds %d characters", maxTaskNameLen)
+		if err := checkTaskName(name); err != nil {
+			return nil, err
 		}
 		updates["name"] = name
 	}
 	if input.Description != nil {
-		if len(*input.Description) > maxTaskDescriptionLen {
-			return nil, fmt.Errorf("description exceeds %d characters", maxTaskDescriptionLen)
+		if err := checkTaskDescription(*input.Description); err != nil {
+			return nil, err
 		}
 		updates["description"] = *input.Description
 	}

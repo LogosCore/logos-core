@@ -3,6 +3,7 @@ package controller
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestSanitizeUploadFilename(t *testing.T) {
@@ -43,6 +44,19 @@ func TestSanitizeUploadFilename_LongName(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, ".pdf") {
 		t.Fatalf("extension not preserved: %q", got)
+	}
+}
+
+func TestSanitizeUploadFilename_LongNameCutsBetweenCharacters(t *testing.T) {
+	// "ж" is two bytes: an odd budget would cut one in half.
+	for _, in := range []string{strings.Repeat("ж", 300) + ".pdf", strings.Repeat("ж", 300)} {
+		got := SanitizeUploadFilename(in)
+		if len(got) > 255 || !utf8.ValidString(got) || !strings.HasPrefix(got, "жж") {
+			t.Errorf("%d bytes, valid %v: %q", len(got), utf8.ValidString(got), got)
+		}
+	}
+	if got := SanitizeUploadFilename(strings.Repeat("ж", 300) + ".pdf"); !strings.HasSuffix(got, ".pdf") {
+		t.Errorf("extension lost: %q", got)
 	}
 }
 

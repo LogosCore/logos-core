@@ -74,6 +74,28 @@ func TestNormalizeCredentialProperties(t *testing.T) {
 			wantErr: "exceeds",
 		},
 		{
+			// Characters, not bytes: "ж" is two bytes.
+			name: "takes a name and a value at the caps in characters",
+			in: []*model.CredentialPropertyInput{
+				ptrProp(strings.Repeat("ж", maxCredentialPropertyNameLen), strings.Repeat("ж", maxCredentialPropertyValueLen)),
+			},
+			wantLen: 1,
+		},
+		{
+			name: "rejects a name a character over the cap",
+			in: []*model.CredentialPropertyInput{
+				ptrProp(strings.Repeat("ж", maxCredentialPropertyNameLen+1), "x"),
+			},
+			wantErr: "exceeds",
+		},
+		{
+			name: "rejects a value a character over the cap",
+			in: []*model.CredentialPropertyInput{
+				ptrProp("k", strings.Repeat("ж", maxCredentialPropertyValueLen+1)),
+			},
+			wantErr: "exceeds",
+		},
+		{
 			name: "rejects oversized value",
 			in: []*model.CredentialPropertyInput{
 				ptrProp("k", strings.Repeat("v", maxCredentialPropertyValueLen+1)),
