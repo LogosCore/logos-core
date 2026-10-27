@@ -30,3 +30,91 @@ index 9aab405..0c685f7 100644
      whileElementsMounted: keepMounted ? undefined : (...args) => autoUpdate(...args, autoUpdateOptions),
      nodeId,
      externalTree
+diff --git a/node_modules/@base-ui/react/select/popup/SelectPopup.js b/node_modules/@base-ui/react/select/popup/SelectPopup.js
+index b1371b1..7944223 100644
+--- a/node_modules/@base-ui/react/select/popup/SelectPopup.js
++++ b/node_modules/@base-ui/react/select/popup/SelectPopup.js
+@@ -94,6 +94,8 @@ const SelectPopup = exports.SelectPopup = /*#__PURE__*/React.forwardRef(function
+   const reachedMaxHeightRef = React.useRef(false);
+   const initialPlacedRef = React.useRef(false);
+   const originalPositionerStylesRef = React.useRef({});
++  // Patched: whether the align-with-trigger mode has written the positioner's styles.
++  const handStyledRef = React.useRef(false);
+   const scrollArrowFrame = (0, _useAnimationFrame.useAnimationFrame)();
+   const handleScroll = (0, _useStableCallback.useStableCallback)(scroller => {
+     if (!positionerElement || !popupRef.current || !initialPlacedRef.current) {
+@@ -199,6 +201,14 @@ const SelectPopup = exports.SelectPopup = /*#__PURE__*/React.forwardRef(function
+     }
+     initialPlacedRef.current = false;
+     reachedMaxHeightRef.current = false;
++    // Patched: restore only what the align-with-trigger mode wrote by hand. A
++    // Floating UI-positioned popup's styles are React's: the snapshot was taken
++    // before its first positioning pass (top and left 0), and writing it back as the
++    // popup starts its exit animation moved it to the page's top-left corner.
++    if (!handStyledRef.current) {
++      return;
++    }
++    handStyledRef.current = false;
+     (0, _utils2.clearStyles)(positionerElement, originalPositionerStylesRef.current);
+   }, [open, alignItemWithTriggerActive, positionerElement, popupRef]);
+   (0, _useIsoLayoutEffect.useIsoLayoutEffect)(() => {
+@@ -218,6 +228,7 @@ const SelectPopup = exports.SelectPopup = /*#__PURE__*/React.forwardRef(function
+       scrollArrowFrame.request(() => handleScrollArrowVisibility(listElement || popupElement));
+       return;
+     }
++    handStyledRef.current = true;
+ 
+     // Ensure we remove any transforms that can affect the location of the popup
+     // and therefore the calculations.
+@@ -291,6 +302,7 @@ const SelectPopup = exports.SelectPopup = /*#__PURE__*/React.forwardRef(function
+       const isPinchZoomed = (win.visualViewport?.scale ?? 1) !== 1 && _platform.platform.engine.webkit;
+       if (fallbackToAlignPopupToTrigger || isPinchZoomed) {
+         (0, _utils2.clearStyles)(positionerElement, originalPositionerStylesRef.current);
++        handStyledRef.current = false;
+         setControlledAlignItemWithTrigger(false);
+         return;
+       }
+diff --git a/node_modules/@base-ui/react/select/popup/SelectPopup.mjs b/node_modules/@base-ui/react/select/popup/SelectPopup.mjs
+index 644079f..baddc9b 100644
+--- a/node_modules/@base-ui/react/select/popup/SelectPopup.mjs
++++ b/node_modules/@base-ui/react/select/popup/SelectPopup.mjs
+@@ -88,6 +88,8 @@ export const SelectPopup = /*#__PURE__*/React.forwardRef(function SelectPopup(co
+   const reachedMaxHeightRef = React.useRef(false);
+   const initialPlacedRef = React.useRef(false);
+   const originalPositionerStylesRef = React.useRef({});
++  // Patched: whether the align-with-trigger mode has written the positioner's styles.
++  const handStyledRef = React.useRef(false);
+   const scrollArrowFrame = useAnimationFrame();
+   const handleScroll = useStableCallback(scroller => {
+     if (!positionerElement || !popupRef.current || !initialPlacedRef.current) {
+@@ -193,6 +195,14 @@ export const SelectPopup = /*#__PURE__*/React.forwardRef(function SelectPopup(co
+     }
+     initialPlacedRef.current = false;
+     reachedMaxHeightRef.current = false;
++    // Patched: restore only what the align-with-trigger mode wrote by hand. A
++    // Floating UI-positioned popup's styles are React's: the snapshot was taken
++    // before its first positioning pass (top and left 0), and writing it back as the
++    // popup starts its exit animation moved it to the page's top-left corner.
++    if (!handStyledRef.current) {
++      return;
++    }
++    handStyledRef.current = false;
+     clearStyles(positionerElement, originalPositionerStylesRef.current);
+   }, [open, alignItemWithTriggerActive, positionerElement, popupRef]);
+   useIsoLayoutEffect(() => {
+@@ -212,6 +222,7 @@ export const SelectPopup = /*#__PURE__*/React.forwardRef(function SelectPopup(co
+       scrollArrowFrame.request(() => handleScrollArrowVisibility(listElement || popupElement));
+       return;
+     }
++    handStyledRef.current = true;
+ 
+     // Ensure we remove any transforms that can affect the location of the popup
+     // and therefore the calculations.
+@@ -285,6 +296,7 @@ export const SelectPopup = /*#__PURE__*/React.forwardRef(function SelectPopup(co
+       const isPinchZoomed = (win.visualViewport?.scale ?? 1) !== 1 && platform.engine.webkit;
+       if (fallbackToAlignPopupToTrigger || isPinchZoomed) {
+         clearStyles(positionerElement, originalPositionerStylesRef.current);
++        handStyledRef.current = false;
+         setControlledAlignItemWithTrigger(false);
+         return;
+       }
