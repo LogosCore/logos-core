@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
@@ -140,7 +141,7 @@ func (r *moduleResolver) BlockModule(ctx context.Context, instance string, reaso
 	if reason != nil {
 		text = strings.TrimSpace(*reason)
 	}
-	if len(text) > maxBlockReason {
+	if utf8.RuneCountInString(text) > maxBlockReason {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the reason is longer than %d characters", maxBlockReason))
 	}
 	if mod.Status == models.ModuleStatusBlocked {

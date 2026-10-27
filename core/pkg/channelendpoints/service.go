@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -331,7 +332,7 @@ func checkMeta(in Input) (name, desc string, err error) {
 	if !namePattern.MatchString(name) {
 		return "", "", invalid("name must be 1-63 lowercase letters, digits, '.', '_' or '-', starting with a letter or digit")
 	}
-	if len(desc) > MaxDescriptionLength {
+	if utf8.RuneCountInString(desc) > MaxDescriptionLength {
 		return "", "", invalid("description longer than %d characters", MaxDescriptionLength)
 	}
 	return name, desc, nil

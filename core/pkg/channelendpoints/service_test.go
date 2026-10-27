@@ -3,6 +3,7 @@ package channelendpoints
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -152,6 +153,20 @@ func TestCreateValidatesAndNormalizes(t *testing.T) {
 	}
 	if _, err = svc.Create(ctx, opA, "telegram", Input{Name: "tg", Values: map[string]any{}}); !errors.As(err, &ve) {
 		t.Errorf("kind without schema: %v", err)
+	}
+}
+
+func TestDescriptionLengthCountsCharacters(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+	// Two bytes each: a byte count would refuse the first.
+	fits := strings.Repeat("é", MaxDescriptionLength)
+	if _, err := svc.Create(ctx, opA, "http", Input{Name: "fits", Description: fits, Values: map[string]any{"base_url": "https://a.example.com"}}); err != nil {
+		t.Errorf("a description of %d characters: %v", MaxDescriptionLength, err)
+	}
+	var ve *ValidationError
+	if _, err := svc.Create(ctx, opA, "http", Input{Name: "over", Description: fits + "é", Values: map[string]any{"base_url": "https://a.example.com"}}); !errors.As(err, &ve) {
+		t.Errorf("a description of %d characters: %v", MaxDescriptionLength+1, err)
 	}
 }
 

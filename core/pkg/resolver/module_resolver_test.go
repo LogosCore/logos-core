@@ -175,6 +175,19 @@ func TestBlockModule(t *testing.T) {
 	}
 }
 
+func TestBlockModuleReasonCountsCharacters(t *testing.T) {
+	repo := &fakeModuleRepo{rows: []models.Module{{Instance: "http-1", Type: "channel", Status: models.ModuleStatusRegistered}}}
+	r := NewModuleResolver(repo, &fakeAdmin{ok: true}, nil, nil)
+	// Two bytes each: a byte count would refuse the first.
+	fits, over := strings.Repeat("é", maxBlockReason), strings.Repeat("é", maxBlockReason+1)
+	if _, err := r.BlockModule(userCtx("admin"), "http-1", &fits); err != nil {
+		t.Errorf("a reason of %d characters: %v", maxBlockReason, err)
+	}
+	if _, err := r.BlockModule(userCtx("admin"), "http-1", &over); gqlCode(err) != errCodeBadUserInput {
+		t.Errorf("a reason of %d characters: %v", maxBlockReason+1, err)
+	}
+}
+
 func TestUnblockModule(t *testing.T) {
 	repo := &fakeModuleRepo{rows: []models.Module{
 		{Instance: "http-1", Status: models.ModuleStatusRegistered},

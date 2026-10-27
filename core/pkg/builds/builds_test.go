@@ -735,6 +735,19 @@ func TestPresets(t *testing.T) {
 	}
 }
 
+func TestPresetDescriptionCountsCharacters(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	// Two bytes each: a byte count would refuse the first.
+	fits := strings.Repeat("é", MaxDescriptionLength)
+	if _, err := r.svc.CreatePreset(ctx, opID, "bob", PresetInput{Name: "fits", Description: fits, Target: "dummy", Actor: alice}); err != nil {
+		t.Errorf("a description of %d characters: %v", MaxDescriptionLength, err)
+	}
+	if _, err := r.svc.CreatePreset(ctx, opID, "bob", PresetInput{Name: "over", Description: fits + "é", Target: "dummy", Actor: alice}); err == nil {
+		t.Errorf("a description of %d characters was taken", MaxDescriptionLength+1)
+	}
+}
+
 // --- files ---------------------------------------------------------------
 
 func TestFiles(t *testing.T) {

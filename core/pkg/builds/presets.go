@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -134,7 +135,7 @@ func (s *Service) applyPresetInput(ctx context.Context, p *models.BuildPreset, i
 	if !presetNamePattern.MatchString(name) {
 		return invalid("name must match %s", presetNamePattern)
 	}
-	if len(desc) > MaxDescriptionLength {
+	if utf8.RuneCountInString(desc) > MaxDescriptionLength {
 		return invalid("description longer than %d characters", MaxDescriptionLength)
 	}
 	schema, err := s.schema(ctx, p.ModuleName)
