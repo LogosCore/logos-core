@@ -10,6 +10,7 @@ import { useChannelEndpointCount } from "@/graphql/hooks/channel-endpoints"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
 import { defaultConnectionName, settingsSummary, type ChannelKind, type ConnectionDraft, type FactoryKind } from "./build-values"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 /** An operation's endpoint, as a connection is filled from it. */
 export interface EndpointOption {
@@ -54,7 +55,7 @@ export function ConnectionCard({
   kind: FactoryKind
   /** The channel kind; undefined when it declares no settings now. */
   channel: ChannelKind | undefined
-  channelIcon?: string
+  channelIcon?: ModuleIconSvgs
   /** The settings as the form submits them, for the folded line. */
   settings: Record<string, unknown>
   /** The form's errors, keyed like the server's problems. */

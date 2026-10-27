@@ -262,11 +262,13 @@ func TestLatestIconPerKind(t *testing.T) {
 	// Sorted as the query sorts them: by name, newest first.
 	got := latestIconPerKind([]models.Module{
 		{Name: "bob", Icon: "<svg new/>"},
-		{Name: "bob", Icon: "<svg old/>"},
+		{Name: "bob", Icon: "<svg old/>", IconLight: "<svg old light/>"},
 		{Name: "http", Icon: ""},
-		{Name: "http", Icon: "<svg http/>"},
+		{Name: "http", Icon: "<svg http/>", IconLight: "<svg http light/>"},
 	})
-	if len(got) != 2 || got["bob"] != "<svg new/>" || got["http"] != "<svg http/>" {
+	// bob's newest sent no light icon: the older one's does not come along.
+	bob, http := models.ModuleIcon{Icon: "<svg new/>"}, models.ModuleIcon{Icon: "<svg http/>", IconLight: "<svg http light/>"}
+	if len(got) != 2 || got["bob"] != bob || got["http"] != http {
 		t.Errorf("icons = %v", got)
 	}
 }

@@ -48,6 +48,11 @@ type Module {
   # scripts or outside references). Empty when it sent none; the UI then shows
   # its type's default. Drawn as a single-colour glyph in the text colour.
   icon: String!
+  # The icon to draw instead on light themes, from the same registration and
+  # checked the same way: for an icon whose shape is the lit parts of a shaded
+  # drawing, which reads as a negative in a dark text colour. Empty when it
+  # sent none; icon then serves every theme.
+  iconLight: String!
   # Lifecycle state: "registered" | "deregistered" | "dead" | "blocked".
   status: String!
   # Self-reported health on the most recent heartbeat:

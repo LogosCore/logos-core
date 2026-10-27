@@ -15,12 +15,13 @@ import {
   type Draft,
   type FieldDef,
 } from "@/components/modules/management/field-values"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 /** A channel kind as the endpoint UI uses it: its schema's fields, sorted. */
 export interface Kind {
   name: string
-  /** The kind's own SVG icon; "" for the default. */
-  icon: string
+  /** The kind's own icon; its SVGs are "" for the default. */
+  icon: ModuleIconSvgs
   version: number
   fields: FieldDef[]
 }
@@ -30,13 +31,18 @@ export interface Kind {
  * operation data here: edited and shown as text like the rest.
  */
 export function kindsByName(
-  kinds: readonly { moduleName: string; icon?: string; schema: { version: number; fields: readonly FieldDef[] } }[],
+  kinds: readonly {
+    moduleName: string
+    icon?: string
+    iconLight?: string
+    schema: { version: number; fields: readonly FieldDef[] }
+  }[],
 ): Map<string, Kind> {
   const out = new Map<string, Kind>()
   for (const k of kinds) {
     out.set(k.moduleName, {
       name: k.moduleName,
-      icon: k.icon ?? "",
+      icon: { icon: k.icon ?? "", iconLight: k.iconLight ?? "" },
       version: k.schema.version,
       fields: k.schema.fields
         .map((f) => (f.type === "secret" ? { ...f, type: "string" } : f))

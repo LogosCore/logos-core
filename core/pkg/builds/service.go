@@ -27,7 +27,7 @@ import (
 type Registry interface {
 	LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error)
 	LatestBuildSchemas(ctx context.Context) (map[string]*models.ModuleBuildSchema, error)
-	LatestIcons(ctx context.Context, moduleType string) (map[string]string, error)
+	LatestIcons(ctx context.Context, moduleType string) (map[string]models.ModuleIcon, error)
 	ListActive(ctx context.Context) ([]models.Module, error)
 	FindByInstance(ctx context.Context, instance string) (models.Module, error)
 }

@@ -70,7 +70,7 @@ func (e *ConflictError) Error() string {
 type Registry interface {
 	LatestConnectionSchema(ctx context.Context, moduleName string) (*models.ModuleConnectionSchema, error)
 	LatestConnectionSchemas(ctx context.Context) (map[string]*models.ModuleConnectionSchema, error)
-	LatestIcons(ctx context.Context, moduleType string) (map[string]string, error)
+	LatestIcons(ctx context.Context, moduleType string) (map[string]models.ModuleIcon, error)
 }
 
 // Kind is a channel kind, its current connection schema, and its icon (empty
@@ -79,6 +79,7 @@ type Kind struct {
 	ModuleName string
 	Schema     protocol.ConnectionSchema
 	Icon       string
+	IconLight  string // the icon on light themes; empty when Icon serves both
 }
 
 // Service validates and stores channel endpoints.
@@ -145,7 +146,7 @@ func (s *Service) Kinds(ctx context.Context) ([]Kind, error) {
 	}
 	out := make([]Kind, 0, len(schemas))
 	for name, c := range schemas {
-		out = append(out, Kind{ModuleName: name, Schema: c.ConnectionSchema, Icon: icons[name]})
+		out = append(out, Kind{ModuleName: name, Schema: c.ConnectionSchema, Icon: icons[name].Icon, IconLight: icons[name].IconLight})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModuleName < out[j].ModuleName })
 	return out, nil

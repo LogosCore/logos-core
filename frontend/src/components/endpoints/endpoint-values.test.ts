@@ -72,7 +72,7 @@ describe("evaluateEndpoint", () => {
 describe("settingRows", () => {
   const kind: Kind = {
     name: "http",
-    icon: "",
+    icon: { icon: "", iconLight: "" },
     version: 2,
     fields: [
       { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
@@ -132,7 +132,7 @@ describe("freeName", () => {
 describe("parseEndpointImport", () => {
   const http: Kind = {
     name: "http",
-    icon: "",
+    icon: { icon: "", iconLight: "" },
     version: 2,
     fields: [
       { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },

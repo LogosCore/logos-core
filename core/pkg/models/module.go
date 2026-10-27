@@ -42,6 +42,10 @@ type Module struct {
 	// with protocol.ValidateIcon; empty when it sent none (or an invalid one),
 	// and the UI shows its type's default.
 	Icon string `bson:"icon,omitempty" json:"icon,omitempty"`
+	// IconLight is the icon the UI draws instead of Icon on light themes, from
+	// the same registration and checked the same way; empty when it sent none,
+	// and Icon serves every theme. Kept only with an Icon.
+	IconLight string `bson:"icon_light,omitempty" json:"icon_light,omitempty"`
 
 	Status          string         `bson:"status" json:"status"`
 	RegisteredAt    time.Time      `bson:"registered_at" json:"registered_at"`
@@ -85,4 +89,11 @@ type Module struct {
 	BlockedAt   *time.Time   `bson:"blocked_at,omitempty" json:"blocked_at,omitempty"`
 	BlockedBy   *ModuleActor `bson:"blocked_by,omitempty" json:"blocked_by,omitempty"`
 	BlockReason string       `bson:"block_reason,omitempty" json:"block_reason,omitempty"`
+}
+
+// ModuleIcon is a kind's icon as one registration sent it: the SVG, and the
+// one for light themes (empty when it sent none).
+type ModuleIcon struct {
+	Icon      string
+	IconLight string
 }

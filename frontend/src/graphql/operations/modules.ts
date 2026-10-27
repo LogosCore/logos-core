@@ -8,6 +8,7 @@ export const ModuleFields = graphql(`
     version
     description
     icon
+    iconLight
     status
     lastStatus
     registeredAt

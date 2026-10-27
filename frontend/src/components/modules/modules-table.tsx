@@ -68,7 +68,7 @@ export function ModulesTable({ modules, isLoading, isFetchingNextPage, hasNextPa
             <>
               <ModuleIconCell
                 type={m.type}
-                icon={m.icon}
+                icon={m}
                 title={<span className="truncate font-mono font-medium">{m.instance}</span>}
                 subtitle={m.description}
                 subtitleTitle={m.description ?? undefined}

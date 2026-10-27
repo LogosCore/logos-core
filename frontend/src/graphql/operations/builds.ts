@@ -93,6 +93,7 @@ export const FactoryKindsQuery = graphql(`
     factoryKinds {
       moduleName
       icon
+      iconLight
       instances
       schema {
         ...BuildSchemaFields

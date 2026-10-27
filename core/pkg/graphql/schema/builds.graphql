@@ -78,6 +78,9 @@ type FactoryKind {
   # The SVG icon the kind's latest registration that sent one carried (see
   # Module.icon); empty when none did, and the UI shows the default.
   icon: String!
+  # That registration's icon for light themes (see Module.iconLight); empty
+  # when it sent none.
+  iconLight: String!
 }
 
 # A file uploaded for a build's file fields.

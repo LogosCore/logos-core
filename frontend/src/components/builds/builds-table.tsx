@@ -13,6 +13,7 @@ import { ModuleIconCell } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
 import { currentStage, platformLabel } from "./build-values"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
 
@@ -32,7 +33,7 @@ export function BuildsTable({
   emptyState,
 }: {
   builds: BuildFieldsFragment[]
-  icons: ReadonlyMap<string, string>
+  icons: ReadonlyMap<string, ModuleIconSvgs>
   isLoading: boolean
   isFetchingNextPage: boolean
   hasNextPage: boolean

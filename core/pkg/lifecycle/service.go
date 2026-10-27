@@ -137,6 +137,8 @@ type registerRequest struct {
 	Description string `json:"description"`
 	// Icon is the module's optional SVG icon.
 	Icon string `json:"icon"`
+	// IconLight is its optional icon for light themes, sent with an Icon.
+	IconLight string `json:"icon_light"`
 	// Management is the optional management manifest.
 	Management *protocol.ManagementManifest `json:"management"`
 	// AppliedRevision is the config revision the process has applied (0 for
@@ -242,6 +244,16 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 			s.logger.Warn("module icon refused", zap.String("instance", p.Instance), zap.Error(err))
 		} else {
 			reg.Icon = p.Icon
+		}
+	}
+	if p.IconLight != "" {
+		// Only with an icon: alone it would leave dark themes on the default.
+		if reg.Icon == "" {
+			s.logger.Warn("module light icon ignored without an icon", zap.String("instance", p.Instance))
+		} else if err := protocol.ValidateIcon(p.IconLight); err != nil {
+			s.logger.Warn("module light icon refused", zap.String("instance", p.Instance), zap.Error(err))
+		} else {
+			reg.IconLight = p.IconLight
 		}
 	}
 	if err := s.repo.Upsert(ctx, reg); err != nil {

@@ -13,6 +13,7 @@ import {
   type CreateChannelEndpointMutationVariables,
   type UpdateChannelEndpointMutationVariables,
 } from "@/graphql/gql/graphql"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 export const channelEndpointKeys = {
   all: ["channel-endpoints"] as const,
@@ -35,9 +36,12 @@ export function useChannelKinds() {
 }
 
 /** Channel kinds' icons by module name ("" when a kind sent none). */
-export function useChannelIcons(): Map<string, string> {
+export function useChannelIcons(): Map<string, ModuleIconSvgs> {
   const { data } = useChannelKinds()
-  return useMemo(() => new Map((data?.channelKinds ?? []).map((k) => [k.moduleName, k.icon])), [data])
+  return useMemo(
+    () => new Map((data?.channelKinds ?? []).map((k) => [k.moduleName, { icon: k.icon, iconLight: k.iconLight }])),
+    [data],
+  )
 }
 
 /** What an endpoints list shows: the server searches and filters. */

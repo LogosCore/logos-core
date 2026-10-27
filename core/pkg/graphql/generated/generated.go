@@ -283,6 +283,7 @@ type ComplexityRoot struct {
 
 	ChannelKind struct {
 		Icon       func(childComplexity int) int
+		IconLight  func(childComplexity int) int
 		ModuleName func(childComplexity int) int
 		Schema     func(childComplexity int) int
 	}
@@ -348,6 +349,7 @@ type ComplexityRoot struct {
 
 	FactoryKind struct {
 		Icon       func(childComplexity int) int
+		IconLight  func(childComplexity int) int
 		Instances  func(childComplexity int) int
 		ModuleName func(childComplexity int) int
 		Schema     func(childComplexity int) int
@@ -454,6 +456,7 @@ type ComplexityRoot struct {
 		DeregisteredAt   func(childComplexity int) int
 		Description      func(childComplexity int) int
 		Icon             func(childComplexity int) int
+		IconLight        func(childComplexity int) int
 		Instance         func(childComplexity int) int
 		LastHeartbeatAt  func(childComplexity int) int
 		LastStatus       func(childComplexity int) int
@@ -2532,6 +2535,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ChannelKind.Icon(childComplexity), true
+	case "ChannelKind.iconLight":
+		if e.ComplexityRoot.ChannelKind.IconLight == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelKind.IconLight(childComplexity), true
 	case "ChannelKind.moduleName":
 		if e.ComplexityRoot.ChannelKind.ModuleName == nil {
 			break
@@ -2786,6 +2795,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FactoryKind.Icon(childComplexity), true
+	case "FactoryKind.iconLight":
+		if e.ComplexityRoot.FactoryKind.IconLight == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FactoryKind.IconLight(childComplexity), true
 	case "FactoryKind.instances":
 		if e.ComplexityRoot.FactoryKind.Instances == nil {
 			break
@@ -3235,6 +3250,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Module.Icon(childComplexity), true
+	case "Module.iconLight":
+		if e.ComplexityRoot.Module.IconLight == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Module.IconLight(childComplexity), true
 	case "Module.instance":
 		if e.ComplexityRoot.Module.Instance == nil {
 			break
@@ -8020,6 +8041,9 @@ type FactoryKind {
   # The SVG icon the kind's latest registration that sent one carried (see
   # Module.icon); empty when none did, and the UI shows the default.
   icon: String!
+  # That registration's icon for light themes (see Module.iconLight); empty
+  # when it sent none.
+  iconLight: String!
 }
 
 # A file uploaded for a build's file fields.
@@ -8278,6 +8302,9 @@ type ChannelKind {
   # The SVG icon the kind's latest registration that sent one carried (see
   # Module.icon); empty when none did, and the UI shows the default.
   icon: String!
+  # That registration's icon for light themes (see Module.iconLight); empty
+  # when it sent none.
+  iconLight: String!
 }
 
 type ChannelEndpointProblem {
@@ -9524,6 +9551,11 @@ type Module {
   # scripts or outside references). Empty when it sent none; the UI then shows
   # its type's default. Drawn as a single-colour glyph in the text colour.
   icon: String!
+  # The icon to draw instead on light themes, from the same registration and
+  # checked the same way: for an icon whose shape is the lit parts of a shaded
+  # drawing, which reads as a negative in a dark text colour. Empty when it
+  # sent none; icon then serves every theme.
+  iconLight: String!
   # Lifecycle state: "registered" | "deregistered" | "dead" | "blocked".
   status: String!
   # Self-reported health on the most recent heartbeat:
@@ -19195,6 +19227,35 @@ func (ec *executionContext) fieldContext_ChannelKind_icon(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _ChannelKind_iconLight(ctx context.Context, field graphql.CollectedField, obj *model.ChannelKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelKind_iconLight,
+		func(ctx context.Context) (any, error) {
+			return obj.IconLight, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelKind_iconLight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Credential_id(ctx context.Context, field graphql.CollectedField, obj *models.Credential) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20757,6 +20818,35 @@ func (ec *executionContext) _FactoryKind_icon(ctx context.Context, field graphql
 }
 
 func (ec *executionContext) fieldContext_FactoryKind_icon(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FactoryKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FactoryKind_iconLight(ctx context.Context, field graphql.CollectedField, obj *model.FactoryKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FactoryKind_iconLight,
+		func(ctx context.Context) (any, error) {
+			return obj.IconLight, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FactoryKind_iconLight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "FactoryKind",
 		Field:      field,
@@ -23075,6 +23165,35 @@ func (ec *executionContext) fieldContext_Module_icon(_ context.Context, field gr
 	return fc, nil
 }
 
+func (ec *executionContext) _Module_iconLight(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Module_iconLight,
+		func(ctx context.Context) (any, error) {
+			return obj.IconLight, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Module_iconLight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Module",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Module_status(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24702,6 +24821,8 @@ func (ec *executionContext) fieldContext_ModuleEdge_node(_ context.Context, fiel
 				return ec.fieldContext_Module_description(ctx, field)
 			case "icon":
 				return ec.fieldContext_Module_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_Module_iconLight(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -24974,6 +25095,8 @@ func (ec *executionContext) fieldContext_ModuleEvent_module(_ context.Context, f
 				return ec.fieldContext_Module_description(ctx, field)
 			case "icon":
 				return ec.fieldContext_Module_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_Module_iconLight(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -30400,6 +30523,8 @@ func (ec *executionContext) fieldContext_Mutation_updateModuleConfig(ctx context
 				return ec.fieldContext_Module_description(ctx, field)
 			case "icon":
 				return ec.fieldContext_Module_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_Module_iconLight(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -30586,6 +30711,8 @@ func (ec *executionContext) fieldContext_Mutation_blockModule(ctx context.Contex
 				return ec.fieldContext_Module_description(ctx, field)
 			case "icon":
 				return ec.fieldContext_Module_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_Module_iconLight(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -30685,6 +30812,8 @@ func (ec *executionContext) fieldContext_Mutation_unblockModule(ctx context.Cont
 				return ec.fieldContext_Module_description(ctx, field)
 			case "icon":
 				return ec.fieldContext_Module_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_Module_iconLight(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -36033,6 +36162,8 @@ func (ec *executionContext) fieldContext_Query_factoryKinds(_ context.Context, f
 				return ec.fieldContext_FactoryKind_instances(ctx, field)
 			case "icon":
 				return ec.fieldContext_FactoryKind_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_FactoryKind_iconLight(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FactoryKind", field.Name)
 		},
@@ -36420,6 +36551,8 @@ func (ec *executionContext) fieldContext_Query_channelKinds(_ context.Context, f
 				return ec.fieldContext_ChannelKind_schema(ctx, field)
 			case "icon":
 				return ec.fieldContext_ChannelKind_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_ChannelKind_iconLight(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ChannelKind", field.Name)
 		},
@@ -37742,6 +37875,8 @@ func (ec *executionContext) fieldContext_Query_module(ctx context.Context, field
 				return ec.fieldContext_Module_description(ctx, field)
 			case "icon":
 				return ec.fieldContext_Module_icon(ctx, field)
+			case "iconLight":
+				return ec.fieldContext_Module_iconLight(ctx, field)
 			case "status":
 				return ec.fieldContext_Module_status(ctx, field)
 			case "lastStatus":
@@ -56022,6 +56157,11 @@ func (ec *executionContext) _ChannelKind(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "iconLight":
+			out.Values[i] = ec._ChannelKind_iconLight(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -56988,6 +57128,11 @@ func (ec *executionContext) _FactoryKind(ctx context.Context, sel ast.SelectionS
 			}
 		case "icon":
 			out.Values[i] = ec._FactoryKind_icon(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "iconLight":
+			out.Values[i] = ec._FactoryKind_iconLight(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -58170,6 +58315,11 @@ func (ec *executionContext) _Module(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "icon":
 			out.Values[i] = ec._Module_icon(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "iconLight":
+			out.Values[i] = ec._Module_iconLight(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

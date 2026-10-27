@@ -59,7 +59,8 @@ func TestIntegrationModuleRegistryRecordStatus(t *testing.T) {
 
 // TestIntegrationModuleRegistryLatestIcons pins a kind's icon: the one its
 // most recent registration that sent an icon carried, whatever the instance's
-// state, and only kinds of the type asked for.
+// state, and only kinds of the type asked for. Its light-theme icon is that
+// same registration's, never an older one's.
 func TestIntegrationModuleRegistryLatestIcons(t *testing.T) {
 	db := integrationDB(t)
 	ctx := context.Background()
@@ -68,19 +69,22 @@ func TestIntegrationModuleRegistryLatestIcons(t *testing.T) {
 		t.Fatalf("index setup: %v", err)
 	}
 	at := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
-	register := func(typ, name, instance, icon string, minutes int) {
+	register := func(typ, name, instance, icon string, minutes int, light ...string) {
 		t.Helper()
 		m := &models.Module{Type: typ, Name: name, Instance: instance, RPCQueue: "q." + instance, Icon: icon,
 			RegisteredAt: at.Add(time.Duration(minutes) * time.Minute)}
+		if len(light) > 0 {
+			m.IconLight = light[0]
+		}
 		if err := repo.Upsert(ctx, m); err != nil {
 			t.Fatal(err)
 		}
 	}
-	register("channel", "http", "http-1", "<svg old/>", 0)
+	register("channel", "http", "http-1", "<svg old/>", 0, "<svg old light/>")
 	register("channel", "http", "http-2", "<svg new/>", 5)
 	register("channel", "http", "http-3", "", 9) // a newer instance without one keeps the kind's icon
 	register("channel", "dns", "dns-1", "", 1)
-	register("factory", "bob", "bob-1", "<svg bob/>", 2)
+	register("factory", "bob", "bob-1", "<svg bob/>", 2, "<svg bob light/>")
 	if ok, err := repo.MarkDeregistered(ctx, "http-2", "shutdown", at.Add(10*time.Minute)); !ok || err != nil {
 		t.Fatalf("deregister: %v %v", ok, err)
 	}
@@ -89,11 +93,19 @@ func TestIntegrationModuleRegistryLatestIcons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got["http"] != "<svg new/>" {
+	// http-2 sent no light icon: http-1's older one must not come with it.
+	if len(got) != 1 || got["http"] != (models.ModuleIcon{Icon: "<svg new/>"}) {
 		t.Errorf("channel icons = %v, want only http's newest", got)
 	}
-	if got, err := repo.LatestIcons(ctx, "factory"); err != nil || len(got) != 1 || got["bob"] != "<svg bob/>" {
+	want := models.ModuleIcon{Icon: "<svg bob/>", IconLight: "<svg bob light/>"}
+	if got, err := repo.LatestIcons(ctx, "factory"); err != nil || len(got) != 1 || got["bob"] != want {
 		t.Errorf("factory icons = %v (%v)", got, err)
+	}
+
+	// Registering again without a light icon drops the stored one.
+	register("factory", "bob", "bob-1", "<svg bob/>", 3)
+	if m, err := repo.FindByInstance(ctx, "bob-1"); err != nil || m.IconLight != "" {
+		t.Errorf("bob-1 after re-registering without a light icon: %+v (%v)", m, err)
 	}
 }
 

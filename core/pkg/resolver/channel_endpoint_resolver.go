@@ -90,7 +90,7 @@ func (r *channelEndpointResolver) ChannelKinds(ctx context.Context) ([]*model.Ch
 	}
 	out := make([]*model.ChannelKind, len(kinds))
 	for i, k := range kinds {
-		out[i] = &model.ChannelKind{ModuleName: k.ModuleName, Schema: toConnectionModel(&k.Schema), Icon: k.Icon}
+		out[i] = &model.ChannelKind{ModuleName: k.ModuleName, Schema: toConnectionModel(&k.Schema), Icon: k.Icon, IconLight: k.IconLight}
 	}
 	return out, nil
 }

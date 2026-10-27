@@ -30,6 +30,7 @@ export const ChannelKindsQuery = graphql(`
     channelKinds {
       moduleName
       icon
+      iconLight
       schema {
         version
         fields {

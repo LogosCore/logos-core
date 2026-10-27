@@ -239,6 +239,7 @@ type ChannelKind struct {
 	ModuleName string                  `json:"moduleName"`
 	Schema     *ModuleConnectionSchema `json:"schema"`
 	Icon       string                  `json:"icon"`
+	IconLight  string                  `json:"iconLight"`
 }
 
 type CreateAgentKeyInput struct {
@@ -363,6 +364,7 @@ type FactoryKind struct {
 	Schema     *BuildSchema `json:"schema"`
 	Instances  int          `json:"instances"`
 	Icon       string       `json:"icon"`
+	IconLight  string       `json:"iconLight"`
 }
 
 type HashConnection struct {

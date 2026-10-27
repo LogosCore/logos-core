@@ -772,13 +772,13 @@ func TestDeleteOperationData(t *testing.T) {
 func TestKinds(t *testing.T) {
 	r := newRig(t)
 	r.reg.mu.Lock()
-	r.reg.icons = map[string]string{"bob": "<svg bob/>"}
+	r.reg.icons = map[string]models.ModuleIcon{"bob": {Icon: "<svg bob/>", IconLight: "<svg bob light/>"}}
 	r.reg.mu.Unlock()
 	kinds, err := r.svc.Kinds(context.Background())
 	if err != nil || len(kinds) != 1 {
 		t.Fatalf("kinds = %+v (%v)", kinds, err)
 	}
-	if k := kinds[0]; k.ModuleName != "bob" || k.Instances != 1 || k.Icon != "<svg bob/>" || k.Schema.Version != 1 {
+	if k := kinds[0]; k.ModuleName != "bob" || k.Instances != 1 || k.Icon != "<svg bob/>" || k.IconLight != "<svg bob light/>" || k.Schema.Version != 1 {
 		t.Errorf("kind = %+v", k)
 	}
 }

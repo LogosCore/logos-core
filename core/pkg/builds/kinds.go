@@ -18,6 +18,7 @@ type Kind struct {
 	Schema     protocol.BuildSchema
 	Instances  int
 	Icon       string
+	IconLight  string // the icon on light themes; empty when Icon serves both
 }
 
 // Kinds returns every factory kind that declared a build schema, by name.
@@ -36,7 +37,8 @@ func (s *Service) Kinds(ctx context.Context) ([]Kind, error) {
 	}
 	out := make([]Kind, 0, len(schemas))
 	for name, sc := range schemas {
-		out = append(out, Kind{ModuleName: name, Schema: sc.BuildSchema, Instances: len(declaring(active, name, sc.Version)), Icon: icons[name]})
+		out = append(out, Kind{ModuleName: name, Schema: sc.BuildSchema, Instances: len(declaring(active, name, sc.Version)),
+			Icon: icons[name].Icon, IconLight: icons[name].IconLight})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ModuleName < out[j].ModuleName })
 	return out, nil

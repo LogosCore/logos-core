@@ -10,6 +10,7 @@ import { useDebounced } from "@/hooks/use-debounced"
 import { cn } from "@/lib/utils"
 import type { EndpointOption } from "./connection-card"
 import { settingsSummary, type ChannelKind } from "./build-values"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 /** A channel a blank connection can go through, or why it cannot. */
 export interface BlankChannel {
@@ -45,7 +46,7 @@ export function ConnectionPickerDialog({
   /** The channel kinds whose endpoints are offered. */
   kinds: readonly string[]
   channels: ReadonlyMap<string, ChannelKind>
-  channelIcons: ReadonlyMap<string, string>
+  channelIcons: ReadonlyMap<string, ModuleIconSvgs>
   /** Channels to start a blank connection through; none offers no blank one. */
   blank?: readonly BlankChannel[]
   onEndpoint: (endpoint: EndpointOption) => void
@@ -116,7 +117,7 @@ function PickerBody({
   /** A blank connection is offered too. */
   blank: boolean
   channels: ReadonlyMap<string, ChannelKind>
-  channelIcons: ReadonlyMap<string, string>
+  channelIcons: ReadonlyMap<string, ModuleIconSvgs>
   onEndpoint: (endpoint: EndpointOption) => void
 }) {
   const listId = useId()

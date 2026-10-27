@@ -99,7 +99,7 @@ func (r *buildResolver) FactoryKinds(ctx context.Context) ([]*model.FactoryKind,
 	}
 	out := make([]*model.FactoryKind, len(kinds))
 	for i, k := range kinds {
-		out[i] = &model.FactoryKind{ModuleName: k.ModuleName, Schema: toBuildSchemaModel(&k.Schema), Instances: k.Instances, Icon: k.Icon}
+		out[i] = &model.FactoryKind{ModuleName: k.ModuleName, Schema: toBuildSchemaModel(&k.Schema), Instances: k.Instances, Icon: k.Icon, IconLight: k.IconLight}
 	}
 	return out, nil
 }

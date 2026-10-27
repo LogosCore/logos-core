@@ -1,32 +1,56 @@
 import type { CSSProperties, ReactNode } from "react"
 import { BlocksIcon, FactoryIcon, RadioTowerIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { defaultIconFor, iconMaskImage } from "./module-icon-values"
+import { defaultIconFor, iconMaskImage, type ModuleIconSvgs } from "./module-icon-values"
 
 const DEFAULT_ICONS = { channel: RadioTowerIcon, factory: FactoryIcon, module: BlocksIcon }
 
 /**
  * A module's icon: the SVG it sent at registration, drawn in the text colour,
- * or else its type's default. Sized like the other icons (size-4) unless
- * className says otherwise.
+ * or else its type's default. On light themes its light-theme SVG, when it
+ * sent one (an icon drawn as the lit parts of a shaded picture is a negative
+ * in a dark colour). Sized like the other icons (size-4) unless className
+ * says otherwise.
  */
-export function ModuleIcon({ type, icon, className }: { type: string; icon?: string | null; className?: string }) {
-  if (icon) {
-    const image = iconMaskImage(icon)
-    const style: CSSProperties = {
-      maskImage: image,
-      WebkitMaskImage: image,
-      maskSize: "contain",
-      WebkitMaskSize: "contain",
-      maskRepeat: "no-repeat",
-      WebkitMaskRepeat: "no-repeat",
-      maskPosition: "center",
-      WebkitMaskPosition: "center",
+export function ModuleIcon({
+  type,
+  icon,
+  className,
+}: {
+  type: string
+  icon?: ModuleIconSvgs | null
+  className?: string
+}) {
+  if (icon?.icon) {
+    if (icon.iconLight) {
+      // Both drawn, one hidden: the theme is a class on the page, so CSS picks.
+      return (
+        <>
+          <IconGlyph svg={icon.iconLight} className={cn(className, "dark:hidden")} />
+          <IconGlyph svg={icon.icon} className={cn(className, "hidden dark:inline-block")} />
+        </>
+      )
     }
-    return <span aria-hidden className={cn("inline-block size-4 shrink-0 bg-current", className)} style={style} />
+    return <IconGlyph svg={icon.icon} className={className} />
   }
   const Icon = DEFAULT_ICONS[defaultIconFor(type)]
   return <Icon aria-hidden className={cn("size-4 shrink-0", className)} />
+}
+
+/** One SVG, drawn through a mask in the text colour. */
+function IconGlyph({ svg, className }: { svg: string; className?: string }) {
+  const image = iconMaskImage(svg)
+  const style: CSSProperties = {
+    maskImage: image,
+    WebkitMaskImage: image,
+    maskSize: "contain",
+    WebkitMaskSize: "contain",
+    maskRepeat: "no-repeat",
+    WebkitMaskRepeat: "no-repeat",
+    maskPosition: "center",
+    WebkitMaskPosition: "center",
+  }
+  return <span aria-hidden className={cn("inline-block size-4 shrink-0 bg-current", className)} style={style} />
 }
 
 /**
@@ -42,7 +66,7 @@ export function KindName({
 }: {
   type: "channel" | "factory"
   name: string
-  icon?: string | null
+  icon?: ModuleIconSvgs | null
   className?: string
 }) {
   return (
@@ -66,7 +90,7 @@ export function ModuleIconCell({
   subtitleTitle,
 }: {
   type: string
-  icon?: string | null
+  icon?: ModuleIconSvgs | null
   title: ReactNode
   subtitle?: ReactNode
   /** The second line's full text on hover. */

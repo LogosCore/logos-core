@@ -286,6 +286,38 @@ func TestHandleRegister_Icon(t *testing.T) {
 	}
 }
 
+func TestHandleRegister_IconLight(t *testing.T) {
+	svc, repo, _ := newTestService()
+	const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>`
+	const light = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/></svg>`
+	const broken = `<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`
+	register := func(instance, icon, light string) *models.Module {
+		t.Helper()
+		_, err := svc.HandleRegister(context.Background(), envFor(t, OpRegister, registerRequest{
+			ModuleType: "channel", ModuleName: "http", Instance: instance, RPCQueue: "q." + instance,
+			Icon: icon, IconLight: light,
+		}))
+		if err != nil {
+			t.Fatalf("HandleRegister: %v", err)
+		}
+		return repo.rows[instance]
+	}
+	if row := register("http-1", icon, light); row.Icon != icon || row.IconLight != light {
+		t.Errorf("icons = %q / %q, want the ones sent", row.Icon, row.IconLight)
+	}
+	// Each refused alone; the registration and the other icon stand.
+	if row := register("http-2", icon, broken); row == nil || row.Icon != icon || row.IconLight != "" {
+		t.Errorf("row = %+v, want the icon without the broken light one", row)
+	}
+	// Without an icon, a light one would leave dark themes on the default.
+	if row := register("http-3", "", light); row == nil || row.Icon != "" || row.IconLight != "" {
+		t.Errorf("row = %+v, want registered without icons", row)
+	}
+	if row := register("http-4", broken, light); row == nil || row.Icon != "" || row.IconLight != "" {
+		t.Errorf("row = %+v, want registered without icons", row)
+	}
+}
+
 func TestHandleRegister_IdempotentTakeoverRevivesDead(t *testing.T) {
 	svc, repo, _ := newTestService()
 	dead := time.Now().Add(-time.Hour)
@@ -576,7 +608,9 @@ func (f *fakeRepo) LatestBuildSchema(context.Context, string) (*models.ModuleBui
 	return nil, nil
 }
 
-func (f *fakeRepo) LatestIcons(context.Context, string) (map[string]string, error) { return nil, nil }
+func (f *fakeRepo) LatestIcons(context.Context, string) (map[string]models.ModuleIcon, error) {
+	return nil, nil
+}
 
 func (f *fakeRepo) LatestBuildSchemas(context.Context) (map[string]*models.ModuleBuildSchema, error) {
 	return nil, nil

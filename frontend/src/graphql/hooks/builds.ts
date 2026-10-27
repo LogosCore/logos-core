@@ -12,6 +12,7 @@ import {
   DeleteBuildArtifactDocument,
   type CreateBuildMutationVariables,
 } from "@/graphql/gql/graphql"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 export const buildKeys = {
   all: ["builds"] as const,
@@ -41,9 +42,12 @@ export function useFactoryKinds() {
 }
 
 /** Factory kinds' icons by module name ("" when a kind sent none). */
-export function useFactoryIcons(): Map<string, string> {
+export function useFactoryIcons(): Map<string, ModuleIconSvgs> {
   const { data } = useFactoryKinds()
-  return useMemo(() => new Map((data?.factoryKinds ?? []).map((k) => [k.moduleName, k.icon])), [data])
+  return useMemo(
+    () => new Map((data?.factoryKinds ?? []).map((k) => [k.moduleName, { icon: k.icon, iconLight: k.iconLight }])),
+    [data],
+  )
 }
 
 /** An operation's build files, newest first. */

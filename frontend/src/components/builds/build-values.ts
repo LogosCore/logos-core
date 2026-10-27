@@ -25,6 +25,7 @@ import {
   type Kind,
 } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 // Secrets in a build are operation data, edited as text like the rest.
 const AS_TEXT = { secretAsText: true }
@@ -92,8 +93,8 @@ export interface Target {
 
 export interface FactoryKind {
   name: string
-  /** The kind's own SVG icon; "" for the default. */
-  icon: string
+  /** The kind's own icon; its SVGs are "" for the default. */
+  icon: ModuleIconSvgs
   version: number
   /** Registered instances declaring this version: a build needs one. */
   instances: number
@@ -110,13 +111,19 @@ const sorted = (fields: readonly FieldDef[]) => fields.map(asText).sort(compareF
 
 /** Factory kinds by name from the factoryKinds query. */
 export function factoryKindsByName(
-  kinds: readonly { moduleName: string; icon?: string; instances: number; schema: BuildSchemaFieldsFragment }[],
+  kinds: readonly {
+    moduleName: string
+    icon?: string
+    iconLight?: string
+    instances: number
+    schema: BuildSchemaFieldsFragment
+  }[],
 ): Map<string, FactoryKind> {
   const out = new Map<string, FactoryKind>()
   for (const k of kinds) {
     out.set(k.moduleName, {
       name: k.moduleName,
-      icon: k.icon ?? "",
+      icon: { icon: k.icon ?? "", iconLight: k.iconLight ?? "" },
       version: k.schema.version,
       instances: k.instances,
       crypto: k.schema.crypto,

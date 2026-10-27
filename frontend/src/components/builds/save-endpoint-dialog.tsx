@@ -10,6 +10,7 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
 import { useCreateChannelEndpoint, useFreeChannelEndpointName } from "@/graphql/hooks/channel-endpoints"
 import { endpointFromConnection, type ChannelKind, type ConnectionDraft } from "./build-values"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 /**
  * Saves a connection's settings as a new endpoint of the operation, to fill
@@ -32,7 +33,7 @@ export function SaveEndpointDialog({
   /** The factory kind, whose parameters stay with the build. */
   factory: string
   channel: ChannelKind | undefined
-  channelIcon?: string
+  channelIcon?: ModuleIconSvgs
   connection: ConnectionDraft | undefined
   index: number
 }) {
@@ -61,7 +62,7 @@ interface SaveBodyProps {
   operationId: string
   factory: string
   channel: ChannelKind
-  channelIcon?: string
+  channelIcon?: ModuleIconSvgs
   connection: ConnectionDraft
   index: number
   onClose: () => void

@@ -8,6 +8,16 @@ export function iconMaskImage(svg: string): string {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
 }
 
+/**
+ * A module's icon as it registered it: the SVG, and the one to draw instead
+ * on light themes ("" when it sent none, and icon serves both). The GraphQL
+ * Module, FactoryKind and ChannelKind carry both, so each passes as one.
+ */
+export interface ModuleIconSvgs {
+  icon: string
+  iconLight: string
+}
+
 export type DefaultIcon = "channel" | "factory" | "module"
 
 /** The built-in icon a module without its own shows, by module type. */
