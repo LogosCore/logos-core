@@ -174,6 +174,10 @@ export interface ConnectionDraft {
   name: string
   /** The name is the operator's, not one a fill gave: the next fill keeps it. */
   named: boolean
+  /** The operators' note on the connection: core keeps it, the factory never gets it. */
+  description: string
+  /** The description is the operator's: the next fill keeps it. */
+  described: boolean
   /** The endpoint the settings were last filled from. */
   filledFrom: string | null
   /** The channel's connection settings. */
@@ -195,6 +199,7 @@ export interface BuildForm {
 export interface ConnectionSource {
   moduleName: string
   name?: string | null
+  description?: string | null
   /** The channel's settings version they were saved against. */
   schemaVersion?: number | null
   settings?: Record<string, unknown> | null
@@ -229,6 +234,8 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
     moduleName: source.moduleName,
     name: source.name ?? "",
     named: !!source.name?.trim(),
+    description: source.description ?? "",
+    described: !!source.description?.trim(),
     filledFrom: null,
     settings: draftsFor(ch?.fields ?? [], source.settings),
     drafts: draftsFor(kind.channelFields.get(source.moduleName) ?? [], source.values),
@@ -238,18 +245,20 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
 
 /**
  * The connection with its settings replaced by an endpoint's values. It takes
- * the endpoint's name too, unless the operator named it: the first of name,
- * name-2, -3… no other connection is called (taken).
+ * the endpoint's name and description too, unless the operator wrote their
+ * own: the name as the first of name, name-2, -3… no other connection is
+ * called (taken).
  */
 export function fillFromEndpoint(
   c: ConnectionDraft,
   ch: ChannelKind,
-  ep: { name: string; values?: unknown },
+  ep: { name: string; description?: string | null; values?: unknown },
   taken: Iterable<string> = [],
 ): ConnectionDraft {
   return {
     ...c,
     name: c.named ? c.name : freeName(ep.name, taken, ""),
+    description: c.described ? c.description : (ep.description ?? ""),
     filledFrom: ep.name,
     settings: draftsFor(ch.fields, isRecord(ep.values) ? ep.values : null),
     notes: [],
@@ -261,10 +270,10 @@ export function connectionNames(connections: readonly Pick<ConnectionDraft, "mod
   return connections.map((c, i) => c.name.trim() || defaultConnectionName(c.moduleName, i))
 }
 
-/** The first settings with a value, for one line: "https://edge.example.com · 10s". */
-export function settingsSummary(channel: ChannelKind | undefined, values: unknown): string {
+/** The first count settings with a value, for one line: "https://edge.example.com · 10s". */
+export function settingsSummary(channel: ChannelKind | undefined, values: unknown, count = 2): string {
   return settingRows(channel ?? null, isRecord(values) ? values : {})
-    .slice(0, 2)
+    .slice(0, count)
     .map((r) => r.text)
     .join(" · ")
 }
@@ -312,6 +321,49 @@ export function initialForm(
   }
 }
 
+/** A build as its record holds it, for what is read back from it. */
+export interface BuildRecordLike {
+  target: string
+  platform: string
+  values?: unknown
+  /** What the factory got: [{endpoint: <export>, values}]. */
+  connections?: unknown
+  /** The operators' notes on the connections, by position. */
+  connectionDescriptions?: readonly string[] | null
+}
+
+/** One of a build record's connections, as far as it reads. */
+function recordedConnection(raw: unknown) {
+  const rec = isRecord(raw) ? raw : {}
+  const ep = isRecord(rec.endpoint) ? rec.endpoint : {}
+  const channel = isRecord(ep.channel) ? ep.channel : {}
+  return {
+    moduleName: typeof channel.module_name === "string" ? channel.module_name : "",
+    name: typeof ep.name === "string" ? ep.name : "",
+    schemaVersion: typeof channel.schema_version === "number" ? channel.schema_version : null,
+    params: isRecord(ep.params) ? ep.params : {},
+    values: isRecord(rec.values) ? rec.values : {},
+  }
+}
+
+/** A build's connections as its page lists them: who, where, and the operators' note. */
+export function buildConnectionRows(
+  build: Pick<BuildRecordLike, "connections" | "connectionDescriptions">,
+  channels: ReadonlyMap<string, ChannelKind>,
+): { moduleName: string; name: string; address: string; description: string }[] {
+  const records = Array.isArray(build.connections) ? build.connections : []
+  return records.map((raw: unknown, i) => {
+    const c = recordedConnection(raw)
+    return {
+      moduleName: c.moduleName,
+      name: c.name,
+      // The channel's first setting, usually where the minion connects.
+      address: settingsSummary(channels.get(c.moduleName), c.params, 1),
+      description: build.connectionDescriptions?.[i] ?? "",
+    }
+  })
+}
+
 /**
  * What "build again" fills the form with. A build holds every default
  * filled in: values equal to today's defaults are left out, so they read as
@@ -320,30 +372,26 @@ export function initialForm(
  */
 export function sourceFromBuild(
   kind: FactoryKind,
-  build: { target: string; platform: string; values?: unknown; connections?: unknown },
+  build: BuildRecordLike,
   channels: ReadonlyMap<string, ChannelKind>,
 ): FormSource {
   const target = kind.targets.find((t) => t.id === build.target)
   const records = Array.isArray(build.connections) ? build.connections : []
   const connections = records.map((raw: unknown, i): ConnectionSource => {
-    const rec = isRecord(raw) ? raw : {}
-    const ep = isRecord(rec.endpoint) ? rec.endpoint : {}
-    const channel = isRecord(ep.channel) ? ep.channel : {}
-    const moduleName = typeof channel.module_name === "string" ? channel.module_name : ""
-    const params = isRecord(ep.params) ? ep.params : {}
+    const { moduleName, name, schemaVersion, params, values } = recordedConnection(raw)
     const ch = channels.get(moduleName)
     const notes: string[] = []
     const dropped = ch ? Object.keys(params).filter((k) => !ch.fields.some((f) => f.key === k)) : []
     if (ch && dropped.length > 0) {
       notes.push(`Left out, not settings of ${moduleName} v${ch.version}: ${dropped.sort().join(", ")}.`)
     }
-    const name = typeof ep.name === "string" && ep.name !== defaultConnectionName(moduleName, i) ? ep.name : null
     return {
       moduleName,
-      name,
-      schemaVersion: typeof channel.schema_version === "number" ? channel.schema_version : null,
+      name: name !== "" && name !== defaultConnectionName(moduleName, i) ? name : null,
+      description: build.connectionDescriptions?.[i] || null,
+      schemaVersion,
       settings: withoutDefaults(ch?.fields ?? [], params),
-      values: withoutDefaults(kind.channelFields.get(moduleName) ?? [], isRecord(rec.values) ? rec.values : {}),
+      values: withoutDefaults(kind.channelFields.get(moduleName) ?? [], values),
       notes,
     }
   })
@@ -369,6 +417,7 @@ function withoutDefaults(fields: readonly FieldDef[], values: Record<string, unk
 export interface ConnectionInput {
   moduleName: string
   name: string | null
+  description: string | null
   settings: Record<string, unknown>
   values: Record<string, unknown>
 }
@@ -437,6 +486,7 @@ export function evaluateForm(
     return {
       moduleName: c.moduleName,
       name: name || null,
+      description: c.description.trim() || null,
       settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, partial, errors),
       values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, partial, errors),
     }

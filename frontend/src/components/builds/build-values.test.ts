@@ -4,6 +4,7 @@ import { kindsByName } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 import {
   acceptText,
+  buildConnectionRows,
   channelUnusable,
   connectionDraft,
   connectionNames,
@@ -81,8 +82,11 @@ const channels = kindsByName([
 const http = channels.get("http")!
 
 /** A blank connection through channel moduleName, with settings and parameters typed in. */
-function connection(moduleName: string, typed: { name?: string; settings?: Record<string, string>; params?: Record<string, string> } = {}) {
-  const c = connectionDraft(kind, channels.get(moduleName), { moduleName, name: typed.name })
+function connection(
+  moduleName: string,
+  typed: { name?: string; description?: string; settings?: Record<string, string>; params?: Record<string, string> } = {},
+) {
+  const c = connectionDraft(kind, channels.get(moduleName), { moduleName, name: typed.name, description: typed.description })
   for (const [k, text] of Object.entries(typed.settings ?? {})) c.settings[k] = { kind: "text", text }
   for (const [k, text] of Object.entries(typed.params ?? {})) c.drafts[k] = { kind: "text", text }
   return c
@@ -139,8 +143,13 @@ describe("the build form", () => {
     form.drafts.punches = { kind: "set", values: ["hook", "jab"] }
     form.drafts.badge = { kind: "file", id: "file-1" }
     form.connections = [
-      connection("http", { name: " edge ", settings: { base_url: "https://edge.example.com", token: "s3cret" }, params: { path_prefix: "/cdn/" } }),
-      connection("http", edge),
+      connection("http", {
+        name: " edge ",
+        description: " EU front ",
+        settings: { base_url: "https://edge.example.com", token: "s3cret" },
+        params: { path_prefix: "/cdn/" },
+      }),
+      connection("http", { ...edge, description: "  " }),
     ]
     const { input, errors } = evaluateForm(kind, form, false, channels)
     expect(errors).toEqual({})
@@ -152,10 +161,11 @@ describe("the build form", () => {
         {
           moduleName: "http",
           name: "edge",
+          description: "EU front",
           settings: { base_url: "https://edge.example.com", token: "s3cret" },
           values: { path_prefix: "/cdn/" },
         },
-        { moduleName: "http", name: null, settings: { base_url: "https://edge.example.com" }, values: {} },
+        { moduleName: "http", name: null, description: null, settings: { base_url: "https://edge.example.com" }, values: {} },
       ],
     })
   })
@@ -222,7 +232,14 @@ describe("the build form", () => {
         platform: "windows/arm64",
         values: { service_name: "WinTelemetry", kill_date: "2027-01-31T00:00:00Z", punches: ["jab"] },
         connections: [
-          { moduleName: "http", name: "edge", schemaVersion: 1, settings: { base_url: "https://edge.example.com" }, values: { method: "GET" } },
+          {
+            moduleName: "http",
+            name: "edge",
+            description: "EU front",
+            schemaVersion: 1,
+            settings: { base_url: "https://edge.example.com" },
+            values: { method: "GET" },
+          },
         ],
       },
       channels,
@@ -237,9 +254,11 @@ describe("the build form", () => {
     const { input, errors } = evaluateForm(kind, form, false, channels)
     expect(errors).toEqual({})
     expect(input.values.kill_date).toBe("2027-01-31T00:00:00Z")
+    expect(c.described).toBe(true)
     expect(input.connections[0]).toEqual({
       moduleName: "http",
       name: "edge",
+      description: "EU front",
       settings: { base_url: "https://edge.example.com" },
       values: { method: "GET" },
     })
@@ -275,6 +294,15 @@ describe("fillFromEndpoint", () => {
       "http-2",
       "dns-3",
     ])
+  })
+
+  it("copies the endpoint's description, until the operator writes one", () => {
+    const c = fillFromEndpoint(connection("http"), http, { ...eu, description: "EU front" })
+    expect(c.description).toBe("EU front")
+    expect(c.described).toBe(false)
+    expect(fillFromEndpoint(c, http, us).description).toBe("")
+    expect(fillFromEndpoint({ ...c, description: "mine", described: true }, http, us).description).toBe("mine")
+    expect(fillFromEndpoint(connection("http", { description: "kept" }), http, eu).description).toBe("kept")
   })
 
   it("leaves the factory's parameters and drops old notes", () => {
@@ -333,23 +361,47 @@ describe("sourceFromBuild", () => {
         },
       ],
     }
-    const source = sourceFromBuild(kind, build, channels)
+    const source = sourceFromBuild(kind, { ...build, connectionDescriptions: ["", "fallback"] }, channels)
     expect(source.values).toEqual({ punches: ["jab"] })
     expect(source.connections).toEqual([
       {
         moduleName: "http",
         name: null,
+        description: null,
         schemaVersion: 2,
         settings: { base_url: "https://a.example.com" },
         values: { path_prefix: "/cdn/" },
         notes: ["Left out, not settings of http v2: retired."],
       },
-      { moduleName: "http", name: "edge", schemaVersion: 1, settings: { base_url: "https://b.example.com" }, values: { method: "GET" }, notes: [] },
+      {
+        moduleName: "http",
+        name: "edge",
+        description: "fallback",
+        schemaVersion: 1,
+        settings: { base_url: "https://b.example.com" },
+        values: { method: "GET" },
+        notes: [],
+      },
     ])
 
     const form: BuildForm = initialForm(kind, source, channels)
     expect(form.connections[1].notes).toEqual(["Saved for http settings v1; the channel is at v2. Check the settings."])
     expect(evaluateForm(kind, form, false, channels).errors).toEqual({})
+  })
+
+  it("lists the connections with their notes", () => {
+    const build = {
+      connections: [
+        { endpoint: { name: "http-1", channel: { module_name: "http" }, params: { request_timeout: "40s", base_url: "https://a.example.com" } } },
+        { endpoint: { name: "edge", channel: { module_name: "http" }, params: { base_url: "https://b.example.com" } } },
+      ],
+      connectionDescriptions: ["EU front"],
+    }
+    expect(buildConnectionRows(build, channels)).toEqual([
+      { moduleName: "http", name: "http-1", address: "https://a.example.com", description: "EU front" },
+      { moduleName: "http", name: "edge", address: "https://b.example.com", description: "" },
+    ])
+    expect(buildConnectionRows({ connections: null }, channels)).toEqual([])
   })
 
   it("survives what it does not know", () => {

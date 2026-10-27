@@ -29,11 +29,13 @@ import { artifactUrl } from "@/lib/build-file-upload"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import type { BuildQuery } from "@/graphql/gql/graphql"
 import { isUnfinished, useBuild, useCancelBuild, useDeleteBuildArtifact, useFactoryIcons } from "@/graphql/hooks/builds"
+import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
+import { kindsByName } from "@/components/endpoints/endpoint-values"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { formatElapsed, prettyJson } from "@/components/modules/management/field-values"
 import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
-import { buildElapsed, platformLabel } from "@/components/builds/build-values"
+import { buildConnectionRows, buildElapsed, platformLabel } from "@/components/builds/build-values"
 import { KindName } from "@/components/modules/module-icon"
 
 type Build = NonNullable<BuildQuery["build"]>
@@ -74,6 +76,9 @@ export function BuildDetailPage() {
 function BuildDetail({ build: b }: { build: Build }) {
   const navigate = useNavigate()
   const icons = useFactoryIcons()
+  const channelIcons = useChannelIcons()
+  const channelKinds = useChannelKinds()
+  const connections = buildConnectionRows(b, kindsByName(channelKinds.data?.channelKinds ?? []))
   const { canWrite } = useCanBuild(b.operationId)
   const cancel = useCancelBuild()
   const [deleting, setDeleting] = useState(false)
@@ -246,10 +251,30 @@ function BuildDetail({ build: b }: { build: Build }) {
           </Section>
         )}
 
+        {connections.length > 0 && (
+          <Section title="Connections">
+            <ol className="divide-y text-sm">
+              {connections.map((c, i) => (
+                <li key={i} className="flex min-w-0 flex-col gap-1 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="text-xs text-muted-foreground tabular-nums">{i + 1}.</span>
+                    <KindName type="channel" name={c.moduleName} icon={channelIcons.get(c.moduleName)} className="shrink-0" />
+                    <span className="text-muted-foreground">·</span>
+                    <span className="truncate font-mono font-medium">{c.name}</span>
+                    {c.address && <span className="truncate font-mono text-xs text-muted-foreground">{c.address}</span>}
+                  </div>
+                  {c.description && <p className="whitespace-pre-line text-muted-foreground">{c.description}</p>}
+                </li>
+              ))}
+            </ol>
+          </Section>
+        )}
+
         <Section title="What the factory was given">
           <div className="flex flex-col gap-3 py-3">
             <p className="text-sm text-muted-foreground">
-              Every value and connection setting with the defaults filled in, as the build was made.
+              Every value and connection setting with the defaults filled in, as the build was made. The
+              connections' descriptions stay in core, so they are not here.
             </p>
             <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5">
               {prettyJson({ values: b.values, connections: b.connections })}

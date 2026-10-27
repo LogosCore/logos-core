@@ -54,31 +54,32 @@ type AgentKeyWithSecret struct {
 }
 
 type Build struct {
-	ID             string         `json:"id"`
-	OperationID    string         `json:"operationId"`
-	ModuleName     string         `json:"moduleName"`
-	Target         string         `json:"target"`
-	Platform       string         `json:"platform"`
-	SchemaVersion  int            `json:"schemaVersion"`
-	Values         any            `json:"values"`
-	Connections    any            `json:"connections"`
-	MinionID       string         `json:"minionId"`
-	State          string         `json:"state"`
-	Instance       *string        `json:"instance,omitempty"`
-	FactoryVersion *string        `json:"factoryVersion,omitempty"`
-	Steps          []*BuildStep   `json:"steps"`
-	Artifact       *BuildArtifact `json:"artifact,omitempty"`
-	Capabilities   []string       `json:"capabilities"`
-	Warnings       []string       `json:"warnings"`
-	Log            *string        `json:"log,omitempty"`
-	Error          *BuildError    `json:"error,omitempty"`
-	PresetID       *string        `json:"presetId,omitempty"`
-	CreatedBy      *ModuleActor   `json:"createdBy"`
-	CancelledBy    *ModuleActor   `json:"cancelledBy,omitempty"`
-	CreatedAt      string         `json:"createdAt"`
-	StartedAt      *string        `json:"startedAt,omitempty"`
-	FinishedAt     *string        `json:"finishedAt,omitempty"`
-	Deadline       string         `json:"deadline"`
+	ID                     string         `json:"id"`
+	OperationID            string         `json:"operationId"`
+	ModuleName             string         `json:"moduleName"`
+	Target                 string         `json:"target"`
+	Platform               string         `json:"platform"`
+	SchemaVersion          int            `json:"schemaVersion"`
+	Values                 any            `json:"values"`
+	Connections            any            `json:"connections"`
+	ConnectionDescriptions []string       `json:"connectionDescriptions"`
+	MinionID               string         `json:"minionId"`
+	State                  string         `json:"state"`
+	Instance               *string        `json:"instance,omitempty"`
+	FactoryVersion         *string        `json:"factoryVersion,omitempty"`
+	Steps                  []*BuildStep   `json:"steps"`
+	Artifact               *BuildArtifact `json:"artifact,omitempty"`
+	Capabilities           []string       `json:"capabilities"`
+	Warnings               []string       `json:"warnings"`
+	Log                    *string        `json:"log,omitempty"`
+	Error                  *BuildError    `json:"error,omitempty"`
+	PresetID               *string        `json:"presetId,omitempty"`
+	CreatedBy              *ModuleActor   `json:"createdBy"`
+	CancelledBy            *ModuleActor   `json:"cancelledBy,omitempty"`
+	CreatedAt              string         `json:"createdAt"`
+	StartedAt              *string        `json:"startedAt,omitempty"`
+	FinishedAt             *string        `json:"finishedAt,omitempty"`
+	Deadline               string         `json:"deadline"`
 }
 
 type BuildArtifact struct {
@@ -101,10 +102,11 @@ type BuildChannelVersions struct {
 }
 
 type BuildConnectionInput struct {
-	ModuleName string  `json:"moduleName"`
-	Name       *string `json:"name,omitempty"`
-	Settings   any     `json:"settings,omitempty"`
-	Values     any     `json:"values,omitempty"`
+	ModuleName  string  `json:"moduleName"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Settings    any     `json:"settings,omitempty"`
+	Values      any     `json:"values,omitempty"`
 }
 
 type BuildError struct {
@@ -155,6 +157,7 @@ type BuildPreset struct {
 type BuildPresetConnection struct {
 	ModuleName    string  `json:"moduleName"`
 	Name          *string `json:"name,omitempty"`
+	Description   *string `json:"description,omitempty"`
 	Settings      any     `json:"settings"`
 	SchemaVersion int     `json:"schemaVersion"`
 	SchemaChanged bool    `json:"schemaChanged"`

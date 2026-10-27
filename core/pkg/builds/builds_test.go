@@ -106,8 +106,8 @@ func (r *rig) input(mutate func(in *BuildInput)) BuildInput {
 		ModuleName: "bob", Target: "dummy", Platform: "any/any",
 		Values: map[string]any{"punches": []any{"jab"}},
 		Connections: []ConnectionInput{{
-			ModuleName: "http", Name: "edge", Settings: map[string]any{"base_url": "https://edge.example.com"},
-			Values: map[string]any{"path_prefix": "/cdn/"},
+			ModuleName: "http", Name: "edge", Description: " EU front, first stage ",
+			Settings: map[string]any{"base_url": "https://edge.example.com"}, Values: map[string]any{"path_prefix": "/cdn/"},
 		}},
 		Actor: alice,
 	}
@@ -213,6 +213,22 @@ func TestCreateBuildQueues(t *testing.T) {
 		conn.Values["method"] != "POST" || conn.Values["path_prefix"] != "/cdn/" {
 		t.Fatalf("connection %+v", conn)
 	}
+	// The note stays core's.
+	if len(b.ConnectionDescriptions) != 1 || b.ConnectionDescriptions[0] != "EU front, first stage" {
+		t.Fatalf("descriptions %q", b.ConnectionDescriptions)
+	}
+}
+
+func TestCreateBuildConnectionDescriptions(t *testing.T) {
+	r := newRig(t)
+	if b := r.queue(t, func(in *BuildInput) { in.Connections[0].Description = " " }); b.ConnectionDescriptions != nil {
+		t.Fatalf("no notes kept as %q", b.ConnectionDescriptions)
+	}
+	// Characters, not bytes, are counted.
+	long := strings.Repeat("é", MaxDescriptionLength)
+	if b := r.queue(t, func(in *BuildInput) { in.Connections[0].Description = long }); b.ConnectionDescriptions[0] != long {
+		t.Fatal("a note of the longest length was cut")
+	}
 }
 
 func TestCreateBuildConnectionNames(t *testing.T) {
@@ -228,6 +244,9 @@ func TestCreateBuildConnectionNames(t *testing.T) {
 	}
 	if strings.Join(names, " ") != "http-1@http backup@http" {
 		t.Fatalf("connections named %v", names)
+	}
+	if d := b.ConnectionDescriptions; len(d) != 2 || d[0] == "" || d[1] != "" {
+		t.Fatalf("descriptions by position %q", d)
 	}
 	// An emptied setting takes its default.
 	if p := b.Connections.Items[1].Endpoint.Params; p["request_timeout"] != "40s" {
@@ -255,6 +274,9 @@ func TestCreateBuildProblems(t *testing.T) {
 		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "smtp" }}, // no such channel
 		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "dns" }},  // not BOB's
 		{"connections[0].name", func(in *BuildInput) { in.Connections[0].Name = "Edge Node" }},
+		{"connections[0].description", func(in *BuildInput) {
+			in.Connections[0].Description = strings.Repeat("é", MaxDescriptionLength+1)
+		}},
 		{"connections[1].name", func(in *BuildInput) { in.Connections = append(in.Connections, in.Connections[0]) }},
 		{"connections[1].name", func(in *BuildInput) { // the second one's default name
 			in.Connections[0].Name = "http-2"
@@ -322,6 +344,10 @@ func TestOfferAccepted(t *testing.T) {
 	req := calls[0].payload.(protocol.BuildRequest)
 	if p := protocol.ValidateBuildRequest(bobSchema(), req); p != nil {
 		t.Fatalf("the request a factory gets does not pass its check: %v", p)
+	}
+	// The operators' notes never reach a factory, nor so an artifact.
+	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") {
+		t.Fatalf("a connection's description went to the factory: %s", raw)
 	}
 	key := artifactKey(opID, b.BuildID)
 	if req.Artifact.UploadURL != "http://store.test/"+key+"?sig=put" || req.Artifact.MaxSize != 256<<20 ||
@@ -647,8 +673,8 @@ func TestPresets(t *testing.T) {
 	ctx := context.Background()
 	in := PresetInput{Name: "eu-front", Target: "dummy", Values: map[string]any{"punches": []any{"hook"}},
 		Connections: []ConnectionInput{
-			{ModuleName: "http", Name: "edge", Settings: map[string]any{"base_url": "https://edge.example.com", "request_timeout": ""},
-				Values: map[string]any{"method": "GET"}},
+			{ModuleName: "http", Name: "edge", Description: " EU front ",
+				Settings: map[string]any{"base_url": "https://edge.example.com", "request_timeout": ""}, Values: map[string]any{"method": "GET"}},
 			{ModuleName: "http"}, // its base URL is left for the build form
 		}, Actor: alice}
 	v, err := r.svc.CreatePreset(ctx, opID, "bob", in)
@@ -656,7 +682,7 @@ func TestPresets(t *testing.T) {
 		t.Fatalf("a partial preset (no platform, a connection without settings) was refused: %v %v", err, problemsOf(err))
 	}
 	c := v.Connections[0]
-	if v.Revision != 1 || len(v.Problems) != 0 || c.ModuleName != "http" || c.Name != "edge" || c.SchemaVersion != 2 ||
+	if v.Revision != 1 || len(v.Problems) != 0 || c.ModuleName != "http" || c.Name != "edge" || c.Description != "EU front" || c.SchemaVersion != 2 ||
 		len(c.Settings) != 1 || c.Settings["base_url"] != "https://edge.example.com" || c.Values["method"] != "GET" ||
 		v.ConnectionSchemaChanged(0) || len(v.Connections[1].Settings) != 0 {
 		t.Fatalf("preset %+v", v)

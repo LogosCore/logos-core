@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react"
 import { ArrowDownIcon, ArrowUpIcon, ChevronRightIcon, CopyIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { SettingRow } from "@/components/ui/settings-rows"
 import { KindName } from "@/components/modules/module-icon"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
@@ -37,6 +38,7 @@ export function ConnectionCard({
   disabled,
   partial,
   onName,
+  onDescription,
   onSetting,
   onParam,
   onFill,
@@ -59,6 +61,7 @@ export function ConnectionCard({
   disabled: boolean
   partial: boolean
   onName: (name: string) => void
+  onDescription: (description: string) => void
   onSetting: (key: string, d: Draft) => void
   onParam: (key: string, d: Draft) => void
   /** Asks for an endpoint to fill the settings from. */
@@ -145,6 +148,22 @@ export function ConnectionCard({
               spellCheck={false}
               disabled={disabled}
               aria-invalid={!!errors[`${at}.name`] || undefined}
+            />
+          </SettingRow>
+          <SettingRow
+            id={`${idPrefix}-description`}
+            label="Description"
+            help="A note for your team on what this connection is for. Core keeps it with the build; the factory and the minion never get it."
+            error={errors[`${at}.description`]}
+          >
+            <Textarea
+              id={`${idPrefix}-description`}
+              value={c.description}
+              onChange={(e) => onDescription(e.target.value)}
+              rows={2}
+              maxLength={500}
+              disabled={disabled}
+              aria-invalid={!!errors[`${at}.description`] || undefined}
             />
           </SettingRow>
           {channel &&

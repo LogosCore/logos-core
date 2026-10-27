@@ -83,6 +83,12 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		b.PresetID = &pid
 	}
 	for i, conn := range conns {
+		if conn.Description != "" && b.ConnectionDescriptions == nil {
+			b.ConnectionDescriptions = make([]string, len(conns))
+		}
+		if b.ConnectionDescriptions != nil {
+			b.ConnectionDescriptions[i] = conn.Description
+		}
 		cs := c.channels[i]
 		ch, _ := schema.Channel(conn.ModuleName)
 		b.Connections.Items = append(b.Connections.Items, protocol.BuildConnection{

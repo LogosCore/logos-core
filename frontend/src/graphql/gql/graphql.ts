@@ -104,6 +104,7 @@ export type Build = {
   artifact?: Maybe<BuildArtifact>;
   cancelledBy?: Maybe<ModuleActor>;
   capabilities: Array<Scalars['String']['output']>;
+  connectionDescriptions: Array<Scalars['String']['output']>;
   connections: Scalars['JSON']['output'];
   createdAt: Scalars['String']['output'];
   createdBy: ModuleActor;
@@ -148,6 +149,7 @@ export type BuildChannelVersions = {
 };
 
 export type BuildConnectionInput = {
+  description?: InputMaybe<Scalars['String']['input']>;
   moduleName: Scalars['String']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
   settings?: InputMaybe<Scalars['JSON']['input']>;
@@ -200,6 +202,7 @@ export type BuildPreset = {
 };
 
 export type BuildPresetConnection = {
+  description?: Maybe<Scalars['String']['output']>;
   moduleName: Scalars['String']['output'];
   name?: Maybe<Scalars['String']['output']>;
   schemaChanged: Scalars['Boolean']['output'];
@@ -2739,7 +2742,7 @@ export type BuildSchemaFieldsFragment = { version: number, crypto: Array<string>
 
 export type BuildFileFieldsFragment = { id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string };
 
-export type BuildPresetFieldsFragment = { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
+export type BuildPresetFieldsFragment = { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, description?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
 
 export type BuildFieldsFragment = { id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } };
 
@@ -2767,14 +2770,14 @@ export type BuildPresetsQueryVariables = Exact<{
 }>;
 
 
-export type BuildPresetsQuery = { buildPresets: Array<{ id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } }> };
+export type BuildPresetsQuery = { buildPresets: Array<{ id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, description?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } }> };
 
 export type BuildPresetQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type BuildPresetQuery = { buildPreset?: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } | null };
+export type BuildPresetQuery = { buildPreset?: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, description?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } | null };
 
 export type CreateBuildPresetMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -2783,7 +2786,7 @@ export type CreateBuildPresetMutationVariables = Exact<{
 }>;
 
 
-export type CreateBuildPresetMutation = { createBuildPreset: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
+export type CreateBuildPresetMutation = { createBuildPreset: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, description?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
 
 export type UpdateBuildPresetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2792,7 +2795,7 @@ export type UpdateBuildPresetMutationVariables = Exact<{
 }>;
 
 
-export type UpdateBuildPresetMutation = { updateBuildPreset: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
+export type UpdateBuildPresetMutation = { updateBuildPreset: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, target: string, platform?: string | null, values: unknown, schemaVersion: number, schemaChanged: boolean, revision: number, updatedAt: string, connections: Array<{ moduleName: string, name?: string | null, description?: string | null, settings: unknown, schemaVersion: number, schemaChanged: boolean, values: unknown }>, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
 
 export type DeleteBuildPresetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2814,7 +2817,7 @@ export type BuildQueryVariables = Exact<{
 }>;
 
 
-export type BuildQuery = { build?: { values: unknown, connections: unknown, warnings: Array<string>, log?: string | null, presetId?: string | null, id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+export type BuildQuery = { build?: { values: unknown, connections: unknown, connectionDescriptions: Array<string>, warnings: Array<string>, log?: string | null, presetId?: string | null, id: string, operationId: string, moduleName: string, target: string, platform: string, schemaVersion: number, minionId: string, state: string, instance?: string | null, factoryVersion?: string | null, capabilities: Array<string>, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, steps: Array<{ step: string, message?: string | null, percent?: number | null, at: string }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
 
 export type CreateBuildMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4209,6 +4212,7 @@ export const BuildPresetFieldsFragmentDoc = new TypedDocumentString(`
   connections {
     moduleName
     name
+    description
     settings
     schemaVersion
     schemaChanged
@@ -5436,6 +5440,7 @@ export const BuildPresetsDocument = new TypedDocumentString(`
   connections {
     moduleName
     name
+    description
     settings
     schemaVersion
     schemaChanged
@@ -5473,6 +5478,7 @@ export const BuildPresetDocument = new TypedDocumentString(`
   connections {
     moduleName
     name
+    description
     settings
     schemaVersion
     schemaChanged
@@ -5514,6 +5520,7 @@ export const CreateBuildPresetDocument = new TypedDocumentString(`
   connections {
     moduleName
     name
+    description
     settings
     schemaVersion
     schemaChanged
@@ -5551,6 +5558,7 @@ export const UpdateBuildPresetDocument = new TypedDocumentString(`
   connections {
     moduleName
     name
+    description
     settings
     schemaVersion
     schemaChanged
@@ -5626,6 +5634,7 @@ export const BuildDocument = new TypedDocumentString(`
     ...BuildFields
     values
     connections
+    connectionDescriptions
     warnings
     log
     presetId

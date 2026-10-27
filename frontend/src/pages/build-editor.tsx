@@ -53,6 +53,7 @@ import {
   targetFields,
   withTarget,
   type BuildForm as Form,
+  type BuildRecordLike,
   type ChannelKind,
   type ConnectionDraft,
   type FactoryKind,
@@ -117,7 +118,7 @@ export function EditPresetPage() {
 type SourceSpec =
   | null
   | { kind: "preset"; preset: Preset }
-  | { kind: "build"; build: { target: string; platform: string; values?: unknown; connections?: unknown } }
+  | { kind: "build"; build: BuildRecordLike }
 
 /** Loads what the form needs: the factory kind, the channels, the endpoints, the files. */
 function EditorLoader({
@@ -154,6 +155,7 @@ function EditorLoader({
       connections: source.preset.connections.map((c) => ({
         moduleName: c.moduleName,
         name: c.name,
+        description: c.description,
         schemaVersion: c.schemaVersion,
         settings: (c.settings ?? {}) as Record<string, unknown>,
         values: (c.values ?? {}) as Record<string, unknown>,
@@ -374,7 +376,7 @@ function Editor({
         }
       : {
           title: `Fill connection ${filling + 1} from an endpoint`,
-          description: `Its settings become a copy of the endpoint's, and its name the endpoint's unless you named it. The ${kind.name} parameters stay as they are.`,
+          description: `Its settings become a copy of the endpoint's, and its name and description the endpoint's unless you wrote your own. The ${kind.name} parameters stay as they are.`,
           kinds: [form.connections[filling].moduleName],
           endpoints: endpoints.filter((e) => e.moduleName === form.connections[filling].moduleName),
           onEndpoint: (ep) => fillConnection(form.connections[filling].key, ep),
@@ -575,6 +577,9 @@ function Editor({
                     disabled={disabled}
                     partial={mode === "preset"}
                     onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
+                    onDescription={(description) =>
+                      updateConnection(i, (x) => ({ ...x, description, described: description.trim() !== "" }), `${at}.description`)
+                    }
                     onSetting={(key, d) =>
                       updateConnection(i, (x) => ({ ...x, settings: { ...x.settings, [key]: d } }), `${at}.settings.${key}`)
                     }

@@ -77,7 +77,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	b, err := svc.CreateBuild(ctx, op, BuildInput{
 		ModuleName: "bob", Target: "dummy", Platform: "any/any",
 		Values: map[string]any{"kill_date": "2027-01-31T00:00:00Z", "punches": []any{"jab", "uppercut"}, "badge": badge.FileID.String()},
-		Connections: []ConnectionInput{{ModuleName: "http", Name: "it-edge",
+		Connections: []ConnectionInput{{ModuleName: "http", Name: "it-edge", Description: "integration note, core's own",
 			Settings: map[string]any{"base_url": "https://edge.example.com"}, Values: map[string]any{"path_prefix": "/cdn/assets/"}}},
 		Actor: actor,
 	})
@@ -122,6 +122,10 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	if minion.MinionID != b.MinionID || minion.Badge.SHA256 != badge.SHA256 || len(minion.Punches) != 2 ||
 		minion.Connections[0].Values["path_prefix"] != "/cdn/assets/" {
 		t.Fatalf("artifact %s", raw)
+	}
+	// The connection's description stayed in core.
+	if strings.Contains(string(raw), "integration note") || b.ConnectionDescriptions[0] != "integration note, core's own" {
+		t.Fatalf("description %q, artifact %s", b.ConnectionDescriptions, raw)
 	}
 	t.Logf("artifact %s (%d bytes):\n%s", b.Artifact.Filename, b.Artifact.Size, raw)
 }

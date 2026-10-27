@@ -136,31 +136,32 @@ type ComplexityRoot struct {
 	}
 
 	Build struct {
-		Artifact       func(childComplexity int) int
-		CancelledBy    func(childComplexity int) int
-		Capabilities   func(childComplexity int) int
-		Connections    func(childComplexity int) int
-		CreatedAt      func(childComplexity int) int
-		CreatedBy      func(childComplexity int) int
-		Deadline       func(childComplexity int) int
-		Error          func(childComplexity int) int
-		FactoryVersion func(childComplexity int) int
-		FinishedAt     func(childComplexity int) int
-		ID             func(childComplexity int) int
-		Instance       func(childComplexity int) int
-		Log            func(childComplexity int) int
-		MinionID       func(childComplexity int) int
-		ModuleName     func(childComplexity int) int
-		OperationID    func(childComplexity int) int
-		Platform       func(childComplexity int) int
-		PresetID       func(childComplexity int) int
-		SchemaVersion  func(childComplexity int) int
-		StartedAt      func(childComplexity int) int
-		State          func(childComplexity int) int
-		Steps          func(childComplexity int) int
-		Target         func(childComplexity int) int
-		Values         func(childComplexity int) int
-		Warnings       func(childComplexity int) int
+		Artifact               func(childComplexity int) int
+		CancelledBy            func(childComplexity int) int
+		Capabilities           func(childComplexity int) int
+		ConnectionDescriptions func(childComplexity int) int
+		Connections            func(childComplexity int) int
+		CreatedAt              func(childComplexity int) int
+		CreatedBy              func(childComplexity int) int
+		Deadline               func(childComplexity int) int
+		Error                  func(childComplexity int) int
+		FactoryVersion         func(childComplexity int) int
+		FinishedAt             func(childComplexity int) int
+		ID                     func(childComplexity int) int
+		Instance               func(childComplexity int) int
+		Log                    func(childComplexity int) int
+		MinionID               func(childComplexity int) int
+		ModuleName             func(childComplexity int) int
+		OperationID            func(childComplexity int) int
+		Platform               func(childComplexity int) int
+		PresetID               func(childComplexity int) int
+		SchemaVersion          func(childComplexity int) int
+		StartedAt              func(childComplexity int) int
+		State                  func(childComplexity int) int
+		Steps                  func(childComplexity int) int
+		Target                 func(childComplexity int) int
+		Values                 func(childComplexity int) int
+		Warnings               func(childComplexity int) int
 	}
 
 	BuildArtifact struct {
@@ -219,6 +220,7 @@ type ComplexityRoot struct {
 	}
 
 	BuildPresetConnection struct {
+		Description   func(childComplexity int) int
 		ModuleName    func(childComplexity int) int
 		Name          func(childComplexity int) int
 		SchemaChanged func(childComplexity int) int
@@ -1959,6 +1961,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Capabilities(childComplexity), true
+	case "Build.connectionDescriptions":
+		if e.ComplexityRoot.Build.ConnectionDescriptions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.ConnectionDescriptions(childComplexity), true
 	case "Build.connections":
 		if e.ComplexityRoot.Build.Connections == nil {
 			break
@@ -2320,6 +2328,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BuildPreset.Values(childComplexity), true
 
+	case "BuildPresetConnection.description":
+		if e.ComplexityRoot.BuildPresetConnection.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildPresetConnection.Description(childComplexity), true
 	case "BuildPresetConnection.moduleName":
 		if e.ComplexityRoot.BuildPresetConnection.ModuleName == nil {
 			break
@@ -8115,7 +8129,7 @@ type BuildFile {
 
 type BuildProblem {
   # Where the problem is: "target", "platform", "values.<key>", "connections",
-  # "connections[<i>]", "connections[<i>].name",
+  # "connections[<i>]", "connections[<i>].name", "connections[<i>].description",
   # "connections[<i>].settings.<key>", "connections[<i>].values.<key>"; null
   # when it is not one place's.
   key: String
@@ -8128,6 +8142,9 @@ type BuildPresetConnection {
   moduleName: String!
   # What the minion calls the connection; null: "<channel>-<position>".
   name: String
+  # The operators' note on the connection; core's own (see
+  # BuildConnectionInput.description).
+  description: String
   # Connection settings by the channel's connection schema field key, secrets
   # included. Fields without a value use the schema's default.
   settings: JSON!
@@ -8178,6 +8195,10 @@ input BuildConnectionInput {
   # What the minion calls the connection, a slug like an endpoint name, unique
   # among the connections; empty: "<channel>-<position>".
   name: String
+  # A note for the team on what the connection is for, at most 500
+  # characters. Core keeps it with the preset or the build record and never
+  # sends it to the factory, so it cannot end up in an artifact.
+  description: String
   # Connection settings by the channel's connection schema field key. null, ""
   # and [] leave a setting unset (its default applies).
   settings: JSON
@@ -8245,6 +8266,9 @@ type Build {
   # The connections as the factory got them: [{endpoint: <export>, values:
   # {...}}], each export's params resolved over the channel's defaults.
   connections: JSON!
+  # The operators' notes on the connections, by position ("" for none). Core's
+  # own: the factory never got them, so they are not in connections.
+  connectionDescriptions: [String!]!
   # The id the minion sends on the data plane.
   minionId: String!
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
@@ -16236,6 +16260,35 @@ func (ec *executionContext) fieldContext_Build_connections(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_connectionDescriptions(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_connectionDescriptions,
+		func(ctx context.Context) (any, error) {
+			return obj.ConnectionDescriptions, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_connectionDescriptions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_minionId(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17663,6 +17716,8 @@ func (ec *executionContext) fieldContext_BuildPreset_connections(_ context.Conte
 				return ec.fieldContext_BuildPresetConnection_moduleName(ctx, field)
 			case "name":
 				return ec.fieldContext_BuildPresetConnection_name(ctx, field)
+			case "description":
+				return ec.fieldContext_BuildPresetConnection_description(ctx, field)
 			case "settings":
 				return ec.fieldContext_BuildPresetConnection_settings(ctx, field)
 			case "schemaVersion":
@@ -17978,6 +18033,35 @@ func (ec *executionContext) _BuildPresetConnection_name(ctx context.Context, fie
 }
 
 func (ec *executionContext) fieldContext_BuildPresetConnection_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildPresetConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildPresetConnection_description(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildPresetConnection_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildPresetConnection_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "BuildPresetConnection",
 		Field:      field,
@@ -28897,6 +28981,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_values(ctx, field)
 			case "connections":
 				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
 			case "minionId":
 				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
@@ -29008,6 +29094,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_values(ctx, field)
 			case "connections":
 				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
 			case "minionId":
 				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
@@ -29119,6 +29207,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_values(ctx, field)
 			case "connections":
 				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
 			case "minionId":
 				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
@@ -36686,6 +36776,8 @@ func (ec *executionContext) fieldContext_Query_builds(ctx context.Context, field
 				return ec.fieldContext_Build_values(ctx, field)
 			case "connections":
 				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
 			case "minionId":
 				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
@@ -36797,6 +36889,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_values(ctx, field)
 			case "connections":
 				return ec.fieldContext_Build_connections(ctx, field)
+			case "connectionDescriptions":
+				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
 			case "minionId":
 				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
@@ -52453,7 +52547,7 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"moduleName", "name", "settings", "values"}
+	fieldsInOrder := [...]string{"moduleName", "name", "description", "settings", "values"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -52474,6 +52568,13 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 				return it, err
 			}
 			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
 		case "settings":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("settings"))
 			data, err := ec.unmarshalOJSON2interface(ctx, v)
@@ -55654,6 +55755,11 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "connectionDescriptions":
+			out.Values[i] = ec._Build_connectionDescriptions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "minionId":
 			out.Values[i] = ec._Build_minionId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -56130,6 +56236,8 @@ func (ec *executionContext) _BuildPresetConnection(ctx context.Context, sel ast.
 			}
 		case "name":
 			out.Values[i] = ec._BuildPresetConnection_name(ctx, field, obj)
+		case "description":
+			out.Values[i] = ec._BuildPresetConnection_description(ctx, field, obj)
 		case "settings":
 			out.Values[i] = ec._BuildPresetConnection_settings(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

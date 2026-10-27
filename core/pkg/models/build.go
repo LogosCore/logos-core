@@ -77,6 +77,9 @@ type BuildPresetConnection struct {
 	// Name is what the minion calls the connection; empty, it is named by
 	// channel and position when building.
 	Name string `bson:"name,omitempty" json:"name,omitempty"`
+	// Description is the operators' note on the connection; builds keep it
+	// in ConnectionDescriptions, never in what the factory gets.
+	Description string `bson:"description,omitempty" json:"description,omitempty"`
 	// SchemaVersion is the channel's connection schema version Settings
 	// were saved against.
 	SchemaVersion int     `bson:"schema_version" json:"schema_version"`
@@ -117,7 +120,11 @@ type Build struct {
 	SchemaVersion int              `bson:"schema_version" json:"schema_version"`
 	Values        JSONMap          `bson:"values" json:"values"`
 	Connections   BuildConnections `bson:"connections" json:"connections"`
-	FileIDs       []string         `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
+	// ConnectionDescriptions are the operators' notes on the connections, by
+	// position ("" for none). Core's own: kept out of Connections, which is
+	// what the factory gets, so a note never ends up in an artifact.
+	ConnectionDescriptions []string `bson:"connection_descriptions,omitempty" json:"connection_descriptions,omitempty"`
+	FileIDs                []string `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
 	// MinionID is the UUIDv4 the minion will send on the data plane.
 	MinionID string `bson:"minion_id" json:"minion_id"`
 	// PresetID is the preset the build was started from, if any.

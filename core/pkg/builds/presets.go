@@ -158,8 +158,8 @@ func (s *Service) applyPresetInput(ctx context.Context, p *models.BuildPreset, i
 	p.Connections = make([]models.BuildPresetConnection, len(conns))
 	for i, conn := range conns {
 		p.Connections[i] = models.BuildPresetConnection{
-			ModuleName: conn.ModuleName, Name: conn.Name, SchemaVersion: c.channels[i].Version,
-			Settings: conn.Settings, Values: conn.Values,
+			ModuleName: conn.ModuleName, Name: conn.Name, Description: conn.Description,
+			SchemaVersion: c.channels[i].Version, Settings: conn.Settings, Values: conn.Values,
 		}
 	}
 	p.UpdatedBy, p.UpdatedAt = in.Actor, s.now()
@@ -181,7 +181,7 @@ func (s *Service) presetView(ctx context.Context, p models.BuildPreset) (PresetV
 	}
 	conns := make([]ConnectionInput, len(p.Connections))
 	for i, c := range p.Connections {
-		conns[i] = ConnectionInput{ModuleName: c.ModuleName, Name: c.Name, Settings: c.Settings, Values: c.Values}
+		conns[i] = ConnectionInput{ModuleName: c.ModuleName, Name: c.Name, Description: c.Description, Settings: c.Settings, Values: c.Values}
 	}
 	c, probs, err := s.check(ctx, p.OperationID, *schema, settings{Target: p.Target, Platform: p.Platform, Values: p.Values, Connections: conns}, true)
 	if err != nil {

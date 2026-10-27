@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -19,11 +20,14 @@ import (
 // a value takes its default) and the factory's connection parameter values
 // for it. Name is given to the minion with the settings and is unique among
 // the connections; empty, the connection is called <channel>-<position>.
+// Description is the operators' note on it: core keeps it, and never puts it
+// in a build request, so it cannot end up in an artifact.
 type ConnectionInput struct {
-	ModuleName string
-	Name       string
-	Settings   map[string]any
-	Values     map[string]any
+	ModuleName  string
+	Name        string
+	Description string
+	Settings    map[string]any
+	Values      map[string]any
 }
 
 // connectionNamePattern: a connection is named like an endpoint.
@@ -36,7 +40,7 @@ func compactConnections(in []ConnectionInput) []ConnectionInput {
 	for i, c := range in {
 		out[i] = ConnectionInput{
 			ModuleName: strings.TrimSpace(c.ModuleName), Name: strings.TrimSpace(c.Name),
-			Settings: compact(c.Settings), Values: compact(c.Values),
+			Description: strings.TrimSpace(c.Description), Settings: compact(c.Settings), Values: compact(c.Values),
 		}
 	}
 	return out
@@ -119,6 +123,9 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			out.add(key+".name", "connection %d is called %q too", j+1, name)
 		default:
 			named[name] = i
+		}
+		if utf8.RuneCountInString(conn.Description) > MaxDescriptionLength {
+			out.add(key+".description", "longer than %d characters", MaxDescriptionLength)
 		}
 		if conn.ModuleName == "" {
 			out.add(key, "a channel is required")

@@ -111,7 +111,11 @@ export function PresetsTable({
                 </div>
                 <div
                   className="truncate font-mono text-xs"
-                  title={p.connections.map((c, i) => `${connections[i]} (${c.moduleName})`).join(" → ") || undefined}
+                  title={
+                    p.connections
+                      .map((c, i) => `${i + 1}. ${connections[i]} (${c.moduleName})${c.description ? ` — ${c.description}` : ""}`)
+                      .join("\n") || undefined
+                  }
                 >
                   {p.connections.length === 0 ? (
                     <span className="font-sans text-sm text-muted-foreground">When building</span>

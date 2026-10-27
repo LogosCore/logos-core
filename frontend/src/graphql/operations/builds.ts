@@ -56,6 +56,7 @@ export const BuildPresetFields = graphql(`
     connections {
       moduleName
       name
+      description
       settings
       schemaVersion
       schemaChanged
@@ -198,6 +199,7 @@ export const BuildQuery = graphql(`
       ...BuildFields
       values
       connections
+      connectionDescriptions
       warnings
       log
       presetId

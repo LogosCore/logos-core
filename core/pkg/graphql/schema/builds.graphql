@@ -94,7 +94,7 @@ type BuildFile {
 
 type BuildProblem {
   # Where the problem is: "target", "platform", "values.<key>", "connections",
-  # "connections[<i>]", "connections[<i>].name",
+  # "connections[<i>]", "connections[<i>].name", "connections[<i>].description",
   # "connections[<i>].settings.<key>", "connections[<i>].values.<key>"; null
   # when it is not one place's.
   key: String
@@ -107,6 +107,9 @@ type BuildPresetConnection {
   moduleName: String!
   # What the minion calls the connection; null: "<channel>-<position>".
   name: String
+  # The operators' note on the connection; core's own (see
+  # BuildConnectionInput.description).
+  description: String
   # Connection settings by the channel's connection schema field key, secrets
   # included. Fields without a value use the schema's default.
   settings: JSON!
@@ -157,6 +160,10 @@ input BuildConnectionInput {
   # What the minion calls the connection, a slug like an endpoint name, unique
   # among the connections; empty: "<channel>-<position>".
   name: String
+  # A note for the team on what the connection is for, at most 500
+  # characters. Core keeps it with the preset or the build record and never
+  # sends it to the factory, so it cannot end up in an artifact.
+  description: String
   # Connection settings by the channel's connection schema field key. null, ""
   # and [] leave a setting unset (its default applies).
   settings: JSON
@@ -224,6 +231,9 @@ type Build {
   # The connections as the factory got them: [{endpoint: <export>, values:
   # {...}}], each export's params resolved over the channel's defaults.
   connections: JSON!
+  # The operators' notes on the connections, by position ("" for none). Core's
+  # own: the factory never got them, so they are not in connections.
+  connectionDescriptions: [String!]!
   # The id the minion sends on the data plane.
   minionId: String!
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED

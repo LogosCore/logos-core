@@ -372,6 +372,9 @@ func connectionInputs(ctx context.Context, in []*model.BuildConnectionInput) ([]
 		if c.Name != nil {
 			out[i].Name = *c.Name
 		}
+		if c.Description != nil {
+			out[i].Description = *c.Description
+		}
 		var ok bool
 		if out[i].Settings, ok = optionalObject(c.Settings); !ok {
 			return nil, moduleGQLError(ctx, errCodeBadUserInput, "connection settings must be an object")
@@ -466,7 +469,7 @@ func toPresetModel(v builds.PresetView) *model.BuildPreset {
 	}
 	for i, c := range v.Connections {
 		out.Connections = append(out.Connections, &model.BuildPresetConnection{
-			ModuleName: c.ModuleName, Name: strPtr(c.Name), Settings: copyMap(c.Settings),
+			ModuleName: c.ModuleName, Name: strPtr(c.Name), Description: strPtr(c.Description), Settings: copyMap(c.Settings),
 			SchemaVersion: c.SchemaVersion, SchemaChanged: v.ConnectionSchemaChanged(i), Values: copyMap(c.Values),
 		})
 	}
@@ -490,6 +493,8 @@ func toBuildModel(b *models.Build) *model.Build {
 	if out.Connections == nil {
 		out.Connections = []protocol.BuildConnection{}
 	}
+	out.ConnectionDescriptions = make([]string, len(b.Connections.Items))
+	copy(out.ConnectionDescriptions, b.ConnectionDescriptions)
 	for _, s := range b.Steps {
 		out.Steps = append(out.Steps, &model.BuildStep{Step: s.Step, Message: strPtr(s.Message), Percent: s.Percent, At: s.At.Format(time.RFC3339)})
 	}
