@@ -40,8 +40,9 @@ func (f BuildFile) Protocol() protocol.BuildFile {
 
 // BuildPreset is ready-to-use build settings an operation keeps, the way an
 // endpoint is ready-to-use connection values: it fills in the build form and
-// builds nothing itself. It refers to endpoints (a build copies them), and is
-// validated against the factory kind's latest schema when saved and read.
+// builds nothing itself. Its connections hold their own settings (filling one
+// from an endpoint copies the endpoint's values), and it is validated against
+// the factory kind's and the channels' latest schemas when saved and read.
 type BuildPreset struct {
 	field.DefaultField `bson:",inline"`
 
@@ -68,11 +69,19 @@ type BuildPreset struct {
 	UpdatedAt time.Time   `bson:"updated_at" json:"updated_at"`
 }
 
-// BuildPresetConnection is one endpoint of a preset, by reference, with the
-// factory's connection parameter values for it.
+// BuildPresetConnection is one connection of a preset: a channel kind, its
+// connection settings and the factory's connection parameter values for it.
 type BuildPresetConnection struct {
-	EndpointID primitive.ObjectID `bson:"endpoint_id" json:"endpoint_id"`
-	Values     JSONMap            `bson:"values" json:"values"`
+	// ModuleName is the channel kind (e.g. "http").
+	ModuleName string `bson:"module_name" json:"module_name"`
+	// Name is what the minion calls the connection; empty, it is named by
+	// channel and position when building.
+	Name string `bson:"name,omitempty" json:"name,omitempty"`
+	// SchemaVersion is the channel's connection schema version Settings
+	// were saved against.
+	SchemaVersion int     `bson:"schema_version" json:"schema_version"`
+	Settings      JSONMap `bson:"settings" json:"settings"`
+	Values        JSONMap `bson:"values" json:"values"`
 }
 
 // Build states.
@@ -93,8 +102,8 @@ const (
 	BuildErrorRefused          = "refused" // the factory would not take the build
 )
 
-// Build is one build: what was asked for, with defaults filled in and the
-// endpoints copied (the build record), its progress and its outcome.
+// Build is one build: what was asked for, with defaults filled in (the build
+// record), its progress and its outcome.
 type Build struct {
 	field.DefaultField `bson:",inline"`
 
@@ -151,8 +160,9 @@ func (b Build) Finished() bool {
 	return false
 }
 
-// BuildConnections are a build's connections as copied: each endpoint's export
-// and the connection parameter values. Stored JSON-faithfully, like schemas.
+// BuildConnections are a build's connections as the factory got them: each
+// one's settings as an endpoint export, and the connection parameter values.
+// Stored JSON-faithfully, like schemas.
 type BuildConnections struct {
 	Items []protocol.BuildConnection `json:"items"`
 }

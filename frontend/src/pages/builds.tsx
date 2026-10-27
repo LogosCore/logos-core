@@ -202,8 +202,8 @@ function BuildsTab({
           <HammerIcon className="size-8 opacity-50" />
           <p className="text-sm">No builds in this operation yet.</p>
           <p className="max-w-md text-center text-xs">
-            A build asks a factory for one minion: pick what to build and the endpoints it connects through, and the
-            factory builds it. Each build is a new minion with its own identity.
+            A build asks a factory for one minion: pick what to build and the connections it reaches its channels
+            through, and the factory builds it. Each build is a new minion with its own identity.
           </p>
           {noKinds && <p className="max-w-md text-center text-xs">No factory has declared what it builds yet.</p>}
         </>
@@ -235,8 +235,9 @@ function PresetsTab({ operationId, canWrite }: { operationId: string; canWrite: 
             <BookmarkIcon className="size-8 opacity-50" />
             <p className="text-sm">No presets in this operation yet.</p>
             <p className="max-w-md text-center text-xs">
-              A preset keeps build settings — a target, values and endpoints — so a build starts from them instead of
-              an empty form. It follows its endpoints' changes; a build copies them.
+              A preset keeps build settings — a target, values and connections — so a build starts from them instead
+              of an empty form. Its connections hold their own settings: editing an endpoint later changes nothing
+              here.
             </p>
           </>
         }

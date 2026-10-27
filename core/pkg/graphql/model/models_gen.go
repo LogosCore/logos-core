@@ -101,8 +101,10 @@ type BuildChannelVersions struct {
 }
 
 type BuildConnectionInput struct {
-	EndpointID string `json:"endpointId"`
-	Values     any    `json:"values,omitempty"`
+	ModuleName string  `json:"moduleName"`
+	Name       *string `json:"name,omitempty"`
+	Settings   any     `json:"settings,omitempty"`
+	Values     any     `json:"values,omitempty"`
 }
 
 type BuildError struct {
@@ -151,9 +153,12 @@ type BuildPreset struct {
 }
 
 type BuildPresetConnection struct {
-	EndpointID   string  `json:"endpointId"`
-	EndpointName *string `json:"endpointName,omitempty"`
-	Values       any     `json:"values"`
+	ModuleName    string  `json:"moduleName"`
+	Name          *string `json:"name,omitempty"`
+	Settings      any     `json:"settings"`
+	SchemaVersion int     `json:"schemaVersion"`
+	SchemaChanged bool    `json:"schemaChanged"`
+	Values        any     `json:"values"`
 }
 
 type BuildPresetInput struct {

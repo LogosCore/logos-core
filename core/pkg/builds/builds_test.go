@@ -11,11 +11,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
-	"github.com/qiniu/qmgo/field"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.uber.org/zap"
 )
@@ -23,17 +21,11 @@ import (
 // --- fixtures ------------------------------------------------------------
 
 var (
-	opID      = uuid.MustParse("6b1e2f3a-4c5d-4e6f-8a9b-0c1d2e3f4a5b")
-	otherOpID = uuid.MustParse("7c2f3a4b-5d6e-4f70-9b0c-1d2e3f4a5b6c")
-	alice     = models.ModuleActor{Type: "user", ID: "u-alice", Name: "alice"}
+	opID  = uuid.MustParse("6b1e2f3a-4c5d-4e6f-8a9b-0c1d2e3f4a5b")
+	alice = models.ModuleActor{Type: "user", ID: "u-alice", Name: "alice"}
 )
 
-const (
-	edgeID   = "65f0000000000000000000a1"
-	otherID  = "65f0000000000000000000a2" // another operation's
-	brokenID = "65f0000000000000000000a3" // does not fit its schema
-	bobQueue = "logos.factory.rpc.bob-1"
-)
+const bobQueue = "logos.factory.rpc.bob-1"
 
 // bobSchema is BOB's build schema.
 func bobSchema() protocol.BuildSchema {
@@ -63,24 +55,19 @@ func bobInstance(name string, version int) models.Module {
 		RPCQueue: "logos.factory.rpc." + name, Status: models.ModuleStatusRegistered, Build: &models.ModuleBuildSchema{BuildSchema: sc}}
 }
 
-func endpoint(id, name string, op uuid.UUID) channelendpoints.View {
-	oid, _ := primitive.ObjectIDFromHex(id)
-	return channelendpoints.View{
-		ChannelEndpoint: models.ChannelEndpoint{
-			DefaultField: field.DefaultField{Id: oid}, OperationID: op, Name: name, ModuleName: "http",
-			SchemaVersion: 2, Values: models.JSONMap{"base_url": "https://" + name + ".example.com"},
-		},
-		Schema: &protocol.ConnectionSchema{SchemaVersion: "1", Version: 2, Fields: []protocol.FieldSpec{
-			{Key: "base_url", Type: protocol.FieldURL, Required: true},
-			{Key: "request_timeout", Type: protocol.FieldDuration, Default: "40s"},
-		}},
-	}
+// httpSchema is the HTTP channel's connection schema, which BOB's minions
+// read.
+func httpSchema() *protocol.ConnectionSchema {
+	return &protocol.ConnectionSchema{SchemaVersion: "1", Version: 2, Fields: []protocol.FieldSpec{
+		{Key: "base_url", Type: protocol.FieldURL, Required: true},
+		{Key: "request_timeout", Type: protocol.FieldDuration, Default: "40s"},
+	}}
 }
 
 type rig struct {
 	svc     *Service
 	reg     *fakeRegistry
-	eps     *fakeEndpoints
+	chs     *fakeChannels
 	rpc     *fakeCaller
 	store   *fakeStore
 	files   *fakeFiles
@@ -92,14 +79,12 @@ type rig struct {
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	broken := endpoint(brokenID, "broken", opID)
-	broken.Problems = map[string]string{"base_url": "value is required"}
 	sc := bobSchema()
+	dns := &protocol.ConnectionSchema{SchemaVersion: "1", Version: 1, Fields: []protocol.FieldSpec{{Key: "zone", Type: protocol.FieldString}}}
 	r := &rig{
 		reg: &fakeRegistry{schemas: map[string]*models.ModuleBuildSchema{"bob": {BuildSchema: sc}}},
-		eps: &fakeEndpoints{views: map[string]channelendpoints.View{
-			edgeID: endpoint(edgeID, "edge", opID), otherID: endpoint(otherID, "other", otherOpID), brokenID: broken,
-		}},
+		// BOB's minions do not speak dns.
+		chs:     &fakeChannels{schemas: map[string]*protocol.ConnectionSchema{"http": httpSchema(), "dns": dns}},
 		rpc:     &fakeCaller{},
 		store:   &fakeStore{objects: map[string][]byte{}},
 		files:   &fakeFiles{rows: map[uuid.UUID]models.BuildFile{}},
@@ -110,7 +95,7 @@ func newRig(t *testing.T) *rig {
 	}
 	r.reg.setActive(bobInstance("bob-1", 1))
 	r.svc = NewService(Repos{Files: r.files, Presets: r.presets, Builds: r.builds, Minions: r.minions},
-		r.reg, r.eps, r.rpc, r.store, fakeSigner{}, Config{}, zap.NewNop())
+		r.reg, r.chs, r.rpc, r.store, fakeSigner{}, Config{}, zap.NewNop())
 	r.svc.now = func() time.Time { return r.clock }
 	t.Cleanup(r.svc.Stop)
 	return r
@@ -119,9 +104,12 @@ func newRig(t *testing.T) *rig {
 func (r *rig) input(mutate func(in *BuildInput)) BuildInput {
 	in := BuildInput{
 		ModuleName: "bob", Target: "dummy", Platform: "any/any",
-		Values:      map[string]any{"punches": []any{"jab"}},
-		Connections: []ConnectionInput{{EndpointID: edgeID, Values: map[string]any{"path_prefix": "/cdn/"}}},
-		Actor:       alice,
+		Values: map[string]any{"punches": []any{"jab"}},
+		Connections: []ConnectionInput{{
+			ModuleName: "http", Name: "edge", Settings: map[string]any{"base_url": "https://edge.example.com"},
+			Values: map[string]any{"path_prefix": "/cdn/"},
+		}},
+		Actor: alice,
 	}
 	if mutate != nil {
 		mutate(&in)
@@ -217,10 +205,33 @@ func TestCreateBuildQueues(t *testing.T) {
 	if len(b.FileIDs) != 1 || b.FileIDs[0] != badge.FileID.String() {
 		t.Fatalf("file ids %v", b.FileIDs)
 	}
+	// Each connection's settings as an endpoint export, defaults filled in.
 	conn := b.Connections.Items[0]
-	if conn.Endpoint.Name != "edge" || conn.Endpoint.Channel.SchemaVersion != 2 ||
-		conn.Endpoint.Params["request_timeout"] != "40s" || conn.Values["method"] != "POST" || conn.Values["path_prefix"] != "/cdn/" {
+	if conn.Endpoint.Format != protocol.ChannelEndpointExportV1 || conn.Endpoint.Name != "edge" ||
+		conn.Endpoint.Channel != (protocol.ExportChannel{ModuleName: "http", SchemaVersion: 2}) ||
+		conn.Endpoint.Params["base_url"] != "https://edge.example.com" || conn.Endpoint.Params["request_timeout"] != "40s" ||
+		conn.Values["method"] != "POST" || conn.Values["path_prefix"] != "/cdn/" {
 		t.Fatalf("connection %+v", conn)
+	}
+}
+
+func TestCreateBuildConnectionNames(t *testing.T) {
+	r := newRig(t)
+	b := r.queue(t, func(in *BuildInput) {
+		in.Connections[0].Name = " "
+		in.Connections = append(in.Connections, ConnectionInput{ModuleName: " http ", Name: " backup ",
+			Settings: map[string]any{"base_url": "https://backup.example.com", "request_timeout": ""}})
+	})
+	var names []string
+	for _, c := range b.Connections.Items {
+		names = append(names, c.Endpoint.Name+"@"+c.Endpoint.Channel.ModuleName)
+	}
+	if strings.Join(names, " ") != "http-1@http backup@http" {
+		t.Fatalf("connections named %v", names)
+	}
+	// An emptied setting takes its default.
+	if p := b.Connections.Items[1].Endpoint.Params; p["request_timeout"] != "40s" {
+		t.Fatalf("params %v", p)
 	}
 }
 
@@ -240,9 +251,18 @@ func TestCreateBuildProblems(t *testing.T) {
 		{"values.badge", func(in *BuildInput) { in.Values["badge"] = uuid.NewString() }},
 		{"values.badge", func(in *BuildInput) { in.Values["badge"] = text.FileID.String() }}, // not an image
 		{"connections", func(in *BuildInput) { in.Connections = nil }},
-		{"connections[0]", func(in *BuildInput) { in.Connections[0].EndpointID = otherID }},
-		{"connections[0]", func(in *BuildInput) { in.Connections[0].EndpointID = brokenID }},
-		{"connections[0]", func(in *BuildInput) { in.Connections[0].EndpointID = "65f0000000000000000000ff" }},
+		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "" }},
+		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "smtp" }}, // no such channel
+		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "dns" }},  // not BOB's
+		{"connections[0].name", func(in *BuildInput) { in.Connections[0].Name = "Edge Node" }},
+		{"connections[1].name", func(in *BuildInput) { in.Connections = append(in.Connections, in.Connections[0]) }},
+		{"connections[1].name", func(in *BuildInput) { // the second one's default name
+			in.Connections[0].Name = "http-2"
+			in.Connections = append(in.Connections, ConnectionInput{ModuleName: "http", Settings: in.Connections[0].Settings})
+		}},
+		{"connections[0].settings.base_url", func(in *BuildInput) { delete(in.Connections[0].Settings, "base_url") }},
+		{"connections[0].settings.base_url", func(in *BuildInput) { in.Connections[0].Settings["base_url"] = "edge" }},
+		{"connections[0].settings.color", func(in *BuildInput) { in.Connections[0].Settings["color"] = "red" }},
 		{"connections[0].values.method", func(in *BuildInput) { in.Connections[0].Values["method"] = "PUT" }},
 		{"connections[0].values.color", func(in *BuildInput) { in.Connections[0].Values["color"] = "red" }},
 	} {
@@ -269,6 +289,8 @@ func TestCreateBuildRefusals(t *testing.T) {
 			r.reg.setActive(bobInstance("bob-1", 1))
 		}, want: "schema version 2"},
 		"crypto": {setup: func(r *rig) { r.reg.schemas["bob"].Crypto = []string{"x25519-xchacha20poly1305"} }, want: "payload crypto"},
+		// BOB's minions read version 2 of the HTTP channel's settings.
+		"channel version": {setup: func(r *rig) { r.chs.schemas["http"].Version = 3 }, want: "does not fit"},
 	} {
 		r := newRig(t)
 		if c.setup != nil {
@@ -624,13 +646,26 @@ func TestPresets(t *testing.T) {
 	r := newRig(t)
 	ctx := context.Background()
 	in := PresetInput{Name: "eu-front", Target: "dummy", Values: map[string]any{"punches": []any{"hook"}},
-		Connections: []ConnectionInput{{EndpointID: edgeID, Values: map[string]any{"method": "GET"}}}, Actor: alice}
+		Connections: []ConnectionInput{
+			{ModuleName: "http", Name: "edge", Settings: map[string]any{"base_url": "https://edge.example.com", "request_timeout": ""},
+				Values: map[string]any{"method": "GET"}},
+			{ModuleName: "http"}, // its base URL is left for the build form
+		}, Actor: alice}
 	v, err := r.svc.CreatePreset(ctx, opID, "bob", in)
 	if err != nil {
-		t.Fatalf("a partial preset (no platform) was refused: %v %v", err, problemsOf(err))
+		t.Fatalf("a partial preset (no platform, a connection without settings) was refused: %v %v", err, problemsOf(err))
 	}
-	if v.Revision != 1 || len(v.Problems) != 0 || v.EndpointNames[edgeID] != "edge" || v.Connections[0].Values["method"] != "GET" {
+	c := v.Connections[0]
+	if v.Revision != 1 || len(v.Problems) != 0 || c.ModuleName != "http" || c.Name != "edge" || c.SchemaVersion != 2 ||
+		len(c.Settings) != 1 || c.Settings["base_url"] != "https://edge.example.com" || c.Values["method"] != "GET" ||
+		v.ConnectionSchemaChanged(0) || len(v.Connections[1].Settings) != 0 {
 		t.Fatalf("preset %+v", v)
+	}
+	bad := in
+	bad.Name = "bad"
+	bad.Connections = []ConnectionInput{{ModuleName: "http", Settings: map[string]any{"base_url": "edge"}}}
+	if _, err := r.svc.CreatePreset(ctx, opID, "bob", bad); problemsOf(err)["connections[0].settings.base_url"] == "" {
+		t.Fatalf("a preset with a wrong setting: %v %v", err, problemsOf(err))
 	}
 	if _, err := r.svc.CreatePreset(ctx, opID, "bob", in); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("a second preset with the name: %v", err)
@@ -650,11 +685,21 @@ func TestPresets(t *testing.T) {
 		t.Fatalf("a stale update: %v", err)
 	}
 
-	// The endpoint is deleted: the preset shows it.
-	delete(r.eps.views, edgeID)
+	// The channel's settings move on: the preset shows it.
+	r.chs.schemas["http"].Version = 3
 	got, err := r.svc.Preset(ctx, v.Id.Hex())
-	if err != nil || got.Problems["connections[0]"] == "" || got.EndpointNames[edgeID] != "" {
-		t.Fatalf("preset after its endpoint went: %v %+v", err, got.Problems)
+	if err != nil || got.Problems["connections[0]"] == "" || !got.ConnectionSchemaChanged(0) || !got.ConnectionSchemaChanged(1) {
+		t.Fatalf("preset after a channel release: %v %+v", err, got.Problems)
+	}
+	// BOB learns version 3, which renamed a setting the preset holds.
+	r.reg.schemas["bob"].Channels[0].Versions = []int{2, 3}
+	r.chs.schemas["http"].Fields[0].Key = "base_urls"
+	if got, err = r.svc.Preset(ctx, v.Id.Hex()); err != nil || got.Problems["connections[0].settings.base_url"] == "" {
+		t.Fatalf("preset after a renamed setting: %v %+v", err, got.Problems)
+	}
+	delete(r.chs.schemas, "http")
+	if got, err = r.svc.Preset(ctx, v.Id.Hex()); err != nil || got.Problems["connections[1]"] == "" || got.ConnectionSchemaChanged(0) {
+		t.Fatalf("preset after its channel went: %v %+v", err, got.Problems)
 	}
 	if err := r.svc.DeletePreset(ctx, v.Id.Hex()); err != nil {
 		t.Fatal(err)

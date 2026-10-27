@@ -249,7 +249,7 @@ function BuildDetail({ build: b }: { build: Build }) {
         <Section title="What the factory was given">
           <div className="flex flex-col gap-3 py-3">
             <p className="text-sm text-muted-foreground">
-              Every value with the defaults filled in, and the endpoints as they were copied into the build.
+              Every value and connection setting with the defaults filled in, as the build was made.
             </p>
             <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5">
               {prettyJson({ values: b.values, connections: b.connections })}

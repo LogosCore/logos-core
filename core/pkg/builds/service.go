@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/blob"
-	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -34,10 +33,10 @@ type Registry interface {
 	FindByInstance(ctx context.Context, instance string) (models.Module, error)
 }
 
-// Endpoints is the slice of channel endpoints the service reads.
-type Endpoints interface {
-	Get(ctx context.Context, id string) (channelendpoints.View, error)
-	Export(ctx context.Context, id string) (map[string]any, error)
+// Channels gives a channel kind's current minion connection schema (nil when
+// no instance declared one): what a build's connection settings follow.
+type Channels interface {
+	Schema(ctx context.Context, moduleName string) (*protocol.ConnectionSchema, error)
 }
 
 // Caller calls a module's rpc_queue (messaging.RPCClient).
@@ -144,15 +143,15 @@ func (e *ConflictError) Error() string {
 
 // Service runs builds.
 type Service struct {
-	repos     Repos
-	registry  Registry
-	endpoints Endpoints
-	rpc       Caller
-	store     Store
-	signer    Signer
-	cfg       Config
-	logger    *zap.Logger
-	now       func() time.Time
+	repos    Repos
+	registry Registry
+	channels Channels
+	rpc      Caller
+	store    Store
+	signer   Signer
+	cfg      Config
+	logger   *zap.Logger
+	now      func() time.Time
 
 	kick      chan struct{}
 	stop      chan struct{}
@@ -161,9 +160,9 @@ type Service struct {
 	verifying sync.Map      // build ids whose artifact this process checks
 }
 
-func NewService(repos Repos, registry Registry, endpoints Endpoints, rpc Caller, store Store, signer Signer, cfg Config, logger *zap.Logger) *Service {
+func NewService(repos Repos, registry Registry, channels Channels, rpc Caller, store Store, signer Signer, cfg Config, logger *zap.Logger) *Service {
 	return &Service{
-		repos: repos, registry: registry, endpoints: endpoints, rpc: rpc, store: store, signer: signer,
+		repos: repos, registry: registry, channels: channels, rpc: rpc, store: store, signer: signer,
 		cfg:    cfg.withDefaults(),
 		logger: logger,
 		now:    func() time.Time { return time.Now().UTC() },

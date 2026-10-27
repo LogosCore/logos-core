@@ -9,7 +9,7 @@ import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
 import type { BuildPresetFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
 import { PRESETS_PATH } from "./build-access"
-import { platformLabel } from "./build-values"
+import { defaultConnectionName, platformLabel } from "./build-values"
 
 type Preset = BuildPresetFieldsFragment
 
@@ -56,7 +56,7 @@ export function PresetsTable({
           <div>Name</div>
           <div>Factory · target</div>
           <div>Platform</div>
-          <div>Endpoints</div>
+          <div>Connections</div>
           <div>Status</div>
           <div>Updated</div>
           <div />
@@ -65,6 +65,7 @@ export function PresetsTable({
       emptyState={emptyState}
       renderRow={(p) => {
         const values = Object.keys((p.values ?? {}) as Record<string, unknown>)
+        const connections = p.connections.map((c, i) => c.name || defaultConnectionName(c.moduleName, i))
         return (
           <ContextMenuRow
             gridCols={GRID_COLS}
@@ -108,11 +109,14 @@ export function PresetsTable({
                 <div className="truncate text-sm">
                   {p.platform ? platformLabel(p.platform) : <span className="text-muted-foreground">When building</span>}
                 </div>
-                <div className="truncate font-mono text-xs" title={p.connections.map((c) => c.endpointName ?? "(deleted)").join(" → ")}>
+                <div
+                  className="truncate font-mono text-xs"
+                  title={p.connections.map((c, i) => `${connections[i]} (${c.moduleName})`).join(" → ") || undefined}
+                >
                   {p.connections.length === 0 ? (
                     <span className="font-sans text-sm text-muted-foreground">When building</span>
                   ) : (
-                    p.connections.map((c) => c.endpointName ?? "(deleted)").join(" → ")
+                    connections.join(" → ")
                   )}
                 </div>
                 <StatusCell preset={p} />
@@ -130,7 +134,8 @@ export function PresetsTable({
 }
 
 function StatusCell({ preset: p }: { preset: Preset }) {
-  if (p.problems.length === 0 && !p.schemaChanged) {
+  const channelsChanged = p.connections.filter((c) => c.schemaChanged).map((c) => c.moduleName)
+  if (p.problems.length === 0 && !p.schemaChanged && channelsChanged.length === 0) {
     return <div className="text-sm text-muted-foreground">Ready</div>
   }
   return (
@@ -153,6 +158,15 @@ function StatusCell({ preset: p }: { preset: Preset }) {
           title="The factory now declares another version of its build settings. Check the preset and save it again."
         >
           Saved for v{p.schemaVersion}
+        </Badge>
+      )}
+      {channelsChanged.length > 0 && (
+        <Badge
+          variant="outline"
+          className={AMBER}
+          title={`${[...new Set(channelsChanged)].join(", ")} now declares another version of its connection settings. Check the connections and save the preset again.`}
+        >
+          Channel updated
         </Badge>
       )}
     </div>

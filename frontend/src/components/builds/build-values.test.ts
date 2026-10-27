@@ -1,16 +1,21 @@
 import { describe, expect, it } from "vitest"
 import type { FieldDef } from "@/components/modules/management/field-values"
+import { kindsByName } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 import {
   acceptText,
-  endpointUnusable,
+  channelUnusable,
+  connectionDraft,
   evaluateForm,
   factoryKindsByName,
   fileFits,
+  fillFromEndpoint,
   initialForm,
   move,
   platformLabel,
+  sourceFromBuild,
   withTarget,
+  type BuildForm,
 } from "./build-values"
 
 function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef {
@@ -53,10 +58,33 @@ const schema: BuildSchemaFieldsFragment = {
 }
 
 const kind = factoryKindsByName([{ moduleName: "bob", instances: 1, schema }]).get("bob")!
-const endpointKinds = new Map([
-  ["ep-edge", "http"],
-  ["ep-dns", "dns"],
+
+// The HTTP channel's connection settings; BOB's minions do not speak dns.
+const channels = kindsByName([
+  {
+    moduleName: "http",
+    schema: {
+      version: 2,
+      fields: [
+        field({ key: "base_url", type: "url", required: true, order: 1 }),
+        field({ key: "request_timeout", type: "duration", default: "40s", order: 2 }),
+        field({ key: "token", type: "secret", order: 3 }),
+      ],
+    },
+  },
+  { moduleName: "dns", schema: { version: 1, fields: [field({ key: "zone", type: "string" })] } },
 ])
+const http = channels.get("http")!
+
+/** A blank connection through channel moduleName, with settings and parameters typed in. */
+function connection(moduleName: string, typed: { name?: string; settings?: Record<string, string>; params?: Record<string, string> } = {}) {
+  const c = connectionDraft(kind, channels.get(moduleName), { moduleName, name: typed.name })
+  for (const [k, text] of Object.entries(typed.settings ?? {})) c.settings[k] = { kind: "text", text }
+  for (const [k, text] of Object.entries(typed.params ?? {})) c.drafts[k] = { kind: "text", text }
+  return c
+}
+
+const edge = { settings: { base_url: "https://edge.example.com" } }
 
 describe("fileFits", () => {
   const f = field({ key: "icon", type: "file", accept: [".ico", "image/*"], maxSize: 100 })
@@ -81,66 +109,100 @@ describe("factoryKindsByName", () => {
   })
 })
 
-describe("endpointUnusable", () => {
+describe("channelUnusable", () => {
   const dummy = kind.targets[0]
-  const versions = new Map([["http", 2], ["dns", 1]])
-  it("takes only fitting endpoints the target speaks", () => {
-    expect(endpointUnusable(dummy, { id: "ep-edge", name: "edge", moduleName: "http", problems: [] }, versions)).toBeNull()
-    expect(endpointUnusable(dummy, { id: "ep-dns", name: "dns", moduleName: "dns", problems: [] }, versions)).toMatch(/does not speak dns/)
-    expect(
-      endpointUnusable(dummy, { id: "x", name: "x", moduleName: "http", problems: [{ key: "base_url", message: "required" }] }, versions),
-    ).toMatch(/does not fit/i)
-    expect(endpointUnusable(dummy, { id: "ep-edge", name: "edge", moduleName: "http", problems: [] }, new Map([["http", 3]]))).toMatch(/v3/)
+  it("takes the channels the target speaks, at a version it reads", () => {
+    expect(channelUnusable(dummy, "http", channels)).toBeNull()
+    expect(channelUnusable(dummy, "dns", channels)).toMatch(/does not speak dns/)
+    expect(channelUnusable(dummy, "smtp", channels)).toMatch(/no smtp channel/i)
+    expect(channelUnusable(undefined, "http", channels)).toMatch(/pick a target/i)
+    const v3 = new Map([["http", { ...http, version: 3 }]])
+    expect(channelUnusable(dummy, "http", v3)).toMatch(/settings v3; this factory reads v2/)
   })
 })
 
 describe("the build form", () => {
   it("starts from the first target and its only platform", () => {
-    const form = initialForm(kind, null, endpointKinds)
+    const form = initialForm(kind, null, channels)
     expect(form.target).toBe("dummy")
     expect(form.platform).toBe("any/any")
     expect(Object.keys(form.drafts)).toEqual(["greeting", "kill_date", "punches", "badge", "token"])
+    expect(form.connections).toEqual([])
   })
 
-  it("submits set values, defaults left to the server", () => {
-    const form = initialForm(kind, null, endpointKinds)
+  it("submits set values and settings, defaults left to the server", () => {
+    const form = initialForm(kind, null, channels)
     form.drafts.punches = { kind: "set", values: ["hook", "jab"] }
     form.drafts.badge = { kind: "file", id: "file-1" }
-    form.connections = [{ endpointId: "ep-edge", drafts: { path_prefix: { kind: "text", text: "/cdn/" } } }]
-    const { input, errors } = evaluateForm(kind, form, false, endpointKinds)
+    form.connections = [
+      connection("http", { name: " edge ", settings: { base_url: "https://edge.example.com", token: "s3cret" }, params: { path_prefix: "/cdn/" } }),
+      connection("http", edge),
+    ]
+    const { input, errors } = evaluateForm(kind, form, false, channels)
     expect(errors).toEqual({})
     expect(input).toEqual({
       target: "dummy",
       platform: "any/any",
       values: { punches: ["jab", "hook"], badge: "file-1" },
-      connections: [{ endpointId: "ep-edge", values: { path_prefix: "/cdn/" } }],
+      connections: [
+        {
+          moduleName: "http",
+          name: "edge",
+          settings: { base_url: "https://edge.example.com", token: "s3cret" },
+          values: { path_prefix: "/cdn/" },
+        },
+        { moduleName: "http", name: null, settings: { base_url: "https://edge.example.com" }, values: {} },
+      ],
     })
   })
 
   it("keys errors like the server's problems", () => {
-    let form = initialForm(kind, null, endpointKinds)
+    let form = initialForm(kind, null, channels)
     form = withTarget(kind, form, "service")
-    form.connections = [{ endpointId: "ep-edge", drafts: { path_prefix: { kind: "text", text: "cdn" } } }]
+    form.connections = [
+      connection("http", { name: "Edge Node", settings: { base_url: "edge", request_timeout: "soon" }, params: { path_prefix: "cdn" } }),
+      connection("dns"),
+    ]
     form.drafts.kill_date = { kind: "text", text: "not a date" }
-    const { errors } = evaluateForm(kind, form, false, endpointKinds)
-    expect(errors).toEqual({
+    const { errors } = evaluateForm(kind, form, false, channels)
+    expect(errors).toMatchObject({
       platform: "Pick a platform",
       "values.service_name": "Required",
       "values.kill_date": "Not a date and time",
+      "connections[0].name": expect.stringMatching(/lowercase letters/i),
+      "connections[0].settings.base_url": "Must be a valid URL",
+      "connections[0].settings.request_timeout": expect.stringMatching(/invalid duration/i),
       "connections[0].values.path_prefix": "Must match ^/",
+      "connections[1]": "This target does not speak dns",
     })
+    expect(Object.keys(errors)).toHaveLength(8)
   })
 
-  it("lets a preset leave the platform, endpoints and required values", () => {
-    const form = withTarget(kind, initialForm(kind, null, endpointKinds), "service")
-    const build = evaluateForm(kind, form, false, endpointKinds).errors
+  it("wants connection names unique, the server's defaults counted", () => {
+    const form = initialForm(kind, null, channels)
+    form.connections = [connection("http", { ...edge, name: "edge" }), connection("http", { ...edge, name: "edge" })]
+    expect(evaluateForm(kind, form, false, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called edge too" })
+    form.connections = [connection("http", { ...edge, name: "http-2" }), connection("http", edge)]
+    expect(evaluateForm(kind, form, false, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called http-2 too" })
+  })
+
+  it("lets a preset leave the platform, connections, required values and settings", () => {
+    const form = withTarget(kind, initialForm(kind, null, channels), "service")
+    const build = evaluateForm(kind, form, false, channels).errors
     expect(build.connections).toBeDefined()
     expect(build["values.service_name"]).toBeDefined()
-    expect(evaluateForm(kind, form, true, endpointKinds).errors).toEqual({})
+    expect(evaluateForm(kind, form, true, channels).errors).toEqual({})
+
+    form.connections = [connection("http")]
+    expect(evaluateForm(kind, form, false, channels).errors["connections[0].settings.base_url"]).toBe("Required")
+    expect(evaluateForm(kind, form, true, channels).errors).toEqual({})
+    // What a preset holds must still fit.
+    form.connections = [connection("dns")]
+    expect(evaluateForm(kind, form, true, channels).errors).toEqual({ "connections[0]": "This target does not speak dns" })
   })
 
   it("keeps values that carry over to another target", () => {
-    const form = initialForm(kind, null, endpointKinds)
+    const form = initialForm(kind, null, channels)
     form.drafts.greeting = { kind: "text", text: "hi" }
     const service = withTarget(kind, form, "service")
     expect(service.drafts.greeting).toEqual({ kind: "text", text: "hi" })
@@ -148,23 +210,109 @@ describe("the build form", () => {
     expect(service.platform).toBe("") // two platforms: the user picks
   })
 
-  it("fills in from a preset or a build", () => {
+  it("fills in from a preset", () => {
     const form = initialForm(
       kind,
       {
         target: "service",
         platform: "windows/arm64",
         values: { service_name: "WinTelemetry", kill_date: "2027-01-31T00:00:00Z", punches: ["jab"] },
-        connections: [{ endpointId: "ep-edge", values: { method: "GET" } }],
+        connections: [
+          { moduleName: "http", name: "edge", schemaVersion: 1, settings: { base_url: "https://edge.example.com" }, values: { method: "GET" } },
+        ],
       },
-      endpointKinds,
+      channels,
     )
     expect(form.platform).toBe("windows/arm64")
     expect(form.drafts.punches).toEqual({ kind: "set", values: ["jab"] })
-    expect(form.connections[0].drafts.method).toEqual({ kind: "text", text: "GET" })
-    const { input, errors } = evaluateForm(kind, form, false, endpointKinds)
+    const c = form.connections[0]
+    expect(c.name).toBe("edge")
+    expect(c.settings.base_url).toEqual({ kind: "text", text: "https://edge.example.com" })
+    expect(c.drafts.method).toEqual({ kind: "text", text: "GET" })
+    expect(c.notes).toEqual(["Saved for http settings v1; the channel is at v2. Check the settings."])
+    const { input, errors } = evaluateForm(kind, form, false, channels)
     expect(errors).toEqual({})
     expect(input.values.kill_date).toBe("2027-01-31T00:00:00Z")
+    expect(input.connections[0]).toEqual({
+      moduleName: "http",
+      name: "edge",
+      settings: { base_url: "https://edge.example.com" },
+      values: { method: "GET" },
+    })
+  })
+})
+
+describe("fillFromEndpoint", () => {
+  const eu = { name: "eu", values: { base_url: "https://eu.example.com", request_timeout: "10s", gone: true } }
+  const us = { name: "us", values: { base_url: "https://us.example.com" } }
+
+  it("copies the endpoint's settings and name, until the operator names the connection", () => {
+    const c = fillFromEndpoint(connection("http", { settings: { token: "typed" } }), http, eu)
+    expect(c.name).toBe("eu")
+    expect(c.filledFrom).toBe("eu")
+    expect(c.settings).toEqual({
+      base_url: { kind: "text", text: "https://eu.example.com" },
+      request_timeout: { kind: "text", text: "10s" },
+      token: { kind: "text", text: "" },
+    })
+    expect(fillFromEndpoint(c, http, us).name).toBe("us")
+    expect(fillFromEndpoint({ ...c, name: "primary" }, http, us).name).toBe("primary")
+  })
+
+  it("leaves the factory's parameters and drops old notes", () => {
+    const c = { ...connection("http", { params: { method: "GET" } }), notes: ["Saved for v1"] }
+    const filled = fillFromEndpoint(c, http, us)
+    expect(filled.drafts.method).toEqual({ kind: "text", text: "GET" })
+    expect(filled.notes).toEqual([])
+    expect(filled.key).toBe(c.key)
+  })
+})
+
+describe("sourceFromBuild", () => {
+  it("takes what the build set, not the defaults it holds", () => {
+    const build = {
+      target: "dummy",
+      platform: "any/any",
+      values: { greeting: "hello from BOB", punches: ["jab"] },
+      connections: [
+        {
+          endpoint: {
+            format: "logos.channel-endpoint.v1",
+            name: "http-1",
+            channel: { module_name: "http", schema_version: 2 },
+            params: { base_url: "https://a.example.com", request_timeout: "40s", retired: "x" },
+          },
+          values: { method: "POST", path_prefix: "/cdn/" },
+        },
+        {
+          endpoint: { name: "edge", channel: { module_name: "http", schema_version: 1 }, params: { base_url: "https://b.example.com" } },
+          values: { method: "GET", path_prefix: "/" },
+        },
+      ],
+    }
+    const source = sourceFromBuild(kind, build, channels)
+    expect(source.values).toEqual({ punches: ["jab"] })
+    expect(source.connections).toEqual([
+      {
+        moduleName: "http",
+        name: null,
+        schemaVersion: 2,
+        settings: { base_url: "https://a.example.com" },
+        values: { path_prefix: "/cdn/" },
+        notes: ["Left out, not settings of http v2: retired."],
+      },
+      { moduleName: "http", name: "edge", schemaVersion: 1, settings: { base_url: "https://b.example.com" }, values: { method: "GET" }, notes: [] },
+    ])
+
+    const form: BuildForm = initialForm(kind, source, channels)
+    expect(form.connections[1].notes).toEqual(["Saved for http settings v1; the channel is at v2. Check the settings."])
+    expect(evaluateForm(kind, form, false, channels).errors).toEqual({})
+  })
+
+  it("survives what it does not know", () => {
+    const source = sourceFromBuild(kind, { target: "dummy", platform: "any/any", values: null, connections: [null, { endpoint: 1 }] }, channels)
+    expect(source.values).toEqual({})
+    expect(source.connections?.map((c) => c.moduleName)).toEqual(["", ""])
   })
 })
 

@@ -158,12 +158,12 @@ function slug(name: string): string {
     .slice(0, MAX_NAME_LENGTH)
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
 }
 
 /** Whether two JSON values are equal (key order aside). */
-function sameJSON(a: unknown, b: unknown): boolean {
+export function sameJSON(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJSON(v, b[i]))
   if (isRecord(a) && isRecord(b)) {

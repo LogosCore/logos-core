@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router"
-import { ArrowDownIcon, ArrowLeftIcon, ArrowUpIcon, HammerIcon, XIcon } from "lucide-react"
+import { ArrowLeftIcon, HammerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,22 +33,25 @@ import {
 import { uploadBuildFile } from "@/lib/build-file-upload"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
-import { FieldControl } from "@/components/modules/management/field-control"
-import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
-import { nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
+import { groupByField, type Draft } from "@/components/modules/management/field-values"
+import { kindsByName, nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
 import { BuildFilesContext, type BuildFilesContextValue } from "@/components/builds/build-files-context"
+import { FieldRow } from "@/components/builds/build-field-row"
+import { AddConnectionMenu, ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
 import {
   connectionDraft,
-  endpointUnusable,
   evaluateForm,
   factoryKindsByName,
+  fillFromEndpoint,
   initialForm,
   move,
   platformLabel,
+  sourceFromBuild,
   targetFields,
   withTarget,
   type BuildForm as Form,
-  type EndpointLike,
+  type ChannelKind,
+  type ConnectionDraft,
   type FactoryKind,
   type FormSource,
 } from "@/components/builds/build-values"
@@ -72,15 +75,7 @@ export function NewBuildPage() {
   const kindName = params.get("kind") ?? preset?.moduleName ?? from?.moduleName ?? ""
   let source: SourceSpec = null
   if (preset) source = { kind: "preset", preset }
-  else if (from) {
-    source = {
-      kind: "build",
-      target: from.target,
-      platform: from.platform,
-      values: (from.values ?? {}) as Record<string, unknown>,
-      connections: (from.connections ?? []) as BuildConnectionRecord[],
-    }
-  }
+  else if (from) source = { kind: "build", build: from }
   return <EditorLoader operationId={scopedOperation.id} kindName={kindName} mode="build" source={source} preset={null} />
 }
 
@@ -116,18 +111,12 @@ export function EditPresetPage() {
   )
 }
 
-/** A build's copied connection, as Build.connections holds it. */
-interface BuildConnectionRecord {
-  endpoint?: { name?: string }
-  values?: Record<string, unknown>
-}
-
 type SourceSpec =
   | null
   | { kind: "preset"; preset: Preset }
-  | { kind: "build"; target: string; platform: string; values: Record<string, unknown>; connections: BuildConnectionRecord[] }
+  | { kind: "build"; build: { target: string; platform: string; values?: unknown; connections?: unknown } }
 
-/** Loads what the form needs: the factory kind, the endpoints, the files. */
+/** Loads what the form needs: the factory kind, the channels, the endpoints, the files. */
 function EditorLoader({
   operationId,
   kindName,
@@ -151,31 +140,24 @@ function EditorLoader({
   }
   const kind = factoryKindsByName(kinds.data?.factoryKinds ?? []).get(kindName)
   if (!kind) return <NotFound text={`No "${kindName}" factory declares what it builds.`} />
-  const endpoints = endpointsQuery.data?.channelEndpoints ?? []
-  const channelVersions = new Map((channelKinds.data?.channelKinds ?? []).map((k) => [k.moduleName, k.schema.version]))
+  const channels = kindsByName(channelKinds.data?.channelKinds ?? [])
 
   let formSource: FormSource | null = null
-  const notes: string[] = []
   if (source?.kind === "preset") {
     formSource = {
       target: source.preset.target,
       platform: source.preset.platform,
       values: (source.preset.values ?? {}) as Record<string, unknown>,
       connections: source.preset.connections.map((c) => ({
-        endpointId: c.endpointId,
+        moduleName: c.moduleName,
+        name: c.name,
+        schemaVersion: c.schemaVersion,
+        settings: (c.settings ?? {}) as Record<string, unknown>,
         values: (c.values ?? {}) as Record<string, unknown>,
       })),
     }
   } else if (source?.kind === "build") {
-    // A build copied its endpoints; take the operation's current ones by name.
-    const byName = new Map(endpoints.map((e) => [e.name, e.id]))
-    const connections: { endpointId: string; values: Record<string, unknown> }[] = []
-    for (const c of source.connections) {
-      const id = byName.get(c.endpoint?.name ?? "")
-      if (id) connections.push({ endpointId: id, values: c.values ?? {} })
-      else notes.push(`Endpoint "${c.endpoint?.name ?? "?"}" no longer exists in this operation.`)
-    }
-    formSource = { target: source.target, platform: source.platform, values: source.values, connections }
+    formSource = sourceFromBuild(kind, source.build, channels)
   }
 
   return (
@@ -185,9 +167,8 @@ function EditorLoader({
       mode={mode}
       preset={preset}
       source={formSource}
-      notes={notes}
-      endpoints={endpoints}
-      channelVersions={channelVersions}
+      channels={channels}
+      endpoints={endpointsQuery.data?.channelEndpoints ?? []}
       files={(filesQuery.data?.buildFiles ?? []).map((f) => ({ id: f.id, name: f.name, size: f.size, mediaType: f.mediaType }))}
     />
   )
@@ -220,9 +201,8 @@ function Editor({
   mode,
   preset,
   source,
-  notes,
+  channels,
   endpoints,
-  channelVersions,
   files,
 }: {
   operationId: string
@@ -230,20 +210,18 @@ function Editor({
   mode: "build" | "preset"
   preset: Preset | null
   source: FormSource | null
-  notes: string[]
-  endpoints: readonly (EndpointLike & { description?: string | null })[]
-  channelVersions: ReadonlyMap<string, number>
+  channels: ReadonlyMap<string, ChannelKind>
+  /** The operation's endpoints, which connections can be filled from. */
+  endpoints: readonly EndpointOption[]
   files: BuildFilesContextValue["files"]
 }) {
   const navigate = useNavigate()
   const { canWrite, loading: roleLoading } = useCanBuild(operationId)
   const readOnly = !roleLoading && !canWrite
   const backTo = mode === "build" ? "/builds" : PRESETS_PATH
-  const endpointKinds = useMemo(() => new Map(endpoints.map((e) => [e.id, e.moduleName])), [endpoints])
-  const endpointById = useMemo(() => new Map(endpoints.map((e) => [e.id, e])), [endpoints])
   const channelIcons = useChannelIcons()
 
-  const [form, setForm] = useState<Form>(() => initialForm(kind, source, endpointKinds))
+  const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
   const [name, setName] = useState(preset?.name ?? "")
   const [description, setDescription] = useState(preset?.description ?? "")
   const [submitted, setSubmitted] = useState(false)
@@ -258,7 +236,7 @@ function Editor({
 
   const target = kind.targets.find((t) => t.id === form.target)
   const fields = targetFields(kind, target)
-  const { input, errors } = evaluateForm(kind, form, mode === "preset", endpointKinds)
+  const { input, errors } = evaluateForm(kind, form, mode === "preset", channels)
   const nameErr = mode === "preset" ? nameError(name) : null
   const shown: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
   const hasErrors = nameErr !== null || Object.keys(errors).length > 0
@@ -276,11 +254,10 @@ function Editor({
   )
 
   function clearServerError(key: string) {
+    const hit = (k: string) => (key.endsWith(".") ? k.startsWith(key) : k === key)
     setServerErrors((prev) => {
-      if (!(key in prev)) return prev
-      const next = { ...prev }
-      delete next[key]
-      return next
+      if (!Object.keys(prev).some(hit)) return prev
+      return Object.fromEntries(Object.entries(prev).filter(([k]) => !hit(k)))
     })
   }
 
@@ -289,12 +266,26 @@ function Editor({
     clearServerError(`values.${key}`)
   }
 
-  function setConnectionDraft(i: number, key: string, d: Draft) {
-    setForm((f) => ({
-      ...f,
-      connections: f.connections.map((c, j) => (j === i ? { ...c, drafts: { ...c.drafts, [key]: d } } : c)),
-    }))
-    clearServerError(`connections[${i}].values.${key}`)
+  /** Changes connection i; clears the server's errors under clear (keys or prefixes ending in "."). */
+  function updateConnection(i: number, update: (c: ConnectionDraft) => ConnectionDraft, ...clear: string[]) {
+    setForm((f) => ({ ...f, connections: f.connections.map((c, j) => (j === i ? update(c) : c)) }))
+    for (const key of clear) clearServerError(key)
+  }
+
+  /** Changes the list of connections. The server's errors name them by position, so they go. */
+  function setConnections(update: (cs: ConnectionDraft[]) => ConnectionDraft[]) {
+    setForm((f) => ({ ...f, connections: update(f.connections) }))
+    setServerErrors((prev) => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith("connections")))
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next
+    })
+  }
+
+  function addConnection(moduleName: string, ep: EndpointOption | null) {
+    const ch = channels.get(moduleName)
+    if (!ch) return
+    const c = connectionDraft(kind, ch, { moduleName })
+    setConnections((cs) => [...cs, ep ? fillFromEndpoint(c, ch, ep) : c])
   }
 
   async function submit() {
@@ -351,10 +342,9 @@ function Editor({
   }
 
   const groups = groupByField(fields, (f) => f)
-  const unusedEndpoints = endpoints.filter((e) => !form.connections.some((c) => c.endpointId === e.id))
 
-  // Side list: what to build, each group of fields, the endpoints, with a dot
-  // for errors or for values set.
+  // Side list: what to build, each group of fields, the connections, with a
+  // dot for errors or for values set.
   const navSections: SettingsNavSection[] = [
     {
       id: sectionId(WHAT_TO_BUILD),
@@ -373,8 +363,8 @@ function Editor({
       }),
     ),
     {
-      id: sectionId(ENDPOINTS),
-      title: ENDPOINTS,
+      id: sectionId(CONNECTIONS),
+      title: CONNECTIONS,
       state: Object.keys(shown).some((k) => k.startsWith("connections"))
         ? "error"
         : form.connections.length > 0
@@ -428,13 +418,6 @@ function Editor({
         <div className="@container/settings min-w-0 flex-1">
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
-          {notes.length > 0 && (
-            <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
-              {notes.map((n) => (
-                <p key={n}>{n}</p>
-              ))}
-            </div>
-          )}
 
           <SettingsSection id={sectionId(WHAT_TO_BUILD)} title={WHAT_TO_BUILD}>
             {mode === "preset" && (
@@ -526,88 +509,57 @@ function Editor({
             </SettingsSection>
           ))}
 
-          <SettingsSection id={sectionId(ENDPOINTS)} title={ENDPOINTS}>
-            <div className="flex flex-col gap-3 py-3">
+          <section id={sectionId(CONNECTIONS)} className="scroll-mt-20" aria-labelledby={`${sectionId(CONNECTIONS)}-title`}>
+            <h2 id={`${sectionId(CONNECTIONS)}-title`} className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {CONNECTIONS}
+            </h2>
+            <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">
-                The minion tries them in this order. Each is copied into the build: changing an endpoint later changes
-                nothing already built.
+                How the minion reaches its channels, tried in this order. Fill the settings in, or from one of the
+                operation's endpoints and then change what you need: they are copied, so editing the endpoint later
+                changes nothing here.
               </p>
               {shown.connections && <p className="text-sm text-destructive">{shown.connections}</p>}
               {form.connections.map((c, i) => {
-                const ep = endpointById.get(c.endpointId)
-                const params = kind.channelFields.get(ep?.moduleName ?? "") ?? []
-                const problem = shown[`connections[${i}]`] ?? (ep ? endpointUnusable(target, ep, channelVersions) : "This endpoint no longer exists")
+                const at = `connections[${i}]`
+                const ch = channels.get(c.moduleName)
                 return (
-                  <div key={`${c.endpointId}-${i}`} className="rounded-lg border">
-                    <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
-                      <span className="text-xs text-muted-foreground">{i + 1}.</span>
-                      <span className="font-mono text-sm font-medium">{ep?.name ?? "(deleted)"}</span>
-                      {ep && (
-                        <KindName type="channel" name={ep.moduleName} icon={channelIcons.get(ep.moduleName)} className="text-xs text-muted-foreground" />
-                      )}
-                      <div className="ml-auto flex items-center gap-1">
-                        <Button type="button" variant="ghost" size="icon-sm" title="Earlier" aria-label="Earlier" disabled={disabled || i === 0}
-                          onClick={() => setForm((f) => ({ ...f, connections: move(f.connections, i, -1) }))}>
-                          <ArrowUpIcon />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon-sm" title="Later" aria-label="Later" disabled={disabled || i === form.connections.length - 1}
-                          onClick={() => setForm((f) => ({ ...f, connections: move(f.connections, i, 1) }))}>
-                          <ArrowDownIcon />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon-sm" title="Remove" aria-label="Remove" disabled={disabled}
-                          onClick={() => setForm((f) => ({ ...f, connections: f.connections.filter((_, j) => j !== i) }))}>
-                          <XIcon />
-                        </Button>
-                      </div>
-                    </div>
-                    {problem && <p className="px-3 pt-2 text-sm text-destructive">{problem}</p>}
-                    {params.length > 0 && (
-                      <div className="divide-y px-3">
-                        {params.map((f) => (
-                          <FieldRow
-                            key={f.key}
-                            idPrefix={`conn-${i}`}
-                            field={f}
-                            draft={c.drafts[f.key]}
-                            onChange={(d) => setConnectionDraft(i, f.key, d)}
-                            error={shown[`connections[${i}].values.${f.key}`]}
-                            disabled={disabled}
-                            partial={mode === "preset"}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <ConnectionCard
+                    key={c.key}
+                    index={i}
+                    count={form.connections.length}
+                    connection={c}
+                    kind={kind}
+                    channel={ch}
+                    channelIcon={channelIcons.get(c.moduleName)}
+                    endpoints={endpoints.filter((e) => e.moduleName === c.moduleName)}
+                    settings={input.connections[i]?.settings ?? {}}
+                    errors={shown}
+                    disabled={disabled}
+                    partial={mode === "preset"}
+                    onName={(name) => updateConnection(i, (x) => ({ ...x, name }), `${at}.name`)}
+                    onSetting={(key, d) =>
+                      updateConnection(i, (x) => ({ ...x, settings: { ...x.settings, [key]: d } }), `${at}.settings.${key}`)
+                    }
+                    onParam={(key, d) => updateConnection(i, (x) => ({ ...x, drafts: { ...x.drafts, [key]: d } }), `${at}.values.${key}`)}
+                    onFill={(ep) => {
+                      if (ch) updateConnection(i, (x) => fillFromEndpoint(x, ch, ep), `${at}.settings.`, `${at}.name`)
+                    }}
+                    onMove={(by) => setConnections((cs) => move(cs, i, by))}
+                    onRemove={() => setConnections((cs) => cs.filter((_, j) => j !== i))}
+                  />
                 )
               })}
-              <Select
-                value={null}
-                onValueChange={(v) => {
-                  if (typeof v !== "string") return
-                  const ep = endpointById.get(v)
-                  setForm((f) => ({ ...f, connections: [...f.connections, connectionDraft(kind, v, ep?.moduleName)] }))
-                  clearServerError("connections")
-                }}
-                disabled={disabled || unusedEndpoints.length === 0}
-              >
-                <SelectTrigger className="w-full max-w-80" aria-label="Add an endpoint">
-                  <SelectValue
-                    placeholder={endpoints.length === 0 ? "No endpoints in this operation yet" : "Add an endpoint…"}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {unusedEndpoints.map((e) => {
-                    const why = endpointUnusable(target, e, channelVersions)
-                    return (
-                      <SelectItem key={e.id} value={e.id} disabled={why !== null} description={why ?? e.moduleName}>
-                        {e.name}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
+              <AddConnectionMenu
+                target={target}
+                channels={channels}
+                channelIcons={channelIcons}
+                endpoints={endpoints}
+                disabled={disabled}
+                onAdd={addConnection}
+              />
             </div>
-          </SettingsSection>
+          </section>
         </div>
         </div>
         </div>
@@ -618,31 +570,4 @@ function Editor({
 
 /** The form's own sections, around the factory's groups of fields. */
 const WHAT_TO_BUILD = "What to build"
-const ENDPOINTS = "Endpoints"
-
-function FieldRow({
-  idPrefix,
-  field: f,
-  draft,
-  onChange,
-  error,
-  disabled,
-  partial,
-}: {
-  idPrefix: string
-  field: FieldDef
-  draft: Draft | undefined
-  onChange: (d: Draft) => void
-  error?: string
-  disabled: boolean
-  partial: boolean
-}) {
-  const id = `${idPrefix}-${f.key}`
-  if (!draft) return null
-  return (
-    <SettingRow id={id} label={f.label} fieldKey={f.key} required={f.required && !partial} help={f.description ?? undefined} error={error}>
-      <FieldControl field={f} id={id} draft={draft} onChange={onChange} disabled={disabled} invalid={!!error} defaultValue={f.default} />
-    </SettingRow>
-  )
-}
-
+const CONNECTIONS = "Connections"

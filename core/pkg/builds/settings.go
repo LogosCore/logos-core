@@ -4,20 +4,50 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
-// ConnectionInput is one endpoint of a build or preset, by id, with the
-// factory's connection parameter values for it.
+// ConnectionInput is one connection of a build or preset: a channel kind,
+// its connection settings (by the channel's connection schema; a field without
+// a value takes its default) and the factory's connection parameter values
+// for it. Name is given to the minion with the settings and is unique among
+// the connections; empty, the connection is called <channel>-<position>.
 type ConnectionInput struct {
-	EndpointID string
+	ModuleName string
+	Name       string
+	Settings   map[string]any
 	Values     map[string]any
+}
+
+// connectionNamePattern: a connection is named like an endpoint.
+var connectionNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
+
+// compactConnections trims names and leaves empty values out, as compact does
+// for a build's values.
+func compactConnections(in []ConnectionInput) []ConnectionInput {
+	out := make([]ConnectionInput, len(in))
+	for i, c := range in {
+		out[i] = ConnectionInput{
+			ModuleName: strings.TrimSpace(c.ModuleName), Name: strings.TrimSpace(c.Name),
+			Settings: compact(c.Settings), Values: compact(c.Values),
+		}
+	}
+	return out
+}
+
+// connectionName is a connection's name, or its default.
+func connectionName(c ConnectionInput, i int) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	return fmt.Sprintf("%s-%d", c.ModuleName, i+1)
 }
 
 // settings are what a build is made of, and what a preset holds of it.
@@ -32,8 +62,8 @@ type settings struct {
 type checked struct {
 	target protocol.BuildTarget
 	fields []protocol.FieldSpec // the target's, shared ones first
-	// endpoints by connection index.
-	endpoints []channelendpoints.View
+	// channels are the connections' channel schemas, by connection index.
+	channels []*protocol.ConnectionSchema
 	// fileIDs are the build files the values and connection values name.
 	fileIDs []string
 }
@@ -74,29 +104,43 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	}
 
 	if len(st.Connections) == 0 && !partial {
-		out.add("connections", "at least one endpoint is required")
+		out.add("connections", "at least one connection is required")
 	}
-	c.endpoints = make([]channelendpoints.View, len(st.Connections))
+	c.channels = make([]*protocol.ConnectionSchema, len(st.Connections))
+	named := map[string]int{} // connection index by name
 	for i, conn := range st.Connections {
 		key := fmt.Sprintf("connections[%d]", i)
-		v, err := s.endpoints.Get(ctx, conn.EndpointID)
+		name := connectionName(conn, i)
+		j, taken := named[name]
 		switch {
-		case errors.Is(err, channelendpoints.ErrNotFound) || (err == nil && v.OperationID != op):
-			out.add(key, "no such endpoint in this operation")
-			continue
-		case err != nil:
-			return c, out, fmt.Errorf("load endpoint: %w", err)
+		case conn.Name != "" && !connectionNamePattern.MatchString(conn.Name):
+			out.add(key+".name", "must match %s", connectionNamePattern)
+		case taken:
+			out.add(key+".name", "connection %d is called %q too", j+1, name)
+		default:
+			named[name] = i
 		}
-		c.endpoints[i] = v
-		switch {
-		case len(v.Problems) > 0 || v.Schema == nil:
-			out.add(key, "endpoint %q cannot be used: it does not fit its channel's current schema", v.Name)
-			continue
-		case !schema.Supports(t, v.ModuleName, v.Schema.Version):
-			out.add(key, "target %q cannot connect through channel %q version %d", t.ID, v.ModuleName, v.Schema.Version)
+		if conn.ModuleName == "" {
+			out.add(key, "a channel is required")
 			continue
 		}
-		ch, _ := schema.Channel(v.ModuleName)
+		cs, err := s.channels.Schema(ctx, conn.ModuleName)
+		if err != nil {
+			return c, out, err
+		}
+		if cs == nil {
+			out.add(key, "no %q channel has declared minion connection settings", conn.ModuleName)
+			continue
+		}
+		c.channels[i] = cs
+		if !schema.Supports(t, conn.ModuleName, cs.Version) {
+			out.add(key, "target %q cannot connect through channel %q version %d", t.ID, conn.ModuleName, cs.Version)
+			continue
+		}
+		if err := s.checkValues(ctx, op, key+".settings.", cs.Fields, conn.Settings, partial, out, files); err != nil {
+			return c, out, err
+		}
+		ch, _ := schema.Channel(conn.ModuleName)
 		if err := s.checkValues(ctx, op, key+".values.", ch.Fields, conn.Values, partial, out, files); err != nil {
 			return c, out, err
 		}

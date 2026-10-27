@@ -2,7 +2,6 @@ package builds
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"path"
@@ -36,8 +35,9 @@ func artifactKey(op uuid.UUID, buildID string) string {
 }
 
 // CreateBuild validates a build against the factory kind's current schema and
-// queues it: defaults filled in, endpoints copied, a minion id chosen. The
-// scheduler then offers it to a factory instance.
+// queues it: defaults filled in, each connection's settings resolved against
+// its channel's current schema, a minion id chosen. The scheduler then offers
+// it to a factory instance.
 func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) (*models.Build, error) {
 	moduleName := strings.TrimSpace(in.ModuleName)
 	schema, err := s.schema(ctx, moduleName)
@@ -60,10 +60,7 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	}
 
 	values := compact(in.Values)
-	conns := make([]ConnectionInput, len(in.Connections))
-	for i, c := range in.Connections {
-		conns[i] = ConnectionInput{EndpointID: c.EndpointID, Values: compact(c.Values)}
-	}
+	conns := compactConnections(in.Connections)
 	c, probs, err := s.check(ctx, op, *schema, settings{Target: in.Target, Platform: in.Platform, Values: values, Connections: conns}, false)
 	if err != nil {
 		return nil, err
@@ -86,14 +83,16 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		b.PresetID = &pid
 	}
 	for i, conn := range conns {
-		export, err := s.export(ctx, c.endpoints[i].Id.Hex())
-		if err != nil {
-			return nil, err
-		}
-		ch, _ := schema.Channel(c.endpoints[i].ModuleName)
+		cs := c.channels[i]
+		ch, _ := schema.Channel(conn.ModuleName)
 		b.Connections.Items = append(b.Connections.Items, protocol.BuildConnection{
-			Endpoint: export,
-			Values:   protocol.ResolveFieldValues(ch.Fields, conn.Values),
+			Endpoint: protocol.ChannelEndpointExport{
+				Format:  protocol.ChannelEndpointExportV1,
+				Name:    connectionName(conn, i),
+				Channel: protocol.ExportChannel{ModuleName: conn.ModuleName, SchemaVersion: cs.Version},
+				Params:  protocol.ResolveConnectionValues(*cs, conn.Settings),
+			},
+			Values: protocol.ResolveFieldValues(ch.Fields, conn.Values),
 		})
 	}
 
@@ -113,23 +112,6 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		zap.String("target", b.Target), zap.String("platform", b.Platform))
 	s.wake()
 	return b, nil
-}
-
-// export is an endpoint's export as a build carries it.
-func (s *Service) export(ctx context.Context, endpointID string) (protocol.ChannelEndpointExport, error) {
-	var out protocol.ChannelEndpointExport
-	doc, err := s.endpoints.Export(ctx, endpointID)
-	if err != nil {
-		return out, fmt.Errorf("export endpoint: %w", err)
-	}
-	raw, err := json.Marshal(doc)
-	if err == nil {
-		err = json.Unmarshal(raw, &out)
-	}
-	if err != nil {
-		return out, fmt.Errorf("decode endpoint export: %w", err)
-	}
-	return out, nil
 }
 
 // Builds returns an operation's builds, newest first, at most limit (0: all).

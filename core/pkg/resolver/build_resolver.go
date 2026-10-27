@@ -368,17 +368,28 @@ func presetInput(ctx context.Context, input model.BuildPresetInput) (builds.Pres
 func connectionInputs(ctx context.Context, in []*model.BuildConnectionInput) ([]builds.ConnectionInput, error) {
 	out := make([]builds.ConnectionInput, len(in))
 	for i, c := range in {
-		out[i].EndpointID = c.EndpointID
-		if c.Values == nil {
-			continue
+		out[i].ModuleName = c.ModuleName
+		if c.Name != nil {
+			out[i].Name = *c.Name
 		}
-		values, ok := c.Values.(map[string]any)
-		if !ok {
+		var ok bool
+		if out[i].Settings, ok = optionalObject(c.Settings); !ok {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "connection settings must be an object")
+		}
+		if out[i].Values, ok = optionalObject(c.Values); !ok {
 			return nil, moduleGQLError(ctx, errCodeBadUserInput, "connection values must be an object")
 		}
-		out[i].Values = values
 	}
 	return out, nil
+}
+
+// optionalObject is a JSON input that may be null or an object.
+func optionalObject(v any) (map[string]any, bool) {
+	if v == nil {
+		return nil, true
+	}
+	m, ok := v.(map[string]any)
+	return m, ok
 }
 
 // mapBuildError turns service errors into coded GraphQL errors. Problems
@@ -453,10 +464,10 @@ func toPresetModel(v builds.PresetView) *model.BuildPreset {
 		CreatedBy: toActorModel(v.CreatedBy), UpdatedBy: toActorModel(v.UpdatedBy),
 		CreatedAt: v.CreatedAt.Format(time.RFC3339), UpdatedAt: v.UpdatedAt.Format(time.RFC3339),
 	}
-	for _, c := range v.Connections {
-		id := c.EndpointID.Hex()
+	for i, c := range v.Connections {
 		out.Connections = append(out.Connections, &model.BuildPresetConnection{
-			EndpointID: id, EndpointName: strPtr(v.EndpointNames[id]), Values: copyMap(c.Values),
+			ModuleName: c.ModuleName, Name: strPtr(c.Name), Settings: copyMap(c.Settings),
+			SchemaVersion: c.SchemaVersion, SchemaChanged: v.ConnectionSchemaChanged(i), Values: copyMap(c.Values),
 		})
 	}
 	for _, k := range protocol.SortedProblemKeys(v.Problems) {

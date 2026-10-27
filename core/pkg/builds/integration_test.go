@@ -42,8 +42,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry := repository.NewModuleRegistryRepository(db)
-	endpointRepo := repository.NewChannelEndpointRepository(db)
-	endpoints := channelendpoints.NewService(endpointRepo, registry)
+	channels := channelendpoints.NewService(repository.NewChannelEndpointRepository(db), registry)
 	s3 := blob.S3Config{Endpoint: e.SeaweedFSS3Endpoint, AccessKey: e.SeaweedFSS3AccessKey, SecretKey: e.SeaweedFSS3SecretKey, Bucket: e.BuildBucket}
 	store, err := blob.NewS3Store(ctx, s3)
 	if err != nil {
@@ -60,7 +59,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	svc := NewService(Repos{
 		Files: repository.NewBuildFileRepository(db), Presets: repository.NewBuildPresetRepository(db),
 		Builds: repository.NewBuildRepository(db), Minions: repository.NewMinionRepository(db),
-	}, registry, endpoints, rpc, store, signer, Config{}, zap.NewNop())
+	}, registry, channels, rpc, store, signer, Config{}, zap.NewNop())
 
 	op := uuid.New()
 	t.Cleanup(func() {
@@ -68,14 +67,8 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 		if err := svc.DeleteOperationData(ctx, op); err != nil {
 			t.Logf("cleanup: %v", err)
 		}
-		_ = endpointRepo.DeleteByOperationID(ctx, op)
 	})
 	actor := models.ModuleActor{Type: "user", ID: "integration-test", Name: "integration test"}
-	ep, err := endpoints.Create(ctx, op, "http", channelendpoints.Input{Name: "it-edge",
-		Values: map[string]any{"base_url": "https://edge.example.com"}, Actor: actor})
-	if err != nil {
-		t.Fatalf("create an endpoint (is the HTTP channel registered?): %v", err)
-	}
 	badge, err := svc.UploadFile(ctx, op, "badge.png", "image/png", strings.NewReader("\x89PNG not really"), 15, actor)
 	if err != nil {
 		t.Fatal(err)
@@ -83,12 +76,13 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 
 	b, err := svc.CreateBuild(ctx, op, BuildInput{
 		ModuleName: "bob", Target: "dummy", Platform: "any/any",
-		Values:      map[string]any{"kill_date": "2027-01-31T00:00:00Z", "punches": []any{"jab", "uppercut"}, "badge": badge.FileID.String()},
-		Connections: []ConnectionInput{{EndpointID: ep.Id.Hex(), Values: map[string]any{"path_prefix": "/cdn/assets/"}}},
-		Actor:       actor,
+		Values: map[string]any{"kill_date": "2027-01-31T00:00:00Z", "punches": []any{"jab", "uppercut"}, "badge": badge.FileID.String()},
+		Connections: []ConnectionInput{{ModuleName: "http", Name: "it-edge",
+			Settings: map[string]any{"base_url": "https://edge.example.com"}, Values: map[string]any{"path_prefix": "/cdn/assets/"}}},
+		Actor: actor,
 	})
 	if err != nil {
-		t.Fatalf("create the build (is BOB registered?): %v %v", err, problemsOf(err))
+		t.Fatalf("create the build (are BOB and the HTTP channel registered?): %v %v", err, problemsOf(err))
 	}
 	for !b.Finished() {
 		if ctx.Err() != nil {

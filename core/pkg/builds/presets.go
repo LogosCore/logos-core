@@ -41,15 +41,21 @@ type PresetView struct {
 	// Problems are why the preset does not fit now, keyed like
 	// ValidationError.Problems. Empty when it does.
 	Problems map[string]string
-	// EndpointNames are the current names of the endpoints the preset
-	// refers to, by id; a missing one was deleted.
-	EndpointNames map[string]string
+	// Channels are the connections' current channel schemas, by connection
+	// index; nil where no instance of the channel declared one.
+	Channels []*protocol.ConnectionSchema
 }
 
 // SchemaChanged reports whether the kind now declares another schema version
 // than the one the preset was saved against.
 func (v PresetView) SchemaChanged() bool {
 	return v.Schema != nil && v.Schema.Version != v.SchemaVersion
+}
+
+// ConnectionSchemaChanged reports whether connection i's channel now declares
+// another connection schema version than its settings were saved against.
+func (v PresetView) ConnectionSchemaChanged(i int) bool {
+	return i < len(v.Channels) && v.Channels[i] != nil && v.Channels[i].Version != v.Connections[i].SchemaVersion
 }
 
 // Presets returns an operation's presets, all kinds or one.
@@ -139,10 +145,7 @@ func (s *Service) applyPresetInput(ctx context.Context, p *models.BuildPreset, i
 		return invalid("no %q factory has declared a build schema", p.ModuleName)
 	}
 	values := compact(in.Values)
-	conns := make([]ConnectionInput, len(in.Connections))
-	for i, c := range in.Connections {
-		conns[i] = ConnectionInput{EndpointID: c.EndpointID, Values: compact(c.Values)}
-	}
+	conns := compactConnections(in.Connections)
 	c, probs, err := s.check(ctx, p.OperationID, *schema, settings{Target: in.Target, Platform: in.Platform, Values: values, Connections: conns}, true)
 	if err != nil {
 		return err
@@ -154,17 +157,19 @@ func (s *Service) applyPresetInput(ctx context.Context, p *models.BuildPreset, i
 	p.SchemaVersion, p.Values, p.FileIDs = schema.Version, values, c.fileIDs
 	p.Connections = make([]models.BuildPresetConnection, len(conns))
 	for i, conn := range conns {
-		p.Connections[i] = models.BuildPresetConnection{EndpointID: c.endpoints[i].Id, Values: conn.Values}
+		p.Connections[i] = models.BuildPresetConnection{
+			ModuleName: conn.ModuleName, Name: conn.Name, SchemaVersion: c.channels[i].Version,
+			Settings: conn.Settings, Values: conn.Values,
+		}
 	}
 	p.UpdatedBy, p.UpdatedAt = in.Actor, s.now()
 	return nil
 }
 
-// presetView checks a stored preset against the kind's current schema and
-// endpoints: a channel or factory release, or a deleted endpoint, can leave it
-// unfit.
+// presetView checks a stored preset against the kind's and its channels'
+// current schemas: a channel or factory release can leave it unfit.
 func (s *Service) presetView(ctx context.Context, p models.BuildPreset) (PresetView, error) {
-	v := PresetView{BuildPreset: p, EndpointNames: map[string]string{}}
+	v := PresetView{BuildPreset: p}
 	schema, err := s.schema(ctx, p.ModuleName)
 	if err != nil {
 		return v, err
@@ -176,17 +181,13 @@ func (s *Service) presetView(ctx context.Context, p models.BuildPreset) (PresetV
 	}
 	conns := make([]ConnectionInput, len(p.Connections))
 	for i, c := range p.Connections {
-		conns[i] = ConnectionInput{EndpointID: c.EndpointID.Hex(), Values: c.Values}
+		conns[i] = ConnectionInput{ModuleName: c.ModuleName, Name: c.Name, Settings: c.Settings, Values: c.Values}
 	}
 	c, probs, err := s.check(ctx, p.OperationID, *schema, settings{Target: p.Target, Platform: p.Platform, Values: p.Values, Connections: conns}, true)
 	if err != nil {
 		return v, err
 	}
-	for i, ep := range c.endpoints {
-		if ep.Name != "" {
-			v.EndpointNames[p.Connections[i].EndpointID.Hex()] = ep.Name
-		}
-	}
+	v.Channels = c.channels
 	if len(probs) > 0 {
 		v.Problems = probs
 	}

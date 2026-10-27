@@ -11,7 +11,9 @@
 #
 # An operation keeps build files (uploads for file fields, through
 # POST /api/v1/build-files) and presets (ready-to-use build settings, like
-# endpoints are ready-to-use connection values). A build asks a factory
+# endpoints are ready-to-use connection values). A build's or preset's
+# connections hold their own settings, by each channel's connection schema; the
+# form can fill one from an endpoint, which copies it. A build asks a factory
 # instance for one minion: core queues it, offers it to a live instance, follows
 # its progress and result, checks the artifact, and a successful build creates
 # the minion. Its artifact downloads from GET /api/v1/builds/{id}/artifact.
@@ -42,7 +44,7 @@ type BuildChannel {
   # Connection schema versions the minions read.
   versions: [Int!]!
   # The factory's connection parameters for this channel kind, set per
-  # endpoint of a build.
+  # connection of a build.
   fields: [ModuleField!]!
 }
 
@@ -92,17 +94,28 @@ type BuildFile {
 
 type BuildProblem {
   # Where the problem is: "target", "platform", "values.<key>", "connections",
-  # "connections[<i>]", "connections[<i>].values.<key>"; null when it is not
-  # one place's.
+  # "connections[<i>]", "connections[<i>].name",
+  # "connections[<i>].settings.<key>", "connections[<i>].values.<key>"; null
+  # when it is not one place's.
   key: String
   message: String!
 }
 
+# One connection of a preset.
 type BuildPresetConnection {
-  endpointId: ID!
-  # The endpoint's current name; null when it was deleted.
-  endpointName: String
-  # Connection parameter values by key.
+  # The channel kind, e.g. "http".
+  moduleName: String!
+  # What the minion calls the connection; null: "<channel>-<position>".
+  name: String
+  # Connection settings by the channel's connection schema field key, secrets
+  # included. Fields without a value use the schema's default.
+  settings: JSON!
+  # Connection schema version the settings were saved against.
+  schemaVersion: Int!
+  # The channel now declares another connection schema version: the settings
+  # may need a look.
+  schemaChanged: Boolean!
+  # The factory's connection parameter values by key.
   values: JSON!
 }
 
@@ -125,7 +138,7 @@ type BuildPreset {
   schemaVersion: Int!
   # The kind now declares another schema version.
   schemaChanged: Boolean!
-  # Why the preset does not fit the kind's current schema or endpoints;
+  # Why the preset does not fit the kind's or its channels' current schemas;
   # empty when it does.
   problems: [BuildProblem!]!
   # Grows with every change; updateBuildPreset compares against it.
@@ -136,10 +149,18 @@ type BuildPreset {
   updatedAt: String!
 }
 
+# One connection of a build or preset: a channel kind, its connection settings
+# and the factory's connection parameters for it.
 input BuildConnectionInput {
-  endpointId: ID!
-  # Connection parameter values by key. null, "" and [] leave a parameter
-  # unset (its default applies).
+  # The channel kind; the target must connect through it.
+  moduleName: String!
+  # What the minion calls the connection, a slug like an endpoint name, unique
+  # among the connections; empty: "<channel>-<position>".
+  name: String
+  # Connection settings by the channel's connection schema field key. null, ""
+  # and [] leave a setting unset (its default applies).
+  settings: JSON
+  # The factory's connection parameter values by key, the same way.
   values: JSON
 }
 
@@ -160,7 +181,7 @@ input BuildInput {
   # Values by field key; null, "" and [] leave a field unset (its default
   # applies). File fields take build file ids.
   values: JSON!
-  # The endpoints, in the order the minion tries them.
+  # The connections, in the order the minion tries them.
   connections: [BuildConnectionInput!]!
   # The preset the form was filled from, if any; recorded only.
   presetId: ID
@@ -200,7 +221,8 @@ type Build {
   schemaVersion: Int!
   # Every field with a value or a default, as the factory got them.
   values: JSON!
-  # The endpoints as copied: [{endpoint: <export>, values: {...}}].
+  # The connections as the factory got them: [{endpoint: <export>, values:
+  # {...}}], each export's params resolved over the channel's defaults.
   connections: JSON!
   # The id the minion sends on the data plane.
   minionId: String!

@@ -219,9 +219,12 @@ type ComplexityRoot struct {
 	}
 
 	BuildPresetConnection struct {
-		EndpointID   func(childComplexity int) int
-		EndpointName func(childComplexity int) int
-		Values       func(childComplexity int) int
+		ModuleName    func(childComplexity int) int
+		Name          func(childComplexity int) int
+		SchemaChanged func(childComplexity int) int
+		SchemaVersion func(childComplexity int) int
+		Settings      func(childComplexity int) int
+		Values        func(childComplexity int) int
 	}
 
 	BuildProblem struct {
@@ -2317,18 +2320,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BuildPreset.Values(childComplexity), true
 
-	case "BuildPresetConnection.endpointId":
-		if e.ComplexityRoot.BuildPresetConnection.EndpointID == nil {
+	case "BuildPresetConnection.moduleName":
+		if e.ComplexityRoot.BuildPresetConnection.ModuleName == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildPresetConnection.EndpointID(childComplexity), true
-	case "BuildPresetConnection.endpointName":
-		if e.ComplexityRoot.BuildPresetConnection.EndpointName == nil {
+		return e.ComplexityRoot.BuildPresetConnection.ModuleName(childComplexity), true
+	case "BuildPresetConnection.name":
+		if e.ComplexityRoot.BuildPresetConnection.Name == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildPresetConnection.EndpointName(childComplexity), true
+		return e.ComplexityRoot.BuildPresetConnection.Name(childComplexity), true
+	case "BuildPresetConnection.schemaChanged":
+		if e.ComplexityRoot.BuildPresetConnection.SchemaChanged == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildPresetConnection.SchemaChanged(childComplexity), true
+	case "BuildPresetConnection.schemaVersion":
+		if e.ComplexityRoot.BuildPresetConnection.SchemaVersion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildPresetConnection.SchemaVersion(childComplexity), true
+	case "BuildPresetConnection.settings":
+		if e.ComplexityRoot.BuildPresetConnection.Settings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildPresetConnection.Settings(childComplexity), true
 	case "BuildPresetConnection.values":
 		if e.ComplexityRoot.BuildPresetConnection.Values == nil {
 			break
@@ -8011,7 +8032,9 @@ extend type Mutation {
 #
 # An operation keeps build files (uploads for file fields, through
 # POST /api/v1/build-files) and presets (ready-to-use build settings, like
-# endpoints are ready-to-use connection values). A build asks a factory
+# endpoints are ready-to-use connection values). A build's or preset's
+# connections hold their own settings, by each channel's connection schema; the
+# form can fill one from an endpoint, which copies it. A build asks a factory
 # instance for one minion: core queues it, offers it to a live instance, follows
 # its progress and result, checks the artifact, and a successful build creates
 # the minion. Its artifact downloads from GET /api/v1/builds/{id}/artifact.
@@ -8042,7 +8065,7 @@ type BuildChannel {
   # Connection schema versions the minions read.
   versions: [Int!]!
   # The factory's connection parameters for this channel kind, set per
-  # endpoint of a build.
+  # connection of a build.
   fields: [ModuleField!]!
 }
 
@@ -8092,17 +8115,28 @@ type BuildFile {
 
 type BuildProblem {
   # Where the problem is: "target", "platform", "values.<key>", "connections",
-  # "connections[<i>]", "connections[<i>].values.<key>"; null when it is not
-  # one place's.
+  # "connections[<i>]", "connections[<i>].name",
+  # "connections[<i>].settings.<key>", "connections[<i>].values.<key>"; null
+  # when it is not one place's.
   key: String
   message: String!
 }
 
+# One connection of a preset.
 type BuildPresetConnection {
-  endpointId: ID!
-  # The endpoint's current name; null when it was deleted.
-  endpointName: String
-  # Connection parameter values by key.
+  # The channel kind, e.g. "http".
+  moduleName: String!
+  # What the minion calls the connection; null: "<channel>-<position>".
+  name: String
+  # Connection settings by the channel's connection schema field key, secrets
+  # included. Fields without a value use the schema's default.
+  settings: JSON!
+  # Connection schema version the settings were saved against.
+  schemaVersion: Int!
+  # The channel now declares another connection schema version: the settings
+  # may need a look.
+  schemaChanged: Boolean!
+  # The factory's connection parameter values by key.
   values: JSON!
 }
 
@@ -8125,7 +8159,7 @@ type BuildPreset {
   schemaVersion: Int!
   # The kind now declares another schema version.
   schemaChanged: Boolean!
-  # Why the preset does not fit the kind's current schema or endpoints;
+  # Why the preset does not fit the kind's or its channels' current schemas;
   # empty when it does.
   problems: [BuildProblem!]!
   # Grows with every change; updateBuildPreset compares against it.
@@ -8136,10 +8170,18 @@ type BuildPreset {
   updatedAt: String!
 }
 
+# One connection of a build or preset: a channel kind, its connection settings
+# and the factory's connection parameters for it.
 input BuildConnectionInput {
-  endpointId: ID!
-  # Connection parameter values by key. null, "" and [] leave a parameter
-  # unset (its default applies).
+  # The channel kind; the target must connect through it.
+  moduleName: String!
+  # What the minion calls the connection, a slug like an endpoint name, unique
+  # among the connections; empty: "<channel>-<position>".
+  name: String
+  # Connection settings by the channel's connection schema field key. null, ""
+  # and [] leave a setting unset (its default applies).
+  settings: JSON
+  # The factory's connection parameter values by key, the same way.
   values: JSON
 }
 
@@ -8160,7 +8202,7 @@ input BuildInput {
   # Values by field key; null, "" and [] leave a field unset (its default
   # applies). File fields take build file ids.
   values: JSON!
-  # The endpoints, in the order the minion tries them.
+  # The connections, in the order the minion tries them.
   connections: [BuildConnectionInput!]!
   # The preset the form was filled from, if any; recorded only.
   presetId: ID
@@ -8200,7 +8242,8 @@ type Build {
   schemaVersion: Int!
   # Every field with a value or a default, as the factory got them.
   values: JSON!
-  # The endpoints as copied: [{endpoint: <export>, values: {...}}].
+  # The connections as the factory got them: [{endpoint: <export>, values:
+  # {...}}], each export's params resolved over the channel's defaults.
   connections: JSON!
   # The id the minion sends on the data plane.
   minionId: String!
@@ -17616,10 +17659,16 @@ func (ec *executionContext) fieldContext_BuildPreset_connections(_ context.Conte
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "endpointId":
-				return ec.fieldContext_BuildPresetConnection_endpointId(ctx, field)
-			case "endpointName":
-				return ec.fieldContext_BuildPresetConnection_endpointName(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_BuildPresetConnection_moduleName(ctx, field)
+			case "name":
+				return ec.fieldContext_BuildPresetConnection_name(ctx, field)
+			case "settings":
+				return ec.fieldContext_BuildPresetConnection_settings(ctx, field)
+			case "schemaVersion":
+				return ec.fieldContext_BuildPresetConnection_schemaVersion(ctx, field)
+			case "schemaChanged":
+				return ec.fieldContext_BuildPresetConnection_schemaChanged(ctx, field)
 			case "values":
 				return ec.fieldContext_BuildPresetConnection_values(ctx, field)
 			}
@@ -17883,43 +17932,43 @@ func (ec *executionContext) fieldContext_BuildPreset_updatedAt(_ context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildPresetConnection_endpointId(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildPresetConnection_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildPresetConnection_endpointId,
+		ec.fieldContext_BuildPresetConnection_moduleName,
 		func(ctx context.Context) (any, error) {
-			return obj.EndpointID, nil
+			return obj.ModuleName, nil
 		},
 		nil,
-		ec.marshalNID2string,
+		ec.marshalNString2string,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildPresetConnection_endpointId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildPresetConnection_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "BuildPresetConnection",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildPresetConnection_endpointName(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildPresetConnection_name(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildPresetConnection_endpointName,
+		ec.fieldContext_BuildPresetConnection_name,
 		func(ctx context.Context) (any, error) {
-			return obj.EndpointName, nil
+			return obj.Name, nil
 		},
 		nil,
 		ec.marshalOString2ᚖstring,
@@ -17928,7 +17977,7 @@ func (ec *executionContext) _BuildPresetConnection_endpointName(ctx context.Cont
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildPresetConnection_endpointName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildPresetConnection_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "BuildPresetConnection",
 		Field:      field,
@@ -17936,6 +17985,93 @@ func (ec *executionContext) fieldContext_BuildPresetConnection_endpointName(_ co
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildPresetConnection_settings(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildPresetConnection_settings,
+		func(ctx context.Context) (any, error) {
+			return obj.Settings, nil
+		},
+		nil,
+		ec.marshalNJSON2interface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildPresetConnection_settings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildPresetConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildPresetConnection_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildPresetConnection_schemaVersion,
+		func(ctx context.Context) (any, error) {
+			return obj.SchemaVersion, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildPresetConnection_schemaVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildPresetConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildPresetConnection_schemaChanged(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildPresetConnection_schemaChanged,
+		func(ctx context.Context) (any, error) {
+			return obj.SchemaChanged, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildPresetConnection_schemaChanged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildPresetConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -52317,20 +52453,34 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"endpointId", "values"}
+	fieldsInOrder := [...]string{"moduleName", "name", "settings", "values"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
-		case "endpointId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("endpointId"))
-			data, err := ec.unmarshalNID2string(ctx, v)
+		case "moduleName":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("moduleName"))
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.EndpointID = data
+			it.ModuleName = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "settings":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("settings"))
+			data, err := ec.unmarshalOJSON2interface(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Settings = data
 		case "values":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("values"))
 			data, err := ec.unmarshalOJSON2interface(ctx, v)
@@ -55973,13 +56123,28 @@ func (ec *executionContext) _BuildPresetConnection(ctx context.Context, sel ast.
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("BuildPresetConnection")
-		case "endpointId":
-			out.Values[i] = ec._BuildPresetConnection_endpointId(ctx, field, obj)
+		case "moduleName":
+			out.Values[i] = ec._BuildPresetConnection_moduleName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "endpointName":
-			out.Values[i] = ec._BuildPresetConnection_endpointName(ctx, field, obj)
+		case "name":
+			out.Values[i] = ec._BuildPresetConnection_name(ctx, field, obj)
+		case "settings":
+			out.Values[i] = ec._BuildPresetConnection_settings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "schemaVersion":
+			out.Values[i] = ec._BuildPresetConnection_schemaVersion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "schemaChanged":
+			out.Values[i] = ec._BuildPresetConnection_schemaChanged(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "values":
 			out.Values[i] = ec._BuildPresetConnection_values(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

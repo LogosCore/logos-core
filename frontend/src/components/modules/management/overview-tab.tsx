@@ -15,7 +15,8 @@ type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
 
 /**
  * The minion connection settings this instance declared (read-only). Operators
- * fill them in as endpoints on an operation's Endpoints page.
+ * fill them in for each connection of a build, or keep them as endpoints on an
+ * operation's Endpoints page.
  */
 export function ConnectionSchema({ connection }: { connection: Connection }) {
   return (
@@ -85,7 +86,7 @@ export function BuildParameters({ build }: { build: Build }) {
             {c.fields.length > 0 ? (
               <FieldRows fields={c.fields} />
             ) : (
-              <div className="px-4 py-2 text-sm text-muted-foreground">None: endpoints are used as they are.</div>
+              <div className="px-4 py-2 text-sm text-muted-foreground">None: the connection settings are used as they are.</div>
             )}
           </SchemaGroup>
         ))}

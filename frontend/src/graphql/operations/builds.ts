@@ -54,8 +54,11 @@ export const BuildPresetFields = graphql(`
     platform
     values
     connections {
-      endpointId
-      endpointName
+      moduleName
+      name
+      settings
+      schemaVersion
+      schemaChanged
       values
     }
     schemaVersion

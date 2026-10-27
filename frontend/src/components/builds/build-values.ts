@@ -1,8 +1,8 @@
 // Pure value handling for minion builds: factory kinds as the forms use them,
-// the endpoints a target can connect through, the build and preset form's
+// the channels a target can connect through, the build and preset form's
 // drafts and what it submits, and display helpers. Field rules are the ones of
 // field-values.ts; errors are keyed like the server's problems ("values.<key>",
-// "connections[<i>].values.<key>", ...) so both land on the same control.
+// "connections[<i>].settings.<key>", ...) so both land on the same control.
 // No React here, so all of it is unit-tested directly.
 
 import {
@@ -15,6 +15,7 @@ import {
   type Draft,
   type FieldDef,
 } from "@/components/modules/management/field-values"
+import { isRecord, nameError, sameJSON, type Kind } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
 
 // Secrets in a build are operation data, edited as text like the rest.
@@ -133,33 +134,29 @@ export function targetFields(kind: FactoryKind, target: Target | undefined): Fie
 }
 
 // ---------------------------------------------------------------------------
-// Endpoints a target can connect through
+// Channels a target can connect through
 // ---------------------------------------------------------------------------
 
-export interface EndpointLike {
-  id: string
-  name: string
-  moduleName: string
-  problems: readonly { key?: string | null; message: string }[]
-}
+/** A channel kind as the build form uses it: its connection settings, sorted. */
+export type ChannelKind = Kind
 
 /**
- * Why an endpoint cannot be used for target, or null when it can: it must
- * fit its channel's current schema, of a kind and version the target speaks.
- * channelVersions are the channel kinds' current connection schema versions.
+ * Why target cannot connect through the channel kind moduleName, or null when
+ * it can: the channel must declare connection settings, of a version the
+ * target reads.
  */
-export function endpointUnusable(
+export function channelUnusable(
   target: Target | undefined,
-  ep: EndpointLike,
-  channelVersions: ReadonlyMap<string, number>,
+  moduleName: string,
+  channels: ReadonlyMap<string, ChannelKind>,
 ): string | null {
-  if (ep.problems.length > 0) return "Does not fit its channel's settings"
+  const ch = channels.get(moduleName)
+  if (!ch) return `No ${moduleName} channel declares connection settings`
   if (!target) return "Pick a target first"
-  const supported = target.channels.find((c) => c.moduleName === ep.moduleName)
-  if (!supported) return `This target does not speak ${ep.moduleName}`
-  const version = channelVersions.get(ep.moduleName)
-  if (version === undefined || !supported.versions.includes(version)) {
-    return `The ${ep.moduleName} channel is at settings v${version ?? "?"}; this factory reads v${supported.versions.join(", v")}`
+  const supported = target.channels.find((c) => c.moduleName === moduleName)
+  if (!supported) return `This target does not speak ${moduleName}`
+  if (!supported.versions.includes(ch.version)) {
+    return `The ${moduleName} channel is at settings v${ch.version}; this factory reads v${supported.versions.join(", v")}`
   }
   return null
 }
@@ -168,10 +165,21 @@ export function endpointUnusable(
 // The form
 // ---------------------------------------------------------------------------
 
+/** One connection: a channel kind, its settings, the factory's options for it. */
 export interface ConnectionDraft {
-  endpointId: string
-  /** The factory's connection parameters for the endpoint's channel kind. */
+  /** Tells connections apart while they move and go. */
+  key: string
+  moduleName: string
+  /** What the minion calls the connection; "" for "<channel>-<position>". */
+  name: string
+  /** The endpoint the settings were last filled from. */
+  filledFrom: string | null
+  /** The channel's connection settings. */
+  settings: Record<string, Draft>
+  /** The factory's connection parameters for the channel kind. */
   drafts: Record<string, Draft>
+  /** What the form says about the connection: settings of another version, settings left out. */
+  notes: string[]
 }
 
 export interface BuildForm {
@@ -181,12 +189,23 @@ export interface BuildForm {
   connections: ConnectionDraft[]
 }
 
+/** A connection as a preset holds it, or as an earlier build's turns into. */
+export interface ConnectionSource {
+  moduleName: string
+  name?: string | null
+  /** The channel's settings version they were saved against. */
+  schemaVersion?: number | null
+  settings?: Record<string, unknown> | null
+  values?: Record<string, unknown> | null
+  notes?: readonly string[]
+}
+
 /** What a form is filled from: a preset, or an earlier build. */
 export interface FormSource {
   target: string
   platform?: string | null
   values?: Record<string, unknown> | null
-  connections?: readonly { endpointId: string; values?: Record<string, unknown> | null }[]
+  connections?: readonly ConnectionSource[]
 }
 
 function draftsFor(fields: readonly FieldDef[], values: Record<string, unknown> | null | undefined): Record<string, Draft> {
@@ -195,24 +214,54 @@ function draftsFor(fields: readonly FieldDef[], values: Record<string, unknown> 
   return out
 }
 
-/** Drafts for an endpoint's connection parameters. */
-export function connectionDraft(
-  kind: FactoryKind,
-  endpointId: string,
-  moduleName: string | undefined,
-  values?: Record<string, unknown> | null,
-): ConnectionDraft {
-  return { endpointId, drafts: draftsFor(kind.channelFields.get(moduleName ?? "") ?? [], values) }
+let lastKey = 0
+
+/** A connection through ch (undefined: the channel declares no settings now), from source. */
+export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, source: ConnectionSource): ConnectionDraft {
+  const notes = [...(source.notes ?? [])]
+  if (ch && typeof source.schemaVersion === "number" && source.schemaVersion !== ch.version) {
+    notes.unshift(`Saved for ${ch.name} settings v${source.schemaVersion}; the channel is at v${ch.version}. Check the settings.`)
+  }
+  return {
+    key: `connection-${++lastKey}`,
+    moduleName: source.moduleName,
+    name: source.name ?? "",
+    filledFrom: null,
+    settings: draftsFor(ch?.fields ?? [], source.settings),
+    drafts: draftsFor(kind.channelFields.get(source.moduleName) ?? [], source.values),
+    notes,
+  }
 }
 
 /**
- * A form's start: the source's settings, or the first target with its only
- * platform when it has one. endpointKinds maps endpoint ids to channel kinds.
+ * The connection with its settings replaced by an endpoint's values. It takes
+ * the endpoint's name too, unless the operator named it.
  */
+export function fillFromEndpoint(
+  c: ConnectionDraft,
+  ch: ChannelKind,
+  ep: { name: string; values?: unknown },
+): ConnectionDraft {
+  const named = c.name.trim() !== "" && c.name !== c.filledFrom
+  return {
+    ...c,
+    name: named ? c.name : ep.name,
+    filledFrom: ep.name,
+    settings: draftsFor(ch.fields, isRecord(ep.values) ? ep.values : null),
+    notes: [],
+  }
+}
+
+/** The name the server gives connection i when it has none. */
+export function defaultConnectionName(moduleName: string, i: number): string {
+  return `${moduleName}-${i + 1}`
+}
+
+/** A form's start: the source's settings, or the first target with its only platform when it has one. */
 export function initialForm(
   kind: FactoryKind,
   source: FormSource | null,
-  endpointKinds: ReadonlyMap<string, string>,
+  channels: ReadonlyMap<string, ChannelKind>,
 ): BuildForm {
   const target = kind.targets.find((t) => t.id === source?.target) ?? kind.targets[0]
   const platform =
@@ -225,10 +274,69 @@ export function initialForm(
     target: target?.id ?? "",
     platform,
     drafts: draftsFor(targetFields(kind, target), source?.values),
-    connections: (source?.connections ?? []).map((c) =>
-      connectionDraft(kind, c.endpointId, endpointKinds.get(c.endpointId), c.values),
-    ),
+    connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c)),
   }
+}
+
+/**
+ * What "build again" fills the form with. A build holds every default
+ * filled in: values equal to today's defaults are left out, so they read as
+ * defaults; so are connection names the server gave, and settings the channel
+ * no longer declares, with a note.
+ */
+export function sourceFromBuild(
+  kind: FactoryKind,
+  build: { target: string; platform: string; values?: unknown; connections?: unknown },
+  channels: ReadonlyMap<string, ChannelKind>,
+): FormSource {
+  const target = kind.targets.find((t) => t.id === build.target)
+  const records = Array.isArray(build.connections) ? build.connections : []
+  const connections = records.map((raw: unknown, i): ConnectionSource => {
+    const rec = isRecord(raw) ? raw : {}
+    const ep = isRecord(rec.endpoint) ? rec.endpoint : {}
+    const channel = isRecord(ep.channel) ? ep.channel : {}
+    const moduleName = typeof channel.module_name === "string" ? channel.module_name : ""
+    const params = isRecord(ep.params) ? ep.params : {}
+    const ch = channels.get(moduleName)
+    const notes: string[] = []
+    const dropped = ch ? Object.keys(params).filter((k) => !ch.fields.some((f) => f.key === k)) : []
+    if (ch && dropped.length > 0) {
+      notes.push(`Left out, not settings of ${moduleName} v${ch.version}: ${dropped.sort().join(", ")}.`)
+    }
+    const name = typeof ep.name === "string" && ep.name !== defaultConnectionName(moduleName, i) ? ep.name : null
+    return {
+      moduleName,
+      name,
+      schemaVersion: typeof channel.schema_version === "number" ? channel.schema_version : null,
+      settings: withoutDefaults(ch?.fields ?? [], params),
+      values: withoutDefaults(kind.channelFields.get(moduleName) ?? [], isRecord(rec.values) ? rec.values : {}),
+      notes,
+    }
+  })
+  return {
+    target: build.target,
+    platform: build.platform,
+    values: withoutDefaults(targetFields(kind, target), isRecord(build.values) ? build.values : {}),
+    connections,
+  }
+}
+
+/** values of fields, but those equal to their field's default. */
+function withoutDefaults(fields: readonly FieldDef[], values: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const f of fields) {
+    const v = values[f.key]
+    if (v !== undefined && v !== null && !sameJSON(v, f.default)) out[f.key] = v
+  }
+  return out
+}
+
+/** One connection as createBuild and the preset writes take it. */
+export interface ConnectionInput {
+  moduleName: string
+  name: string | null
+  settings: Record<string, unknown>
+  values: Record<string, unknown>
 }
 
 /** What createBuild / a preset write takes from the form. */
@@ -236,7 +344,7 @@ export interface FormInput {
   target: string
   platform: string
   values: Record<string, unknown>
-  connections: { endpointId: string; values: Record<string, unknown> }[]
+  connections: ConnectionInput[]
 }
 
 function evaluateFields(
@@ -264,14 +372,14 @@ function evaluateFields(
 
 /**
  * The form as createBuild or a preset takes it, and its errors. A build
- * (partial false) needs a platform, an endpoint and every required value; a
- * preset may leave them out.
+ * (partial false) needs a platform, a connection and every required value
+ * and setting; a preset may leave them out.
  */
 export function evaluateForm(
   kind: FactoryKind,
   form: BuildForm,
   partial: boolean,
-  endpointKinds: ReadonlyMap<string, string>,
+  channels: ReadonlyMap<string, ChannelKind>,
 ): { input: FormInput; errors: Record<string, string> } {
   const errors: Record<string, string> = {}
   const target = kind.targets.find((t) => t.id === form.target)
@@ -280,10 +388,24 @@ export function evaluateForm(
   else if (form.platform !== "" && !target.platforms.includes(form.platform)) errors.platform = "Not a platform of this target"
 
   const values = evaluateFields("values.", targetFields(kind, target), form.drafts, partial, errors)
-  if (form.connections.length === 0 && !partial) errors.connections = "Add at least one endpoint"
-  const connections = form.connections.map((c, i) => {
-    const fields = kind.channelFields.get(endpointKinds.get(c.endpointId) ?? "") ?? []
-    return { endpointId: c.endpointId, values: evaluateFields(`connections[${i}].values.`, fields, c.drafts, partial, errors) }
+  if (form.connections.length === 0 && !partial) errors.connections = "Add at least one connection"
+  const named = new Map<string, number>()
+  const connections = form.connections.map((c, i): ConnectionInput => {
+    const at = `connections[${i}]`
+    const why = channelUnusable(target, c.moduleName, channels)
+    if (why) errors[at] = why
+    const name = c.name.trim()
+    const resolved = name || defaultConnectionName(c.moduleName, i)
+    const nameErr = name === "" ? null : nameError(name)
+    if (nameErr) errors[`${at}.name`] = nameErr
+    else if (named.has(resolved)) errors[`${at}.name`] = `Connection ${named.get(resolved)! + 1} is called ${resolved} too`
+    else named.set(resolved, i)
+    return {
+      moduleName: c.moduleName,
+      name: name || null,
+      settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, partial, errors),
+      values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, partial, errors),
+    }
   })
   return { input: { target: form.target, platform: form.platform, values, connections }, errors }
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/blob"
-	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -461,29 +460,13 @@ func (f *fakeRegistry) setActive(mods ...models.Module) {
 	f.active = mods
 }
 
-type fakeEndpoints struct {
-	views map[string]channelendpoints.View
+// fakeChannels holds channel kinds' connection schemas by name.
+type fakeChannels struct {
+	schemas map[string]*protocol.ConnectionSchema
 }
 
-func (f *fakeEndpoints) Get(_ context.Context, id string) (channelendpoints.View, error) {
-	v, ok := f.views[id]
-	if !ok {
-		return channelendpoints.View{}, channelendpoints.ErrNotFound
-	}
-	return v, nil
-}
-
-func (f *fakeEndpoints) Export(_ context.Context, id string) (map[string]any, error) {
-	v, ok := f.views[id]
-	if !ok {
-		return nil, channelendpoints.ErrNotFound
-	}
-	return map[string]any{
-		"format":  protocol.ChannelEndpointExportV1,
-		"name":    v.Name,
-		"channel": map[string]any{"module_name": v.ModuleName, "schema_version": v.Schema.Version},
-		"params":  protocol.ResolveConnectionValues(*v.Schema, v.Values),
-	}, nil
+func (f *fakeChannels) Schema(_ context.Context, moduleName string) (*protocol.ConnectionSchema, error) {
+	return f.schemas[moduleName], nil
 }
 
 // call is one call to a factory's rpc_queue.
