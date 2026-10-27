@@ -89,7 +89,7 @@ export function AppLayout() {
   // The attention channel. Publishes what the operator is currently looking
   // at so an AI agent connected over MCP can follow along rather than asking
   // which operation or page to work on. Mounted here because it needs router
-  // context (App.tsx nests BrowserRouter inside the providers) and because
+  // context (App.tsx nests the router inside the providers) and because
   // every authed surface should report, not just one page.
   useFocusBeacon()
 

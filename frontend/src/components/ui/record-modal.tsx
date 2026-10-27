@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode, type Ref } from "react"
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type Ref } from "react"
+import { useBlocker } from "react-router"
 import { XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,51 +10,96 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { leavesRecordModal } from "@/lib/record-modals"
 
 // The frame of the build and endpoint modals (components/layout/
 // record-modals.tsx): near full screen, a header row with the record's title,
-// its actions and a close button, and a body that scrolls. A form in it
-// reports unsaved changes with useCloseGuard; closing it then asks first,
-// whichever way it is closed (Esc, a click outside, the close button, Cancel).
+// its actions and a close button, and a body that scrolls.
+//
+// A form in it reports unsaved changes with useCloseGuard. A navigation that
+// would then close the modal, or put another in its place, asks first. That
+// covers every way out: Esc, a click outside, the close button and Cancel
+// all close it by navigating, and so do Back, Forward and links. Reloading or
+// leaving the site gets the browser's own prompt instead.
 
 const RequestCloseContext = createContext<() => void>(() => {})
 const GuardContext = createContext<(dirty: boolean) => void>(() => {})
+const SavedContext = createContext<() => void>(() => {})
 
-/** Closes the modal, asking first when its form has unsaved changes. */
+/** Closes the modal; with unsaved changes in its form, asks first. */
 export function useRequestClose(): () => void {
   return useContext(RequestCloseContext)
 }
 
-/** Marks the modal's form as having unsaved changes while dirty is true. */
-export function useCloseGuard(dirty: boolean) {
+/**
+ * Marks the modal's form as having unsaved changes while dirty is true.
+ * Returns saved(): call it after a save, just before closing the modal or
+ * moving it on to what was saved, so that one navigation does not ask.
+ */
+export function useCloseGuard(dirty: boolean): () => void {
   const setDirty = useContext(GuardContext)
   useEffect(() => {
     setDirty(dirty)
     return () => setDirty(false)
   }, [dirty, setDirty])
+  return useContext(SavedContext)
 }
 
-export function RecordModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+export function RecordModal({
+  open,
+  onClose,
+  onClosed,
+  children,
+}: {
+  /** False once the URL no longer names it: it fades out, then onClosed. */
+  open: boolean
+  onClose: () => void
+  onClosed: () => void
+  children: ReactNode
+}) {
   const [dirty, setDirty] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const requestClose = () => (dirty ? setConfirming(true) : onClose())
+  // One navigation let through, set by saved(). Whichever navigation comes
+  // next uses it up, so it cannot wait around for a later one.
+  const pass = useRef(false)
+  const saved = useCallback(() => {
+    pass.current = true
+  }, [])
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    const passing = pass.current
+    pass.current = false
+    return dirty && !passing && leavesRecordModal(currentLocation, nextLocation)
+  })
+
+  useEffect(() => {
+    if (!dirty) return
+    const ask = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      // Still required by some browsers to show the prompt at all.
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", ask)
+    return () => window.removeEventListener("beforeunload", ask)
+  }, [dirty])
 
   return (
-    <Dialog open onOpenChange={(open) => !open && requestClose()}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      onOpenChangeComplete={(o) => !o && onClosed()}
+    >
       <DialogContent
         showCloseButton={false}
         className="flex h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100svh-4rem)] sm:max-w-[calc(100%-4rem)] max-sm:h-svh max-sm:max-w-none max-sm:rounded-none"
       >
-        <RequestCloseContext.Provider value={requestClose}>
-          <GuardContext.Provider value={setDirty}>{children}</GuardContext.Provider>
+        <RequestCloseContext.Provider value={onClose}>
+          <GuardContext.Provider value={setDirty}>
+            <SavedContext.Provider value={saved}>{children}</SavedContext.Provider>
+          </GuardContext.Provider>
         </RequestCloseContext.Provider>
         <DiscardChangesDialog
-          open={confirming}
-          onKeep={() => setConfirming(false)}
-          onDiscard={() => {
-            setConfirming(false)
-            onClose()
-          }}
+          open={blocker.state === "blocked"}
+          onKeep={() => blocker.reset?.()}
+          onDiscard={() => blocker.proceed?.()}
         />
       </DialogContent>
     </Dialog>

@@ -174,7 +174,7 @@ function EndpointEditor({
   // Changed from how it opened: closing then asks before throwing it away.
   const snapshot = JSON.stringify({ name, description, drafts })
   const [initial] = useState(snapshot)
-  useCloseGuard(snapshot !== initial)
+  const saved = useCloseGuard(snapshot !== initial)
   const body = useRef<HTMLDivElement>(null)
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
@@ -224,6 +224,7 @@ function EndpointEditor({
         await create.mutateAsync({ operationId, moduleName: kind.name, input })
         toast.success("Endpoint created")
       }
+      saved()
       close()
     } catch (err) {
       if (graphqlErrorCode(err) === "CONFLICT") {

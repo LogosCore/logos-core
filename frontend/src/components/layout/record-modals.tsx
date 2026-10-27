@@ -1,6 +1,6 @@
-import { lazy, Suspense } from "react"
+import { lazy, Suspense, useState } from "react"
 import { useSearchParams } from "react-router"
-import { recordModalOf } from "@/lib/record-modals"
+import { recordModalKey, recordModalOf } from "@/lib/record-modals"
 
 // Lazy: the modals and everything they show load the first time one opens,
 // not with the shell every page waits for.
@@ -17,13 +17,20 @@ const EndpointModal = lazy(() =>
 export function RecordModals() {
   const [params] = useSearchParams()
   const modal = recordModalOf(params)
-  if (!modal) return null
+  // The last modal the URL named. Once the URL drops it, it stays on screen
+  // closed while it fades out, and goes when the fade ends.
+  const [shown, setShown] = useState(modal)
+  if (modal && recordModalKey(modal) !== recordModalKey(shown)) setShown(modal)
+  const current = modal ?? shown
+  if (!current) return null
+  const open = modal !== null
+  const closed = () => setShown(null)
   return (
     <Suspense fallback={null}>
-      {modal.kind === "build" || modal.kind === "new-build" ? (
-        <BuildModal modal={modal} />
+      {current.kind === "build" || current.kind === "new-build" ? (
+        <BuildModal modal={current} open={open} onClosed={closed} />
       ) : (
-        <EndpointModal modal={modal} />
+        <EndpointModal modal={current} open={open} onClosed={closed} />
       )}
     </Suspense>
   )

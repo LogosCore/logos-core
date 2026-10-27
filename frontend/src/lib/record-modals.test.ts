@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { recordModalOf, searchOf, withRecordModal, type RecordModal } from "./record-modals"
+import {
+  leavesRecordModal,
+  recordModalKey,
+  recordModalOf,
+  searchOf,
+  withRecordModal,
+  type RecordModal,
+} from "./record-modals"
 
 const params = (s: string) => new URLSearchParams(s)
 
@@ -41,6 +48,37 @@ describe("withRecordModal", () => {
       { kind: "new-endpoint", channel: "http", from: "e-1" },
     ]
     for (const m of modals) expect(recordModalOf(withRecordModal(params("q=1"), m))).toEqual(m)
+  })
+})
+
+describe("recordModalKey", () => {
+  it("is equal for equal modals only", () => {
+    expect(recordModalKey({ kind: "build", id: "b-1" })).toBe(recordModalKey({ kind: "build", id: "b-1" }))
+    expect(recordModalKey({ kind: "build", id: "b-1" })).not.toBe(recordModalKey({ kind: "build", id: "b-2" }))
+    expect(recordModalKey({ kind: "new-build", factory: "bob", from: null })).not.toBe(
+      recordModalKey({ kind: "new-build", factory: "bob", from: "b-1" }),
+    )
+    expect(recordModalKey(null)).toBe("")
+  })
+})
+
+describe("leavesRecordModal", () => {
+  const at = (pathname: string, search: string) => ({ pathname, search })
+
+  it("is closing the modal, or putting another in its place", () => {
+    const editing = at("/builds", "?newBuild=bob")
+    expect(leavesRecordModal(editing, at("/builds", ""))).toBe(true)
+    expect(leavesRecordModal(editing, at("/builds", "?build=b-1"))).toBe(true)
+    expect(leavesRecordModal(editing, at("/builds", "?newBuild=bob&buildFrom=b-1"))).toBe(true)
+    expect(leavesRecordModal(editing, at("/wiki", "?newBuild=bob"))).toBe(true)
+  })
+
+  it("is not a change to the page's own query", () => {
+    expect(leavesRecordModal(at("/findings", "?endpoint=e-1"), at("/findings", "?ops=all&endpoint=e-1"))).toBe(false)
+  })
+
+  it("is not anything when no modal is open", () => {
+    expect(leavesRecordModal(at("/builds", "?q=1"), at("/wiki", ""))).toBe(false)
   })
 })
 

@@ -131,7 +131,7 @@ function Editor({
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
   // Changed from how it opened: closing then asks before throwing it away.
   const [initial] = useState(() => JSON.stringify(form))
-  useCloseGuard(JSON.stringify(form) !== initial)
+  const saved = useCloseGuard(JSON.stringify(form) !== initial)
   const body = useRef<HTMLDivElement>(null)
   // The endpoint picker: adding a connection, or filling the one keyed fill.
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
@@ -225,6 +225,7 @@ function Editor({
         },
       })
       toast.success("Build queued")
+      saved()
       open({ kind: "build", id: res.createBuild.id })
     } catch (err) {
       const problems = problemsFromError(err)

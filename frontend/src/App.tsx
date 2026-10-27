@@ -1,5 +1,6 @@
 import { lazy, useEffect, useRef, type ComponentType } from "react"
-import { BrowserRouter, Navigate, Route, Routes, useParams, useSearchParams } from "react-router"
+import { createBrowserRouter, Navigate, Route, Routes, useParams, useSearchParams } from "react-router"
+import { RouterProvider } from "react-router/dom"
 import { QueryProvider } from "@/providers/query-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -55,6 +56,67 @@ function RecordPageRedirect({ list }: { list: "builds" | "endpoints" }) {
   return <Navigate to={`/${list}${searchOf(withRecordModal(new URLSearchParams(), modal))}`} replace />
 }
 
+function AppRoutes() {
+  return (
+    <PageBoundary fullScreen>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/enroll" element={<EnrollPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            {/* No landing page: Tasks is the working surface and shows a
+                "pick an operation" prompt when nothing is scoped. */}
+            <Route index element={<Navigate to="/wiki" replace />} />
+            <Route path="operations" element={<OperationsPage />} />
+            <Route path="users" element={<UsersPage />} />
+            <Route path="modules" element={<ModulesPage />} />
+            <Route path="modules/:instance" element={<ModuleDetailPage />} />
+            <Route path="skills" element={<SkillsPage />} />
+            <Route path="wiki" element={<WikiPage />} />
+            <Route path="wiki/:documentId" element={<WikiPage />} />
+            <Route path="findings" element={<FindingsPage />} />
+            <Route path="tasks" element={<TasksPage />} />
+            <Route path="endpoints" element={<EndpointsPage />} />
+            <Route path="builds" element={<BuildsPage />} />
+            {/* Builds and endpoints open in modals now (?build=<id>, …);
+                their old pages, for anyone's bookmark. */}
+            <Route path="endpoints/new" element={<RecordPageRedirect list="endpoints" />} />
+            <Route path="endpoints/:id" element={<RecordPageRedirect list="endpoints" />} />
+            <Route path="builds/new" element={<RecordPageRedirect list="builds" />} />
+            <Route path="builds/:id" element={<RecordPageRedirect list="builds" />} />
+            <Route path="timeline" element={<TimelinePage />} />
+            {/* One route for both tabs: the page reads the tab off the
+                pathname, and a single element means switching tabs
+                reconciles rather than remounting, so the filters in the URL
+                and the sheet on screen survive the navigation. */}
+            <Route path="agents/*" element={<AgentsPage />} />
+            {/* Where agent activity used to live, for anyone's bookmark. */}
+            <Route
+              path="agent-activity"
+              element={<Navigate to="/agents/activity" replace />}
+            />
+          </Route>
+          {/* Chromeless print view — sits inside ProtectedRoute so the
+              auth guard still applies, but outside AppLayout so it
+              renders without the sidebar / top nav. The browser's print
+              dialog opens automatically once the document loads; the
+              user picks "Save as PDF" from there. */}
+          <Route
+            path="wiki/:documentId/print"
+            element={<WikiPrintPage />}
+          />
+        </Route>
+      </Routes>
+    </PageBoundary>
+  )
+}
+
+// A data router, because only it has useBlocker: a build or endpoint modal
+// with unsaved changes asks before a navigation closes it (components/ui/
+// record-modal.tsx). The routes stay declared with <Routes>, under a single
+// catch-all route, the way React Router's guide moves an app across.
+const router = createBrowserRouter([{ path: "*", element: <AppRoutes /> }])
+
 function App() {
   const checkAuth = useAuthStore((s) => s.checkAuth)
   const reachable = useConnectivityStore((s) => s.reachable)
@@ -84,58 +146,7 @@ function App() {
       <ThemeProvider>
         <Toaster />
         <ConnectivityBanner />
-        <BrowserRouter>
-        <PageBoundary fullScreen>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/enroll" element={<EnrollPage />} />
-          <Route element={<ProtectedRoute />}>
-            <Route element={<AppLayout />}>
-              {/* No landing page: Tasks is the working surface and shows a
-                  "pick an operation" prompt when nothing is scoped. */}
-              <Route index element={<Navigate to="/wiki" replace />} />
-              <Route path="operations" element={<OperationsPage />} />
-              <Route path="users" element={<UsersPage />} />
-              <Route path="modules" element={<ModulesPage />} />
-              <Route path="modules/:instance" element={<ModuleDetailPage />} />
-              <Route path="skills" element={<SkillsPage />} />
-              <Route path="wiki" element={<WikiPage />} />
-              <Route path="wiki/:documentId" element={<WikiPage />} />
-              <Route path="findings" element={<FindingsPage />} />
-              <Route path="tasks" element={<TasksPage />} />
-              <Route path="endpoints" element={<EndpointsPage />} />
-              <Route path="builds" element={<BuildsPage />} />
-              {/* Builds and endpoints open in modals now (?build=<id>, …);
-                  their old pages, for anyone's bookmark. */}
-              <Route path="endpoints/new" element={<RecordPageRedirect list="endpoints" />} />
-              <Route path="endpoints/:id" element={<RecordPageRedirect list="endpoints" />} />
-              <Route path="builds/new" element={<RecordPageRedirect list="builds" />} />
-              <Route path="builds/:id" element={<RecordPageRedirect list="builds" />} />
-              <Route path="timeline" element={<TimelinePage />} />
-              {/* One route for both tabs: the page reads the tab off the
-                  pathname, and a single element means switching tabs
-                  reconciles rather than remounting, so the filters in the URL
-                  and the sheet on screen survive the navigation. */}
-              <Route path="agents/*" element={<AgentsPage />} />
-              {/* Where agent activity used to live, for anyone's bookmark. */}
-              <Route
-                path="agent-activity"
-                element={<Navigate to="/agents/activity" replace />}
-              />
-            </Route>
-            {/* Chromeless print view — sits inside ProtectedRoute so the
-                auth guard still applies, but outside AppLayout so it
-                renders without the sidebar / top nav. The browser's print
-                dialog opens automatically once the document loads; the
-                user picks "Save as PDF" from there. */}
-            <Route
-              path="wiki/:documentId/print"
-              element={<WikiPrintPage />}
-            />
-          </Route>
-        </Routes>
-        </PageBoundary>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </ThemeProvider>
     </QueryProvider>
   )

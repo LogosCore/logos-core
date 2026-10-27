@@ -62,6 +62,30 @@ export function withRecordModal(params: URLSearchParams, modal: RecordModal | nu
   return next
 }
 
+/** The same string for the same modal; "" for none. */
+export function recordModalKey(modal: RecordModal | null): string {
+  return modal ? withRecordModal(new URLSearchParams(), modal).toString() : ""
+}
+
+interface Place {
+  pathname: string
+  search: string
+}
+
+/**
+ * Whether a navigation closes the modal from names, or puts another in its
+ * place: what a form with unsaved changes asks about first. A change to the
+ * page's own query keeps the modal, and goes through.
+ */
+export function leavesRecordModal(from: Place, to: Place): boolean {
+  const modal = recordModalOf(new URLSearchParams(from.search))
+  if (!modal) return false
+  return (
+    from.pathname !== to.pathname ||
+    recordModalKey(modal) !== recordModalKey(recordModalOf(new URLSearchParams(to.search)))
+  )
+}
+
 /** "?query" for params, or "" when there is none. */
 export function searchOf(params: URLSearchParams): string {
   const s = params.toString()

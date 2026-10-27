@@ -27,7 +27,10 @@ import zlib from "node:zlib"
 // explanation in the commit message.
 //
 // At the time of writing the critical path is 964 KB raw / 269 KB served.
-const BUDGET_RAW_KB = 1_050
+// Raw was raised from 1 050 KB when the app moved to React Router's data
+// router, which useBlocker needs (an open build or endpoint form asks before
+// Back drops its changes): +54 KB raw / +16 KB served, to 1 056 / 293.
+const BUDGET_RAW_KB = 1_100
 const BUDGET_SERVED_KB = 300
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
