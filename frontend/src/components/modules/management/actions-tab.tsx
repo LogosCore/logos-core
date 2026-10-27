@@ -336,13 +336,8 @@ function InvocationsTable({ instance, actions }: { instance: string; actions: re
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            ) : invocations.length === 0 ? (
+            {/* Empty while loading, like the other tables. */}
+            {isLoading ? null : invocations.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
                   No actions have been run on this instance.

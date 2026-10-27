@@ -1,14 +1,15 @@
 import { useMemo, type ReactNode } from "react"
 import { Virtuoso } from "react-virtuoso"
 import { LoaderIcon } from "lucide-react"
-import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 // Shared shell for every infinite-scrolling entity table (credentials,
 // hashes, hosts, operations, users, sessions). Owns the chrome and the
-// pagination mechanics — card border, fixed grid header, loading skeleton,
-// empty state, Virtuoso wiring, and the loading/end-of-list footer — so the
-// per-entity components only describe their columns and rows.
+// pagination mechanics — card border, fixed grid header, empty state,
+// Virtuoso wiring, and the loading/end-of-list footer — so the per-entity
+// components only describe their columns and rows. While the first page
+// loads the table is just empty: placeholder rows flashed for a moment on
+// every search and filter change.
 //
 // Rows are rendered by the caller (some are buttons, some plain divs, some
 // wrapped in context menus); use `dataTableRowClass(gridCols)` so the row
@@ -32,8 +33,6 @@ interface VirtualizedDataTableProps<T> {
   // Plural noun for the end-of-list footer: "No more {entityNoun} to load".
   entityNoun: string
 }
-
-const SKELETON_ROWS = 5
 
 export function VirtualizedDataTable<T>({
   items,
@@ -85,14 +84,6 @@ export function VirtualizedDataTable<T>({
           {header}
         </div>
       </div>
-
-      {isLoading && (
-        <div className="space-y-3 p-4">
-          {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      )}
 
       {showEmpty && (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
