@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router"
-import { ArrowDownIcon, ArrowLeftIcon, ArrowUpIcon, HammerIcon, InfoIcon, XIcon } from "lucide-react"
+import { ArrowDownIcon, ArrowLeftIcon, ArrowUpIcon, HammerIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import type { BuildPresetFieldsFragment } from "@/graphql/gql/graphql"
@@ -390,7 +390,8 @@ function Editor({
           </div>
         </header>
 
-        <div className="flex min-w-0 max-w-3xl flex-1 flex-col gap-8 px-4 py-6">
+        <div className="@container/settings min-w-0 flex-1 px-4 py-6">
+        <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
           {notes.length > 0 && (
             <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
@@ -400,10 +401,10 @@ function Editor({
             </div>
           )}
 
-          <FormSection title="What to build">
+          <SettingsSection title="What to build">
             {mode === "preset" && (
               <>
-                <Row id="preset-name" label="Name" required help="Unique in this operation: lowercase letters, digits, '.', '_' and '-'." error={submitted ? (nameErr ?? undefined) : undefined}>
+                <SettingRow id="preset-name" label="Name" required help="Unique in this operation: lowercase letters, digits, '.', '_' and '-'." error={submitted ? (nameErr ?? undefined) : undefined}>
                   <Input
                     id="preset-name"
                     value={name}
@@ -414,8 +415,8 @@ function Editor({
                     disabled={disabled}
                     aria-invalid={(submitted && !!nameErr) || undefined}
                   />
-                </Row>
-                <Row id="preset-description" label="Description" help="What this preset is for, for the rest of the team.">
+                </SettingRow>
+                <SettingRow id="preset-description" label="Description" help="What this preset is for, for the rest of the team.">
                   <Textarea
                     id="preset-description"
                     value={description}
@@ -424,10 +425,10 @@ function Editor({
                     maxLength={500}
                     disabled={disabled}
                   />
-                </Row>
+                </SettingRow>
               </>
             )}
-            <Row id="build-target" label="Target" required help={target?.description ?? "What the factory produces."} error={shown.target}>
+            <SettingRow id="build-target" label="Target" required help={target?.description ?? "What the factory produces."} error={shown.target}>
               <Select
                 value={form.target === "" ? null : form.target}
                 onValueChange={(v) => {
@@ -446,8 +447,8 @@ function Editor({
                   ))}
                 </SelectContent>
               </Select>
-            </Row>
-            <Row
+            </SettingRow>
+            <SettingRow
               id="build-platform"
               label="Platform"
               required={mode === "build"}
@@ -470,11 +471,11 @@ function Editor({
                   ))}
                 </SelectContent>
               </Select>
-            </Row>
-          </FormSection>
+            </SettingRow>
+          </SettingsSection>
 
           {groups.map((g) => (
-            <FormSection key={g.group} title={g.group}>
+            <SettingsSection key={g.group} title={g.group}>
               {g.items.map((f) => (
                 <FieldRow
                   key={f.key}
@@ -487,10 +488,10 @@ function Editor({
                   partial={mode === "preset"}
                 />
               ))}
-            </FormSection>
+            </SettingsSection>
           ))}
 
-          <FormSection title="Endpoints">
+          <SettingsSection title="Endpoints">
             <div className="flex flex-col gap-3 py-3">
               <p className="text-sm text-muted-foreground">
                 The minion tries them in this order. Each is copied into the build: changing an endpoint later changes
@@ -571,7 +572,8 @@ function Editor({
                 </SelectContent>
               </Select>
             </div>
-          </FormSection>
+          </SettingsSection>
+        </div>
         </div>
       </form>
     </BuildFilesContext.Provider>
@@ -598,66 +600,9 @@ function FieldRow({
   const id = `${idPrefix}-${f.key}`
   if (!draft) return null
   return (
-    <Row id={id} label={f.label} fieldKey={f.key} required={f.required && !partial} help={f.description ?? undefined} error={error}>
+    <SettingRow id={id} label={f.label} fieldKey={f.key} required={f.required && !partial} help={f.description ?? undefined} error={error}>
       <FieldControl field={f} id={id} draft={draft} onChange={onChange} disabled={disabled} invalid={!!error} defaultValue={f.default} />
-    </Row>
+    </SettingRow>
   )
 }
 
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
-      <div className="divide-y rounded-xl border bg-card px-4">{children}</div>
-    </section>
-  )
-}
-
-/** One setting: label (with help behind an info icon) | control and its error. */
-function Row({
-  id,
-  label,
-  fieldKey,
-  required,
-  help,
-  error,
-  children,
-}: {
-  id: string
-  label: string
-  fieldKey?: string
-  required?: boolean
-  help?: string
-  error?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="grid gap-x-6 gap-y-1.5 py-3 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-start">
-      <div className="flex items-center gap-1.5 sm:pt-1.5">
-        <label htmlFor={id} className="text-sm font-medium">
-          {label}
-          {required && <span className="text-destructive">*</span>}
-        </label>
-        {help && (
-          <Tooltip>
-            <TooltipTrigger
-              render={<button type="button" className="text-muted-foreground hover:text-foreground" aria-label={`About ${label}`} />}
-            >
-              <InfoIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              <div className="flex flex-col gap-1 text-left">
-                <span>{help}</span>
-                {fieldKey && <code className="font-mono opacity-75">{fieldKey}</code>}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        {children}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </div>
-  )
-}

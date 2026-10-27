@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router"
-import { ArrowLeftIcon, InfoIcon, RadioTowerIcon } from "lucide-react"
+import { ArrowLeftIcon, RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { cn } from "@/lib/utils"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
@@ -304,13 +304,14 @@ function EndpointEditor({
           </ul>
         </nav>
 
-        <div className="flex min-w-0 max-w-3xl flex-1 flex-col gap-8">
+        <div className="@container/settings min-w-0 flex-1">
+        <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
           {saveError && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>
           )}
 
-          <FormSection id={sectionId(GENERAL)} title={GENERAL}>
-            <Row
+          <SettingsSection id={sectionId(GENERAL)} title={GENERAL}>
+            <SettingRow
               id="endpoint-name"
               label="Name"
               required
@@ -327,8 +328,8 @@ function EndpointEditor({
                 disabled={disabled}
                 aria-invalid={(submitted && !!nameErr) || undefined}
               />
-            </Row>
-            <Row id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
+            </SettingRow>
+            <SettingRow id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
               <Textarea
                 id="endpoint-description"
                 value={description}
@@ -337,15 +338,15 @@ function EndpointEditor({
                 maxLength={500}
                 disabled={disabled}
               />
-            </Row>
-          </FormSection>
+            </SettingRow>
+          </SettingsSection>
 
           {sections.slice(1).map((s) => (
-            <FormSection key={s.id} id={s.id} title={s.title}>
+            <SettingsSection key={s.id} id={s.id} title={s.title}>
               {s.fields.map((f) => {
                 const id = `endpoint-${f.key}`
                 return (
-                  <Row
+                  <SettingRow
                     key={f.key}
                     id={id}
                     label={f.label}
@@ -363,82 +364,18 @@ function EndpointEditor({
                       invalid={!!shownErrors[f.key]}
                       defaultValue={f.default}
                     />
-                  </Row>
+                  </SettingRow>
                 )
               })}
-            </FormSection>
+            </SettingsSection>
           ))}
+        </div>
         </div>
       </div>
     </form>
   )
 }
 
-function FormSection({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
-  return (
-    <section id={id} className="scroll-mt-20" aria-labelledby={`${id}-title`}>
-      <h2 id={`${id}-title`} className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </h2>
-      <div className="divide-y rounded-xl border bg-card px-4">{children}</div>
-    </section>
-  )
-}
-
-/** One setting: label (with help behind an info icon) | control and its error. */
-function Row({
-  id,
-  label,
-  fieldKey,
-  required,
-  help,
-  error,
-  children,
-}: {
-  id: string
-  label: string
-  fieldKey?: string
-  required?: boolean
-  help?: string
-  error?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="grid gap-x-6 gap-y-1.5 py-3 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-start">
-      <div className="flex items-center gap-1.5 sm:pt-1.5">
-        <label htmlFor={id} className="text-sm font-medium">
-          {label}
-          {required && <span className="text-destructive">*</span>}
-        </label>
-        {help && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground"
-                  aria-label={`About ${label}`}
-                />
-              }
-            >
-              <InfoIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent className="max-w-xs">
-              <div className="flex flex-col gap-1 text-left">
-                <span>{help}</span>
-                {fieldKey && <code className="font-mono opacity-75">{fieldKey}</code>}
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        {children}
-        {error && <p className="text-sm text-destructive">{error}</p>}
-      </div>
-    </div>
-  )
-}
 
 /** How far below the viewport top a section's heading counts as reached. */
 const SPY_OFFSET = 120
