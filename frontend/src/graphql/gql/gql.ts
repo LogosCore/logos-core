@@ -35,18 +35,12 @@ type Documents = {
     "\n  mutation DeleteMyAPIKey {\n    deleteMyAPIKey\n  }\n": typeof types.DeleteMyApiKeyDocument,
     "\n  fragment BuildSchemaFields on BuildSchema {\n    version\n    crypto\n    fields {\n      ...ModuleFieldDefFields\n    }\n    channels {\n      moduleName\n      versions\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n    targets {\n      id\n      label\n      description\n      format\n      platforms\n      fields {\n        ...ModuleFieldDefFields\n      }\n      channels {\n        moduleName\n        versions\n      }\n    }\n  }\n": typeof types.BuildSchemaFieldsFragmentDoc,
     "\n  fragment BuildFileFields on BuildFile {\n    id\n    operationId\n    name\n    size\n    sha256\n    mediaType\n    createdAt\n  }\n": typeof types.BuildFileFieldsFragmentDoc,
-    "\n  fragment BuildPresetFields on BuildPreset {\n    id\n    operationId\n    name\n    description\n    moduleName\n    target\n    platform\n    values\n    connections {\n      moduleName\n      name\n      description\n      settings\n      schemaVersion\n      schemaChanged\n      values\n    }\n    schemaVersion\n    schemaChanged\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    updatedAt\n  }\n": typeof types.BuildPresetFieldsFragmentDoc,
     "\n  fragment BuildFields on Build {\n    id\n    operationId\n    moduleName\n    target\n    platform\n    schemaVersion\n    minionId\n    state\n    instance\n    factoryVersion\n    steps {\n      step\n      message\n      percent\n      at\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    capabilities\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n": typeof types.BuildFieldsFragmentDoc,
     "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": typeof types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": typeof types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": typeof types.DeleteBuildFileDocument,
-    "\n  query BuildPresets($operationId: ID!) {\n    buildPresets(operationId: $operationId) {\n      ...BuildPresetFields\n    }\n  }\n": typeof types.BuildPresetsDocument,
-    "\n  query BuildPreset($id: ID!) {\n    buildPreset(id: $id) {\n      ...BuildPresetFields\n    }\n  }\n": typeof types.BuildPresetDocument,
-    "\n  mutation CreateBuildPreset($operationId: ID!, $moduleName: String!, $input: BuildPresetInput!) {\n    createBuildPreset(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...BuildPresetFields\n    }\n  }\n": typeof types.CreateBuildPresetDocument,
-    "\n  mutation UpdateBuildPreset($id: ID!, $input: BuildPresetInput!, $expectedRevision: Int!) {\n    updateBuildPreset(id: $id, input: $input, expectedRevision: $expectedRevision) {\n      ...BuildPresetFields\n    }\n  }\n": typeof types.UpdateBuildPresetDocument,
-    "\n  mutation DeleteBuildPreset($id: ID!) {\n    deleteBuildPreset(id: $id)\n  }\n": typeof types.DeleteBuildPresetDocument,
     "\n  query Builds($operationId: ID!, $limit: Int) {\n    builds(operationId: $operationId, limit: $limit) {\n      ...BuildFields\n    }\n  }\n": typeof types.BuildsDocument,
-    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      presetId\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
+    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": typeof types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.CancelBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.DeleteBuildArtifactDocument,
@@ -258,18 +252,12 @@ const documents: Documents = {
     "\n  mutation DeleteMyAPIKey {\n    deleteMyAPIKey\n  }\n": types.DeleteMyApiKeyDocument,
     "\n  fragment BuildSchemaFields on BuildSchema {\n    version\n    crypto\n    fields {\n      ...ModuleFieldDefFields\n    }\n    channels {\n      moduleName\n      versions\n      fields {\n        ...ModuleFieldDefFields\n      }\n    }\n    targets {\n      id\n      label\n      description\n      format\n      platforms\n      fields {\n        ...ModuleFieldDefFields\n      }\n      channels {\n        moduleName\n        versions\n      }\n    }\n  }\n": types.BuildSchemaFieldsFragmentDoc,
     "\n  fragment BuildFileFields on BuildFile {\n    id\n    operationId\n    name\n    size\n    sha256\n    mediaType\n    createdAt\n  }\n": types.BuildFileFieldsFragmentDoc,
-    "\n  fragment BuildPresetFields on BuildPreset {\n    id\n    operationId\n    name\n    description\n    moduleName\n    target\n    platform\n    values\n    connections {\n      moduleName\n      name\n      description\n      settings\n      schemaVersion\n      schemaChanged\n      values\n    }\n    schemaVersion\n    schemaChanged\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    updatedAt\n  }\n": types.BuildPresetFieldsFragmentDoc,
     "\n  fragment BuildFields on Build {\n    id\n    operationId\n    moduleName\n    target\n    platform\n    schemaVersion\n    minionId\n    state\n    instance\n    factoryVersion\n    steps {\n      step\n      message\n      percent\n      at\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    capabilities\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n": types.BuildFieldsFragmentDoc,
     "\n  query FactoryKinds {\n    factoryKinds {\n      moduleName\n      icon\n      instances\n      schema {\n        ...BuildSchemaFields\n      }\n    }\n  }\n": types.FactoryKindsDocument,
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": types.DeleteBuildFileDocument,
-    "\n  query BuildPresets($operationId: ID!) {\n    buildPresets(operationId: $operationId) {\n      ...BuildPresetFields\n    }\n  }\n": types.BuildPresetsDocument,
-    "\n  query BuildPreset($id: ID!) {\n    buildPreset(id: $id) {\n      ...BuildPresetFields\n    }\n  }\n": types.BuildPresetDocument,
-    "\n  mutation CreateBuildPreset($operationId: ID!, $moduleName: String!, $input: BuildPresetInput!) {\n    createBuildPreset(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...BuildPresetFields\n    }\n  }\n": types.CreateBuildPresetDocument,
-    "\n  mutation UpdateBuildPreset($id: ID!, $input: BuildPresetInput!, $expectedRevision: Int!) {\n    updateBuildPreset(id: $id, input: $input, expectedRevision: $expectedRevision) {\n      ...BuildPresetFields\n    }\n  }\n": types.UpdateBuildPresetDocument,
-    "\n  mutation DeleteBuildPreset($id: ID!) {\n    deleteBuildPreset(id: $id)\n  }\n": types.DeleteBuildPresetDocument,
     "\n  query Builds($operationId: ID!, $limit: Int) {\n    builds(operationId: $operationId, limit: $limit) {\n      ...BuildFields\n    }\n  }\n": types.BuildsDocument,
-    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      presetId\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
+    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.CancelBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.DeleteBuildArtifactDocument,
@@ -544,10 +532,6 @@ export function graphql(source: "\n  fragment BuildFileFields on BuildFile {\n  
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment BuildPresetFields on BuildPreset {\n    id\n    operationId\n    name\n    description\n    moduleName\n    target\n    platform\n    values\n    connections {\n      moduleName\n      name\n      description\n      settings\n      schemaVersion\n      schemaChanged\n      values\n    }\n    schemaVersion\n    schemaChanged\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    updatedAt\n  }\n"): typeof import('./graphql').BuildPresetFieldsFragmentDoc;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
 export function graphql(source: "\n  fragment BuildFields on Build {\n    id\n    operationId\n    moduleName\n    target\n    platform\n    schemaVersion\n    minionId\n    state\n    instance\n    factoryVersion\n    steps {\n      step\n      message\n      percent\n      at\n    }\n    artifact {\n      filename\n      size\n      sha256\n      mediaType\n      deleted\n    }\n    capabilities\n    error {\n      code\n      message\n    }\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    startedAt\n    finishedAt\n    deadline\n  }\n"): typeof import('./graphql').BuildFieldsFragmentDoc;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -564,31 +548,11 @@ export function graphql(source: "\n  mutation DeleteBuildFile($id: ID!) {\n    d
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query BuildPresets($operationId: ID!) {\n    buildPresets(operationId: $operationId) {\n      ...BuildPresetFields\n    }\n  }\n"): typeof import('./graphql').BuildPresetsDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query BuildPreset($id: ID!) {\n    buildPreset(id: $id) {\n      ...BuildPresetFields\n    }\n  }\n"): typeof import('./graphql').BuildPresetDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation CreateBuildPreset($operationId: ID!, $moduleName: String!, $input: BuildPresetInput!) {\n    createBuildPreset(operationId: $operationId, moduleName: $moduleName, input: $input) {\n      ...BuildPresetFields\n    }\n  }\n"): typeof import('./graphql').CreateBuildPresetDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation UpdateBuildPreset($id: ID!, $input: BuildPresetInput!, $expectedRevision: Int!) {\n    updateBuildPreset(id: $id, input: $input, expectedRevision: $expectedRevision) {\n      ...BuildPresetFields\n    }\n  }\n"): typeof import('./graphql').UpdateBuildPresetDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  mutation DeleteBuildPreset($id: ID!) {\n    deleteBuildPreset(id: $id)\n  }\n"): typeof import('./graphql').DeleteBuildPresetDocument;
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
 export function graphql(source: "\n  query Builds($operationId: ID!, $limit: Int) {\n    builds(operationId: $operationId, limit: $limit) {\n      ...BuildFields\n    }\n  }\n"): typeof import('./graphql').BuildsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      presetId\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n"): typeof import('./graphql').BuildDocument;
+export function graphql(source: "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n"): typeof import('./graphql').BuildDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

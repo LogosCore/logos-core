@@ -12,7 +12,6 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.uber.org/zap"
 )
 
@@ -23,10 +22,7 @@ type BuildInput struct {
 	Platform    string
 	Values      map[string]any
 	Connections []ConnectionInput
-	// PresetID names the preset the form was filled from, if any; it is
-	// recorded, not read.
-	PresetID string
-	Actor    models.ModuleActor
+	Actor       models.ModuleActor
 }
 
 // artifactKey is where a build's artifact is uploaded.
@@ -61,7 +57,7 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 
 	values := compact(in.Values)
 	conns := compactConnections(in.Connections)
-	c, probs, err := s.check(ctx, op, *schema, settings{Target: in.Target, Platform: in.Platform, Values: values, Connections: conns}, false)
+	c, probs, err := s.check(ctx, op, *schema, settings{Target: in.Target, Platform: in.Platform, Values: values, Connections: conns})
 	if err != nil {
 		return nil, err
 	}
@@ -78,9 +74,6 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		State:     models.BuildStateQueued,
 		Deadline:  s.now().Add(s.cfg.Timeout),
 		CreatedBy: in.Actor, CreatedAt: s.now(),
-	}
-	if pid, err := primitive.ObjectIDFromHex(in.PresetID); err == nil {
-		b.PresetID = &pid
 	}
 	for i, conn := range conns {
 		if conn.Description != "" && b.ConnectionDescriptions == nil {
@@ -219,7 +212,7 @@ func (s *Service) Minions(ctx context.Context, op uuid.UUID) ([]models.Minion, e
 }
 
 // DeleteOperationData removes everything builds keep for an operation: its
-// presets, builds and their artifacts, files and minions.
+// builds and their artifacts, files and minions.
 func (s *Service) DeleteOperationData(ctx context.Context, op uuid.UUID) error {
 	builds, err := s.repos.Builds.List(ctx, op, 0)
 	if err != nil {
@@ -247,7 +240,6 @@ func (s *Service) DeleteOperationData(ctx context.Context, op uuid.UUID) error {
 		}
 	}
 	for name, del := range map[string]func(context.Context, uuid.UUID) error{
-		"presets": s.repos.Presets.DeleteByOperationID,
 		"builds":  s.repos.Builds.DeleteByOperationID,
 		"files":   s.repos.Files.DeleteByOperationID,
 		"minions": s.repos.Minions.DeleteByOperationID,

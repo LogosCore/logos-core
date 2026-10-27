@@ -73,7 +73,6 @@ type Build struct {
 	Warnings               []string       `json:"warnings"`
 	Log                    *string        `json:"log,omitempty"`
 	Error                  *BuildError    `json:"error,omitempty"`
-	PresetID               *string        `json:"presetId,omitempty"`
 	CreatedBy              *ModuleActor   `json:"createdBy"`
 	CancelledBy            *ModuleActor   `json:"cancelledBy,omitempty"`
 	CreatedAt              string         `json:"createdAt"`
@@ -129,46 +128,6 @@ type BuildInput struct {
 	ModuleName  string                  `json:"moduleName"`
 	Target      string                  `json:"target"`
 	Platform    string                  `json:"platform"`
-	Values      any                     `json:"values"`
-	Connections []*BuildConnectionInput `json:"connections"`
-	PresetID    *string                 `json:"presetId,omitempty"`
-}
-
-type BuildPreset struct {
-	ID            string                   `json:"id"`
-	OperationID   string                   `json:"operationId"`
-	Name          string                   `json:"name"`
-	Description   *string                  `json:"description,omitempty"`
-	ModuleName    string                   `json:"moduleName"`
-	Target        string                   `json:"target"`
-	Platform      *string                  `json:"platform,omitempty"`
-	Values        any                      `json:"values"`
-	Connections   []*BuildPresetConnection `json:"connections"`
-	SchemaVersion int                      `json:"schemaVersion"`
-	SchemaChanged bool                     `json:"schemaChanged"`
-	Problems      []*BuildProblem          `json:"problems"`
-	Revision      int                      `json:"revision"`
-	CreatedBy     *ModuleActor             `json:"createdBy"`
-	UpdatedBy     *ModuleActor             `json:"updatedBy"`
-	CreatedAt     string                   `json:"createdAt"`
-	UpdatedAt     string                   `json:"updatedAt"`
-}
-
-type BuildPresetConnection struct {
-	ModuleName    string  `json:"moduleName"`
-	Name          *string `json:"name,omitempty"`
-	Description   *string `json:"description,omitempty"`
-	Settings      any     `json:"settings"`
-	SchemaVersion int     `json:"schemaVersion"`
-	SchemaChanged bool    `json:"schemaChanged"`
-	Values        any     `json:"values"`
-}
-
-type BuildPresetInput struct {
-	Name        string                  `json:"name"`
-	Description *string                 `json:"description,omitempty"`
-	Target      string                  `json:"target"`
-	Platform    *string                 `json:"platform,omitempty"`
 	Values      any                     `json:"values"`
 	Connections []*BuildConnectionInput `json:"connections"`
 }

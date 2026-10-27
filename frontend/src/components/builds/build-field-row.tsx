@@ -10,7 +10,6 @@ export function FieldRow({
   onChange,
   error,
   disabled,
-  partial,
 }: {
   idPrefix: string
   field: FieldDef
@@ -18,13 +17,11 @@ export function FieldRow({
   onChange: (d: Draft) => void
   error?: string
   disabled: boolean
-  /** A preset: nothing is required. */
-  partial: boolean
 }) {
   const id = `${idPrefix}-${f.key}`
   if (!draft) return null
   return (
-    <SettingRow id={id} label={f.label} fieldKey={f.key} required={f.required && !partial} help={f.description ?? undefined} error={error}>
+    <SettingRow id={id} label={f.label} fieldKey={f.key} required={f.required} help={f.description ?? undefined} error={error}>
       <FieldControl field={f} id={id} draft={draft} onChange={onChange} disabled={disabled} invalid={!!error} defaultValue={f.default} />
     </SettingRow>
   )

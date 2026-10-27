@@ -152,7 +152,7 @@ describe("the build form", () => {
       }),
       connection("http", { ...edge, description: "  " }),
     ]
-    const { input, errors } = evaluateForm(kind, form, false, channels)
+    const { input, errors } = evaluateForm(kind, form, channels)
     expect(errors).toEqual({})
     expect(input).toEqual({
       target: "dummy",
@@ -179,7 +179,7 @@ describe("the build form", () => {
       connection("dns"),
     ]
     form.drafts.kill_date = { kind: "text", text: "not a date" }
-    const { errors } = evaluateForm(kind, form, false, channels)
+    const { errors } = evaluateForm(kind, form, channels)
     expect(errors).toMatchObject({
       platform: "Pick a platform",
       "values.service_name": "Required",
@@ -196,24 +196,16 @@ describe("the build form", () => {
   it("wants connection names unique, the server's defaults counted", () => {
     const form = initialForm(kind, null, channels)
     form.connections = [connection("http", { ...edge, name: "edge" }), connection("http", { ...edge, name: "edge" })]
-    expect(evaluateForm(kind, form, false, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called edge too" })
+    expect(evaluateForm(kind, form, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called edge too" })
     form.connections = [connection("http", { ...edge, name: "http-2" }), connection("http", edge)]
-    expect(evaluateForm(kind, form, false, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called http-2 too" })
+    expect(evaluateForm(kind, form, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called http-2 too" })
   })
 
-  it("lets a preset leave the platform, connections, required values and settings", () => {
-    const form = withTarget(kind, initialForm(kind, null, channels), "service")
-    const build = evaluateForm(kind, form, false, channels).errors
-    expect(build.connections).toBeDefined()
-    expect(build["values.service_name"]).toBeDefined()
-    expect(evaluateForm(kind, form, true, channels).errors).toEqual({})
-
+  it("needs a connection, and every required value and setting", () => {
+    const form = initialForm(kind, null, channels)
+    expect(evaluateForm(kind, form, channels).errors).toEqual({ connections: "Add at least one connection" })
     form.connections = [connection("http")]
-    expect(evaluateForm(kind, form, false, channels).errors["connections[0].settings.base_url"]).toBe("Required")
-    expect(evaluateForm(kind, form, true, channels).errors).toEqual({})
-    // What a preset holds must still fit.
-    form.connections = [connection("dns")]
-    expect(evaluateForm(kind, form, true, channels).errors).toEqual({ "connections[0]": "This target does not speak dns" })
+    expect(evaluateForm(kind, form, channels).errors).toEqual({ "connections[0].settings.base_url": "Required" })
   })
 
   it("keeps values that carry over to another target", () => {
@@ -225,7 +217,7 @@ describe("the build form", () => {
     expect(service.platform).toBe("") // two platforms: the user picks
   })
 
-  it("fills in from a preset", () => {
+  it("fills in from an earlier build's settings", () => {
     const form = initialForm(
       kind,
       {
@@ -252,7 +244,7 @@ describe("the build form", () => {
     expect(c.settings.base_url).toEqual({ kind: "text", text: "https://edge.example.com" })
     expect(c.drafts.method).toEqual({ kind: "text", text: "GET" })
     expect(c.notes).toEqual(["Saved for http settings v1; the channel is at v2. Check the settings."])
-    const { input, errors } = evaluateForm(kind, form, false, channels)
+    const { input, errors } = evaluateForm(kind, form, channels)
     expect(errors).toEqual({})
     expect(input.values.kill_date).toBe("2027-01-31T00:00:00Z")
     expect(c.described).toBe(true)
@@ -282,7 +274,7 @@ describe("fillFromEndpoint", () => {
     })
     expect(fillFromEndpoint(c, http, us).name).toBe("us")
     expect(fillFromEndpoint({ ...c, name: "primary", named: true }, http, us).name).toBe("primary")
-    // A preset's or build's own name counts as the operator's.
+    // An earlier build's own name counts as the operator's.
     expect(fillFromEndpoint(connection("http", { name: "primary" }), http, us).name).toBe("primary")
   })
 
@@ -413,7 +405,7 @@ describe("sourceFromBuild", () => {
 
     const form: BuildForm = initialForm(kind, source, channels)
     expect(form.connections[1].notes).toEqual(["Saved for http settings v1; the channel is at v2. Check the settings."])
-    expect(evaluateForm(kind, form, false, channels).errors).toEqual({})
+    expect(evaluateForm(kind, form, channels).errors).toEqual({})
   })
 
   it("lists the connections with their notes", () => {

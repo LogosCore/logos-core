@@ -1,6 +1,5 @@
 // Package builds runs minion builds (contracts/minion-build.md): factory kinds
-// and their build schemas, an operation's build files and presets, and its
-// builds. A build is offered to a live instance of its factory kind over the
+// and their build schemas, an operation's build files, and its builds. A build is offered to a live instance of its factory kind over the
 // control plane (factory.build), followed through progress and result, its
 // artifact checked, and a successful one creates the minion.
 //
@@ -60,7 +59,6 @@ type Signer interface {
 // Repos are the stores the service writes.
 type Repos struct {
 	Files   repository.IBuildFileRepository
-	Presets repository.IBuildPresetRepository
 	Builds  repository.IBuildRepository
 	Minions repository.IMinionRepository
 }
@@ -114,15 +112,15 @@ const keepSteps = 50
 
 // Errors the API layer maps to client errors.
 var (
-	ErrFileNotFound   = errors.New("build file not found")
-	ErrPresetNotFound = errors.New("build preset not found")
-	ErrBuildNotFound  = errors.New("build not found")
+	ErrFileNotFound  = errors.New("build file not found")
+	ErrBuildNotFound = errors.New("build not found")
 )
 
 // ValidationError is a client error. Problems holds reasons by where they
 // are: "target", "platform", "values.<key>", "connections",
-// "connections[<i>]", "connections[<i>].values.<key>", or "" when the problem
-// is not one place's.
+// "connections[<i>]", "connections[<i>].name", "connections[<i>].description",
+// "connections[<i>].settings.<key>", "connections[<i>].values.<key>", or ""
+// when the problem is not one place's.
 type ValidationError struct {
 	Message  string
 	Problems map[string]string
@@ -132,13 +130,6 @@ func (e *ValidationError) Error() string { return e.Message }
 
 func invalid(format string, args ...any) error {
 	return &ValidationError{Message: fmt.Sprintf(format, args...)}
-}
-
-// ConflictError means a preset changed since the caller read it.
-type ConflictError struct{}
-
-func (e *ConflictError) Error() string {
-	return "the preset was changed concurrently; reload and retry"
 }
 
 // Service runs builds.
@@ -219,4 +210,12 @@ func (s *Service) wake() {
 	case s.kick <- struct{}{}:
 	default:
 	}
+}
+
+// notFound maps a repository miss to sentinel.
+func notFound(err, sentinel error) error {
+	if repository.IsNotFound(err) {
+		return sentinel
+	}
+	return err
 }

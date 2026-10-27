@@ -14,7 +14,6 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.uber.org/zap"
 )
 
@@ -71,7 +70,6 @@ type rig struct {
 	rpc     *fakeCaller
 	store   *fakeStore
 	files   *fakeFiles
-	presets *fakePresets
 	builds  *fakeBuilds
 	minions *fakeMinions
 	clock   time.Time
@@ -88,13 +86,12 @@ func newRig(t *testing.T) *rig {
 		rpc:     &fakeCaller{},
 		store:   &fakeStore{objects: map[string][]byte{}},
 		files:   &fakeFiles{rows: map[uuid.UUID]models.BuildFile{}},
-		presets: &fakePresets{rows: map[primitive.ObjectID]models.BuildPreset{}},
 		builds:  &fakeBuilds{rows: map[string]*models.Build{}},
 		minions: &fakeMinions{rows: map[string]models.Minion{}},
 		clock:   time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC),
 	}
 	r.reg.setActive(bobInstance("bob-1", 1))
-	r.svc = NewService(Repos{Files: r.files, Presets: r.presets, Builds: r.builds, Minions: r.minions},
+	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions},
 		r.reg, r.chs, r.rpc, r.store, fakeSigner{}, Config{}, zap.NewNop())
 	r.svc.now = func() time.Time { return r.clock }
 	t.Cleanup(r.svc.Stop)
@@ -666,88 +663,6 @@ func TestTimeoutsAndLostFactories(t *testing.T) {
 	}
 }
 
-// --- presets -------------------------------------------------------------
-
-func TestPresets(t *testing.T) {
-	r := newRig(t)
-	ctx := context.Background()
-	in := PresetInput{Name: "eu-front", Target: "dummy", Values: map[string]any{"punches": []any{"hook"}},
-		Connections: []ConnectionInput{
-			{ModuleName: "http", Name: "edge", Description: " EU front ",
-				Settings: map[string]any{"base_url": "https://edge.example.com", "request_timeout": ""}, Values: map[string]any{"method": "GET"}},
-			{ModuleName: "http"}, // its base URL is left for the build form
-		}, Actor: alice}
-	v, err := r.svc.CreatePreset(ctx, opID, "bob", in)
-	if err != nil {
-		t.Fatalf("a partial preset (no platform, a connection without settings) was refused: %v %v", err, problemsOf(err))
-	}
-	c := v.Connections[0]
-	if v.Revision != 1 || len(v.Problems) != 0 || c.ModuleName != "http" || c.Name != "edge" || c.Description != "EU front" || c.SchemaVersion != 2 ||
-		len(c.Settings) != 1 || c.Settings["base_url"] != "https://edge.example.com" || c.Values["method"] != "GET" ||
-		v.ConnectionSchemaChanged(0) || len(v.Connections[1].Settings) != 0 {
-		t.Fatalf("preset %+v", v)
-	}
-	bad := in
-	bad.Name = "bad"
-	bad.Connections = []ConnectionInput{{ModuleName: "http", Settings: map[string]any{"base_url": "edge"}}}
-	if _, err := r.svc.CreatePreset(ctx, opID, "bob", bad); problemsOf(err)["connections[0].settings.base_url"] == "" {
-		t.Fatalf("a preset with a wrong setting: %v %v", err, problemsOf(err))
-	}
-	if _, err := r.svc.CreatePreset(ctx, opID, "bob", in); err == nil || !strings.Contains(err.Error(), "already exists") {
-		t.Fatalf("a second preset with the name: %v", err)
-	}
-
-	in.Platform = "linux/amd64"
-	if _, err := r.svc.UpdatePreset(ctx, v.Id.Hex(), v.Revision, in); problemsOf(err)["platform"] == "" {
-		t.Fatalf("a wrong platform: %v", err)
-	}
-	in.Platform = "any/any"
-	updated, err := r.svc.UpdatePreset(ctx, v.Id.Hex(), v.Revision, in)
-	if err != nil || updated.Revision != 2 || updated.Platform != "any/any" {
-		t.Fatalf("update: %v %+v", err, updated)
-	}
-	var conflict *ConflictError
-	if _, err := r.svc.UpdatePreset(ctx, v.Id.Hex(), 1, in); !errors.As(err, &conflict) {
-		t.Fatalf("a stale update: %v", err)
-	}
-
-	// The channel's settings move on: the preset shows it.
-	r.chs.schemas["http"].Version = 3
-	got, err := r.svc.Preset(ctx, v.Id.Hex())
-	if err != nil || got.Problems["connections[0]"] == "" || !got.ConnectionSchemaChanged(0) || !got.ConnectionSchemaChanged(1) {
-		t.Fatalf("preset after a channel release: %v %+v", err, got.Problems)
-	}
-	// BOB learns version 3, which renamed a setting the preset holds.
-	r.reg.schemas["bob"].Channels[0].Versions = []int{2, 3}
-	r.chs.schemas["http"].Fields[0].Key = "base_urls"
-	if got, err = r.svc.Preset(ctx, v.Id.Hex()); err != nil || got.Problems["connections[0].settings.base_url"] == "" {
-		t.Fatalf("preset after a renamed setting: %v %+v", err, got.Problems)
-	}
-	delete(r.chs.schemas, "http")
-	if got, err = r.svc.Preset(ctx, v.Id.Hex()); err != nil || got.Problems["connections[1]"] == "" || got.ConnectionSchemaChanged(0) {
-		t.Fatalf("preset after its channel went: %v %+v", err, got.Problems)
-	}
-	if err := r.svc.DeletePreset(ctx, v.Id.Hex()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := r.svc.Preset(ctx, v.Id.Hex()); !errors.Is(err, ErrPresetNotFound) {
-		t.Fatalf("deleted preset: %v", err)
-	}
-}
-
-func TestPresetDescriptionCountsCharacters(t *testing.T) {
-	r := newRig(t)
-	ctx := context.Background()
-	// Two bytes each: a byte count would refuse the first.
-	fits := strings.Repeat("é", MaxDescriptionLength)
-	if _, err := r.svc.CreatePreset(ctx, opID, "bob", PresetInput{Name: "fits", Description: fits, Target: "dummy", Actor: alice}); err != nil {
-		t.Errorf("a description of %d characters: %v", MaxDescriptionLength, err)
-	}
-	if _, err := r.svc.CreatePreset(ctx, opID, "bob", PresetInput{Name: "over", Description: fits + "é", Target: "dummy", Actor: alice}); err == nil {
-		t.Errorf("a description of %d characters was taken", MaxDescriptionLength+1)
-	}
-}
-
 // --- files ---------------------------------------------------------------
 
 func TestFiles(t *testing.T) {
@@ -764,12 +679,8 @@ func TestFiles(t *testing.T) {
 		t.Fatal("an upload over the limit was taken")
 	}
 
-	// A preset refers to it: it stays, through deletes and sweeps.
-	_, err := r.svc.CreatePreset(ctx, opID, "bob", PresetInput{Name: "badged", Target: "dummy",
-		Values: map[string]any{"badge": f.FileID.String()}, Actor: alice})
-	if err != nil {
-		t.Fatal(err)
-	}
+	// A build refers to it: it stays, through deletes and sweeps.
+	r.queue(t, func(in *BuildInput) { in.Values["badge"] = f.FileID.String() })
 	if err := r.svc.DeleteFile(ctx, f.FileID.String()); err == nil {
 		t.Fatal("a file in use was deleted")
 	}

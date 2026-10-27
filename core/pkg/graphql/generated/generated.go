@@ -154,7 +154,6 @@ type ComplexityRoot struct {
 		ModuleName             func(childComplexity int) int
 		OperationID            func(childComplexity int) int
 		Platform               func(childComplexity int) int
-		PresetID               func(childComplexity int) int
 		SchemaVersion          func(childComplexity int) int
 		StartedAt              func(childComplexity int) int
 		State                  func(childComplexity int) int
@@ -197,36 +196,6 @@ type ComplexityRoot struct {
 		Sha256      func(childComplexity int) int
 		Size        func(childComplexity int) int
 		UploadedBy  func(childComplexity int) int
-	}
-
-	BuildPreset struct {
-		Connections   func(childComplexity int) int
-		CreatedAt     func(childComplexity int) int
-		CreatedBy     func(childComplexity int) int
-		Description   func(childComplexity int) int
-		ID            func(childComplexity int) int
-		ModuleName    func(childComplexity int) int
-		Name          func(childComplexity int) int
-		OperationID   func(childComplexity int) int
-		Platform      func(childComplexity int) int
-		Problems      func(childComplexity int) int
-		Revision      func(childComplexity int) int
-		SchemaChanged func(childComplexity int) int
-		SchemaVersion func(childComplexity int) int
-		Target        func(childComplexity int) int
-		UpdatedAt     func(childComplexity int) int
-		UpdatedBy     func(childComplexity int) int
-		Values        func(childComplexity int) int
-	}
-
-	BuildPresetConnection struct {
-		Description   func(childComplexity int) int
-		ModuleName    func(childComplexity int) int
-		Name          func(childComplexity int) int
-		SchemaChanged func(childComplexity int) int
-		SchemaVersion func(childComplexity int) int
-		Settings      func(childComplexity int) int
-		Values        func(childComplexity int) int
 	}
 
 	BuildProblem struct {
@@ -621,7 +590,6 @@ type ComplexityRoot struct {
 		CompleteGuide                 func(childComplexity int, guide string) int
 		CreateAgentKey                func(childComplexity int, input model.CreateAgentKeyInput) int
 		CreateBuild                   func(childComplexity int, operationID string, input model.BuildInput) int
-		CreateBuildPreset             func(childComplexity int, operationID string, moduleName string, input model.BuildPresetInput) int
 		CreateChannelEndpoint         func(childComplexity int, operationID string, moduleName string, input model.ChannelEndpointInput) int
 		CreateCredential              func(childComplexity int, operationID string, input model.CreateCredentialInput) int
 		CreateCustomTimelineEvent     func(childComplexity int, operationID string, input model.CreateCustomTimelineEventInput) int
@@ -636,7 +604,6 @@ type ComplexityRoot struct {
 		DeleteAgentKey                func(childComplexity int, id string) int
 		DeleteBuildArtifact           func(childComplexity int, id string) int
 		DeleteBuildFile               func(childComplexity int, id string) int
-		DeleteBuildPreset             func(childComplexity int, id string) int
 		DeleteChannelEndpoint         func(childComplexity int, id string) int
 		DeleteCredential              func(childComplexity int, id string) int
 		DeleteCredentialComment       func(childComplexity int, credentialID string, commentID string) int
@@ -684,7 +651,6 @@ type ComplexityRoot struct {
 		TransferSkill                 func(childComplexity int, name string, userID string) int
 		UnblockModule                 func(childComplexity int, instance string) int
 		UpdateAgentKey                func(childComplexity int, id string, input model.UpdateAgentKeyInput) int
-		UpdateBuildPreset             func(childComplexity int, id string, input model.BuildPresetInput, expectedRevision int) int
 		UpdateChannelEndpoint         func(childComplexity int, id string, input model.ChannelEndpointInput, expectedRevision int) int
 		UpdateCredential              func(childComplexity int, id string, input model.UpdateCredentialInput) int
 		UpdateCredentialComment       func(childComplexity int, credentialID string, commentID string, text string) int
@@ -771,8 +737,6 @@ type ComplexityRoot struct {
 	Query struct {
 		Build                              func(childComplexity int, id string) int
 		BuildFiles                         func(childComplexity int, operationID string) int
-		BuildPreset                        func(childComplexity int, id string) int
-		BuildPresets                       func(childComplexity int, operationID string, moduleName *string) int
 		Builds                             func(childComplexity int, operationID string, limit *int) int
 		ChannelEndpoint                    func(childComplexity int, id string) int
 		ChannelEndpointExport              func(childComplexity int, id string) int
@@ -1344,9 +1308,6 @@ type MutationResolver interface {
 	SetMyAPIKeyEnabled(ctx context.Context, enabled bool) (*models.APIKey, error)
 	DeleteMyAPIKey(ctx context.Context) (bool, error)
 	DeleteBuildFile(ctx context.Context, id string) (bool, error)
-	CreateBuildPreset(ctx context.Context, operationID string, moduleName string, input model.BuildPresetInput) (*model.BuildPreset, error)
-	UpdateBuildPreset(ctx context.Context, id string, input model.BuildPresetInput, expectedRevision int) (*model.BuildPreset, error)
-	DeleteBuildPreset(ctx context.Context, id string) (bool, error)
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
@@ -1433,8 +1394,6 @@ type QueryResolver interface {
 	MyAPIKey(ctx context.Context) (*models.APIKey, error)
 	FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error)
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
-	BuildPresets(ctx context.Context, operationID string, moduleName *string) ([]*model.BuildPreset, error)
-	BuildPreset(ctx context.Context, id string) (*model.BuildPreset, error)
 	Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
@@ -2051,12 +2010,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Platform(childComplexity), true
-	case "Build.presetId":
-		if e.ComplexityRoot.Build.PresetID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Build.PresetID(childComplexity), true
 	case "Build.schemaVersion":
 		if e.ComplexityRoot.Build.SchemaVersion == nil {
 			break
@@ -2224,152 +2177,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildFile.UploadedBy(childComplexity), true
-
-	case "BuildPreset.connections":
-		if e.ComplexityRoot.BuildPreset.Connections == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Connections(childComplexity), true
-	case "BuildPreset.createdAt":
-		if e.ComplexityRoot.BuildPreset.CreatedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.CreatedAt(childComplexity), true
-	case "BuildPreset.createdBy":
-		if e.ComplexityRoot.BuildPreset.CreatedBy == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.CreatedBy(childComplexity), true
-	case "BuildPreset.description":
-		if e.ComplexityRoot.BuildPreset.Description == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Description(childComplexity), true
-	case "BuildPreset.id":
-		if e.ComplexityRoot.BuildPreset.ID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.ID(childComplexity), true
-	case "BuildPreset.moduleName":
-		if e.ComplexityRoot.BuildPreset.ModuleName == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.ModuleName(childComplexity), true
-	case "BuildPreset.name":
-		if e.ComplexityRoot.BuildPreset.Name == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Name(childComplexity), true
-	case "BuildPreset.operationId":
-		if e.ComplexityRoot.BuildPreset.OperationID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.OperationID(childComplexity), true
-	case "BuildPreset.platform":
-		if e.ComplexityRoot.BuildPreset.Platform == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Platform(childComplexity), true
-	case "BuildPreset.problems":
-		if e.ComplexityRoot.BuildPreset.Problems == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Problems(childComplexity), true
-	case "BuildPreset.revision":
-		if e.ComplexityRoot.BuildPreset.Revision == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Revision(childComplexity), true
-	case "BuildPreset.schemaChanged":
-		if e.ComplexityRoot.BuildPreset.SchemaChanged == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.SchemaChanged(childComplexity), true
-	case "BuildPreset.schemaVersion":
-		if e.ComplexityRoot.BuildPreset.SchemaVersion == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.SchemaVersion(childComplexity), true
-	case "BuildPreset.target":
-		if e.ComplexityRoot.BuildPreset.Target == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Target(childComplexity), true
-	case "BuildPreset.updatedAt":
-		if e.ComplexityRoot.BuildPreset.UpdatedAt == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.UpdatedAt(childComplexity), true
-	case "BuildPreset.updatedBy":
-		if e.ComplexityRoot.BuildPreset.UpdatedBy == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.UpdatedBy(childComplexity), true
-	case "BuildPreset.values":
-		if e.ComplexityRoot.BuildPreset.Values == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPreset.Values(childComplexity), true
-
-	case "BuildPresetConnection.description":
-		if e.ComplexityRoot.BuildPresetConnection.Description == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.Description(childComplexity), true
-	case "BuildPresetConnection.moduleName":
-		if e.ComplexityRoot.BuildPresetConnection.ModuleName == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.ModuleName(childComplexity), true
-	case "BuildPresetConnection.name":
-		if e.ComplexityRoot.BuildPresetConnection.Name == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.Name(childComplexity), true
-	case "BuildPresetConnection.schemaChanged":
-		if e.ComplexityRoot.BuildPresetConnection.SchemaChanged == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.SchemaChanged(childComplexity), true
-	case "BuildPresetConnection.schemaVersion":
-		if e.ComplexityRoot.BuildPresetConnection.SchemaVersion == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.SchemaVersion(childComplexity), true
-	case "BuildPresetConnection.settings":
-		if e.ComplexityRoot.BuildPresetConnection.Settings == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.Settings(childComplexity), true
-	case "BuildPresetConnection.values":
-		if e.ComplexityRoot.BuildPresetConnection.Values == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildPresetConnection.Values(childComplexity), true
 
 	case "BuildProblem.key":
 		if e.ComplexityRoot.BuildProblem.Key == nil {
@@ -4080,17 +3887,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateBuild(childComplexity, args["operationId"].(string), args["input"].(model.BuildInput)), true
-	case "Mutation.createBuildPreset":
-		if e.ComplexityRoot.Mutation.CreateBuildPreset == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_createBuildPreset_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.CreateBuildPreset(childComplexity, args["operationId"].(string), args["moduleName"].(string), args["input"].(model.BuildPresetInput)), true
 	case "Mutation.createChannelEndpoint":
 		if e.ComplexityRoot.Mutation.CreateChannelEndpoint == nil {
 			break
@@ -4240,17 +4036,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteBuildFile(childComplexity, args["id"].(string)), true
-	case "Mutation.deleteBuildPreset":
-		if e.ComplexityRoot.Mutation.DeleteBuildPreset == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_deleteBuildPreset_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.DeleteBuildPreset(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteChannelEndpoint":
 		if e.ComplexityRoot.Mutation.DeleteChannelEndpoint == nil {
 			break
@@ -4753,17 +4538,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateAgentKey(childComplexity, args["id"].(string), args["input"].(model.UpdateAgentKeyInput)), true
-	case "Mutation.updateBuildPreset":
-		if e.ComplexityRoot.Mutation.UpdateBuildPreset == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_updateBuildPreset_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Mutation.UpdateBuildPreset(childComplexity, args["id"].(string), args["input"].(model.BuildPresetInput), args["expectedRevision"].(int)), true
 	case "Mutation.updateChannelEndpoint":
 		if e.ComplexityRoot.Mutation.UpdateChannelEndpoint == nil {
 			break
@@ -5185,28 +4959,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.BuildFiles(childComplexity, args["operationId"].(string)), true
-	case "Query.buildPreset":
-		if e.ComplexityRoot.Query.BuildPreset == nil {
-			break
-		}
-
-		args, err := ec.field_Query_buildPreset_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Query.BuildPreset(childComplexity, args["id"].(string)), true
-	case "Query.buildPresets":
-		if e.ComplexityRoot.Query.BuildPresets == nil {
-			break
-		}
-
-		args, err := ec.field_Query_buildPresets_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Query.BuildPresets(childComplexity, args["operationId"].(string), args["moduleName"].(*string)), true
 	case "Query.builds":
 		if e.ComplexityRoot.Query.Builds == nil {
 			break
@@ -7581,7 +7333,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputBuildConnectionInput,
 		ec.unmarshalInputBuildInput,
-		ec.unmarshalInputBuildPresetInput,
 		ec.unmarshalInputBulkImportHashesInput,
 		ec.unmarshalInputChangeTaskStageInput,
 		ec.unmarshalInputChannelEndpointInput,
@@ -8034,7 +7785,7 @@ extend type Mutation {
 }
 `, BuiltIn: false},
 	{Name: "../schema/builds.graphql", Input: `# =============================================================================
-# Minion builds — factories, build files, presets, builds and minions
+# Minion builds — factories, build files, builds and minions
 # =============================================================================
 #
 # A factory declares a build schema at module.register (see
@@ -8045,10 +7796,10 @@ extend type Mutation {
 # current schema is the highest version any of its instances declared.
 #
 # An operation keeps build files (uploads for file fields, through
-# POST /api/v1/build-files) and presets (ready-to-use build settings, like
-# endpoints are ready-to-use connection values). A build's or preset's
-# connections hold their own settings, by each channel's connection schema; the
-# form can fill one from an endpoint, which copies it. A build asks a factory
+# POST /api/v1/build-files). A build's connections hold their own settings, by
+# each channel's connection schema; the form can fill one from an endpoint,
+# which copies it, and an earlier build fills the whole form ("Build again").
+# A build asks a factory
 # instance for one minion: core queues it, offers it to a live instance, follows
 # its progress and result, checks the artifact, and a successful build creates
 # the minion. Its artifact downloads from GET /api/v1/builds/{id}/artifact.
@@ -8136,59 +7887,8 @@ type BuildProblem {
   message: String!
 }
 
-# One connection of a preset.
-type BuildPresetConnection {
-  # The channel kind, e.g. "http".
-  moduleName: String!
-  # What the minion calls the connection; null: "<channel>-<position>".
-  name: String
-  # The operators' note on the connection; core's own (see
-  # BuildConnectionInput.description).
-  description: String
-  # Connection settings by the channel's connection schema field key, secrets
-  # included. Fields without a value use the schema's default.
-  settings: JSON!
-  # Connection schema version the settings were saved against.
-  schemaVersion: Int!
-  # The channel now declares another connection schema version: the settings
-  # may need a look.
-  schemaChanged: Boolean!
-  # The factory's connection parameter values by key.
-  values: JSON!
-}
-
-# Ready-to-use build settings: they fill in the build form.
-type BuildPreset {
-  id: ID!
-  operationId: ID!
-  # Unique within the operation.
-  name: String!
-  description: String
-  # The factory kind.
-  moduleName: String!
-  target: String!
-  # Optional: may be left for the build form.
-  platform: String
-  # Values by field key; file fields hold build file ids.
-  values: JSON!
-  connections: [BuildPresetConnection!]!
-  # Build schema version the preset was saved against.
-  schemaVersion: Int!
-  # The kind now declares another schema version.
-  schemaChanged: Boolean!
-  # Why the preset does not fit the kind's or its channels' current schemas;
-  # empty when it does.
-  problems: [BuildProblem!]!
-  # Grows with every change; updateBuildPreset compares against it.
-  revision: Int!
-  createdBy: ModuleActor!
-  updatedBy: ModuleActor!
-  createdAt: String!
-  updatedAt: String!
-}
-
-# One connection of a build or preset: a channel kind, its connection settings
-# and the factory's connection parameters for it.
+# One connection of a build: a channel kind, its connection settings and the
+# factory's connection parameters for it.
 input BuildConnectionInput {
   # The channel kind; the target must connect through it.
   moduleName: String!
@@ -8196,24 +7896,14 @@ input BuildConnectionInput {
   # among the connections; empty: "<channel>-<position>".
   name: String
   # A note for the team on what the connection is for, at most 500
-  # characters. Core keeps it with the preset or the build record and never
-  # sends it to the factory, so it cannot end up in an artifact.
+  # characters. Core keeps it with the build record and never sends it to the
+  # factory, so it cannot end up in an artifact.
   description: String
   # Connection settings by the channel's connection schema field key. null, ""
   # and [] leave a setting unset (its default applies).
   settings: JSON
   # The factory's connection parameter values by key, the same way.
   values: JSON
-}
-
-input BuildPresetInput {
-  name: String!
-  description: String
-  target: String!
-  platform: String
-  # Values by field key; null, "" and [] leave a field unset.
-  values: JSON!
-  connections: [BuildConnectionInput!]!
 }
 
 input BuildInput {
@@ -8225,8 +7915,6 @@ input BuildInput {
   values: JSON!
   # The connections, in the order the minion tries them.
   connections: [BuildConnectionInput!]!
-  # The preset the form was filled from, if any; recorded only.
-  presetId: ID
 }
 
 type BuildStep {
@@ -8284,7 +7972,6 @@ type Build {
   # The build output, its last 64 KiB.
   log: String
   error: BuildError
-  presetId: ID
   createdBy: ModuleActor!
   cancelledBy: ModuleActor
   createdAt: String!
@@ -8317,15 +8004,6 @@ extend type Query {
   buildFiles(operationId: ID!): [BuildFile!]!
     @hasPermission(permission: "operation:member")
 
-  # An operation's presets by kind and name; one kind's when moduleName is
-  # set. Needs at least viewer.
-  buildPresets(operationId: ID!, moduleName: String): [BuildPreset!]!
-    @hasPermission(permission: "operation:member")
-
-  # One preset; null when it does not exist. Needs at least viewer.
-  buildPreset(id: ID!): BuildPreset
-    @hasPermission(permission: "operation:member")
-
   # An operation's builds, newest first, at most limit (default 50).
   # Needs at least viewer.
   builds(operationId: ID!, limit: Int): [Build!]!
@@ -8341,23 +8019,9 @@ extend type Query {
 }
 
 extend type Mutation {
-  # Fails while a preset or build refers to the file. Needs at least
-  # operator; agent API keys are rejected.
+  # Fails while a build refers to the file. Needs at least operator; agent API
+  # keys are rejected.
   deleteBuildFile(id: ID!): Boolean!
-    @hasPermission(permission: "operation:member")
-
-  # Validated against the kind's current schema; problems are in the error's
-  # extensions.problems. Needs at least operator; agent API keys are
-  # rejected.
-  createBuildPreset(operationId: ID!, moduleName: String!, input: BuildPresetInput!): BuildPreset!
-    @hasPermission(permission: "operation:member")
-
-  # expectedRevision is the revision the caller read; a mismatch fails with
-  # CONFLICT.
-  updateBuildPreset(id: ID!, input: BuildPresetInput!, expectedRevision: Int!): BuildPreset!
-    @hasPermission(permission: "operation:member")
-
-  deleteBuildPreset(id: ID!): Boolean!
     @hasPermission(permission: "operation:member")
 
   # Queues a build. Validated against the kind's current schema; problems are
@@ -11760,27 +11424,6 @@ func (ec *executionContext) field_Mutation_createAgentKey_args(ctx context.Conte
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_createBuildPreset_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["operationId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "moduleName", ec.unmarshalNString2string)
-	if err != nil {
-		return nil, err
-	}
-	args["moduleName"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNBuildPresetInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetInput)
-	if err != nil {
-		return nil, err
-	}
-	args["input"] = arg2
-	return args, nil
-}
-
 func (ec *executionContext) field_Mutation_createBuild_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11970,17 +11613,6 @@ func (ec *executionContext) field_Mutation_deleteBuildArtifact_args(ctx context.
 }
 
 func (ec *executionContext) field_Mutation_deleteBuildFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["id"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_deleteBuildPreset_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -12585,27 +12217,6 @@ func (ec *executionContext) field_Mutation_updateAgentKey_args(ctx context.Conte
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_updateBuildPreset_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["id"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNBuildPresetInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetInput)
-	if err != nil {
-		return nil, err
-	}
-	args["input"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedRevision", ec.unmarshalNInt2int)
-	if err != nil {
-		return nil, err
-	}
-	args["expectedRevision"] = arg2
-	return args, nil
-}
-
 func (ec *executionContext) field_Mutation_updateChannelEndpoint_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -12848,33 +12459,6 @@ func (ec *executionContext) field_Query_buildFiles_args(ctx context.Context, raw
 		return nil, err
 	}
 	args["operationId"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_buildPreset_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["id"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Query_buildPresets_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
-	if err != nil {
-		return nil, err
-	}
-	args["operationId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "moduleName", ec.unmarshalOString2ᚖstring)
-	if err != nil {
-		return nil, err
-	}
-	args["moduleName"] = arg1
 	return args, nil
 }
 
@@ -16607,35 +16191,6 @@ func (ec *executionContext) fieldContext_Build_error(_ context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _Build_presetId(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Build_presetId,
-		func(ctx context.Context) (any, error) {
-			return obj.PresetID, nil
-		},
-		nil,
-		ec.marshalOID2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Build_presetId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Build",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Build_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17451,740 +17006,6 @@ func (ec *executionContext) fieldContext_BuildFile_createdAt(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_id(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_id,
-		func(ctx context.Context) (any, error) {
-			return obj.ID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_operationId(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_operationId,
-		func(ctx context.Context) (any, error) {
-			return obj.OperationID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_name(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_name,
-		func(ctx context.Context) (any, error) {
-			return obj.Name, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_description(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_description,
-		func(ctx context.Context) (any, error) {
-			return obj.Description, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_moduleName,
-		func(ctx context.Context) (any, error) {
-			return obj.ModuleName, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_target(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_target,
-		func(ctx context.Context) (any, error) {
-			return obj.Target, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_target(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_platform(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_platform,
-		func(ctx context.Context) (any, error) {
-			return obj.Platform, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_platform(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_values(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_values,
-		func(ctx context.Context) (any, error) {
-			return obj.Values, nil
-		},
-		nil,
-		ec.marshalNJSON2interface,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type JSON does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_connections(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_connections,
-		func(ctx context.Context) (any, error) {
-			return obj.Connections, nil
-		},
-		nil,
-		ec.marshalNBuildPresetConnection2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetConnectionᚄ,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "moduleName":
-				return ec.fieldContext_BuildPresetConnection_moduleName(ctx, field)
-			case "name":
-				return ec.fieldContext_BuildPresetConnection_name(ctx, field)
-			case "description":
-				return ec.fieldContext_BuildPresetConnection_description(ctx, field)
-			case "settings":
-				return ec.fieldContext_BuildPresetConnection_settings(ctx, field)
-			case "schemaVersion":
-				return ec.fieldContext_BuildPresetConnection_schemaVersion(ctx, field)
-			case "schemaChanged":
-				return ec.fieldContext_BuildPresetConnection_schemaChanged(ctx, field)
-			case "values":
-				return ec.fieldContext_BuildPresetConnection_values(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildPresetConnection", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_schemaVersion,
-		func(ctx context.Context) (any, error) {
-			return obj.SchemaVersion, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_schemaVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_schemaChanged(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_schemaChanged,
-		func(ctx context.Context) (any, error) {
-			return obj.SchemaChanged, nil
-		},
-		nil,
-		ec.marshalNBoolean2bool,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_schemaChanged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_problems(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_problems,
-		func(ctx context.Context) (any, error) {
-			return obj.Problems, nil
-		},
-		nil,
-		ec.marshalNBuildProblem2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildProblemᚄ,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_problems(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "key":
-				return ec.fieldContext_BuildProblem_key(ctx, field)
-			case "message":
-				return ec.fieldContext_BuildProblem_message(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildProblem", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_revision(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_revision,
-		func(ctx context.Context) (any, error) {
-			return obj.Revision, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_revision(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_createdBy(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_createdBy,
-		func(ctx context.Context) (any, error) {
-			return obj.CreatedBy, nil
-		},
-		nil,
-		ec.marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "type":
-				return ec.fieldContext_ModuleActor_type(ctx, field)
-			case "id":
-				return ec.fieldContext_ModuleActor_id(ctx, field)
-			case "name":
-				return ec.fieldContext_ModuleActor_name(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_updatedBy(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_updatedBy,
-		func(ctx context.Context) (any, error) {
-			return obj.UpdatedBy, nil
-		},
-		nil,
-		ec.marshalNModuleActor2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleActor,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "type":
-				return ec.fieldContext_ModuleActor_type(ctx, field)
-			case "id":
-				return ec.fieldContext_ModuleActor_id(ctx, field)
-			case "name":
-				return ec.fieldContext_ModuleActor_name(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type ModuleActor", field.Name)
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_createdAt,
-		func(ctx context.Context) (any, error) {
-			return obj.CreatedAt, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPreset_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.BuildPreset) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPreset_updatedAt,
-		func(ctx context.Context) (any, error) {
-			return obj.UpdatedAt, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPreset_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPreset",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_moduleName,
-		func(ctx context.Context) (any, error) {
-			return obj.ModuleName, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_name(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_name,
-		func(ctx context.Context) (any, error) {
-			return obj.Name, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_description(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_description,
-		func(ctx context.Context) (any, error) {
-			return obj.Description, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_settings(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_settings,
-		func(ctx context.Context) (any, error) {
-			return obj.Settings, nil
-		},
-		nil,
-		ec.marshalNJSON2interface,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_settings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type JSON does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_schemaVersion,
-		func(ctx context.Context) (any, error) {
-			return obj.SchemaVersion, nil
-		},
-		nil,
-		ec.marshalNInt2int,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_schemaVersion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_schemaChanged(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_schemaChanged,
-		func(ctx context.Context) (any, error) {
-			return obj.SchemaChanged, nil
-		},
-		nil,
-		ec.marshalNBoolean2bool,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_schemaChanged(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _BuildPresetConnection_values(ctx context.Context, field graphql.CollectedField, obj *model.BuildPresetConnection) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildPresetConnection_values,
-		func(ctx context.Context) (any, error) {
-			return obj.Values, nil
-		},
-		nil,
-		ec.marshalNJSON2interface,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildPresetConnection_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildPresetConnection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type JSON does not have child fields")
 		},
 	}
 	return fc, nil
@@ -28673,255 +27494,6 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildFile(ctx context.Co
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_createBuildPreset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Mutation_createBuildPreset,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().CreateBuildPreset(ctx, fc.Args["operationId"].(string), fc.Args["moduleName"].(string), fc.Args["input"].(model.BuildPresetInput))
-		},
-		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
-			directive0 := next
-
-			directive1 := func(ctx context.Context) (any, error) {
-				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
-				if err != nil {
-					var zeroVal *model.BuildPreset
-					return zeroVal, err
-				}
-				if ec.Directives.HasPermission == nil {
-					var zeroVal *model.BuildPreset
-					return zeroVal, errors.New("directive hasPermission is not implemented")
-				}
-				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
-			}
-
-			next = directive1
-			return next
-		},
-		ec.marshalNBuildPreset2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Mutation_createBuildPreset(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_BuildPreset_id(ctx, field)
-			case "operationId":
-				return ec.fieldContext_BuildPreset_operationId(ctx, field)
-			case "name":
-				return ec.fieldContext_BuildPreset_name(ctx, field)
-			case "description":
-				return ec.fieldContext_BuildPreset_description(ctx, field)
-			case "moduleName":
-				return ec.fieldContext_BuildPreset_moduleName(ctx, field)
-			case "target":
-				return ec.fieldContext_BuildPreset_target(ctx, field)
-			case "platform":
-				return ec.fieldContext_BuildPreset_platform(ctx, field)
-			case "values":
-				return ec.fieldContext_BuildPreset_values(ctx, field)
-			case "connections":
-				return ec.fieldContext_BuildPreset_connections(ctx, field)
-			case "schemaVersion":
-				return ec.fieldContext_BuildPreset_schemaVersion(ctx, field)
-			case "schemaChanged":
-				return ec.fieldContext_BuildPreset_schemaChanged(ctx, field)
-			case "problems":
-				return ec.fieldContext_BuildPreset_problems(ctx, field)
-			case "revision":
-				return ec.fieldContext_BuildPreset_revision(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_BuildPreset_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_BuildPreset_updatedBy(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_BuildPreset_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_BuildPreset_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildPreset", field.Name)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_createBuildPreset_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_updateBuildPreset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Mutation_updateBuildPreset,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().UpdateBuildPreset(ctx, fc.Args["id"].(string), fc.Args["input"].(model.BuildPresetInput), fc.Args["expectedRevision"].(int))
-		},
-		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
-			directive0 := next
-
-			directive1 := func(ctx context.Context) (any, error) {
-				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
-				if err != nil {
-					var zeroVal *model.BuildPreset
-					return zeroVal, err
-				}
-				if ec.Directives.HasPermission == nil {
-					var zeroVal *model.BuildPreset
-					return zeroVal, errors.New("directive hasPermission is not implemented")
-				}
-				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
-			}
-
-			next = directive1
-			return next
-		},
-		ec.marshalNBuildPreset2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Mutation_updateBuildPreset(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_BuildPreset_id(ctx, field)
-			case "operationId":
-				return ec.fieldContext_BuildPreset_operationId(ctx, field)
-			case "name":
-				return ec.fieldContext_BuildPreset_name(ctx, field)
-			case "description":
-				return ec.fieldContext_BuildPreset_description(ctx, field)
-			case "moduleName":
-				return ec.fieldContext_BuildPreset_moduleName(ctx, field)
-			case "target":
-				return ec.fieldContext_BuildPreset_target(ctx, field)
-			case "platform":
-				return ec.fieldContext_BuildPreset_platform(ctx, field)
-			case "values":
-				return ec.fieldContext_BuildPreset_values(ctx, field)
-			case "connections":
-				return ec.fieldContext_BuildPreset_connections(ctx, field)
-			case "schemaVersion":
-				return ec.fieldContext_BuildPreset_schemaVersion(ctx, field)
-			case "schemaChanged":
-				return ec.fieldContext_BuildPreset_schemaChanged(ctx, field)
-			case "problems":
-				return ec.fieldContext_BuildPreset_problems(ctx, field)
-			case "revision":
-				return ec.fieldContext_BuildPreset_revision(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_BuildPreset_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_BuildPreset_updatedBy(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_BuildPreset_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_BuildPreset_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildPreset", field.Name)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_updateBuildPreset_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_deleteBuildPreset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Mutation_deleteBuildPreset,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().DeleteBuildPreset(ctx, fc.Args["id"].(string))
-		},
-		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
-			directive0 := next
-
-			directive1 := func(ctx context.Context) (any, error) {
-				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
-				if err != nil {
-					var zeroVal bool
-					return zeroVal, err
-				}
-				if ec.Directives.HasPermission == nil {
-					var zeroVal bool
-					return zeroVal, errors.New("directive hasPermission is not implemented")
-				}
-				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
-			}
-
-			next = directive1
-			return next
-		},
-		ec.marshalNBoolean2bool,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Mutation_deleteBuildPreset(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Boolean does not have child fields")
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_deleteBuildPreset_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Mutation_createBuild(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29003,8 +27575,6 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_log(ctx, field)
 			case "error":
 				return ec.fieldContext_Build_error(ctx, field)
-			case "presetId":
-				return ec.fieldContext_Build_presetId(ctx, field)
 			case "createdBy":
 				return ec.fieldContext_Build_createdBy(ctx, field)
 			case "cancelledBy":
@@ -29116,8 +27686,6 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_log(ctx, field)
 			case "error":
 				return ec.fieldContext_Build_error(ctx, field)
-			case "presetId":
-				return ec.fieldContext_Build_presetId(ctx, field)
 			case "createdBy":
 				return ec.fieldContext_Build_createdBy(ctx, field)
 			case "cancelledBy":
@@ -29229,8 +27797,6 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_log(ctx, field)
 			case "error":
 				return ec.fieldContext_Build_error(ctx, field)
-			case "presetId":
-				return ec.fieldContext_Build_presetId(ctx, field)
 			case "createdBy":
 				return ec.fieldContext_Build_createdBy(ctx, field)
 			case "cancelledBy":
@@ -36527,196 +35093,6 @@ func (ec *executionContext) fieldContext_Query_buildFiles(ctx context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_buildPresets(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Query_buildPresets,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().BuildPresets(ctx, fc.Args["operationId"].(string), fc.Args["moduleName"].(*string))
-		},
-		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
-			directive0 := next
-
-			directive1 := func(ctx context.Context) (any, error) {
-				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
-				if err != nil {
-					var zeroVal []*model.BuildPreset
-					return zeroVal, err
-				}
-				if ec.Directives.HasPermission == nil {
-					var zeroVal []*model.BuildPreset
-					return zeroVal, errors.New("directive hasPermission is not implemented")
-				}
-				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
-			}
-
-			next = directive1
-			return next
-		},
-		ec.marshalNBuildPreset2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetᚄ,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Query_buildPresets(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_BuildPreset_id(ctx, field)
-			case "operationId":
-				return ec.fieldContext_BuildPreset_operationId(ctx, field)
-			case "name":
-				return ec.fieldContext_BuildPreset_name(ctx, field)
-			case "description":
-				return ec.fieldContext_BuildPreset_description(ctx, field)
-			case "moduleName":
-				return ec.fieldContext_BuildPreset_moduleName(ctx, field)
-			case "target":
-				return ec.fieldContext_BuildPreset_target(ctx, field)
-			case "platform":
-				return ec.fieldContext_BuildPreset_platform(ctx, field)
-			case "values":
-				return ec.fieldContext_BuildPreset_values(ctx, field)
-			case "connections":
-				return ec.fieldContext_BuildPreset_connections(ctx, field)
-			case "schemaVersion":
-				return ec.fieldContext_BuildPreset_schemaVersion(ctx, field)
-			case "schemaChanged":
-				return ec.fieldContext_BuildPreset_schemaChanged(ctx, field)
-			case "problems":
-				return ec.fieldContext_BuildPreset_problems(ctx, field)
-			case "revision":
-				return ec.fieldContext_BuildPreset_revision(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_BuildPreset_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_BuildPreset_updatedBy(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_BuildPreset_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_BuildPreset_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildPreset", field.Name)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_buildPresets_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Query_buildPreset(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Query_buildPreset,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().BuildPreset(ctx, fc.Args["id"].(string))
-		},
-		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
-			directive0 := next
-
-			directive1 := func(ctx context.Context) (any, error) {
-				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
-				if err != nil {
-					var zeroVal *model.BuildPreset
-					return zeroVal, err
-				}
-				if ec.Directives.HasPermission == nil {
-					var zeroVal *model.BuildPreset
-					return zeroVal, errors.New("directive hasPermission is not implemented")
-				}
-				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
-			}
-
-			next = directive1
-			return next
-		},
-		ec.marshalOBuildPreset2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Query_buildPreset(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_BuildPreset_id(ctx, field)
-			case "operationId":
-				return ec.fieldContext_BuildPreset_operationId(ctx, field)
-			case "name":
-				return ec.fieldContext_BuildPreset_name(ctx, field)
-			case "description":
-				return ec.fieldContext_BuildPreset_description(ctx, field)
-			case "moduleName":
-				return ec.fieldContext_BuildPreset_moduleName(ctx, field)
-			case "target":
-				return ec.fieldContext_BuildPreset_target(ctx, field)
-			case "platform":
-				return ec.fieldContext_BuildPreset_platform(ctx, field)
-			case "values":
-				return ec.fieldContext_BuildPreset_values(ctx, field)
-			case "connections":
-				return ec.fieldContext_BuildPreset_connections(ctx, field)
-			case "schemaVersion":
-				return ec.fieldContext_BuildPreset_schemaVersion(ctx, field)
-			case "schemaChanged":
-				return ec.fieldContext_BuildPreset_schemaChanged(ctx, field)
-			case "problems":
-				return ec.fieldContext_BuildPreset_problems(ctx, field)
-			case "revision":
-				return ec.fieldContext_BuildPreset_revision(ctx, field)
-			case "createdBy":
-				return ec.fieldContext_BuildPreset_createdBy(ctx, field)
-			case "updatedBy":
-				return ec.fieldContext_BuildPreset_updatedBy(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_BuildPreset_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_BuildPreset_updatedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type BuildPreset", field.Name)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_buildPreset_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Query_builds(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -36798,8 +35174,6 @@ func (ec *executionContext) fieldContext_Query_builds(ctx context.Context, field
 				return ec.fieldContext_Build_log(ctx, field)
 			case "error":
 				return ec.fieldContext_Build_error(ctx, field)
-			case "presetId":
-				return ec.fieldContext_Build_presetId(ctx, field)
 			case "createdBy":
 				return ec.fieldContext_Build_createdBy(ctx, field)
 			case "cancelledBy":
@@ -36911,8 +35285,6 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_log(ctx, field)
 			case "error":
 				return ec.fieldContext_Build_error(ctx, field)
-			case "presetId":
-				return ec.fieldContext_Build_presetId(ctx, field)
 			case "createdBy":
 				return ec.fieldContext_Build_createdBy(ctx, field)
 			case "cancelledBy":
@@ -52605,7 +50977,7 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"moduleName", "target", "platform", "values", "connections", "presetId"}
+	fieldsInOrder := [...]string{"moduleName", "target", "platform", "values", "connections"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -52629,78 +51001,6 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 		case "platform":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("platform"))
 			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Platform = data
-		case "values":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("values"))
-			data, err := ec.unmarshalNJSON2interface(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Values = data
-		case "connections":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("connections"))
-			data, err := ec.unmarshalNBuildConnectionInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildConnectionInputᚄ(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Connections = data
-		case "presetId":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("presetId"))
-			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.PresetID = data
-		}
-	}
-	return it, nil
-}
-
-func (ec *executionContext) unmarshalInputBuildPresetInput(ctx context.Context, obj any) (model.BuildPresetInput, error) {
-	var it model.BuildPresetInput
-	if obj == nil {
-		return it, nil
-	}
-
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"name", "description", "target", "platform", "values", "connections"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "name":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Name = data
-		case "description":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Description = data
-		case "target":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("target"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Target = data
-		case "platform":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("platform"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -55795,8 +54095,6 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = ec._Build_log(ctx, field, obj)
 		case "error":
 			out.Values[i] = ec._Build_error(ctx, field, obj)
-		case "presetId":
-			out.Values[i] = ec._Build_presetId(ctx, field, obj)
 		case "createdBy":
 			out.Values[i] = ec._Build_createdBy(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -56079,182 +54377,6 @@ func (ec *executionContext) _BuildFile(ctx context.Context, sel ast.SelectionSet
 			}
 		case "createdAt":
 			out.Values[i] = ec._BuildFile_createdAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var buildPresetImplementors = []string{"BuildPreset"}
-
-func (ec *executionContext) _BuildPreset(ctx context.Context, sel ast.SelectionSet, obj *model.BuildPreset) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, buildPresetImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("BuildPreset")
-		case "id":
-			out.Values[i] = ec._BuildPreset_id(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "operationId":
-			out.Values[i] = ec._BuildPreset_operationId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "name":
-			out.Values[i] = ec._BuildPreset_name(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "description":
-			out.Values[i] = ec._BuildPreset_description(ctx, field, obj)
-		case "moduleName":
-			out.Values[i] = ec._BuildPreset_moduleName(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "target":
-			out.Values[i] = ec._BuildPreset_target(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "platform":
-			out.Values[i] = ec._BuildPreset_platform(ctx, field, obj)
-		case "values":
-			out.Values[i] = ec._BuildPreset_values(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "connections":
-			out.Values[i] = ec._BuildPreset_connections(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "schemaVersion":
-			out.Values[i] = ec._BuildPreset_schemaVersion(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "schemaChanged":
-			out.Values[i] = ec._BuildPreset_schemaChanged(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "problems":
-			out.Values[i] = ec._BuildPreset_problems(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "revision":
-			out.Values[i] = ec._BuildPreset_revision(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "createdBy":
-			out.Values[i] = ec._BuildPreset_createdBy(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "updatedBy":
-			out.Values[i] = ec._BuildPreset_updatedBy(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "createdAt":
-			out.Values[i] = ec._BuildPreset_createdAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "updatedAt":
-			out.Values[i] = ec._BuildPreset_updatedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.ProcessDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var buildPresetConnectionImplementors = []string{"BuildPresetConnection"}
-
-func (ec *executionContext) _BuildPresetConnection(ctx context.Context, sel ast.SelectionSet, obj *model.BuildPresetConnection) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, buildPresetConnectionImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("BuildPresetConnection")
-		case "moduleName":
-			out.Values[i] = ec._BuildPresetConnection_moduleName(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "name":
-			out.Values[i] = ec._BuildPresetConnection_name(ctx, field, obj)
-		case "description":
-			out.Values[i] = ec._BuildPresetConnection_description(ctx, field, obj)
-		case "settings":
-			out.Values[i] = ec._BuildPresetConnection_settings(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "schemaVersion":
-			out.Values[i] = ec._BuildPresetConnection_schemaVersion(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "schemaChanged":
-			out.Values[i] = ec._BuildPresetConnection_schemaChanged(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "values":
-			out.Values[i] = ec._BuildPresetConnection_values(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -60234,27 +58356,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "createBuildPreset":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_createBuildPreset(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "updateBuildPreset":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_updateBuildPreset(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "deleteBuildPreset":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_deleteBuildPreset(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "createBuild":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createBuild(ctx, field)
@@ -61610,47 +59711,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx,
-					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "buildPresets":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_buildPresets(ctx, field)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
-			}
-
-			rrm := func(ctx context.Context) graphql.Marshaler {
-				return ec.OperationContext.RootResolverMiddleware(ctx,
-					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "buildPreset":
-			field := field
-
-			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_buildPreset(ctx, field)
 				return res
 			}
 
@@ -68413,93 +66473,6 @@ func (ec *executionContext) unmarshalNBuildInput2githubᚗcomᚋlogoscoreᚋlogo
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) marshalNBuildPreset2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset(ctx context.Context, sel ast.SelectionSet, v model.BuildPreset) graphql.Marshaler {
-	return ec._BuildPreset(ctx, sel, &v)
-}
-
-func (ec *executionContext) marshalNBuildPreset2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildPreset) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNBuildPreset2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNBuildPreset2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset(ctx context.Context, sel ast.SelectionSet, v *model.BuildPreset) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._BuildPreset(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNBuildPresetConnection2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetConnectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildPresetConnection) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNBuildPresetConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetConnection(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNBuildPresetConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetConnection(ctx context.Context, sel ast.SelectionSet, v *model.BuildPresetConnection) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._BuildPresetConnection(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalNBuildPresetInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPresetInput(ctx context.Context, v any) (model.BuildPresetInput, error) {
-	res, err := ec.unmarshalInputBuildPresetInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNBuildProblem2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildProblemᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildProblem) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNBuildProblem2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildProblem(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNBuildProblem2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildProblem(ctx context.Context, sel ast.SelectionSet, v *model.BuildProblem) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._BuildProblem(ctx, sel, v)
-}
-
 func (ec *executionContext) marshalNBuildSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildSchema(ctx context.Context, sel ast.SelectionSet, v *model.BuildSchema) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -71193,13 +69166,6 @@ func (ec *executionContext) marshalOBuildError2ᚖgithubᚗcomᚋlogoscoreᚋlog
 		return graphql.Null
 	}
 	return ec._BuildError(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalOBuildPreset2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildPreset(ctx context.Context, sel ast.SelectionSet, v *model.BuildPreset) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	return ec._BuildPreset(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOBuildSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildSchema(ctx context.Context, sel ast.SelectionSet, v *model.BuildSchema) graphql.Marshaler {

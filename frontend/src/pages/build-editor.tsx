@@ -1,9 +1,8 @@
 import { useMemo, useState, type ComponentProps } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router"
+import { Link, useNavigate, useSearchParams } from "react-router"
 import { ArrowLeftIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -12,29 +11,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Textarea } from "@/components/ui/textarea"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
-import type { BuildPresetFieldsFragment } from "@/graphql/gql/graphql"
 import { useChannelEndpoints, useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
-import {
-  useBuild,
-  useBuildFiles,
-  useBuildPreset,
-  useCreateBuild,
-  useCreateBuildPreset,
-  useFactoryKinds,
-  useInvalidateBuildFiles,
-  useUpdateBuildPreset,
-} from "@/graphql/hooks/builds"
+import { useBuild, useBuildFiles, useCreateBuild, useFactoryKinds, useInvalidateBuildFiles } from "@/graphql/hooks/builds"
 import { uploadBuildFile } from "@/lib/build-file-upload"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
-import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
+import { errorMessage } from "@/components/modules/management/api-errors"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
-import { kindsByName, nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
+import { kindsByName, problemsFromError } from "@/components/endpoints/endpoint-values"
 import { BuildFilesContext, type BuildFilesContextValue } from "@/components/builds/build-files-context"
 import { FieldRow } from "@/components/builds/build-field-row"
 import { ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
@@ -60,80 +48,36 @@ import {
   type FactoryKind,
   type FormSource,
 } from "@/components/builds/build-values"
-import { PRESETS_PATH, useCanBuild } from "@/components/builds/build-access"
+import { BUILDS_PATH, useCanBuild } from "@/components/builds/build-access"
 import { KindName } from "@/components/modules/module-icon"
 
-type Preset = BuildPresetFieldsFragment
-
-/** /builds/new?kind=bob[&preset=<id> | &from=<build id>] — a build in the scoped operation. */
+/**
+ * /builds/new?kind=bob[&from=<build id>] — a build in the scoped operation;
+ * with from, filled in from that earlier build ("Build again").
+ */
 export function NewBuildPage() {
   const scopedOperation = useScopedOperation()
   const [params] = useSearchParams()
-  const presetQuery = useBuildPreset(params.get("preset") ?? "")
   const fromQuery = useBuild(params.get("from") ?? "")
   usePageMetadata({ title: "New build", icon: { kind: "lucide", component: HammerIcon } })
 
   if (!scopedOperation) return <GettingStartedPanel />
-  if (presetQuery.isLoading || fromQuery.isLoading) return <EditorSkeleton />
-  const preset = presetQuery.data?.buildPreset ?? null
+  if (fromQuery.isLoading) return <EditorSkeleton />
   const from = fromQuery.data?.build ?? null
-  const kindName = params.get("kind") ?? preset?.moduleName ?? from?.moduleName ?? ""
-  let source: SourceSpec = null
-  if (preset) source = { kind: "preset", preset }
-  else if (from) source = { kind: "build", build: from }
-  return <EditorLoader operationId={scopedOperation.id} kindName={kindName} mode="build" source={source} preset={null} />
+  const kindName = params.get("kind") ?? from?.moduleName ?? ""
+  return <EditorLoader operationId={scopedOperation.id} kindName={kindName} from={from} />
 }
-
-/** /builds/presets/new?kind=bob — a preset in the scoped operation. */
-export function NewPresetPage() {
-  const scopedOperation = useScopedOperation()
-  const [params] = useSearchParams()
-  usePageMetadata({ title: "New preset", icon: { kind: "lucide", component: HammerIcon } })
-  if (!scopedOperation) return <GettingStartedPanel />
-  return <EditorLoader operationId={scopedOperation.id} kindName={params.get("kind") ?? ""} mode="preset" source={null} preset={null} />
-}
-
-/** /builds/presets/:id — edit a preset (read-only below operator). */
-export function EditPresetPage() {
-  const { id = "" } = useParams<{ id: string }>()
-  const presetQuery = useBuildPreset(id)
-  const preset = presetQuery.data?.buildPreset ?? null
-  usePageMetadata({
-    title: preset ? `${preset.name} · Presets` : "Presets",
-    icon: { kind: "lucide", component: HammerIcon },
-  })
-  if (presetQuery.isLoading) return <EditorSkeleton />
-  if (presetQuery.error) return <NotFound text={presetQuery.error.message} />
-  if (!preset) return <NotFound text="This preset does not exist." />
-  return (
-    <EditorLoader
-      operationId={preset.operationId}
-      kindName={preset.moduleName}
-      mode="preset"
-      source={{ kind: "preset", preset }}
-      preset={preset}
-    />
-  )
-}
-
-type SourceSpec =
-  | null
-  | { kind: "preset"; preset: Preset }
-  | { kind: "build"; build: BuildRecordLike }
 
 /** Loads what the form needs: the factory kind, the channels, the endpoints, the files. */
 function EditorLoader({
   operationId,
   kindName,
-  mode,
-  source,
-  preset,
+  from,
 }: {
   operationId: string
   kindName: string
-  mode: "build" | "preset"
-  source: SourceSpec
-  preset: Preset | null
+  /** The earlier build the form starts from, if any. */
+  from: BuildRecordLike | null
 }) {
   const kinds = useFactoryKinds()
   const channelKinds = useChannelKinds()
@@ -147,32 +91,11 @@ function EditorLoader({
   if (!kind) return <NotFound text={`No "${kindName}" factory declares what it builds.`} />
   const channels = kindsByName(channelKinds.data?.channelKinds ?? [])
 
-  let formSource: FormSource | null = null
-  if (source?.kind === "preset") {
-    formSource = {
-      target: source.preset.target,
-      platform: source.preset.platform,
-      values: (source.preset.values ?? {}) as Record<string, unknown>,
-      connections: source.preset.connections.map((c) => ({
-        moduleName: c.moduleName,
-        name: c.name,
-        description: c.description,
-        schemaVersion: c.schemaVersion,
-        settings: (c.settings ?? {}) as Record<string, unknown>,
-        values: (c.values ?? {}) as Record<string, unknown>,
-      })),
-    }
-  } else if (source?.kind === "build") {
-    formSource = sourceFromBuild(kind, source.build, channels)
-  }
-
   return (
     <Editor
       operationId={operationId}
       kind={kind}
-      mode={mode}
-      preset={preset}
-      source={formSource}
+      source={from && sourceFromBuild(kind, from, channels)}
       channels={channels}
       endpoints={endpointsQuery.data?.channelEndpoints ?? []}
       files={(filesQuery.data?.buildFiles ?? []).map((f) => ({ id: f.id, name: f.name, size: f.size, mediaType: f.mediaType }))}
@@ -194,7 +117,7 @@ function NotFound({ text }: { text: string }) {
     <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
       <HammerIcon className="size-8 opacity-50" />
       <p className="max-w-md text-sm">{text}</p>
-      <Link to="/builds" className="text-sm underline underline-offset-4">
+      <Link to={BUILDS_PATH} className="text-sm underline underline-offset-4">
         Back to builds
       </Link>
     </div>
@@ -204,8 +127,6 @@ function NotFound({ text }: { text: string }) {
 function Editor({
   operationId,
   kind,
-  mode,
-  preset,
   source,
   channels,
   endpoints,
@@ -213,8 +134,6 @@ function Editor({
 }: {
   operationId: string
   kind: FactoryKind
-  mode: "build" | "preset"
-  preset: Preset | null
   source: FormSource | null
   channels: ReadonlyMap<string, ChannelKind>
   /** The operation's endpoints, which connections can be filled from. */
@@ -224,7 +143,6 @@ function Editor({
   const navigate = useNavigate()
   const { canWrite, loading: roleLoading } = useCanBuild(operationId)
   const readOnly = !roleLoading && !canWrite
-  const backTo = mode === "build" ? "/builds" : PRESETS_PATH
   const channelIcons = useChannelIcons()
 
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
@@ -232,24 +150,19 @@ function Editor({
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
   // Saving the connection keyed key as an endpoint.
   const [saving, setSaving] = useState<{ open: boolean; key: string | null }>({ open: false, key: null })
-  const [name, setName] = useState(preset?.name ?? "")
-  const [description, setDescription] = useState(preset?.description ?? "")
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
   const [saveError, setSaveError] = useState<string | null>(null)
   const createBuild = useCreateBuild()
-  const createPreset = useCreateBuildPreset()
-  const updatePreset = useUpdateBuildPreset()
   const invalidateFiles = useInvalidateBuildFiles()
-  const pending = createBuild.isPending || createPreset.isPending || updatePreset.isPending
+  const pending = createBuild.isPending
   const disabled = pending || readOnly
 
   const target = kind.targets.find((t) => t.id === form.target)
   const fields = targetFields(kind, target)
-  const { input, errors } = evaluateForm(kind, form, mode === "preset", channels)
-  const nameErr = mode === "preset" ? nameError(name) : null
+  const { input, errors } = evaluateForm(kind, form, channels)
   const shown: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
-  const hasErrors = nameErr !== null || Object.keys(errors).length > 0
+  const hasErrors = Object.keys(errors).length > 0
 
   const filesCtx: BuildFilesContextValue = useMemo(
     () => ({
@@ -313,50 +226,26 @@ function Editor({
     setSaveError(null)
     if (hasErrors || readOnly) return
     try {
-      if (mode === "build") {
-        const res = await createBuild.mutateAsync({
-          operationId,
-          input: {
-            moduleName: kind.name,
-            target: input.target,
-            platform: input.platform,
-            values: input.values,
-            connections: input.connections,
-            presetId: preset?.id ?? null,
-          },
-        })
-        toast.success("Build queued")
-        navigate(`/builds/${res.createBuild.id}`)
-        return
-      }
-      const presetInput = {
-        name: name.trim(),
-        description: description.trim() || null,
-        target: input.target,
-        platform: input.platform || null,
-        values: input.values,
-        connections: input.connections,
-      }
-      if (preset) {
-        await updatePreset.mutateAsync({ id: preset.id, input: presetInput, expectedRevision: preset.revision })
-        toast.success("Preset saved")
-      } else {
-        await createPreset.mutateAsync({ operationId, moduleName: kind.name, input: presetInput })
-        toast.success("Preset created")
-      }
-      navigate(PRESETS_PATH)
+      const res = await createBuild.mutateAsync({
+        operationId,
+        input: {
+          moduleName: kind.name,
+          target: input.target,
+          platform: input.platform,
+          values: input.values,
+          connections: input.connections,
+        },
+      })
+      toast.success("Build queued")
+      navigate(`${BUILDS_PATH}/${res.createBuild.id}`)
     } catch (err) {
-      if (graphqlErrorCode(err) === "CONFLICT") {
-        setSaveError("Someone else changed this preset meanwhile. Reload the page to see their version.")
-        return
-      }
       const problems = problemsFromError(err)
       setServerErrors(problems)
       setSaveError(
         problems[""] ??
           (Object.keys(problems).length > 0
             ? "Some settings were rejected; see the marked fields."
-            : errorMessage(err, mode === "build" ? "Failed to start the build" : "Failed to save the preset")),
+            : errorMessage(err, "Failed to start the build")),
       )
     }
   }
@@ -393,7 +282,7 @@ function Editor({
     {
       id: sectionId(WHAT_TO_BUILD),
       title: WHAT_TO_BUILD,
-      state: shown.target || shown.platform || (submitted && nameErr) ? "error" : "set",
+      state: shown.target || shown.platform ? "error" : "set",
     },
     ...groups.map(
       (g): SettingsNavSection => ({
@@ -428,17 +317,15 @@ function Editor({
         }}
       >
         <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 py-3">
-          <Link to={backTo} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <Link to={BUILDS_PATH} className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeftIcon className="size-4" />
-            {mode === "build" ? "Builds" : "Presets"}
+            Builds
           </Link>
           <span className="h-5 w-px bg-border" aria-hidden />
-          <h1 className="text-lg font-semibold">
-            {mode === "build" ? "New build" : preset ? preset.name : "New preset"}
-          </h1>
+          <h1 className="text-lg font-semibold">New build</h1>
           <span className="text-sm text-muted-foreground">
-            <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
-            {mode === "build" && ` · ${kind.instances} running`}
+            <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version} · {kind.instances}{" "}
+            running
           </span>
           <div className="flex items-center gap-2 sm:ml-auto">
             {readOnly ? (
@@ -446,11 +333,11 @@ function Editor({
             ) : (
               <>
                 {submitted && hasErrors && <span className="text-sm text-destructive">Fix the marked fields</span>}
-                <Button type="button" variant="outline" onClick={() => navigate(backTo)} disabled={pending}>
+                <Button type="button" variant="outline" onClick={() => navigate(BUILDS_PATH)} disabled={pending}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={pending}>
-                  {pending ? "Saving..." : mode === "build" ? "Build" : preset ? "Save" : "Create"}
+                  {pending ? "Starting..." : "Build"}
                 </Button>
               </>
             )}
@@ -464,32 +351,6 @@ function Editor({
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
 
           <SettingsSection id={sectionId(WHAT_TO_BUILD)} title={WHAT_TO_BUILD}>
-            {mode === "preset" && (
-              <>
-                <SettingRow id="preset-name" label="Name" required help="Unique in this operation: lowercase letters, digits, '.', '_' and '-'." error={submitted ? (nameErr ?? undefined) : undefined}>
-                  <Input
-                    id="preset-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="eu-front-service"
-                    autoComplete="off"
-                    spellCheck={false}
-                    disabled={disabled}
-                    aria-invalid={(submitted && !!nameErr) || undefined}
-                  />
-                </SettingRow>
-                <SettingRow id="preset-description" label="Description" help="What this preset is for, for the rest of the team.">
-                  <Textarea
-                    id="preset-description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={2}
-                    maxLength={500}
-                    disabled={disabled}
-                  />
-                </SettingRow>
-              </>
-            )}
             <SettingRow id="build-target" label="Target" required help={target?.description ?? "What the factory produces."} error={shown.target}>
               <Select
                 value={form.target === "" ? null : form.target}
@@ -510,20 +371,14 @@ function Editor({
                 </SelectContent>
               </Select>
             </SettingRow>
-            <SettingRow
-              id="build-platform"
-              label="Platform"
-              required={mode === "build"}
-              help={mode === "preset" ? "Optional in a preset: it can be left for the build." : "Where the minion runs."}
-              error={shown.platform}
-            >
+            <SettingRow id="build-platform" label="Platform" required help="Where the minion runs." error={shown.platform}>
               <Select
                 value={form.platform === "" ? null : form.platform}
                 onValueChange={(v) => setForm((f) => ({ ...f, platform: typeof v === "string" ? v : "" }))}
                 disabled={disabled || !target}
               >
                 <SelectTrigger id="build-platform" className="w-full max-w-80">
-                  <SelectValue placeholder={mode === "preset" ? "Chosen when building" : "Select…"} />
+                  <SelectValue placeholder="Select…" />
                 </SelectTrigger>
                 <SelectContent>
                   {(target?.platforms ?? []).map((p) => (
@@ -547,7 +402,6 @@ function Editor({
                   onChange={(d) => setValueDraft(f.key, d)}
                   error={shown[`values.${f.key}`]}
                   disabled={disabled}
-                  partial={mode === "preset"}
                 />
               ))}
             </SettingsSection>
@@ -580,7 +434,6 @@ function Editor({
                     settings={input.connections[i]?.settings ?? {}}
                     errors={shown}
                     disabled={disabled}
-                    partial={mode === "preset"}
                     onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
                     onDescription={(description) =>
                       updateConnection(i, (x) => ({ ...x, description, described: description.trim() !== "" }), `${at}.description`)

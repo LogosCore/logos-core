@@ -15,7 +15,7 @@ import (
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
-// ConnectionInput is one connection of a build or preset: a channel kind,
+// ConnectionInput is one connection of a build: a channel kind,
 // its connection settings (by the channel's connection schema; a field without
 // a value takes its default) and the factory's connection parameter values
 // for it. Name is given to the minion with the settings and is unique among
@@ -29,6 +29,9 @@ type ConnectionInput struct {
 	Settings    map[string]any
 	Values      map[string]any
 }
+
+// MaxDescriptionLength bounds a connection's description, in characters.
+const MaxDescriptionLength = 500
 
 // connectionNamePattern: a connection is named like an endpoint.
 var connectionNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
@@ -54,7 +57,7 @@ func connectionName(c ConnectionInput, i int) string {
 	return fmt.Sprintf("%s-%d", c.ModuleName, i+1)
 }
 
-// settings are what a build is made of, and what a preset holds of it.
+// settings are what a build is made of.
 type settings struct {
 	Target      string
 	Platform    string
@@ -84,10 +87,9 @@ func (p problems) err(message string) error {
 	return &ValidationError{Message: message, Problems: p}
 }
 
-// check validates settings for operation op against schema. A preset is
-// partial: the platform, the connections and required values may be left for
-// the build form. Problems come back in out; err is for failures to check.
-func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.BuildSchema, st settings, partial bool) (c checked, out problems, err error) {
+// check validates settings for operation op against schema. Problems come
+// back in out; err is for failures to check.
+func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.BuildSchema, st settings) (c checked, out problems, err error) {
 	out = problems{}
 	t, ok := schema.Target(st.Target)
 	if !ok {
@@ -96,18 +98,18 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	}
 	c.target, c.fields = t, schema.TargetFields(t)
 	switch {
-	case st.Platform == "" && !partial:
+	case st.Platform == "":
 		out.add("platform", "a platform is required")
 	case st.Platform != "" && !t.HasPlatform(st.Platform):
 		out.add("platform", "not a platform of target %q", t.ID)
 	}
 
 	files := map[string]bool{}
-	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, partial, out, files); err != nil {
+	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, out, files); err != nil {
 		return c, out, err
 	}
 
-	if len(st.Connections) == 0 && !partial {
+	if len(st.Connections) == 0 {
 		out.add("connections", "at least one connection is required")
 	}
 	c.channels = make([]*protocol.ConnectionSchema, len(st.Connections))
@@ -144,11 +146,11 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			out.add(key, "target %q cannot connect through channel %q version %d", t.ID, conn.ModuleName, cs.Version)
 			continue
 		}
-		if err := s.checkValues(ctx, op, key+".settings.", cs.Fields, conn.Settings, partial, out, files); err != nil {
+		if err := s.checkValues(ctx, op, key+".settings.", cs.Fields, conn.Settings, out, files); err != nil {
 			return c, out, err
 		}
 		ch, _ := schema.Channel(conn.ModuleName)
-		if err := s.checkValues(ctx, op, key+".values.", ch.Fields, conn.Values, partial, out, files); err != nil {
+		if err := s.checkValues(ctx, op, key+".values.", ch.Fields, conn.Values, out, files); err != nil {
 			return c, out, err
 		}
 	}
@@ -160,9 +162,9 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 }
 
 // checkValues checks values against fields: no undeclared keys, every value
-// valid, required ones set unless partial, and file values naming a fitting
-// build file of op, whose ids go into files.
-func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, partial bool, out problems, files map[string]bool) error {
+// valid, required ones set, and file values naming a fitting build file of
+// op, whose ids go into files.
+func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, out problems, files map[string]bool) error {
 	declared := make(map[string]protocol.FieldSpec, len(fields))
 	for _, f := range fields {
 		declared[f.Key] = f
@@ -175,7 +177,7 @@ func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, 
 	for _, f := range fields {
 		v, ok := values[f.Key]
 		if !ok || v == nil {
-			if f.Required && f.Default == nil && !partial {
+			if f.Required && f.Default == nil {
 				out.add(prefix+f.Key, "value is required")
 			}
 			continue
@@ -219,4 +221,25 @@ func (s *Service) fileOf(ctx context.Context, op uuid.UUID, id string) (*models.
 		return nil, fmt.Errorf("load build file: %w", err)
 	}
 	return f, nil
+}
+
+// compact drops values that leave a field unset: null, "" and [].
+func compact(values map[string]any) map[string]any {
+	out := make(map[string]any, len(values))
+	for k, v := range values {
+		switch x := v.(type) {
+		case nil:
+			continue
+		case string:
+			if x == "" {
+				continue
+			}
+		case []any:
+			if len(x) == 0 {
+				continue
+			}
+		}
+		out[k] = v
+	}
+	return out
 }

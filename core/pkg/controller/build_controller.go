@@ -50,7 +50,7 @@ type BuildFileUploadResponse struct {
 // UploadFile handles POST /api/v1/build-files (multipart/form-data).
 //
 //	@Summary		Upload a build file
-//	@Description	Upload a file for a build's file fields (an icon, a signing certificate). It is kept while a preset or a build refers to it; an upload nothing refers to is removed after a day.
+//	@Description	Upload a file for a build's file fields (an icon, a signing certificate). It is kept while a build refers to it; an upload nothing refers to is removed after a day.
 //	@Tags			Builds
 //	@Accept			multipart/form-data
 //	@Produce		json

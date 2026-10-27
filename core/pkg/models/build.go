@@ -6,14 +6,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo/field"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Minion builds (contracts/minion-build.md). A factory declares a build
 // schema at module.register (Module.Build). An operation keeps build files
-// (uploads for file fields) and presets (ready-to-use build settings), and its
-// builds: each asks a factory instance for one minion, and a successful one
-// creates the Minion.
+// (uploads for file fields) and its builds: each asks a factory instance for
+// one minion, and a successful one creates the Minion.
 
 // BuildFile is a file an operator uploaded for a build's file fields, such as
 // an icon or a signing certificate, kept by an operation. Its bytes are in the
@@ -36,55 +34,6 @@ type BuildFile struct {
 // Protocol is the file as a build request carries it, without its URL.
 func (f BuildFile) Protocol() protocol.BuildFile {
 	return protocol.BuildFile{ID: f.FileID.String(), Name: f.Name, Size: f.Size, SHA256: f.SHA256, MediaType: f.MediaType}
-}
-
-// BuildPreset is ready-to-use build settings an operation keeps, the way an
-// endpoint is ready-to-use connection values: it fills in the build form and
-// builds nothing itself. Its connections hold their own settings (filling one
-// from an endpoint copies the endpoint's values), and it is validated against
-// the factory kind's and the channels' latest schemas when saved and read.
-type BuildPreset struct {
-	field.DefaultField `bson:",inline"`
-
-	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
-	// Name is unique within the operation.
-	Name        string `bson:"name" json:"name"`
-	Description string `bson:"description,omitempty" json:"description,omitempty"`
-	// ModuleName is the factory kind (Module.Name, e.g. "bob").
-	ModuleName string `bson:"module_name" json:"module_name"`
-	Target     string `bson:"target" json:"target"`
-	// Platform is optional: it may be left for the build form.
-	Platform string `bson:"platform,omitempty" json:"platform,omitempty"`
-	// SchemaVersion is the build schema version Values were saved against.
-	SchemaVersion int                     `bson:"schema_version" json:"schema_version"`
-	Values        JSONMap                 `bson:"values" json:"values"`
-	Connections   []BuildPresetConnection `bson:"connections" json:"connections"`
-	// FileIDs are the build files the values name: what keeps them stored.
-	FileIDs []string `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
-	// Revision grows with every write; updates compare against it.
-	Revision  int64       `bson:"revision" json:"revision"`
-	CreatedBy ModuleActor `bson:"created_by" json:"created_by"`
-	UpdatedBy ModuleActor `bson:"updated_by" json:"updated_by"`
-	CreatedAt time.Time   `bson:"created_at" json:"created_at"`
-	UpdatedAt time.Time   `bson:"updated_at" json:"updated_at"`
-}
-
-// BuildPresetConnection is one connection of a preset: a channel kind, its
-// connection settings and the factory's connection parameter values for it.
-type BuildPresetConnection struct {
-	// ModuleName is the channel kind (e.g. "http").
-	ModuleName string `bson:"module_name" json:"module_name"`
-	// Name is what the minion calls the connection; empty, it is named by
-	// channel and position when building.
-	Name string `bson:"name,omitempty" json:"name,omitempty"`
-	// Description is the operators' note on the connection; builds keep it
-	// in ConnectionDescriptions, never in what the factory gets.
-	Description string `bson:"description,omitempty" json:"description,omitempty"`
-	// SchemaVersion is the channel's connection schema version Settings
-	// were saved against.
-	SchemaVersion int     `bson:"schema_version" json:"schema_version"`
-	Settings      JSONMap `bson:"settings" json:"settings"`
-	Values        JSONMap `bson:"values" json:"values"`
 }
 
 // Build states.
@@ -127,8 +76,6 @@ type Build struct {
 	FileIDs                []string `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
 	// MinionID is the UUIDv4 the minion will send on the data plane.
 	MinionID string `bson:"minion_id" json:"minion_id"`
-	// PresetID is the preset the build was started from, if any.
-	PresetID *primitive.ObjectID `bson:"preset_id,omitempty" json:"preset_id,omitempty"`
 
 	State string `bson:"state" json:"state"`
 	// Instance is the factory instance building it (set when it accepted).

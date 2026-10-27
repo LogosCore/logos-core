@@ -1,5 +1,5 @@
 # =============================================================================
-# Minion builds — factories, build files, presets, builds and minions
+# Minion builds — factories, build files, builds and minions
 # =============================================================================
 #
 # A factory declares a build schema at module.register (see
@@ -10,10 +10,10 @@
 # current schema is the highest version any of its instances declared.
 #
 # An operation keeps build files (uploads for file fields, through
-# POST /api/v1/build-files) and presets (ready-to-use build settings, like
-# endpoints are ready-to-use connection values). A build's or preset's
-# connections hold their own settings, by each channel's connection schema; the
-# form can fill one from an endpoint, which copies it. A build asks a factory
+# POST /api/v1/build-files). A build's connections hold their own settings, by
+# each channel's connection schema; the form can fill one from an endpoint,
+# which copies it, and an earlier build fills the whole form ("Build again").
+# A build asks a factory
 # instance for one minion: core queues it, offers it to a live instance, follows
 # its progress and result, checks the artifact, and a successful build creates
 # the minion. Its artifact downloads from GET /api/v1/builds/{id}/artifact.
@@ -101,59 +101,8 @@ type BuildProblem {
   message: String!
 }
 
-# One connection of a preset.
-type BuildPresetConnection {
-  # The channel kind, e.g. "http".
-  moduleName: String!
-  # What the minion calls the connection; null: "<channel>-<position>".
-  name: String
-  # The operators' note on the connection; core's own (see
-  # BuildConnectionInput.description).
-  description: String
-  # Connection settings by the channel's connection schema field key, secrets
-  # included. Fields without a value use the schema's default.
-  settings: JSON!
-  # Connection schema version the settings were saved against.
-  schemaVersion: Int!
-  # The channel now declares another connection schema version: the settings
-  # may need a look.
-  schemaChanged: Boolean!
-  # The factory's connection parameter values by key.
-  values: JSON!
-}
-
-# Ready-to-use build settings: they fill in the build form.
-type BuildPreset {
-  id: ID!
-  operationId: ID!
-  # Unique within the operation.
-  name: String!
-  description: String
-  # The factory kind.
-  moduleName: String!
-  target: String!
-  # Optional: may be left for the build form.
-  platform: String
-  # Values by field key; file fields hold build file ids.
-  values: JSON!
-  connections: [BuildPresetConnection!]!
-  # Build schema version the preset was saved against.
-  schemaVersion: Int!
-  # The kind now declares another schema version.
-  schemaChanged: Boolean!
-  # Why the preset does not fit the kind's or its channels' current schemas;
-  # empty when it does.
-  problems: [BuildProblem!]!
-  # Grows with every change; updateBuildPreset compares against it.
-  revision: Int!
-  createdBy: ModuleActor!
-  updatedBy: ModuleActor!
-  createdAt: String!
-  updatedAt: String!
-}
-
-# One connection of a build or preset: a channel kind, its connection settings
-# and the factory's connection parameters for it.
+# One connection of a build: a channel kind, its connection settings and the
+# factory's connection parameters for it.
 input BuildConnectionInput {
   # The channel kind; the target must connect through it.
   moduleName: String!
@@ -161,24 +110,14 @@ input BuildConnectionInput {
   # among the connections; empty: "<channel>-<position>".
   name: String
   # A note for the team on what the connection is for, at most 500
-  # characters. Core keeps it with the preset or the build record and never
-  # sends it to the factory, so it cannot end up in an artifact.
+  # characters. Core keeps it with the build record and never sends it to the
+  # factory, so it cannot end up in an artifact.
   description: String
   # Connection settings by the channel's connection schema field key. null, ""
   # and [] leave a setting unset (its default applies).
   settings: JSON
   # The factory's connection parameter values by key, the same way.
   values: JSON
-}
-
-input BuildPresetInput {
-  name: String!
-  description: String
-  target: String!
-  platform: String
-  # Values by field key; null, "" and [] leave a field unset.
-  values: JSON!
-  connections: [BuildConnectionInput!]!
 }
 
 input BuildInput {
@@ -190,8 +129,6 @@ input BuildInput {
   values: JSON!
   # The connections, in the order the minion tries them.
   connections: [BuildConnectionInput!]!
-  # The preset the form was filled from, if any; recorded only.
-  presetId: ID
 }
 
 type BuildStep {
@@ -249,7 +186,6 @@ type Build {
   # The build output, its last 64 KiB.
   log: String
   error: BuildError
-  presetId: ID
   createdBy: ModuleActor!
   cancelledBy: ModuleActor
   createdAt: String!
@@ -282,15 +218,6 @@ extend type Query {
   buildFiles(operationId: ID!): [BuildFile!]!
     @hasPermission(permission: "operation:member")
 
-  # An operation's presets by kind and name; one kind's when moduleName is
-  # set. Needs at least viewer.
-  buildPresets(operationId: ID!, moduleName: String): [BuildPreset!]!
-    @hasPermission(permission: "operation:member")
-
-  # One preset; null when it does not exist. Needs at least viewer.
-  buildPreset(id: ID!): BuildPreset
-    @hasPermission(permission: "operation:member")
-
   # An operation's builds, newest first, at most limit (default 50).
   # Needs at least viewer.
   builds(operationId: ID!, limit: Int): [Build!]!
@@ -306,23 +233,9 @@ extend type Query {
 }
 
 extend type Mutation {
-  # Fails while a preset or build refers to the file. Needs at least
-  # operator; agent API keys are rejected.
+  # Fails while a build refers to the file. Needs at least operator; agent API
+  # keys are rejected.
   deleteBuildFile(id: ID!): Boolean!
-    @hasPermission(permission: "operation:member")
-
-  # Validated against the kind's current schema; problems are in the error's
-  # extensions.problems. Needs at least operator; agent API keys are
-  # rejected.
-  createBuildPreset(operationId: ID!, moduleName: String!, input: BuildPresetInput!): BuildPreset!
-    @hasPermission(permission: "operation:member")
-
-  # expectedRevision is the revision the caller read; a mismatch fails with
-  # CONFLICT.
-  updateBuildPreset(id: ID!, input: BuildPresetInput!, expectedRevision: Int!): BuildPreset!
-    @hasPermission(permission: "operation:member")
-
-  deleteBuildPreset(id: ID!): Boolean!
     @hasPermission(permission: "operation:member")
 
   # Queues a build. Validated against the kind's current schema; problems are

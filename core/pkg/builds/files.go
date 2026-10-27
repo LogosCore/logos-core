@@ -78,31 +78,30 @@ func (s *Service) File(ctx context.Context, id string) (*models.BuildFile, error
 	return f, nil
 }
 
-// DeleteFile removes a build file nothing refers to. A preset or a build
-// naming it keeps it: a build record must stay complete.
+// DeleteFile removes a build file nothing refers to. A build naming it keeps
+// it: a build record must stay complete.
 func (s *Service) DeleteFile(ctx context.Context, id string) error {
 	f, err := s.File(ctx, id)
 	if err != nil {
 		return err
 	}
-	presets, builds, err := s.fileReferences(ctx, f.FileID.String())
+	builds, err := s.fileReferences(ctx, f.FileID.String())
 	if err != nil {
 		return err
 	}
-	if presets+builds > 0 {
-		return invalid("%s is used by %d preset(s) and %d build(s)", f.Name, presets, builds)
+	if builds > 0 {
+		return invalid("%s is used by %d build(s)", f.Name, builds)
 	}
 	return s.removeFile(ctx, f)
 }
 
-func (s *Service) fileReferences(ctx context.Context, id string) (presets, builds int64, err error) {
-	if presets, err = s.repos.Presets.CountFileReferences(ctx, id); err != nil {
-		return 0, 0, fmt.Errorf("count preset references: %w", err)
+// fileReferences counts the builds whose values name build file id.
+func (s *Service) fileReferences(ctx context.Context, id string) (int64, error) {
+	n, err := s.repos.Builds.CountFileReferences(ctx, id)
+	if err != nil {
+		return 0, fmt.Errorf("count build references: %w", err)
 	}
-	if builds, err = s.repos.Builds.CountFileReferences(ctx, id); err != nil {
-		return 0, 0, fmt.Errorf("count build references: %w", err)
-	}
-	return presets, builds, nil
+	return n, nil
 }
 
 func (s *Service) removeFile(ctx context.Context, f *models.BuildFile) error {
@@ -123,12 +122,12 @@ func (s *Service) sweepFiles(ctx context.Context) {
 		return
 	}
 	for i := range old {
-		presets, builds, err := s.fileReferences(ctx, old[i].FileID.String())
+		builds, err := s.fileReferences(ctx, old[i].FileID.String())
 		if err != nil {
 			s.logger.Warn("build file sweep: references", zap.Error(err))
 			return
 		}
-		if presets+builds > 0 {
+		if builds > 0 {
 			continue
 		}
 		if err := s.removeFile(ctx, &old[i]); err != nil {

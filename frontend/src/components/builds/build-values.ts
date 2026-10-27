@@ -1,6 +1,6 @@
 // Pure value handling for minion builds: factory kinds as the forms use them,
-// the channels a target can connect through, the build and preset form's
-// drafts and what it submits, and display helpers. Field rules are the ones of
+// the channels a target can connect through, the build form's drafts and what
+// it submits, and display helpers. Field rules are the ones of
 // field-values.ts; errors are keyed like the server's problems ("values.<key>",
 // "connections[<i>].settings.<key>", ...) so both land on the same control.
 // No React here, so all of it is unit-tested directly.
@@ -203,7 +203,7 @@ export interface BuildForm {
   connections: ConnectionDraft[]
 }
 
-/** A connection as a preset holds it, or as an earlier build's turns into. */
+/** A connection as an earlier build's turns into ("Build again"). */
 export interface ConnectionSource {
   moduleName: string
   name?: string | null
@@ -215,7 +215,7 @@ export interface ConnectionSource {
   notes?: readonly string[]
 }
 
-/** What a form is filled from: a preset, or an earlier build. */
+/** What a form is filled from: an earlier build ("Build again"). */
 export interface FormSource {
   target: string
   platform?: string | null
@@ -448,7 +448,7 @@ function withoutDefaults(fields: readonly FieldDef[], values: Record<string, unk
   return out
 }
 
-/** One connection as createBuild and the preset writes take it. */
+/** One connection as createBuild takes it. */
 export interface ConnectionInput {
   moduleName: string
   name: string | null
@@ -457,7 +457,7 @@ export interface ConnectionInput {
   values: Record<string, unknown>
 }
 
-/** What createBuild / a preset write takes from the form. */
+/** What createBuild takes from the form. */
 export interface FormInput {
   target: string
   platform: string
@@ -469,7 +469,6 @@ function evaluateFields(
   prefix: string,
   fields: readonly FieldDef[],
   drafts: Record<string, Draft>,
-  partial: boolean,
   errors: Record<string, string>,
 ): Record<string, unknown> {
   const values: Record<string, unknown> = {}
@@ -480,8 +479,7 @@ function evaluateFields(
       continue
     }
     const v = parsed.value
-    // A preset may leave required values for the build form.
-    const error = validateValue(f, v, { fallback: partial ? true : f.default })
+    const error = validateValue(f, v, { fallback: f.default })
     if (error) errors[prefix + f.key] = error
     else if (v !== null && v !== undefined) values[f.key] = v
   }
@@ -489,24 +487,22 @@ function evaluateFields(
 }
 
 /**
- * The form as createBuild or a preset takes it, and its errors. A build
- * (partial false) needs a platform, a connection and every required value
- * and setting; a preset may leave them out.
+ * The form as createBuild takes it, and its errors: a build needs a
+ * platform, a connection and every required value and setting.
  */
 export function evaluateForm(
   kind: FactoryKind,
   form: BuildForm,
-  partial: boolean,
   channels: ReadonlyMap<string, ChannelKind>,
 ): { input: FormInput; errors: Record<string, string> } {
   const errors: Record<string, string> = {}
   const target = kind.targets.find((t) => t.id === form.target)
   if (!target) errors.target = "Pick a target"
-  else if (form.platform === "" && !partial) errors.platform = "Pick a platform"
+  else if (form.platform === "") errors.platform = "Pick a platform"
   else if (form.platform !== "" && !target.platforms.includes(form.platform)) errors.platform = "Not a platform of this target"
 
-  const values = evaluateFields("values.", targetFields(kind, target), form.drafts, partial, errors)
-  if (form.connections.length === 0 && !partial) errors.connections = "Add at least one connection"
+  const values = evaluateFields("values.", targetFields(kind, target), form.drafts, errors)
+  if (form.connections.length === 0) errors.connections = "Add at least one connection"
   const named = new Map<string, number>()
   const connections = form.connections.map((c, i): ConnectionInput => {
     const at = `connections[${i}]`
@@ -522,8 +518,8 @@ export function evaluateForm(
       moduleName: c.moduleName,
       name: name || null,
       description: c.description.trim() || null,
-      settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, partial, errors),
-      values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, partial, errors),
+      settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, errors),
+      values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, errors),
     }
   })
   return { input: { target: form.target, platform: form.platform, values, connections }, errors }

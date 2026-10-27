@@ -36,7 +36,6 @@ export function ConnectionCard({
   settings,
   errors,
   disabled,
-  partial,
   onName,
   onDescription,
   onSetting,
@@ -60,7 +59,6 @@ export function ConnectionCard({
   /** The form's errors, keyed like the server's problems. */
   errors: Record<string, string>
   disabled: boolean
-  partial: boolean
   onName: (name: string) => void
   onDescription: (description: string) => void
   onSetting: (key: string, d: Draft) => void
@@ -192,7 +190,6 @@ export function ConnectionCard({
                     onChange={(d) => onSetting(f.key, d)}
                     error={errors[`${at}.settings.${f.key}`]}
                     disabled={disabled}
-                    partial={partial}
                   />
                 ))}
               </Group>
@@ -208,7 +205,6 @@ export function ConnectionCard({
                   onChange={(d) => onParam(f.key, d)}
                   error={errors[`${at}.values.${f.key}`]}
                   disabled={disabled}
-                  partial={partial}
                 />
               ))}
             </Group>

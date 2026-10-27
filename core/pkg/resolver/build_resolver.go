@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -20,7 +19,7 @@ import (
 )
 
 // Minion builds over GraphQL (builds.graphql): factory kinds, an operation's
-// build files, presets, builds and minions. The logic is builds.Service; this
+// build files, builds and minions. The logic is builds.Service; this
 // resolver authorizes by operation role (viewer reads, operator writes; agent
 // keys read only) and maps the results.
 
@@ -31,11 +30,6 @@ type BuildManager interface {
 	Files(ctx context.Context, op uuid.UUID) ([]models.BuildFile, error)
 	File(ctx context.Context, id string) (*models.BuildFile, error)
 	DeleteFile(ctx context.Context, id string) error
-	Presets(ctx context.Context, op uuid.UUID, moduleName string) ([]builds.PresetView, error)
-	Preset(ctx context.Context, id string) (builds.PresetView, error)
-	CreatePreset(ctx context.Context, op uuid.UUID, moduleName string, in builds.PresetInput) (builds.PresetView, error)
-	UpdatePreset(ctx context.Context, id string, expectedRevision int64, in builds.PresetInput) (builds.PresetView, error)
-	DeletePreset(ctx context.Context, id string) error
 	Builds(ctx context.Context, op uuid.UUID, limit int64) ([]models.Build, error)
 	Build(ctx context.Context, id string) (*models.Build, error)
 	CreateBuild(ctx context.Context, op uuid.UUID, in builds.BuildInput) (*models.Build, error)
@@ -50,11 +44,6 @@ type IBuildResolver interface {
 	FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error)
 	BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error)
 	DeleteBuildFile(ctx context.Context, id string) (bool, error)
-	BuildPresets(ctx context.Context, operationID string, moduleName *string) ([]*model.BuildPreset, error)
-	BuildPreset(ctx context.Context, id string) (*model.BuildPreset, error)
-	CreateBuildPreset(ctx context.Context, operationID string, moduleName string, input model.BuildPresetInput) (*model.BuildPreset, error)
-	UpdateBuildPreset(ctx context.Context, id string, input model.BuildPresetInput, expectedRevision int) (*model.BuildPreset, error)
-	DeleteBuildPreset(ctx context.Context, id string) (bool, error)
 	Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error)
 	Build(ctx context.Context, id string) (*model.Build, error)
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
@@ -150,91 +139,6 @@ func (r *buildResolver) DeleteBuildFile(ctx context.Context, id string) (bool, e
 	return true, nil
 }
 
-// --- presets ---
-
-func (r *buildResolver) BuildPresets(ctx context.Context, operationID string, moduleName *string) ([]*model.BuildPreset, error) {
-	op, err := r.authorizeID(ctx, operationID, models.OperationRoleViewer, false)
-	if err != nil {
-		return nil, err
-	}
-	name := ""
-	if moduleName != nil {
-		name = *moduleName
-	}
-	views, err := r.builds.Presets(ctx, op, name)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*model.BuildPreset, len(views))
-	for i := range views {
-		out[i] = toPresetModel(views[i])
-	}
-	return out, nil
-}
-
-func (r *buildResolver) BuildPreset(ctx context.Context, id string) (*model.BuildPreset, error) {
-	v, err := r.builds.Preset(ctx, id)
-	if errors.Is(err, builds.ErrPresetNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := r.authorize(ctx, v.OperationID, models.OperationRoleViewer, false); err != nil {
-		return nil, err
-	}
-	return toPresetModel(v), nil
-}
-
-func (r *buildResolver) CreateBuildPreset(ctx context.Context, operationID string, moduleName string, input model.BuildPresetInput) (*model.BuildPreset, error) {
-	op, err := r.authorizeID(ctx, operationID, models.OperationRoleOperator, true)
-	if err != nil {
-		return nil, err
-	}
-	in, err := presetInput(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	v, err := r.builds.CreatePreset(ctx, op, moduleName, in)
-	if err != nil {
-		return nil, mapBuildError(ctx, err)
-	}
-	return toPresetModel(v), nil
-}
-
-func (r *buildResolver) UpdateBuildPreset(ctx context.Context, id string, input model.BuildPresetInput, expectedRevision int) (*model.BuildPreset, error) {
-	v, err := r.builds.Preset(ctx, id)
-	if err != nil {
-		return nil, mapBuildError(ctx, err)
-	}
-	if err := r.authorize(ctx, v.OperationID, models.OperationRoleOperator, true); err != nil {
-		return nil, err
-	}
-	in, err := presetInput(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	v, err = r.builds.UpdatePreset(ctx, id, int64(expectedRevision), in)
-	if err != nil {
-		return nil, mapBuildError(ctx, err)
-	}
-	return toPresetModel(v), nil
-}
-
-func (r *buildResolver) DeleteBuildPreset(ctx context.Context, id string) (bool, error) {
-	v, err := r.builds.Preset(ctx, id)
-	if err != nil {
-		return false, mapBuildError(ctx, err)
-	}
-	if err := r.authorize(ctx, v.OperationID, models.OperationRoleOperator, true); err != nil {
-		return false, err
-	}
-	if err := r.builds.DeletePreset(ctx, id); err != nil {
-		return false, mapBuildError(ctx, err)
-	}
-	return true, nil
-}
-
 // --- builds ---
 
 func (r *buildResolver) Builds(ctx context.Context, operationID string, limit *int) ([]*model.Build, error) {
@@ -287,9 +191,6 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 	in := builds.BuildInput{
 		ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
 		Values: values, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
-	}
-	if input.PresetID != nil {
-		in.PresetID = *input.PresetID
 	}
 	b, err := r.builds.CreateBuild(ctx, op, in)
 	if err != nil {
@@ -345,26 +246,6 @@ func (r *buildResolver) Minions(ctx context.Context, operationID string) ([]*mod
 
 // --- inputs and errors ---
 
-func presetInput(ctx context.Context, input model.BuildPresetInput) (builds.PresetInput, error) {
-	values, ok := input.Values.(map[string]any)
-	if !ok {
-		return builds.PresetInput{}, moduleGQLError(ctx, errCodeBadUserInput, "values must be an object")
-	}
-	conns, err := connectionInputs(ctx, input.Connections)
-	if err != nil {
-		return builds.PresetInput{}, err
-	}
-	in := builds.PresetInput{Name: input.Name, Target: input.Target, Values: values, Connections: conns,
-		Actor: managementActor(gqlctx.AuthFromContext(ctx))}
-	if input.Description != nil {
-		in.Description = strings.TrimSpace(*input.Description)
-	}
-	if input.Platform != nil {
-		in.Platform = *input.Platform
-	}
-	return in, nil
-}
-
 func connectionInputs(ctx context.Context, in []*model.BuildConnectionInput) ([]builds.ConnectionInput, error) {
 	out := make([]builds.ConnectionInput, len(in))
 	for i, c := range in {
@@ -398,18 +279,15 @@ func optionalObject(v any) (map[string]any, bool) {
 // mapBuildError turns service errors into coded GraphQL errors. Problems
 // travel in extensions.problems as {key, message} pairs.
 func mapBuildError(ctx context.Context, err error) error {
-	var conflict *builds.ConflictError
 	var invalid *builds.ValidationError
 	switch {
-	case errors.As(err, &conflict):
-		return moduleGQLError(ctx, errCodeConflict, conflict.Error())
 	case errors.As(err, &invalid):
 		ext := map[string]any{"code": errCodeBadUserInput}
 		if len(invalid.Problems) > 0 {
 			ext["problems"] = problemList(invalid.Problems)
 		}
 		return &gqlerror.Error{Message: invalid.Message, Path: graphql.GetPath(ctx), Extensions: ext}
-	case errors.Is(err, builds.ErrBuildNotFound), errors.Is(err, builds.ErrPresetNotFound), errors.Is(err, builds.ErrFileNotFound):
+	case errors.Is(err, builds.ErrBuildNotFound), errors.Is(err, builds.ErrFileNotFound):
 		return moduleGQLError(ctx, errCodeNotFound, err.Error())
 	}
 	return err
@@ -458,27 +336,6 @@ func toBuildFileModel(f *models.BuildFile) *model.BuildFile {
 	}
 }
 
-func toPresetModel(v builds.PresetView) *model.BuildPreset {
-	out := &model.BuildPreset{
-		ID: v.Id.Hex(), OperationID: v.OperationID.String(), Name: v.Name, Description: strPtr(v.Description),
-		ModuleName: v.ModuleName, Target: v.Target, Platform: strPtr(v.Platform), Values: copyMap(v.Values),
-		SchemaVersion: v.SchemaVersion, SchemaChanged: v.SchemaChanged(), Revision: int(v.Revision),
-		Connections: []*model.BuildPresetConnection{}, Problems: []*model.BuildProblem{},
-		CreatedBy: toActorModel(v.CreatedBy), UpdatedBy: toActorModel(v.UpdatedBy),
-		CreatedAt: v.CreatedAt.Format(time.RFC3339), UpdatedAt: v.UpdatedAt.Format(time.RFC3339),
-	}
-	for i, c := range v.Connections {
-		out.Connections = append(out.Connections, &model.BuildPresetConnection{
-			ModuleName: c.ModuleName, Name: strPtr(c.Name), Description: strPtr(c.Description), Settings: copyMap(c.Settings),
-			SchemaVersion: c.SchemaVersion, SchemaChanged: v.ConnectionSchemaChanged(i), Values: copyMap(c.Values),
-		})
-	}
-	for _, k := range protocol.SortedProblemKeys(v.Problems) {
-		out.Problems = append(out.Problems, &model.BuildProblem{Key: strPtr(k), Message: v.Problems[k]})
-	}
-	return out
-}
-
 func toBuildModel(b *models.Build) *model.Build {
 	out := &model.Build{
 		ID: b.BuildID, OperationID: b.OperationID.String(), ModuleName: b.ModuleName, Target: b.Target,
@@ -503,9 +360,6 @@ func toBuildModel(b *models.Build) *model.Build {
 	}
 	if b.Error != nil {
 		out.Error = &model.BuildError{Code: b.Error.Code, Message: b.Error.Message}
-	}
-	if b.PresetID != nil {
-		out.PresetID = strPtr(b.PresetID.Hex())
 	}
 	if b.CancelledBy != nil {
 		out.CancelledBy = toActorModel(*b.CancelledBy)

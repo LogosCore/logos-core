@@ -11,30 +11,20 @@ import (
 	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Minion builds: build files, presets, builds and minions. See
+// Minion builds: build files, builds and minions. See
 // models/build.go. A build's state only moves through compare-and-set updates
 // on build_id + state, so concurrent core instances (and a cancel racing a
 // result) never both win.
 
 const (
-	buildFileCollection   = "build_files"
-	buildPresetCollection = "build_presets"
-	buildCollection       = "builds"
-	minionCollection      = "minions"
+	buildFileCollection = "build_files"
+	buildCollection     = "builds"
+	minionCollection    = "minions"
 )
-
-// ErrBuildPresetNameTaken is returned when another preset of the operation
-// has the name.
-var ErrBuildPresetNameTaken = errors.New("build preset name taken")
-
-// ErrBuildPresetConflict is returned by Update when the preset's revision is
-// not the expected one, or the preset is gone.
-var ErrBuildPresetConflict = errors.New("build preset revision conflict")
 
 // --- build files ---------------------------------------------------------
 
@@ -103,132 +93,6 @@ func (r *buildFileRepository) Delete(ctx context.Context, fileID uuid.UUID) (boo
 func (r *buildFileRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
-}
-
-// --- presets -------------------------------------------------------------
-
-// IBuildPresetRepository stores build presets.
-type IBuildPresetRepository interface {
-	// List returns an operation's presets by kind and name, all kinds or one
-	// (moduleName "" for all).
-	List(ctx context.Context, operationID uuid.UUID, moduleName string) ([]models.BuildPreset, error)
-	// FindByID returns one preset; IsNotFound on a miss.
-	FindByID(ctx context.Context, id primitive.ObjectID) (*models.BuildPreset, error)
-	// Insert stores a new preset at revision 1.
-	Insert(ctx context.Context, p *models.BuildPreset) error
-	// Update replaces the settings if the stored revision equals p.Revision,
-	// and increments it (p.Revision is updated).
-	Update(ctx context.Context, p *models.BuildPreset) error
-	Delete(ctx context.Context, id primitive.ObjectID) (bool, error)
-	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
-	// CountFileReferences counts presets whose values name a build file.
-	CountFileReferences(ctx context.Context, fileID string) (int64, error)
-}
-
-type buildPresetRepository struct{ coll database.Collection }
-
-func NewBuildPresetRepository(db database.Database) IBuildPresetRepository {
-	db.EnsureIndexes(context.Background(), buildPresetCollection, []opts.IndexModel{
-		{Key: []string{"operation_id", "name"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
-		{Key: []string{"operation_id", "module_name", "name"}},
-		{Key: []string{"file_ids"}},
-	})
-	return &buildPresetRepository{coll: db.Collection(buildPresetCollection)}
-}
-
-func (r *buildPresetRepository) List(ctx context.Context, operationID uuid.UUID, moduleName string) ([]models.BuildPreset, error) {
-	filter := bson.M{"operation_id": operationID}
-	if moduleName != "" {
-		filter["module_name"] = moduleName
-	}
-	out := []models.BuildPreset{}
-	err := r.coll.Find(ctx, filter).Sort("module_name", "name").All(&out)
-	return out, err
-}
-
-func (r *buildPresetRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*models.BuildPreset, error) {
-	var p models.BuildPreset
-	if err := r.coll.Find(ctx, bson.M{"_id": id}).One(&p); err != nil {
-		return nil, err
-	}
-	return &p, nil
-}
-
-func (r *buildPresetRepository) Insert(ctx context.Context, p *models.BuildPreset) error {
-	p.Revision = 1
-	_, err := r.coll.InsertOne(ctx, p)
-	if mongo.IsDuplicateKeyError(err) {
-		return ErrBuildPresetNameTaken
-	}
-	return err
-}
-
-// buildPresetUpdate is the set half of Update's compare-and-set.
-func buildPresetUpdate(p *models.BuildPreset) bson.M {
-	set := bson.M{
-		"name":           p.Name,
-		"target":         p.Target,
-		"schema_version": p.SchemaVersion,
-		"values":         p.Values,
-		"connections":    p.Connections,
-		"updated_by":     p.UpdatedBy,
-		"updated_at":     p.UpdatedAt,
-		"updateAt":       p.UpdatedAt,
-	}
-	unset := bson.M{}
-	for key, v := range map[string]string{"description": p.Description, "platform": p.Platform} {
-		if v != "" {
-			set[key] = v
-		} else {
-			unset[key] = ""
-		}
-	}
-	if len(p.FileIDs) > 0 {
-		set["file_ids"] = p.FileIDs
-	} else {
-		unset["file_ids"] = ""
-	}
-	u := bson.M{"$set": set, "$inc": bson.M{"revision": int64(1)}}
-	if len(unset) > 0 {
-		u["$unset"] = unset
-	}
-	return u
-}
-
-func (r *buildPresetRepository) Update(ctx context.Context, p *models.BuildPreset) error {
-	var out models.BuildPreset
-	err := r.coll.Find(ctx, bson.M{"_id": p.Id, "revision": p.Revision}).Apply(qmgo.Change{
-		Update:    buildPresetUpdate(p),
-		ReturnNew: true,
-	}, &out)
-	switch {
-	case err == nil:
-		p.Revision = out.Revision
-		return nil
-	case errors.Is(err, qmgo.ErrNoSuchDocuments):
-		return ErrBuildPresetConflict
-	case mongo.IsDuplicateKeyError(err):
-		return ErrBuildPresetNameTaken
-	default:
-		return err
-	}
-}
-
-func (r *buildPresetRepository) Delete(ctx context.Context, id primitive.ObjectID) (bool, error) {
-	err := r.coll.Remove(ctx, bson.M{"_id": id})
-	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-func (r *buildPresetRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
-	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
-	return err
-}
-
-func (r *buildPresetRepository) CountFileReferences(ctx context.Context, fileID string) (int64, error) {
-	return r.coll.Find(ctx, bson.M{"file_ids": fileID}).Count()
 }
 
 // --- builds --------------------------------------------------------------

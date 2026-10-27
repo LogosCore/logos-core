@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { InfoIcon } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-// Settings forms (endpoint, build and preset editors) lay rows out by the
+// Settings forms (the endpoint and build editors) lay rows out by the
 // width of the form itself, not the screen: put them under an element with
 // the class `@container/settings`. Narrow: label above control. From 32rem:
 // label | control, help behind an info icon. From 72rem, where a third column

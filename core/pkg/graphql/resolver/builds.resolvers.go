@@ -22,21 +22,6 @@ func (r *mutationResolver) DeleteBuildFile(ctx context.Context, id string) (bool
 	return r.BuildResolver.DeleteBuildFile(ctx, id)
 }
 
-// CreateBuildPreset is the resolver for the createBuildPreset field.
-func (r *mutationResolver) CreateBuildPreset(ctx context.Context, operationID string, moduleName string, input model.BuildPresetInput) (*model.BuildPreset, error) {
-	return r.BuildResolver.CreateBuildPreset(ctx, operationID, moduleName, input)
-}
-
-// UpdateBuildPreset is the resolver for the updateBuildPreset field.
-func (r *mutationResolver) UpdateBuildPreset(ctx context.Context, id string, input model.BuildPresetInput, expectedRevision int) (*model.BuildPreset, error) {
-	return r.BuildResolver.UpdateBuildPreset(ctx, id, input, expectedRevision)
-}
-
-// DeleteBuildPreset is the resolver for the deleteBuildPreset field.
-func (r *mutationResolver) DeleteBuildPreset(ctx context.Context, id string) (bool, error) {
-	return r.BuildResolver.DeleteBuildPreset(ctx, id)
-}
-
 // CreateBuild is the resolver for the createBuild field.
 func (r *mutationResolver) CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error) {
 	return r.BuildResolver.CreateBuild(ctx, operationID, input)
@@ -60,16 +45,6 @@ func (r *queryResolver) FactoryKinds(ctx context.Context) ([]*model.FactoryKind,
 // BuildFiles is the resolver for the buildFiles field.
 func (r *queryResolver) BuildFiles(ctx context.Context, operationID string) ([]*model.BuildFile, error) {
 	return r.BuildResolver.BuildFiles(ctx, operationID)
-}
-
-// BuildPresets is the resolver for the buildPresets field.
-func (r *queryResolver) BuildPresets(ctx context.Context, operationID string, moduleName *string) ([]*model.BuildPreset, error) {
-	return r.BuildResolver.BuildPresets(ctx, operationID, moduleName)
-}
-
-// BuildPreset is the resolver for the buildPreset field.
-func (r *queryResolver) BuildPreset(ctx context.Context, id string) (*model.BuildPreset, error) {
-	return r.BuildResolver.BuildPreset(ctx, id)
 }
 
 // Builds is the resolver for the builds field.

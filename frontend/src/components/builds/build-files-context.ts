@@ -8,7 +8,7 @@ export interface BuildFileRef extends FileLike {
 
 /**
  * What a file field needs from the form around it: the operation's build
- * files and a way to upload one. Only the build and preset forms provide it.
+ * files and a way to upload one. Only the build form provides it.
  */
 export interface BuildFilesContextValue {
   files: readonly BuildFileRef[]

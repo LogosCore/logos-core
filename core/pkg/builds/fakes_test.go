@@ -15,7 +15,6 @@ import (
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/minio/minio-go/v7"
 	"github.com/qiniu/qmgo"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // In-memory stand-ins with the repositories' compare-and-set semantics.
@@ -83,103 +82,6 @@ func (f *fakeFiles) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
 		}
 	}
 	return nil
-}
-
-type fakePresets struct {
-	mu   sync.Mutex
-	rows map[primitive.ObjectID]models.BuildPreset
-}
-
-func (f *fakePresets) List(_ context.Context, op uuid.UUID, moduleName string) ([]models.BuildPreset, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var out []models.BuildPreset
-	for _, p := range f.rows {
-		if p.OperationID == op && (moduleName == "" || p.ModuleName == moduleName) {
-			out = append(out, p)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out, nil
-}
-
-func (f *fakePresets) FindByID(_ context.Context, id primitive.ObjectID) (*models.BuildPreset, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	p, ok := f.rows[id]
-	if !ok {
-		return nil, qmgo.ErrNoSuchDocuments
-	}
-	return &p, nil
-}
-
-func (f *fakePresets) nameTaken(p *models.BuildPreset) bool {
-	for id, other := range f.rows {
-		if id != p.Id && other.OperationID == p.OperationID && other.Name == p.Name {
-			return true
-		}
-	}
-	return false
-}
-
-func (f *fakePresets) Insert(_ context.Context, p *models.BuildPreset) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	p.Id = primitive.NewObjectID()
-	if f.nameTaken(p) {
-		return repository.ErrBuildPresetNameTaken
-	}
-	p.Revision = 1
-	f.rows[p.Id] = *p
-	return nil
-}
-
-func (f *fakePresets) Update(_ context.Context, p *models.BuildPreset) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	stored, ok := f.rows[p.Id]
-	if !ok || stored.Revision != p.Revision {
-		return repository.ErrBuildPresetConflict
-	}
-	if f.nameTaken(p) {
-		return repository.ErrBuildPresetNameTaken
-	}
-	p.Revision++
-	f.rows[p.Id] = *p
-	return nil
-}
-
-func (f *fakePresets) Delete(_ context.Context, id primitive.ObjectID) (bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	_, ok := f.rows[id]
-	delete(f.rows, id)
-	return ok, nil
-}
-
-func (f *fakePresets) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for id, p := range f.rows {
-		if p.OperationID == op {
-			delete(f.rows, id)
-		}
-	}
-	return nil
-}
-
-func (f *fakePresets) CountFileReferences(_ context.Context, id string) (int64, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var n int64
-	for _, p := range f.rows {
-		for _, fid := range p.FileIDs {
-			if fid == id {
-				n++
-			}
-		}
-	}
-	return n, nil
 }
 
 type fakeBuilds struct {

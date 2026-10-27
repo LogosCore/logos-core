@@ -3,12 +3,11 @@ import { useAuthStore } from "@/stores/auth"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
 
 export const BUILDS_PATH = "/builds"
-export const PRESETS_PATH = "/builds/presets"
 
 /**
- * Whether the caller may build in the operation, and change its presets and
- * build files: its operators and admins, and app admins (the server allows
- * them in any operation; OPERATION_DELETE is what only they hold).
+ * Whether the caller may build in the operation, and change its build files:
+ * its operators and admins, and app admins (the server allows them in any
+ * operation; OPERATION_DELETE is what only they hold).
  */
 export function useCanBuild(operationId: string): { canWrite: boolean; loading: boolean } {
   const hasPermission = useAuthStore((s) => s.hasPermission)

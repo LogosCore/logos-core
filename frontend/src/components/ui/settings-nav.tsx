@@ -9,7 +9,7 @@ export interface SettingsNavSection {
 }
 
 /**
- * The side list of a settings form's sections (endpoint, build and preset
+ * The side list of a settings form's sections (the endpoint and build
  * editors), on wide enough screens: the one being read highlighted, a dot for
  * one with errors or values, a click to go there. Pair it with
  * useActiveSection.

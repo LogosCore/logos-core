@@ -82,7 +82,6 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		ModuleInvocation:   repository.NewModuleActionInvocationRepository(db),
 		ChannelEndpoint:    repository.NewChannelEndpointRepository(db),
 		BuildFile:          repository.NewBuildFileRepository(db),
-		BuildPreset:        repository.NewBuildPresetRepository(db),
 		Build:              repository.NewBuildRepository(db),
 		Minion:             repository.NewMinionRepository(db),
 	}
@@ -433,7 +432,7 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 		return nil, fmt.Errorf("failed to initialize the build URL signer: %w", err)
 	}
 	return builds.NewService(
-		builds.Repos{Files: repos.BuildFile, Presets: repos.BuildPreset, Builds: repos.Build, Minions: repos.Minion},
+		builds.Repos{Files: repos.BuildFile, Builds: repos.Build, Minions: repos.Minion},
 		repos.ModuleRegistry, endpoints, rpc, store, signer,
 		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
 		l.Named("builds"),

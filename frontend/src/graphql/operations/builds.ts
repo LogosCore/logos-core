@@ -43,41 +43,6 @@ export const BuildFileFields = graphql(`
   }
 `)
 
-export const BuildPresetFields = graphql(`
-  fragment BuildPresetFields on BuildPreset {
-    id
-    operationId
-    name
-    description
-    moduleName
-    target
-    platform
-    values
-    connections {
-      moduleName
-      name
-      description
-      settings
-      schemaVersion
-      schemaChanged
-      values
-    }
-    schemaVersion
-    schemaChanged
-    problems {
-      key
-      message
-    }
-    revision
-    updatedBy {
-      type
-      id
-      name
-    }
-    updatedAt
-  }
-`)
-
 export const BuildFields = graphql(`
   fragment BuildFields on Build {
     id
@@ -147,44 +112,6 @@ export const DeleteBuildFileMutation = graphql(`
   }
 `)
 
-export const BuildPresetsQuery = graphql(`
-  query BuildPresets($operationId: ID!) {
-    buildPresets(operationId: $operationId) {
-      ...BuildPresetFields
-    }
-  }
-`)
-
-export const BuildPresetQuery = graphql(`
-  query BuildPreset($id: ID!) {
-    buildPreset(id: $id) {
-      ...BuildPresetFields
-    }
-  }
-`)
-
-export const CreateBuildPresetMutation = graphql(`
-  mutation CreateBuildPreset($operationId: ID!, $moduleName: String!, $input: BuildPresetInput!) {
-    createBuildPreset(operationId: $operationId, moduleName: $moduleName, input: $input) {
-      ...BuildPresetFields
-    }
-  }
-`)
-
-export const UpdateBuildPresetMutation = graphql(`
-  mutation UpdateBuildPreset($id: ID!, $input: BuildPresetInput!, $expectedRevision: Int!) {
-    updateBuildPreset(id: $id, input: $input, expectedRevision: $expectedRevision) {
-      ...BuildPresetFields
-    }
-  }
-`)
-
-export const DeleteBuildPresetMutation = graphql(`
-  mutation DeleteBuildPreset($id: ID!) {
-    deleteBuildPreset(id: $id)
-  }
-`)
-
 export const BuildsQuery = graphql(`
   query Builds($operationId: ID!, $limit: Int) {
     builds(operationId: $operationId, limit: $limit) {
@@ -202,7 +129,6 @@ export const BuildQuery = graphql(`
       connectionDescriptions
       warnings
       log
-      presetId
       cancelledBy {
         type
         id

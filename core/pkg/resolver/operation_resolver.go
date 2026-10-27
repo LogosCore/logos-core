@@ -124,9 +124,8 @@ func WithChannelEndpointRepo(repo repository.IChannelEndpointRepository) Operati
 	}
 }
 
-// BuildCleanup removes what minion builds keep for an operation (presets,
-// builds and their artifacts, build files, minions). Satisfied by
-// *builds.Service.
+// BuildCleanup removes what minion builds keep for an operation (builds and
+// their artifacts, build files, minions). Satisfied by *builds.Service.
 type BuildCleanup interface {
 	DeleteOperationData(ctx context.Context, operationID uuid.UUID) error
 }
@@ -288,8 +287,8 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 		}
 	}
 
-	// Cascade delete: remove the operation's presets, builds, artifacts, build
-	// files and minions
+	// Cascade delete: remove the operation's builds, artifacts, build files and
+	// minions
 	if r.buildCleanup != nil {
 		if err := r.buildCleanup.DeleteOperationData(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's builds: %w", err)

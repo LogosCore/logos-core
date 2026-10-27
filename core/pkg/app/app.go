@@ -73,7 +73,6 @@ type Repositories struct {
 	ModuleInvocation   repository.IModuleActionInvocationRepository
 	ChannelEndpoint    repository.IChannelEndpointRepository
 	BuildFile          repository.IBuildFileRepository
-	BuildPreset        repository.IBuildPresetRepository
 	Build              repository.IBuildRepository
 	Minion             repository.IMinionRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
@@ -136,8 +135,8 @@ type App struct {
 	moduleMgmt  *modulemgmt.Service
 	// endpoints holds the values minions are given to reach a channel.
 	endpoints *channelendpoints.Service
-	// builds runs minion builds: presets, build files, builds offered to
-	// factory instances, and the minions they create.
+	// builds runs minion builds: build files, builds offered to factory
+	// instances, and the minions they create.
 	builds *builds.Service
 
 	// Future integration points:

@@ -57,8 +57,8 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	defer func() { _ = rpc.Close() }()
 	// Not started: the running core's scheduler is the one that offers it.
 	svc := NewService(Repos{
-		Files: repository.NewBuildFileRepository(db), Presets: repository.NewBuildPresetRepository(db),
-		Builds: repository.NewBuildRepository(db), Minions: repository.NewMinionRepository(db),
+		Files: repository.NewBuildFileRepository(db), Builds: repository.NewBuildRepository(db),
+		Minions: repository.NewMinionRepository(db),
 	}, registry, channels, rpc, store, signer, Config{}, zap.NewNop())
 
 	op := uuid.New()
