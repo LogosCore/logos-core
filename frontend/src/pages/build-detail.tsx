@@ -57,7 +57,7 @@ export function BuildDetailPage() {
     return (
       <div className="flex flex-col gap-4 p-4">
         <Skeleton className="h-8 w-80" />
-        <Skeleton className="h-96 w-full max-w-4xl" />
+        <Skeleton className="h-96 w-full" />
       </div>
     )
   }
@@ -131,7 +131,8 @@ function BuildDetail({ build: b }: { build: Build }) {
         </div>
       </header>
 
-      <div className="flex min-w-0 max-w-4xl flex-col gap-6 px-4 py-6">
+      {/* The page's full width: a long pipeline fits on one line instead of scrolling. */}
+      <div className="flex min-w-0 flex-col gap-6 px-4 py-6">
         {b.error && (
           <div className="flex items-start gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
             <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
