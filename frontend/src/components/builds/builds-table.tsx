@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
 import { currentStage, platformLabel } from "./build-values"
 
-const GRID_COLS = "grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_48px]"
+const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
 
 /**
  * An operation's builds, newest first. A row opens the build; its menu
@@ -61,7 +61,6 @@ export function BuildsTable({
           <div>Description</div>
           <div>Pipeline</div>
           <div>Platform</div>
-          <div>Minion</div>
           <div>Date</div>
           <div />
         </>
@@ -102,6 +101,9 @@ export function BuildsTable({
                     <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
                     <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
                   </div>
+                  <div className="truncate font-mono text-xs text-muted-foreground" title="Build id">
+                    {b.id}
+                  </div>
                   {b.error && (
                     <div className="truncate text-xs text-destructive" title={b.error.message}>
                       {b.error.code}: {b.error.message}
@@ -120,9 +122,6 @@ export function BuildsTable({
                   )}
                 </div>
                 <div className="truncate text-sm">{platformLabel(b.platform)}</div>
-                <div className="truncate font-mono text-xs" title={b.minionId}>
-                  {b.minionId.slice(0, 8)}
-                </div>
                 <div className="truncate text-sm text-muted-foreground">
                   <FormattedDateTimeText date={b.createdAt} />
                   {b.createdBy.name && <span> by {b.createdBy.name}</span>}
