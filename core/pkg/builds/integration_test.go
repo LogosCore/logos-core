@@ -75,7 +75,8 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	}
 
 	b, err := svc.CreateBuild(ctx, op, BuildInput{
-		ModuleName: "bob", Target: "dummy", Platform: "any/any",
+		Description: "integration test build, core's own",
+		ModuleName:  "bob", Target: "dummy", Platform: "any/any",
 		Values: map[string]any{"kill_date": "2027-01-31T00:00:00Z", "punches": []any{"jab", "uppercut"}, "badge": badge.FileID.String()},
 		Connections: []ConnectionInput{{ModuleName: "http", Name: "it-edge", Description: "integration note, core's own",
 			Settings: map[string]any{"base_url": "https://edge.example.com"}, Values: map[string]any{"path_prefix": "/cdn/assets/"}}},
@@ -133,9 +134,10 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 		minion.Connections[0].Values["path_prefix"] != "/cdn/assets/" {
 		t.Fatalf("artifact %s", raw)
 	}
-	// The connection's description stayed in core.
-	if strings.Contains(string(raw), "integration note") || b.ConnectionDescriptions[0] != "integration note, core's own" {
-		t.Fatalf("description %q, artifact %s", b.ConnectionDescriptions, raw)
+	// The descriptions stayed in core.
+	if strings.Contains(string(raw), "integration note") || b.ConnectionDescriptions[0] != "integration note, core's own" ||
+		strings.Contains(string(raw), "integration test build") || b.Description != "integration test build, core's own" {
+		t.Fatalf("descriptions %q %q, artifact %s", b.Description, b.ConnectionDescriptions, raw)
 	}
 	t.Logf("artifact %s (%d bytes):\n%s", b.Artifact.Filename, b.Artifact.Size, raw)
 }

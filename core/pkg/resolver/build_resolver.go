@@ -189,7 +189,7 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 		return nil, err
 	}
 	in := builds.BuildInput{
-		ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
+		Description: input.Description, ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
 		Values: values, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
 	}
 	b, err := r.builds.CreateBuild(ctx, op, in)
@@ -338,7 +338,7 @@ func toBuildFileModel(f *models.BuildFile) *model.BuildFile {
 
 func toBuildModel(b *models.Build) *model.Build {
 	out := &model.Build{
-		ID: b.BuildID, OperationID: b.OperationID.String(), ModuleName: b.ModuleName, Target: b.Target,
+		ID: b.BuildID, OperationID: b.OperationID.String(), Description: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, SchemaVersion: b.SchemaVersion, Values: copyMap(b.Values),
 		Connections: b.Connections.Items, MinionID: b.MinionID, State: b.State,
 		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion),

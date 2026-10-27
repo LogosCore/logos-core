@@ -100,7 +100,8 @@ func newRig(t *testing.T) *rig {
 
 func (r *rig) input(mutate func(in *BuildInput)) BuildInput {
 	in := BuildInput{
-		ModuleName: "bob", Target: "dummy", Platform: "any/any",
+		Description: " A dummy for the EU front's dry run ",
+		ModuleName:  "bob", Target: "dummy", Platform: "any/any",
 		Values: map[string]any{"punches": []any{"jab"}},
 		Connections: []ConnectionInput{{
 			ModuleName: "http", Name: "edge", Description: " EU front, first stage ",
@@ -210,9 +211,12 @@ func TestCreateBuildQueues(t *testing.T) {
 		conn.Values["method"] != "POST" || conn.Values["path_prefix"] != "/cdn/" {
 		t.Fatalf("connection %+v", conn)
 	}
-	// The note stays core's.
+	// The notes stay core's.
 	if len(b.ConnectionDescriptions) != 1 || b.ConnectionDescriptions[0] != "EU front, first stage" {
 		t.Fatalf("descriptions %q", b.ConnectionDescriptions)
+	}
+	if b.Description != "A dummy for the EU front's dry run" {
+		t.Fatalf("description %q", b.Description)
 	}
 }
 
@@ -225,6 +229,9 @@ func TestCreateBuildConnectionDescriptions(t *testing.T) {
 	long := strings.Repeat("é", MaxDescriptionLength)
 	if b := r.queue(t, func(in *BuildInput) { in.Connections[0].Description = long }); b.ConnectionDescriptions[0] != long {
 		t.Fatal("a note of the longest length was cut")
+	}
+	if b := r.queue(t, func(in *BuildInput) { in.Description = long }); b.Description != long {
+		t.Fatal("a build description of the longest length was cut")
 	}
 }
 
@@ -258,6 +265,8 @@ func TestCreateBuildProblems(t *testing.T) {
 		key    string
 		mutate func(in *BuildInput)
 	}{
+		{"description", func(in *BuildInput) { in.Description = " " }},
+		{"description", func(in *BuildInput) { in.Description = strings.Repeat("é", MaxDescriptionLength+1) }},
 		{"target", func(in *BuildInput) { in.Target = "windows-exe" }},
 		{"platform", func(in *BuildInput) { in.Platform = "" }},
 		{"platform", func(in *BuildInput) { in.Platform = "linux/amd64" }},
@@ -343,8 +352,8 @@ func TestOfferAccepted(t *testing.T) {
 		t.Fatalf("the request a factory gets does not pass its check: %v", p)
 	}
 	// The operators' notes never reach a factory, nor so an artifact.
-	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") {
-		t.Fatalf("a connection's description went to the factory: %s", raw)
+	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") || strings.Contains(string(raw), "dry run") {
+		t.Fatalf("a description went to the factory: %s", raw)
 	}
 	key := artifactKey(opID, b.BuildID)
 	if req.Artifact.UploadURL != "http://store.test/"+key+"?sig=put" || req.Artifact.MaxSize != 256<<20 ||

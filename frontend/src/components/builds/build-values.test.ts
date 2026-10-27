@@ -139,10 +139,12 @@ describe("the build form", () => {
     expect(form.platform).toBe("any/any")
     expect(Object.keys(form.drafts)).toEqual(["greeting", "kill_date", "punches", "badge", "token"])
     expect(form.connections).toEqual([])
+    expect(form.description).toBe("")
   })
 
   it("submits set values and settings, defaults left to the server", () => {
     const form = initialForm(kind, null, channels)
+    form.description = " EU front dry run "
     form.drafts.punches = { kind: "set", values: ["hook", "jab"] }
     form.drafts.badge = { kind: "file", id: "file-1" }
     form.connections = [
@@ -157,6 +159,7 @@ describe("the build form", () => {
     const { input, errors } = evaluateForm(kind, form, channels)
     expect(errors).toEqual({})
     expect(input).toEqual({
+      description: "EU front dry run",
       target: "dummy",
       platform: "any/any",
       values: { punches: ["jab", "hook"], badge: "file-1" },
@@ -183,6 +186,7 @@ describe("the build form", () => {
     form.drafts.kill_date = { kind: "text", text: "not a date" }
     const { errors } = evaluateForm(kind, form, channels)
     expect(errors).toMatchObject({
+      description: "Required",
       platform: "Pick a platform",
       "values.service_name": "Required",
       "values.kill_date": "Not a date and time",
@@ -192,20 +196,23 @@ describe("the build form", () => {
       "connections[0].values.path_prefix": "Must match ^/",
       "connections[1]": "This target does not speak dns",
     })
-    expect(Object.keys(errors)).toHaveLength(8)
+    expect(Object.keys(errors)).toHaveLength(9)
   })
 
   it("wants connection names unique, the server's defaults counted", () => {
     const form = initialForm(kind, null, channels)
+    form.description = "dry run"
     form.connections = [connection("http", { ...edge, name: "edge" }), connection("http", { ...edge, name: "edge" })]
     expect(evaluateForm(kind, form, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called edge too" })
     form.connections = [connection("http", { ...edge, name: "http-2" }), connection("http", edge)]
     expect(evaluateForm(kind, form, channels).errors).toEqual({ "connections[1].name": "Connection 1 is called http-2 too" })
   })
 
-  it("needs a connection, and every required value and setting", () => {
+  it("needs a description, a connection, and every required value and setting", () => {
     const form = initialForm(kind, null, channels)
-    expect(evaluateForm(kind, form, channels).errors).toEqual({ connections: "Add at least one connection" })
+    form.description = "  "
+    expect(evaluateForm(kind, form, channels).errors).toEqual({ description: "Required", connections: "Add at least one connection" })
+    form.description = "dry run"
     form.connections = [connection("http")]
     expect(evaluateForm(kind, form, channels).errors).toEqual({ "connections[0].settings.base_url": "Required" })
   })
@@ -223,6 +230,7 @@ describe("the build form", () => {
     const form = initialForm(
       kind,
       {
+        description: "WinTelemetry for the dry run",
         target: "service",
         platform: "windows/arm64",
         values: { service_name: "WinTelemetry", kill_date: "2027-01-31T00:00:00Z", punches: ["jab"] },
@@ -240,6 +248,7 @@ describe("the build form", () => {
       channels,
     )
     expect(form.platform).toBe("windows/arm64")
+    expect(form.description).toBe("WinTelemetry for the dry run")
     expect(form.drafts.punches).toEqual({ kind: "set", values: ["jab"] })
     const c = form.connections[0]
     expect(c.name).toBe("edge")
@@ -363,6 +372,7 @@ describe("finding endpoints", () => {
 describe("sourceFromBuild", () => {
   it("takes what the build set, not the defaults it holds", () => {
     const build = {
+      description: "the EU front's dry run",
       target: "dummy",
       platform: "any/any",
       values: { greeting: "hello from BOB", punches: ["jab"] },
@@ -384,6 +394,7 @@ describe("sourceFromBuild", () => {
     }
     const source = sourceFromBuild(kind, { ...build, connectionDescriptions: ["", "fallback"] }, channels)
     expect(source.values).toEqual({ punches: ["jab"] })
+    expect(source.description).toBe("the EU front's dry run")
     expect(source.connections).toEqual([
       {
         moduleName: "http",

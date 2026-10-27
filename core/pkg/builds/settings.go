@@ -30,7 +30,8 @@ type ConnectionInput struct {
 	Values      map[string]any
 }
 
-// MaxDescriptionLength bounds a connection's description, in characters.
+// MaxDescriptionLength bounds a build's and a connection's description, in
+// characters.
 const MaxDescriptionLength = 500
 
 // connectionNamePattern: a connection is named like an endpoint.

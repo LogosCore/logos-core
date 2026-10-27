@@ -56,6 +56,7 @@ type AgentKeyWithSecret struct {
 type Build struct {
 	ID                     string         `json:"id"`
 	OperationID            string         `json:"operationId"`
+	Description            string         `json:"description"`
 	ModuleName             string         `json:"moduleName"`
 	Target                 string         `json:"target"`
 	Platform               string         `json:"platform"`
@@ -125,6 +126,7 @@ type BuildFile struct {
 }
 
 type BuildInput struct {
+	Description string                  `json:"description"`
 	ModuleName  string                  `json:"moduleName"`
 	Target      string                  `json:"target"`
 	Platform    string                  `json:"platform"`

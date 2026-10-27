@@ -158,6 +158,11 @@ function BuildDetail({ build: b }: { build: Build }) {
 
         <Section title="Overview">
           <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-6 gap-y-2 py-3 text-sm">
+            {b.description && (
+              <Item label="Description">
+                <span className="whitespace-pre-line">{b.description}</span>
+              </Item>
+            )}
             <Item label="Platform">{platformLabel(b.platform)}</Item>
             <Item label="Minion">
               <span className="inline-flex items-center gap-1">

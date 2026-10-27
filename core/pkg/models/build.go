@@ -63,7 +63,11 @@ type Build struct {
 	BuildID     string    `bson:"build_id" json:"build_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	// ModuleName is the factory kind.
-	ModuleName    string           `bson:"module_name" json:"module_name"`
+	ModuleName string `bson:"module_name" json:"module_name"`
+	// Description is what the build is for: the operators' note, core's own,
+	// never in the build request. Empty for a build made before it was
+	// required.
+	Description   string           `bson:"description,omitempty" json:"description,omitempty"`
 	Target        string           `bson:"target" json:"target"`
 	Platform      string           `bson:"platform" json:"platform"`
 	SchemaVersion int              `bson:"schema_version" json:"schema_version"`

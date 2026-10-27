@@ -197,6 +197,8 @@ export interface ConnectionDraft {
 }
 
 export interface BuildForm {
+  /** What the build is for: the operators' note, required. */
+  description: string
   target: string
   platform: string
   drafts: Record<string, Draft>
@@ -217,6 +219,7 @@ export interface ConnectionSource {
 
 /** What a form is filled from: an earlier build ("Build again"). */
 export interface FormSource {
+  description?: string | null
   target: string
   platform?: string | null
   values?: Record<string, unknown> | null
@@ -349,6 +352,7 @@ export function initialForm(
         ? target.platforms[0]
         : ""
   return {
+    description: source?.description ?? "",
     target: target?.id ?? "",
     platform,
     drafts: draftsFor(targetFields(kind, target), source?.values),
@@ -358,6 +362,7 @@ export function initialForm(
 
 /** A build as its record holds it, for what is read back from it. */
 export interface BuildRecordLike {
+  description?: string | null
   target: string
   platform: string
   values?: unknown
@@ -431,6 +436,7 @@ export function sourceFromBuild(
     }
   })
   return {
+    description: build.description,
     target: build.target,
     platform: build.platform,
     values: withoutDefaults(targetFields(kind, target), isRecord(build.values) ? build.values : {}),
@@ -459,6 +465,7 @@ export interface ConnectionInput {
 
 /** What createBuild takes from the form. */
 export interface FormInput {
+  description: string
   target: string
   platform: string
   values: Record<string, unknown>
@@ -488,7 +495,8 @@ function evaluateFields(
 
 /**
  * The form as createBuild takes it, and its errors: a build needs a
- * platform, a connection and every required value and setting.
+ * description, a platform, a connection and every required value and
+ * setting.
  */
 export function evaluateForm(
   kind: FactoryKind,
@@ -496,6 +504,8 @@ export function evaluateForm(
   channels: ReadonlyMap<string, ChannelKind>,
 ): { input: FormInput; errors: Record<string, string> } {
   const errors: Record<string, string> = {}
+  const description = form.description.trim()
+  if (description === "") errors.description = "Required"
   const target = kind.targets.find((t) => t.id === form.target)
   if (!target) errors.target = "Pick a target"
   else if (form.platform === "") errors.platform = "Pick a platform"
@@ -522,7 +532,7 @@ export function evaluateForm(
       values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, errors),
     }
   })
-  return { input: { target: form.target, platform: form.platform, values, connections }, errors }
+  return { input: { description, target: form.target, platform: form.platform, values, connections }, errors }
 }
 
 /** The form with another target: drafts for its fields, kept where they carry over. */

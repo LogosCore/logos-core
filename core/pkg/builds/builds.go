@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -17,6 +18,10 @@ import (
 
 // BuildInput is what an operator asks to build.
 type BuildInput struct {
+	// Description is what the build is for, required: the operators' note.
+	// Core keeps it with the build record and never puts it in the build
+	// request, so it cannot end up in an artifact.
+	Description string
 	ModuleName  string
 	Target      string
 	Platform    string
@@ -61,12 +66,19 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if err != nil {
 		return nil, err
 	}
+	description := strings.TrimSpace(in.Description)
+	switch {
+	case description == "":
+		probs.add("description", "a description is required")
+	case utf8.RuneCountInString(description) > MaxDescriptionLength:
+		probs.add("description", "longer than %d characters", MaxDescriptionLength)
+	}
 	if err := probs.err("the build does not fit the factory's build schema"); err != nil {
 		return nil, err
 	}
 
 	b := &models.Build{
-		BuildID: protocol.NewULID(), OperationID: op, ModuleName: moduleName,
+		BuildID: protocol.NewULID(), OperationID: op, ModuleName: moduleName, Description: description,
 		Target: in.Target, Platform: in.Platform, SchemaVersion: schema.Version,
 		Values:    protocol.ResolveFieldValues(c.fields, values),
 		FileIDs:   c.fileIDs,

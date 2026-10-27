@@ -47,6 +47,7 @@ export const BuildFields = graphql(`
   fragment BuildFields on Build {
     id
     operationId
+    description
     moduleName
     target
     platform

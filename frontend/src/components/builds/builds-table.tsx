@@ -104,6 +104,11 @@ export function BuildsTable({
                     <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
                     <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
                   </div>
+                  {b.description && (
+                    <div className="truncate text-xs text-muted-foreground" title={b.description}>
+                      {b.description}
+                    </div>
+                  )}
                   {b.error && (
                     <div className="truncate text-xs text-destructive" title={b.error.message}>
                       {b.error.code}: {b.error.message}

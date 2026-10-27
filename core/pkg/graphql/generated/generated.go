@@ -144,6 +144,7 @@ type ComplexityRoot struct {
 		CreatedAt              func(childComplexity int) int
 		CreatedBy              func(childComplexity int) int
 		Deadline               func(childComplexity int) int
+		Description            func(childComplexity int) int
 		Error                  func(childComplexity int) int
 		FactoryVersion         func(childComplexity int) int
 		FinishedAt             func(childComplexity int) int
@@ -1953,6 +1954,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Deadline(childComplexity), true
+	case "Build.description":
+		if e.ComplexityRoot.Build.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Description(childComplexity), true
 	case "Build.error":
 		if e.ComplexityRoot.Build.Error == nil {
 			break
@@ -7900,10 +7907,10 @@ type BuildFile {
 }
 
 type BuildProblem {
-  # Where the problem is: "target", "platform", "values.<key>", "connections",
-  # "connections[<i>]", "connections[<i>].name", "connections[<i>].description",
-  # "connections[<i>].settings.<key>", "connections[<i>].values.<key>"; null
-  # when it is not one place's.
+  # Where the problem is: "description", "target", "platform", "values.<key>",
+  # "connections", "connections[<i>]", "connections[<i>].name",
+  # "connections[<i>].description", "connections[<i>].settings.<key>",
+  # "connections[<i>].values.<key>"; null when it is not one place's.
   key: String
   message: String!
 }
@@ -7928,6 +7935,10 @@ input BuildConnectionInput {
 }
 
 input BuildInput {
+  # What the build is for, 1 to 500 characters: the operators' note. Core
+  # keeps it with the build record and never sends it to the factory, so it
+  # cannot end up in an artifact.
+  description: String!
   moduleName: String!
   target: String!
   platform: String!
@@ -7978,6 +7989,9 @@ type Build {
   # The build id factories know it by (a ULID).
   id: ID!
   operationId: ID!
+  # What the build is for: the operators' note, core's own (see
+  # BuildInput.description). Empty for a build made before it was required.
+  description: String!
   # The factory kind.
   moduleName: String!
   target: String!
@@ -15699,6 +15713,35 @@ func (ec *executionContext) fieldContext_Build_operationId(_ context.Context, fi
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Build_description(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_description,
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -27668,6 +27711,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_id(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_Build_moduleName(ctx, field)
 			case "target":
@@ -27779,6 +27824,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_id(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_Build_moduleName(ctx, field)
 			case "target":
@@ -27890,6 +27937,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_id(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_Build_moduleName(ctx, field)
 			case "target":
@@ -35267,6 +35316,8 @@ func (ec *executionContext) fieldContext_Query_builds(ctx context.Context, field
 				return ec.fieldContext_Build_id(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_Build_moduleName(ctx, field)
 			case "target":
@@ -35378,6 +35429,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_id(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Build_operationId(ctx, field)
+			case "description":
+				return ec.fieldContext_Build_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_Build_moduleName(ctx, field)
 			case "target":
@@ -51104,13 +51157,20 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"moduleName", "target", "platform", "values", "connections"}
+	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "connections"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
 		case "moduleName":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("moduleName"))
 			data, err := ec.unmarshalNString2string(ctx, v)
@@ -54149,6 +54209,11 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "operationId":
 			out.Values[i] = ec._Build_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._Build_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

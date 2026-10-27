@@ -38,6 +38,10 @@ func TestToBuildModelConnectionDescriptions(t *testing.T) {
 	if d := toBuildModel(b).ConnectionDescriptions; len(d) != 3 || d[0] != "" {
 		t.Errorf("without notes: %q", d)
 	}
+	b.Description = "a dry run"
+	if d := toBuildModel(b).Description; d != "a dry run" {
+		t.Errorf("description %q", d)
+	}
 	b.ConnectionDescriptions = []string{"EU front", "", "fallback"}
 	if d := toBuildModel(b).ConnectionDescriptions; len(d) != 3 || d[0] != "EU front" || d[2] != "fallback" {
 		t.Errorf("notes: %q", d)

@@ -93,10 +93,10 @@ type BuildFile {
 }
 
 type BuildProblem {
-  # Where the problem is: "target", "platform", "values.<key>", "connections",
-  # "connections[<i>]", "connections[<i>].name", "connections[<i>].description",
-  # "connections[<i>].settings.<key>", "connections[<i>].values.<key>"; null
-  # when it is not one place's.
+  # Where the problem is: "description", "target", "platform", "values.<key>",
+  # "connections", "connections[<i>]", "connections[<i>].name",
+  # "connections[<i>].description", "connections[<i>].settings.<key>",
+  # "connections[<i>].values.<key>"; null when it is not one place's.
   key: String
   message: String!
 }
@@ -121,6 +121,10 @@ input BuildConnectionInput {
 }
 
 input BuildInput {
+  # What the build is for, 1 to 500 characters: the operators' note. Core
+  # keeps it with the build record and never sends it to the factory, so it
+  # cannot end up in an artifact.
+  description: String!
   moduleName: String!
   target: String!
   platform: String!
@@ -171,6 +175,9 @@ type Build {
   # The build id factories know it by (a ULID).
   id: ID!
   operationId: ID!
+  # What the build is for: the operators' note, core's own (see
+  # BuildInput.description). Empty for a build made before it was required.
+  description: String!
   # The factory kind.
   moduleName: String!
   target: String!

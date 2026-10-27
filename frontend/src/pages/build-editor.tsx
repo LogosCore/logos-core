@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Textarea } from "@/components/ui/textarea"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
@@ -229,6 +230,7 @@ function Editor({
       const res = await createBuild.mutateAsync({
         operationId,
         input: {
+          description: input.description,
           moduleName: kind.name,
           target: input.target,
           platform: input.platform,
@@ -282,7 +284,7 @@ function Editor({
     {
       id: sectionId(WHAT_TO_BUILD),
       title: WHAT_TO_BUILD,
-      state: shown.target || shown.platform ? "error" : "set",
+      state: shown.description || shown.target || shown.platform ? "error" : "set",
     },
     ...groups.map(
       (g): SettingsNavSection => ({
@@ -351,6 +353,28 @@ function Editor({
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
 
           <SettingsSection id={sectionId(WHAT_TO_BUILD)} title={WHAT_TO_BUILD}>
+            <SettingRow
+              id="build-description"
+              label="Description"
+              required
+              help="What this build is for, for the rest of the team. Core keeps it with the build; the factory and the minion never get it."
+              error={shown.description}
+            >
+              <Textarea
+                id="build-description"
+                value={form.description}
+                onChange={(e) => {
+                  const description = e.target.value
+                  setForm((f) => ({ ...f, description }))
+                  clearServerError("description")
+                }}
+                rows={2}
+                maxLength={500}
+                placeholder="e.g. Service build for the EU front's dry run"
+                disabled={disabled}
+                aria-invalid={!!shown.description || undefined}
+              />
+            </SettingRow>
             <SettingRow id="build-target" label="Target" required help={target?.description ?? "What the factory produces."} error={shown.target}>
               <Select
                 value={form.target === "" ? null : form.target}
