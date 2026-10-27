@@ -8,19 +8,10 @@ import { EditEndpoint, NewEndpoint } from "./endpoint-editor"
  * editor, or the form for a new one. Keyed by what it shows, so moving from
  * one to another starts that one afresh.
  */
-export function EndpointModal({
-  modal,
-  open,
-  onClosed,
-}: {
-  modal: Extract<RecordModalTarget, { kind: "endpoint" | "new-endpoint" }>
-  /** False while it fades out (components/ui/record-modal.tsx). */
-  open: boolean
-  onClosed: () => void
-}) {
+export function EndpointModal({ modal }: { modal: Extract<RecordModalTarget, { kind: "endpoint" | "new-endpoint" }> }) {
   const { close } = useRecordModals()
   return (
-    <RecordModal open={open} onClose={close} onClosed={onClosed}>
+    <RecordModal onClose={close}>
       {modal.kind === "endpoint" ? (
         <EditEndpoint key={`endpoint:${modal.id}`} id={modal.id} />
       ) : (

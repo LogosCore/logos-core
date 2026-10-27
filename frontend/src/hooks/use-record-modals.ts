@@ -41,7 +41,7 @@ export function useRecordModals() {
       const inApp = current === null || openedInApp(location.state)
       go(modal, current !== null, { ...extraState, inApp })
     },
-    /** Closes the open modal. Nothing once it is closed (and fading out). */
+    /** Closes the open modal; nothing when none is open. */
     close() {
       if (current === null) return
       if (openedInApp(location.state)) navigate(-1)

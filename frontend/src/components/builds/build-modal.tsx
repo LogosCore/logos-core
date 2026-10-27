@@ -9,19 +9,10 @@ import { BuildEditor } from "./build-editor"
  * or the form for a new one. Keyed by what it shows, so moving from one to
  * the other (Build again, a build started) starts that one afresh.
  */
-export function BuildModal({
-  modal,
-  open,
-  onClosed,
-}: {
-  modal: Extract<RecordModalTarget, { kind: "build" | "new-build" }>
-  /** False while it fades out (components/ui/record-modal.tsx). */
-  open: boolean
-  onClosed: () => void
-}) {
+export function BuildModal({ modal }: { modal: Extract<RecordModalTarget, { kind: "build" | "new-build" }> }) {
   const { close } = useRecordModals()
   return (
-    <RecordModal open={open} onClose={close} onClosed={onClosed}>
+    <RecordModal onClose={close}>
       {modal.kind === "build" ? (
         <BuildDetails key={`build:${modal.id}`} id={modal.id} />
       ) : (

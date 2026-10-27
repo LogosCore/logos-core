@@ -14,7 +14,8 @@ import { leavesRecordModal } from "@/lib/record-modals"
 
 // The frame of the build and endpoint modals (components/layout/
 // record-modals.tsx): near full screen, a header row with the record's title,
-// its actions and a close button, and a body that scrolls.
+// its actions and a close button, and a body that scrolls. It appears and
+// goes at once: duration-0 zeroes the fade and zoom the other dialogs have.
 //
 // A form in it reports unsaved changes with useCloseGuard. A navigation that
 // would then close the modal, or put another in its place, asks first. That
@@ -45,18 +46,7 @@ export function useCloseGuard(dirty: boolean): () => void {
   return useContext(SavedContext)
 }
 
-export function RecordModal({
-  open,
-  onClose,
-  onClosed,
-  children,
-}: {
-  /** False once the URL no longer names it: it fades out, then onClosed. */
-  open: boolean
-  onClose: () => void
-  onClosed: () => void
-  children: ReactNode
-}) {
+export function RecordModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   const [dirty, setDirty] = useState(false)
   // One navigation let through, set by saved(). Whichever navigation comes
   // next uses it up, so it cannot wait around for a later one.
@@ -82,16 +72,12 @@ export function RecordModal({
   }, [dirty])
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => !o && onClose()}
-      onOpenChangeComplete={(o) => !o && onClosed()}
-    >
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         showCloseButton={false}
         // The page behind it blurred, so the record in front is what reads.
-        overlayClassName="backdrop-blur-sm"
-        className="flex h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100svh-4rem)] sm:max-w-[calc(100%-4rem)] max-sm:h-svh max-sm:max-w-none max-sm:rounded-none"
+        overlayClassName="backdrop-blur-sm duration-0"
+        className="flex h-[calc(100svh-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:h-[calc(100svh-4rem)] sm:max-w-[calc(100%-4rem)] max-sm:h-svh max-sm:max-w-none max-sm:rounded-none duration-0"
       >
         <RequestCloseContext.Provider value={onClose}>
           <GuardContext.Provider value={setDirty}>
