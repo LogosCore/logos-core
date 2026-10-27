@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  emptyDraft,
   checkDraft,
   durationMs,
   evaluateForm,
@@ -105,13 +106,16 @@ describe("durations", () => {
 describe("string_list", () => {
   const f = field({ key: "hosts", type: "string_list" })
 
-  it("is one item per line, blank lines dropped", () => {
-    expect(parseDraft(f, { kind: "text", text: " a \n\nb\n" })).toEqual({ ok: true, value: ["a", "b"] })
-    expect(parseDraft(f, { kind: "text", text: "\n \n" })).toEqual({ ok: true, value: null })
+  it("is one row per item, in order, blank rows dropped", () => {
+    expect(parseDraft(f, { kind: "list", items: [" b ", "", "a"] })).toEqual({ ok: true, value: ["b", "a"] })
+    expect(parseDraft(f, { kind: "list", items: ["", " "] })).toEqual({ ok: true, value: null })
+    expect(parseDraft(f, { kind: "list", items: [] })).toEqual({ ok: true, value: null })
   })
 
-  it("renders a stored list one per line", () => {
-    expect(initialDraft(f, ["x", "y"])).toEqual({ kind: "text", text: "x\ny" })
+  it("starts from a stored list, one row per item", () => {
+    expect(initialDraft(f, ["x", "y"])).toEqual({ kind: "list", items: ["x", "y"] })
+    expect(initialDraft(f, null)).toEqual({ kind: "list", items: [] })
+    expect(emptyDraft(f)).toEqual({ kind: "list", items: [] })
   })
 
   it("applies pattern and maxLength per item", () => {

@@ -10,9 +10,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
-import { PlusIcon, XIcon } from "lucide-react"
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
+import { move } from "@/components/builds/build-values"
 import { UserAgentGenerator } from "./user-agent-generator"
 import {
   BYTE_UNITS,
@@ -142,6 +142,19 @@ export function FieldControl({
         />
       )
 
+    case "list":
+      return (
+        <ListControl
+          id={id}
+          field={field}
+          draft={draft}
+          onChange={onChange}
+          disabled={disabled}
+          invalid={invalid}
+          defaultText={defaultText}
+        />
+      )
+
     case "text":
       break
   }
@@ -181,25 +194,6 @@ export function FieldControl({
         </Select>
       )
     }
-
-    case "string_list":
-      return (
-        <Textarea
-          id={id}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={disabled}
-          aria-invalid={invalid || undefined}
-          rows={Math.min(8, Math.max(3, text.split("\n").length + 1))}
-          placeholder={
-            Array.isArray(defaultValue) && defaultValue.length > 0
-              ? defaultValue.join("\n")
-              : (field.placeholder ?? "One per line")
-          }
-          spellCheck={false}
-          className="font-mono text-sm"
-        />
-      )
 
     case "duration":
       return (
@@ -405,6 +399,105 @@ function BytesControl({
       {hint && draft.unit === "B" && amount >= 1024 && (
         <span className="text-xs text-muted-foreground">≈ {humanizeBytes(amount)}</span>
       )}
+    </div>
+  )
+}
+
+/**
+ * string_list: one row per item (value, move up/down, remove), and "Add", like
+ * string_map. Order is kept, as it can matter (fallback addresses, say); a
+ * blank row is ignored on save.
+ */
+function ListControl({
+  id,
+  field,
+  draft,
+  onChange,
+  disabled,
+  invalid,
+  defaultText,
+}: {
+  id: string
+  field: FieldDef
+  draft: Extract<Draft, { kind: "list" }>
+  onChange: (d: Draft) => void
+  disabled?: boolean
+  invalid?: boolean
+  defaultText?: string
+}) {
+  const items = draft.items
+  const set = (next: string[]) => onChange({ kind: "list", items: next })
+  const full = field.maxItems != null && items.length >= field.maxItems
+
+  return (
+    <div className="flex flex-col gap-2">
+      {items.length === 0 && (
+        <span className="text-sm text-muted-foreground">
+          {defaultText !== undefined && defaultText !== "(empty)" ? `Default: ${defaultText}` : "None"}
+        </span>
+      )}
+      {items.map((item, i) => (
+        <div key={i} className="flex items-center gap-1">
+          <Input
+            id={i === 0 ? id : undefined}
+            value={item}
+            onChange={(ev) => set(items.map((v, j) => (j === i ? ev.target.value : v)))}
+            placeholder={field.placeholder ?? undefined}
+            aria-label={`${field.label} ${i + 1}`}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            autoComplete="off"
+            spellCheck={false}
+            className="mr-1 min-w-0 flex-1 font-mono text-sm"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => set(move(items, i, -1))}
+            disabled={disabled || i === 0}
+            title="Move up"
+            aria-label="Move up"
+          >
+            <ArrowUpIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => set(move(items, i, 1))}
+            disabled={disabled || i === items.length - 1}
+            title="Move down"
+            aria-label="Move down"
+          >
+            <ArrowDownIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => set(items.filter((_, j) => j !== i))}
+            disabled={disabled}
+            title="Remove"
+            aria-label="Remove"
+          >
+            <XIcon />
+          </Button>
+        </div>
+      ))}
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => set([...items, ""])}
+          disabled={disabled || full}
+          title={full ? `At most ${field.maxItems}` : undefined}
+        >
+          <PlusIcon />
+          Add
+        </Button>
+      </div>
     </div>
   )
 }

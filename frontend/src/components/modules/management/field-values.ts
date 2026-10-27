@@ -168,6 +168,8 @@ export type Draft =
   | { kind: "bytes"; text: string; unit: ByteUnit }
   | { kind: "secret"; mode: "keep" | "replace" | "clear"; text: string }
   | { kind: "map"; entries: MapEntry[] }
+  // string_list: one row per item, in order; blank rows are dropped on save.
+  | { kind: "list"; items: string[] }
   // enum_list: the checked options; none means not set.
   | { kind: "set"; values: string[] }
   // file: a build file's id; null when not set.
@@ -209,6 +211,10 @@ export function initialDraft(
         : [],
     }
   }
+  if (type === "string_list") {
+    const items = Array.isArray(value) ? value.map(String) : typeof value === "string" && value !== "" ? [value] : []
+    return { kind: "list", items }
+  }
   if (type === "bytes") {
     if (typeof value === "number") return { kind: "bytes", ...splitBytes(value) }
     return { kind: "bytes", text: "", unit: defaultByteUnit(field) }
@@ -222,7 +228,7 @@ export function initialDraft(
   if (type === "datetime") {
     return { kind: "text", text: typeof value === "string" ? rfc3339ToLocalInput(value) : "" }
   }
-  return { kind: "text", text: valueToText(type, value) }
+  return { kind: "text", text: valueToText(value) }
 }
 
 function defaultByteUnit(field: FieldDef): ByteUnit {
@@ -230,11 +236,8 @@ function defaultByteUnit(field: FieldDef): ByteUnit {
   return "B"
 }
 
-function valueToText(type: FieldType, value: unknown): string {
+function valueToText(value: unknown): string {
   if (value === null || value === undefined) return ""
-  if (type === "string_list") {
-    return Array.isArray(value) ? value.map(String).join("\n") : String(value)
-  }
   if (typeof value === "string") return value
   if (typeof value === "number" || typeof value === "boolean") return String(value)
   return JSON.stringify(value)
@@ -269,6 +272,10 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
     }
     case "file":
       return { ok: true, value: draft.id }
+    case "list": {
+      const items = draft.items.map((i) => i.trim()).filter((i) => i !== "")
+      return { ok: true, value: items.length === 0 ? null : items }
+    }
     case "map": {
       const out: Record<string, string> = {}
       for (const e of draft.entries) {
@@ -290,13 +297,6 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
     }
     case "text": {
       const raw = draft.text
-      if (type === "string_list") {
-        const items = raw
-          .split("\n")
-          .map((l) => l.trim())
-          .filter((l) => l !== "")
-        return { ok: true, value: items.length === 0 ? null : items }
-      }
       const t = raw.trim()
       if (t === "") return { ok: true, value: null }
       if (type === "int") {

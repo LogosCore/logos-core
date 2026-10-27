@@ -37,7 +37,7 @@ describe("evaluateEndpoint", () => {
   it("leaves unset fields out and validates the rest", () => {
     const drafts = endpointDrafts(fields, null)
     drafts.base_url = { kind: "text", text: "https://edge.example.com:8443" }
-    drafts.headers = { kind: "text", text: "X-A: 1\n\nX-B: 2" }
+    drafts.headers = { kind: "list", items: ["X-A: 1", "", "X-B: 2"] }
     const { values, errors } = evaluateEndpoint(fields, drafts)
     expect(errors).toEqual({})
     expect(values).toEqual({ base_url: "https://edge.example.com:8443", headers: ["X-A: 1", "X-B: 2"] })

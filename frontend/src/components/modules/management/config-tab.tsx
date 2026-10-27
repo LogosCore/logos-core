@@ -242,7 +242,8 @@ function PropertyCard({
     (draft.kind === "bool" && draft.value === null) ||
     (draft.kind === "bytes" && draft.text.trim() === "") ||
     (draft.kind === "secret" && draft.mode === "clear") ||
-    (draft.kind === "map" && draft.entries.length === 0)
+    (draft.kind === "map" && draft.entries.length === 0) ||
+    (draft.kind === "list" && draft.items.every((i) => i.trim() === ""))
   const canReset = !disabled && p.source === "set" && !draftEmpty
 
   return (
