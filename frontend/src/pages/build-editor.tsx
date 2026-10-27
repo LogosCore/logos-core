@@ -14,6 +14,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
+import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-nav"
+import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import type { BuildPresetFieldsFragment } from "@/graphql/gql/graphql"
@@ -351,6 +353,37 @@ function Editor({
   const groups = groupByField(fields, (f) => f)
   const unusedEndpoints = endpoints.filter((e) => !form.connections.some((c) => c.endpointId === e.id))
 
+  // Side list: what to build, each group of fields, the endpoints, with a dot
+  // for errors or for values set.
+  const navSections: SettingsNavSection[] = [
+    {
+      id: sectionId(WHAT_TO_BUILD),
+      title: WHAT_TO_BUILD,
+      state: shown.target || shown.platform || (submitted && nameErr) ? "error" : "set",
+    },
+    ...groups.map(
+      (g): SettingsNavSection => ({
+        id: sectionId(g.group),
+        title: g.group,
+        state: g.items.some((f) => shown[`values.${f.key}`])
+          ? "error"
+          : g.items.some((f) => input.values[f.key] !== undefined)
+            ? "set"
+            : null,
+      }),
+    ),
+    {
+      id: sectionId(ENDPOINTS),
+      title: ENDPOINTS,
+      state: Object.keys(shown).some((k) => k.startsWith("connections"))
+        ? "error"
+        : form.connections.length > 0
+          ? "set"
+          : null,
+    },
+  ]
+  const [active, goTo] = useActiveSection(navSections.map((s) => s.id))
+
   return (
     <BuildFilesContext.Provider value={filesCtx}>
       <form
@@ -390,7 +423,9 @@ function Editor({
           </div>
         </header>
 
-        <div className="@container/settings min-w-0 flex-1 px-4 py-6">
+        <div className="flex gap-10 px-4 py-6">
+        <SettingsNav sections={navSections} active={active} onPick={goTo} />
+        <div className="@container/settings min-w-0 flex-1">
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
           {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
           {notes.length > 0 && (
@@ -401,7 +436,7 @@ function Editor({
             </div>
           )}
 
-          <SettingsSection title="What to build">
+          <SettingsSection id={sectionId(WHAT_TO_BUILD)} title={WHAT_TO_BUILD}>
             {mode === "preset" && (
               <>
                 <SettingRow id="preset-name" label="Name" required help="Unique in this operation: lowercase letters, digits, '.', '_' and '-'." error={submitted ? (nameErr ?? undefined) : undefined}>
@@ -475,7 +510,7 @@ function Editor({
           </SettingsSection>
 
           {groups.map((g) => (
-            <SettingsSection key={g.group} title={g.group}>
+            <SettingsSection key={g.group} id={sectionId(g.group)} title={g.group}>
               {g.items.map((f) => (
                 <FieldRow
                   key={f.key}
@@ -491,7 +526,7 @@ function Editor({
             </SettingsSection>
           ))}
 
-          <SettingsSection title="Endpoints">
+          <SettingsSection id={sectionId(ENDPOINTS)} title={ENDPOINTS}>
             <div className="flex flex-col gap-3 py-3">
               <p className="text-sm text-muted-foreground">
                 The minion tries them in this order. Each is copied into the build: changing an endpoint later changes
@@ -575,10 +610,15 @@ function Editor({
           </SettingsSection>
         </div>
         </div>
+        </div>
       </form>
     </BuildFilesContext.Provider>
   )
 }
+
+/** The form's own sections, around the factory's groups of fields. */
+const WHAT_TO_BUILD = "What to build"
+const ENDPOINTS = "Endpoints"
 
 function FieldRow({
   idPrefix,

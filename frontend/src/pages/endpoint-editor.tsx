@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router"
 import { ArrowLeftIcon, RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
-import { cn } from "@/lib/utils"
+import { SettingsNav } from "@/components/ui/settings-nav"
+import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
@@ -140,10 +141,6 @@ interface Section {
   id: string
   title: string
   fields: FieldDef[]
-}
-
-function sectionId(title: string): string {
-  return `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
 }
 
 /**
@@ -290,35 +287,11 @@ function EndpointEditor({
       </header>
 
       <div className="flex gap-10 px-4 py-6">
-        <nav className="sticky top-20 hidden w-40 shrink-0 self-start md:block" aria-label="Sections">
-          <ul className="flex flex-col gap-0.5">
-            {sections.map((s) => {
-              const state = sectionState(s)
-              return (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => goTo(s.id)}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm",
-                      active === s.id
-                        ? "bg-foreground/10 font-medium text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {s.title}
-                    {state && (
-                      <span
-                        className={cn("size-1.5 rounded-full", state === "error" ? "bg-destructive" : "bg-foreground/50")}
-                        aria-label={state === "error" ? "has errors" : "has values"}
-                      />
-                    )}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
+        <SettingsNav
+          sections={sections.map((s) => ({ id: s.id, title: s.title, state: sectionState(s) }))}
+          active={active}
+          onPick={goTo}
+        />
 
         <div className="@container/settings min-w-0 flex-1">
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
@@ -400,67 +373,3 @@ function EndpointEditor({
 }
 
 
-/** How far below the viewport top a section's heading counts as reached. */
-const SPY_OFFSET = 120
-
-/**
- * The section the reader is in, and a way to go to one. Reading position: the
- * last section whose top has scrolled above SPY_OFFSET, or the last section
- * once the page is scrolled to its end (short last sections never reach the
- * top). A section picked from the list stays highlighted until the reader
- * scrolls themselves: near the end of the page it may not move at all.
- */
-function useActiveSection(ids: string[]): [string | null, (id: string) => void] {
-  const [active, setActive] = useState<string | null>(ids[0] ?? null)
-  const idsRef = useRef(ids)
-  const pickedRef = useRef(false)
-  useEffect(() => {
-    idsRef.current = ids
-  })
-
-  useEffect(() => {
-    const update = () => {
-      if (pickedRef.current) return
-      const els = idsRef.current
-        .map((id) => document.getElementById(id))
-        .filter((el): el is HTMLElement => el !== null)
-      if (els.length === 0) return
-      const last = els[els.length - 1]
-      // At the end: the last section has fully come into view.
-      if (last.getBoundingClientRect().bottom <= window.innerHeight + 1) {
-        setActive(last.id)
-        return
-      }
-      let current = els[0].id
-      for (const el of els) {
-        if (el.getBoundingClientRect().top <= SPY_OFFSET) current = el.id
-      }
-      setActive(current)
-    }
-    // The reader taking over ends a pick.
-    const release = () => {
-      pickedRef.current = false
-    }
-    // Capture: the page scrolls inside the app layout, not the window.
-    document.addEventListener("scroll", update, { capture: true, passive: true })
-    window.addEventListener("resize", update)
-    for (const ev of ["wheel", "touchstart", "keydown"] as const) {
-      window.addEventListener(ev, release, { passive: true })
-    }
-    update()
-    return () => {
-      document.removeEventListener("scroll", update, { capture: true })
-      window.removeEventListener("resize", update)
-      for (const ev of ["wheel", "touchstart", "keydown"] as const) {
-        window.removeEventListener(ev, release)
-      }
-    }
-  }, [])
-
-  const goTo = (id: string) => {
-    pickedRef.current = true
-    setActive(id)
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
-  return [active, goTo]
-}
