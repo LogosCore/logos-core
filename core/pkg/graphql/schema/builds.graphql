@@ -172,7 +172,8 @@ type BuildError {
 }
 
 type Build {
-  # The build id factories know it by (a ULID).
+  # The build's id, and the minion's: factories know the build by it, and the
+  # minion sends it on the data plane.
   id: ID!
   operationId: ID!
   # What the build is for: the operators' note, core's own (see
@@ -191,8 +192,6 @@ type Build {
   # The operators' notes on the connections, by position ("" for none). Core's
   # own: the factory never got them, so they are not in connections.
   connectionDescriptions: [String!]!
-  # The id the minion sends on the data plane.
-  minionId: String!
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
   state: String!
   # The factory instance building it.
@@ -215,11 +214,10 @@ type Build {
   deadline: String!
 }
 
-# What a successful build created.
+# What a successful build created. Its id is its build's.
 type Minion {
   id: ID!
   operationId: ID!
-  buildId: ID!
   # The factory kind that built it.
   moduleName: String!
   target: String!

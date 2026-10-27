@@ -151,7 +151,6 @@ type ComplexityRoot struct {
 		ID                     func(childComplexity int) int
 		Instance               func(childComplexity int) int
 		Log                    func(childComplexity int) int
-		MinionID               func(childComplexity int) int
 		ModuleName             func(childComplexity int) int
 		OperationID            func(childComplexity int) int
 		Platform               func(childComplexity int) int
@@ -412,7 +411,6 @@ type ComplexityRoot struct {
 	}
 
 	Minion struct {
-		BuildID      func(childComplexity int) int
 		Capabilities func(childComplexity int) int
 		CreatedAt    func(childComplexity int) int
 		CreatedBy    func(childComplexity int) int
@@ -1996,12 +1994,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Log(childComplexity), true
-	case "Build.minionId":
-		if e.ComplexityRoot.Build.MinionID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Build.MinionID(childComplexity), true
 	case "Build.moduleName":
 		if e.ComplexityRoot.Build.ModuleName == nil {
 			break
@@ -3035,12 +3027,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Login.User(childComplexity), true
 
-	case "Minion.buildId":
-		if e.ComplexityRoot.Minion.BuildID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Minion.BuildID(childComplexity), true
 	case "Minion.capabilities":
 		if e.ComplexityRoot.Minion.Capabilities == nil {
 			break
@@ -7986,7 +7972,8 @@ type BuildError {
 }
 
 type Build {
-  # The build id factories know it by (a ULID).
+  # The build's id, and the minion's: factories know the build by it, and the
+  # minion sends it on the data plane.
   id: ID!
   operationId: ID!
   # What the build is for: the operators' note, core's own (see
@@ -8005,8 +7992,6 @@ type Build {
   # The operators' notes on the connections, by position ("" for none). Core's
   # own: the factory never got them, so they are not in connections.
   connectionDescriptions: [String!]!
-  # The id the minion sends on the data plane.
-  minionId: String!
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
   state: String!
   # The factory instance building it.
@@ -8029,11 +8014,10 @@ type Build {
   deadline: String!
 }
 
-# What a successful build created.
+# What a successful build created. Its id is its build's.
 type Minion {
   id: ID!
   operationId: ID!
-  buildId: ID!
   # The factory kind that built it.
   moduleName: String!
   target: String!
@@ -15950,35 +15934,6 @@ func (ec *executionContext) fieldContext_Build_connectionDescriptions(_ context.
 	return fc, nil
 }
 
-func (ec *executionContext) _Build_minionId(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Build_minionId,
-		func(ctx context.Context) (any, error) {
-			return obj.MinionID, nil
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Build_minionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Build",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Build_state(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22037,35 +21992,6 @@ func (ec *executionContext) fieldContext_Minion_operationId(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _Minion_buildId(ctx context.Context, field graphql.CollectedField, obj *model.Minion) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Minion_buildId,
-		func(ctx context.Context) (any, error) {
-			return obj.BuildID, nil
-		},
-		nil,
-		ec.marshalNID2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Minion_buildId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Minion",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type ID does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Minion_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.Minion) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27727,8 +27653,6 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
-			case "minionId":
-				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -27840,8 +27764,6 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
-			case "minionId":
-				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -27953,8 +27875,6 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
-			case "minionId":
-				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -35332,8 +35252,6 @@ func (ec *executionContext) fieldContext_Query_builds(ctx context.Context, field
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
-			case "minionId":
-				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -35445,8 +35363,6 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
-			case "minionId":
-				return ec.fieldContext_Build_minionId(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -35542,8 +35458,6 @@ func (ec *executionContext) fieldContext_Query_minions(ctx context.Context, fiel
 				return ec.fieldContext_Minion_id(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Minion_operationId(ctx, field)
-			case "buildId":
-				return ec.fieldContext_Minion_buildId(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_Minion_moduleName(ctx, field)
 			case "target":
@@ -54252,11 +54166,6 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "minionId":
-			out.Values[i] = ec._Build_minionId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "state":
 			out.Values[i] = ec._Build_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -57092,11 +57001,6 @@ func (ec *executionContext) _Minion(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "operationId":
 			out.Values[i] = ec._Minion_operationId(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "buildId":
-			out.Values[i] = ec._Minion_buildId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

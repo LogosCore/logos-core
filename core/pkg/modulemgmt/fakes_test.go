@@ -186,10 +186,12 @@ func (f *fakeChanges) ListByInstance(context.Context, string, int64) ([]models.M
 	return f.rows, nil
 }
 
+func (f *fakeChanges) BackfillChangeIDs(context.Context) (int64, error) { return 0, nil }
+
 type fakeInvocations struct {
 	mu       sync.Mutex
 	inserted []models.ModuleActionInvocation
-	finished map[string]string // invocation id -> status
+	finished map[models.InvocationID]string // invocation id -> status
 }
 
 func (f *fakeInvocations) Insert(_ context.Context, inv *models.ModuleActionInvocation) error {
@@ -199,11 +201,11 @@ func (f *fakeInvocations) Insert(_ context.Context, inv *models.ModuleActionInvo
 	return nil
 }
 
-func (f *fakeInvocations) Finish(_ context.Context, id, status, _, _ string, _ time.Time) error {
+func (f *fakeInvocations) Finish(_ context.Context, id models.InvocationID, status, _, _ string, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.finished == nil {
-		f.finished = map[string]string{}
+		f.finished = map[models.InvocationID]string{}
 	}
 	f.finished[id] = status
 	return nil
@@ -212,6 +214,8 @@ func (f *fakeInvocations) Finish(_ context.Context, id, status, _, _ string, _ t
 func (f *fakeInvocations) ListByInstance(context.Context, string, int64) ([]models.ModuleActionInvocation, error) {
 	return f.inserted, nil
 }
+
+func (f *fakeInvocations) ConvertLegacyIDs(context.Context) (int64, error) { return 0, nil }
 
 // --- RPC ---
 

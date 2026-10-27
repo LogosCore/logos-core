@@ -178,7 +178,7 @@ func (r *apiKeyResolver) DeleteMyAPIKey(ctx context.Context) (bool, error) {
 // ID surfaces the public key_id prefix as the GraphQL id. There's no separate
 // row UUID worth exposing — key_id is unique and stable across regenerations.
 func (r *apiKeyResolver) ID(_ context.Context, obj *models.APIKey) (string, error) {
-	return obj.KeyID, nil
+	return obj.APIKeyID.String(), nil
 }
 
 func (r *apiKeyResolver) LastUsedAt(_ context.Context, obj *models.APIKey) (*string, error) {

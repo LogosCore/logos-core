@@ -31,8 +31,8 @@ type BuildInput struct {
 }
 
 // artifactKey is where a build's artifact is uploaded.
-func artifactKey(op uuid.UUID, buildID string) string {
-	return path.Join("artifacts", op.String(), buildID)
+func artifactKey(op, minionID uuid.UUID) string {
+	return path.Join("artifacts", op.String(), minionID.String())
 }
 
 // CreateBuild validates a build against the factory kind's current schema and
@@ -78,11 +78,10 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	}
 
 	b := &models.Build{
-		BuildID: protocol.NewULID(), OperationID: op, ModuleName: moduleName, Description: description,
+		MinionID: uuid.New(), OperationID: op, ModuleName: moduleName, Description: description,
 		Target: in.Target, Platform: in.Platform, SchemaVersion: schema.Version,
 		Values:    protocol.ResolveFieldValues(c.fields, values),
 		FileIDs:   c.fileIDs,
-		MinionID:  uuid.NewString(),
 		State:     models.BuildStateQueued,
 		Deadline:  s.now().Add(s.cfg.Timeout),
 		CreatedBy: in.Actor, CreatedAt: s.now(),
@@ -119,7 +118,7 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if err := s.repos.Builds.Insert(ctx, b); err != nil {
 		return nil, fmt.Errorf("store build: %w", err)
 	}
-	s.logger.Info("build queued", zap.String("build_id", b.BuildID), zap.String("factory", moduleName),
+	s.logger.Info("build queued", zap.String("minion_id", b.MinionID.String()), zap.String("factory", moduleName),
 		zap.String("target", b.Target), zap.String("platform", b.Platform))
 	s.wake()
 	return b, nil
@@ -130,9 +129,17 @@ func (s *Service) Builds(ctx context.Context, op uuid.UUID, limit int64) ([]mode
 	return s.repos.Builds.List(ctx, op, limit)
 }
 
-// Build returns one build.
-func (s *Service) Build(ctx context.Context, buildID string) (*models.Build, error) {
-	b, err := s.repos.Builds.FindByBuildID(ctx, strings.TrimSpace(buildID))
+// Build returns one build, by its id: its minion's.
+func (s *Service) Build(ctx context.Context, id string) (*models.Build, error) {
+	minionID, err := uuid.Parse(strings.TrimSpace(id))
+	if err != nil {
+		return nil, ErrBuildNotFound
+	}
+	return s.build(ctx, minionID)
+}
+
+func (s *Service) build(ctx context.Context, minionID uuid.UUID) (*models.Build, error) {
+	b, err := s.repos.Builds.FindByMinionID(ctx, minionID)
 	if err != nil {
 		return nil, notFound(err, ErrBuildNotFound)
 	}
@@ -142,30 +149,30 @@ func (s *Service) Build(ctx context.Context, buildID string) (*models.Build, err
 // CancelBuild stops a queued or running build. A running one is also
 // cancelled on its factory instance, best effort: core ignores whatever that
 // instance still sends.
-func (s *Service) CancelBuild(ctx context.Context, buildID string, actor models.ModuleActor) (*models.Build, error) {
-	b, err := s.Build(ctx, buildID)
+func (s *Service) CancelBuild(ctx context.Context, id string, actor models.ModuleActor) (*models.Build, error) {
+	b, err := s.Build(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if b.Finished() {
 		return nil, invalid("the build already finished (%s)", b.State)
 	}
-	ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateQueued, models.BuildStateBuilding},
+	ok, err := s.repos.Builds.Finish(ctx, b.MinionID, []string{models.BuildStateQueued, models.BuildStateBuilding},
 		repository.BuildOutcome{State: models.BuildStateCancelled, CancelledBy: &actor, At: s.now()})
 	if err != nil {
 		return nil, fmt.Errorf("cancel build: %w", err)
 	}
 	if ok && b.State == models.BuildStateBuilding {
-		s.cancelOn(b.BuildID, b.Instance)
+		s.cancelOn(b.MinionID, b.Instance)
 	}
 	if ok {
-		s.logger.Info("build cancelled", zap.String("build_id", b.BuildID), zap.String("by", actor.ID))
+		s.logger.Info("build cancelled", zap.String("minion_id", b.MinionID.String()), zap.String("by", actor.ID))
 	}
-	return s.Build(ctx, b.BuildID)
+	return s.build(ctx, b.MinionID)
 }
 
 // cancelOn tells a factory instance to stop a build, in the background.
-func (s *Service) cancelOn(buildID, instance string) {
+func (s *Service) cancelOn(minionID uuid.UUID, instance string) {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -175,17 +182,17 @@ func (s *Service) cancelOn(buildID, instance string) {
 		if err != nil || mod.RPCQueue == "" {
 			return
 		}
-		rep, err := s.rpc.Call(ctx, mod.RPCQueue, protocol.TypeFactoryBuildCancel, protocol.BuildCancelRequest{BuildID: buildID}, s.cfg.CallTimeout)
+		rep, err := s.rpc.Call(ctx, mod.RPCQueue, protocol.TypeFactoryBuildCancel, protocol.BuildCancelRequest{MinionID: minionID.String()}, s.cfg.CallTimeout)
 		if err != nil || rep.Status != protocol.StatusOK {
-			s.logger.Warn("factory did not confirm a build cancel", zap.String("build_id", buildID),
+			s.logger.Warn("factory did not confirm a build cancel", zap.String("minion_id", minionID.String()),
 				zap.String("instance", instance), zap.Error(err))
 		}
 	}()
 }
 
 // OpenArtifact streams a succeeded build's artifact.
-func (s *Service) OpenArtifact(ctx context.Context, buildID string) (io.ReadCloser, *models.Build, error) {
-	b, err := s.Build(ctx, buildID)
+func (s *Service) OpenArtifact(ctx context.Context, id string) (io.ReadCloser, *models.Build, error) {
+	b, err := s.Build(ctx, id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -201,8 +208,8 @@ func (s *Service) OpenArtifact(ctx context.Context, buildID string) (io.ReadClos
 
 // DeleteArtifact removes a finished build's artifact bytes; the build record
 // stays.
-func (s *Service) DeleteArtifact(ctx context.Context, buildID string) (*models.Build, error) {
-	b, err := s.Build(ctx, buildID)
+func (s *Service) DeleteArtifact(ctx context.Context, id string) (*models.Build, error) {
+	b, err := s.Build(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -212,10 +219,10 @@ func (s *Service) DeleteArtifact(ctx context.Context, buildID string) (*models.B
 	if err := s.store.Delete(ctx, b.Artifact.ObjectKey); err != nil {
 		return nil, fmt.Errorf("delete artifact: %w", err)
 	}
-	if err := s.repos.Builds.MarkArtifactDeleted(ctx, b.BuildID); err != nil {
+	if err := s.repos.Builds.MarkArtifactDeleted(ctx, b.MinionID); err != nil {
 		return nil, fmt.Errorf("record artifact deletion: %w", err)
 	}
-	return s.Build(ctx, b.BuildID)
+	return s.build(ctx, b.MinionID)
 }
 
 // Minions returns an operation's minions, newest first.
@@ -232,14 +239,14 @@ func (s *Service) DeleteOperationData(ctx context.Context, op uuid.UUID) error {
 	}
 	for _, b := range builds {
 		if !b.Finished() {
-			_, _ = s.repos.Builds.Finish(ctx, b.BuildID, []string{b.State},
+			_, _ = s.repos.Builds.Finish(ctx, b.MinionID, []string{b.State},
 				repository.BuildOutcome{State: models.BuildStateCancelled, At: s.now()})
 			if b.State == models.BuildStateBuilding {
-				s.cancelOn(b.BuildID, b.Instance)
+				s.cancelOn(b.MinionID, b.Instance)
 			}
 		}
-		if err := s.store.Delete(ctx, artifactKey(op, b.BuildID)); err != nil {
-			s.logger.Warn("delete artifact with its operation", zap.String("build_id", b.BuildID), zap.Error(err))
+		if err := s.store.Delete(ctx, artifactKey(op, b.MinionID)); err != nil {
+			s.logger.Warn("delete artifact with its operation", zap.String("minion_id", b.MinionID.String()), zap.Error(err))
 		}
 	}
 	files, err := s.repos.Files.List(ctx, op)

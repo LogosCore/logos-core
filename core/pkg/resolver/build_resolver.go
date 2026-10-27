@@ -236,7 +236,7 @@ func (r *buildResolver) Minions(ctx context.Context, operationID string) ([]*mod
 	out := make([]*model.Minion, len(ms))
 	for i, m := range ms {
 		out[i] = &model.Minion{
-			ID: m.MinionID, OperationID: m.OperationID.String(), BuildID: m.BuildID, ModuleName: m.ModuleName,
+			ID: m.MinionID.String(), OperationID: m.OperationID.String(), ModuleName: m.ModuleName,
 			Target: m.Target, Platform: m.Platform, Capabilities: orEmpty(m.Capabilities),
 			CreatedBy: toActorModel(m.CreatedBy), CreatedAt: m.CreatedAt.Format(time.RFC3339),
 		}
@@ -338,9 +338,9 @@ func toBuildFileModel(f *models.BuildFile) *model.BuildFile {
 
 func toBuildModel(b *models.Build) *model.Build {
 	out := &model.Build{
-		ID: b.BuildID, OperationID: b.OperationID.String(), Description: b.Description, ModuleName: b.ModuleName, Target: b.Target,
+		ID: b.MinionID.String(), OperationID: b.OperationID.String(), Description: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, SchemaVersion: b.SchemaVersion, Values: copyMap(b.Values),
-		Connections: b.Connections.Items, MinionID: b.MinionID, State: b.State,
+		Connections: b.Connections.Items, State: b.State,
 		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion),
 		Stages: []*model.BuildStage{}, Capabilities: orEmpty(b.Capabilities), Warnings: orEmpty(b.Warnings),
 		Log: strPtr(b.Log), CreatedBy: toActorModel(b.CreatedBy),

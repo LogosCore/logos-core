@@ -52,7 +52,6 @@ export const BuildFields = graphql(`
     target
     platform
     schemaVersion
-    minionId
     state
     instance
     factoryVersion

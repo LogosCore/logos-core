@@ -22,6 +22,7 @@ import (
 type ChannelEndpoint struct {
 	field.DefaultField `bson:",inline"`
 
+	EndpointID  uuid.UUID `bson:"endpoint_id" json:"endpoint_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	// Name is unique within the operation.
 	Name        string `bson:"name" json:"name"`

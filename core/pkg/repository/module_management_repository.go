@@ -3,13 +3,16 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -50,18 +53,24 @@ type IModuleConfigRepository interface {
 
 // IModuleConfigChangeRepository is the audit trail of config writes.
 type IModuleConfigChangeRepository interface {
+	// Insert stores a change, giving it a change id when it has none.
 	Insert(ctx context.Context, change *models.ModuleConfigChange) error
 	// ListByInstance returns an instance's config changes, newest first.
 	ListByInstance(ctx context.Context, instance string, limit int64) ([]models.ModuleConfigChange, error)
+	// BackfillChangeIDs gives the changes recorded before they had ids one.
+	BackfillChangeIDs(ctx context.Context) (int64, error)
 }
 
 // IModuleActionInvocationRepository records action invocations.
 type IModuleActionInvocationRepository interface {
 	Insert(ctx context.Context, inv *models.ModuleActionInvocation) error
 	// Finish moves a RUNNING invocation to its terminal state.
-	Finish(ctx context.Context, invocationID, status, resultJSON, errMsg string, at time.Time) error
+	Finish(ctx context.Context, invocationID models.InvocationID, status, resultJSON, errMsg string, at time.Time) error
 	// ListByInstance returns an instance's invocations, newest first.
 	ListByInstance(ctx context.Context, instance string, limit int64) ([]models.ModuleActionInvocation, error)
+	// ConvertLegacyIDs stores the ULID ids of finished invocations as the
+	// UUIDs they read as (models.InvocationID).
+	ConvertLegacyIDs(ctx context.Context) (int64, error)
 }
 
 // --- module_instance_config ---
@@ -185,11 +194,15 @@ func NewModuleConfigChangeRepository(db database.Database) IModuleConfigChangeRe
 	db.EnsureIndexes(context.Background(), moduleConfigChangeCollection, []opts.IndexModel{
 		// -_id matches the query's tiebreak, so the index serves the sort.
 		{Key: []string{"instance", "-at", "-_id"}},
+		uniqueIDIndex("change_id"),
 	})
 	return &moduleConfigChangeRepository{coll: db.Collection(moduleConfigChangeCollection)}
 }
 
 func (r *moduleConfigChangeRepository) Insert(ctx context.Context, change *models.ModuleConfigChange) error {
+	if change.ChangeID == uuid.Nil {
+		change.ChangeID = uuid.New()
+	}
 	_, err := r.coll.InsertOne(ctx, change)
 	return err
 }
@@ -200,8 +213,17 @@ func (r *moduleConfigChangeRepository) ListByInstance(ctx context.Context, insta
 	if limit > 0 {
 		q = q.Limit(limit)
 	}
-	err := q.All(&out)
+	if err := q.All(&out); err != nil {
+		return nil, err
+	}
+	err := fillIDs(ctx, r.coll, "change_id", out, func(c *models.ModuleConfigChange) (primitive.ObjectID, *uuid.UUID) {
+		return c.Id, &c.ChangeID
+	})
 	return out, err
+}
+
+func (r *moduleConfigChangeRepository) BackfillChangeIDs(ctx context.Context) (int64, error) {
+	return backfillIDs(ctx, r.coll, "change_id")
 }
 
 // --- module_action_invocations ---
@@ -235,7 +257,7 @@ func (r *moduleActionInvocationRepository) Insert(ctx context.Context, inv *mode
 	return err
 }
 
-func (r *moduleActionInvocationRepository) Finish(ctx context.Context, invocationID, status, resultJSON, errMsg string, at time.Time) error {
+func (r *moduleActionInvocationRepository) Finish(ctx context.Context, invocationID models.InvocationID, status, resultJSON, errMsg string, at time.Time) error {
 	return r.coll.UpdateOne(ctx,
 		bson.M{"invocation_id": invocationID, "status": models.ModuleActionRunning},
 		invocationFinishUpdate(status, resultJSON, errMsg, at))
@@ -249,4 +271,35 @@ func (r *moduleActionInvocationRepository) ListByInstance(ctx context.Context, i
 	}
 	err := q.All(&out)
 	return out, err
+}
+
+// ConvertLegacyIDs rewrites the ULID string ids of finished invocations as
+// binary UUIDs of the same bits: what they already read as. A running one is
+// left for a later boot: the core instance waiting for its reply, which may be
+// an older one, finishes it by the id it knows.
+func (r *moduleActionInvocationRepository) ConvertLegacyIDs(ctx context.Context) (int64, error) {
+	var rows []struct {
+		ID     primitive.ObjectID `bson:"_id"`
+		Legacy string             `bson:"invocation_id"`
+	}
+	filter := bson.M{"invocation_id": bson.M{"$type": "string"}, "status": bson.M{"$ne": models.ModuleActionRunning}}
+	if err := r.coll.Find(ctx, filter).Select(bson.M{"invocation_id": 1}).All(&rows); err != nil {
+		return 0, fmt.Errorf("find legacy invocation ids: %w", err)
+	}
+	var n int64
+	for _, row := range rows {
+		id, err := models.InvocationIDFromULID(row.Legacy)
+		if err != nil {
+			return n, err
+		}
+		ok, err := matched(r.coll.UpdateOne(ctx, bson.M{"_id": row.ID, "invocation_id": row.Legacy},
+			bson.M{"$set": bson.M{"invocation_id": id}}))
+		if err != nil {
+			return n, fmt.Errorf("convert invocation id %s: %w", row.Legacy, err)
+		}
+		if ok {
+			n++
+		}
+	}
+	return n, nil
 }

@@ -129,7 +129,7 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, protocol.OutboundMinionMessage{
-		MessageID:     protocol.NewULID(),
+		MessageID:     protocol.NewID(),
 		Type:          protocol.TypeOutboundMinionMessage,
 		Version:       protocol.VersionV1,
 		Timestamp:     protocol.NowTimestamp(),

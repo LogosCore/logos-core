@@ -106,7 +106,7 @@ export function BuildsTable({
                     </>
                   }
                   subtitle={<span className="font-mono">{b.id}</span>}
-                  subtitleTitle="Build id"
+                  subtitleTitle="Minion id"
                 />
                 <div className="truncate text-sm" title={b.description || undefined}>
                   {b.description || <span className="text-muted-foreground">—</span>}

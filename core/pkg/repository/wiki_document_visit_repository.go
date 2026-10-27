@@ -53,6 +53,8 @@ type IWikiDocumentVisitRepository interface {
 	// DeleteByOperationID removes every visit row in an operation. Called
 	// when an operation is hard-deleted.
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
+	// BackfillVisitIDs gives the visits recorded before they had ids one.
+	BackfillVisitIDs(ctx context.Context) (int64, error)
 }
 
 type wikiDocumentVisitRepository struct {
@@ -73,6 +75,8 @@ func NewWikiDocumentVisitRepository(db database.Database) IWikiDocumentVisitRepo
 		{Key: []string{"user_id", "operation_id", "-visited_at", "-_id"}},
 		// Cascade delete on permanent doc removal.
 		{Key: []string{"document_id"}},
+		// The public id (public_ids.go).
+		uniqueIDIndex("visit_id"),
 	})
 
 	return &wikiDocumentVisitRepository{coll: coll}
@@ -96,6 +100,7 @@ func (r *wikiDocumentVisitRepository) Upsert(ctx context.Context, userID, operat
 		},
 		"$setOnInsert": bson.M{
 			"_id":      primitive.NewObjectID(),
+			"visit_id": uuid.New(),
 			"createAt": visitedAt,
 		},
 	}
@@ -111,6 +116,11 @@ func (r *wikiDocumentVisitRepository) Upsert(ctx context.Context, userID, operat
 		"document_id":  documentID,
 	}).One(&v); err != nil {
 		return models.WikiDocumentVisit{}, fmt.Errorf("read upserted visit: %w", err)
+	}
+	if v.VisitID == uuid.Nil {
+		if v.VisitID, err = fillID(ctx, r.coll, v.Id, "visit_id"); err != nil {
+			return models.WikiDocumentVisit{}, err
+		}
 	}
 	return v, nil
 }
@@ -173,7 +183,10 @@ func (r *wikiDocumentVisitRepository) FindByUserOperationActive(ctx context.Cont
 	if err != nil {
 		return nil, fmt.Errorf("list visits: %w", err)
 	}
-	return visits, nil
+	err = fillIDs(ctx, r.coll, "visit_id", visits, func(v *models.WikiDocumentVisit) (primitive.ObjectID, *uuid.UUID) {
+		return v.Id, &v.VisitID
+	})
+	return visits, err
 }
 
 func (r *wikiDocumentVisitRepository) CountByUserOperationActive(ctx context.Context, userID, operationID uuid.UUID, activeDocIDs []uuid.UUID) (int64, error) {
@@ -203,4 +216,8 @@ func (r *wikiDocumentVisitRepository) DeleteByDocumentIDs(ctx context.Context, d
 func (r *wikiDocumentVisitRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
+}
+
+func (r *wikiDocumentVisitRepository) BackfillVisitIDs(ctx context.Context) (int64, error) {
+	return backfillIDs(ctx, r.coll, "visit_id")
 }

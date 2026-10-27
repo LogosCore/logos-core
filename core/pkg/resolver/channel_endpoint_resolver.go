@@ -259,7 +259,7 @@ func toEndpointModel(v channelendpoints.View) *model.ChannelEndpoint {
 		problems = append(problems, &model.ChannelEndpointProblem{Key: strPtr(k), Message: v.Problems[k]})
 	}
 	return &model.ChannelEndpoint{
-		ID:            v.Id.Hex(),
+		ID:            v.EndpointID.String(),
 		OperationID:   v.OperationID.String(),
 		Name:          v.Name,
 		Description:   strPtr(v.Description),

@@ -64,7 +64,6 @@ type Build struct {
 	Values                 any            `json:"values"`
 	Connections            any            `json:"connections"`
 	ConnectionDescriptions []string       `json:"connectionDescriptions"`
-	MinionID               string         `json:"minionId"`
 	State                  string         `json:"state"`
 	Instance               *string        `json:"instance,omitempty"`
 	FactoryVersion         *string        `json:"factoryVersion,omitempty"`
@@ -407,7 +406,6 @@ type MarkHashCrackedInput struct {
 type Minion struct {
 	ID           string       `json:"id"`
 	OperationID  string       `json:"operationId"`
-	BuildID      string       `json:"buildId"`
 	ModuleName   string       `json:"moduleName"`
 	Target       string       `json:"target"`
 	Platform     string       `json:"platform"`

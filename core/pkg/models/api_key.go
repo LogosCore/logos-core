@@ -14,6 +14,10 @@ import (
 type APIKey struct {
 	field.DefaultField `bson:",inline"`
 
+	// APIKeyID is the row's public id (GraphQL APIKey.id). Unlike KeyID it
+	// survives regeneration.
+	APIKeyID uuid.UUID `bson:"api_key_id" json:"api_key_id"`
+
 	// KeyID is the short, public prefix that appears in the raw token. Used
 	// by the middleware to find the row without scanning. Unique-indexed.
 	KeyID string `bson:"key_id" json:"key_id"`

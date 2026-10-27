@@ -86,18 +86,18 @@ func (f *fakeFiles) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
 
 type fakeBuilds struct {
 	mu   sync.Mutex
-	rows map[string]*models.Build
+	rows map[uuid.UUID]*models.Build
 }
 
 func (f *fakeBuilds) Insert(_ context.Context, b *models.Build) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	cp := *b
-	f.rows[b.BuildID] = &cp
+	f.rows[b.MinionID] = &cp
 	return nil
 }
 
-func (f *fakeBuilds) FindByBuildID(_ context.Context, id string) (*models.Build, error) {
+func (f *fakeBuilds) FindByMinionID(_ context.Context, id uuid.UUID) (*models.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -140,13 +140,13 @@ func (f *fakeBuilds) ClaimQueued(_ context.Context, now, until time.Time) (*mode
 	if len(queued) == 0 {
 		return nil, nil
 	}
-	b := f.rows[queued[0].BuildID]
+	b := f.rows[queued[0].MinionID]
 	b.LeaseUntil = &until
 	cp := *b
 	return &cp, nil
 }
 
-func (f *fakeBuilds) ReleaseClaim(_ context.Context, id string) error {
+func (f *fakeBuilds) ReleaseClaim(_ context.Context, id uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if b, ok := f.rows[id]; ok && b.State == models.BuildStateQueued {
@@ -155,7 +155,7 @@ func (f *fakeBuilds) ReleaseClaim(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeBuilds) MarkBuilding(_ context.Context, id, instance, version string, deadline, at time.Time) (bool, error) {
+func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, version string, deadline, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -166,7 +166,7 @@ func (f *fakeBuilds) MarkBuilding(_ context.Context, id, instance, version strin
 	return true, nil
 }
 
-func (f *fakeBuilds) Unoffer(_ context.Context, id, instance string, until time.Time) (bool, error) {
+func (f *fakeBuilds) Unoffer(_ context.Context, id uuid.UUID, instance string, until time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -178,7 +178,7 @@ func (f *fakeBuilds) Unoffer(_ context.Context, id, instance string, until time.
 	return true, nil
 }
 
-func (f *fakeBuilds) SetPlan(_ context.Context, id, instance string, plan []models.BuildPlanStep) (bool, error) {
+func (f *fakeBuilds) SetPlan(_ context.Context, id uuid.UUID, instance string, plan []models.BuildPlanStep) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -191,7 +191,7 @@ func (f *fakeBuilds) SetPlan(_ context.Context, id, instance string, plan []mode
 
 // ReportStep keeps a step's first time and its latest message, as the
 // repository's $min and $set do.
-func (f *fakeBuilds) ReportStep(_ context.Context, id, instance, step, message string, at time.Time) (bool, error) {
+func (f *fakeBuilds) ReportStep(_ context.Context, id uuid.UUID, instance, step, message string, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -210,7 +210,7 @@ func (f *fakeBuilds) ReportStep(_ context.Context, id, instance, step, message s
 	return true, nil
 }
 
-func (f *fakeBuilds) RecordResult(_ context.Context, id, instance string, art models.BuildArtifact, caps, warnings []string, log string, at time.Time) (bool, error) {
+func (f *fakeBuilds) RecordResult(_ context.Context, id uuid.UUID, instance string, art models.BuildArtifact, caps, warnings []string, log string, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -221,7 +221,7 @@ func (f *fakeBuilds) RecordResult(_ context.Context, id, instance string, art mo
 	return true, nil
 }
 
-func (f *fakeBuilds) Finish(_ context.Context, id string, from []string, out repository.BuildOutcome) (bool, error) {
+func (f *fakeBuilds) Finish(_ context.Context, id uuid.UUID, from []string, out repository.BuildOutcome) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -257,7 +257,7 @@ func (f *fakeBuilds) Finish(_ context.Context, id string, from []string, out rep
 	return true, nil
 }
 
-func (f *fakeBuilds) MarkArtifactDeleted(_ context.Context, id string) error {
+func (f *fakeBuilds) MarkArtifactDeleted(_ context.Context, id uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if b, ok := f.rows[id]; ok && b.Artifact != nil {
@@ -266,7 +266,7 @@ func (f *fakeBuilds) MarkArtifactDeleted(_ context.Context, id string) error {
 	return nil
 }
 
-func (f *fakeBuilds) CountFileReferences(_ context.Context, id string) (int64, error) {
+func (f *fakeBuilds) CountFileReferences(_ context.Context, id uuid.UUID) (int64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var n int64
@@ -293,7 +293,7 @@ func (f *fakeBuilds) DeleteByOperationID(_ context.Context, op uuid.UUID) error 
 
 type fakeMinions struct {
 	mu   sync.Mutex
-	rows map[string]models.Minion
+	rows map[uuid.UUID]models.Minion
 }
 
 func (f *fakeMinions) Insert(_ context.Context, m *models.Minion) error {
@@ -430,9 +430,9 @@ func accept(c call) protocol.ReplyEnvelope {
 	var payload any = struct{}{}
 	switch p := c.payload.(type) {
 	case protocol.BuildRequest:
-		payload = protocol.BuildReply{BuildID: p.BuildID, Accepted: true, Steps: bobPlan}
+		payload = protocol.BuildReply{MinionID: p.MinionID, Accepted: true, Steps: bobPlan}
 	case protocol.BuildCancelRequest:
-		payload = protocol.BuildCancelReply{BuildID: p.BuildID, Cancelled: true}
+		payload = protocol.BuildCancelReply{MinionID: p.MinionID, Cancelled: true}
 	}
 	rep, _ := protocol.NewReply(req, protocol.Source{Service: "factory"}, payload)
 	return rep

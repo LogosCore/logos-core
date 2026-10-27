@@ -59,8 +59,9 @@ const (
 type Build struct {
 	field.DefaultField `bson:",inline"`
 
-	// BuildID is the ULID factories know the build by.
-	BuildID     string    `bson:"build_id" json:"build_id"`
+	// MinionID is the id of the build and of the minion it makes: factories
+	// know the build by it, and the minion sends it on the data plane.
+	MinionID    uuid.UUID `bson:"minion_id" json:"minion_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	// ModuleName is the factory kind.
 	ModuleName string `bson:"module_name" json:"module_name"`
@@ -76,10 +77,8 @@ type Build struct {
 	// ConnectionDescriptions are the operators' notes on the connections, by
 	// position ("" for none). Core's own: kept out of Connections, which is
 	// what the factory gets, so a note never ends up in an artifact.
-	ConnectionDescriptions []string `bson:"connection_descriptions,omitempty" json:"connection_descriptions,omitempty"`
-	FileIDs                []string `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
-	// MinionID is the UUIDv4 the minion will send on the data plane.
-	MinionID string `bson:"minion_id" json:"minion_id"`
+	ConnectionDescriptions []string    `bson:"connection_descriptions,omitempty" json:"connection_descriptions,omitempty"`
+	FileIDs                []uuid.UUID `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
 
 	State string `bson:"state" json:"state"`
 	// Instance is the factory instance building it (set when it accepted).
@@ -178,13 +177,13 @@ type BuildError struct {
 }
 
 // Minion is what a successful build creates: an identity core knows on the
-// data plane, with its build. Its keys come with the payload crypto contract.
+// data plane. Its id is its build's. Its keys come with the payload crypto
+// contract.
 type Minion struct {
 	field.DefaultField `bson:",inline"`
 
-	MinionID     string      `bson:"minion_id" json:"minion_id"`
+	MinionID     uuid.UUID   `bson:"minion_id" json:"minion_id"`
 	OperationID  uuid.UUID   `bson:"operation_id" json:"operation_id"`
-	BuildID      string      `bson:"build_id" json:"build_id"`
 	ModuleName   string      `bson:"module_name" json:"module_name"`
 	Target       string      `bson:"target" json:"target"`
 	Platform     string      `bson:"platform" json:"platform"`

@@ -83,6 +83,8 @@ func (f *fakeAPIKeyRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) err
 	return nil
 }
 
+func (f *fakeAPIKeyRepo) BackfillAPIKeyIDs(context.Context) (int64, error) { return 0, nil }
+
 func (f *fakeAPIKeyRepo) TouchLastUsed(_ context.Context, keyID string, at time.Time) error {
 	f.touches++
 	k := f.byKeyID[keyID]

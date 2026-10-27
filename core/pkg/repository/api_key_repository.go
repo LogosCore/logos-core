@@ -25,6 +25,8 @@ type IAPIKeyRepository interface {
 	SetEnabled(ctx context.Context, userID uuid.UUID, enabled bool) error
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 	TouchLastUsed(ctx context.Context, keyID string, at time.Time) error
+	// BackfillAPIKeyIDs gives the keys created before they had ids one.
+	BackfillAPIKeyIDs(ctx context.Context) (int64, error)
 }
 
 type apiKeyRepository struct {
@@ -37,6 +39,7 @@ func NewAPIKeyRepository(db database.Database) IAPIKeyRepository {
 	db.EnsureIndexes(context.Background(), apiKeyCollection, []opts.IndexModel{
 		{Key: []string{"key_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"user_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
+		uniqueIDIndex("api_key_id"),
 	})
 
 	return &apiKeyRepository{coll: coll}
@@ -51,10 +54,16 @@ func (r *apiKeyRepository) FindByKeyID(ctx context.Context, keyID string) (model
 func (r *apiKeyRepository) FindByUserID(ctx context.Context, userID uuid.UUID) (models.APIKey, error) {
 	var key models.APIKey
 	err := r.coll.FindOne(ctx, bson.M{"user_id": userID}).One(&key)
+	if err == nil && key.APIKeyID == uuid.Nil {
+		key.APIKeyID, err = fillID(ctx, r.coll, key.Id, "api_key_id")
+	}
 	return key, err
 }
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *models.APIKey) error {
+	if key.APIKeyID == uuid.Nil {
+		key.APIKeyID = uuid.New()
+	}
 	_, err := r.coll.InsertOne(ctx, key)
 	return err
 }
@@ -91,4 +100,8 @@ func (r *apiKeyRepository) TouchLastUsed(ctx context.Context, keyID string, at t
 		bson.M{"key_id": keyID},
 		bson.M{"$set": bson.M{"last_used_at": at}},
 	)
+}
+
+func (r *apiKeyRepository) BackfillAPIKeyIDs(ctx context.Context) (int64, error) {
+	return backfillIDs(ctx, r.coll, "api_key_id")
 }

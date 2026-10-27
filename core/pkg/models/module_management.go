@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo/field"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
 )
 
 // Module management storage: desired property values per instance, the audit
@@ -72,9 +76,10 @@ type ModuleConfigKeyChange struct {
 type ModuleConfigChange struct {
 	field.DefaultField `bson:",inline"`
 
-	Instance   string `bson:"instance" json:"instance"`
-	ModuleName string `bson:"module_name" json:"module_name"`
-	Revision   int64  `bson:"revision" json:"revision"`
+	ChangeID   uuid.UUID `bson:"change_id" json:"change_id"`
+	Instance   string    `bson:"instance" json:"instance"`
+	ModuleName string    `bson:"module_name" json:"module_name"`
+	Revision   int64     `bson:"revision" json:"revision"`
 	// Changes is stored as JSON-shaped BSON (see JSONMap) so old/new values
 	// read back as plain JSON types.
 	Changes ModuleConfigKeyChanges `bson:"changes" json:"changes"`
@@ -106,10 +111,10 @@ func (c *ModuleConfigKeyChanges) UnmarshalBSONValue(t bsontype.Type, data []byte
 type ModuleActionInvocation struct {
 	field.DefaultField `bson:",inline"`
 
-	InvocationID string `bson:"invocation_id" json:"invocation_id"`
-	Instance     string `bson:"instance" json:"instance"`
-	ModuleName   string `bson:"module_name" json:"module_name"`
-	Action       string `bson:"action" json:"action"`
+	InvocationID InvocationID `bson:"invocation_id" json:"invocation_id"`
+	Instance     string       `bson:"instance" json:"instance"`
+	ModuleName   string       `bson:"module_name" json:"module_name"`
+	Action       string       `bson:"action" json:"action"`
 	// Params as sent, with secret params replaced by RedactedValue.
 	Params JSONMap `bson:"params,omitempty" json:"params,omitempty"`
 	Status string  `bson:"status" json:"status"`
@@ -257,4 +262,76 @@ func bsonValueToJSON(t bsontype.Type, data []byte, out any) error {
 		return err
 	}
 	return json.Unmarshal(wrapper.V, out)
+}
+
+// InvocationID is an action invocation's id: a UUIDv4, stored as binary like
+// every UUID. Invocations recorded before ids were UUIDs hold a ULID string,
+// which reads as the UUID of the same 128 bits: the value the startup
+// conversion stores in its place, so a row keeps its id across it.
+type InvocationID uuid.UUID
+
+// NewInvocationID returns a fresh invocation id.
+func NewInvocationID() InvocationID { return InvocationID(uuid.New()) }
+
+func (id InvocationID) String() string { return uuid.UUID(id).String() }
+
+func (id InvocationID) MarshalText() ([]byte, error) { return uuid.UUID(id).MarshalText() }
+
+func (id *InvocationID) UnmarshalText(text []byte) error {
+	return (*uuid.UUID)(id).UnmarshalText(text)
+}
+
+// MarshalBSONValue stores the id as a uuid.UUID is stored: generic binary.
+func (id InvocationID) MarshalBSONValue() (bsontype.Type, []byte, error) {
+	return bson.TypeBinary, bsoncore.AppendBinary(nil, bson.TypeBinaryGeneric, id[:]), nil
+}
+
+// UnmarshalBSONValue reads a stored id: binary, or a legacy ULID string.
+func (id *InvocationID) UnmarshalBSONValue(t bsontype.Type, data []byte) error {
+	switch t {
+	case bson.TypeBinary:
+		_, b, _, ok := bsoncore.ReadBinary(data)
+		if !ok || len(b) != len(id) {
+			return fmt.Errorf("invocation_id: binary of %d bytes, want %d", len(b), len(id))
+		}
+		copy(id[:], b)
+		return nil
+	case bson.TypeString:
+		s, _, ok := bsoncore.ReadString(data)
+		if !ok {
+			return fmt.Errorf("invocation_id: malformed string")
+		}
+		legacy, err := InvocationIDFromULID(s)
+		if err != nil {
+			return fmt.Errorf("invocation_id: %w", err)
+		}
+		*id = legacy
+		return nil
+	}
+	return fmt.Errorf("invocation_id: BSON %s, want binary", t)
+}
+
+// crockford is the ULID alphabet, Crockford's base32.
+const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+// InvocationIDFromULID is the id of an invocation recorded with a ULID: the
+// 128 bits the ULID encodes.
+func InvocationIDFromULID(s string) (InvocationID, error) {
+	var id InvocationID
+	s = strings.ToUpper(s)
+	// 26 characters of 5 bits are 130 bits: the first character carries only
+	// 3 of the 128.
+	if len(s) != 26 || s[0] > '7' {
+		return id, fmt.Errorf("%q is not a ULID", s)
+	}
+	v := new(big.Int)
+	for i := range len(s) {
+		d := strings.IndexByte(crockford, s[i])
+		if d < 0 {
+			return id, fmt.Errorf("%q is not a ULID", s)
+		}
+		v.Lsh(v, 5).Or(v, big.NewInt(int64(d)))
+	}
+	v.FillBytes(id[:])
+	return id, nil
 }

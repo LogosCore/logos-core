@@ -469,7 +469,7 @@ func TestInvokeAction(t *testing.T) {
 	call := h.rpc.callsOf(protocol.TypeMgmtActionInvoke)[0]
 	var sent protocol.ActionInvokeRequest
 	_ = json.Unmarshal(call.payload, &sent)
-	if sent.Params["password"] != "hunter2" || sent.InvocationID != inv.InvocationID || call.timeout != DefaultActionTimeout {
+	if sent.Params["password"] != "hunter2" || sent.InvocationID != inv.InvocationID.String() || call.timeout != DefaultActionTimeout {
 		t.Errorf("sent = %+v timeout %s", sent, call.timeout)
 	}
 	if h.invs.finished[inv.InvocationID] != models.ModuleActionSucceeded {

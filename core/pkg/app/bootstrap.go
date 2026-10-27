@@ -406,6 +406,24 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 	} else if n > 0 {
 		l.Info("credential validity backfill complete", zap.Int64("rows", n))
 	}
+
+	// Public ids (repository/public_ids.go): rows from before their
+	// collection had one get a UUID (a row an older core writes afterwards
+	// gets one when it is read), and finished invocations recorded with a
+	// ULID store the UUID they read as.
+	for name, backfill := range map[string]func(context.Context) (int64, error){
+		"channel endpoint ids":     repos.ChannelEndpoint.BackfillEndpointIDs,
+		"module config change ids": repos.ModuleConfigChange.BackfillChangeIDs,
+		"module invocation ids":    repos.ModuleInvocation.ConvertLegacyIDs,
+		"wiki visit ids":           repos.WikiDocumentVisit.BackfillVisitIDs,
+		"API key ids":              repos.APIKey.BackfillAPIKeyIDs,
+	} {
+		if n, err := backfill(ctx); err != nil {
+			l.Warn(name+" backfill failed", zap.Error(err))
+		} else if n > 0 {
+			l.Info(name+" backfill complete", zap.Int64("rows", n))
+		}
+	}
 }
 
 // newBuildService stands up minion builds: the build bucket, the signer for

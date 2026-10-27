@@ -625,7 +625,7 @@ func (s *Service) InvokeAction(ctx context.Context, req InvokeRequest) (*models.
 	}
 
 	inv := &models.ModuleActionInvocation{
-		InvocationID: protocol.NewULID(),
+		InvocationID: models.NewInvocationID(),
 		Instance:     mod.Instance,
 		ModuleName:   mod.Name,
 		Action:       action.Name,
@@ -643,7 +643,7 @@ func (s *Service) InvokeAction(ctx context.Context, req InvokeRequest) (*models.
 	// and must reach a terminal state.
 	callCtx := context.WithoutCancel(ctx)
 	reply, callErr := s.rpc.Call(callCtx, mod.RPCQueue, protocol.TypeMgmtActionInvoke, protocol.ActionInvokeRequest{
-		InvocationID: inv.InvocationID,
+		InvocationID: inv.InvocationID.String(),
 		Action:       action.Name,
 		Params:       params,
 		Actor:        req.Actor.Protocol(),
@@ -653,7 +653,7 @@ func (s *Service) InvokeAction(ctx context.Context, req InvokeRequest) (*models.
 	finished := s.now()
 	inv.Status, inv.ResultJSON, inv.Error, inv.FinishedAt = status, resultJSON, errMsg, &finished
 	if err := s.invocations.Finish(callCtx, inv.InvocationID, status, resultJSON, errMsg, finished); err != nil {
-		s.logger.Error("failed to record invocation outcome", zap.String("invocation_id", inv.InvocationID), zap.Error(err))
+		s.logger.Error("failed to record invocation outcome", zap.String("invocation_id", inv.InvocationID.String()), zap.Error(err))
 	}
 	s.logger.Info("module action finished", zap.String("instance", mod.Instance), zap.String("action", action.Name),
 		zap.String("status", status), zap.String("actor", req.Actor.ID))

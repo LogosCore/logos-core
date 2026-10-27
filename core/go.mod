@@ -15,7 +15,6 @@ require (
 	github.com/minio/minio-go/v7 v7.0.100
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/mssola/useragent v1.0.0
-	github.com/oklog/ulid/v2 v2.1.1
 	github.com/qiniu/qmgo v1.1.10
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/spf13/viper v1.21.0
@@ -49,6 +48,7 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
+	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect

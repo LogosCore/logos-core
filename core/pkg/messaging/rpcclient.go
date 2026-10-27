@@ -21,7 +21,7 @@ import (
 // Wire shape (the module SDK is built against exactly this):
 //   - published to the DEFAULT exchange, routing key = the instance's rpc_queue
 //   - reply_to = "amq.rabbitmq.reply-to" (RabbitMQ direct reply-to)
-//   - correlation_id = message_id = the envelope's message_id (a ULID)
+//   - correlation_id = message_id = the envelope's message_id (a UUIDv4)
 //   - AMQP `type` = envelope type (e.g. "mgmt.config.apply")
 //   - expiration = the call timeout in ms, so a request to a module that is
 //     down does not sit in its queue and run long after the caller gave up
@@ -137,7 +137,7 @@ func (c *RPCClient) Call(ctx context.Context, queue, opType string, payload any,
 	if err != nil {
 		return ReplyEnvelope{}, fmt.Errorf("rpc %s: marshal payload: %w", opType, err)
 	}
-	id := protocol.NewULID()
+	id := protocol.NewID()
 	env := Envelope{
 		MessageID:     id,
 		CorrelationID: id,

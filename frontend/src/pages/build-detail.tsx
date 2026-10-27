@@ -164,10 +164,10 @@ function BuildDetail({ build: b }: { build: Build }) {
               </Item>
             )}
             <Item label="Platform">{platformLabel(b.platform)}</Item>
-            <Item label="Minion">
+            <Item label="Minion id">
               <span className="inline-flex items-center gap-1">
-                <code className="font-mono text-xs">{b.minionId}</code>
-                <Button variant="ghost" size="icon-sm" title="Copy" aria-label="Copy the minion id" onClick={() => copyToClipboard(b.minionId, "Minion id")}>
+                <code className="font-mono text-xs">{b.id}</code>
+                <Button variant="ghost" size="icon-sm" title="Copy" aria-label="Copy the minion id" onClick={() => copyToClipboard(b.id, "Minion id")}>
                   <CopyIcon />
                 </Button>
               </span>
@@ -196,9 +196,6 @@ function BuildDetail({ build: b }: { build: Build }) {
                 {formatAbsolute(b.deadline)} <span className="text-muted-foreground">({relativeTime(b.deadline)})</span>
               </Item>
             )}
-            <Item label="Build id">
-              <code className="font-mono text-xs">{b.id}</code>
-            </Item>
           </dl>
         </Section>
 

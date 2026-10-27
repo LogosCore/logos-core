@@ -22,12 +22,12 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 		t.Fatalf("index setup: %v", err)
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	b := &models.Build{BuildID: "01M6A3Q9X7J0B5KQZC2V1RS8TN", OperationID: uuid.New(), ModuleName: "bob",
+	b := &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob",
 		State: models.BuildStateQueued, CreatedAt: now}
 	if err := repo.Insert(ctx, b); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := repo.MarkBuilding(ctx, b.BuildID, "bob-1", "dev", now.Add(time.Hour), now); !ok || err != nil {
+	if ok, err := repo.MarkBuilding(ctx, b.MinionID, "bob-1", "dev", now.Add(time.Hour), now); !ok || err != nil {
 		t.Fatalf("mark building: %v %v", ok, err)
 	}
 
@@ -42,19 +42,19 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 		{"upload", "uploading", second},
 		{"upload", "", second.Add(time.Second)}, // clears the message
 	} {
-		if ok, err := repo.ReportStep(ctx, b.BuildID, "bob-1", r.step, r.message, r.at); !ok || err != nil {
+		if ok, err := repo.ReportStep(ctx, b.MinionID, "bob-1", r.step, r.message, r.at); !ok || err != nil {
 			t.Fatalf("report %s: %v %v", r.step, ok, err)
 		}
 	}
 	plan := []models.BuildPlanStep{{ID: "render", Label: "Render"}, {ID: "upload", Label: "Upload"}}
-	if ok, err := repo.SetPlan(ctx, b.BuildID, "bob-1", plan); !ok || err != nil {
+	if ok, err := repo.SetPlan(ctx, b.MinionID, "bob-1", plan); !ok || err != nil {
 		t.Fatalf("set plan: %v %v", ok, err)
 	}
-	if ok, _ := repo.ReportStep(ctx, b.BuildID, "bob-2", "render", "not mine", now); ok {
+	if ok, _ := repo.ReportStep(ctx, b.MinionID, "bob-2", "render", "not mine", now); ok {
 		t.Error("another instance reported")
 	}
 
-	got, err := repo.FindByBuildID(ctx, b.BuildID)
+	got, err := repo.FindByMinionID(ctx, b.MinionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,10 +69,10 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	}
 
 	// Not taken after all: back in the queue, with nothing of that instance.
-	if ok, err := repo.Unoffer(ctx, b.BuildID, "bob-1", now.Add(time.Minute)); !ok || err != nil {
+	if ok, err := repo.Unoffer(ctx, b.MinionID, "bob-1", now.Add(time.Minute)); !ok || err != nil {
 		t.Fatalf("unoffer: %v %v", ok, err)
 	}
-	if got, _ := repo.FindByBuildID(ctx, b.BuildID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil {
+	if got, _ := repo.FindByMinionID(ctx, b.MinionID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil {
 		t.Errorf("after unoffer: plan %+v, reports %+v", got.Plan, got.StepReports)
 	}
 }

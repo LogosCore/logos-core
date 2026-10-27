@@ -85,7 +85,7 @@ func (s *Service) DeleteFile(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	builds, err := s.fileReferences(ctx, f.FileID.String())
+	builds, err := s.fileReferences(ctx, f.FileID)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (s *Service) DeleteFile(ctx context.Context, id string) error {
 }
 
 // fileReferences counts the builds whose values name build file id.
-func (s *Service) fileReferences(ctx context.Context, id string) (int64, error) {
+func (s *Service) fileReferences(ctx context.Context, id uuid.UUID) (int64, error) {
 	n, err := s.repos.Builds.CountFileReferences(ctx, id)
 	if err != nil {
 		return 0, fmt.Errorf("count build references: %w", err)
@@ -122,7 +122,7 @@ func (s *Service) sweepFiles(ctx context.Context) {
 		return
 	}
 	for i := range old {
-		builds, err := s.fileReferences(ctx, old[i].FileID.String())
+		builds, err := s.fileReferences(ctx, old[i].FileID)
 		if err != nil {
 			s.logger.Warn("build file sweep: references", zap.Error(err))
 			return

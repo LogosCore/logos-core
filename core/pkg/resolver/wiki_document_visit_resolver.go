@@ -209,7 +209,7 @@ func (r *wikiDocumentVisitResolver) WikiDocumentHistory(ctx context.Context, ope
 // --- WikiDocumentVisit field resolvers ---
 
 func (r *wikiDocumentVisitResolver) WikiDocumentVisitID(ctx context.Context, obj *models.WikiDocumentVisit) (string, error) {
-	return obj.Id.Hex(), nil
+	return obj.VisitID.String(), nil
 }
 
 func (r *wikiDocumentVisitResolver) WikiDocumentVisitDocument(ctx context.Context, obj *models.WikiDocumentVisit) (*models.WikiDocument, error) {

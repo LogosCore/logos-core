@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -73,7 +74,7 @@ type checked struct {
 	// channels are the connections' channel schemas, by connection index.
 	channels []*protocol.ConnectionSchema
 	// fileIDs are the build files the values and connection values name.
-	fileIDs []string
+	fileIDs []uuid.UUID
 }
 
 // problems collects validation problems by where they are.
@@ -105,7 +106,7 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 		out.add("platform", "not a platform of target %q", t.ID)
 	}
 
-	files := map[string]bool{}
+	files := map[uuid.UUID]bool{}
 	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, out, files); err != nil {
 		return c, out, err
 	}
@@ -155,17 +156,14 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			return c, out, err
 		}
 	}
-	for id := range files {
-		c.fileIDs = append(c.fileIDs, id)
-	}
-	sort.Strings(c.fileIDs)
+	c.fileIDs = slices.SortedFunc(maps.Keys(files), func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	return c, out, nil
 }
 
 // checkValues checks values against fields: no undeclared keys, every value
 // valid, required ones set, and file values naming a fitting build file of
 // op, whose ids go into files.
-func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, out problems, files map[string]bool) error {
+func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, out problems, files map[uuid.UUID]bool) error {
 	declared := make(map[string]protocol.FieldSpec, len(fields))
 	for _, f := range fields {
 		declared[f.Key] = f
@@ -203,17 +201,23 @@ func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, 
 			out.add(prefix+f.Key, "%s: %v", file.Name, err)
 			continue
 		}
-		files[id] = true
+		files[file.FileID] = true
 	}
 	return nil
 }
 
-// fileOf returns a build file of operation op.
+// fileOf returns a build file of operation op, by the id a value names it
+// by.
 func (s *Service) fileOf(ctx context.Context, op uuid.UUID, id string) (*models.BuildFile, error) {
 	fid, err := uuid.Parse(id)
 	if err != nil {
 		return nil, ErrFileNotFound
 	}
+	return s.file(ctx, op, fid)
+}
+
+// file returns a build file of operation op.
+func (s *Service) file(ctx context.Context, op, fid uuid.UUID) (*models.BuildFile, error) {
 	f, err := s.repos.Files.FindByFileID(ctx, fid)
 	if repository.IsNotFound(err) || (err == nil && f.OperationID != op) {
 		return nil, ErrFileNotFound

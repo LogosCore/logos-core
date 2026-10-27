@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -25,14 +26,15 @@ func (s *Service) HandleProgress(ctx context.Context, req messaging.Envelope) (a
 	if err := p.Validate(); err != nil {
 		return nil, rpcErr(protocol.CodeValidationFailed, err.Error())
 	}
-	ok, err := s.repos.Builds.ReportStep(ctx, p.BuildID, req.Source.Instance, p.Step, p.Message, s.now())
+	// Validate checked the minion id is a UUIDv4.
+	ok, err := s.repos.Builds.ReportStep(ctx, uuid.MustParse(p.MinionID), req.Source.Instance, p.Step, p.Message, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record progress: %w", err)
 	}
 	if !ok {
-		return nil, notWaiting(p.BuildID, req.Source.Instance)
+		return nil, notWaiting(p.MinionID, req.Source.Instance)
 	}
-	return protocol.BuildProgressReply{BuildID: p.BuildID, Ack: true}, nil
+	return protocol.BuildProgressReply{MinionID: p.MinionID, Ack: true}, nil
 }
 
 // HandleResult serves factory.build.result. A failed result finishes the
@@ -48,17 +50,17 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		return nil, rpcErr(protocol.CodeValidationFailed, err.Error())
 	}
 	instance := req.Source.Instance
-	b, err := s.repos.Builds.FindByBuildID(ctx, r.BuildID)
+	b, err := s.repos.Builds.FindByMinionID(ctx, uuid.MustParse(r.MinionID)) // checked by Validate
 	if repository.IsNotFound(err) {
-		return nil, notWaiting(r.BuildID, instance)
+		return nil, notWaiting(r.MinionID, instance)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load build: %w", err)
 	}
 	if b.Instance != instance {
-		return nil, notWaiting(r.BuildID, instance)
+		return nil, notWaiting(r.MinionID, instance)
 	}
-	recorded := protocol.BuildResultReply{BuildID: r.BuildID, Recorded: true}
+	recorded := protocol.BuildResultReply{MinionID: r.MinionID, Recorded: true}
 
 	if b.State != models.BuildStateBuilding {
 		// The same result again (the reply was lost) is answered the same
@@ -66,11 +68,11 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		if resultRecorded(b) {
 			return recorded, nil
 		}
-		return nil, notWaiting(r.BuildID, instance)
+		return nil, notWaiting(r.MinionID, instance)
 	}
 
 	if r.Status == protocol.BuildFailed {
-		ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
+		ok, err := s.repos.Builds.Finish(ctx, b.MinionID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
 			State: models.BuildStateFailed, Error: &models.BuildError{Code: r.Error.Code, Message: r.Error.Message},
 			Warnings: r.Warnings, Log: r.Log, At: s.now(),
 		})
@@ -78,24 +80,24 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 			return nil, fmt.Errorf("record a failed build: %w", err)
 		}
 		if !ok {
-			return nil, notWaiting(r.BuildID, instance)
+			return nil, notWaiting(r.MinionID, instance)
 		}
-		s.logger.Info("build failed", zap.String("build_id", b.BuildID), zap.String("code", r.Error.Code), zap.String("reason", r.Error.Message))
+		s.logger.Info("build failed", zap.String("minion_id", r.MinionID), zap.String("code", r.Error.Code), zap.String("reason", r.Error.Message))
 		return recorded, nil
 	}
 
 	art := models.BuildArtifact{
 		Filename: r.Artifact.Filename, Size: r.Artifact.Size, SHA256: r.Artifact.SHA256,
-		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.BuildID),
+		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.MinionID),
 	}
-	ok, err := s.repos.Builds.RecordResult(ctx, b.BuildID, instance, art, r.Capabilities, r.Warnings, r.Log, s.now())
+	ok, err := s.repos.Builds.RecordResult(ctx, b.MinionID, instance, art, r.Capabilities, r.Warnings, r.Log, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record a build result: %w", err)
 	}
 	if !ok && !b.ResultReceived {
-		return nil, notWaiting(r.BuildID, instance)
+		return nil, notWaiting(r.MinionID, instance)
 	}
-	s.verifyAsync(b.BuildID)
+	s.verifyAsync(b.MinionID)
 	return recorded, nil
 }
 
@@ -123,6 +125,6 @@ func resultRecorded(b *models.Build) bool {
 
 func rpcErr(code, msg string) error { return &messaging.RPCError{Code: code, Message: msg} }
 
-func notWaiting(buildID, instance string) error {
-	return rpcErr(protocol.CodeNotFound, fmt.Sprintf("core does not wait for build %s from %s", buildID, instance))
+func notWaiting(minionID, instance string) error {
+	return rpcErr(protocol.CodeNotFound, fmt.Sprintf("core does not wait for build %s from %s", minionID, instance))
 }

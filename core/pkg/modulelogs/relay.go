@@ -95,7 +95,7 @@ func New(registry Registry, rpc messaging.RPCCaller, source Source, logger *zap.
 		rpc:      rpc,
 		source:   source,
 		logger:   logger.With(zap.String("component", "module-logs")),
-		newID:    protocol.NewULID,
+		newID:    protocol.NewID,
 		renew:    renewEvery,
 	}
 }

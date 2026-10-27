@@ -28,7 +28,6 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // ExportFormat identifies the export document's layout.
@@ -242,11 +241,11 @@ func (s *Service) Update(ctx context.Context, id string, expectedRevision int64,
 
 // Delete removes an endpoint.
 func (s *Service) Delete(ctx context.Context, id string) error {
-	oid, err := primitive.ObjectIDFromHex(id)
+	endpointID, err := uuid.Parse(id)
 	if err != nil {
 		return ErrNotFound
 	}
-	ok, err := s.repo.Delete(ctx, oid)
+	ok, err := s.repo.Delete(ctx, endpointID)
 	if err != nil {
 		return fmt.Errorf("delete channel endpoint: %w", err)
 	}
@@ -302,11 +301,11 @@ func (s *Service) requireSchema(ctx context.Context, moduleName string) (*protoc
 }
 
 func (s *Service) find(ctx context.Context, id string) (*models.ChannelEndpoint, error) {
-	oid, err := primitive.ObjectIDFromHex(id)
+	endpointID, err := uuid.Parse(id)
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	ep, err := s.repo.FindByID(ctx, oid)
+	ep, err := s.repo.FindByEndpointID(ctx, endpointID)
 	if repository.IsNotFound(err) {
 		return nil, ErrNotFound
 	}

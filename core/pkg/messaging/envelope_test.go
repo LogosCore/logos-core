@@ -1,6 +1,6 @@
 package messaging
 
-// The wire types, ULID generation, and version parsing are owned and tested by
+// The wire types, id generation, and version parsing are owned and tested by
 // the shared protocol module. These tests cover only the core-side layer: the
 // source-stamping wrappers, RPCError handling, and the RPC server dispatch.
 import (
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oklog/ulid/v2"
+	"github.com/google/uuid"
 	"github.com/wagslane/go-rabbitmq"
 	"go.uber.org/zap"
 )
@@ -43,8 +43,8 @@ func TestNewReply_EchoesCorrelationAndType(t *testing.T) {
 	if reply.Source.Service != ServiceCore {
 		t.Errorf("source.service = %q, want %q", reply.Source.Service, ServiceCore)
 	}
-	if _, err := ulid.Parse(reply.MessageID); err != nil {
-		t.Errorf("reply message_id %q not a ULID: %v", reply.MessageID, err)
+	if id, err := uuid.Parse(reply.MessageID); err != nil || id.Version() != 4 {
+		t.Errorf("reply message_id %q is not a UUIDv4: %v", reply.MessageID, err)
 	}
 
 	// Timestamp must parse as RFC3339 and be UTC with ms precision.

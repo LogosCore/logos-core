@@ -306,7 +306,7 @@ func toActorModel(a models.ModuleActor) *model.ModuleActor {
 
 func toInvocationModel(inv *models.ModuleActionInvocation) *model.ModuleActionInvocation {
 	out := &model.ModuleActionInvocation{
-		ID:         inv.InvocationID,
+		ID:         inv.InvocationID.String(),
 		Instance:   inv.Instance,
 		Action:     inv.Action,
 		Status:     model.ModuleActionStatus(inv.Status),
@@ -328,7 +328,7 @@ func toConfigChangeModel(c *models.ModuleConfigChange) *model.ModuleConfigChange
 		changes[i] = &model.ModuleConfigKeyChange{Key: k.Key, Old: k.Old, New: k.New}
 	}
 	return &model.ModuleConfigChange{
-		ID:       c.Id.Hex(),
+		ID:       c.ChangeID.String(),
 		Instance: c.Instance,
 		Revision: int(c.Revision),
 		Changes:  changes,

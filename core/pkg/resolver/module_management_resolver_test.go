@@ -40,7 +40,7 @@ func (f *fakeManager) InvokeAction(_ context.Context, req modulemgmt.InvokeReque
 	if f.invokeErr != nil {
 		return nil, f.invokeErr
 	}
-	return &models.ModuleActionInvocation{InvocationID: "inv-1", Instance: req.Instance, Action: req.Action,
+	return &models.ModuleActionInvocation{InvocationID: models.NewInvocationID(), Instance: req.Instance, Action: req.Action,
 		Status: models.ModuleActionTimedOut, Error: "no reply within 30s", Actor: req.Actor}, nil
 }
 

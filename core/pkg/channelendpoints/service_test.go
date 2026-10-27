@@ -45,7 +45,7 @@ func (f fakeRegistry) LatestConnectionSchema(_ context.Context, moduleName strin
 }
 
 type fakeRepo struct {
-	rows map[primitive.ObjectID]*models.ChannelEndpoint
+	rows map[uuid.UUID]*models.ChannelEndpoint
 }
 
 func (f *fakeRepo) List(_ context.Context, operationID uuid.UUID, moduleName string) ([]models.ChannelEndpoint, error) {
@@ -58,7 +58,7 @@ func (f *fakeRepo) List(_ context.Context, operationID uuid.UUID, moduleName str
 	return out, nil
 }
 
-func (f *fakeRepo) FindByID(_ context.Context, id primitive.ObjectID) (*models.ChannelEndpoint, error) {
+func (f *fakeRepo) FindByEndpointID(_ context.Context, id uuid.UUID) (*models.ChannelEndpoint, error) {
 	ep, ok := f.rows[id]
 	if !ok {
 		return nil, qmgo.ErrNoSuchDocuments
@@ -73,20 +73,23 @@ func (f *fakeRepo) Insert(_ context.Context, ep *models.ChannelEndpoint) error {
 			return repository.ErrChannelEndpointNameTaken
 		}
 	}
+	if ep.EndpointID == uuid.Nil {
+		ep.EndpointID = uuid.New()
+	}
 	ep.Id, ep.Revision = primitive.NewObjectID(), 1
 	cp := *ep
-	f.rows[ep.Id] = &cp
+	f.rows[ep.EndpointID] = &cp
 	return nil
 }
 
 func (f *fakeRepo) Update(_ context.Context, ep *models.ChannelEndpoint) error {
-	r, ok := f.rows[ep.Id]
+	r, ok := f.rows[ep.EndpointID]
 	if !ok || r.Revision != ep.Revision {
 		return repository.ErrChannelEndpointConflict
 	}
 	ep.Revision++
 	cp := *ep
-	f.rows[ep.Id] = &cp
+	f.rows[ep.EndpointID] = &cp
 	return nil
 }
 
@@ -99,11 +102,13 @@ func (f *fakeRepo) DeleteByOperationID(_ context.Context, operationID uuid.UUID)
 	return nil
 }
 
-func (f *fakeRepo) Delete(_ context.Context, id primitive.ObjectID) (bool, error) {
+func (f *fakeRepo) Delete(_ context.Context, id uuid.UUID) (bool, error) {
 	_, ok := f.rows[id]
 	delete(f.rows, id)
 	return ok, nil
 }
+
+func (f *fakeRepo) BackfillEndpointIDs(context.Context) (int64, error) { return 0, nil }
 
 var opA, opB = uuid.New(), uuid.New()
 
@@ -119,7 +124,7 @@ var schema = protocol.ConnectionSchema{
 }
 
 func newService() (*Service, *fakeRepo, fakeRegistry) {
-	repo := &fakeRepo{rows: map[primitive.ObjectID]*models.ChannelEndpoint{}}
+	repo := &fakeRepo{rows: map[uuid.UUID]*models.ChannelEndpoint{}}
 	reg := fakeRegistry{"http": schema}
 	return NewService(repo, reg), repo, reg
 }
@@ -177,7 +182,7 @@ func TestUpdateReplacesValuesAndChecksRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := v.Id.Hex()
+	id := v.EndpointID.String()
 	v, err = svc.Update(ctx, id, 1, Input{Name: "edge", Values: map[string]any{"base_url": "https://b.example.com"}})
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +226,7 @@ func TestExportAndProblems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := svc.Export(ctx, v.Id.Hex())
+	doc, err := svc.Export(ctx, v.EndpointID.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +241,7 @@ func TestExportAndProblems(t *testing.T) {
 	next.Fields = append([]protocol.FieldSpec{{Key: "region", Type: protocol.FieldString, Required: true}}, schema.Fields...)
 	reg["http"] = next
 
-	got, err := svc.Get(ctx, v.Id.Hex())
+	got, err := svc.Get(ctx, v.EndpointID.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +249,7 @@ func TestExportAndProblems(t *testing.T) {
 		t.Errorf("after schema change: changed=%v problems=%v", got.SchemaChanged(), got.Problems)
 	}
 	var ve *ValidationError
-	if _, err := svc.Export(ctx, v.Id.Hex()); !errors.As(err, &ve) {
+	if _, err := svc.Export(ctx, v.EndpointID.String()); !errors.As(err, &ve) {
 		t.Errorf("export with problems: %v", err)
 	}
 
@@ -253,10 +258,10 @@ func TestExportAndProblems(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Problems[""] == "" {
 		t.Errorf("no schema left: %v %+v", err, list)
 	}
-	if err := svc.Delete(ctx, v.Id.Hex()); err != nil {
+	if err := svc.Delete(ctx, v.EndpointID.String()); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Delete(ctx, v.Id.Hex()); !errors.Is(err, ErrNotFound) {
+	if err := svc.Delete(ctx, v.EndpointID.String()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("second delete: %v", err)
 	}
 }

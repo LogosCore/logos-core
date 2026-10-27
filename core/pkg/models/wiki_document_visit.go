@@ -17,6 +17,7 @@ import (
 // user per operation; older rows are pruned after each upsert.
 type WikiDocumentVisit struct {
 	field.DefaultField `bson:",inline"`
+	VisitID            uuid.UUID `bson:"visit_id" json:"visitId"`
 	UserID             uuid.UUID `bson:"user_id" json:"userId"`
 	OperationID        uuid.UUID `bson:"operation_id" json:"operationId"`
 	DocumentID         uuid.UUID `bson:"document_id" json:"documentId"`

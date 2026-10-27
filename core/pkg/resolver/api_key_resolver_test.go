@@ -48,6 +48,9 @@ func (f *fakeAPIKeyRepo) FindByUserID(_ context.Context, userID uuid.UUID) (mode
 	return k, nil
 }
 func (f *fakeAPIKeyRepo) Create(_ context.Context, k *models.APIKey) error {
+	if k.APIKeyID == uuid.Nil {
+		k.APIKeyID = uuid.New()
+	}
 	// Simulate qmgo populating timestamps + _id.
 	k.DefaultField = field.DefaultField{}
 	k.CreateAt = time.Now().UTC()
@@ -82,6 +85,8 @@ func (f *fakeAPIKeyRepo) DeleteByUserID(_ context.Context, userID uuid.UUID) err
 func (f *fakeAPIKeyRepo) TouchLastUsed(_ context.Context, _ string, _ time.Time) error {
 	return nil
 }
+
+func (f *fakeAPIKeyRepo) BackfillAPIKeyIDs(context.Context) (int64, error) { return 0, nil }
 
 var _ repository.IAPIKeyRepository = (*fakeAPIKeyRepo)(nil)
 
@@ -168,6 +173,29 @@ func TestRegenerateMyAPIKey_BumpsVersionAndInvalidatesOld(t *testing.T) {
 	}
 	if !stored.Enabled {
 		t.Fatalf("regenerate must leave key enabled")
+	}
+}
+
+// TestAPIKeyID_SurvivesRegenerate pins APIKey.id: the row's UUID, which a
+// regenerate keeps while keyId changes.
+func TestAPIKeyID_SurvivesRegenerate(t *testing.T) {
+	uid := uuid.New()
+	repo := newFakeAPIKeyRepo()
+	r := NewAPIKeyResolver(repo)
+	created, err := r.CreateMyAPIKey(authCtx(uid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := r.ID(context.Background(), created.APIKey)
+	if parsed, err := uuid.Parse(id); err != nil || parsed.Version() != 4 {
+		t.Fatalf("id %q is not a UUIDv4", id)
+	}
+	again, err := r.RegenerateMyAPIKey(authCtx(uid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := r.ID(context.Background(), again.APIKey); got != id || again.APIKey.KeyID == created.APIKey.KeyID {
+		t.Fatalf("after regenerate: id %q (was %q), keyId %q (was %q)", got, id, again.APIKey.KeyID, created.APIKey.KeyID)
 	}
 }
 

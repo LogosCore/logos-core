@@ -37,19 +37,23 @@ type IChannelEndpointRepository interface {
 	// List returns an operation's endpoints by kind and name, all kinds or
 	// one (moduleName "" for all).
 	List(ctx context.Context, operationID uuid.UUID, moduleName string) ([]models.ChannelEndpoint, error)
-	// FindByID returns one endpoint; IsNotFound on a miss.
-	FindByID(ctx context.Context, id primitive.ObjectID) (*models.ChannelEndpoint, error)
-	// Insert stores a new endpoint at revision 1.
+	// FindByEndpointID returns one endpoint; IsNotFound on a miss.
+	FindByEndpointID(ctx context.Context, endpointID uuid.UUID) (*models.ChannelEndpoint, error)
+	// Insert stores a new endpoint at revision 1, giving it an endpoint id
+	// when it has none.
 	Insert(ctx context.Context, ep *models.ChannelEndpoint) error
 	// Update replaces name, description, schema version and values if the
 	// stored revision equals ep.Revision, and increments it (ep.Revision is
 	// updated).
 	Update(ctx context.Context, ep *models.ChannelEndpoint) error
 	// Delete removes one endpoint; false when there was none.
-	Delete(ctx context.Context, id primitive.ObjectID) (bool, error)
+	Delete(ctx context.Context, endpointID uuid.UUID) (bool, error)
 	// DeleteByOperationID removes every endpoint of an operation (operation
 	// delete cascade).
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
+	// BackfillEndpointIDs gives the endpoints created before they had ids
+	// one.
+	BackfillEndpointIDs(ctx context.Context) (int64, error)
 }
 
 type channelEndpointRepository struct {
@@ -60,6 +64,7 @@ func NewChannelEndpointRepository(db database.Database) IChannelEndpointReposito
 	db.EnsureIndexes(context.Background(), channelEndpointCollection, []opts.IndexModel{
 		{Key: []string{"operation_id", "name"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "module_name", "name"}},
+		uniqueIDIndex("endpoint_id"),
 	})
 	return &channelEndpointRepository{coll: db.Collection(channelEndpointCollection)}
 }
@@ -76,19 +81,27 @@ func channelEndpointListFilter(operationID uuid.UUID, moduleName string) bson.M 
 
 func (r *channelEndpointRepository) List(ctx context.Context, operationID uuid.UUID, moduleName string) ([]models.ChannelEndpoint, error) {
 	out := []models.ChannelEndpoint{}
-	err := r.coll.Find(ctx, channelEndpointListFilter(operationID, moduleName)).Sort("module_name", "name").All(&out)
+	if err := r.coll.Find(ctx, channelEndpointListFilter(operationID, moduleName)).Sort("module_name", "name").All(&out); err != nil {
+		return nil, err
+	}
+	err := fillIDs(ctx, r.coll, "endpoint_id", out, func(ep *models.ChannelEndpoint) (primitive.ObjectID, *uuid.UUID) {
+		return ep.Id, &ep.EndpointID
+	})
 	return out, err
 }
 
-func (r *channelEndpointRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*models.ChannelEndpoint, error) {
+func (r *channelEndpointRepository) FindByEndpointID(ctx context.Context, endpointID uuid.UUID) (*models.ChannelEndpoint, error) {
 	var ep models.ChannelEndpoint
-	if err := r.coll.Find(ctx, bson.M{"_id": id}).One(&ep); err != nil {
+	if err := r.coll.Find(ctx, bson.M{"endpoint_id": endpointID}).One(&ep); err != nil {
 		return nil, err
 	}
 	return &ep, nil
 }
 
 func (r *channelEndpointRepository) Insert(ctx context.Context, ep *models.ChannelEndpoint) error {
+	if ep.EndpointID == uuid.Nil {
+		ep.EndpointID = uuid.New()
+	}
 	ep.Revision = 1
 	_, err := r.coll.InsertOne(ctx, ep)
 	if mongo.IsDuplicateKeyError(err) {
@@ -118,7 +131,7 @@ func channelEndpointUpdate(ep *models.ChannelEndpoint) bson.M {
 
 func (r *channelEndpointRepository) Update(ctx context.Context, ep *models.ChannelEndpoint) error {
 	var out models.ChannelEndpoint
-	err := r.coll.Find(ctx, bson.M{"_id": ep.Id, "revision": ep.Revision}).Apply(qmgo.Change{
+	err := r.coll.Find(ctx, bson.M{"endpoint_id": ep.EndpointID, "revision": ep.Revision}).Apply(qmgo.Change{
 		Update:    channelEndpointUpdate(ep),
 		ReturnNew: true,
 	}, &out)
@@ -135,8 +148,8 @@ func (r *channelEndpointRepository) Update(ctx context.Context, ep *models.Chann
 	}
 }
 
-func (r *channelEndpointRepository) Delete(ctx context.Context, id primitive.ObjectID) (bool, error) {
-	err := r.coll.Remove(ctx, bson.M{"_id": id})
+func (r *channelEndpointRepository) Delete(ctx context.Context, endpointID uuid.UUID) (bool, error) {
+	err := r.coll.Remove(ctx, bson.M{"endpoint_id": endpointID})
 	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
 		return false, nil
 	}
@@ -146,4 +159,8 @@ func (r *channelEndpointRepository) Delete(ctx context.Context, id primitive.Obj
 func (r *channelEndpointRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
+}
+
+func (r *channelEndpointRepository) BackfillEndpointIDs(ctx context.Context) (int64, error) {
+	return backfillIDs(ctx, r.coll, "endpoint_id")
 }
