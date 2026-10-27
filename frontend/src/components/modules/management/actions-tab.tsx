@@ -37,6 +37,7 @@ import {
   useInvokeModuleAction,
   useModuleActionInvocations,
 } from "@/graphql/hooks/modules"
+import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
 import { actionBlocker } from "./action-blocker"
 import { errorMessage, graphqlErrorCode } from "./api-errors"
 import {
@@ -316,6 +317,7 @@ function ActionDialogBody({
 
 function InvocationsTable({ instance, actions }: { instance: string; actions: readonly Action[] }) {
   const { data, isLoading } = useModuleActionInvocations(instance)
+  const slowLoad = useDelayedFlag(isLoading, PLACEHOLDER_DELAY_MS)
   const [expanded, setExpanded] = useState<string | null>(null)
   const invocations = data?.moduleActionInvocations ?? []
   const labelOf = (name: string) => actions.find((a) => a.name === name)?.label ?? name
@@ -336,8 +338,16 @@ function InvocationsTable({ instance, actions }: { instance: string; actions: re
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* Empty while loading, like the other tables. */}
-            {isLoading ? null : invocations.length === 0 ? (
+            {/* Like the other tables: empty while loading, "Loading…" once it is slow. */}
+            {isLoading ? (
+              slowLoad && (
+                <TableRow className="animate-in duration-200 fade-in-0">
+                  <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                    Loading…
+                  </TableCell>
+                </TableRow>
+              )
+            ) : invocations.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
                   No actions have been run on this instance.

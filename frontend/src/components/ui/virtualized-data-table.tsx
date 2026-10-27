@@ -1,19 +1,24 @@
 import { useMemo, type ReactNode } from "react"
 import { Virtuoso } from "react-virtuoso"
 import { LoaderIcon } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
 import { cn } from "@/lib/utils"
 
 // Shared shell for every infinite-scrolling entity table (credentials,
 // hashes, hosts, operations, users, sessions). Owns the chrome and the
-// pagination mechanics — card border, fixed grid header, empty state,
-// Virtuoso wiring, and the loading/end-of-list footer — so the per-entity
-// components only describe their columns and rows. While the first page
-// loads the table is just empty: placeholder rows flashed for a moment on
-// every search and filter change.
+// pagination mechanics — card border, fixed grid header, loading
+// placeholders, empty state, Virtuoso wiring, and the loading/end-of-list
+// footer — so the per-entity components only describe their columns and
+// rows. The placeholders wait PLACEHOLDER_DELAY_MS: every search and filter
+// change loads a new first page, and shown at once they flashed on and off
+// for each quick one. Until then the table is just empty.
 //
 // Rows are rendered by the caller (some are buttons, some plain divs, some
 // wrapped in context menus); use `dataTableRowClass(gridCols)` so the row
 // grid stays aligned with the header.
+
+const SKELETON_ROWS = 5
 
 interface VirtualizedDataTableProps<T> {
   items: T[]
@@ -46,6 +51,7 @@ export function VirtualizedDataTable<T>({
   emptyState,
   entityNoun,
 }: VirtualizedDataTableProps<T>) {
+  const slowLoad = useDelayedFlag(isLoading, PLACEHOLDER_DELAY_MS)
   const showEmpty = !isLoading && items.length === 0
   const showList = !isLoading && items.length > 0
 
@@ -84,6 +90,14 @@ export function VirtualizedDataTable<T>({
           {header}
         </div>
       </div>
+
+      {slowLoad && (
+        <div className="space-y-3 p-4 animate-in duration-200 fade-in-0">
+          {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      )}
 
       {showEmpty && (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
