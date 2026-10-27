@@ -9,14 +9,12 @@ import { isUnfinished } from "@/graphql/hooks/builds"
 import { useNow } from "@/hooks/use-now"
 import { artifactUrl } from "@/lib/build-file-upload"
 import { relativeTime } from "@/lib/relative-time"
-import { formatElapsed } from "@/components/modules/management/field-values"
 import { KindName } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
-import { buildElapsed, currentStage, platformLabel } from "./build-values"
+import { currentStage, platformLabel } from "./build-values"
 
-const GRID_COLS =
-  "grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_48px]"
+const GRID_COLS = "grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_48px]"
 
 /**
  * An operation's builds, newest first. A row opens the build; its menu
@@ -65,7 +63,6 @@ export function BuildsTable({
           <div>Platform</div>
           <div>Minion</div>
           <div>Date</div>
-          <div className="text-right">Took</div>
           <div />
         </>
       }
@@ -130,7 +127,6 @@ export function BuildsTable({
                   {relativeTime(b.createdAt)}
                   {b.createdBy.name && <span> by {b.createdBy.name}</span>}
                 </div>
-                <div className="text-right text-sm text-muted-foreground">{formatElapsed(buildElapsed(b))}</div>
                 <div>{menuButton}</div>
               </>
             )}
