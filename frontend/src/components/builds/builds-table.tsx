@@ -16,7 +16,7 @@ import { PipelineDots } from "./build-pipeline"
 import { buildElapsed, currentStage, platformLabel } from "./build-values"
 
 const GRID_COLS =
-  "grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_48px]"
+  "grid-cols-[minmax(0,1.2fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.5fr)_minmax(0,0.9fr)_minmax(0,0.5fr)_48px]"
 
 /**
  * An operation's builds, newest first. A row opens the build; its menu
@@ -60,6 +60,7 @@ export function BuildsTable({
       header={
         <>
           <div>Factory · target</div>
+          <div>Description</div>
           <div>Pipeline</div>
           <div>Platform</div>
           <div>Minion</div>
@@ -104,16 +105,14 @@ export function BuildsTable({
                     <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
                     <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
                   </div>
-                  {b.description && (
-                    <div className="truncate text-xs text-muted-foreground" title={b.description}>
-                      {b.description}
-                    </div>
-                  )}
                   {b.error && (
                     <div className="truncate text-xs text-destructive" title={b.error.message}>
                       {b.error.code}: {b.error.message}
                     </div>
                   )}
+                </div>
+                <div className="truncate text-sm" title={b.description || undefined}>
+                  {b.description || <span className="text-muted-foreground">—</span>}
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <PipelineDots stages={b.stages} now={now} />
