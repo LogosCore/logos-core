@@ -59,22 +59,12 @@ describe("generate", () => {
     expect(generate(path, words, sequence(0, 1))).toBe("/river/stone/")
   })
 
-  it("joins a segment's words, and cases them", () => {
-    const s = set({ segments: 1, words: 3, joiner: "-", leading: false, trailing: false })
+  it("divides a word a segment as asked, and cases the words", () => {
+    const s = set({ segments: 3, divider: "-", leading: false, trailing: false })
     expect(generate(s, words, sequence(1, 0, 2))).toBe("stone-river-cloud")
-    expect(generate({ ...s, joiner: "_" }, words, sequence(1, 0, 2))).toBe("stone_river_cloud")
-    expect(generate({ ...s, joiner: "" }, words, sequence(1, 0, 2))).toBe("stonerivercloud")
-    expect(generate({ ...s, joiner: "camel" }, words, sequence(1, 0, 2))).toBe("stoneRiverCloud")
-    expect(generate({ ...s, joiner: "camel", case: "title" }, words, sequence(1, 0, 2))).toBe("StoneRiverCloud")
+    expect(generate({ ...s, divider: "." }, words, sequence(1, 0, 2))).toBe("stone.river.cloud")
     expect(generate({ ...s, case: "title" }, words, sequence(1, 0, 2))).toBe("Stone-River-Cloud")
-  })
-
-  it("ends the last segment with a number of all its digits", () => {
-    // 1000 + 3821: four digits, never fewer.
-    expect(generate(set({ segments: 1, digits: 4 }), words, sequence(0, 3821))).toBe("/river-4821/")
-    expect(generate(set({ segments: 2, digits: 2, joiner: "", divider: ".", leading: false }), words, sequence(0, 1, 89))).toBe(
-      "river.stone99.",
-    )
+    expect(generate({ ...s, divider: "_", leading: true }, words, sequence(1, 0, 2))).toBe("_stone_river_cloud")
   })
 
   it("makes nothing without words", () => {
@@ -109,11 +99,10 @@ describe("drawsFrom", () => {
 })
 
 describe("combinations", () => {
-  it("count every choice: words per segment, segments, and the number", () => {
-    // 3 words, 2 in each of 2 segments: 3^4 = 81; × 90 two-digit numbers = 7290.
-    const s = set({ segments: 2, words: 2, digits: 2 })
-    expect(10 ** log10Combinations(s, 3)).toBeCloseTo(7290)
-    expect(log10Combinations(s, 0)).toBe(-Infinity)
+  it("count a choice of word for every segment", () => {
+    // 3 words in 4 segments: 3^4 = 81.
+    expect(10 ** log10Combinations(set({ segments: 4 }), 3)).toBeCloseTo(81)
+    expect(log10Combinations(path, 0)).toBe(-Infinity)
   })
 
   it("read in full below a million, else as a power of ten", () => {
@@ -126,17 +115,16 @@ describe("combinations", () => {
 
 describe("settingsOf", () => {
   it("keeps what was saved, and takes the preset's for anything missing or out of range", () => {
-    expect(settingsOf({ segments: 4, divider: ".", words: 9, joiner: "?", lists: [] }, path)).toEqual({
+    expect(settingsOf({ segments: 4, divider: ".", case: "UPPER", lists: [] }, path)).toEqual({
       ...path,
       segments: 4,
       divider: ".",
     })
     expect(settingsOf(null, path)).toEqual(path)
-    // A setting it no longer has is dropped.
-    expect(settingsOf({ pattern: "adjective-noun", lists: ["long"], digits: 3 }, path)).toEqual({
+    // Settings it no longer has are dropped.
+    expect(settingsOf({ pattern: "adjective-noun", words: 3, joiner: "_", digits: 3, lists: ["long"] }, path)).toEqual({
       ...path,
       lists: ["long"],
-      digits: 3,
     })
   })
 })

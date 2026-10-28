@@ -3,32 +3,23 @@
 // by scripts/generate-wordlists.mjs), in a shape the operator sets, such as
 // /quiet/river/ for a path. No React here, so all of it is unit-tested.
 
-/** How words join inside a segment: "quiet-river", "quiet_river", "quietriver", "quietRiver". */
-export type Joiner = "-" | "_" | "" | "camel"
 /** What goes between segments, and before and after them when asked. */
 export type Divider = "/" | "-" | "." | "_"
 export type LetterCase = "lower" | "title"
 
 export interface GeneratorSettings {
-  /** 1 to MAX_SEGMENTS. */
+  /** Words, one a segment: 1 to MAX_SEGMENTS. */
   segments: number
-  /** Words in each segment, 1 to MAX_WORDS. */
-  words: number
-  joiner: Joiner
   divider: Divider
   /** A divider before the first segment ("/quiet"), and after the last ("river/"). */
   leading: boolean
   trailing: boolean
   case: LetterCase
-  /** A number of this many digits ends the last segment ("river-4821"); 0 for none. */
-  digits: number
   /** The word lists picked, by id: every word comes from them all. */
   lists: string[]
 }
 
 export const MAX_SEGMENTS = 6
-export const MAX_WORDS = 3
-export const MAX_DIGITS = 6
 
 /** What a word list is, as public/wordlists/index.json lists it. */
 export interface WordlistInfo {
@@ -54,13 +45,10 @@ export interface WordlistCatalog {
 export const PRESETS: Record<string, GeneratorSettings> = {
   path: {
     segments: 2,
-    words: 1,
-    joiner: "-",
     divider: "/",
     leading: true,
     trailing: true,
     case: "lower",
-    digits: 0,
     lists: ["common"],
   },
 }
@@ -79,13 +67,10 @@ export function settingsOf(saved: unknown, preset: GeneratorSettings): Generator
   const oneOf = <T>(v: unknown, options: readonly T[], fallback: T): T => (options.includes(v as T) ? (v as T) : fallback)
   return {
     segments: int(s.segments, 1, MAX_SEGMENTS, preset.segments),
-    words: int(s.words, 1, MAX_WORDS, preset.words),
-    joiner: oneOf<Joiner>(s.joiner, ["-", "_", "", "camel"], preset.joiner),
     divider: oneOf<Divider>(s.divider, ["/", "-", ".", "_"], preset.divider),
     leading: typeof s.leading === "boolean" ? s.leading : preset.leading,
     trailing: typeof s.trailing === "boolean" ? s.trailing : preset.trailing,
     case: oneOf<LetterCase>(s.case, ["lower", "title"], preset.case),
-    digits: int(s.digits, 0, MAX_DIGITS, preset.digits),
     lists:
       Array.isArray(s.lists) && s.lists.length > 0 && s.lists.every((id) => typeof id === "string")
         ? (s.lists as string[])
@@ -143,32 +128,16 @@ export function randomIndex(n: number, random: Random = cryptoRandom): number {
 
 const title = (w: string) => (w === "" ? w : w[0].toUpperCase() + w.slice(1))
 
-/** A segment's words, cased and joined. */
-function segment(words: readonly string[], s: GeneratorSettings): string {
-  if (s.joiner === "camel") {
-    return words.map((w, i) => (i === 0 && s.case === "lower" ? w : title(w))).join("")
-  }
-  return words.map((w) => (s.case === "title" ? title(w) : w)).join(s.joiner)
-}
-
 /**
- * One value in the shape s sets, its words drawn from words (drawsFrom's
- * lists, merged by pool). Null when there are none.
+ * One value in the shape s sets, a word a segment, drawn from words
+ * (drawsFrom's lists, merged by pool). Null when there are none.
  */
 export function generate(s: GeneratorSettings, words: readonly string[], random: Random = cryptoRandom): string | null {
   if (words.length === 0) return null
   const segments: string[] = []
   for (let i = 0; i < s.segments; i++) {
-    const picked: string[] = []
-    for (let j = 0; j < s.words; j++) picked.push(words[randomIndex(words.length, random)])
-    segments.push(segment(picked, s))
-  }
-  if (s.digits > 0) {
-    // No leading zero: the number has all its digits.
-    const low = 10 ** (s.digits - 1)
-    const n = low + randomIndex(9 * low, random)
-    const glue = s.joiner === "-" || s.joiner === "_" ? s.joiner : ""
-    segments[segments.length - 1] += glue + String(n)
+    const w = words[randomIndex(words.length, random)]
+    segments.push(s.case === "title" ? title(w) : w)
   }
   return (s.leading ? s.divider : "") + segments.join(s.divider) + (s.trailing ? s.divider : "")
 }
@@ -195,13 +164,11 @@ export function candidates(
 
 /**
  * How many different values the settings can make from size words, as its
- * base-10 logarithm: the count passes any number's range long before the
- * sliders do. -Infinity without words.
+ * base-10 logarithm: a big list's count passes any number's range long
+ * before the slider ends. -Infinity without words.
  */
 export function log10Combinations(s: GeneratorSettings, size: number): number {
-  if (size === 0) return -Infinity
-  const number = s.digits > 0 ? Math.log10(9) + (s.digits - 1) : 0
-  return s.segments * s.words * Math.log10(size) + number
+  return size === 0 ? -Infinity : s.segments * Math.log10(size)
 }
 
 const SUPERSCRIPT = "⁰¹²³⁴⁵⁶⁷⁸⁹"

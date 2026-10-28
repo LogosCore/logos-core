@@ -12,26 +12,17 @@ import {
   formatCombinations,
   fromDrawn,
   log10Combinations,
-  MAX_DIGITS,
   MAX_SEGMENTS,
-  MAX_WORDS,
   pool,
   PRESETS,
   settingsOf,
   type Divider,
   type GeneratorSettings,
-  type Joiner,
 } from "@/lib/word-generator"
 import { fetchWordlist, fetchWordlistCatalog, WORDLIST_CREDITS } from "@/lib/wordlists"
 import { useWordGeneratorStore } from "@/stores/word-generator"
 import { Chip, Choices } from "./generator-parts"
 
-const JOINERS: { value: Joiner; label: string }[] = [
-  { value: "-", label: "-" },
-  { value: "_", label: "_" },
-  { value: "", label: "none" },
-  { value: "camel", label: "camelCase" },
-]
 const DIVIDERS: Divider[] = ["/", "-", ".", "_"]
 const CANDIDATES = 5
 // The lists stay as long as the page: they are static files.
@@ -149,28 +140,6 @@ function Panel({
       <div className="grid gap-4 p-3 sm:grid-cols-2">
         <div className="flex flex-col gap-3">
           <SliderRow label="Segments" value={s.segments} min={1} max={MAX_SEGMENTS} onChange={(segments) => set({ segments })} />
-          <SliderRow
-            label="Words in a segment"
-            value={s.words}
-            min={1}
-            max={MAX_WORDS}
-            onChange={(words) => set({ words })}
-          />
-          <SliderRow
-            label="Number at the end"
-            value={s.digits}
-            min={0}
-            max={MAX_DIGITS}
-            onChange={(digits) => set({ digits })}
-            text={(d) => (d === 0 ? "none" : `${d} digit${d === 1 ? "" : "s"}`)}
-          />
-          <Choices label="Join words with">
-            {JOINERS.map((j) => (
-              <Chip key={j.label} active={s.joiner === j.value} onClick={() => set({ joiner: j.value })}>
-                <span className={j.value === "" || j.value === "camel" ? undefined : "font-mono"}>{j.label}</span>
-              </Chip>
-            ))}
-          </Choices>
           <Choices label="Divider">
             {DIVIDERS.map((d) => (
               <Chip key={d} active={s.divider === d} onClick={() => set({ divider: d })}>
@@ -194,64 +163,64 @@ function Panel({
           </Choices>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Word lists</span>
-            <div className="rounded-md border p-1">
-              {catalog.isPending && <p className="px-2 py-1 text-sm text-muted-foreground">Loading the word lists…</p>}
-              {lists.map((l) => {
-                const on = picked.includes(l.id)
-                return (
-                  <label
-                    key={l.id}
-                    title={`From ${sourcesOf(l.sources)}`}
-                    onPointerEnter={() => prefetch(l.id)}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/60"
-                  >
-                    {/* The last one picked stays: a value needs words. */}
-                    <Checkbox
-                      checked={on}
-                      disabled={on && picked.length === 1}
-                      onCheckedChange={(checked) =>
-                        set({ lists: checked ? [...picked, l.id] : picked.filter((id) => id !== l.id) })
-                      }
-                    />
-                    <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">{l.count.toLocaleString("en-US")}</span>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* As tall as five candidates whatever it shows, so the popover
-              keeps its size. */}
-          <div className="flex min-h-[13.5rem] flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Pick one
-              {loading && values.length > 0 && <span className="font-normal"> · loading words…</span>}
-            </span>
-            {values.length === 0 && failed ? (
-              <p className="text-sm text-destructive">The word lists did not load.</p>
-            ) : values.length === 0 && loading ? (
-              <p className="text-sm text-muted-foreground">Loading the words…</p>
-            ) : values.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No value made this way fits the field: its pattern or its length. Change the shape.
-              </p>
-            ) : (
-              values.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => onUse(v)}
-                  className="truncate rounded-md border px-2.5 py-1.5 text-left font-mono text-sm transition-colors hover:bg-muted"
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">Word lists</span>
+          <div className="rounded-md border p-1">
+            {catalog.isPending && <p className="px-2 py-1 text-sm text-muted-foreground">Loading the word lists…</p>}
+            {lists.map((l) => {
+              const on = picked.includes(l.id)
+              return (
+                <label
+                  key={l.id}
+                  title={`From ${sourcesOf(l.sources)}`}
+                  onPointerEnter={() => prefetch(l.id)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/60"
                 >
-                  {v}
-                </button>
-              ))
-            )}
+                  {/* The last one picked stays: a value needs words. */}
+                  <Checkbox
+                    checked={on}
+                    disabled={on && picked.length === 1}
+                    onCheckedChange={(checked) =>
+                      set({ lists: checked ? [...picked, l.id] : picked.filter((id) => id !== l.id) })
+                    }
+                  />
+                  <span className="min-w-0 flex-1 truncate">{l.name}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{l.count.toLocaleString("en-US")}</span>
+                </label>
+              )
+            })}
           </div>
+        </div>
+      </div>
+
+      <div className="border-t p-3">
+        {/* Across the whole generator, as tall as five candidates whatever
+            it shows, so the popover keeps its size. */}
+        <div className="flex min-h-[13.5rem] flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Pick one
+            {loading && values.length > 0 && <span className="font-normal"> · loading words…</span>}
+          </span>
+          {values.length === 0 && failed ? (
+            <p className="text-sm text-destructive">The word lists did not load.</p>
+          ) : values.length === 0 && loading ? (
+            <p className="text-sm text-muted-foreground">Loading the words…</p>
+          ) : values.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No value made this way fits the field: its pattern or its length. Change the shape.
+            </p>
+          ) : (
+            values.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onUse(v)}
+                className="truncate rounded-md border px-2.5 py-1.5 text-left font-mono text-sm transition-colors hover:bg-muted"
+              >
+                {v}
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -286,20 +255,18 @@ function SliderRow({
   min,
   max,
   onChange,
-  text = String,
 }: {
   label: string
   value: number
   min: number
   max: number
   onChange: (value: number) => void
-  text?: (value: number) => string
 }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium text-muted-foreground">{label}</span>
-        <span className="tabular-nums">{text(value)}</span>
+        <span className="tabular-nums">{value}</span>
       </div>
       <Slider value={value} min={min} max={max} step={1} onValueChange={onChange} aria-label={label} />
     </div>
