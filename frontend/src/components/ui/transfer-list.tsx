@@ -8,7 +8,6 @@ import {
   after,
   clicked,
   extended,
-  grouped,
   leaving,
   movable,
   moved,
@@ -29,8 +28,8 @@ export type { TransferItem } from "./transfer-list-state"
  * those shown. A click marks an item (Ctrl or ⌘ adds one, Shift a range), a
  * double click moves it. In a list, the arrow keys move focus (with Shift,
  * marking as they go), Space marks, Enter moves, Ctrl+A marks all. A locked
- * item stays selected. Both lists keep the items' order and headings, and
- * one search narrows both. Narrow, the lists stack and the arrows turn.
+ * item stays selected. Both lists keep the items' order, and one search
+ * narrows both. Narrow, the lists stack and the arrows turn.
  */
 export function TransferList({
   items,
@@ -74,8 +73,6 @@ export function TransferList({
     available: sideItems(items, selected, "available", query),
     selected: sideItems(items, selected, "selected", query),
   }
-  // Headings only where there is more than one.
-  const headings = new Set(items.map((i) => i.group ?? "")).size > 1
   const atDefaults = defaults !== undefined && normalized(items, defaults).join() === picked.join()
   const searching = query.trim() !== ""
 
@@ -135,7 +132,6 @@ export function TransferList({
       title={titles[side]}
       count={side === "selected" ? `${picked.length} of ${items.length}` : `${items.length - picked.length}`}
       items={shown[side]}
-      headings={headings}
       marks={marks[side]}
       active={active[side]}
       lockedNote={lockedNote}
@@ -239,14 +235,13 @@ const ROW = "flex min-w-0 flex-1 items-baseline gap-2"
 /** The DOM id of a list's option, for the list's active descendant. */
 const optionId = (list: string, item: string) => `${list}-${item}`
 
-/** One of the two lists: a listbox the keyboard works in, its items under their headings. */
+/** One of the two lists: a listbox the keyboard works in. */
 function ItemList({
   id,
   side,
   title,
   count,
   items,
-  headings,
   marks,
   active,
   lockedNote,
@@ -262,7 +257,6 @@ function ItemList({
   title: string
   count: string
   items: readonly TransferItem[]
-  headings: boolean
   marks: Marks
   active: string | null
   lockedNote: string
@@ -305,61 +299,52 @@ function ItemList({
         className="group/list h-64 overflow-y-auto py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
       >
         {items.length === 0 && <p className="px-3 py-6 text-center text-sm text-muted-foreground">{empty}</p>}
-        {grouped(items).map((g) => (
-          <div key={g.group} role="group" aria-label={g.group || undefined}>
-            {headings && (
-              <div className="px-3 pt-2 pb-0.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                {g.group || "Other"}
-              </div>
-            )}
-            {g.items.map((item) => {
-              const canMove = movable(item, side)
-              const isMarked = canMove && marks.marked.has(item.id)
-              const note = [item.locked ? lockedNote : "", item.description ?? ""].filter(Boolean).join("\n")
-              const content = (
-                <>
-                  {item.locked && <LockIcon aria-hidden className="size-3 shrink-0 self-center" />}
-                  <span className="min-w-0 truncate">{item.label}</span>
-                  {item.hint && <code className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">{item.hint}</code>}
-                </>
-              )
-              return (
-                <div
-                  key={item.id}
-                  id={optionId(id, item.id)}
-                  role="option"
-                  aria-selected={isMarked}
-                  aria-disabled={!canMove || undefined}
-                  aria-description={note || undefined}
-                  data-active={item.id === focused || undefined}
-                  onClick={(e) => !disabled && onClick(item.id, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey })}
-                  onDoubleClick={() => !disabled && onDoubleClick(item)}
-                  className={cn(
-                    "mx-1 flex cursor-default rounded-md px-2 py-1 text-sm select-none",
-                    isMarked ? "bg-accent text-accent-foreground" : "hover:bg-muted/60",
-                    !canMove && "text-muted-foreground",
-                    "group-focus-visible/list:data-active:ring-1 group-focus-visible/list:data-active:ring-ring",
-                  )}
-                >
-                  {/* The tooltip's trigger fills the row: the trigger gives what it
-                      renders an id of its own, and the option's must stay. */}
-                  {note ? (
-                    <Tooltip>
-                      <TooltipTrigger delay={500} render={<span className={ROW} />}>
-                        {content}
-                      </TooltipTrigger>
-                      <TooltipContent side={side === "available" ? "right" : "left"} className="whitespace-pre-line">
-                        {note}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    <span className={ROW}>{content}</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ))}
+        {items.map((item) => {
+          const canMove = movable(item, side)
+          const isMarked = canMove && marks.marked.has(item.id)
+          const note = [item.locked ? lockedNote : "", item.description ?? ""].filter(Boolean).join("\n")
+          const content = (
+            <>
+              {item.locked && <LockIcon aria-hidden className="size-3 shrink-0 self-center" />}
+              <span className="min-w-0 truncate">{item.label}</span>
+              {item.hint && <code className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">{item.hint}</code>}
+            </>
+          )
+          return (
+            <div
+              key={item.id}
+              id={optionId(id, item.id)}
+              role="option"
+              aria-selected={isMarked}
+              aria-disabled={!canMove || undefined}
+              aria-description={note || undefined}
+              data-active={item.id === focused || undefined}
+              onClick={(e) => !disabled && onClick(item.id, { shift: e.shiftKey, toggle: e.ctrlKey || e.metaKey })}
+              onDoubleClick={() => !disabled && onDoubleClick(item)}
+              className={cn(
+                "mx-1 flex cursor-default rounded-md px-2 py-1 text-sm select-none",
+                isMarked ? "bg-accent text-accent-foreground" : "hover:bg-muted/60",
+                !canMove && "text-muted-foreground",
+                "group-focus-visible/list:data-active:ring-1 group-focus-visible/list:data-active:ring-ring",
+              )}
+            >
+              {/* The tooltip's trigger fills the row: the trigger gives what it
+                  renders an id of its own, and the option's must stay. */}
+              {note ? (
+                <Tooltip>
+                  <TooltipTrigger delay={500} render={<span className={ROW} />}>
+                    {content}
+                  </TooltipTrigger>
+                  <TooltipContent side={side === "available" ? "right" : "left"} className="whitespace-pre-line">
+                    {note}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className={ROW}>{content}</span>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

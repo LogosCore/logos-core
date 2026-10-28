@@ -1,14 +1,13 @@
 import { SettingsSection } from "@/components/ui/settings-rows"
 import { TransferList, type TransferItem } from "@/components/ui/transfer-list"
-import { DEFAULT_GROUP } from "@/components/modules/management/field-values"
 import type { Command } from "@/components/builds/build-values"
 
 /**
  * The build form's commands: what the minion will be able to do, and nothing
  * else. The target's commands to pick from, and the ones picked, in two lists
- * under the factory's headings. A new build starts with the target's default
- * and required ones picked; the required ones cannot be taken out. onChange
- * gets the picks as they are: the form keeps them to the target's.
+ * in the factory's order. A new build starts with the target's default and
+ * required ones picked; the required ones cannot be taken out. onChange gets
+ * the picks as they are: the form keeps them to the target's.
  */
 export function CommandPicker({
   id,
@@ -40,7 +39,6 @@ export function CommandPicker({
       description: [c.description, c.params.length > 0 ? `Takes ${c.params.map((f) => f.key).join(", ")}.` : ""]
         .filter(Boolean)
         .join("\n"),
-      group: c.group.trim() || DEFAULT_GROUP,
       locked: c.required,
     }),
   )

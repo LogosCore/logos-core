@@ -14,7 +14,6 @@ import {
   factoryKindsByName,
   fileFits,
   fillFromEndpoint,
-  groupCommands,
   initialForm,
   move,
   pickedCommands,
@@ -140,7 +139,6 @@ describe("factoryKindsByName", () => {
   it("keeps the commands in the factory's order, their params sorted", () => {
     expect(kind.commands.map((c) => c.id)).toEqual(["sleep", "hello", "ls", "shell", "stop"])
     expect(kind.commands[0].params.map((f) => f.key)).toEqual(["interval", "jitter"])
-    expect(kind.commands[4].group).toBe("")
   })
 })
 
@@ -157,14 +155,6 @@ describe("commands", () => {
   it("picked keep to the target's, required ones added, in the factory's order", () => {
     expect(pickedCommands(kind, dummy, ["shell", "ls", "stop", "nope"])).toEqual(["sleep", "ls", "shell"])
     expect(pickedCommands(kind, service, [])).toEqual(["sleep"])
-  })
-
-  it("go under their headings, in the order the headings first come", () => {
-    expect(groupCommands(targetCommands(kind, service)).map((g) => [g.group, g.items.map((c) => c.id)])).toEqual([
-      ["Session", ["sleep", "hello"]],
-      ["Files", ["ls"]],
-      ["General", ["stop"]],
-    ])
   })
 
   it("start as the target's defaults, or as the build again's picks", () => {

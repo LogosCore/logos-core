@@ -12,8 +12,6 @@ export interface TransferItem {
   hint?: string
   /** In the item's tooltip, and searched. */
   description?: string | null
-  /** The heading the item is listed under. */
-  group?: string
   /** Selected for good: it never leaves the selected list. */
   locked?: boolean
 }
@@ -53,18 +51,6 @@ export function moved(items: readonly TransferItem[], selected: readonly string[
 /** Whether an item can leave the side it is on: a locked one cannot leave the selected list. */
 export function movable(item: TransferItem, side: Side): boolean {
   return side === "available" || !item.locked
-}
-
-/** Items under their headings, in their order: the first item of each heading places it. */
-export function grouped(items: readonly TransferItem[]): { group: string; items: TransferItem[] }[] {
-  const groups = new Map<string, TransferItem[]>()
-  for (const item of items) {
-    const g = item.group ?? ""
-    const list = groups.get(g)
-    if (list) list.push(item)
-    else groups.set(g, [item])
-  }
-  return [...groups].map(([group, items]) => ({ group, items }))
 }
 
 /** What is marked in one list, and where a range marked with Shift starts. */

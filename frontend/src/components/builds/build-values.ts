@@ -7,7 +7,6 @@
 
 import {
   compareFields,
-  DEFAULT_GROUP,
   emptyDraft,
   humanizeBytes,
   initialDraft,
@@ -97,8 +96,6 @@ export interface Command {
   id: string
   label: string
   description: string | null
-  /** The heading it is listed under; "" for none. */
-  group: string
   /** The targets whose builds can have it. */
   targets: string[]
   /** Picked in a new build until the operator unpicks it. */
@@ -162,7 +159,6 @@ export function factoryKindsByName(
         id: c.id,
         label: c.label,
         description: c.description ?? null,
-        group: c.group ?? "",
         targets: c.targets,
         default: c.default,
         required: c.required,
@@ -203,21 +199,6 @@ export function pickedCommands(kind: FactoryKind, target: Target | undefined, pi
   return targetCommands(kind, target)
     .filter((c) => c.required || on.has(c.id))
     .map((c) => c.id)
-}
-
-/**
- * Commands under their headings, in the factory's order: the first command of
- * each heading places it. One without a heading goes under fields' default.
- */
-export function groupCommands(commands: readonly Command[]): { group: string; items: Command[] }[] {
-  const groups = new Map<string, Command[]>()
-  for (const c of commands) {
-    const g = c.group.trim() || DEFAULT_GROUP
-    const list = groups.get(g)
-    if (list) list.push(c)
-    else groups.set(g, [c])
-  }
-  return [...groups].map(([group, items]) => ({ group, items }))
 }
 
 // ---------------------------------------------------------------------------

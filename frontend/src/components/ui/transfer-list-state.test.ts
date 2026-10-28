@@ -3,7 +3,6 @@ import {
   after,
   clicked,
   extended,
-  grouped,
   leaving,
   matches,
   moved,
@@ -15,12 +14,12 @@ import {
 } from "./transfer-list-state"
 
 const items: TransferItem[] = [
-  { id: "sleep", label: "Sleep", hint: "sleep", group: "Session", locked: true },
-  { id: "exit", label: "Exit", hint: "exit", group: "Session", locked: true },
-  { id: "hello", label: "Say hello", hint: "hello", description: "Answers with the greeting.", group: "Session" },
-  { id: "ls", label: "List a directory", hint: "ls", group: "Files" },
-  { id: "download", label: "Download a file", hint: "download", group: "Files" },
-  { id: "shell", label: "Run a shell command", hint: "shell", group: "Execution" },
+  { id: "sleep", label: "Sleep", hint: "sleep", locked: true },
+  { id: "exit", label: "Exit", hint: "exit", locked: true },
+  { id: "hello", label: "Say hello", hint: "hello", description: "Answers with the greeting." },
+  { id: "ls", label: "List a directory", hint: "ls" },
+  { id: "download", label: "Download a file", hint: "download" },
+  { id: "shell", label: "Run a shell command", hint: "shell" },
 ]
 const ids = (list: readonly TransferItem[]) => list.map((i) => i.id)
 
@@ -38,13 +37,6 @@ describe("the lists", () => {
     expect(matches(items[3], "file")).toBe(false)
     expect(ids(sideItems(items, [], "available", "file"))).toEqual(["download"])
     expect(ids(sideItems(items, [], "available", "  "))).toEqual(["hello", "ls", "download", "shell"])
-  })
-
-  it("keep the items under their headings, in the order the headings first come", () => {
-    expect(grouped(sideItems(items, ["shell"], "selected", "")).map((g) => [g.group, ids(g.items)])).toEqual([
-      ["Session", ["sleep", "exit"]],
-      ["Execution", ["shell"]],
-    ])
   })
 })
 

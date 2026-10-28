@@ -50,7 +50,8 @@ type BuildCommand {
   # The factory's label, or the id when it gave none.
   label: String!
   description: String
-  # The heading it is listed under; null for none.
+  # A theme of the command (Session, Files, ...), shown with it where the
+  # factory's commands are described; null for none.
   group: String
   # The targets whose builds can have it.
   targets: [String!]!

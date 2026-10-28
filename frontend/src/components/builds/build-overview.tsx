@@ -14,7 +14,6 @@ import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import {
   buildElapsed,
   factoryKindsByName,
-  groupCommands,
   platformLabel,
   recordedConnections,
   targetFields,
@@ -199,43 +198,26 @@ export function BuildOverview({
 }
 
 /**
- * What the minion can do: the build's commands under the factory's headings,
- * by today's labels; one the factory no longer has goes by its id.
+ * What the minion can do: the build's commands in the factory's order, by
+ * today's labels; one the factory no longer has goes by its id.
  */
 function CommandList({ ids, known }: { ids: readonly string[]; known: readonly Command[] }) {
   if (ids.length === 0) return <p className="py-3 text-sm text-muted-foreground">None: the minion was built without commands.</p>
   const byId = new Map(known.map((c) => [c.id, c]))
-  const groups = groupCommands(ids.flatMap((id) => byId.get(id) ?? []))
-  const gone = ids.filter((id) => !byId.has(id))
   return (
-    <div className="flex flex-col">
-      {groups.map((g) => (
-        <Fragment key={g.group}>
-          {groups.length > 1 && <SubHeading>{g.group}</SubHeading>}
-          <ItemList>
-            {g.items.map((c) => (
-              <Item key={c.id} label={c.label} title={c.id}>
-                <code className="font-mono text-xs">{c.id}</code>
-                {c.required && <span className="text-muted-foreground"> · always built in</span>}
-                {c.description && <p className="text-muted-foreground">{c.description}</p>}
-              </Item>
-            ))}
-          </ItemList>
-        </Fragment>
-      ))}
-      {gone.length > 0 && (
-        <>
-          <SubHeading>No longer commands of the factory</SubHeading>
-          <ItemList>
-            {gone.map((id) => (
-              <Item key={id} label={id}>
-                <code className="font-mono text-xs">{id}</code>
-              </Item>
-            ))}
-          </ItemList>
-        </>
-      )}
-    </div>
+    <ItemList>
+      {ids.map((id) => {
+        const c = byId.get(id)
+        return (
+          <Item key={id} label={c?.label ?? id} title={id}>
+            <code className="font-mono text-xs">{id}</code>
+            {c?.required && <span className="text-muted-foreground"> · always built in</span>}
+            {!c && <span className="text-muted-foreground"> · no longer a command of the factory</span>}
+            {c?.description && <p className="text-muted-foreground">{c.description}</p>}
+          </Item>
+        )
+      })}
+    </ItemList>
   )
 }
 
