@@ -19,7 +19,7 @@ import {
   targetFields,
 } from "@/components/builds/build-values"
 import { valueRows, type BuildRecord, type ValueRow } from "@/components/builds/build-record"
-import { Item, ItemList, Section } from "@/components/builds/build-detail-parts"
+import { BuildNotices, Item, ItemList, Section } from "@/components/builds/build-detail-parts"
 
 /**
  * The build modal's Overview tab: what the JSON tab holds, for reading. The
@@ -54,6 +54,8 @@ export function BuildOverview({
 
   return (
     <div className="flex min-w-0 flex-col gap-6 px-4 py-6">
+      {/* First: what went wrong, what the factory warns about the result. */}
+      <BuildNotices build={b} />
       {/* A build's capabilities (what the minion can do) are left out until
           factories' command sets are worked out; core still keeps them. */}
       <Section title="Summary">

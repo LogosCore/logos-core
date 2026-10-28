@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react"
-import { CopyIcon, DownloadIcon, TriangleAlertIcon } from "lucide-react"
+import { CopyIcon, DownloadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { downloadBlob } from "@/lib/file-export"
@@ -9,7 +9,7 @@ import { formatElapsed } from "@/components/modules/management/field-values"
 import { BuildPipeline } from "@/components/builds/build-pipeline"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { buildElapsed } from "@/components/builds/build-values"
-import { Section } from "@/components/builds/build-detail-parts"
+import { BuildNotices, Section } from "@/components/builds/build-detail-parts"
 import type { BuildRecord } from "@/components/builds/build-record"
 
 /**
@@ -43,28 +43,7 @@ export function BuildRun({ build: b }: { build: BuildRecord }) {
         </div>
       </Section>
 
-      {b.error && (
-        <div className="flex items-start gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-          <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
-          <div>
-            <code className="font-mono font-medium">{b.error.code}</code>: {b.error.message}
-          </div>
-        </div>
-      )}
-      {/* What the factory warns about with its result. */}
-      {b.warnings.length > 0 && (
-        <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
-          <TriangleAlertIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="font-medium">Warnings</p>
-            <ul className="list-inside list-disc">
-              {b.warnings.map((w) => (
-                <li key={w}>{w}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
+      <BuildNotices build={b} />
 
       <BuildLog log={b.log ?? ""} running={running} fileName={`${b.id}.log`} />
     </div>

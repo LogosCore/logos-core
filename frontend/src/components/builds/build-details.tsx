@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon } from "lucide-react"
+import { DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -109,7 +109,17 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
           </div>
           <div className="flex items-center gap-2 sm:ml-auto">
             <TabsList>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="overview">
+                Overview
+                {/* The factory's warnings, flagged from every tab. */}
+                {b.warnings.length > 0 && (
+                  <span className="flex items-center gap-0.5 text-amber-600 tabular-nums dark:text-amber-400">
+                    <TriangleAlertIcon aria-hidden className="size-3.5" />
+                    {b.warnings.length}
+                    <span className="sr-only">{b.warnings.length === 1 ? "warning" : "warnings"}</span>
+                  </span>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="json">JSON</TabsTrigger>
               <TabsTrigger value="pipeline">
                 {/* The build's state from every tab: spinning while it runs. */}
