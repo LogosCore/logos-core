@@ -10,7 +10,7 @@ import { useBuildFiles, useFactoryIcons, useFactoryKinds } from "@/graphql/hooks
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
 import { formatElapsed, formatValue, groupByField, type FieldDef } from "@/components/modules/management/field-values"
-import { ModuleIcon } from "@/components/modules/module-icon"
+import { KindName, ModuleIcon } from "@/components/modules/module-icon"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import {
   buildElapsed,
@@ -66,10 +66,8 @@ export function BuildOverview({
             <BuildStateBadge build={b} />
           </Item>
           <Item label="Factory">
-            <span className="inline-flex items-center gap-1.5">
-              <ModuleIcon type="factory" icon={icons.get(b.moduleName)} />
-              <span className="font-mono">{b.moduleName}</span>
-            </span>
+            {/* KindName keeps the name on the text's baseline, with what follows. */}
+            <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
             <span className="text-muted-foreground"> · schema v{b.schemaVersion}</span>
             {kind && kind.version !== b.schemaVersion && (
               <span className="text-muted-foreground"> (the factory is at v{kind.version} now)</span>
@@ -185,11 +183,12 @@ export function BuildOverview({
           <ol className="divide-y">
             {connections.map((c, i) => (
               <li key={i} className="flex min-w-0 flex-col gap-1 py-3">
-                <div className="flex min-w-0 items-center gap-2 text-sm">
+                {/* On one baseline, the icon centred on the line, as KindName has it. */}
+                <div className="flex min-w-0 items-baseline gap-2 text-sm">
                   <span className="text-xs text-muted-foreground tabular-nums">{i + 1}.</span>
-                  <ModuleIcon type="channel" icon={channelIcons.get(c.moduleName)} className="size-5" />
+                  <ModuleIcon type="channel" icon={channelIcons.get(c.moduleName)} className="size-5 self-center" />
                   <span className="truncate font-mono font-medium">{c.name}</span>
-                  <span className="font-mono text-muted-foreground">· {c.moduleName}</span>
+                  <span className="shrink-0 font-mono text-muted-foreground">· {c.moduleName}</span>
                 </div>
                 {c.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{c.description}</p>}
                 <SubHeading>Settings</SubHeading>
