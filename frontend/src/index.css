@@ -22,14 +22,15 @@
 }
 
 /* A canvas of faint dots, as graph editors draw under their nodes (the build
-   pipeline). Muted-foreground at low strength reads in either theme. Not
-   named bg-*: tailwind-merge would take that for a background colour and
-   drop the element's own (bg-card) from the same class list. */
+   pipeline). Soft dots, strongest at the centre and gone 2.5 px out;
+   muted-foreground at low strength reads in either theme. Not named bg-*:
+   tailwind-merge would take that for a background colour and drop the
+   element's own (bg-card) from the same class list. */
 @utility dot-grid {
   background-image: radial-gradient(
     circle,
-    color-mix(in oklab, var(--muted-foreground) 35%, transparent) 1px,
-    transparent 1.5px
+    color-mix(in oklab, var(--muted-foreground) 40%, transparent),
+    transparent 2.5px
   );
   background-size: 16px 16px;
 }
