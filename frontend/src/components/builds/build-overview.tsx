@@ -1,6 +1,8 @@
-import { Fragment, useMemo } from "react"
+import { useMemo, type ReactNode } from "react"
 import { CopyIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { CardColumns } from "@/components/ui/card-columns"
+import { IdRows, InfoCard, LabelRow, NoteRow, SectionRow, type IdRow } from "@/components/ui/info-card"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { cn } from "@/lib/utils"
 import { formatBytes } from "@/lib/format-bytes"
@@ -8,7 +10,7 @@ import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { useBuildFiles, useFactoryIcons, useFactoryKinds } from "@/graphql/hooks/builds"
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
-import { formatElapsed, formatValue, groupByField, type FieldDef } from "@/components/modules/management/field-values"
+import { formatElapsed, formatValue, type FieldDef } from "@/components/modules/management/field-values"
 import { KindName, ModuleIcon } from "@/components/modules/module-icon"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import {
@@ -20,14 +22,15 @@ import {
   type Command,
 } from "@/components/builds/build-values"
 import { valueRows, type BuildRecord, type ValueRow } from "@/components/builds/build-record"
-import { BuildNotices, Item, ItemList, Section } from "@/components/builds/build-detail-parts"
+import { BuildNotices } from "@/components/builds/build-detail-parts"
 
 /**
- * The build modal's Overview tab: what the JSON tab holds, for reading. The
- * build itself, what the minion can do (its commands), its artifact, the
- * values it was given under the factory's labels, and its connections, each
- * with its channel's settings and the factory's values for it. Values equal
- * to their default are dimmed, so the ones somebody chose stand out.
+ * The build modal's Overview tab: what the JSON tab holds, for reading, in
+ * cards each as tall as it needs, as a factory's page has them. What went
+ * wrong first, then the build's summary, its artifact, what the minion can
+ * do (its commands), the values it was given, and each connection with its
+ * channel's settings and the factory's values for it. Values equal to their
+ * default are dimmed, so the ones somebody chose stand out.
  */
 export function BuildOverview({
   build: b,
@@ -50,26 +53,25 @@ export function BuildOverview({
     [files.data],
   )
   const target = kind?.targets.find((t) => t.id === b.target)
-  const fields = kind ? targetFields(kind, target) : []
+  const values = valueRows(kind ? targetFields(kind, target) : [], b.values)
   const connections = recordedConnections(b)
+  const a = b.artifact
 
   return (
-    <div className="flex min-w-0 flex-col gap-6 px-4 py-6">
+    <div className="flex min-w-0 flex-col gap-4 px-4 py-6">
       {/* First: what went wrong, what the factory warns about the result. */}
       <BuildNotices build={b} />
-      {/* A build's capabilities (what the minion can do) are left out until
-          factories' command sets are worked out; core still keeps them. */}
-      <Section title="Summary">
-        <ItemList>
+      <CardColumns>
+        <InfoCard title="Summary">
           {b.description && (
-            <Item label="Description">
+            <LabelRow label="Description">
               <span className="whitespace-pre-line">{b.description}</span>
-            </Item>
+            </LabelRow>
           )}
-          <Item label="State">
+          <LabelRow label="State">
             <BuildStateBadge build={b} />
-          </Item>
-          <Item label="Factory">
+          </LabelRow>
+          <LabelRow label="Factory">
             {/* KindName keeps the name on the text's baseline, with what follows. */}
             <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} />
             <span className="text-muted-foreground"> · schema v{b.schemaVersion}</span>
@@ -77,210 +79,173 @@ export function BuildOverview({
               <span className="text-muted-foreground"> (the factory is at v{kind.version} now)</span>
             )}
             {b.factoryVersion && <span className="text-muted-foreground"> · version {b.factoryVersion}</span>}
-          </Item>
-          <Item label="Target">
+          </LabelRow>
+          <LabelRow label="Target">
             {target ? target.label : <span className="font-mono">{b.target}</span>}
             {target && <span className="font-mono text-muted-foreground"> · {b.target}</span>}
-          </Item>
-          <Item label="Platform">
+          </LabelRow>
+          <LabelRow label="Platform">
             {platformLabel(b.platform)} <span className="font-mono text-muted-foreground">· {b.platform}</span>
-          </Item>
-          <Item label="Minion id">
-            <span className="flex min-w-0 items-center gap-1">
-              <code className="min-w-0 font-mono text-xs break-all">{b.id}</code>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                title="Copy"
-                aria-label="Copy the minion id"
-                onClick={() => copyToClipboard(b.id, "Minion id")}
-              >
-                <CopyIcon />
-              </Button>
-            </span>
-          </Item>
-          <Item label="Started">
+          </LabelRow>
+          <LabelRow label="Minion id">
+            <Copyable text={b.id} what="Minion id" />
+          </LabelRow>
+          <LabelRow label="Started">
             {formatAbsolute(b.createdAt)}
             {b.createdBy.name && <span className="text-muted-foreground"> by {b.createdBy.name}</span>}
-          </Item>
+          </LabelRow>
           {b.finishedAt ? (
-            <Item label="Finished">
+            <LabelRow label="Finished">
               {formatAbsolute(b.finishedAt)}{" "}
               <span className="text-muted-foreground">· took {formatElapsed(buildElapsed(b))}</span>
               {b.cancelledBy?.name && <span className="text-muted-foreground"> · cancelled by {b.cancelledBy.name}</span>}
-            </Item>
+            </LabelRow>
           ) : (
-            <Item label="Deadline">
+            <LabelRow label="Deadline">
               {formatAbsolute(b.deadline)} <span className="text-muted-foreground">({relativeTime(b.deadline)})</span>
-            </Item>
+            </LabelRow>
           )}
-        </ItemList>
-      </Section>
+        </InfoCard>
 
-      <Section title="Commands">
-        <CommandList ids={b.commands} known={kind?.commands ?? []} />
-      </Section>
-
-      {b.artifact && (
-        <Section title="Artifact">
-          <ItemList>
-            <Item label="File">
-              <span className="font-mono">{b.artifact.filename}</span>{" "}
-              <span className="text-muted-foreground">· {formatBytes(b.artifact.size)}</span>
-              {b.artifact.mediaType && <span className="text-muted-foreground"> · {b.artifact.mediaType}</span>}
-            </Item>
-            <Item label="SHA-256">
-              {/* A block row in which the hash may shrink: in an inline one it ran past the card. */}
-              <span className="flex min-w-0 items-center gap-1">
-                <code className="min-w-0 font-mono text-xs break-all">{b.artifact.sha256}</code>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  title="Copy"
-                  aria-label="Copy the SHA-256"
-                  onClick={() => copyToClipboard(b.artifact?.sha256 ?? "", "SHA-256")}
-                >
-                  <CopyIcon />
-                </Button>
-              </span>
-            </Item>
-          </ItemList>
-          {b.artifact.deleted ? (
-            <p className="pb-3 text-sm text-muted-foreground">The artifact&apos;s bytes were deleted; the build record stays.</p>
-          ) : (
-            canWrite && (
-              <div className="pb-3">
-                <Button variant="outline" size="sm" onClick={onDeleteArtifact}>
+        {a && (
+          <InfoCard
+            title="Artifact"
+            note={formatBytes(a.size)}
+            actions={
+              canWrite &&
+              !a.deleted && (
+                <Button type="button" variant="ghost" size="xs" onClick={onDeleteArtifact}>
                   <Trash2Icon />
-                  Delete the artifact
+                  Delete
                 </Button>
-              </div>
-            )
+              )
+            }
+          >
+            <LabelRow label="File">
+              <span className="font-mono">{a.filename}</span>
+              {a.mediaType && <span className="text-muted-foreground"> · {a.mediaType}</span>}
+            </LabelRow>
+            <LabelRow label="SHA-256">
+              <Copyable text={a.sha256} what="SHA-256" />
+            </LabelRow>
+            {a.deleted && <NoteRow>The artifact&apos;s bytes were deleted; the build record stays.</NoteRow>}
+          </InfoCard>
+        )}
+
+        <InfoCard title="Commands" note={b.commands.length}>
+          {b.commands.length === 0 ? (
+            <NoteRow>None: the minion was built without commands.</NoteRow>
+          ) : (
+            <IdRows rows={commandRows(b.commands, kind?.commands ?? [])} />
           )}
-        </Section>
-      )}
+        </InfoCard>
 
-      <Section title="Values">
-        <GroupedValues fields={fields} values={b.values} fileNames={fileNames} />
-      </Section>
+        <InfoCard title="Values" note={values.length}>
+          {values.length === 0 ? <NoteRow>None.</NoteRow> : <IdRows rows={rowsOf(values, fileNames)} />}
+        </InfoCard>
 
-      {connections.length > 0 && (
-        <Section title="Connections">
-          <ol className="divide-y">
-            {connections.map((c, i) => (
-              <li key={i} className="flex min-w-0 flex-col gap-1 py-3">
-                {/* On one baseline, the icon centred on the line, as KindName has it. */}
-                <div className="flex min-w-0 items-baseline gap-2 text-sm">
-                  <span className="text-xs text-muted-foreground tabular-nums">{i + 1}.</span>
-                  <ModuleIcon type="channel" icon={channelIcons.get(c.moduleName)} className="size-5 self-center" />
-                  <span className="truncate font-mono font-medium">{c.name}</span>
-                  <span className="shrink-0 font-mono text-muted-foreground">· {c.moduleName}</span>
-                </div>
-                {c.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{c.description}</p>}
-                <SubHeading>Settings</SubHeading>
-                <ValueList rows={valueRows(channels.get(c.moduleName)?.fields ?? [], c.params)} fileNames={fileNames} />
-                {(kind?.channelFields.get(c.moduleName)?.length || Object.keys(c.values).length > 0) && (
-                  <>
-                    <SubHeading>{b.moduleName}&apos;s values for it</SubHeading>
-                    <ValueList
-                      rows={valueRows(kind?.channelFields.get(c.moduleName) ?? [], c.values)}
-                      fileNames={fileNames}
-                    />
-                  </>
-                )}
-              </li>
-            ))}
-          </ol>
-        </Section>
-      )}
+        {connections.map((c, i) => {
+          const settings = valueRows(channels.get(c.moduleName)?.fields ?? [], c.params)
+          const own = valueRows(kind?.channelFields.get(c.moduleName) ?? [], c.values)
+          // Headed only when the factory has values for the channel too.
+          const parts = own.length > 0
+          return (
+            <InfoCard
+              key={i}
+              title={
+                <span className="flex min-w-0 items-baseline gap-2">
+                  <ModuleIcon type="channel" icon={channelIcons.get(c.moduleName)} className="size-4 self-center" />
+                  <span className="truncate font-mono">{c.name}</span>
+                </span>
+              }
+              note={`${c.moduleName} · connection ${i + 1} of ${connections.length}`}
+            >
+              {c.description && <NoteRow>{c.description}</NoteRow>}
+              {parts && <SectionRow title="Settings" note={c.moduleName} />}
+              {settings.length === 0 ? <NoteRow>No settings.</NoteRow> : <IdRows rows={rowsOf(settings, fileNames)} />}
+              {parts && (
+                <>
+                  <SectionRow title={`${b.moduleName}'s values`} note={`for ${c.moduleName}`} />
+                  <IdRows rows={rowsOf(own, fileNames)} />
+                </>
+              )}
+            </InfoCard>
+          )
+        })}
+      </CardColumns>
     </div>
+  )
+}
+
+/** A hash or an id, with a button that copies it. */
+function Copyable({ text, what }: { text: string; what: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <code className="min-w-0 font-mono text-xs break-all">{text}</code>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        title="Copy"
+        aria-label={`Copy the ${what}`}
+        onClick={() => copyToClipboard(text, what)}
+      >
+        <CopyIcon />
+      </Button>
+    </span>
   )
 }
 
 /**
- * What the minion can do: the build's commands in the factory's order, by
- * today's labels; one the factory no longer has goes by its id.
+ * The build's commands in the factory's order: each id, and its label and
+ * description by today's schema; one the factory no longer has says so.
  */
-function CommandList({ ids, known }: { ids: readonly string[]; known: readonly Command[] }) {
-  if (ids.length === 0) return <p className="py-3 text-sm text-muted-foreground">None: the minion was built without commands.</p>
+function commandRows(ids: readonly string[], known: readonly Command[]): IdRow[] {
   const byId = new Map(known.map((c) => [c.id, c]))
-  return (
-    <ItemList>
-      {ids.map((id) => {
-        const c = byId.get(id)
-        return (
-          <Item key={id} label={c?.label ?? id} title={id}>
-            <code className="font-mono text-xs">{id}</code>
-            {c?.required && <span className="text-muted-foreground"> · always built in</span>}
-            {!c && <span className="text-muted-foreground"> · no longer a command of the factory</span>}
-            {c?.description && <p className="text-muted-foreground">{c.description}</p>}
-          </Item>
-        )
-      })}
-    </ItemList>
-  )
-}
-
-function SubHeading({ children }: { children: React.ReactNode }) {
-  return <h3 className="mt-2 text-xs font-medium text-muted-foreground">{children}</h3>
-}
-
-/** The build's values under their fields' groups, as the form has them. */
-function GroupedValues({
-  fields,
-  values,
-  fileNames,
-}: {
-  fields: readonly FieldDef[]
-  values: unknown
-  fileNames: ReadonlyMap<string, string>
-}) {
-  const rows = valueRows(fields, values)
-  const known = rows.filter((r) => r.field !== null)
-  const gone = rows.filter((r) => r.field === null)
-  const groups = groupByField(known, (r) => r.field!)
-  return (
-    <div className="flex flex-col">
-      {groups.map((g) => (
-        <Fragment key={g.group}>
-          {groups.length > 1 && <SubHeading>{g.group}</SubHeading>}
-          <ValueList rows={g.items} fileNames={fileNames} />
-        </Fragment>
-      ))}
-      {gone.length > 0 && (
+  return ids.map((id) => {
+    const c = byId.get(id)
+    return {
+      id,
+      content: c ? (
         <>
-          <SubHeading>No longer fields of the factory</SubHeading>
-          <ValueList rows={gone} fileNames={fileNames} />
+          <div>
+            {c.label}
+            {c.required && <span className="text-xs text-muted-foreground"> · always built in</span>}
+          </div>
+          {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
         </>
-      )}
-    </div>
-  )
+      ) : (
+        <div className="text-muted-foreground">No longer a command of the factory</div>
+      ),
+    }
+  })
 }
 
-function ValueList({ rows, fileNames }: { rows: readonly ValueRow[]; fileNames: ReadonlyMap<string, string> }) {
-  if (rows.length === 0) return <p className="py-3 text-sm text-muted-foreground">None.</p>
-  return (
-    <ItemList>
-      {rows.map((r) => (
-        <Item key={r.key} label={r.field?.label ?? r.key} title={r.key}>
-          <ValueText row={r} fileNames={fileNames} />
-        </Item>
-      ))}
-    </ItemList>
-  )
+/**
+ * Values as rows: each key, its value (dimmed at its default, "not set" for
+ * none; a file by its name), and under it the field's label.
+ */
+function rowsOf(rows: readonly ValueRow[], fileNames: ReadonlyMap<string, string>): IdRow[] {
+  return rows.map((r) => ({
+    id: r.key,
+    content: (
+      <>
+        <div className={cn("whitespace-pre-line", (r.value === undefined || r.isDefault) && "text-muted-foreground")}>
+          {valueText(r, fileNames)}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {[r.field ? r.field.label : "no longer a field of the factory", r.isDefault ? "default" : ""]
+            .filter(Boolean)
+            .join(" · ")}
+        </div>
+      </>
+    ),
+  }))
 }
 
-function ValueText({ row, fileNames }: { row: ValueRow; fileNames: ReadonlyMap<string, string> }) {
-  if (row.value === undefined) return <span className="text-muted-foreground">not set</span>
-  const type = row.field?.type ?? ""
-  const text =
-    type === "file" && typeof row.value === "string"
-      ? (fileNames.get(row.value) ?? row.value)
-      : formatValue(type, row.value, row.field?.unit)
-  return (
-    <span className={cn("break-words whitespace-pre-line", row.isDefault && "text-muted-foreground")}>
-      {text}
-      {row.isDefault && <span className="ml-2 text-xs">default</span>}
-    </span>
-  )
+function valueText(r: ValueRow, fileNames: ReadonlyMap<string, string>): ReactNode {
+  if (r.value === undefined) return "not set"
+  const f: FieldDef | null = r.field
+  if (f?.type === "file" && typeof r.value === "string") return fileNames.get(r.value) ?? r.value
+  return formatValue(f?.type ?? "", r.value, f?.unit)
 }

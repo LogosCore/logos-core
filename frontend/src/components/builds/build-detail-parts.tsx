@@ -31,27 +31,6 @@ export function Section({
   )
 }
 
-/** A label and its value in a two-column list (a dl). */
-export function Item({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
-  return (
-    <>
-      <dt className="truncate text-muted-foreground" title={title}>
-        {label}
-      </dt>
-      <dd className="min-w-0">{children}</dd>
-    </>
-  )
-}
-
-/** The two-column list Items go in. */
-export function ItemList({ className, children }: { className?: string; children: ReactNode }) {
-  return (
-    <dl className={cn("grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-6 gap-y-2 py-3 text-sm", className)}>
-      {children}
-    </dl>
-  )
-}
-
 /**
  * What went wrong, and what the factory warns about with its result: on
  * the Overview tab, where a finished build opens, so they are read before

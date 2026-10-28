@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
-import { TableBody, TableCell, TableRow } from "@/components/ui/table"
+import { IdRows, InfoCard, NoteRow, SectionRow, type IdRow } from "@/components/ui/info-card"
 import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
@@ -43,7 +43,7 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
 export function BuildParameters({ build }: { build: Build }) {
   const crypto = build.crypto.length > 0 ? `payload crypto ${build.crypto.join(", ")}` : "no payload crypto"
   return (
-    <IdCard title="Build parameters" note={`schema v${build.version} · ${crypto}`}>
+    <InfoCard title="Build parameters" note={`schema v${build.version} · ${crypto}`}>
       {build.fields.length > 0 && (
         <>
           <SectionRow title="Every target" />
@@ -64,15 +64,11 @@ export function BuildParameters({ build }: { build: Build }) {
           {c.fields.length > 0 ? (
             <IdRows rows={fieldRows(c.fields)} />
           ) : (
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={2} className="px-4 py-2 whitespace-normal text-muted-foreground">
-                None: the connection settings are used as they are.
-              </TableCell>
-            </TableRow>
+            <NoteRow>None: the connection settings are used as they are.</NoteRow>
           )}
         </Fragment>
       ))}
-    </IdCard>
+    </InfoCard>
   )
 }
 
@@ -100,7 +96,7 @@ function fieldRows(fields: readonly FieldDef[]): IdRow[] {
  */
 export function BuildTargets({ build }: { build: Build }) {
   return (
-    <IdCard title="Targets" note={build.targets.length}>
+    <InfoCard title="Targets" note={build.targets.length}>
       <IdRows
         rows={build.targets.map((t) => ({
           id: t.id,
@@ -117,7 +113,7 @@ export function BuildTargets({ build }: { build: Build }) {
           ),
         }))}
       />
-    </IdCard>
+    </InfoCard>
   )
 }
 
@@ -128,7 +124,7 @@ export function BuildTargets({ build }: { build: Build }) {
  */
 export function BuildCommands({ build }: { build: Build }) {
   return (
-    <IdCard title="Commands" note={build.commands.length}>
+    <InfoCard title="Commands" note={build.commands.length}>
       <IdRows
         rows={build.commands.map((c) => ({
           id: c.id,
@@ -140,52 +136,7 @@ export function BuildCommands({ build }: { build: Build }) {
           ),
         }))}
       />
-    </IdCard>
-  )
-}
-
-/** One row of an IdCard's table: an id, and what is said of it. */
-interface IdRow {
-  id: string
-  content: ReactNode
-}
-
-/** A card titled with a note (a count, a version), holding a two-column table without headings. */
-function IdCard({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="rounded-xl border bg-card">
-      <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
-        {title}
-        {note !== undefined && <span className="text-xs font-normal text-muted-foreground tabular-nums">{note}</span>}
-      </h3>
-      <table className="w-full text-sm">
-        <TableBody>{children}</TableBody>
-      </table>
-    </section>
-  )
-}
-
-function IdRows({ rows }: { rows: readonly IdRow[] }) {
-  return rows.map((r) => (
-    <TableRow key={r.id} className="hover:bg-transparent">
-      {/* Baseline: the id and the first line beside it share it. */}
-      <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
-        <code className="font-mono text-xs">{r.id}</code>
-      </TableCell>
-      <TableCell className="px-4 py-2 align-baseline whitespace-normal">{r.content}</TableCell>
-    </TableRow>
-  ))
-}
-
-/** A row across an IdCard's table, heading the rows under it. */
-function SectionRow({ title, note }: { title: string; note?: string }) {
-  return (
-    <TableRow className="bg-muted/40 hover:bg-muted/40">
-      <TableCell colSpan={2} className="px-4 py-1.5 text-xs text-muted-foreground">
-        <span className="font-medium">{title}</span>
-        {note && <span> · {note}</span>}
-      </TableCell>
-    </TableRow>
+    </InfoCard>
   )
 }
 
