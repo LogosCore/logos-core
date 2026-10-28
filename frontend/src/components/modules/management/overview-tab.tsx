@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { TableBody, TableCell, TableRow } from "@/components/ui/table"
 import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
@@ -105,7 +105,7 @@ export function BuildParameters({ build }: { build: Build }) {
 /**
  * The commands this factory instance declared (read-only), what its minions
  * can be built with: a table of their ids and names (label and description),
- * in the factory's order. Operators pick a build's in the build form.
+ * in the factory's order, without column headings. Operators pick a build's in the build form.
  */
 export function BuildCommands({ build }: { build: Build }) {
   return (
@@ -115,12 +115,6 @@ export function BuildCommands({ build }: { build: Build }) {
         <span className="text-xs font-normal text-muted-foreground tabular-nums">{build.commands.length}</span>
       </h3>
       <table className="w-full text-sm">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="h-9 w-40 px-4 text-xs text-muted-foreground">ID</TableHead>
-            <TableHead className="h-9 px-4 text-xs text-muted-foreground">Name</TableHead>
-          </TableRow>
-        </TableHeader>
         <TableBody>
           {build.commands.map((c) => (
             <TableRow key={c.id} className="hover:bg-transparent">
