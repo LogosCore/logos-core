@@ -1,10 +1,20 @@
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation } from "react-router"
 import { RadioTowerIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
 import {
   RecordModalBody,
   RecordModalHeader,
@@ -16,6 +26,8 @@ import {
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { SettingsNav } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
+import { childPointer, type JsonProblem } from "@/lib/json-edit"
+import { whenIdle } from "@/lib/preloadable"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { useRecordModals } from "@/hooks/use-record-modals"
@@ -38,10 +50,18 @@ import {
   endpointImportFrom,
   evaluateEndpoint,
   kindsByName,
+  MAX_DESCRIPTION_LENGTH,
   nameError,
   problemsFromError,
   type Kind,
 } from "@/components/endpoints/endpoint-values"
+import {
+  ENDPOINT_JSON_LOCKED,
+  endpointJson,
+  endpointJsonHints,
+  formValues,
+  readEndpointJson,
+} from "@/components/endpoints/endpoint-json"
 
 type Endpoint = ChannelEndpointFieldsFragment
 
@@ -171,10 +191,22 @@ function EndpointEditor({
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
     endpointDrafts(fields, endpoint ? ((endpoint.values ?? {}) as Record<string, unknown>) : (source?.values ?? null)),
   )
-  // Changed from how it opened: closing then asks before throwing it away.
+  // The JSON tab edits the same endpoint as text. While it is open the text
+  // leads: each version that reads as an endpoint is copied into the form's
+  // state, so Save, the close guard and the Form tab all see it.
+  const [tab, setTab] = useState<"form" | "json">("form")
+  const [jsonText, setJsonText] = useState("")
+  const [leavingJson, setLeavingJson] = useState(false)
+  const read = tab === "json" ? readEndpointJson(jsonText, kind) : null
+  const hints = useMemo(() => endpointJsonHints(kind), [kind])
+  // Fetched once the modal has settled, so the JSON tab opens at once.
+  useEffect(() => whenIdle(preloadJsonEditor), [])
+
+  // Changed from how it opened, or JSON that no longer reads: closing then
+  // asks before throwing it away.
   const snapshot = JSON.stringify({ name, description, drafts })
   const [initial] = useState(snapshot)
-  const saved = useCloseGuard(snapshot !== initial)
+  const saved = useCloseGuard(snapshot !== initial || (read !== null && !read.ok))
   const body = useRef<HTMLDivElement>(null)
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({})
@@ -187,7 +219,41 @@ function EndpointEditor({
   const { values, errors } = evaluateEndpoint(fields, drafts)
   const nameErr = nameError(name)
   const shownErrors: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
-  const hasErrors = nameErr !== null || Object.keys(errors).length > 0
+  const hasErrors = read
+    ? !read.ok || read.problems.length > 0
+    : nameErr !== null || Object.keys(errors).length > 0
+  // The JSON tab marks problems as they appear, as code editors do, and the
+  // server's from the last save at their settings.
+  const jsonProblems: JsonProblem[] = read?.ok
+    ? [
+        ...read.problems,
+        ...Object.entries(serverErrors)
+          .filter(([key]) => key !== "")
+          .map(([key, message]) => ({ path: childPointer("/params", key), message })),
+      ]
+    : []
+
+  function showJson() {
+    setJsonText(endpointJson(kind, { name, description, values: formValues(fields, drafts) }))
+    setTab("json")
+  }
+
+  // Text that does not read as an endpoint cannot be carried over: ask first.
+  function showForm() {
+    if (read && !read.ok) setLeavingJson(true)
+    else setTab("form")
+  }
+
+  function editJson(text: string) {
+    setJsonText(text)
+    setServerErrors({})
+    const next = readEndpointJson(text, kind)
+    if (next.ok) {
+      setName(next.doc.name)
+      setDescription(next.doc.description)
+      setDrafts(endpointDrafts(fields, next.doc.values))
+    }
+  }
 
   const sections: Section[] = useMemo(
     () => [
@@ -214,8 +280,13 @@ function EndpointEditor({
   async function save() {
     setSubmitted(true)
     setSaveError(null)
+    if (read && !read.ok) setSaveError(`The JSON is not an endpoint: ${read.message}`)
     if (hasErrors || readOnly) return
-    const input = { name: name.trim(), description: description.trim() || null, values }
+    // From the JSON tab, what it holds as it reads, without a trip through
+    // the form's fields.
+    const input = read?.ok
+      ? { name: read.doc.name.trim(), description: read.doc.description.trim() || null, values: read.doc.values }
+      : { name: name.trim(), description: description.trim() || null, values }
     try {
       if (endpoint) {
         await update.mutateAsync({ id: endpoint.id, input, expectedRevision: endpoint.revision })
@@ -258,6 +329,11 @@ function EndpointEditor({
         save()
       }}
     >
+      <Tabs
+        value={tab}
+        onValueChange={(v) => (v === "json" ? showJson() : showForm())}
+        className="min-h-0 flex-1 gap-0"
+      >
       <RecordModalHeader>
         {/* The title and the channel kind share a baseline. */}
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -268,12 +344,18 @@ function EndpointEditor({
           </span>
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
+          <TabsList>
+            <TabsTrigger value="form">Form</TabsTrigger>
+            <TabsTrigger value="json">JSON</TabsTrigger>
+          </TabsList>
           {readOnly ? (
             <span className="text-sm text-muted-foreground">Read-only — needs operator in this operation</span>
           ) : (
             <>
               {submitted && hasErrors && (
-                <span className="text-sm text-destructive">Fix the marked fields</span>
+                <span className="text-sm text-destructive">
+                  {read ? "Fix the marked problems" : "Fix the marked fields"}
+                </span>
               )}
               <Button type="button" variant="outline" onClick={requestClose} disabled={pending}>
                 Cancel
@@ -286,6 +368,7 @@ function EndpointEditor({
         </div>
       </RecordModalHeader>
 
+      <TabsContent value="form" className="flex min-h-0 flex-col">
       <RecordModalBody ref={body}>
       <div className="flex gap-10 px-4 py-6">
         <SettingsNav
@@ -332,7 +415,7 @@ function EndpointEditor({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                maxLength={500}
+                maxLength={MAX_DESCRIPTION_LENGTH}
                 disabled={disabled}
               />
             </SettingRow>
@@ -370,7 +453,72 @@ function EndpointEditor({
         </div>
       </div>
       </RecordModalBody>
+      </TabsContent>
+
+      <TabsContent value="json" className="flex min-h-0 flex-col gap-3 px-4 py-4">
+        {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
+        <LazyJsonEditor
+          value={jsonText}
+          onChange={editJson}
+          locked={ENDPOINT_JSON_LOCKED}
+          problems={jsonProblems}
+          hints={hints}
+          readOnly={disabled}
+          aria-label="The endpoint as JSON"
+          className="flex-1 rounded-md border"
+        />
+        <p className="text-xs text-muted-foreground">
+          <code className="font-mono">null</code> leaves a setting at the channel&apos;s default.{" "}
+          <code className="font-mono">format</code> and <code className="font-mono">channel</code> are locked.
+          Settings and their values are suggested as you type; Ctrl+Space (⌥I on a Mac) asks for them.
+        </p>
+      </TabsContent>
+      </Tabs>
+
+      <LeaveJsonDialog
+        open={leavingJson}
+        problem={read && !read.ok ? read.message : ""}
+        onStay={() => setLeavingJson(false)}
+        onLeave={() => {
+          setLeavingJson(false)
+          setTab("form")
+        }}
+      />
     </form>
+  )
+}
+
+/** Leaving JSON that does not read: the form shows the last version that did. */
+function LeaveJsonDialog({
+  open,
+  problem,
+  onStay,
+  onLeave,
+}: {
+  open: boolean
+  problem: string
+  onStay: () => void
+  onLeave: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onStay()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>The JSON does not read as an endpoint</DialogTitle>
+          <DialogDescription>
+            {problem} The form shows the last version that did; what you changed since is dropped.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onStay}>
+            Keep editing
+          </Button>
+          <Button type="button" onClick={onLeave}>
+            Show the form
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

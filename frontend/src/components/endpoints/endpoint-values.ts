@@ -58,6 +58,9 @@ export const ENDPOINT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
 /** The longest endpoint name ENDPOINT_NAME_PATTERN allows. */
 const MAX_NAME_LENGTH = 63
 
+/** The longest description core takes (channelendpoints.MaxDescriptionLength), in characters. */
+export const MAX_DESCRIPTION_LENGTH = 500
+
 /**
  * The first free name of name+tag, name+tag-2, -3…, the base shortened to
  * stay within the name length. tag is "" or starts with "-".

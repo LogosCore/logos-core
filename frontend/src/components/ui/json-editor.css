@@ -1,0 +1,48 @@
+/* The JSON editor's colours (json-editor.tsx): the palette the wiki's code
+   blocks use, so JSON looks the same everywhere in the app. */
+.json-editor {
+  --json-key: #005cc5;
+  --json-string: #032f62;
+  --json-number: #005cc5;
+  --json-literal: #d73a49;
+}
+
+.dark .json-editor {
+  --json-key: #79c0ff;
+  --json-string: #a5d6ff;
+  --json-number: #79c0ff;
+  --json-literal: #ff7b72;
+}
+
+/* A locked property: readable, plainly not for editing. */
+.json-editor .cm-json-locked {
+  opacity: 0.6;
+}
+
+.json-editor .cm-json-lock {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.35em;
+  vertical-align: -0.05em;
+  color: var(--muted-foreground);
+}
+
+.json-editor .cm-json-lock svg {
+  width: 100%;
+  height: 100%;
+}
+
+.cm-json-hint {
+  max-width: 24rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.cm-json-hint-title {
+  margin-bottom: 0.125rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
