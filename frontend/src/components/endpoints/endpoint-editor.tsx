@@ -30,6 +30,7 @@ import { childPointer, type JsonProblem } from "@/lib/json-edit"
 import { whenIdle } from "@/lib/preloadable"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
+import { useEditorModeStore } from "@/stores/editor-mode"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
@@ -194,9 +195,14 @@ function EndpointEditor({
   )
   // The JSON tab edits the same endpoint as text. While it is open the text
   // leads: each version that reads as an endpoint is copied into the form's
-  // state, so Save, the close guard and the Form tab all see it.
-  const [tab, setTab] = useState<"form" | "json">("form")
-  const [jsonText, setJsonText] = useState("")
+  // state, so Save, the close guard and the Form tab all see it. The modal
+  // opens on the tab picked last, in any record's editor (stores/editor-mode).
+  const preferred = useEditorModeStore((s) => s.mode)
+  const setPreferred = useEditorModeStore((s) => s.setMode)
+  const [tab, setTab] = useState(preferred)
+  const [jsonText, setJsonText] = useState(() =>
+    preferred === "json" ? endpointJson(kind, { name, description, values: formValues(fields, drafts) }) : "",
+  )
   const [leavingJson, setLeavingJson] = useState(false)
   const read = tab === "json" ? readEndpointJson(jsonText, kind) : null
   const hints = useMemo(() => endpointJsonHints(kind), [kind])
@@ -237,12 +243,18 @@ function EndpointEditor({
   function showJson() {
     setJsonText(endpointJson(kind, { name, description, values: formValues(fields, drafts) }))
     setTab("json")
+    setPreferred("json")
   }
 
   // Text that does not read as an endpoint cannot be carried over: ask first.
   function showForm() {
     if (read && !read.ok) setLeavingJson(true)
-    else setTab("form")
+    else leaveJson()
+  }
+
+  function leaveJson() {
+    setTab("form")
+    setPreferred("form")
   }
 
   function editJson(text: string) {
@@ -458,6 +470,13 @@ function EndpointEditor({
 
       <TabsContent value="json" className="flex min-h-0 flex-col gap-3 px-4 py-4">
         {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
+        {source && source.notes.length > 0 && (
+          <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+            {source.notes.map((n) => (
+              <p key={n}>{n}</p>
+            ))}
+          </div>
+        )}
         <LazyJsonEditor
           value={jsonText}
           onChange={editJson}
@@ -483,7 +502,7 @@ function EndpointEditor({
         onStay={() => setLeavingJson(false)}
         onLeave={() => {
           setLeavingJson(false)
-          setTab("form")
+          leaveJson()
         }}
       />
     </form>
