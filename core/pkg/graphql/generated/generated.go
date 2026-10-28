@@ -185,7 +185,6 @@ type ComplexityRoot struct {
 	BuildCommand struct {
 		Default     func(childComplexity int) int
 		Description func(childComplexity int) int
-		Group       func(childComplexity int) int
 		ID          func(childComplexity int) int
 		Label       func(childComplexity int) int
 		Params      func(childComplexity int) int
@@ -2180,12 +2179,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Description(childComplexity), true
-	case "BuildCommand.group":
-		if e.ComplexityRoot.BuildCommand.Group == nil {
-			break
-		}
-
-		return e.ComplexityRoot.BuildCommand.Group(childComplexity), true
 	case "BuildCommand.id":
 		if e.ComplexityRoot.BuildCommand.ID == nil {
 			break
@@ -8080,9 +8073,6 @@ type BuildCommand {
   # The factory's label, or the id when it gave none.
   label: String!
   description: String
-  # A theme of the command (Session, Files, ...), shown with it where the
-  # factory's commands are described; null for none.
-  group: String
   # The targets whose builds can have it.
   targets: [String!]!
   # Picked in a new build until the operator unpicks it, and what a build
@@ -17291,35 +17281,6 @@ func (ec *executionContext) fieldContext_BuildCommand_description(_ context.Cont
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildCommand_group(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_BuildCommand_group,
-		func(ctx context.Context) (any, error) {
-			return obj.Group, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_BuildCommand_group(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "BuildCommand",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _BuildCommand_targets(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -18288,8 +18249,6 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_label(ctx, field)
 			case "description":
 				return ec.fieldContext_BuildCommand_description(ctx, field)
-			case "group":
-				return ec.fieldContext_BuildCommand_group(ctx, field)
 			case "targets":
 				return ec.fieldContext_BuildCommand_targets(ctx, field)
 			case "default":
@@ -55866,8 +55825,6 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			}
 		case "description":
 			out.Values[i] = ec._BuildCommand_description(ctx, field, obj)
-		case "group":
-			out.Values[i] = ec._BuildCommand_group(ctx, field, obj)
 		case "targets":
 			out.Values[i] = ec._BuildCommand_targets(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

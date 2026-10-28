@@ -32,7 +32,6 @@ export const BuildSchemaFields = graphql(`
       id
       label
       description
-      group
       targets
       default
       required

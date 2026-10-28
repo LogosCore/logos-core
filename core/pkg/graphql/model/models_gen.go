@@ -104,7 +104,6 @@ type BuildCommand struct {
 	ID          string         `json:"id"`
 	Label       string         `json:"label"`
 	Description *string        `json:"description,omitempty"`
-	Group       *string        `json:"group,omitempty"`
 	Targets     []string       `json:"targets"`
 	Default     bool           `json:"default"`
 	Required    bool           `json:"required"`

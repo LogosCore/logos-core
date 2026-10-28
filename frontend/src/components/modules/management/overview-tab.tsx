@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -7,7 +7,7 @@ import { ModuleStatusIndicator } from "@/components/modules/module-status-indica
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { cn } from "@/lib/utils"
 import { platformLabel } from "@/components/builds/build-values"
-import { compareFields, DEFAULT_GROUP, formatValue, type FieldDef } from "./field-values"
+import { compareFields, formatValue, type FieldDef } from "./field-values"
 import { channelsText, fieldNotes, versionsText } from "./schema-notes"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
@@ -105,11 +105,9 @@ export function BuildParameters({ build }: { build: Build }) {
 /**
  * The commands this factory instance declared (read-only), what its minions
  * can be built with: a table of their ids and names (label and description),
- * under their groups in the factory's order. Operators pick a build's in the
- * build form.
+ * in the factory's order. Operators pick a build's in the build form.
  */
 export function BuildCommands({ build }: { build: Build }) {
-  const groups = commandGroups(build.commands)
   return (
     <section className="rounded-xl border bg-card">
       <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
@@ -124,46 +122,22 @@ export function BuildCommands({ build }: { build: Build }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {groups.map((g) => (
-            <Fragment key={g.group}>
-              {/* A group's row, where there is more than one group. */}
-              {groups.length > 1 && (
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableCell colSpan={2} className="px-4 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                    {g.group}
-                  </TableCell>
-                </TableRow>
-              )}
-              {g.commands.map((c) => (
-                <TableRow key={c.id} className="hover:bg-transparent">
-                  {/* Baseline: the id and the label share their first line. */}
-                  <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
-                    <code className="font-mono text-xs">{c.id}</code>
-                  </TableCell>
-                  <TableCell className="px-4 py-2 align-baseline whitespace-normal">
-                    <div>{c.label}</div>
-                    {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Fragment>
+          {build.commands.map((c) => (
+            <TableRow key={c.id} className="hover:bg-transparent">
+              {/* Baseline: the id and the label share their first line. */}
+              <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
+                <code className="font-mono text-xs">{c.id}</code>
+              </TableCell>
+              <TableCell className="px-4 py-2 align-baseline whitespace-normal">
+                <div>{c.label}</div>
+                {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+              </TableCell>
+            </TableRow>
           ))}
         </TableBody>
       </table>
     </section>
   )
-}
-
-/** Commands under their groups: each group where its first command is, one without under the default group. */
-function commandGroups<C extends { group?: string | null }>(commands: readonly C[]): { group: string; commands: C[] }[] {
-  const groups = new Map<string, C[]>()
-  for (const c of commands) {
-    const g = c.group?.trim() || DEFAULT_GROUP
-    const list = groups.get(g)
-    if (list) list.push(c)
-    else groups.set(g, [c])
-  }
-  return [...groups].map(([group, commands]) => ({ group, commands }))
 }
 
 function SchemaGroup({ title, note, children }: { title: string; note?: string; children: ReactNode }) {

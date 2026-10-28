@@ -68,7 +68,7 @@ func TestToBuildSchemaModelCommands(t *testing.T) {
 		Targets: []protocol.BuildTarget{{ID: "exe"}, {ID: "shellcode"}},
 		Commands: []protocol.BuildCommand{
 			{ID: "sleep", Required: true, Params: []protocol.FieldSpec{{Key: "interval", Type: protocol.FieldDuration, Label: "Interval"}}},
-			{ID: "screenshot", Label: "Screenshot", Group: "Collection", Default: true, Targets: []string{"exe"}},
+			{ID: "screenshot", Label: "Screenshot", Default: true, Targets: []string{"exe"}},
 		},
 	}
 	cs := toBuildSchemaModel(s).Commands
@@ -76,11 +76,11 @@ func TestToBuildSchemaModelCommands(t *testing.T) {
 		t.Fatalf("commands %+v", cs)
 	}
 	// A command without targets is every target's; the list names them.
-	if c := cs[0]; c.ID != "sleep" || c.Label != "sleep" || c.Group != nil || !c.Required || c.Default ||
+	if c := cs[0]; c.ID != "sleep" || c.Label != "sleep" || !c.Required || c.Default ||
 		len(c.Targets) != 2 || c.Targets[1] != "shellcode" || len(c.Params) != 1 || c.Params[0].Key != "interval" {
 		t.Errorf("sleep = %+v", c)
 	}
-	if c := cs[1]; c.Label != "Screenshot" || *c.Group != "Collection" || !c.Default || len(c.Targets) != 1 || c.Targets[0] != "exe" ||
+	if c := cs[1]; c.Label != "Screenshot" || !c.Default || len(c.Targets) != 1 || c.Targets[0] != "exe" ||
 		c.Params == nil {
 		t.Errorf("screenshot = %+v", c)
 	}

@@ -317,7 +317,7 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	out.Commands = make([]*model.BuildCommand, len(s.Commands))
 	for i, c := range s.Commands {
 		mc := &model.BuildCommand{
-			ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description), Group: strPtr(c.Group),
+			ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
 			Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
 		}
 		for _, t := range s.Targets {
