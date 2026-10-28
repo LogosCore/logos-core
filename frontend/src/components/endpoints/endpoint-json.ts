@@ -11,10 +11,12 @@ import {
 
 // An endpoint as the endpoint modal's JSON tab edits it: the shape of its
 // export (Copy / Download as JSON), so an export pastes straight in, with
-// the description, and every setting of its channel listed. A setting that
-// is not set is null, the channel's default; a list or map with no default
-// is [] or {} instead, empty being the same as not set then (as in the form,
-// which keeps no empty list).
+// the description, and every setting of its channel listed with the value
+// the endpoint uses: the channel's default where none is set, as the form
+// shows it. A value left at the default is not stored, so the setting keeps
+// following the channel's default; null also means the default. A setting
+// with no default is null when not set, or [] / {} for a list or map, empty
+// being the same as not set then (the form keeps no empty list either).
 //
 //   { "format": "logos.channel-endpoint.v1", "name": "…", "description": "…",
 //     "channel": { "module_name": "http", "schema_version": 2 },
@@ -37,7 +39,7 @@ const KEYS = ["format", "name", "description", "channel", "params"]
 /** The JSON tab's text for an endpoint of kind. */
 export function endpointJson(kind: Kind, doc: EndpointDocument): string {
   const params: Record<string, unknown> = {}
-  for (const f of kind.fields) params[f.key] = doc.values[f.key] ?? notSet(f)
+  for (const f of kind.fields) params[f.key] = doc.values[f.key] ?? f.default ?? notSet(f)
   return formatJson({
     format: ENDPOINT_EXPORT_FORMAT,
     name: doc.name,
@@ -103,7 +105,7 @@ export function readEndpointJson(text: string, kind: Kind): EndpointJsonRead {
     for (const [key, value] of Object.entries(params)) {
       const f = fields.get(key)
       if (!f) at(childPointer("/params", key), `Not a setting of ${kind.name} v${kind.version}`)
-      else if (!leavesUnset(f, value)) values[key] = value
+      else if (!leavesUnset(f, value) && !sameJSON(value, f.default)) values[key] = value
     }
     for (const f of kind.fields) {
       const raw = params[f.key]

@@ -12,6 +12,7 @@ import {
   initialDraft,
   parseDraft,
   validateValue,
+  valuesEqual,
   type Draft,
   type FieldDef,
 } from "@/components/modules/management/field-values"
@@ -184,21 +185,27 @@ export function nameError(name: string): string | null {
 
 const AS_TEXT = { secretAsText: true }
 
-/** Drafts for an endpoint's stored values (null: a new endpoint). */
+/**
+ * Drafts for an endpoint's stored values (null: a new endpoint), a setting
+ * not set filled in with the channel's default: the form shows what the
+ * endpoint will use, not empty fields.
+ */
 export function endpointDrafts(
   fields: readonly FieldDef[],
   values: Record<string, unknown> | null,
 ): Record<string, Draft> {
   const out: Record<string, Draft> = {}
   for (const f of fields) {
-    out[f.key] = initialDraft(f, values?.[f.key] ?? null, AS_TEXT)
+    out[f.key] = initialDraft(f, values?.[f.key] ?? f.default ?? null, AS_TEXT)
   }
   return out
 }
 
 /**
  * The values object to submit (it replaces the stored one), plus per-key
- * errors. Unset fields are left out: their default applies.
+ * errors. Unset fields are left out, and so are fields at their default
+ * (the form starts with the defaults filled in): the default applies, and
+ * keeps applying should the channel change it.
  */
 export function evaluateEndpoint(
   fields: readonly FieldDef[],
@@ -215,7 +222,7 @@ export function evaluateEndpoint(
     const v = parsed.value
     const error = validateValue(f, v, { fallback: f.default })
     if (error) errors[f.key] = error
-    else if (v !== null && v !== undefined) values[f.key] = v
+    else if (v !== null && v !== undefined && !valuesEqual(v, f.default)) values[f.key] = v
   }
   return { values, errors }
 }

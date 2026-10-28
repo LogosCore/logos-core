@@ -489,8 +489,8 @@ function EndpointEditor({
           className="flex-1 rounded-md border"
         />
         <p className="text-xs text-muted-foreground">
-          <code className="font-mono">null</code> leaves a setting at the channel&apos;s default; a list or map
-          without one is <code className="font-mono">[]</code> or <code className="font-mono">{"{}"}</code> when empty.{" "}
+          Settings show the channel&apos;s defaults; one left at its default is not stored and follows the channel&apos;s
+          default (<code className="font-mono">null</code> sets it back).{" "}
           <code className="font-mono">format</code> and <code className="font-mono">channel</code> are locked.
           Settings and their values are suggested as you type; Ctrl+Space (⌥I on a Mac) asks for them.
         </p>

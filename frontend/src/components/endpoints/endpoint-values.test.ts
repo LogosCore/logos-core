@@ -63,6 +63,17 @@ describe("evaluateEndpoint", () => {
     expect("token" in evaluateEndpoint(fields, drafts).values).toBe(false)
   })
 
+  it("starts at the channel's defaults, and leaves them out of what it saves", () => {
+    const drafts = endpointDrafts(fields, null)
+    expect(drafts.request_timeout).toEqual({ kind: "text", text: "40s" })
+    expect(drafts.tls_verify).toEqual({ kind: "bool", value: false })
+    const { values } = evaluateEndpoint(fields, drafts)
+    expect(values).not.toHaveProperty("request_timeout")
+    expect(values).not.toHaveProperty("tls_verify")
+    drafts.request_timeout = { kind: "text", text: "45s" }
+    expect(evaluateEndpoint(fields, drafts).values.request_timeout).toBe("45s")
+  })
+
   it("starts from stored values", () => {
     const drafts = endpointDrafts(fields, { base_url: "https://a.example.com", tls_verify: true })
     expect(evaluateEndpoint(fields, drafts).values).toEqual({ base_url: "https://a.example.com", tls_verify: true })

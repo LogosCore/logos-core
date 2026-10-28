@@ -35,14 +35,14 @@ const doc = (over: Record<string, unknown> = {}) =>
   })
 
 describe("endpointJson", () => {
-  it("lists every setting, null where the default applies, in the export's shape", () => {
+  it("lists every setting with the value it uses, its default where none is set, in the export's shape", () => {
     const text = endpointJson(kind, { name: "edge", description: "CDN", values: { base_url: "https://a.example.com", retries: 3 } })
     expect(JSON.parse(text)).toEqual({
       format: ENDPOINT_EXPORT_FORMAT,
       name: "edge",
       description: "CDN",
       channel: { module_name: "http", schema_version: 2 },
-      params: { base_url: "https://a.example.com", tls_verify: null, retries: 3, mode: null },
+      params: { base_url: "https://a.example.com", tls_verify: false, retries: 3, mode: null },
     })
     expect(text).toContain('\n  "params": {\n    "base_url"') // indented two spaces
   })
@@ -73,6 +73,14 @@ describe("readEndpointJson", () => {
       "/params/retries": "Must be at most 5",
       "/params/mode": "Not one of the allowed options",
     })
+  })
+
+  it("leaves out values at their default, or null, so they follow the channel's default", () => {
+    const read = readEndpointJson(
+      doc({ params: { base_url: "https://a.example.com", tls_verify: false, retries: null, mode: "fast" } }),
+      kind,
+    )
+    expect(read.ok && read.doc.values).toEqual({ base_url: "https://a.example.com", mode: "fast" })
   })
 
   it("asks for a required setting left null, and for a name", () => {
@@ -114,11 +122,11 @@ describe("empty lists and maps", () => {
     ],
   }
 
-  it("shows one with no default as empty when not set, one with a default as null", () => {
+  it("shows one with no default as empty when not set, one with a default as its default", () => {
     const params = JSON.parse(endpointJson(withLists, { name: "e", description: "", values: {} })).params
     expect(params.extra).toEqual([])
     expect(params.headers).toEqual({})
-    expect(params.tags).toBeNull()
+    expect(params.tags).toEqual(["a"])
   })
 
   it("reads an empty one back as not set, unless it overrides a default", () => {
