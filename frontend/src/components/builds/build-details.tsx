@@ -26,6 +26,7 @@ import {
   RecordModalTitle,
 } from "@/components/ui/record-modal"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
+import { cn } from "@/lib/utils"
 import { formatBytes } from "@/lib/format-bytes"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { artifactUrl } from "@/lib/build-file-upload"
@@ -144,7 +145,7 @@ function BuildDetail({ build: b }: { build: Build }) {
           </div>
         )}
 
-        <Section title="Pipeline" aside={<BuildStateBadge build={b} />}>
+        <Section title="Pipeline" aside={<BuildStateBadge build={b} />} className="dot-grid">
           <div className="py-3">
             <BuildPipeline stages={b.stages} now={now} />
           </div>
@@ -277,15 +278,28 @@ function BuildDetail({ build: b }: { build: Build }) {
   )
 }
 
-/** A titled card; aside goes beside the title (the build's state, by the pipeline). */
-function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
+/**
+ * A titled card; aside goes beside the title (the build's state, by the
+ * pipeline), className onto the card (the pipeline's dotted canvas).
+ */
+function Section({
+  title,
+  aside,
+  className,
+  children,
+}: {
+  title: string
+  aside?: React.ReactNode
+  className?: string
+  children: React.ReactNode
+}) {
   return (
     <section>
       <div className="mb-1 flex items-center gap-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
         {aside}
       </div>
-      <div className="rounded-xl border bg-card px-4">{children}</div>
+      <div className={cn("rounded-xl border bg-card px-4", className)}>{children}</div>
     </section>
   )
 }
