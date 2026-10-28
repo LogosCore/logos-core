@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { TableBody, TableCell, TableRow } from "@/components/ui/table"
@@ -34,53 +34,63 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
 }
 
 /**
- * The build parameters this factory instance declared (read-only): the
- * parameters every target takes, each target's own, and the connection
- * parameters per channel kind. Operators fill them in on an operation's
- * Builds page.
+ * The build parameters this factory instance declared (read-only), as a table
+ * of each field's key and what it is: those every target takes, each
+ * target's own, and the connection parameters per channel kind, each under
+ * a row saying which. The header says the schema version and the payload
+ * crypto. Operators fill them in on an operation's Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
+  const crypto = build.crypto.length > 0 ? `payload crypto ${build.crypto.join(", ")}` : "no payload crypto"
   return (
-    <section className="rounded-xl border bg-card">
-      <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
-        Build parameters
-        <span className="text-xs font-normal text-muted-foreground">schema v{build.version}</span>
-      </h3>
-      <div className="divide-y">
-        {build.fields.length > 0 && (
-          <SchemaGroup title="Parameters of every target">
-            <FieldRows fields={build.fields} />
-          </SchemaGroup>
-        )}
-        {build.targets
-          .filter((t) => t.fields.length > 0)
-          .map((t) => (
-            <SchemaGroup key={t.id} title={`${t.label} parameters`}>
-              <FieldRows fields={t.fields} />
-            </SchemaGroup>
-          ))}
-        {build.channels.map((c) => (
-          <SchemaGroup
-            key={c.moduleName}
-            title={`${c.moduleName} connection parameters`}
-            note={`connection schema ${versionsText(c.versions)}`}
-          >
-            {c.fields.length > 0 ? (
-              <FieldRows fields={c.fields} />
-            ) : (
-              <div className="px-4 py-2 text-sm text-muted-foreground">None: the connection settings are used as they are.</div>
-            )}
-          </SchemaGroup>
+    <IdCard title="Build parameters" note={`schema v${build.version} · ${crypto}`}>
+      {build.fields.length > 0 && (
+        <>
+          <SectionRow title="Every target" />
+          <IdRows rows={fieldRows(build.fields)} />
+        </>
+      )}
+      {build.targets
+        .filter((t) => t.fields.length > 0)
+        .map((t) => (
+          <Fragment key={t.id}>
+            <SectionRow title={`${t.label} only`} note={t.id} />
+            <IdRows rows={fieldRows(t.fields)} />
+          </Fragment>
         ))}
-        <dl>
-          <div className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
-            <dt className="text-muted-foreground">Payload crypto</dt>
-            <dd className="min-w-0 break-words">{build.crypto.length > 0 ? build.crypto.join(", ") : "None"}</dd>
-          </div>
-        </dl>
-      </div>
-    </section>
+      {build.channels.map((c) => (
+        <Fragment key={c.moduleName}>
+          <SectionRow title={`${c.moduleName} connection`} note={`schema ${versionsText(c.versions)}`} />
+          {c.fields.length > 0 ? (
+            <IdRows rows={fieldRows(c.fields)} />
+          ) : (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={2} className="px-4 py-2 whitespace-normal text-muted-foreground">
+                None: the connection settings are used as they are.
+              </TableCell>
+            </TableRow>
+          )}
+        </Fragment>
+      ))}
+    </IdCard>
   )
+}
+
+/** A schema's fields in their declared order, as rows: the key, then the label, description, type and notes. */
+function fieldRows(fields: readonly FieldDef[]): IdRow[] {
+  return [...fields].sort(compareFields).map((f) => ({
+    id: f.key,
+    content: (
+      <>
+        <div>
+          {f.label}
+          {f.required && <span className="text-destructive">*</span>}
+        </div>
+        {f.description && <div className="text-xs text-muted-foreground">{f.description}</div>}
+        <div className="text-xs text-muted-foreground">{[f.type, ...fieldNotes(f)].join(" · ")}</div>
+      </>
+    ),
+  }))
 }
 
 /**
@@ -90,23 +100,24 @@ export function BuildParameters({ build }: { build: Build }) {
  */
 export function BuildTargets({ build }: { build: Build }) {
   return (
-    <IdTable
-      title="Targets"
-      rows={build.targets.map((t) => ({
-        id: t.id,
-        content: (
-          <>
-            <div>{t.label}</div>
-            {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
-            <div className="text-xs text-muted-foreground">
-              {[t.format, t.platforms.map(platformLabel).join(", "), t.channels.length > 0 ? `speaks ${channelsText(t.channels)}` : ""]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
-          </>
-        ),
-      }))}
-    />
+    <IdCard title="Targets" note={build.targets.length}>
+      <IdRows
+        rows={build.targets.map((t) => ({
+          id: t.id,
+          content: (
+            <>
+              <div>{t.label}</div>
+              {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
+              <div className="text-xs text-muted-foreground">
+                {[t.format, t.platforms.map(platformLabel).join(", "), t.channels.length > 0 ? `speaks ${channelsText(t.channels)}` : ""]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            </>
+          ),
+        }))}
+      />
+    </IdCard>
   )
 }
 
@@ -117,55 +128,64 @@ export function BuildTargets({ build }: { build: Build }) {
  */
 export function BuildCommands({ build }: { build: Build }) {
   return (
-    <IdTable
-      title="Commands"
-      rows={build.commands.map((c) => ({
-        id: c.id,
-        content: (
-          <>
-            <div>{c.label}</div>
-            {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
-          </>
-        ),
-      }))}
-    />
+    <IdCard title="Commands" note={build.commands.length}>
+      <IdRows
+        rows={build.commands.map((c) => ({
+          id: c.id,
+          content: (
+            <>
+              <div>{c.label}</div>
+              {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+            </>
+          ),
+        }))}
+      />
+    </IdCard>
   )
 }
 
-/** A card titled with its count, holding a table without headings: each row an id, and what is said of it. */
-function IdTable({ title, rows }: { title: string; rows: { id: string; content: ReactNode }[] }) {
+/** One row of an IdCard's table: an id, and what is said of it. */
+interface IdRow {
+  id: string
+  content: ReactNode
+}
+
+/** A card titled with a note (a count, a version), holding a two-column table without headings. */
+function IdCard({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-xl border bg-card">
       <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
         {title}
-        <span className="text-xs font-normal text-muted-foreground tabular-nums">{rows.length}</span>
+        {note !== undefined && <span className="text-xs font-normal text-muted-foreground tabular-nums">{note}</span>}
       </h3>
       <table className="w-full text-sm">
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.id} className="hover:bg-transparent">
-              {/* Baseline: the id and the first line beside it share it. */}
-              <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
-                <code className="font-mono text-xs">{r.id}</code>
-              </TableCell>
-              <TableCell className="px-4 py-2 align-baseline whitespace-normal">{r.content}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
+        <TableBody>{children}</TableBody>
       </table>
     </section>
   )
 }
 
-function SchemaGroup({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+function IdRows({ rows }: { rows: readonly IdRow[] }) {
+  return rows.map((r) => (
+    <TableRow key={r.id} className="hover:bg-transparent">
+      {/* Baseline: the id and the first line beside it share it. */}
+      <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
+        <code className="font-mono text-xs">{r.id}</code>
+      </TableCell>
+      <TableCell className="px-4 py-2 align-baseline whitespace-normal">{r.content}</TableCell>
+    </TableRow>
+  ))
+}
+
+/** A row across an IdCard's table, heading the rows under it. */
+function SectionRow({ title, note }: { title: string; note?: string }) {
   return (
-    <div>
-      <h4 className="flex items-baseline gap-2 px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground">
-        {title}
-        {note && <span className="font-normal">{note}</span>}
-      </h4>
-      <dl className="divide-y">{children}</dl>
-    </div>
+    <TableRow className="bg-muted/40 hover:bg-muted/40">
+      <TableCell colSpan={2} className="px-4 py-1.5 text-xs text-muted-foreground">
+        <span className="font-medium">{title}</span>
+        {note && <span> · {note}</span>}
+      </TableCell>
+    </TableRow>
   )
 }
 
