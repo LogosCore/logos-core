@@ -2,7 +2,7 @@ import { useState } from "react"
 import { DicesIcon, WandSparklesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { Choices, Chip } from "./generator-parts"
 import {
   generateUserAgent,
   randomChoice,
@@ -97,30 +97,5 @@ export function UserAgentGenerator({
         </div>
       </PopoverContent>
     </Popover>
-  )
-}
-
-function Choices({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="flex flex-wrap gap-1.5">{children}</div>
-    </div>
-  )
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded-md border px-2.5 py-1 text-sm transition-colors",
-        active ? "border-foreground bg-foreground text-background" : "hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
   )
 }

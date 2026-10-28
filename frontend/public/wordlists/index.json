@@ -1,0 +1,913 @@
+{
+  "lists": [
+    {
+      "id": "common",
+      "name": "Common words",
+      "kind": "word",
+      "count": 3780,
+      "sources": [
+        "scowl",
+        "corpora"
+      ]
+    },
+    {
+      "id": "short",
+      "name": "Short words",
+      "kind": "word",
+      "count": 1293,
+      "sources": [
+        "eff"
+      ]
+    },
+    {
+      "id": "long",
+      "name": "Long word list",
+      "kind": "word",
+      "count": 7768,
+      "sources": [
+        "eff"
+      ]
+    },
+    {
+      "id": "bip39",
+      "name": "BIP-39 words",
+      "kind": "word",
+      "count": 2048,
+      "sources": [
+        "bip39"
+      ]
+    },
+    {
+      "id": "adjectives",
+      "name": "Adjectives",
+      "kind": "adjective",
+      "count": 2161,
+      "sources": [
+        "corpora",
+        "imsky",
+        "ung"
+      ]
+    },
+    {
+      "id": "nouns",
+      "name": "Nouns",
+      "kind": "noun",
+      "count": 3337,
+      "sources": [
+        "corpora",
+        "imsky"
+      ]
+    },
+    {
+      "id": "verbs",
+      "name": "Verbs",
+      "kind": "verb",
+      "count": 1044,
+      "sources": [
+        "corpora",
+        "imsky"
+      ]
+    },
+    {
+      "id": "animals",
+      "name": "Animals",
+      "kind": "noun",
+      "count": 345,
+      "sources": [
+        "ung"
+      ]
+    },
+    {
+      "id": "colors",
+      "name": "Colors",
+      "kind": "adjective",
+      "count": 90,
+      "sources": [
+        "ung",
+        "imsky"
+      ]
+    },
+    {
+      "id": "places",
+      "name": "Places",
+      "kind": "noun",
+      "count": 2178,
+      "sources": [
+        "ung",
+        "imsky"
+      ]
+    },
+    {
+      "id": "names",
+      "name": "Names",
+      "kind": "noun",
+      "count": 6363,
+      "sources": [
+        "ung",
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-3d-graphics",
+      "name": "3D graphics",
+      "kind": "noun",
+      "theme": true,
+      "count": 115,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-3d-printing",
+      "name": "3D printing",
+      "kind": "noun",
+      "theme": true,
+      "count": 26,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-accounting",
+      "name": "Accounting",
+      "kind": "noun",
+      "theme": true,
+      "count": 40,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-algorithms",
+      "name": "Algorithms",
+      "kind": "noun",
+      "theme": true,
+      "count": 96,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-apex-predators",
+      "name": "Apex predators",
+      "kind": "noun",
+      "theme": true,
+      "count": 41,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-architecture",
+      "name": "Architecture",
+      "kind": "noun",
+      "theme": true,
+      "count": 35,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-astronomy",
+      "name": "Astronomy",
+      "kind": "noun",
+      "theme": true,
+      "count": 35,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-automobiles",
+      "name": "Automobiles",
+      "kind": "noun",
+      "theme": true,
+      "count": 22,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-birds",
+      "name": "Birds",
+      "kind": "noun",
+      "theme": true,
+      "count": 64,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-buildings",
+      "name": "Buildings",
+      "kind": "noun",
+      "theme": true,
+      "count": 81,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-car-parts",
+      "name": "Car parts",
+      "kind": "noun",
+      "theme": true,
+      "count": 32,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-cats",
+      "name": "Cats",
+      "kind": "noun",
+      "theme": true,
+      "count": 20,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-cheese",
+      "name": "Cheese",
+      "kind": "noun",
+      "theme": true,
+      "count": 29,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-chemistry",
+      "name": "Chemistry",
+      "kind": "noun",
+      "theme": true,
+      "count": 38,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-coding",
+      "name": "Coding",
+      "kind": "noun",
+      "theme": true,
+      "count": 22,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-condiments",
+      "name": "Condiments",
+      "kind": "noun",
+      "theme": true,
+      "count": 21,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-construction",
+      "name": "Construction",
+      "kind": "noun",
+      "theme": true,
+      "count": 229,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-containers",
+      "name": "Containers",
+      "kind": "noun",
+      "theme": true,
+      "count": 62,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-corporate",
+      "name": "Corporate",
+      "kind": "noun",
+      "theme": true,
+      "count": 85,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-corporate-job",
+      "name": "Corporate job",
+      "kind": "noun",
+      "theme": true,
+      "count": 26,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-cotton",
+      "name": "Cotton",
+      "kind": "noun",
+      "theme": true,
+      "count": 28,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-data-structures",
+      "name": "Data structures",
+      "kind": "noun",
+      "theme": true,
+      "count": 29,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-design",
+      "name": "Design",
+      "kind": "noun",
+      "theme": true,
+      "count": 73,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-dogs",
+      "name": "Dogs",
+      "kind": "noun",
+      "theme": true,
+      "count": 25,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-driving",
+      "name": "Driving",
+      "kind": "noun",
+      "theme": true,
+      "count": 31,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-fast-food",
+      "name": "Fast food",
+      "kind": "noun",
+      "theme": true,
+      "count": 25,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-filmmaking",
+      "name": "Filmmaking",
+      "kind": "noun",
+      "theme": true,
+      "count": 58,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-fish",
+      "name": "Fish",
+      "kind": "noun",
+      "theme": true,
+      "count": 34,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-food",
+      "name": "Food",
+      "kind": "noun",
+      "theme": true,
+      "count": 105,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-fortifications",
+      "name": "Fortifications",
+      "kind": "noun",
+      "theme": true,
+      "count": 20,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-fruit",
+      "name": "Fruit",
+      "kind": "noun",
+      "theme": true,
+      "count": 31,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-furniture",
+      "name": "Furniture",
+      "kind": "noun",
+      "theme": true,
+      "count": 13,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-gaming",
+      "name": "Gaming",
+      "kind": "noun",
+      "theme": true,
+      "count": 46,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-geography",
+      "name": "Geography",
+      "kind": "noun",
+      "theme": true,
+      "count": 85,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-geometry",
+      "name": "Geometry",
+      "kind": "noun",
+      "theme": true,
+      "count": 85,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-ghosts",
+      "name": "Ghosts",
+      "kind": "noun",
+      "theme": true,
+      "count": 13,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-history",
+      "name": "History",
+      "kind": "noun",
+      "theme": true,
+      "count": 19,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-houses",
+      "name": "Houses",
+      "kind": "noun",
+      "theme": true,
+      "count": 20,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-infrastructure",
+      "name": "Infrastructure",
+      "kind": "noun",
+      "theme": true,
+      "count": 11,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-insurance",
+      "name": "Insurance",
+      "kind": "noun",
+      "theme": true,
+      "count": 26,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-linear-algebra",
+      "name": "Linear algebra",
+      "kind": "noun",
+      "theme": true,
+      "count": 24,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-machine-learning",
+      "name": "Machine learning",
+      "kind": "noun",
+      "theme": true,
+      "count": 45,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-meat",
+      "name": "Meat",
+      "kind": "noun",
+      "theme": true,
+      "count": 18,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-metals",
+      "name": "Metals",
+      "kind": "noun",
+      "theme": true,
+      "count": 18,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-military-airforce",
+      "name": "Military airforce",
+      "kind": "noun",
+      "theme": true,
+      "count": 38,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-military-army",
+      "name": "Military army",
+      "kind": "noun",
+      "theme": true,
+      "count": 78,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-military-navy",
+      "name": "Military navy",
+      "kind": "noun",
+      "theme": true,
+      "count": 150,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-monkeys",
+      "name": "Monkeys",
+      "kind": "noun",
+      "theme": true,
+      "count": 13,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-music-instruments",
+      "name": "Music instruments",
+      "kind": "noun",
+      "theme": true,
+      "count": 30,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-music-production",
+      "name": "Music production",
+      "kind": "noun",
+      "theme": true,
+      "count": 110,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-music-theory",
+      "name": "Music theory",
+      "kind": "noun",
+      "theme": true,
+      "count": 59,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-phones",
+      "name": "Phones",
+      "kind": "noun",
+      "theme": true,
+      "count": 46,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-physics",
+      "name": "Physics",
+      "kind": "noun",
+      "theme": true,
+      "count": 58,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-physics-optics",
+      "name": "Physics optics",
+      "kind": "noun",
+      "theme": true,
+      "count": 18,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-physics-units",
+      "name": "Physics units",
+      "kind": "noun",
+      "theme": true,
+      "count": 36,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-physics-waves",
+      "name": "Physics waves",
+      "kind": "noun",
+      "theme": true,
+      "count": 9,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-plants",
+      "name": "Plants",
+      "kind": "noun",
+      "theme": true,
+      "count": 58,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-radio",
+      "name": "Radio",
+      "kind": "noun",
+      "theme": true,
+      "count": 52,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-real-estate",
+      "name": "Real estate",
+      "kind": "noun",
+      "theme": true,
+      "count": 36,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-screenwriting",
+      "name": "Screenwriting",
+      "kind": "noun",
+      "theme": true,
+      "count": 10,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-seasonings",
+      "name": "Seasonings",
+      "kind": "noun",
+      "theme": true,
+      "count": 29,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-set-theory",
+      "name": "Set theory",
+      "kind": "noun",
+      "theme": true,
+      "count": 15,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-shopping",
+      "name": "Shopping",
+      "kind": "noun",
+      "theme": true,
+      "count": 44,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-snakes",
+      "name": "Snakes",
+      "kind": "noun",
+      "theme": true,
+      "count": 15,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-software",
+      "name": "Software",
+      "kind": "noun",
+      "theme": true,
+      "count": 20,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-spirits",
+      "name": "Spirits",
+      "kind": "noun",
+      "theme": true,
+      "count": 10,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-sports",
+      "name": "Sports",
+      "kind": "noun",
+      "theme": true,
+      "count": 128,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-startups",
+      "name": "Startups",
+      "kind": "noun",
+      "theme": true,
+      "count": 40,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-storage",
+      "name": "Storage",
+      "kind": "noun",
+      "theme": true,
+      "count": 8,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-travel",
+      "name": "Travel",
+      "kind": "noun",
+      "theme": true,
+      "count": 43,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-typography",
+      "name": "Typography",
+      "kind": "noun",
+      "theme": true,
+      "count": 41,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-vcs",
+      "name": "VCS",
+      "kind": "noun",
+      "theme": true,
+      "count": 36,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-water",
+      "name": "Water",
+      "kind": "noun",
+      "theme": true,
+      "count": 67,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-web-development",
+      "name": "Web development",
+      "kind": "noun",
+      "theme": true,
+      "count": 65,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-wine",
+      "name": "Wine",
+      "kind": "noun",
+      "theme": true,
+      "count": 36,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-wood",
+      "name": "Wood",
+      "kind": "noun",
+      "theme": true,
+      "count": 19,
+      "sources": [
+        "imsky"
+      ]
+    },
+    {
+      "id": "theme-writing",
+      "name": "Writing",
+      "kind": "noun",
+      "theme": true,
+      "count": 48,
+      "sources": [
+        "imsky"
+      ]
+    }
+  ],
+  "sources": {
+    "scowl": {
+      "name": "SCOWL (Spell Checker Oriented Word Lists), size 10",
+      "url": "http://wordlist.aspell.net/",
+      "license": "SCOWL's permission notice: any use, the copyright notice kept"
+    },
+    "corpora": {
+      "name": "Corpora by Darius Kazemi and contributors",
+      "url": "https://github.com/dariusk/corpora",
+      "license": "CC0 1.0"
+    },
+    "imsky": {
+      "name": "wordlists by Ivan Malopinsky",
+      "url": "https://github.com/imsky/wordlists",
+      "license": "MIT"
+    },
+    "ung": {
+      "name": "unique-names-generator by Andrea SonnY",
+      "url": "https://github.com/andreasonny83/unique-names-generator",
+      "license": "MIT"
+    },
+    "bip39": {
+      "name": "BIP-0039 English wordlist",
+      "url": "https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki",
+      "license": "MIT"
+    },
+    "eff": {
+      "name": "EFF's Wordlists for Random Passphrases",
+      "url": "https://www.eff.org/dice",
+      "license": "CC BY 3.0 US"
+    }
+  }
+}

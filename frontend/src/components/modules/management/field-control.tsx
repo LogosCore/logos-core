@@ -13,7 +13,9 @@ import { Switch } from "@/components/ui/switch"
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
 import { move } from "@/components/builds/build-values"
+import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
 import { UserAgentGenerator } from "./user-agent-generator"
+import { WordGenerator } from "./word-generator"
 import {
   BYTE_UNITS,
   DURATION_HINT,
@@ -21,6 +23,7 @@ import {
   formatValue,
   humanizeBytes,
   localInputToRFC3339,
+  validateValue,
   type ByteUnit,
   type Draft,
   type FieldDef,
@@ -275,6 +278,19 @@ export function FieldControl({
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">{input}</div>
             <UserAgentGenerator onUse={setText} disabled={disabled} />
+          </div>
+        )
+      }
+      if (field.type === "string" && field.format && GENERATED_FORMATS.includes(field.format)) {
+        return (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">{input}</div>
+            <WordGenerator
+              format={field.format}
+              fits={(v) => validateValue(field, v) === null}
+              onUse={setText}
+              disabled={disabled}
+            />
           </div>
         )
       }
