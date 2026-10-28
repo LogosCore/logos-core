@@ -13,6 +13,7 @@ import { ModuleIcon } from "@/components/modules/module-icon"
 import { ModuleAdminDialogs, ModuleBlockButton } from "@/components/modules/module-admin-dialogs"
 import { ModuleSyncIndicator } from "@/components/modules/management/module-sync-indicator"
 import {
+  BuildCommands,
   BuildParameters,
   ConnectionSchema,
   ModuleIdentity,
@@ -130,6 +131,7 @@ export function ModuleDetailPage() {
                 <ModuleIdentity module={module} />
                 {connection && <ConnectionSchema connection={connection} />}
                 {build && <BuildParameters build={build} />}
+                {build && build.commands.length > 0 && <BuildCommands build={build} />}
               </div>
             </div>
           ) : (
@@ -170,6 +172,7 @@ export function ModuleDetailPage() {
                 <StatusValues management={management} />
                 {connection && <ConnectionSchema connection={connection} />}
                 {build && <BuildParameters build={build} />}
+                {build && build.commands.length > 0 && <BuildCommands build={build} />}
               </TabsContent>
               {/* Kept mounted: unsaved edits survive a look at another tab. */}
               <TabsContent value="configuration" keepMounted>

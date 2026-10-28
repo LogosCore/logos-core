@@ -34,9 +34,8 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
 
 /**
  * The build parameters this factory instance declared (read-only): the targets
- * it builds, the parameters each takes, the commands a build can pick, and
- * the connection parameters per channel kind. Operators fill them in on an
- * operation's Builds page.
+ * it builds, the parameters each takes, and the connection parameters per
+ * channel kind. Operators fill them in on an operation's Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
   return (
@@ -78,11 +77,6 @@ export function BuildParameters({ build }: { build: Build }) {
               <FieldRows fields={t.fields} />
             </SchemaGroup>
           ))}
-        {build.commands.length > 0 && (
-          <SchemaGroup title="Commands" note="a build picks the minion's">
-            <CommandRows build={build} />
-          </SchemaGroup>
-        )}
         {build.channels.map((c) => (
           <SchemaGroup
             key={c.moduleName}
@@ -103,6 +97,26 @@ export function BuildParameters({ build }: { build: Build }) {
           </div>
         </dl>
       </div>
+    </section>
+  )
+}
+
+/**
+ * The commands this factory instance declared (read-only): what its minions
+ * can be built with, which targets have each, which a build gets by default
+ * or always, and what a task of each takes. Operators pick a build's in the
+ * build form.
+ */
+export function BuildCommands({ build }: { build: Build }) {
+  return (
+    <section className="rounded-xl border bg-card">
+      <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
+        Commands
+        <span className="text-xs font-normal text-muted-foreground tabular-nums">{build.commands.length}</span>
+      </h3>
+      <dl className="divide-y">
+        <CommandRows build={build} />
+      </dl>
     </section>
   )
 }
