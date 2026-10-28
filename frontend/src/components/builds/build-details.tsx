@@ -41,7 +41,7 @@ import { useCanBuild } from "@/components/builds/build-access"
 import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import { buildConnectionRows, buildElapsed, platformLabel } from "@/components/builds/build-values"
 import { BuildPipeline } from "@/components/builds/build-pipeline"
-import { KindName } from "@/components/modules/module-icon"
+import { KindName, ModuleIcon } from "@/components/modules/module-icon"
 
 type Build = NonNullable<BuildQuery["build"]>
 
@@ -89,9 +89,13 @@ function BuildDetail({ build: b }: { build: Build }) {
   return (
     <>
       <RecordModalHeader>
-        <RecordModalTitle>
-          <KindName type="factory" name={b.moduleName} icon={icons.get(b.moduleName)} /> · {b.target}
-        </RecordModalTitle>
+        {/* The factory's icon as large as in the builds table, beside the title. */}
+        <div className="flex min-w-0 items-center gap-3">
+          <ModuleIcon type="factory" icon={icons.get(b.moduleName)} className="size-9" />
+          <RecordModalTitle>
+            <span className="font-mono">{b.moduleName}</span> · {b.target}
+          </RecordModalTitle>
+        </div>
         <BuildStateBadge build={b} />
         <div className="flex items-center gap-2 sm:ml-auto">
           {canWrite && running && (
