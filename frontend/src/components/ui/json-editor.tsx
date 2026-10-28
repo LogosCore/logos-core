@@ -55,7 +55,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { downloadBlob } from "@/lib/file-export"
 import { cn } from "@/lib/utils"
-import { parseJson, type JsonHints, type JsonKeyHint, type JsonProblem } from "@/lib/json-edit"
+import { hintsAt, parseJson, type JsonHints, type JsonKeyHint, type JsonProblem } from "@/lib/json-edit"
 import { keyOf, pointerOfNode } from "./json-editor-tree"
 import {
   completeJson,
@@ -358,7 +358,7 @@ const hintHover = hoverTooltip((view, pos) => {
   if (node.name !== "PropertyName" || !object || object.name !== "Object") return null
   const doc = view.state.doc.toString()
   const pointer = pointerOfNode(object, doc)
-  const hint: JsonKeyHint | undefined = pointer === null ? undefined : view.state.field(config).hints[pointer]?.find((h) => h.key === keyOf(node, doc))
+  const hint: JsonKeyHint | undefined = pointer === null ? undefined : hintsAt(view.state.field(config).hints, pointer)?.find((h) => h.key === keyOf(node, doc))
   if (!hint?.info && !hint?.detail) return null
   return {
     pos: node.from,

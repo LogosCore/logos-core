@@ -3,7 +3,7 @@ import { ensureSyntaxTree, foldable, foldEffect, syntaxTree } from "@codemirror/
 import type { Diagnostic } from "@codemirror/lint"
 import { EditorState, StateEffect, StateField, type TransactionSpec } from "@codemirror/state"
 import type { SyntaxNode } from "@lezer/common"
-import { formatJson, parseJson, type JsonHints, type JsonProblem } from "@/lib/json-edit"
+import { formatJson, hintsAt, parseJson, type JsonHints, type JsonProblem } from "@/lib/json-edit"
 import { firstErrorAt, keyOf, keysOf, pointerOfNode, propertySpans, type PropertySpan } from "./json-editor-tree"
 
 // The JSON editor's state (json-editor.tsx) that needs no page: what the
@@ -176,7 +176,7 @@ export function completeJson(context: CompletionContext): CompletionResult | nul
   const key = keyContext(context)
   if (key) {
     const pointer = pointerOfNode(key.object, doc)
-    const offered = pointer === null ? undefined : hints[pointer]
+    const offered = pointer === null ? undefined : hintsAt(hints, pointer)
     if (!offered?.length) return null
     // Keys the object has are not offered again, unless one is being renamed.
     const present = keysOf(key.object, doc)
@@ -198,7 +198,7 @@ export function completeJson(context: CompletionContext): CompletionResult | nul
   const name = property?.getChild("PropertyName")
   if (!property || !name || pos <= name.to) return null
   const pointer = pointerOfNode(property.parent!, doc)
-  const hint = pointer === null ? undefined : hints[pointer]?.find((h) => h.key === keyOf(name, doc))
+  const hint = pointer === null ? undefined : hintsAt(hints, pointer)?.find((h) => h.key === keyOf(name, doc))
   if (!hint?.values?.length) return null
   const valueNode = node.name === "Property" ? null : node
   const from = valueNode && valueNode !== name ? valueNode.from : pos

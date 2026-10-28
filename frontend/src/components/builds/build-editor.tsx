@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ComponentProps } from "react"
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react"
 import { HammerIcon, PlusIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
+import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   RecordModalBody,
   RecordModalHeader,
@@ -23,6 +26,9 @@ import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-n
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
+import type { JsonProblem } from "@/lib/json-edit"
+import { whenIdle } from "@/lib/preloadable"
+import { useEditorModeStore } from "@/stores/editor-mode"
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useBuild, useBuildFiles, useCreateBuild, useFactoryKinds, useInvalidateBuildFiles } from "@/graphql/hooks/builds"
 import { uploadBuildFile } from "@/lib/build-file-upload"
@@ -54,6 +60,16 @@ import {
   type FactoryKind,
   type FormSource,
 } from "@/components/builds/build-values"
+import {
+  BUILD_JSON_LOCKED,
+  buildJson,
+  buildJsonHints,
+  buildProblemPointer,
+  documentInput,
+  formDocument,
+  formFromDocument,
+  readBuildJson,
+} from "@/components/builds/build-json"
 import { useCanBuild } from "@/components/builds/build-access"
 import { KindName } from "@/components/modules/module-icon"
 
@@ -129,9 +145,30 @@ function Editor({
   const channelIcons = useChannelIcons()
 
   const [form, setForm] = useState<Form>(() => initialForm(kind, source, channels))
-  // Changed from how it opened: closing then asks before throwing it away.
-  const [initial] = useState(() => JSON.stringify(form))
-  const saved = useCloseGuard(JSON.stringify(form) !== initial)
+  // The JSON tab edits the same build as text. While it is open the text
+  // leads: each version that reads as a build is copied into the form, so
+  // Build, the close guard and the Form tab all see it. The modal opens on
+  // the tab picked last, in any record's editor (stores/editor-mode).
+  const preferred = useEditorModeStore((s) => s.mode)
+  const setPreferred = useEditorModeStore((s) => s.setMode)
+  const [tab, setTab] = useState(preferred)
+  const [jsonText, setJsonText] = useState(() =>
+    preferred === "json" ? buildJson(kind, channels, formDocument(kind, channels, form)) : "",
+  )
+  const [leavingJson, setLeavingJson] = useState(false)
+  const read = tab === "json" ? readBuildJson(jsonText, kind, channels) : null
+  const connectionChannels = form.connections.map((c) => c.moduleName).join(",")
+  const hints = useMemo(
+    () => buildJsonHints(kind, channels, form.target, connectionChannels === "" ? [] : connectionChannels.split(",")),
+    [kind, channels, form.target, connectionChannels],
+  )
+  // Fetched once the modal has settled, so the JSON tab opens at once.
+  useEffect(() => whenIdle(preloadJsonEditor), [])
+
+  // Changed from how it opened, or JSON that no longer reads: closing then
+  // asks before throwing it away.
+  const [initial] = useState(() => snapshotOf(form))
+  const saved = useCloseGuard(snapshotOf(form) !== initial || (read !== null && !read.ok))
   const body = useRef<HTMLDivElement>(null)
   // The endpoint picker: adding a connection, or filling the one keyed fill.
   const [picker, setPicker] = useState<{ open: boolean; fill: string | null }>({ open: false, fill: null })
@@ -149,7 +186,41 @@ function Editor({
   const fields = targetFields(kind, target)
   const { input, errors } = evaluateForm(kind, form, channels)
   const shown: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
-  const hasErrors = Object.keys(errors).length > 0
+  const hasErrors = read ? !read.ok || read.problems.length > 0 : Object.keys(errors).length > 0
+  // The JSON tab marks problems as they appear, as code editors do, and the
+  // server's from the last try at their place.
+  const jsonProblems: JsonProblem[] = read?.ok
+    ? [
+        ...read.problems,
+        ...Object.entries(serverErrors)
+          .filter(([key]) => key !== "")
+          .map(([key, message]) => ({ path: buildProblemPointer(key), message })),
+      ]
+    : []
+
+  function showJson() {
+    setJsonText(buildJson(kind, channels, formDocument(kind, channels, form)))
+    setTab("json")
+    setPreferred("json")
+  }
+
+  // Text that does not read as a build cannot be carried over: ask first.
+  function showForm() {
+    if (read && !read.ok) setLeavingJson(true)
+    else leaveJson()
+  }
+
+  function leaveJson() {
+    setTab("form")
+    setPreferred("form")
+  }
+
+  function editJson(text: string) {
+    setJsonText(text)
+    setServerErrors({})
+    const next = readBuildJson(text, kind, channels)
+    if (next.ok) setForm(formFromDocument(kind, channels, next.doc))
+  }
 
   const filesCtx: BuildFilesContextValue = useMemo(
     () => ({
@@ -211,17 +282,21 @@ function Editor({
   async function submit() {
     setSubmitted(true)
     setSaveError(null)
+    if (read && !read.ok) setSaveError(`The JSON is not a build: ${read.message}`)
     if (hasErrors || readOnly) return
+    // From the JSON tab, what it holds as it reads, without a trip through
+    // the form's fields.
+    const request = read?.ok ? documentInput(read.doc) : input
     try {
       const res = await createBuild.mutateAsync({
         operationId,
         input: {
-          description: input.description,
+          description: request.description,
           moduleName: kind.name,
-          target: input.target,
-          platform: input.platform,
-          values: input.values,
-          connections: input.connections,
+          target: request.target,
+          platform: request.platform,
+          values: request.values,
+          connections: request.connections,
         },
       })
       toast.success("Build queued")
@@ -309,6 +384,11 @@ function Editor({
           void submit()
         }}
       >
+        <Tabs
+          value={tab}
+          onValueChange={(v) => (v === "json" ? showJson() : showForm())}
+          className="min-h-0 flex-1 gap-0"
+        >
         <RecordModalHeader>
           {/* The title and what it builds with share a baseline. */}
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -319,11 +399,19 @@ function Editor({
             </span>
           </div>
           <div className="flex items-center gap-2 sm:ml-auto">
+            <TabsList>
+              <TabsTrigger value="form">Form</TabsTrigger>
+              <TabsTrigger value="json">JSON</TabsTrigger>
+            </TabsList>
             {readOnly ? (
               <span className="text-sm text-muted-foreground">Read-only — needs operator in this operation</span>
             ) : (
               <>
-                {submitted && hasErrors && <span className="text-sm text-destructive">Fix the marked fields</span>}
+                {submitted && hasErrors && (
+                  <span className="text-sm text-destructive">
+                    {read ? "Fix the marked problems" : "Fix the marked fields"}
+                  </span>
+                )}
                 <Button type="button" variant="outline" onClick={requestClose} disabled={pending}>
                   Cancel
                 </Button>
@@ -335,6 +423,7 @@ function Editor({
           </div>
         </RecordModalHeader>
 
+        <TabsContent value="form" className="flex min-h-0 flex-col">
         <RecordModalBody ref={body}>
         <div className="flex gap-10 px-4 py-6">
         <SettingsNav sections={navSections} active={active} onPick={goTo} />
@@ -497,9 +586,62 @@ function Editor({
         </div>
         </div>
         </RecordModalBody>
+        </TabsContent>
+
+        <TabsContent value="json" className="flex min-h-0 flex-col gap-3 px-4 py-4">
+          {saveError && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>}
+          <LazyJsonEditor
+            value={jsonText}
+            onChange={editJson}
+            locked={BUILD_JSON_LOCKED}
+            problems={jsonProblems}
+            hints={hints}
+            readOnly={disabled}
+            fileName={`${kind.name}.build.json`}
+            aria-label="The build as JSON"
+            className="flex-1 rounded-md border"
+          />
+          <p className="text-xs text-muted-foreground">
+            Values show the factory&apos;s and the channels&apos; defaults; one left at its default, or emptied, is left
+            to the default. A connection&apos;s <code className="font-mono">settings</code> are its channel&apos;s, its{" "}
+            <code className="font-mono">values</code> the factory&apos;s for that channel.{" "}
+            <code className="font-mono">factory</code> is locked. Suggestions appear as you type; Ctrl+Space (⌥I on a
+            Mac) asks for them.
+          </p>
+        </TabsContent>
+        </Tabs>
+
+        <LeaveJsonDialog
+          open={leavingJson}
+          what="a build"
+          problem={read && !read.ok ? read.message : ""}
+          onStay={() => setLeavingJson(false)}
+          onLeave={() => {
+            setLeavingJson(false)
+            leaveJson()
+          }}
+        />
       </form>
     </BuildFilesContext.Provider>
   )
+}
+
+/**
+ * What the form holds, for telling whether it changed: the connections'
+ * bookkeeping (keys, notes, what filled them) aside, which the JSON tab
+ * renews on every edit.
+ */
+function snapshotOf(form: Form): string {
+  return JSON.stringify({
+    ...form,
+    connections: form.connections.map((c) => ({
+      moduleName: c.moduleName,
+      name: c.name,
+      description: c.description,
+      settings: c.settings,
+      drafts: c.drafts,
+    })),
+  })
 }
 
 /** The form's own sections, around the factory's groups of fields. */

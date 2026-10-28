@@ -22,8 +22,24 @@ export interface JsonKeyHint {
   values?: readonly unknown[]
 }
 
-/** Keys to offer, by the pointer of the object they belong in. */
+/**
+ * Keys to offer, by the pointer of the object they belong in. A "*" stands
+ * for any one key or index: "/connections/*" is every connection's object.
+ */
 export type JsonHints = Readonly<Record<string, readonly JsonKeyHint[]>>
+
+/** The keys hints offers in the object at pointer: its own, else a "*" pattern's. */
+export function hintsAt(hints: JsonHints, pointer: string): readonly JsonKeyHint[] | undefined {
+  const exact = hints[pointer]
+  if (exact) return exact
+  const tokens = pointer.split("/")
+  for (const [pattern, keys] of Object.entries(hints)) {
+    if (!pattern.includes("*")) continue
+    const want = pattern.split("/")
+    if (want.length === tokens.length && want.every((t, i) => t === "*" || t === tokens[i])) return keys
+  }
+  return undefined
+}
 
 /** The pointer of a key or index under parent. */
 export function childPointer(parent: string, token: string | number): string {
@@ -49,4 +65,19 @@ export function parseJson(text: string): JsonParse {
 /** Indented two spaces, as the editors show a document. */
 export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
+}
+
+export function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
+}
+
+/** Whether two JSON values are equal (key order aside). */
+export function sameJSON(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJSON(v, b[i]))
+  if (isRecord(a) && isRecord(b)) {
+    const ka = Object.keys(a)
+    return ka.length === Object.keys(b).length && ka.every((k) => sameJSON(a[k], b[k]))
+  }
+  return false
 }

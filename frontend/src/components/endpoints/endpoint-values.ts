@@ -17,6 +17,7 @@ import {
   type FieldDef,
 } from "@/components/modules/management/field-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
+import { isRecord, sameJSON } from "@/lib/json-edit"
 
 /** A channel kind as the endpoint UI uses it: its schema's fields, sorted. */
 export interface Kind {
@@ -159,20 +160,8 @@ function slug(name: string): string {
     .slice(0, MAX_NAME_LENGTH)
 }
 
-export function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
-}
-
-/** Whether two JSON values are equal (key order aside). */
-export function sameJSON(a: unknown, b: unknown): boolean {
-  if (a === b) return true
-  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJSON(v, b[i]))
-  if (isRecord(a) && isRecord(b)) {
-    const ka = Object.keys(a)
-    return ka.length === Object.keys(b).length && ka.every((k) => sameJSON(a[k], b[k]))
-  }
-  return false
-}
+// Generic JSON helpers, kept importable from here for the code that always did.
+export { isRecord, sameJSON } from "@/lib/json-edit"
 
 export function nameError(name: string): string | null {
   const n = name.trim()

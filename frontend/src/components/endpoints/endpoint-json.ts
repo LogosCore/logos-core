@@ -1,25 +1,21 @@
-import { parseDraft, validateValue, type Draft, type FieldDef } from "@/components/modules/management/field-values"
-import { childPointer, formatJson, parseJson, type JsonHints, type JsonProblem } from "@/lib/json-edit"
 import {
-  ENDPOINT_EXPORT_FORMAT,
-  isRecord,
-  MAX_DESCRIPTION_LENGTH,
-  nameError,
-  sameJSON,
-  type Kind,
-} from "./endpoint-values"
+  fieldHints,
+  jsonFieldValues,
+  readFieldValues,
+} from "@/components/modules/management/field-json"
+import { childPointer, formatJson, isRecord, parseJson, sameJSON, type JsonHints, type JsonProblem } from "@/lib/json-edit"
+import { ENDPOINT_EXPORT_FORMAT, MAX_DESCRIPTION_LENGTH, nameError, type Kind } from "./endpoint-values"
+
+export { formValues } from "@/components/modules/management/field-json"
 
 // An endpoint as the endpoint modal's JSON tab edits it: the shape of its
 // export (Copy / Download as JSON), so an export pastes straight in, with
 // the description, and every setting of its channel listed with the value
-// the endpoint uses: the channel's default where none is set, as the form
-// shows it. A value left at the default is not stored, so the setting keeps
-// following the channel's default; null also means the default. A setting
-// with no default shows empty when not set, as its type is empty: "" for
-// text (and anything written as text: URLs, durations, options), [] or {}
-// for a list or map; null for a number or a switch, where 0 and false are
-// values. Empty text means not set whatever the setting, as a cleared field
-// does in the form.
+// the endpoint uses, the channel's default where none is set, as the form
+// shows it (modules/management/field-json.ts has the rules). A value left at
+// the default is not stored, so the setting keeps following the channel's
+// default. An empty list or map stands for itself where the setting has a
+// default ("none, instead of it"): core keeps an endpoint's as it is.
 //
 //   { "format": "logos.channel-endpoint.v1", "name": "…", "description": "…",
 //     "channel": { "module_name": "http", "schema_version": 2 },
@@ -41,32 +37,13 @@ const KEYS = ["format", "name", "description", "channel", "params"]
 
 /** The JSON tab's text for an endpoint of kind. */
 export function endpointJson(kind: Kind, doc: EndpointDocument): string {
-  const params: Record<string, unknown> = {}
-  for (const f of kind.fields) params[f.key] = doc.values[f.key] ?? f.default ?? notSet(f)
   return formatJson({
     format: ENDPOINT_EXPORT_FORMAT,
     name: doc.name,
     description: doc.description,
     channel: { module_name: kind.name, schema_version: kind.version },
-    params,
+    params: jsonFieldValues(kind.fields, doc.values),
   })
-}
-
-/**
- * The form's settings as JSON values: each set field's value, or the text
- * typed into it where that does not parse (a number field holding "abc"), so
- * the JSON tab shows what the form holds and marks it.
- */
-export function formValues(fields: readonly FieldDef[], drafts: Record<string, Draft>): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const f of fields) {
-    const draft = drafts[f.key]
-    if (!draft) continue
-    const parsed = parseDraft(f, draft)
-    if (!parsed.ok) out[f.key] = "text" in draft ? draft.text : null
-    else if (parsed.value !== null && parsed.value !== undefined) out[f.key] = parsed.value
-  }
-  return out
 }
 
 /** The JSON tab's text read back: not an endpoint at all, or one with its problems. */
@@ -99,55 +76,15 @@ export function readEndpointJson(text: string, kind: Kind): EndpointJsonRead {
   const description = textOf(root.description, "/description", at)
   if ([...description].length > MAX_DESCRIPTION_LENGTH) at("/description", `At most ${MAX_DESCRIPTION_LENGTH} characters`)
 
-  const values: Record<string, unknown> = {}
-  const params = root.params ?? {}
-  if (!isRecord(params)) {
-    at("/params", "Must be an object of settings")
-  } else {
-    const fields = new Map(kind.fields.map((f) => [f.key, f]))
-    for (const [key, value] of Object.entries(params)) {
-      const f = fields.get(key)
-      if (!f) at(childPointer("/params", key), `Not a setting of ${kind.name} v${kind.version}`)
-      else if (!leavesUnset(f, value) && !sameJSON(value, f.default)) values[key] = value
-    }
-    for (const f of kind.fields) {
-      const raw = params[f.key]
-      const value = raw === undefined || leavesUnset(f, raw) ? null : raw
-      const error = validateValue(f, value, { fallback: f.default })
-      if (error) at(childPointer("/params", f.key), error)
-    }
-  }
+  const values = readFieldValues(
+    kind.fields,
+    root.params,
+    "/params",
+    { unknown: `Not a setting of ${kind.name} v${kind.version}`, notObject: "Must be an object of settings" },
+    problems,
+    { emptyOverridesDefault: true },
+  )
   return { ok: true, doc: { name, description, values }, problems }
-}
-
-const TEXTS = new Set(["string", "url", "secret", "duration", "datetime", "enum"])
-const LISTS = new Set(["string_list", "enum_list"])
-const MAPS = new Set(["string_map"])
-
-/**
- * How a setting with no default shows when not set: empty, as its type is
- * ("" for text, [] or {} for a list or map), where empty and not set are the
- * same; null for a number or a switch, and for a setting with a default
- * (which shows its default instead, and where an empty list would mean
- * "none, instead of the default").
- */
-function notSet(f: FieldDef): unknown {
-  if (f.default !== null && f.default !== undefined) return null
-  if (TEXTS.has(f.type)) return ""
-  if (LISTS.has(f.type)) return []
-  if (MAPS.has(f.type)) return {}
-  return null
-}
-
-/**
- * Whether a value in the text leaves its setting not set: null, empty text
- * (whatever the setting: a cleared field in the form is not set either), or
- * the empty list or map notSet shows.
- */
-function leavesUnset(f: FieldDef, value: unknown): boolean {
-  if (value === null || (value === "" && TEXTS.has(f.type))) return true
-  const empty = notSet(f)
-  return empty !== null && sameJSON(value, empty)
 }
 
 /** A text property's value: "" when absent or null, a problem when not text. */
@@ -165,22 +102,6 @@ export function endpointJsonHints(kind: Kind): JsonHints {
       { key: "description", detail: "text", info: "What this endpoint is for, for the rest of the team." },
       { key: "params", detail: "object", info: `The ${kind.name} channel's settings; null leaves one at its default.` },
     ],
-    "/params": kind.fields.map((f) => ({
-      key: f.key,
-      detail: f.required ? `${f.type}, required` : f.type,
-      info: [
-        f.label,
-        f.description,
-        f.default !== null && f.default !== undefined ? `Default: ${JSON.stringify(f.default)}` : "No default",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      values:
-        f.type === "enum"
-          ? [...(f.options ?? []).map((o) => o.value), notSet(f)]
-          : f.type === "bool"
-            ? [true, false, null]
-            : undefined,
-    })),
+    "/params": fieldHints(kind.fields),
   }
 }

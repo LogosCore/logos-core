@@ -5,14 +5,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
 import {
@@ -499,6 +492,7 @@ function EndpointEditor({
 
       <LeaveJsonDialog
         open={leavingJson}
+        what="an endpoint"
         problem={read && !read.ok ? read.message : ""}
         onStay={() => setLeavingJson(false)}
         onLeave={() => {
@@ -509,39 +503,3 @@ function EndpointEditor({
     </form>
   )
 }
-
-/** Leaving JSON that does not read: the form shows the last version that did. */
-function LeaveJsonDialog({
-  open,
-  problem,
-  onStay,
-  onLeave,
-}: {
-  open: boolean
-  problem: string
-  onStay: () => void
-  onLeave: () => void
-}) {
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onStay()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>The JSON does not read as an endpoint</DialogTitle>
-          <DialogDescription>
-            {problem} The form shows the last version that did; what you changed since is dropped.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onStay}>
-            Keep editing
-          </Button>
-          <Button type="button" onClick={onLeave}>
-            Show the form
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-

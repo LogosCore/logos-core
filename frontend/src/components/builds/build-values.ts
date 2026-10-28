@@ -233,9 +233,16 @@ export interface FormSource {
   connections?: readonly ConnectionSource[]
 }
 
-function draftsFor(fields: readonly FieldDef[], values: Record<string, unknown> | null | undefined): Record<string, Draft> {
+/**
+ * Drafts for fields from values, a field values do not set filled in with its
+ * default: the form shows what the build will use, not empty fields.
+ */
+export function draftsFor(
+  fields: readonly FieldDef[],
+  values: Record<string, unknown> | null | undefined,
+): Record<string, Draft> {
   const out: Record<string, Draft> = {}
-  for (const f of fields) out[f.key] = initialDraft(f, values?.[f.key] ?? null, AS_TEXT)
+  for (const f of fields) out[f.key] = initialDraft(f, values?.[f.key] ?? f.default ?? null, AS_TEXT)
   return out
 }
 
@@ -476,9 +483,57 @@ function evaluateFields(
     const v = parsed.value
     const error = validateValue(f, v, { fallback: f.default })
     if (error) errors[prefix + f.key] = error
-    else if (v !== null && v !== undefined) values[f.key] = v
+    // At its default (the form starts there), left to the server's default.
+    else if (v !== null && v !== undefined && !sameJSON(v, f.default)) values[f.key] = v
   }
   return values
+}
+
+/** The longest description core takes, of a build and of a connection, in characters. */
+const MAX_DESCRIPTION = 500
+
+/** What checkBuild looks at: a build's own parts, its values aside. */
+export interface BuildShape {
+  description: string
+  target: string
+  platform: string
+  connections: readonly { moduleName: string; name: string; description: string }[]
+}
+
+/**
+ * Adds to errors what a build needs besides valid values: a description, a
+ * target and one of its platforms, a connection, each through a channel the
+ * target speaks and named apart from the others. Keyed like the server's
+ * problems ("connections[1].name").
+ */
+export function checkBuild(
+  kind: FactoryKind,
+  b: BuildShape,
+  channels: ReadonlyMap<string, ChannelKind>,
+  errors: Record<string, string>,
+) {
+  const description = b.description.trim()
+  if (description === "") errors.description = "Required"
+  else if ([...description].length > MAX_DESCRIPTION) errors.description = `At most ${MAX_DESCRIPTION} characters`
+  const target = kind.targets.find((t) => t.id === b.target)
+  if (!target) errors.target = "Pick a target"
+  else if (b.platform === "") errors.platform = "Pick a platform"
+  else if (!target.platforms.includes(b.platform)) errors.platform = "Not a platform of this target"
+
+  if (b.connections.length === 0) errors.connections = "Add at least one connection"
+  const named = new Map<string, number>()
+  b.connections.forEach((c, i) => {
+    const at = `connections[${i}]`
+    const why = channelUnusable(target, c.moduleName, channels)
+    if (why) errors[at] = why
+    const name = c.name.trim()
+    const resolved = name || defaultConnectionName(c.moduleName, i)
+    const nameErr = name === "" ? null : nameError(name)
+    if (nameErr) errors[`${at}.name`] = nameErr
+    else if (named.has(resolved)) errors[`${at}.name`] = `Connection ${named.get(resolved)! + 1} is called ${resolved} too`
+    else named.set(resolved, i)
+    if ([...c.description.trim()].length > MAX_DESCRIPTION) errors[`${at}.description`] = `At most ${MAX_DESCRIPTION} characters`
+  })
 }
 
 /**
@@ -492,42 +547,30 @@ export function evaluateForm(
   channels: ReadonlyMap<string, ChannelKind>,
 ): { input: FormInput; errors: Record<string, string> } {
   const errors: Record<string, string> = {}
-  const description = form.description.trim()
-  if (description === "") errors.description = "Required"
+  checkBuild(kind, form, channels, errors)
   const target = kind.targets.find((t) => t.id === form.target)
-  if (!target) errors.target = "Pick a target"
-  else if (form.platform === "") errors.platform = "Pick a platform"
-  else if (form.platform !== "" && !target.platforms.includes(form.platform)) errors.platform = "Not a platform of this target"
-
   const values = evaluateFields("values.", targetFields(kind, target), form.drafts, errors)
-  if (form.connections.length === 0) errors.connections = "Add at least one connection"
-  const named = new Map<string, number>()
   const connections = form.connections.map((c, i): ConnectionInput => {
     const at = `connections[${i}]`
-    const why = channelUnusable(target, c.moduleName, channels)
-    if (why) errors[at] = why
-    const name = c.name.trim()
-    const resolved = name || defaultConnectionName(c.moduleName, i)
-    const nameErr = name === "" ? null : nameError(name)
-    if (nameErr) errors[`${at}.name`] = nameErr
-    else if (named.has(resolved)) errors[`${at}.name`] = `Connection ${named.get(resolved)! + 1} is called ${resolved} too`
-    else named.set(resolved, i)
     return {
       moduleName: c.moduleName,
-      name: name || null,
+      name: c.name.trim() || null,
       description: c.description.trim() || null,
       settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, errors),
       values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, errors),
     }
   })
-  return { input: { description, target: form.target, platform: form.platform, values, connections }, errors }
+  const input = { description: form.description.trim(), target: form.target, platform: form.platform, values, connections }
+  return { input, errors }
 }
 
 /** The form with another target: drafts for its fields, kept where they carry over. */
 export function withTarget(kind: FactoryKind, form: BuildForm, targetId: string): BuildForm {
   const target = kind.targets.find((t) => t.id === targetId)
   const drafts: Record<string, Draft> = {}
-  for (const f of targetFields(kind, target)) drafts[f.key] = form.drafts[f.key] ?? emptyDraft(f, AS_TEXT)
+  for (const f of targetFields(kind, target)) {
+    drafts[f.key] = form.drafts[f.key] ?? initialDraft(f, f.default ?? null, AS_TEXT)
+  }
   const platform = target?.platforms.includes(form.platform)
     ? form.platform
     : target?.platforms.length === 1
