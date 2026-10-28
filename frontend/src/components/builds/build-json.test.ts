@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest"
 import type { FieldDef } from "@/components/modules/management/field-values"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
-import { hintsAt } from "@/lib/json-edit"
+import { formatJson, hintsAt } from "@/lib/json-edit"
+import { buildRecordJson, type BuildRecord } from "./build-record"
 import { evaluateForm, factoryKindsByName, initialForm } from "./build-values"
 import {
   buildJson,
@@ -178,6 +179,35 @@ describe("readBuildJson", () => {
   it("checks a target's own values", () => {
     expect(problems({ ...json(), target: "service", platform: "windows/amd64" })).toEqual({
       "/values/service_name": "Required",
+    })
+  })
+})
+
+describe("a finished build's JSON", () => {
+  it("reads back as a new build's, the defaults it holds left to the server", () => {
+    const record = {
+      description: "EU dry run",
+      moduleName: "bob",
+      schemaVersion: 1,
+      target: "dummy",
+      platform: "any/any",
+      values: { greeting: "hello from BOB", punches: ["jab"] },
+      connections: [
+        {
+          endpoint: {
+            name: "edge",
+            channel: { module_name: "http", schema_version: 2 },
+            params: { base_url: "https://edge.example.com", request_timeout: "40s" },
+          },
+          values: { method: "POST" },
+        },
+      ],
+      connectionDescriptions: [""],
+    } as unknown as BuildRecord
+    expect(read(formatJson(buildRecordJson(record)))).toEqual({
+      ok: true,
+      doc: { ...good, connections: [{ ...good.connections[0], name: "edge" }] },
+      problems: [],
     })
   })
 })

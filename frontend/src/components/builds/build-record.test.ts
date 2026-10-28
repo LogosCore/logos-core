@@ -14,31 +14,53 @@ describe("defaultBuildTab", () => {
 })
 
 describe("buildRecordJson", () => {
-  it("is the record without its log, the build first and what it was given last", () => {
+  it("is what it takes to build it, as a new build's JSON writes it", () => {
     const b = {
       id: "m-1",
       operationId: "op",
-      description: "d",
+      description: "EU dry run",
       moduleName: "bob",
       target: "dummy",
       platform: "any/any",
       schemaVersion: 1,
       state: "SUCCEEDED",
-      stages: [],
-      warnings: [],
+      stages: [{ id: "core.queue" }],
+      warnings: ["debug build"],
+      artifact: { filename: "bob.json" },
       values: { greeting: "hi" },
-      connections: [],
-      connectionDescriptions: [],
+      connections: [
+        {
+          endpoint: {
+            format: "logos.channel-endpoint.v1",
+            name: "edge",
+            channel: { module_name: "http", schema_version: 2 },
+            params: { base_url: "https://edge.example.com", request_timeout: "40s" },
+          },
+          values: { method: "POST" },
+        },
+      ],
+      connectionDescriptions: ["the EU front"],
       createdBy: { type: "user", id: "u", name: "ann" },
       createdAt: "2026-10-28T10:00:00Z",
       deadline: "2026-10-28T11:00:00Z",
       log: "x".repeat(70_000),
     } as unknown as BuildRecord
-    const json = buildRecordJson(b)
-    expect(json).not.toHaveProperty("log")
-    expect(Object.keys(json)[0]).toBe("id")
-    expect(Object.keys(json).slice(-3)).toEqual(["values", "connections", "connectionDescriptions"])
-    expect(json.finishedAt).toBeNull()
+    expect(buildRecordJson(b)).toEqual({
+      factory: { module_name: "bob", schema_version: 1 },
+      description: "EU dry run",
+      target: "dummy",
+      platform: "any/any",
+      values: { greeting: "hi" },
+      connections: [
+        {
+          channel: "http",
+          name: "edge",
+          description: "the EU front",
+          settings: { base_url: "https://edge.example.com", request_timeout: "40s" },
+          values: { method: "POST" },
+        },
+      ],
+    })
   })
 })
 

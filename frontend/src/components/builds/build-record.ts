@@ -2,6 +2,7 @@ import type { FieldDef } from "@/components/modules/management/field-values"
 import type { BuildQuery } from "@/graphql/gql/graphql"
 import { isRecord, sameJSON } from "@/lib/json-edit"
 import type { BuildTab } from "@/lib/record-modals"
+import { recordedConnections } from "@/components/builds/build-values"
 
 // A finished or running build as its modal shows it (build-details.tsx):
 // which tab it opens on, the record its JSON tab shows, and its values as
@@ -21,35 +22,28 @@ export function defaultBuildTab(state: string): BuildTab {
 }
 
 /**
- * The build as the JSON tab shows it: the record as the API gives it, the
- * build itself first and what it was given last. Its log is left out: up to
- * 64 KiB of text, which the Pipeline tab shows as a log. So are its
- * capabilities, until factories' command sets are worked out.
+ * The build as the JSON tab shows it: what it takes to build it, as the New
+ * build modal's JSON tab writes a build (build-json.ts), so a build's JSON
+ * pastes into a new build's. Its factory, description, target, platform and
+ * values, and its connections, each with its channel, name, description, the
+ * channel's settings and the factory's values for it; every value as the
+ * factory got it, defaults filled in. What came of the build (state, stages,
+ * artifact, error, warnings, times, its log) is the other tabs'.
  */
 export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
   return {
-    id: b.id,
-    operationId: b.operationId,
+    factory: { module_name: b.moduleName, schema_version: b.schemaVersion },
     description: b.description,
-    moduleName: b.moduleName,
     target: b.target,
     platform: b.platform,
-    schemaVersion: b.schemaVersion,
-    state: b.state,
-    factoryVersion: b.factoryVersion ?? null,
-    createdBy: b.createdBy,
-    createdAt: b.createdAt,
-    startedAt: b.startedAt ?? null,
-    finishedAt: b.finishedAt ?? null,
-    deadline: b.deadline,
-    cancelledBy: b.cancelledBy ?? null,
-    error: b.error ?? null,
-    warnings: b.warnings,
-    artifact: b.artifact ?? null,
-    stages: b.stages,
     values: b.values,
-    connections: b.connections,
-    connectionDescriptions: b.connectionDescriptions,
+    connections: recordedConnections(b).map((c) => ({
+      channel: c.moduleName,
+      name: c.name,
+      description: c.description,
+      settings: c.params,
+      values: c.values,
+    })),
   }
 }
 
