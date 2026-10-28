@@ -35,7 +35,7 @@ import {
   useFreeChannelEndpointName,
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
-import { KindName } from "@/components/modules/module-icon"
+import { ModuleIcon } from "@/components/modules/module-icon"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
 import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
@@ -341,13 +341,17 @@ function EndpointEditor({
         className="min-h-0 flex-1 gap-0"
       >
       <RecordModalHeader>
-        {/* The title and the channel kind share a baseline. */}
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <RecordModalTitle>{endpoint ? endpoint.name : "New endpoint"}</RecordModalTitle>
-          <span className="text-sm text-muted-foreground">
-            <KindName type="channel" name={kind.name} icon={kind.icon} /> · schema v{kind.version}
-            {source && <> · {source.label}</>}
-          </span>
+        {/* The channel's icon as large as in the endpoints table, beside the
+            title and, under it, what the endpoint is for. */}
+        <div className="flex min-w-0 items-center gap-3">
+          <ModuleIcon type="channel" icon={kind.icon} className="size-9" />
+          <div className="flex min-w-0 flex-col">
+            <RecordModalTitle>{endpoint ? endpoint.name : "New endpoint"}</RecordModalTitle>
+            <span className="truncate text-sm text-muted-foreground">
+              <span className="font-mono">{kind.name}</span> · schema v{kind.version}
+              {source && <> · {source.label}</>}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
           <TabsList>
