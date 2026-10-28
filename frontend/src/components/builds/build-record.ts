@@ -60,7 +60,7 @@ export interface ValueRow {
 
 /**
  * values as rows, in their fields' order: each field with what the build
- * was given (none, for a field with no default it was not given), then keys
+ * was given (none, for a field with no default that was not set), then keys
  * no field has any more.
  */
 export function valueRows(fields: readonly FieldDef[], values: unknown): ValueRow[] {

@@ -242,7 +242,7 @@ function ValueList({ rows, fileNames }: { rows: readonly ValueRow[]; fileNames: 
 }
 
 function ValueText({ row, fileNames }: { row: ValueRow; fileNames: ReadonlyMap<string, string> }) {
-  if (row.value === undefined) return <span className="text-muted-foreground">not given</span>
+  if (row.value === undefined) return <span className="text-muted-foreground">not set</span>
   const type = row.field?.type ?? ""
   const text =
     type === "file" && typeof row.value === "string"
