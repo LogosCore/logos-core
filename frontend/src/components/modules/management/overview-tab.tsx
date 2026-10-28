@@ -34,9 +34,10 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
 }
 
 /**
- * The build parameters this factory instance declared (read-only): the targets
- * it builds, the parameters each takes, and the connection parameters per
- * channel kind. Operators fill them in on an operation's Builds page.
+ * The build parameters this factory instance declared (read-only): the
+ * parameters every target takes, each target's own, and the connection
+ * parameters per channel kind. Operators fill them in on an operation's
+ * Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
   return (
@@ -46,26 +47,6 @@ export function BuildParameters({ build }: { build: Build }) {
         <span className="text-xs font-normal text-muted-foreground">schema v{build.version}</span>
       </h3>
       <div className="divide-y">
-        <SchemaGroup title="Targets">
-          {build.targets.map((t) => (
-            <div key={t.id} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
-              <dt className="min-w-0 truncate text-muted-foreground" title={t.description ?? undefined}>
-                {t.label}
-              </dt>
-              <dd className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex flex-wrap items-baseline gap-x-2">
-                  <code className="font-mono text-xs">{t.id}</code>
-                  <span className="text-xs text-muted-foreground">{t.format}</span>
-                  <span className="text-xs text-muted-foreground">{t.platforms.map(platformLabel).join(", ")}</span>
-                  {t.channels.length > 0 && (
-                    <span className="text-xs text-muted-foreground">speaks {channelsText(t.channels)}</span>
-                  )}
-                </span>
-                {t.description && <span className="text-xs text-muted-foreground">{t.description}</span>}
-              </dd>
-            </div>
-          ))}
-        </SchemaGroup>
         {build.fields.length > 0 && (
           <SchemaGroup title="Parameters of every target">
             <FieldRows fields={build.fields} />
@@ -103,29 +84,71 @@ export function BuildParameters({ build }: { build: Build }) {
 }
 
 /**
+ * The targets this factory instance declared (read-only), what it can
+ * produce: each one's id, and its label, description, format, platforms and
+ * the channels it speaks.
+ */
+export function BuildTargets({ build }: { build: Build }) {
+  return (
+    <IdTable
+      title="Targets"
+      rows={build.targets.map((t) => ({
+        id: t.id,
+        content: (
+          <>
+            <div>{t.label}</div>
+            {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
+            <div className="text-xs text-muted-foreground">
+              {[t.format, t.platforms.map(platformLabel).join(", "), t.channels.length > 0 ? `speaks ${channelsText(t.channels)}` : ""]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          </>
+        ),
+      }))}
+    />
+  )
+}
+
+/**
  * The commands this factory instance declared (read-only), what its minions
- * can be built with: a table of their ids and names (label and description),
- * in the factory's order, without column headings. Operators pick a build's in the build form.
+ * can be built with: each one's id, and its label and description, in the
+ * factory's order. Operators pick a build's in the build form.
  */
 export function BuildCommands({ build }: { build: Build }) {
   return (
+    <IdTable
+      title="Commands"
+      rows={build.commands.map((c) => ({
+        id: c.id,
+        content: (
+          <>
+            <div>{c.label}</div>
+            {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+          </>
+        ),
+      }))}
+    />
+  )
+}
+
+/** A card titled with its count, holding a table without headings: each row an id, and what is said of it. */
+function IdTable({ title, rows }: { title: string; rows: { id: string; content: ReactNode }[] }) {
+  return (
     <section className="rounded-xl border bg-card">
       <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
-        Commands
-        <span className="text-xs font-normal text-muted-foreground tabular-nums">{build.commands.length}</span>
+        {title}
+        <span className="text-xs font-normal text-muted-foreground tabular-nums">{rows.length}</span>
       </h3>
       <table className="w-full text-sm">
         <TableBody>
-          {build.commands.map((c) => (
-            <TableRow key={c.id} className="hover:bg-transparent">
-              {/* Baseline: the id and the label share their first line. */}
+          {rows.map((r) => (
+            <TableRow key={r.id} className="hover:bg-transparent">
+              {/* Baseline: the id and the first line beside it share it. */}
               <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
-                <code className="font-mono text-xs">{c.id}</code>
+                <code className="font-mono text-xs">{r.id}</code>
               </TableCell>
-              <TableCell className="px-4 py-2 align-baseline whitespace-normal">
-                <div>{c.label}</div>
-                {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
-              </TableCell>
+              <TableCell className="px-4 py-2 align-baseline whitespace-normal">{r.content}</TableCell>
             </TableRow>
           ))}
         </TableBody>

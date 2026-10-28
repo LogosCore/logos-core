@@ -15,6 +15,7 @@ import { ModuleSyncIndicator } from "@/components/modules/management/module-sync
 import {
   BuildCommands,
   BuildParameters,
+  BuildTargets,
   ConnectionSchema,
   ModuleIdentity,
   StatusValues,
@@ -130,6 +131,7 @@ export function ModuleDetailPage() {
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <ModuleIdentity module={module} />
                 {connection && <ConnectionSchema connection={connection} />}
+                {build && <BuildTargets build={build} />}
                 {build && <BuildParameters build={build} />}
                 {build && build.commands.length > 0 && <BuildCommands build={build} />}
               </div>
@@ -171,6 +173,7 @@ export function ModuleDetailPage() {
                 <ModuleIdentity module={module} />
                 <StatusValues management={management} />
                 {connection && <ConnectionSchema connection={connection} />}
+                {build && <BuildTargets build={build} />}
                 {build && <BuildParameters build={build} />}
                 {build && build.commands.length > 0 && <BuildCommands build={build} />}
               </TabsContent>
