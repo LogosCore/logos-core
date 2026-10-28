@@ -490,7 +490,7 @@ function EndpointEditor({
         />
         <p className="text-xs text-muted-foreground">
           Settings show the channel&apos;s defaults; one left at its default is not stored and follows the channel&apos;s
-          default (<code className="font-mono">null</code> sets it back).{" "}
+          default (<code className="font-mono">null</code> sets it back). Empty text, lists and maps are not set.{" "}
           <code className="font-mono">format</code> and <code className="font-mono">channel</code> are locked.
           Settings and their values are suggested as you type; Ctrl+Space (⌥I on a Mac) asks for them.
         </p>

@@ -15,8 +15,11 @@ import {
 // the endpoint uses: the channel's default where none is set, as the form
 // shows it. A value left at the default is not stored, so the setting keeps
 // following the channel's default; null also means the default. A setting
-// with no default is null when not set, or [] / {} for a list or map, empty
-// being the same as not set then (the form keeps no empty list either).
+// with no default shows empty when not set, as its type is empty: "" for
+// text (and anything written as text: URLs, durations, options), [] or {}
+// for a list or map; null for a number or a switch, where 0 and false are
+// values. Empty text means not set whatever the setting, as a cleared field
+// does in the form.
 //
 //   { "format": "logos.channel-endpoint.v1", "name": "…", "description": "…",
 //     "channel": { "module_name": "http", "schema_version": 2 },
@@ -117,25 +120,32 @@ export function readEndpointJson(text: string, kind: Kind): EndpointJsonRead {
   return { ok: true, doc: { name, description, values }, problems }
 }
 
+const TEXTS = new Set(["string", "url", "secret", "duration", "datetime", "enum"])
 const LISTS = new Set(["string_list", "enum_list"])
 const MAPS = new Set(["string_map"])
 
 /**
- * How a setting that is not set shows: [] or {} for a list or map with no
- * default, where empty and not set are the same and [] reads as a list;
- * otherwise null, the channel's default (an empty list there would mean
+ * How a setting with no default shows when not set: empty, as its type is
+ * ("" for text, [] or {} for a list or map), where empty and not set are the
+ * same; null for a number or a switch, and for a setting with a default
+ * (which shows its default instead, and where an empty list would mean
  * "none, instead of the default").
  */
 function notSet(f: FieldDef): unknown {
-  const noDefault = f.default === null || f.default === undefined
-  if (noDefault && LISTS.has(f.type)) return []
-  if (noDefault && MAPS.has(f.type)) return {}
+  if (f.default !== null && f.default !== undefined) return null
+  if (TEXTS.has(f.type)) return ""
+  if (LISTS.has(f.type)) return []
+  if (MAPS.has(f.type)) return {}
   return null
 }
 
-/** Whether a value in the text leaves its setting not set: null, or what notSet shows. */
+/**
+ * Whether a value in the text leaves its setting not set: null, empty text
+ * (whatever the setting: a cleared field in the form is not set either), or
+ * the empty list or map notSet shows.
+ */
 function leavesUnset(f: FieldDef, value: unknown): boolean {
-  if (value === null) return true
+  if (value === null || (value === "" && TEXTS.has(f.type))) return true
   const empty = notSet(f)
   return empty !== null && sameJSON(value, empty)
 }
@@ -166,7 +176,11 @@ export function endpointJsonHints(kind: Kind): JsonHints {
         .filter(Boolean)
         .join("\n"),
       values:
-        f.type === "enum" ? [...(f.options ?? []).map((o) => o.value), null] : f.type === "bool" ? [true, false, null] : undefined,
+        f.type === "enum"
+          ? [...(f.options ?? []).map((o) => o.value), notSet(f)]
+          : f.type === "bool"
+            ? [true, false, null]
+            : undefined,
     })),
   }
 }

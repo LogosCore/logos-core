@@ -42,7 +42,7 @@ describe("endpointJson", () => {
       name: "edge",
       description: "CDN",
       channel: { module_name: "http", schema_version: 2 },
-      params: { base_url: "https://a.example.com", tls_verify: false, retries: 3, mode: null },
+      params: { base_url: "https://a.example.com", tls_verify: false, retries: 3, mode: "" },
     })
     expect(text).toContain('\n  "params": {\n    "base_url"') // indented two spaces
   })
@@ -81,6 +81,13 @@ describe("readEndpointJson", () => {
       kind,
     )
     expect(read.ok && read.doc.values).toEqual({ base_url: "https://a.example.com", mode: "fast" })
+  })
+
+  it("reads empty text as not set, as a cleared field in the form", () => {
+    const read = readEndpointJson(doc({ params: { base_url: "", tls_verify: null, retries: null, mode: "" } }), kind)
+    if (!read.ok) throw new Error(read.message)
+    expect(read.doc.values).toEqual({})
+    expect(read.problems).toEqual([{ path: "/params/base_url", message: "Required" }])
   })
 
   it("asks for a required setting left null, and for a name", () => {
@@ -153,7 +160,7 @@ describe("endpointJsonHints", () => {
   it("offers the channel's settings, with an enum's and a switch's values", () => {
     const params = endpointJsonHints(kind)["/params"]
     expect(params.map((h) => h.key)).toEqual(["base_url", "tls_verify", "retries", "mode"])
-    expect(params.find((h) => h.key === "mode")!.values).toEqual(["fast", "safe", null])
+    expect(params.find((h) => h.key === "mode")!.values).toEqual(["fast", "safe", ""])
     expect(params.find((h) => h.key === "tls_verify")!.values).toEqual([true, false, null])
     expect(params.find((h) => h.key === "base_url")!.detail).toBe("url, required")
   })
