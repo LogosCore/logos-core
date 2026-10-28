@@ -1,12 +1,13 @@
-import type { ReactNode } from "react"
+import { Fragment, type ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ModuleDetailFieldsFragment } from "@/graphql/gql/graphql"
 import { ModuleStatusIndicator } from "@/components/modules/module-status-indicator"
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { cn } from "@/lib/utils"
 import { platformLabel } from "@/components/builds/build-values"
-import { compareFields, formatValue, type FieldDef } from "./field-values"
+import { compareFields, DEFAULT_GROUP, formatValue, type FieldDef } from "./field-values"
 import { channelsText, fieldNotes, versionsText } from "./schema-notes"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
@@ -102,23 +103,67 @@ export function BuildParameters({ build }: { build: Build }) {
 }
 
 /**
- * The commands this factory instance declared (read-only): what its minions
- * can be built with, which targets have each, which a build gets by default
- * or always, and what a task of each takes. Operators pick a build's in the
+ * The commands this factory instance declared (read-only), what its minions
+ * can be built with: a table of their ids and names (label and description),
+ * under their groups in the factory's order. Operators pick a build's in the
  * build form.
  */
 export function BuildCommands({ build }: { build: Build }) {
+  const groups = commandGroups(build.commands)
   return (
     <section className="rounded-xl border bg-card">
       <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
         Commands
         <span className="text-xs font-normal text-muted-foreground tabular-nums">{build.commands.length}</span>
       </h3>
-      <dl className="divide-y">
-        <CommandRows build={build} />
-      </dl>
+      <table className="w-full text-sm">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="h-9 w-40 px-4 text-xs text-muted-foreground">ID</TableHead>
+            <TableHead className="h-9 px-4 text-xs text-muted-foreground">Name</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {groups.map((g) => (
+            <Fragment key={g.group}>
+              {/* A group's row, where there is more than one group. */}
+              {groups.length > 1 && (
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableCell colSpan={2} className="px-4 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                    {g.group}
+                  </TableCell>
+                </TableRow>
+              )}
+              {g.commands.map((c) => (
+                <TableRow key={c.id} className="hover:bg-transparent">
+                  {/* Baseline: the id and the label share their first line. */}
+                  <TableCell className="w-40 max-w-40 px-4 py-2 align-baseline break-all whitespace-normal">
+                    <code className="font-mono text-xs">{c.id}</code>
+                  </TableCell>
+                  <TableCell className="px-4 py-2 align-baseline whitespace-normal">
+                    <div>{c.label}</div>
+                    {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </Fragment>
+          ))}
+        </TableBody>
+      </table>
     </section>
   )
+}
+
+/** Commands under their groups: each group where its first command is, one without under the default group. */
+function commandGroups<C extends { group?: string | null }>(commands: readonly C[]): { group: string; commands: C[] }[] {
+  const groups = new Map<string, C[]>()
+  for (const c of commands) {
+    const g = c.group?.trim() || DEFAULT_GROUP
+    const list = groups.get(g)
+    if (list) list.push(c)
+    else groups.set(g, [c])
+  }
+  return [...groups].map(([group, commands]) => ({ group, commands }))
 }
 
 function SchemaGroup({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
@@ -149,38 +194,6 @@ function FieldRows({ fields }: { fields: readonly FieldDef[] }) {
             {n}
           </span>
         ))}
-      </dd>
-    </div>
-  ))
-}
-
-/** The factory's commands in its order, as read-only rows: who has each, and what a task of it takes. */
-function CommandRows({ build }: { build: Build }) {
-  const targetLabel = new Map(build.targets.map((t) => [t.id, t.label]))
-  return build.commands.map((c) => (
-    <div key={c.id} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
-      <dt className="min-w-0 truncate text-muted-foreground" title={c.description ?? undefined}>
-        {c.label}
-      </dt>
-      <dd className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex flex-wrap items-baseline gap-x-2">
-          <code className="font-mono text-xs">{c.id}</code>
-          {c.group && <span className="text-xs text-muted-foreground">{c.group}</span>}
-          {c.required ? (
-            <span className="text-xs text-muted-foreground">required</span>
-          ) : (
-            c.default && <span className="text-xs text-muted-foreground">picked by default</span>
-          )}
-          {c.targets.length < build.targets.length && (
-            <span className="text-xs text-muted-foreground">
-              {c.targets.map((t) => targetLabel.get(t) ?? t).join(", ")} only
-            </span>
-          )}
-          {c.params.length > 0 && (
-            <span className="text-xs text-muted-foreground">takes {c.params.map((f) => f.key).join(", ")}</span>
-          )}
-        </span>
-        {c.description && <span className="text-xs text-muted-foreground">{c.description}</span>}
       </dd>
     </div>
   ))
