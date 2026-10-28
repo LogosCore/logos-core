@@ -381,6 +381,15 @@ function recordedConnection(raw: unknown) {
   }
 }
 
+/** A build record's connections as far as they read, with the operators' notes. */
+export function recordedConnections(build: Pick<BuildRecordLike, "connections" | "connectionDescriptions">) {
+  const records = Array.isArray(build.connections) ? build.connections : []
+  return records.map((raw: unknown, i) => ({
+    ...recordedConnection(raw),
+    description: build.connectionDescriptions?.[i] ?? "",
+  }))
+}
+
 /** A build's connections as its page lists them: who, where, and the operators' note. */
 export function buildConnectionRows(
   build: Pick<BuildRecordLike, "connections" | "connectionDescriptions">,

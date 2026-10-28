@@ -4,6 +4,7 @@ import { json } from "@codemirror/lang-json"
 import { EditorState, type TransactionSpec } from "@codemirror/state"
 import type { JsonHints } from "@/lib/json-edit"
 import {
+  changedPart,
   completeJson,
   config,
   diagnosticsOf,
@@ -133,5 +134,18 @@ describe("foldContentsEffects", () => {
     const folded = foldContentsEffects(stateOf(doc)).map((e) => doc.slice(e.value.from - 1, e.value.to + 1))
     // channel and params, not the document, and not params' own list on its own.
     expect(folded).toEqual(['{\n    "x": 1\n  }', '{\n    "b": [\n      1\n    ]\n  }'])
+  })
+})
+
+describe("changedPart", () => {
+  it("is the part between what both texts start and end with alike", () => {
+    expect(changedPart('{"state": "BUILDING", "n": 1}', '{"state": "SUCCEEDED", "n": 1}')).toEqual({
+      from: 11,
+      to: 19,
+      insert: "SUCCEEDED",
+    })
+    expect(changedPart("abc", "abc")).toEqual({ from: 3, to: 3, insert: "" })
+    expect(changedPart("ab", "abab")).toEqual({ from: 2, to: 2, insert: "ab" })
+    expect(changedPart("", "x")).toEqual({ from: 0, to: 0, insert: "x" })
   })
 })

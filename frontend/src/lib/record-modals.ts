@@ -1,21 +1,27 @@
 // Builds and endpoints open in large modals over whatever page is showing,
 // addressed by the URL's query, so a link to one opens it and Back closes it:
 //
-//   ?build=<id>                                a build
+//   ?build=<id>[&buildTab=<tab>]               a build, on a tab of its own
 //   ?newBuild=<factory>[&buildFrom=<id>]       a new build, from an earlier one
 //   ?endpoint=<id>                             an endpoint (its editor)
 //   ?newEndpoint=<channel>[&endpointFrom=<id>] a new endpoint, from another
 //
 // The rest of the query belongs to the page underneath and is kept.
 
+/** A build modal's tabs (?buildTab=). Without one, the modal picks by the build's state. */
+export type BuildTab = "overview" | "json" | "pipeline"
+
+const BUILD_TABS: readonly BuildTab[] = ["overview", "json", "pipeline"]
+
 /** The modal the URL opens. */
 export type RecordModal =
-  | { kind: "build"; id: string }
+  | { kind: "build"; id: string; tab?: BuildTab }
   | { kind: "new-build"; factory: string; from: string | null }
   | { kind: "endpoint"; id: string }
   | { kind: "new-endpoint"; channel: string; from: string | null }
 
 const BUILD = "build"
+const BUILD_TAB = "buildTab"
 const NEW_BUILD = "newBuild"
 const BUILD_FROM = "buildFrom"
 const ENDPOINT = "endpoint"
@@ -23,13 +29,16 @@ const NEW_ENDPOINT = "newEndpoint"
 const ENDPOINT_FROM = "endpointFrom"
 
 /** Every query key the record modals use. */
-export const RECORD_MODAL_KEYS = [BUILD, NEW_BUILD, BUILD_FROM, ENDPOINT, NEW_ENDPOINT, ENDPOINT_FROM]
+export const RECORD_MODAL_KEYS = [BUILD, BUILD_TAB, NEW_BUILD, BUILD_FROM, ENDPOINT, NEW_ENDPOINT, ENDPOINT_FROM]
 
 /** The modal params name, or null; with several, the first of the order above. */
 export function recordModalOf(params: URLSearchParams): RecordModal | null {
   const get = (key: string) => params.get(key)?.trim() || null
   const build = get(BUILD)
-  if (build) return { kind: "build", id: build }
+  if (build) {
+    const tab = BUILD_TABS.find((t) => t === get(BUILD_TAB))
+    return tab ? { kind: "build", id: build, tab } : { kind: "build", id: build }
+  }
   const factory = get(NEW_BUILD)
   if (factory) return { kind: "new-build", factory, from: get(BUILD_FROM) }
   const endpoint = get(ENDPOINT)
@@ -46,6 +55,7 @@ export function withRecordModal(params: URLSearchParams, modal: RecordModal | nu
   switch (modal?.kind) {
     case "build":
       next.set(BUILD, modal.id)
+      if (modal.tab) next.set(BUILD_TAB, modal.tab)
       break
     case "new-build":
       next.set(NEW_BUILD, modal.factory)

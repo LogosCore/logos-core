@@ -19,6 +19,14 @@ describe("recordModalOf", () => {
     expect(recordModalOf(params("newEndpoint=http&endpointFrom=e-1"))).toEqual({ kind: "new-endpoint", channel: "http", from: "e-1" })
   })
 
+  it("reads a build's tab, and leaves out one it does not know", () => {
+    expect(recordModalOf(params("build=b-1&buildTab=pipeline"))).toEqual({ kind: "build", id: "b-1", tab: "pipeline" })
+    expect(recordModalOf(params("build=b-1&buildTab=logs"))).toEqual({ kind: "build", id: "b-1" })
+    expect(withRecordModal(params(""), { kind: "build", id: "b-1", tab: "json" }).toString()).toBe("build=b-1&buildTab=json")
+    // Another modal drops it.
+    expect(withRecordModal(params("build=b-1&buildTab=json"), { kind: "endpoint", id: "e-1" }).toString()).toBe("endpoint=e-1")
+  })
+
   it("is none without a modal key, or with an empty one", () => {
     expect(recordModalOf(params(""))).toBeNull()
     expect(recordModalOf(params("tab=hosts&build="))).toBeNull()
@@ -42,6 +50,7 @@ describe("withRecordModal", () => {
   it("round-trips every modal", () => {
     const modals: RecordModal[] = [
       { kind: "build", id: "b-1" },
+      { kind: "build", id: "b-1", tab: "overview" },
       { kind: "new-build", factory: "bob", from: null },
       { kind: "new-build", factory: "bob", from: "b-1" },
       { kind: "endpoint", id: "e-1" },

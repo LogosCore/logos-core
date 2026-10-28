@@ -245,3 +245,19 @@ export function foldContentsEffects(state: EditorState): StateEffect<{ from: num
   }
   return effects
 }
+
+// --- Text from outside -------------------------------------------------------
+
+/** The change from a to b: the part between what they start and end with alike. */
+export function changedPart(a: string, b: string): { from: number; to: number; insert: string } {
+  let start = 0
+  const shorter = Math.min(a.length, b.length)
+  while (start < shorter && a.charCodeAt(start) === b.charCodeAt(start)) start++
+  let endA = a.length
+  let endB = b.length
+  while (endA > start && endB > start && a.charCodeAt(endA - 1) === b.charCodeAt(endB - 1)) {
+    endA--
+    endB--
+  }
+  return { from: start, to: endA, insert: b.slice(start, endB) }
+}

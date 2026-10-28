@@ -15,7 +15,7 @@ export function BuildModal({ modal }: { modal: Extract<RecordModalTarget, { kind
   return (
     <RecordModal onClose={close}>
       {modal.kind === "build" ? (
-        <BuildDetails key={`build:${modal.id}`} id={modal.id} />
+        <BuildDetails key={`build:${modal.id}`} id={modal.id} tab={modal.tab ?? null} />
       ) : (
         <NewBuild key={`new:${modal.factory}:${modal.from ?? ""}`} factory={modal.factory} from={modal.from} />
       )}

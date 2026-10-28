@@ -37,7 +37,7 @@ import {
 } from "@codemirror/language"
 import { lintGutter, lintKeymap, nextDiagnostic, setDiagnostics } from "@codemirror/lint"
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search"
-import { Compartment, EditorState, type Extension } from "@codemirror/state"
+import { Compartment, EditorState, Transaction, type Extension } from "@codemirror/state"
 import {
   Decoration,
   drawSelection,
@@ -58,6 +58,7 @@ import { cn } from "@/lib/utils"
 import { hintsAt, parseJson, type JsonHints, type JsonKeyHint, type JsonProblem } from "@/lib/json-edit"
 import { keyOf, pointerOfNode } from "./json-editor-tree"
 import {
+  changedPart,
   completeJson,
   config,
   diagnosticsOf,
@@ -161,12 +162,19 @@ export function JsonEditor({
     }
   }, [])
 
-  // A new value from outside (the form, a reset): replace the text, past the locks.
+  // A new value from outside (the form, a record refreshing): past the locks
+  // and outside the undo history, and only the part that differs, so the
+  // scroll position and the folds stay where they are.
   useEffect(() => {
     const v = view.current
     if (!v) return
     const text = v.state.doc.toString()
-    if (text !== value) v.dispatch({ changes: { from: 0, to: text.length, insert: value }, filter: false })
+    if (text === value) return
+    v.dispatch({
+      changes: changedPart(text, value),
+      filter: false,
+      annotations: Transaction.addToHistory.of(false),
+    })
   }, [value])
 
   useEffect(() => {
@@ -227,7 +235,7 @@ export function JsonEditor({
         </Tool>
 
         <span className="flex-1" />
-        {problemCount > 0 ? (
+        {readOnly ? null : problemCount > 0 ? (
           <Tool label="Go to the next problem" keys="F8" onClick={() => run(nextDiagnostic)} wide>
             <span className="flex items-center gap-1 text-destructive">
               <CircleAlertIcon />
