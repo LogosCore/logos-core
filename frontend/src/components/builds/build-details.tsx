@@ -96,7 +96,6 @@ function BuildDetail({ build: b }: { build: Build }) {
             <span className="font-mono">{b.moduleName}</span> · {b.target}
           </RecordModalTitle>
         </div>
-        <BuildStateBadge build={b} />
         <div className="flex items-center gap-2 sm:ml-auto">
           {canWrite && running && (
             <Button variant="outline" onClick={stop} disabled={cancel.isPending}>
@@ -145,7 +144,7 @@ function BuildDetail({ build: b }: { build: Build }) {
           </div>
         )}
 
-        <Section title="Pipeline">
+        <Section title="Pipeline" aside={<BuildStateBadge build={b} />}>
           <div className="py-3">
             <BuildPipeline stages={b.stages} now={now} />
           </div>
@@ -278,10 +277,14 @@ function BuildDetail({ build: b }: { build: Build }) {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** A titled card; aside goes beside the title (the build's state, by the pipeline). */
+function Section({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+      <div className="mb-1 flex items-center gap-2">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+        {aside}
+      </div>
       <div className="rounded-xl border bg-card px-4">{children}</div>
     </section>
   )
