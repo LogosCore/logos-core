@@ -3,6 +3,7 @@ import { ArrowLeftIcon, BlocksIcon, PackageOpenIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CardColumns } from "@/components/ui/card-columns"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useAuthStore } from "@/stores/auth"
 import { Permissions } from "@/constants/permissions"
@@ -128,13 +129,13 @@ export function ModuleDetailPage() {
                   configuration, actions and status here.
                 </p>
               </div>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <CardColumns>
                 <ModuleIdentity module={module} />
                 {connection && <ConnectionSchema connection={connection} />}
                 {build && <BuildTargets build={build} />}
                 {build && <BuildParameters build={build} />}
                 {build && build.commands.length > 0 && <BuildCommands build={build} />}
-              </div>
+              </CardColumns>
             </div>
           ) : (
             <Tabs
@@ -169,13 +170,16 @@ export function ModuleDetailPage() {
                   <TabsTrigger value="logs">Logs</TabsTrigger>
                 )}
               </TabsList>
-              <TabsContent value="overview" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <ModuleIdentity module={module} />
-                <StatusValues management={management} />
-                {connection && <ConnectionSchema connection={connection} />}
-                {build && <BuildTargets build={build} />}
-                {build && <BuildParameters build={build} />}
-                {build && build.commands.length > 0 && <BuildCommands build={build} />}
+              <TabsContent value="overview">
+                {/* Each card as tall as it needs, not as its neighbour. */}
+                <CardColumns>
+                  <ModuleIdentity module={module} />
+                  <StatusValues management={management} />
+                  {connection && <ConnectionSchema connection={connection} />}
+                  {build && <BuildTargets build={build} />}
+                  {build && <BuildParameters build={build} />}
+                  {build && build.commands.length > 0 && <BuildCommands build={build} />}
+                </CardColumns>
               </TabsContent>
               {/* Kept mounted: unsaved edits survive a look at another tab. */}
               <TabsContent value="configuration" keepMounted>
