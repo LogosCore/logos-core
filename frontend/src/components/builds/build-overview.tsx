@@ -83,8 +83,8 @@ export function BuildOverview({
             {platformLabel(b.platform)} <span className="font-mono text-muted-foreground">· {b.platform}</span>
           </Item>
           <Item label="Minion id">
-            <span className="inline-flex items-center gap-1">
-              <code className="font-mono text-xs">{b.id}</code>
+            <span className="flex min-w-0 items-center gap-1">
+              <code className="min-w-0 font-mono text-xs break-all">{b.id}</code>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -133,8 +133,9 @@ export function BuildOverview({
               {b.artifact.mediaType && <span className="text-muted-foreground"> · {b.artifact.mediaType}</span>}
             </Item>
             <Item label="SHA-256">
-              <span className="inline-flex min-w-0 items-center gap-1">
-                <code className="break-all font-mono text-xs">{b.artifact.sha256}</code>
+              {/* A block row in which the hash may shrink: in an inline one it ran past the card. */}
+              <span className="flex min-w-0 items-center gap-1">
+                <code className="min-w-0 font-mono text-xs break-all">{b.artifact.sha256}</code>
                 <Button
                   variant="ghost"
                   size="icon-sm"
