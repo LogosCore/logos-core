@@ -24,6 +24,15 @@
       "sources": [
         "eff"
       ]
+    },
+    {
+      "id": "directory",
+      "name": "Directory names",
+      "count": 180053,
+      "sources": [
+        "dirbuster",
+        "operators"
+      ]
     }
   ],
   "sources": {
@@ -41,6 +50,16 @@
       "name": "EFF's Wordlists for Random Passphrases",
       "url": "https://www.eff.org/dice",
       "license": "CC BY 3.0 US"
+    },
+    "dirbuster": {
+      "name": "DirBuster's directory-list-2.3-medium by James Fisher",
+      "url": "https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/DirBuster-2007_directory-list-2.3-medium.txt",
+      "license": "CC BY-SA 3.0"
+    },
+    "operators": {
+      "name": "the operators' web path lists",
+      "url": "",
+      "license": "origin not recorded"
     }
   }
 }

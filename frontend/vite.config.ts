@@ -146,7 +146,9 @@ function preloadLatinFont(): Plugin {
 // not worth it. The 1 KiB floor matches gzip_min_length in nginx.conf: under it
 // the header and round-trip dominate and a compressed copy can even be larger.
 // It also keeps ~4,000 per-icon chunks out of the image — see nginx.conf.
-const PRECOMPRESS_EXTENSIONS = new Set([".js", ".css", ".html", ".svg", ".json"])
+// .txt and .md: the value generator's word lists (public/wordlists), one of
+// them 1.7 MB of directory names.
+const PRECOMPRESS_EXTENSIONS = new Set([".js", ".css", ".html", ".svg", ".json", ".txt", ".md"])
 const PRECOMPRESS_MIN_BYTES = 1024
 
 // Writes a .gz next to every compressible build output, for `gzip_static on`.

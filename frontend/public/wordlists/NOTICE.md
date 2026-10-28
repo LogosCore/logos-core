@@ -2,15 +2,18 @@
 
 The value generator (the "Generate" helper of fields that hold a path) picks
 its words from these lists. `scripts/generate-wordlists.mjs` builds them from
-the sources below: each list holds lowercase words of 3 to 10 letters a–z,
-each once, without offensive words; dice numbers and the words that do not
-fit are left out of the sources' lists.
+the sources below: Common words, Short words and Long word list hold
+lowercase words of 3 to 10 letters a–z; Directory names, names fit for a
+path segment (see its section). Every list holds each word once, without
+offensive words; dice numbers and the words that do not fit are left out of
+the sources' lists.
 
 | List | Words | From |
 |---|---|---|
 | Common words | 3780 | SCOWL (Spell Checker Oriented Word Lists), size 10; Corpora by Darius Kazemi and contributors |
 | Short words | 1293 | EFF's Wordlists for Random Passphrases |
 | Long word list | 7768 | EFF's Wordlists for Random Passphrases |
+| Directory names | 180053 | DirBuster's directory-list-2.3-medium by James Fisher; the operators' web path lists |
 
 ## SCOWL
 
@@ -281,3 +284,18 @@ Electronic Frontier Foundation: https://www.eff.org/dice. Licensed under the
 Creative Commons Attribution 3.0 United States License
 (https://creativecommons.org/licenses/by/3.0/us/). Changed: the dice numbers
 are left out, and so are the words that do not fit the rule above.
+
+## Directory names
+
+Merged from web content discovery lists the operators keep, cut to names
+fit for a path segment: lowercase, from a letter on, letters and digits in
+parts joined by one `-` or `_`, 3 to 20 characters with at most 4
+digits, no offensive part. File names, ids and symbols are left out.
+
+- `directory-list-2.3-medium.txt` and its lowercase version, from DirBuster:
+  Copyright 2007 James Fisher, licensed under the Creative Commons
+  Attribution-Share Alike 3.0 License
+  (https://creativecommons.org/licenses/by-sa/3.0/). Built on it, the
+  Directory names list is shared under the same license.
+- `directories.txt`, `directories(1).txt`, `most_common.txt` and
+  `web_path_wordlist.txt`: the operators' own; their origin is not recorded.

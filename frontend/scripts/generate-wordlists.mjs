@@ -3,22 +3,26 @@
 // its words from (src/lib/word-generator.ts; the "Generate" helper of string
 // fields with format "path").
 //
-// Three lists: Common words (SCOWL size 10 with Corpora's common words),
-// and EFF's short and long passphrase lists. Every list is cleaned the same
-// way: lowercase words of 3 to 10 letters a–z, each once, sorted, and
-// without offensive words, which are dropped against two blocklists used
-// here only and never shipped; a word written with a capital, a proper
-// noun, is left out.
+// Four lists: Common words (SCOWL size 10 with Corpora's common words),
+// EFF's short and long passphrase lists, and Directory names. The first
+// three hold lowercase words of 3 to 10 letters a–z (a word written with a
+// capital, a proper noun, is left out). Directory names are merged from
+// web content discovery lists the operators keep in a folder of their own,
+// cut to names fit for a path segment (directoryName). Every list holds
+// each word once, sorted, without offensive words, which are dropped
+// against two blocklists used here only and never shipped.
 //
-// The sources are fetched and the output is committed, so nothing but this
-// script, run by hand when a list should change, needs network.
+// The sources are fetched (or read from that folder) and the output is
+// committed, so nothing but this script, run by hand when a list should
+// change, needs them.
 //
-//   npm run gen:wordlists
+//   npm run gen:wordlists                               # Directory names kept as committed
+//   npm run gen:wordlists -- --directories ~/wordlists  # Directory names rebuilt from a folder
 //
 // public/wordlists/index.json lists the lists; NOTICE.md credits every source
 // with its terms.
 
-import { mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -28,6 +32,12 @@ const OUT = join(root, "public/wordlists")
 const RAW = "https://raw.githubusercontent.com"
 const SCOWL = "https://sources.debian.org/data/main/s/scowl/2020.12.07-2"
 const CORPORA = `${RAW}/dariusk/corpora/master/data/words`
+
+// The folder Directory names are merged from: every file in it, one name a
+// line, "#" lines skipped. Without it, the committed list is kept.
+const at = process.argv.indexOf("--directories")
+const DIRECTORIES = at >= 0 ? process.argv[at + 1] : null
+if (at >= 0 && !DIRECTORIES) throw new Error("--directories needs a folder")
 
 async function text(url) {
   const res = await fetch(url, { headers: { "User-Agent": "logos-generate-wordlists" } })
@@ -67,11 +77,54 @@ function clean(words) {
   return [...new Set(words.filter((w) => WORD.test(w) && !blocked.has(w)))].sort()
 }
 
+const DIRECTORY = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/
+
+/**
+ * A directory name fit for a path segment, or null: lowercased, slashes
+ * around it trimmed; from a letter on, letters and digits in parts joined
+ * by one - or _; 3 to 20 characters with at most 4 digits, so no ids or
+ * hashes; no part of it blocked. File names, traversal tricks and symbols
+ * do not pass.
+ */
+function directoryName(raw) {
+  const w = raw.trim().replace(/^\/+|\/+$/g, "").toLowerCase()
+  if (w.length < 3 || w.length > 20 || !DIRECTORY.test(w)) return null
+  if ((w.match(/[0-9]/g) ?? []).length > 4) return null
+  if (blocked.has(w) || w.split(/[-_]/).some((part) => blocked.has(part))) return null
+  return w
+}
+
+/** Directory names: merged from the folder's files, or the committed list kept. */
+function directoryNames() {
+  if (DIRECTORIES) {
+    const names = new Set()
+    for (const file of readdirSync(DIRECTORIES).sort()) {
+      const path = join(DIRECTORIES, file)
+      if (!statSync(path).isFile()) continue
+      let kept = 0
+      for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
+        const name = line.startsWith("#") ? null : directoryName(line)
+        if (name) {
+          names.add(name)
+          kept++
+        }
+      }
+      console.log(`  ${file}: ${kept} names`)
+    }
+    return [...names].sort()
+  }
+  const committed = join(OUT, "directory.txt")
+  if (!existsSync(committed)) return []
+  console.log("  Directory names kept as committed (--directories rebuilds them)")
+  return lines(readFileSync(committed, "utf8"))
+}
+
 const lists = [
   { id: "common", name: "Common words", sources: ["scowl", "corpora"], words: clean([...scowl10, ...common]) },
   { id: "short", name: "Short words", sources: ["eff"], words: clean(effShort) },
   { id: "long", name: "Long word list", sources: ["eff"], words: clean(effLarge) },
-]
+  { id: "directory", name: "Directory names", sources: ["dirbuster", "operators"], words: directoryNames() },
+].filter((l) => l.words.length > 0)
 
 const SOURCES = {
   scowl: {
@@ -81,10 +134,19 @@ const SOURCES = {
   },
   corpora: { name: "Corpora by Darius Kazemi and contributors", url: "https://github.com/dariusk/corpora", license: "CC0 1.0" },
   eff: { name: "EFF's Wordlists for Random Passphrases", url: "https://www.eff.org/dice", license: "CC BY 3.0 US" },
+  dirbuster: {
+    name: "DirBuster's directory-list-2.3-medium by James Fisher",
+    url: "https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/DirBuster-2007_directory-list-2.3-medium.txt",
+    license: "CC BY-SA 3.0",
+  },
+  operators: { name: "the operators' web path lists", url: "", license: "origin not recorded" },
 }
 
-rmSync(OUT, { recursive: true, force: true })
+// Written over in place, and stale files removed one by one: a dev server
+// watching the folder loses track of its files when it goes whole.
 mkdirSync(OUT, { recursive: true })
+const written = new Set([...lists.map((l) => `${l.id}.txt`), "index.json", "NOTICE.md"])
+for (const file of readdirSync(OUT)) if (!written.has(file)) rmSync(join(OUT, file))
 for (const l of lists) writeFileSync(join(OUT, `${l.id}.txt`), `${l.words.join("\n")}\n`)
 writeFileSync(
   join(OUT, "index.json"),
@@ -105,9 +167,11 @@ writeFileSync(
 
 The value generator (the "Generate" helper of fields that hold a path) picks
 its words from these lists. \`scripts/generate-wordlists.mjs\` builds them from
-the sources below: each list holds lowercase words of 3 to 10 letters a–z,
-each once, without offensive words; dice numbers and the words that do not
-fit are left out of the sources' lists.
+the sources below: Common words, Short words and Long word list hold
+lowercase words of 3 to 10 letters a–z; Directory names, names fit for a
+path segment (see its section). Every list holds each word once, without
+offensive words; dice numbers and the words that do not fit are left out of
+the sources' lists.
 
 | List | Words | From |
 |---|---|---|
@@ -135,6 +199,21 @@ Electronic Frontier Foundation: ${SOURCES.eff.url}. Licensed under the
 Creative Commons Attribution 3.0 United States License
 (https://creativecommons.org/licenses/by/3.0/us/). Changed: the dice numbers
 are left out, and so are the words that do not fit the rule above.
+
+## Directory names
+
+Merged from web content discovery lists the operators keep, cut to names
+fit for a path segment: lowercase, from a letter on, letters and digits in
+parts joined by one \`-\` or \`_\`, 3 to 20 characters with at most 4
+digits, no offensive part. File names, ids and symbols are left out.
+
+- \`directory-list-2.3-medium.txt\` and its lowercase version, from DirBuster:
+  Copyright 2007 James Fisher, licensed under the Creative Commons
+  Attribution-Share Alike 3.0 License
+  (https://creativecommons.org/licenses/by-sa/3.0/). Built on it, the
+  Directory names list is shared under the same license.
+- \`directories.txt\`, \`directories(1).txt\`, \`most_common.txt\` and
+  \`web_path_wordlist.txt\`: the operators' own; their origin is not recorded.
 `,
 )
 console.log(`wrote ${lists.length} lists to public/wordlists (${lists.reduce((n, l) => n + l.words.length, 0)} words)`)

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { DicesIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -36,6 +36,20 @@ const DIVIDERS: Divider[] = ["/", "-", ".", "_"]
 const CANDIDATES = 5
 // The lists stay as long as the page: they are static files.
 const FOREVER = { staleTime: Infinity, gcTime: Infinity }
+
+/**
+ * The picked lists' words as one pool, and how their loading goes. Out of
+ * the component, so useQueries runs it again only when a list's result
+ * changes: Directory names alone is 180,000 names, not to be merged again
+ * on every slider move.
+ */
+function combineLists(results: UseQueryResult<string[]>[]) {
+  return {
+    words: pool(results.map((r) => r.data ?? [])),
+    loading: results.some((r) => r.isPending),
+    failed: results.some((r) => r.isError),
+  }
+}
 
 /**
  * "Generate" helper for string fields of a format the generator serves
@@ -118,12 +132,12 @@ function Panel({
   const lists = catalog.data?.lists ?? []
   const picked = drawsFrom(s, lists)
   const wordlist = (id: string) => ({ queryKey: ["wordlist", id], queryFn: () => fetchWordlist(id), ...FOREVER })
-  const loaded = useQueries({ queries: picked.map(wordlist) })
-  const loading = catalog.isPending || loaded.some((q) => q.isPending)
-  const failed = catalog.isError || loaded.some((q) => q.isError)
   // Made of the lists that are here: while a list just picked loads, the
   // candidates stay those of the others, and change once when it comes.
-  const words = pool(loaded.map((q) => q.data ?? []))
+  const loaded = useQueries({ queries: picked.map(wordlist), combine: combineLists })
+  const words = loaded.words
+  const loading = catalog.isPending || loaded.loading
+  const failed = catalog.isError || loaded.failed
   const values = candidates(s, words, CANDIDATES, fits, fromDrawn(drawn))
   const log10 = log10Combinations(s, words.length)
   // Fetched while the pointer is on a list, so it is mostly here by the click.
