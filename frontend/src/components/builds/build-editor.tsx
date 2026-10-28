@@ -71,7 +71,7 @@ import {
   readBuildJson,
 } from "@/components/builds/build-json"
 import { useCanBuild } from "@/components/builds/build-access"
-import { KindName } from "@/components/modules/module-icon"
+import { ModuleIcon } from "@/components/modules/module-icon"
 
 /**
  * A new build in the scoped operation (the build modal, ?newBuild=<factory>);
@@ -390,13 +390,16 @@ function Editor({
           className="min-h-0 flex-1 gap-0"
         >
         <RecordModalHeader>
-          {/* The title and what it builds with share a baseline. */}
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-            <RecordModalTitle>New build</RecordModalTitle>
-            <span className="text-sm text-muted-foreground">
-              <KindName type="factory" name={kind.name} icon={kind.icon} /> · schema v{kind.version} · {kind.instances}{" "}
-              running
-            </span>
+          {/* The factory's icon as large as in the builds table, beside the
+              title and, under it, what builds. */}
+          <div className="flex min-w-0 items-center gap-3">
+            <ModuleIcon type="factory" icon={kind.icon} className="size-9" />
+            <div className="flex min-w-0 flex-col">
+              <RecordModalTitle>New build</RecordModalTitle>
+              <span className="truncate text-sm text-muted-foreground">
+                <span className="font-mono">{kind.name}</span> · schema v{kind.version} · {kind.instances} running
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:ml-auto">
             <TabsList>
