@@ -11,8 +11,10 @@ import {
 
 // An endpoint as the endpoint modal's JSON tab edits it: the shape of its
 // export (Copy / Download as JSON), so an export pastes straight in, with
-// the description, and every setting of its channel listed, null where the
-// channel's default applies.
+// the description, and every setting of its channel listed. A setting that
+// is not set is null, the channel's default; a list or map with no default
+// is [] or {} instead, empty being the same as not set then (as in the form,
+// which keeps no empty list).
 //
 //   { "format": "logos.channel-endpoint.v1", "name": "…", "description": "…",
 //     "channel": { "module_name": "http", "schema_version": 2 },
@@ -35,7 +37,7 @@ const KEYS = ["format", "name", "description", "channel", "params"]
 /** The JSON tab's text for an endpoint of kind. */
 export function endpointJson(kind: Kind, doc: EndpointDocument): string {
   const params: Record<string, unknown> = {}
-  for (const f of kind.fields) params[f.key] = doc.values[f.key] ?? null
+  for (const f of kind.fields) params[f.key] = doc.values[f.key] ?? notSet(f)
   return formatJson({
     format: ENDPOINT_EXPORT_FORMAT,
     name: doc.name,
@@ -99,15 +101,41 @@ export function readEndpointJson(text: string, kind: Kind): EndpointJsonRead {
   } else {
     const fields = new Map(kind.fields.map((f) => [f.key, f]))
     for (const [key, value] of Object.entries(params)) {
-      if (!fields.has(key)) at(childPointer("/params", key), `Not a setting of ${kind.name} v${kind.version}`)
-      else if (value !== null) values[key] = value
+      const f = fields.get(key)
+      if (!f) at(childPointer("/params", key), `Not a setting of ${kind.name} v${kind.version}`)
+      else if (!leavesUnset(f, value)) values[key] = value
     }
     for (const f of kind.fields) {
-      const error = validateValue(f, params[f.key] ?? null, { fallback: f.default })
+      const raw = params[f.key]
+      const value = raw === undefined || leavesUnset(f, raw) ? null : raw
+      const error = validateValue(f, value, { fallback: f.default })
       if (error) at(childPointer("/params", f.key), error)
     }
   }
   return { ok: true, doc: { name, description, values }, problems }
+}
+
+const LISTS = new Set(["string_list", "enum_list"])
+const MAPS = new Set(["string_map"])
+
+/**
+ * How a setting that is not set shows: [] or {} for a list or map with no
+ * default, where empty and not set are the same and [] reads as a list;
+ * otherwise null, the channel's default (an empty list there would mean
+ * "none, instead of the default").
+ */
+function notSet(f: FieldDef): unknown {
+  const noDefault = f.default === null || f.default === undefined
+  if (noDefault && LISTS.has(f.type)) return []
+  if (noDefault && MAPS.has(f.type)) return {}
+  return null
+}
+
+/** Whether a value in the text leaves its setting not set: null, or what notSet shows. */
+function leavesUnset(f: FieldDef, value: unknown): boolean {
+  if (value === null) return true
+  const empty = notSet(f)
+  return empty !== null && sameJSON(value, empty)
 }
 
 /** A text property's value: "" when absent or null, a problem when not text. */

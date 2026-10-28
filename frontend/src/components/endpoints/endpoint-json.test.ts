@@ -103,6 +103,36 @@ describe("readEndpointJson", () => {
   })
 })
 
+describe("empty lists and maps", () => {
+  const withLists: Kind = {
+    ...kind,
+    fields: [
+      ...kind.fields,
+      { key: "extra", type: "string_list", label: "Extra", order: 5, required: false },
+      { key: "tags", type: "string_list", label: "Tags", order: 6, required: false, default: ["a"] },
+      { key: "headers", type: "string_map", label: "Headers", order: 7, required: false },
+    ],
+  }
+
+  it("shows one with no default as empty when not set, one with a default as null", () => {
+    const params = JSON.parse(endpointJson(withLists, { name: "e", description: "", values: {} })).params
+    expect(params.extra).toEqual([])
+    expect(params.headers).toEqual({})
+    expect(params.tags).toBeNull()
+  })
+
+  it("reads an empty one back as not set, unless it overrides a default", () => {
+    const text = JSON.stringify({
+      name: "edge",
+      params: { base_url: "https://a.example.com", extra: [], headers: {}, tags: [] },
+    })
+    const read = readEndpointJson(text, withLists)
+    if (!read.ok) throw new Error(read.message)
+    expect(read.doc.values).toEqual({ base_url: "https://a.example.com", tags: [] })
+    expect(read.problems).toEqual([])
+  })
+})
+
 describe("formValues", () => {
   it("is the form's settings as JSON, with text that does not parse kept as typed", () => {
     const drafts = endpointDrafts(kind.fields, { base_url: "https://a.example.com", tls_verify: true })
