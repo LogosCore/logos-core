@@ -73,6 +73,7 @@ export function BuildOverview({
             {kind && kind.version !== b.schemaVersion && (
               <span className="text-muted-foreground"> (the factory is at v{kind.version} now)</span>
             )}
+            {b.factoryVersion && <span className="text-muted-foreground"> · version {b.factoryVersion}</span>}
           </Item>
           <Item label="Target">
             {target ? target.label : <span className="font-mono">{b.target}</span>}
@@ -94,16 +95,6 @@ export function BuildOverview({
                 <CopyIcon />
               </Button>
             </span>
-          </Item>
-          <Item label="Factory instance">
-            {b.instance ? (
-              <>
-                <span className="font-mono">{b.instance}</span>
-                {b.factoryVersion && <span className="text-muted-foreground"> · {b.factoryVersion}</span>}
-              </>
-            ) : (
-              <span className="text-muted-foreground">not taken yet</span>
-            )}
           </Item>
           <Item label="Started">
             {formatAbsolute(b.createdAt)}

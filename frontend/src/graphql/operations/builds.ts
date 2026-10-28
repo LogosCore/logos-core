@@ -53,7 +53,6 @@ export const BuildFields = graphql(`
     platform
     schemaVersion
     state
-    instance
     factoryVersion
     stages {
       id

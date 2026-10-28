@@ -5,7 +5,9 @@ import type { BuildTab } from "@/lib/record-modals"
 
 // A finished or running build as its modal shows it (build-details.tsx):
 // which tab it opens on, the record its JSON tab shows, and its values as
-// Overview lists them.
+// Overview lists them. Which factory instance took the build is core's own
+// business (it sends cancels there and takes reports only from there), so
+// the modal leaves it out.
 
 export type BuildRecord = NonNullable<BuildQuery["build"]>
 
@@ -34,7 +36,6 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
     platform: b.platform,
     schemaVersion: b.schemaVersion,
     state: b.state,
-    instance: b.instance ?? null,
     factoryVersion: b.factoryVersion ?? null,
     createdBy: b.createdBy,
     createdAt: b.createdAt,

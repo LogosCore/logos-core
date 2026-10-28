@@ -2730,7 +2730,7 @@ export type BuildSchemaFieldsFragment = { version: number, crypto: Array<string>
 
 export type BuildFileFieldsFragment = { id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string };
 
-export type BuildFieldsFragment = { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } };
+export type BuildFieldsFragment = { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } };
 
 export type FactoryKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -2761,14 +2761,14 @@ export type BuildsQueryVariables = Exact<{
 }>;
 
 
-export type BuildsQuery = { builds: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type BuildsQuery = { builds: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type BuildQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type BuildQuery = { build?: { values: unknown, connections: unknown, connectionDescriptions: Array<string>, warnings: Array<string>, log?: string | null, id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+export type BuildQuery = { build?: { values: unknown, connections: unknown, connectionDescriptions: Array<string>, warnings: Array<string>, log?: string | null, id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
 
 export type CreateBuildMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -2776,21 +2776,21 @@ export type CreateBuildMutationVariables = Exact<{
 }>;
 
 
-export type CreateBuildMutation = { createBuild: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type CreateBuildMutation = { createBuild: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type CancelBuildMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelBuildMutation = { cancelBuild: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type CancelBuildMutation = { cancelBuild: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type DeleteBuildArtifactMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type DeleteBuildArtifactMutation = { deleteBuildArtifact: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, instance?: string | null, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type DeleteBuildArtifactMutation = { deleteBuildArtifact: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type ChannelEndpointFieldsFragment = { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
 
@@ -4176,7 +4176,6 @@ export const BuildFieldsFragmentDoc = new TypedDocumentString(`
   platform
   schemaVersion
   state
-  instance
   factoryVersion
   stages {
     id
@@ -5392,7 +5391,6 @@ export const BuildsDocument = new TypedDocumentString(`
   platform
   schemaVersion
   state
-  instance
   factoryVersion
   stages {
     id
@@ -5449,7 +5447,6 @@ export const BuildDocument = new TypedDocumentString(`
   platform
   schemaVersion
   state
-  instance
   factoryVersion
   stages {
     id
@@ -5496,7 +5493,6 @@ export const CreateBuildDocument = new TypedDocumentString(`
   platform
   schemaVersion
   state
-  instance
   factoryVersion
   stages {
     id
@@ -5543,7 +5539,6 @@ export const CancelBuildDocument = new TypedDocumentString(`
   platform
   schemaVersion
   state
-  instance
   factoryVersion
   stages {
     id
@@ -5590,7 +5585,6 @@ export const DeleteBuildArtifactDocument = new TypedDocumentString(`
   platform
   schemaVersion
   state
-  instance
   factoryVersion
   stages {
     id
