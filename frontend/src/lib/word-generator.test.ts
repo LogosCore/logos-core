@@ -23,15 +23,13 @@ function sequence(...xs: number[]): Random {
 }
 
 const path = PRESETS.path
-const pools = { first: ["quiet", "bold"], last: ["river", "stone", "cloud"] }
+const words = ["river", "stone", "cloud"]
 const set = (over: Partial<GeneratorSettings>): GeneratorSettings => ({ ...path, ...over })
 
 const catalog: WordlistInfo[] = [
-  { id: "common", name: "Common words", kind: "word", count: 3780, sources: ["scowl"] },
-  { id: "adjectives", name: "Adjectives", kind: "adjective", count: 2161, sources: ["corpora"] },
-  { id: "colors", name: "Colors", kind: "adjective", count: 90, sources: ["ung"] },
-  { id: "nouns", name: "Nouns", kind: "noun", count: 3337, sources: ["corpora"] },
-  { id: "theme-coding", name: "Coding", kind: "noun", theme: true, count: 70, sources: ["imsky"] },
+  { id: "common", name: "Common words", count: 3780, sources: ["scowl", "corpora"] },
+  { id: "short", name: "Short words", count: 1293, sources: ["eff"] },
+  { id: "long", name: "Long word list", count: 7768, sources: ["eff"] },
 ]
 
 describe("randomIndex", () => {
@@ -58,58 +56,51 @@ describe("randomIndex", () => {
 
 describe("generate", () => {
   it("makes a path of words by default: segments between dividers, one before and after", () => {
-    // Indexes 0, 1 of the last pool: river, stone.
-    expect(generate(path, pools, sequence(0, 1))).toBe("/river/stone/")
+    expect(generate(path, words, sequence(0, 1))).toBe("/river/stone/")
   })
 
-  it("joins a segment's words, adjectives before the noun", () => {
+  it("joins a segment's words, and cases them", () => {
     const s = set({ segments: 1, words: 3, joiner: "-", leading: false, trailing: false })
-    expect(generate(s, pools, sequence(1, 0, 2))).toBe("bold-quiet-cloud")
-    expect(generate({ ...s, joiner: "_" }, pools, sequence(1, 0, 2))).toBe("bold_quiet_cloud")
-    expect(generate({ ...s, joiner: "" }, pools, sequence(1, 0, 2))).toBe("boldquietcloud")
-    expect(generate({ ...s, joiner: "camel" }, pools, sequence(1, 0, 2))).toBe("boldQuietCloud")
-    expect(generate({ ...s, joiner: "camel", case: "title" }, pools, sequence(1, 0, 2))).toBe("BoldQuietCloud")
-    expect(generate({ ...s, case: "title" }, pools, sequence(1, 0, 2))).toBe("Bold-Quiet-Cloud")
+    expect(generate(s, words, sequence(1, 0, 2))).toBe("stone-river-cloud")
+    expect(generate({ ...s, joiner: "_" }, words, sequence(1, 0, 2))).toBe("stone_river_cloud")
+    expect(generate({ ...s, joiner: "" }, words, sequence(1, 0, 2))).toBe("stonerivercloud")
+    expect(generate({ ...s, joiner: "camel" }, words, sequence(1, 0, 2))).toBe("stoneRiverCloud")
+    expect(generate({ ...s, joiner: "camel", case: "title" }, words, sequence(1, 0, 2))).toBe("StoneRiverCloud")
+    expect(generate({ ...s, case: "title" }, words, sequence(1, 0, 2))).toBe("Stone-River-Cloud")
   })
 
   it("ends the last segment with a number of all its digits", () => {
     // 1000 + 3821: four digits, never fewer.
-    expect(generate(set({ segments: 1, digits: 4 }), pools, sequence(0, 3821))).toBe("/river-4821/")
-    expect(generate(set({ segments: 2, digits: 2, joiner: "", divider: "." , leading: false }), pools, sequence(0, 1, 89))).toBe("river.stone99.")
+    expect(generate(set({ segments: 1, digits: 4 }), words, sequence(0, 3821))).toBe("/river-4821/")
+    expect(generate(set({ segments: 2, digits: 2, joiner: "", divider: ".", leading: false }), words, sequence(0, 1, 89))).toBe(
+      "river.stone99.",
+    )
   })
 
-  it("makes nothing from an empty pool it needs", () => {
-    expect(generate(path, { first: [], last: [] })).toBeNull()
-    expect(generate(set({ words: 2 }), { first: [], last: ["river"] })).toBeNull()
-    expect(generate(set({ words: 1 }), { first: [], last: ["river"] })).toBe("/river/river/")
+  it("makes nothing without words", () => {
+    expect(generate(path, [])).toBeNull()
   })
 })
 
 describe("candidates", () => {
   it("are different values that fit the field", () => {
-    const got = candidates(set({ segments: 1 }), pools, 5, (v) => v !== "/stone/", sequence(0, 1, 2, 0, 1, 2))
+    const got = candidates(set({ segments: 1 }), words, 5, (v) => v !== "/stone/", sequence(0, 1, 2, 0, 1, 2))
     expect(got).toEqual(["/river/", "/cloud/"])
   })
 
   it("give up on settings whose values never fit", () => {
-    expect(candidates(path, pools, 5, () => false)).toEqual([])
+    expect(candidates(path, words, 5, () => false)).toEqual([])
   })
 })
 
 describe("drawsFrom", () => {
-  it("draws any words from every list picked, ids the catalog lacks left out", () => {
-    expect(drawsFrom(set({ lists: ["common", "gone"] }), catalog)).toEqual({ first: ["common"], last: ["common"] })
+  it("draws on the lists picked that the catalog has", () => {
+    expect(drawsFrom(set({ lists: ["short", "gone", "long"] }), catalog)).toEqual(["short", "long"])
   })
 
-  it("draws adjectives then a noun from the picked lists of each kind, or the kind's main list", () => {
-    expect(drawsFrom(set({ pattern: "adjective-noun", lists: ["colors", "theme-coding", "common"] }), catalog)).toEqual({
-      first: ["colors"],
-      last: ["theme-coding"],
-    })
-    expect(drawsFrom(set({ pattern: "adjective-noun", lists: ["common"] }), catalog)).toEqual({
-      first: ["adjectives"],
-      last: ["nouns"],
-    })
+  it("draws on the catalog's first list when none picked is there any more", () => {
+    expect(drawsFrom(set({ lists: ["theme-coding"] }), catalog)).toEqual(["common"])
+    expect(drawsFrom(path, [])).toEqual([])
   })
 
   it("pools lists' words, each once", () => {
@@ -119,10 +110,10 @@ describe("drawsFrom", () => {
 
 describe("combinations", () => {
   it("count every choice: words per segment, segments, and the number", () => {
-    // (2 × 3)^2 segments = 36; × 90 two-digit numbers = 3240.
+    // 3 words, 2 in each of 2 segments: 3^4 = 81; × 90 two-digit numbers = 7290.
     const s = set({ segments: 2, words: 2, digits: 2 })
-    expect(10 ** log10Combinations(s, { first: 2, last: 3 })).toBeCloseTo(3240)
-    expect(log10Combinations(s, { first: 0, last: 3 })).toBe(-Infinity)
+    expect(10 ** log10Combinations(s, 3)).toBeCloseTo(7290)
+    expect(log10Combinations(s, 0)).toBe(-Infinity)
   })
 
   it("read in full below a million, else as a power of ten", () => {
@@ -141,9 +132,10 @@ describe("settingsOf", () => {
       divider: ".",
     })
     expect(settingsOf(null, path)).toEqual(path)
-    expect(settingsOf({ pattern: "adjective-noun", lists: ["nouns"], digits: 3 }, path)).toMatchObject({
-      pattern: "adjective-noun",
-      lists: ["nouns"],
+    // A setting it no longer has is dropped.
+    expect(settingsOf({ pattern: "adjective-noun", lists: ["long"], digits: 3 }, path)).toEqual({
+      ...path,
+      lists: ["long"],
       digits: 3,
     })
   })

@@ -11,15 +11,6 @@ fit are left out of the sources' lists.
 | Common words | 3780 | SCOWL (Spell Checker Oriented Word Lists), size 10; Corpora by Darius Kazemi and contributors |
 | Short words | 1293 | EFF's Wordlists for Random Passphrases |
 | Long word list | 7768 | EFF's Wordlists for Random Passphrases |
-| BIP-39 words | 2048 | BIP-0039 English wordlist |
-| Adjectives | 2161 | Corpora by Darius Kazemi and contributors; wordlists by Ivan Malopinsky; unique-names-generator by Andrea SonnY |
-| Nouns | 3337 | Corpora by Darius Kazemi and contributors; wordlists by Ivan Malopinsky |
-| Verbs | 1044 | Corpora by Darius Kazemi and contributors; wordlists by Ivan Malopinsky |
-| Animals | 345 | unique-names-generator by Andrea SonnY |
-| Colors | 90 | unique-names-generator by Andrea SonnY; wordlists by Ivan Malopinsky |
-| Places | 2178 | unique-names-generator by Andrea SonnY; wordlists by Ivan Malopinsky |
-| Names | 6363 | unique-names-generator by Andrea SonnY; wordlists by Ivan Malopinsky |
-| 77 themes (Coding, Food, …) | 3466 | wordlists by Ivan Malopinsky |
 
 ## SCOWL
 
@@ -282,56 +273,6 @@ and Australian word list.  It is under the following copyright:
 Corpora, by Darius Kazemi and contributors: https://github.com/dariusk/corpora. Its data
 is dedicated to the public domain under CC0 1.0
 (https://creativecommons.org/publicdomain/zero/1.0/).
-
-## wordlists
-
-wordlists, by Ivan Malopinsky: https://github.com/imsky/wordlists.
-
-```
-The MIT License (MIT)
-
-Copyright (c) 2017-2021 Ivan Malopinsky
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-```
-
-## unique-names-generator
-
-unique-names-generator, by Andrea SonnY: https://github.com/andreasonny83/unique-names-generator.
-
-```
-MIT License
-
-Copyright (c) 2018-2022 AndreaSonny <andreasonny83@gmail.com> (https://github.com/andreasonny83)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
-## BIP-0039
-
-The English wordlist of BIP-0039, "Mnemonic code for generating
-deterministic keys", by Marek Palatinus, Pavol Rusnak, Aaron Voisine and Sean
-Bowe: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki. The BIP states: "License: MIT".
 
 ## EFF's Wordlists for Random Passphrases
 

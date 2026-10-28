@@ -1,9 +1,0 @@
-amplitude
-crest
-cycle
-frequency
-hertz
-period
-phase
-shift
-wavelength

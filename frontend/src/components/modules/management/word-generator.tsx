@@ -4,7 +4,6 @@ import { DicesIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { SearchInput } from "@/components/ui/search-input"
 import { Slider } from "@/components/ui/slider"
 import {
   candidates,
@@ -113,48 +112,28 @@ function Panel({
   const forget = useWordGeneratorStore((st) => st.forget)
   const s = settingsOf(saved, PRESETS[format] ?? PRESETS.path)
   const set = (patch: Partial<GeneratorSettings>) => save(format, { ...s, ...patch })
-  const [query, setQuery] = useState("")
 
   const queryClient = useQueryClient()
   const catalog = useQuery({ queryKey: ["wordlists"], queryFn: fetchWordlistCatalog, ...FOREVER })
   const lists = catalog.data?.lists ?? []
-  const from = drawsFrom(s, lists)
-  const ids = [...new Set([...from.first, ...from.last])]
+  const picked = drawsFrom(s, lists)
   const wordlist = (id: string) => ({ queryKey: ["wordlist", id], queryFn: () => fetchWordlist(id), ...FOREVER })
-  const loaded = useQueries({ queries: ids.map(wordlist) })
-  const words = new Map(ids.map((id, i) => [id, loaded[i]?.data]))
+  const loaded = useQueries({ queries: picked.map(wordlist) })
   const loading = catalog.isPending || loaded.some((q) => q.isPending)
   const failed = catalog.isError || loaded.some((q) => q.isError)
   // Made of the lists that are here: while a list just picked loads, the
   // candidates stay those of the others, and change once when it comes.
-  const pools = {
-    first: pool(from.first.map((id) => words.get(id) ?? [])),
-    last: pool(from.last.map((id) => words.get(id) ?? [])),
-  }
-  const values = candidates(s, pools, CANDIDATES, fits, fromDrawn(drawn))
-  const log10 = log10Combinations(s, { first: pools.first.length, last: pools.last.length })
+  const words = pool(loaded.map((q) => q.data ?? []))
+  const values = candidates(s, words, CANDIDATES, fits, fromDrawn(drawn))
+  const log10 = log10Combinations(s, words.length)
   // Fetched while the pointer is on a list, so it is mostly here by the click.
   const prefetch = (id: string) => void queryClient.prefetchQuery(wordlist(id))
-
-  const shown = lists.filter((l) => l.name.toLowerCase().includes(query.trim().toLowerCase()))
   const sourcesOf = (ids: readonly string[]) => ids.map((id) => catalog.data?.sources[id]?.name ?? id).join("; ")
 
   return (
     <div className="flex flex-col">
       <div className="grid gap-4 p-3 sm:grid-cols-2">
         <div className="flex flex-col gap-3">
-          <Choices label="Words">
-            <Chip active={s.pattern === "any"} onClick={() => set({ pattern: "any" })}>
-              Any words
-            </Chip>
-            <Chip
-              active={s.pattern === "adjective-noun"}
-              onClick={() => set({ pattern: "adjective-noun" })}
-              title="In each segment, adjectives and then a noun: quiet-river"
-            >
-              Adjective + noun
-            </Chip>
-          </Choices>
           <SliderRow label="Segments" value={s.segments} min={1} max={MAX_SEGMENTS} onChange={(segments) => set({ segments })} />
           <SliderRow
             label="Words in a segment"
@@ -204,18 +183,10 @@ function Panel({
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Word lists</span>
-            <SearchInput
-              value={query}
-              onValueChange={setQuery}
-              placeholder="Search lists…"
-              debounceMs={0}
-              title=""
-              className="relative w-full"
-            />
-            <div className="h-44 overflow-y-auto rounded-md border p-1">
+            <div className="rounded-md border p-1">
               {catalog.isPending && <p className="px-2 py-1 text-sm text-muted-foreground">Loading the word lists…</p>}
-              {shown.map((l) => {
-                const on = s.lists.includes(l.id)
+              {lists.map((l) => {
+                const on = picked.includes(l.id)
                 return (
                   <label
                     key={l.id}
@@ -226,24 +197,17 @@ function Panel({
                     {/* The last one picked stays: a value needs words. */}
                     <Checkbox
                       checked={on}
-                      disabled={on && s.lists.length === 1}
+                      disabled={on && picked.length === 1}
                       onCheckedChange={(checked) =>
-                        set({ lists: checked ? [...s.lists, l.id] : s.lists.filter((id) => id !== l.id) })
+                        set({ lists: checked ? [...picked, l.id] : picked.filter((id) => id !== l.id) })
                       }
                     />
                     <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                    {l.theme && <span className="text-xs text-muted-foreground">theme</span>}
                     <span className="text-xs text-muted-foreground tabular-nums">{l.count.toLocaleString("en-US")}</span>
                   </label>
                 )
               })}
             </div>
-            {s.pattern === "adjective-noun" && (
-              <p className="text-xs text-muted-foreground">
-                Adjectives come from the adjective lists picked (Adjectives, Colors), nouns from the others; with none of
-                a kind picked, from Adjectives or Nouns.
-              </p>
-            )}
           </div>
 
           {/* As tall as five candidates whatever it shows, so the popover

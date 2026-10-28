@@ -8,8 +8,6 @@ export type Joiner = "-" | "_" | "" | "camel"
 /** What goes between segments, and before and after them when asked. */
 export type Divider = "/" | "-" | "." | "_"
 export type LetterCase = "lower" | "title"
-/** Any words from the lists picked, or adjectives then a noun in each segment. */
-export type WordPattern = "any" | "adjective-noun"
 
 export interface GeneratorSettings {
   /** 1 to MAX_SEGMENTS. */
@@ -24,8 +22,7 @@ export interface GeneratorSettings {
   case: LetterCase
   /** A number of this many digits ends the last segment ("river-4821"); 0 for none. */
   digits: number
-  pattern: WordPattern
-  /** The word lists picked, by id. */
+  /** The word lists picked, by id: every word comes from them all. */
   lists: string[]
 }
 
@@ -37,10 +34,6 @@ export const MAX_DIGITS = 6
 export interface WordlistInfo {
   id: string
   name: string
-  /** For the adjective + noun pattern; "word" and "verb" lists take no part in it. */
-  kind: "word" | "adjective" | "noun" | "verb"
-  /** One of imsky's nouns by theme. */
-  theme?: boolean
   count: number
   /** Where its words come from, by source id. */
   sources: string[]
@@ -68,7 +61,6 @@ export const PRESETS: Record<string, GeneratorSettings> = {
     trailing: true,
     case: "lower",
     digits: 0,
-    pattern: "any",
     lists: ["common"],
   },
 }
@@ -94,7 +86,6 @@ export function settingsOf(saved: unknown, preset: GeneratorSettings): Generator
     trailing: typeof s.trailing === "boolean" ? s.trailing : preset.trailing,
     case: oneOf<LetterCase>(s.case, ["lower", "title"], preset.case),
     digits: int(s.digits, 0, MAX_DIGITS, preset.digits),
-    pattern: oneOf<WordPattern>(s.pattern, ["any", "adjective-noun"], preset.pattern),
     lists:
       Array.isArray(s.lists) && s.lists.length > 0 && s.lists.every((id) => typeof id === "string")
         ? (s.lists as string[])
@@ -103,21 +94,13 @@ export function settingsOf(saved: unknown, preset: GeneratorSettings): Generator
 }
 
 /**
- * The lists a value's words come from. With any words, all of them from
- * every list picked. With adjective + noun, the last word of a segment from
- * the noun lists picked and the words before it from the adjective lists
- * picked; a kind with none picked takes its main list ("adjectives",
- * "nouns"). Ids the catalog does not have are left out.
+ * The lists a value's words come from: those picked that the catalog has,
+ * or its first list when it has none of them (lists picked once and gone
+ * since).
  */
-export function drawsFrom(s: GeneratorSettings, catalog: readonly WordlistInfo[]): { first: string[]; last: string[] } {
-  const known = new Map(catalog.map((l) => [l.id, l]))
-  const picked = s.lists.filter((id) => known.has(id))
-  if (s.pattern === "any") return { first: picked, last: picked }
-  const ofKind = (kind: WordlistInfo["kind"], main: string) => {
-    const lists = picked.filter((id) => known.get(id)?.kind === kind)
-    return lists.length > 0 ? lists : known.has(main) ? [main] : []
-  }
-  return { first: ofKind("adjective", "adjectives"), last: ofKind("noun", "nouns") }
+export function drawsFrom(s: GeneratorSettings, catalog: readonly WordlistInfo[]): string[] {
+  const picked = s.lists.filter((id) => catalog.some((l) => l.id === id))
+  return picked.length > 0 ? picked : catalog.slice(0, 1).map((l) => l.id)
 }
 
 /** Words of several lists as one pool, each word once. */
@@ -169,23 +152,16 @@ function segment(words: readonly string[], s: GeneratorSettings): string {
 }
 
 /**
- * One value in the shape s sets, its words drawn from the pools (drawsFrom's
- * lists, merged by pool). Null when a pool it needs is empty.
+ * One value in the shape s sets, its words drawn from words (drawsFrom's
+ * lists, merged by pool). Null when there are none.
  */
-export function generate(
-  s: GeneratorSettings,
-  pools: { first: readonly string[]; last: readonly string[] },
-  random: Random = cryptoRandom,
-): string | null {
-  if (pools.last.length === 0 || (s.words > 1 && pools.first.length === 0)) return null
+export function generate(s: GeneratorSettings, words: readonly string[], random: Random = cryptoRandom): string | null {
+  if (words.length === 0) return null
   const segments: string[] = []
   for (let i = 0; i < s.segments; i++) {
-    const words: string[] = []
-    for (let j = 0; j < s.words; j++) {
-      const from = j === s.words - 1 ? pools.last : pools.first
-      words.push(from[randomIndex(from.length, random)])
-    }
-    segments.push(segment(words, s))
+    const picked: string[] = []
+    for (let j = 0; j < s.words; j++) picked.push(words[randomIndex(words.length, random)])
+    segments.push(segment(picked, s))
   }
   if (s.digits > 0) {
     // No leading zero: the number has all its digits.
@@ -203,14 +179,14 @@ export function generate(
  */
 export function candidates(
   s: GeneratorSettings,
-  pools: { first: readonly string[]; last: readonly string[] },
+  words: readonly string[],
   count: number,
   fits: (value: string) => boolean,
   random: Random = cryptoRandom,
 ): string[] {
   const out = new Set<string>()
   for (let tries = 0; tries < count * 40 && out.size < count; tries++) {
-    const v = generate(s, pools, random)
+    const v = generate(s, words, random)
     if (v === null) break
     if (fits(v)) out.add(v)
   }
@@ -218,15 +194,14 @@ export function candidates(
 }
 
 /**
- * How many different values the settings can make, as its base-10
- * logarithm: the count passes any number's range long before the sliders
- * do. -Infinity when a pool it needs is empty.
+ * How many different values the settings can make from size words, as its
+ * base-10 logarithm: the count passes any number's range long before the
+ * sliders do. -Infinity without words.
  */
-export function log10Combinations(s: GeneratorSettings, sizes: { first: number; last: number }): number {
-  if (sizes.last === 0 || (s.words > 1 && sizes.first === 0)) return -Infinity
-  const perSegment = (s.words - 1) * Math.log10(sizes.first) + Math.log10(sizes.last)
+export function log10Combinations(s: GeneratorSettings, size: number): number {
+  if (size === 0) return -Infinity
   const number = s.digits > 0 ? Math.log10(9) + (s.digits - 1) : 0
-  return s.segments * perSegment + number
+  return s.segments * s.words * Math.log10(size) + number
 }
 
 const SUPERSCRIPT = "⁰¹²³⁴⁵⁶⁷⁸⁹"
