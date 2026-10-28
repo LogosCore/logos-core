@@ -14,19 +14,21 @@ import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import {
   buildElapsed,
   factoryKindsByName,
+  groupCommands,
   platformLabel,
   recordedConnections,
   targetFields,
+  type Command,
 } from "@/components/builds/build-values"
 import { valueRows, type BuildRecord, type ValueRow } from "@/components/builds/build-record"
 import { BuildNotices, Item, ItemList, Section } from "@/components/builds/build-detail-parts"
 
 /**
  * The build modal's Overview tab: what the JSON tab holds, for reading. The
- * build itself, its artifact, the values it was given under the factory's
- * labels, and its connections, each with its channel's settings and the
- * factory's values for it. Values equal to their default are dimmed, so the
- * ones somebody chose stand out.
+ * build itself, what the minion can do (its commands), its artifact, the
+ * values it was given under the factory's labels, and its connections, each
+ * with its channel's settings and the factory's values for it. Values equal
+ * to their default are dimmed, so the ones somebody chose stand out.
  */
 export function BuildOverview({
   build: b,
@@ -116,6 +118,10 @@ export function BuildOverview({
         </ItemList>
       </Section>
 
+      <Section title="Commands">
+        <CommandList ids={b.commands} known={kind?.commands ?? []} />
+      </Section>
+
       {b.artifact && (
         <Section title="Artifact">
           <ItemList>
@@ -187,6 +193,47 @@ export function BuildOverview({
             ))}
           </ol>
         </Section>
+      )}
+    </div>
+  )
+}
+
+/**
+ * What the minion can do: the build's commands under the factory's headings,
+ * by today's labels; one the factory no longer has goes by its id.
+ */
+function CommandList({ ids, known }: { ids: readonly string[]; known: readonly Command[] }) {
+  if (ids.length === 0) return <p className="py-3 text-sm text-muted-foreground">None: the minion was built without commands.</p>
+  const byId = new Map(known.map((c) => [c.id, c]))
+  const groups = groupCommands(ids.flatMap((id) => byId.get(id) ?? []))
+  const gone = ids.filter((id) => !byId.has(id))
+  return (
+    <div className="flex flex-col">
+      {groups.map((g) => (
+        <Fragment key={g.group}>
+          {groups.length > 1 && <SubHeading>{g.group}</SubHeading>}
+          <ItemList>
+            {g.items.map((c) => (
+              <Item key={c.id} label={c.label} title={c.id}>
+                <code className="font-mono text-xs">{c.id}</code>
+                {c.required && <span className="text-muted-foreground"> · always built in</span>}
+                {c.description && <p className="text-muted-foreground">{c.description}</p>}
+              </Item>
+            ))}
+          </ItemList>
+        </Fragment>
+      ))}
+      {gone.length > 0 && (
+        <>
+          <SubHeading>No longer commands of the factory</SubHeading>
+          <ItemList>
+            {gone.map((id) => (
+              <Item key={id} label={id}>
+                <code className="font-mono text-xs">{id}</code>
+              </Item>
+            ))}
+          </ItemList>
+        </>
       )}
     </div>
   )

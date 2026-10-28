@@ -79,6 +79,10 @@ type Build struct {
 	// what the factory gets, so a note never ends up in an artifact.
 	ConnectionDescriptions []string    `bson:"connection_descriptions,omitempty" json:"connection_descriptions,omitempty"`
 	FileIDs                []uuid.UUID `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
+	// Commands are what the minion can do: the commands the operator picked,
+	// with the target's required ones, in the schema's order. The factory
+	// gets them, and the minion has these and no others.
+	Commands []string `bson:"commands,omitempty" json:"commands,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
 	SearchText string `bson:"search_text" json:"-"`
@@ -106,11 +110,10 @@ type Build struct {
 	// arrive before the plan, and a step outside the plan is never shown.
 	StepReports map[string]BuildStepReport `bson:"step_reports,omitempty" json:"step_reports,omitempty"`
 
-	Artifact     *BuildArtifact `bson:"artifact,omitempty" json:"artifact,omitempty"`
-	Capabilities []string       `bson:"capabilities,omitempty" json:"capabilities,omitempty"`
-	Warnings     []string       `bson:"warnings,omitempty" json:"warnings,omitempty"`
-	Log          string         `bson:"log,omitempty" json:"log,omitempty"`
-	Error        *BuildError    `bson:"error,omitempty" json:"error,omitempty"`
+	Artifact *BuildArtifact `bson:"artifact,omitempty" json:"artifact,omitempty"`
+	Warnings []string       `bson:"warnings,omitempty" json:"warnings,omitempty"`
+	Log      string         `bson:"log,omitempty" json:"log,omitempty"`
+	Error    *BuildError    `bson:"error,omitempty" json:"error,omitempty"`
 
 	CreatedBy   ModuleActor  `bson:"created_by" json:"created_by"`
 	CancelledBy *ModuleActor `bson:"cancelled_by,omitempty" json:"cancelled_by,omitempty"`
@@ -185,12 +188,13 @@ type BuildError struct {
 type Minion struct {
 	field.DefaultField `bson:",inline"`
 
-	MinionID     uuid.UUID   `bson:"minion_id" json:"minion_id"`
-	OperationID  uuid.UUID   `bson:"operation_id" json:"operation_id"`
-	ModuleName   string      `bson:"module_name" json:"module_name"`
-	Target       string      `bson:"target" json:"target"`
-	Platform     string      `bson:"platform" json:"platform"`
-	Capabilities []string    `bson:"capabilities,omitempty" json:"capabilities,omitempty"`
-	CreatedBy    ModuleActor `bson:"created_by" json:"created_by"`
-	CreatedAt    time.Time   `bson:"created_at" json:"created_at"`
+	MinionID    uuid.UUID `bson:"minion_id" json:"minion_id"`
+	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
+	ModuleName  string    `bson:"module_name" json:"module_name"`
+	Target      string    `bson:"target" json:"target"`
+	Platform    string    `bson:"platform" json:"platform"`
+	// Commands are what the minion can do: its build's.
+	Commands  []string    `bson:"commands,omitempty" json:"commands,omitempty"`
+	CreatedBy ModuleActor `bson:"created_by" json:"created_by"`
+	CreatedAt time.Time   `bson:"created_at" json:"created_at"`
 }

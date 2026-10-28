@@ -97,7 +97,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	if b.State != models.BuildStateSucceeded {
 		t.Fatalf("build %s: %+v\nlog: %s", b.State, b.Error, b.Log)
 	}
-	t.Logf("built by %s (%s): plan %+v, capabilities %v", b.Instance, b.FactoryVersion, b.Plan, b.Capabilities)
+	t.Logf("built by %s (%s): plan %+v, commands %v", b.Instance, b.FactoryVersion, b.Plan, b.Commands)
 	// BOB's plan: the badge was given, so it was checked; the last step is the
 	// upload. Every stage succeeded.
 	if len(b.Plan) < 3 || b.Plan[0].ID != "badge" || b.Plan[len(b.Plan)-1].ID != "upload" {

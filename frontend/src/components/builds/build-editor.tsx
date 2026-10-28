@@ -40,17 +40,21 @@ import { FieldRow } from "@/components/builds/build-field-row"
 import { ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
 import { ConnectionPickerDialog } from "@/components/builds/connection-picker-dialog"
 import { SaveEndpointDialog } from "@/components/builds/save-endpoint-dialog"
+import { CommandPicker } from "@/components/builds/command-picker"
 import {
   channelUnusable,
   connectionDraft,
   connectionNames,
+  defaultCommands,
   evaluateForm,
   factoryKindsByName,
   fillFromEndpoint,
   initialForm,
   move,
+  pickedCommands,
   platformLabel,
   sourceFromBuild,
+  targetCommands,
   targetFields,
   withTarget,
   type BuildForm as Form,
@@ -247,6 +251,14 @@ function Editor({
     clearServerError(`values.${key}`)
   }
 
+  function pickCommands(picked: string[]) {
+    setForm((f) => ({ ...f, commands: pickedCommands(kind, kind.targets.find((t) => t.id === f.target), picked) }))
+    setServerErrors((prev) => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([k]) => !isCommandsKey(k)))
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next
+    })
+  }
+
   /** Changes connection i; clears the server's errors under clear (keys or prefixes ending in "."). */
   function updateConnection(i: number, update: (c: ConnectionDraft) => ConnectionDraft, ...clear: string[]) {
     setForm((f) => ({ ...f, connections: f.connections.map((c, j) => (j === i ? update(c) : c)) }))
@@ -296,6 +308,7 @@ function Editor({
           target: request.target,
           platform: request.platform,
           values: request.values,
+          commands: request.commands,
           connections: request.connections,
         },
       })
@@ -315,6 +328,9 @@ function Editor({
   }
 
   const groups = groupByField(fields, (f) => f)
+  const commands = targetCommands(kind, target)
+  const defaults = defaultCommands(kind, target)
+  const commandsError = Object.entries(shown).find(([k]) => isCommandsKey(k))?.[1]
   // The channels the target speaks, for a new connection, and their endpoints.
   const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
   const usable = speaks.filter((c) => c.why === null).map((c) => c.name)
@@ -349,6 +365,20 @@ function Editor({
       title: WHAT_TO_BUILD,
       state: shown.description || shown.target || shown.platform ? "error" : "set",
     },
+    // A factory without commands builds none: no section for them.
+    ...(kind.commands.length === 0
+      ? []
+      : [
+          {
+            id: sectionId(COMMANDS),
+            title: COMMANDS,
+            state: commandsError
+              ? ("error" as const)
+              : form.commands.join() !== defaults.join()
+                ? ("set" as const)
+                : null,
+          },
+        ]),
     ...groups.map(
       (g): SettingsNavSection => ({
         id: sectionId(g.group),
@@ -497,6 +527,19 @@ function Editor({
             </SettingRow>
           </SettingsSection>
 
+          {kind.commands.length > 0 && (
+            <CommandPicker
+              id={sectionId(COMMANDS)}
+              title={COMMANDS}
+              commands={commands}
+              picked={form.commands}
+              defaults={defaults}
+              onChange={pickCommands}
+              error={commandsError}
+              disabled={disabled}
+            />
+          )}
+
           {groups.map((g) => (
             <SettingsSection key={g.group} id={sectionId(g.group)} title={g.group}>
               {g.items.map((f) => (
@@ -605,8 +648,9 @@ function Editor({
             className="flex-1 rounded-md border"
           />
           <p className="text-xs text-muted-foreground">
-            Values show the factory&apos;s and the channels&apos; defaults; one left at its default, or emptied, is left
-            to the default. A connection&apos;s <code className="font-mono">settings</code> are its channel&apos;s, its{" "}
+            <code className="font-mono">commands</code> are what the minion can do; the target&apos;s required ones stay
+            in. Values show the factory&apos;s and the channels&apos; defaults; one left at its default, or emptied, is
+            left to the default. A connection&apos;s <code className="font-mono">settings</code> are its channel&apos;s, its{" "}
             <code className="font-mono">values</code> the factory&apos;s for that channel.{" "}
             <code className="font-mono">factory</code> is locked. Suggestions appear as you type; Ctrl+Space (⌥I on a
             Mac) asks for them.
@@ -649,4 +693,8 @@ function snapshotOf(form: Form): string {
 
 /** The form's own sections, around the factory's groups of fields. */
 const WHAT_TO_BUILD = "What to build"
+const COMMANDS = "Commands"
 const CONNECTIONS = "Connections"
+
+/** A problem's key that is the commands': "commands", "commands[2]". */
+const isCommandsKey = (key: string) => key === "commands" || key.startsWith("commands[")

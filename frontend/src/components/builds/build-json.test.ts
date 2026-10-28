@@ -48,6 +48,11 @@ const schema: BuildSchemaFieldsFragment = {
       channels: [{ moduleName: "http", versions: [2] }],
     },
   ],
+  commands: [
+    { id: "sleep", label: "Sleep", description: null, group: null, targets: ["dummy", "service"], default: false, required: true, params: [] },
+    { id: "hello", label: "Say hello", description: "Answers.", group: null, targets: ["dummy", "service"], default: true, required: false, params: [] },
+    { id: "shell", label: "Shell", description: null, group: null, targets: ["dummy"], default: false, required: false, params: [] },
+  ],
 }
 const kind = factoryKindsByName([{ moduleName: "bob", instances: 1, schema }]).get("bob")!
 const channels = kindsByName([
@@ -68,6 +73,7 @@ const good: BuildDocument = {
   description: "EU dry run",
   target: "dummy",
   platform: "any/any",
+  commands: ["sleep", "hello"],
   values: { punches: ["jab"] },
   connections: [
     { moduleName: "http", name: "", description: "", settings: { base_url: "https://edge.example.com" }, values: {} },
@@ -88,6 +94,7 @@ describe("buildJson", () => {
       description: "EU dry run",
       target: "dummy",
       platform: "any/any",
+      commands: ["sleep", "hello"],
       values: { greeting: "hello from BOB", punches: ["jab"], rounds: null },
       connections: [
         {
@@ -104,6 +111,7 @@ describe("buildJson", () => {
   it("starts a new build at the defaults, from the form", () => {
     const doc = JSON.parse(buildJson(kind, channels, formDocument(kind, channels, initialForm(kind, null, channels))))
     expect(doc.values).toEqual({ greeting: "hello from BOB", punches: [], rounds: null })
+    expect(doc.commands).toEqual(["sleep", "hello"])
     expect(doc.connections).toEqual([])
   })
 })
@@ -181,6 +189,30 @@ describe("readBuildJson", () => {
       "/values/service_name": "Required",
     })
   })
+
+  it("takes the commands the target has, each once, and wants its required ones", () => {
+    const r = read({ ...json(), commands: ["sleep", 5, "sleep", "fly", "hello"] })
+    expect(r.ok && r.doc.commands).toEqual(["sleep", "hello"])
+    expect(r.ok && Object.fromEntries(r.problems.map((p) => [p.path, p.message]))).toEqual({
+      "/commands/1": "Must be a command id",
+      "/commands/2": "Listed twice",
+      "/commands/3": "Not a command of bob",
+    })
+    const service = { ...json(), target: "service", platform: "windows/amd64", values: { service_name: "svc" } }
+    expect(problems({ ...service, commands: ["sleep", "shell"] })).toEqual({ "/commands/1": "Not a command of the service target" })
+    expect(problems({ ...json(), commands: ["hello"] })).toEqual({ "/commands": "The dummy target requires sleep" })
+    expect(problems({ ...json(), commands: "sleep" })).toEqual({ "/commands": "Must be a list of command ids" })
+  })
+
+  it("takes the target's default commands when none are listed", () => {
+    const without = json()
+    delete without.commands
+    for (const doc of [without, { ...json(), commands: null }]) {
+      const r = read(doc)
+      expect(r.ok && r.doc.commands).toEqual(["sleep", "hello"])
+      expect(r.ok && r.problems).toEqual([])
+    }
+  })
 })
 
 describe("a finished build's JSON", () => {
@@ -192,6 +224,7 @@ describe("a finished build's JSON", () => {
       target: "dummy",
       platform: "any/any",
       values: { greeting: "hello from BOB", punches: ["jab"] },
+      commands: ["sleep", "hello"],
       connections: [
         {
           endpoint: {
@@ -216,6 +249,9 @@ describe("form and document", () => {
   it("carry each other over", () => {
     const form = formFromDocument(kind, channels, good)
     expect(form.drafts.greeting).toEqual({ kind: "text", text: "hello from BOB" }) // its default, filled in
+    expect(form.commands).toEqual(["sleep", "hello"])
+    // The form holds the required ones whatever the JSON says, in the factory's order.
+    expect(formFromDocument(kind, channels, { ...good, commands: ["shell", "hello"] }).commands).toEqual(["sleep", "hello", "shell"])
     expect(formDocument(kind, channels, form)).toEqual({
       ...good,
       values: { greeting: "hello from BOB", punches: ["jab"] },
@@ -244,6 +280,7 @@ describe("documentInput", () => {
       target: "dummy",
       platform: "any/any",
       values: { punches: ["jab"] },
+      commands: ["sleep", "hello"],
       connections: [
         { moduleName: "http", name: null, description: "note", settings: { base_url: "https://edge.example.com" }, values: {} },
       ],
@@ -255,6 +292,8 @@ describe("buildProblemPointer", () => {
   it("places the form's and core's problem keys in the document", () => {
     expect(buildProblemPointer("description")).toBe("/description")
     expect(buildProblemPointer("values.greeting")).toBe("/values/greeting")
+    expect(buildProblemPointer("commands")).toBe("/commands")
+    expect(buildProblemPointer("commands[3]")).toBe("/commands/3")
     expect(buildProblemPointer("connections")).toBe("/connections")
     expect(buildProblemPointer("connections[2]")).toBe("/connections/2")
     expect(buildProblemPointer("connections[0].name")).toBe("/connections/0/name")
@@ -268,7 +307,12 @@ describe("buildJsonHints", () => {
   const hints = buildJsonHints(kind, channels, "dummy", ["http"])
 
   it("offers the build's keys, its targets and the target's platforms", () => {
-    expect(hints[""].map((h) => h.key)).toEqual(["description", "target", "platform", "values", "connections"])
+    expect(hints[""].map((h) => h.key)).toEqual(["description", "target", "platform", "commands", "values", "connections"])
+    expect(hints[""].find((h) => h.key === "commands")!.items).toEqual([
+      { value: "sleep", detail: "Sleep, required", info: undefined },
+      { value: "hello", detail: "Say hello", info: "Answers." },
+      { value: "shell", detail: "Shell", info: undefined },
+    ])
     expect(hints[""].find((h) => h.key === "target")!.values).toEqual(["dummy", "service"])
     expect(hints[""].find((h) => h.key === "platform")!.values).toEqual(["any/any"])
     expect(hints["/values"].map((h) => h.key)).toEqual(["greeting", "punches", "rounds"])

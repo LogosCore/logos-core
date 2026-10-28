@@ -62,3 +62,38 @@ func TestToBuildModelStages(t *testing.T) {
 		t.Errorf("stages %+v %+v", st[1], st[3])
 	}
 }
+
+func TestToBuildSchemaModelCommands(t *testing.T) {
+	s := &protocol.BuildSchema{
+		Targets: []protocol.BuildTarget{{ID: "exe"}, {ID: "shellcode"}},
+		Commands: []protocol.BuildCommand{
+			{ID: "sleep", Required: true, Params: []protocol.FieldSpec{{Key: "interval", Type: protocol.FieldDuration, Label: "Interval"}}},
+			{ID: "screenshot", Label: "Screenshot", Group: "Collection", Default: true, Targets: []string{"exe"}},
+		},
+	}
+	cs := toBuildSchemaModel(s).Commands
+	if len(cs) != 2 {
+		t.Fatalf("commands %+v", cs)
+	}
+	// A command without targets is every target's; the list names them.
+	if c := cs[0]; c.ID != "sleep" || c.Label != "sleep" || c.Group != nil || !c.Required || c.Default ||
+		len(c.Targets) != 2 || c.Targets[1] != "shellcode" || len(c.Params) != 1 || c.Params[0].Key != "interval" {
+		t.Errorf("sleep = %+v", c)
+	}
+	if c := cs[1]; c.Label != "Screenshot" || *c.Group != "Collection" || !c.Default || len(c.Targets) != 1 || c.Targets[0] != "exe" ||
+		c.Params == nil {
+		t.Errorf("screenshot = %+v", c)
+	}
+	if got := toBuildSchemaModel(&protocol.BuildSchema{}).Commands; got == nil {
+		t.Error("no commands: nil, want an empty list")
+	}
+}
+
+func TestToBuildModelCommands(t *testing.T) {
+	if c := toBuildModel(&models.Build{}).Commands; c == nil || len(c) != 0 {
+		t.Errorf("a build without commands: %#v, want an empty list", c)
+	}
+	if c := toBuildModel(&models.Build{Commands: []string{"sleep", "exit"}}).Commands; len(c) != 2 || c[1] != "exit" {
+		t.Errorf("commands %v", c)
+	}
+}

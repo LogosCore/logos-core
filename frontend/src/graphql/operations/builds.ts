@@ -28,6 +28,18 @@ export const BuildSchemaFields = graphql(`
         versions
       }
     }
+    commands {
+      id
+      label
+      description
+      group
+      targets
+      default
+      required
+      params {
+        ...ModuleFieldDefFields
+      }
+    }
   }
 `)
 
@@ -151,6 +163,7 @@ export const BuildQuery = graphql(`
     build(id: $id) {
       ...BuildFields
       values
+      commands
       connections
       connectionDescriptions
       warnings

@@ -34,8 +34,9 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
 
 /**
  * The build parameters this factory instance declared (read-only): the targets
- * it builds, the parameters each takes, and the connection parameters per
- * channel kind. Operators fill them in on an operation's Builds page.
+ * it builds, the parameters each takes, the commands a build can pick, and
+ * the connection parameters per channel kind. Operators fill them in on an
+ * operation's Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
   return (
@@ -77,6 +78,11 @@ export function BuildParameters({ build }: { build: Build }) {
               <FieldRows fields={t.fields} />
             </SchemaGroup>
           ))}
+        {build.commands.length > 0 && (
+          <SchemaGroup title="Commands" note="a build picks the minion's">
+            <CommandRows build={build} />
+          </SchemaGroup>
+        )}
         {build.channels.map((c) => (
           <SchemaGroup
             key={c.moduleName}
@@ -129,6 +135,38 @@ function FieldRows({ fields }: { fields: readonly FieldDef[] }) {
             {n}
           </span>
         ))}
+      </dd>
+    </div>
+  ))
+}
+
+/** The factory's commands in its order, as read-only rows: who has each, and what a task of it takes. */
+function CommandRows({ build }: { build: Build }) {
+  const targetLabel = new Map(build.targets.map((t) => [t.id, t.label]))
+  return build.commands.map((c) => (
+    <div key={c.id} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
+      <dt className="min-w-0 truncate text-muted-foreground" title={c.description ?? undefined}>
+        {c.label}
+      </dt>
+      <dd className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <code className="font-mono text-xs">{c.id}</code>
+          {c.group && <span className="text-xs text-muted-foreground">{c.group}</span>}
+          {c.required ? (
+            <span className="text-xs text-muted-foreground">required</span>
+          ) : (
+            c.default && <span className="text-xs text-muted-foreground">picked by default</span>
+          )}
+          {c.targets.length < build.targets.length && (
+            <span className="text-xs text-muted-foreground">
+              {c.targets.map((t) => targetLabel.get(t) ?? t).join(", ")} only
+            </span>
+          )}
+          {c.params.length > 0 && (
+            <span className="text-xs text-muted-foreground">takes {c.params.map((f) => f.key).join(", ")}</span>
+          )}
+        </span>
+        {c.description && <span className="text-xs text-muted-foreground">{c.description}</span>}
       </dd>
     </div>
   ))

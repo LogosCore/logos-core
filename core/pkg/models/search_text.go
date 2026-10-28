@@ -24,6 +24,7 @@ func EndpointSearchText(e *ChannelEndpoint) string {
 // settings and values.
 func BuildSearchText(b *Build) string {
 	parts := jsonLeaves([]string{b.MinionID.String()}, map[string]any(b.Values))
+	parts = append(parts, b.Commands...)
 	for _, c := range b.Connections.Items {
 		parts = append(parts, c.Endpoint.Name, c.Endpoint.Channel.ModuleName)
 		parts = jsonLeaves(parts, c.Endpoint.Params)

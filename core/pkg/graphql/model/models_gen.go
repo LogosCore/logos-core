@@ -62,6 +62,7 @@ type Build struct {
 	Platform               string         `json:"platform"`
 	SchemaVersion          int            `json:"schemaVersion"`
 	Values                 any            `json:"values"`
+	Commands               []string       `json:"commands"`
 	Connections            any            `json:"connections"`
 	ConnectionDescriptions []string       `json:"connectionDescriptions"`
 	State                  string         `json:"state"`
@@ -69,7 +70,6 @@ type Build struct {
 	FactoryVersion         *string        `json:"factoryVersion,omitempty"`
 	Stages                 []*BuildStage  `json:"stages"`
 	Artifact               *BuildArtifact `json:"artifact,omitempty"`
-	Capabilities           []string       `json:"capabilities"`
 	Warnings               []string       `json:"warnings"`
 	Log                    *string        `json:"log,omitempty"`
 	Error                  *BuildError    `json:"error,omitempty"`
@@ -98,6 +98,17 @@ type BuildChannel struct {
 type BuildChannelVersions struct {
 	ModuleName string `json:"moduleName"`
 	Versions   []int  `json:"versions"`
+}
+
+type BuildCommand struct {
+	ID          string         `json:"id"`
+	Label       string         `json:"label"`
+	Description *string        `json:"description,omitempty"`
+	Group       *string        `json:"group,omitempty"`
+	Targets     []string       `json:"targets"`
+	Default     bool           `json:"default"`
+	Required    bool           `json:"required"`
+	Params      []*ModuleField `json:"params"`
 }
 
 type BuildConnection struct {
@@ -141,6 +152,7 @@ type BuildInput struct {
 	Target      string                  `json:"target"`
 	Platform    string                  `json:"platform"`
 	Values      any                     `json:"values"`
+	Commands    []string                `json:"commands,omitempty"`
 	Connections []*BuildConnectionInput `json:"connections"`
 }
 
@@ -155,6 +167,7 @@ type BuildSchema struct {
 	Crypto   []string        `json:"crypto"`
 	Fields   []*ModuleField  `json:"fields"`
 	Targets  []*BuildTarget  `json:"targets"`
+	Commands []*BuildCommand `json:"commands"`
 }
 
 type BuildStage struct {
@@ -428,14 +441,14 @@ type MarkHashCrackedInput struct {
 }
 
 type Minion struct {
-	ID           string       `json:"id"`
-	OperationID  string       `json:"operationId"`
-	ModuleName   string       `json:"moduleName"`
-	Target       string       `json:"target"`
-	Platform     string       `json:"platform"`
-	Capabilities []string     `json:"capabilities"`
-	CreatedBy    *ModuleActor `json:"createdBy"`
-	CreatedAt    string       `json:"createdAt"`
+	ID          string       `json:"id"`
+	OperationID string       `json:"operationId"`
+	ModuleName  string       `json:"moduleName"`
+	Target      string       `json:"target"`
+	Platform    string       `json:"platform"`
+	Commands    []string     `json:"commands"`
+	CreatedBy   *ModuleActor `json:"createdBy"`
+	CreatedAt   string       `json:"createdAt"`
 }
 
 type ModuleAction struct {

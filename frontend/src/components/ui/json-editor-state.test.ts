@@ -89,6 +89,40 @@ describe("completeJson", () => {
     const noValues = '{"params": {"retries": 1}}'
     expect(complete(noValues, noValues.indexOf("1") + 1)).toBeNull()
   })
+
+  describe("in a list", () => {
+    const listHints: JsonHints = {
+      "": [{ key: "picks", items: [{ value: "sleep", detail: "Sleep" }, { value: "exit" }, { value: "shell" }] }, { key: "other" }],
+    }
+    const at = (doc: string, pos: number) => completeJson(new CompletionContext(stateOf(doc, [], listHints), pos, true))
+    const labels = (doc: string, pos: number) => at(doc, pos)?.options.map((o) => o.label)
+
+    it("offers the items it does not hold yet, where one goes", () => {
+      const empty = '{"picks": []}'
+      expect(labels(empty, empty.indexOf("[") + 1)).toEqual(['"sleep"', '"exit"', '"shell"'])
+      const next = '{"picks": ["exit", ]}'
+      const r = at(next, next.indexOf(", ") + 2)!
+      expect(r.options.map((o) => o.label)).toEqual(['"sleep"', '"shell"'])
+      expect(r.options[0].detail).toBe("Sleep")
+      expect([r.from, r.to]).toEqual([next.indexOf(", ") + 2, next.indexOf(", ") + 2])
+    })
+
+    it("replaces the item written there, or being typed", () => {
+      const written = '{"picks": ["exit", "sh"]}'
+      const r = at(written, written.indexOf('"sh"') + 3)!
+      expect(written.slice(r.from, r.to)).toBe('"sh"')
+      expect(r.options.map((o) => o.label)).toEqual(['"sleep"', '"shell"'])
+      const typing = '{"picks": ["exit", "sh'
+      const t = at(typing, typing.length)!
+      expect(typing.slice(t.from)).toBe('"sh')
+    })
+
+    it("offers nothing in a list without items, or once it holds them all", () => {
+      expect(at('{"other": []}', '{"other": ['.length)).toBeNull()
+      const full = '{"picks": ["sleep", "exit", "shell", ]}'
+      expect(at(full, full.indexOf(", ]") + 2)).toBeNull()
+    })
+  })
 })
 
 describe("diagnosticsOf", () => {

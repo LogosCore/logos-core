@@ -61,9 +61,11 @@ func connectionName(c ConnectionInput, i int) string {
 
 // settings are what a build is made of.
 type settings struct {
-	Target      string
-	Platform    string
-	Values      map[string]any
+	Target   string
+	Platform string
+	Values   map[string]any
+	// Commands are the ones picked, by id; nil for the target's defaults.
+	Commands    []string
 	Connections []ConnectionInput
 }
 
@@ -71,6 +73,9 @@ type settings struct {
 type checked struct {
 	target protocol.BuildTarget
 	fields []protocol.FieldSpec // the target's, shared ones first
+	// commands are the build's: the ones picked and the target's required
+	// ones, in the schema's order.
+	commands []string
 	// channels are the connections' channel schemas, by connection index.
 	channels []*protocol.ConnectionSchema
 	// fileIDs are the build files the values and connection values name.
@@ -110,6 +115,7 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, out, files); err != nil {
 		return c, out, err
 	}
+	c.commands = commandsFor(schema, t, st.Commands, out)
 
 	if len(st.Connections) == 0 {
 		out.add("connections", "at least one connection is required")
@@ -158,6 +164,37 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	}
 	c.fileIDs = slices.SortedFunc(maps.Keys(files), func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	return c, out, nil
+}
+
+// commandsFor resolves a build's commands for target t: the ones picked, or
+// the target's defaults when none are named (nil), with its required ones
+// always, in the schema's order. Each one picked must be a command of t,
+// picked once.
+func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []string, out problems) []string {
+	if picked == nil {
+		return schema.DefaultCommands(t)
+	}
+	seen := make(map[string]bool, len(picked))
+	for i, id := range picked {
+		key := fmt.Sprintf("commands[%d]", i)
+		c, ok := schema.Command(id)
+		switch {
+		case !ok:
+			out.add(key, "%q is not a command of this factory", id)
+		case !c.For(t.ID):
+			out.add(key, "%q is not a command of target %q", id, t.ID)
+		case seen[id]:
+			out.add(key, "%q is picked twice", id)
+		}
+		seen[id] = true
+	}
+	commands := []string{}
+	for _, c := range schema.TargetCommands(t) {
+		if c.Required || seen[c.ID] {
+			commands = append(commands, c.ID)
+		}
+	}
+	return commands
 }
 
 // checkValues checks values against fields: no undeclared keys, every value

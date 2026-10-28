@@ -241,14 +241,14 @@ func (f *fakeBuilds) ReportStep(_ context.Context, id uuid.UUID, instance, step,
 	return true, nil
 }
 
-func (f *fakeBuilds) RecordResult(_ context.Context, id uuid.UUID, instance string, art models.BuildArtifact, caps, warnings []string, log string, at time.Time) (bool, error) {
+func (f *fakeBuilds) RecordResult(_ context.Context, id uuid.UUID, instance string, art models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
 	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance || b.ResultReceived {
 		return false, nil
 	}
-	b.ResultReceived, b.ResultAt, b.Artifact, b.Capabilities, b.Warnings, b.Log = true, &at, &art, caps, warnings, log
+	b.ResultReceived, b.ResultAt, b.Artifact, b.Warnings, b.Log = true, &at, &art, warnings, log
 	return true, nil
 }
 
@@ -272,9 +272,6 @@ func (f *fakeBuilds) Finish(_ context.Context, id uuid.UUID, from []string, out 
 	}
 	if out.Artifact != nil {
 		b.Artifact = out.Artifact
-	}
-	if out.Capabilities != nil {
-		b.Capabilities = out.Capabilities
 	}
 	if out.Warnings != nil {
 		b.Warnings = out.Warnings

@@ -90,7 +90,7 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		Filename: r.Artifact.Filename, Size: r.Artifact.Size, SHA256: r.Artifact.SHA256,
 		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.MinionID),
 	}
-	ok, err := s.repos.Builds.RecordResult(ctx, b.MinionID, instance, art, r.Capabilities, r.Warnings, r.Log, s.now())
+	ok, err := s.repos.Builds.RecordResult(ctx, b.MinionID, instance, art, r.Warnings, r.Log, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record a build result: %w", err)
 	}

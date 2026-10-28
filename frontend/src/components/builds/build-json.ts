@@ -17,12 +17,16 @@ import {
 import {
   checkBuild,
   connectionDraft,
+  defaultCommands,
   draftsFor,
+  pickedCommands,
+  targetCommands,
   targetFields,
   type BuildForm,
   type ChannelKind,
   type FactoryKind,
   type FormInput,
+  type Target,
 } from "./build-values"
 
 // A new build as the build modal's JSON tab edits it: what createBuild takes,
@@ -33,14 +37,17 @@ import {
 //
 //   { "factory": { "module_name": "bob", "schema_version": 1 },
 //     "description": "…", "target": "dummy", "platform": "any/any",
+//     "commands": ["sleep", "exit", "hello"],
 //     "values": { "greeting": "hello from BOB" },
 //     "connections": [
 //       { "channel": "http", "name": "", "description": "",
 //         "settings": { "base_url": "https://…" }, "values": { "method": "POST" } } ] }
 //
-// "factory" says what builds it and stays as it is. A connection's
-// "settings" are its channel's connection settings, its "values" the
-// factory's parameters for that channel.
+// "factory" says what builds it and stays as it is. "commands" are what the
+// minion can do, by id: the target's required ones stay in, and leaving the
+// list out takes the target's defaults. A connection's "settings" are its
+// channel's connection settings, its "values" the factory's parameters for
+// that channel.
 
 /** A connection as the JSON tab and the form share it; settings and values hold set ones only. */
 export interface ConnectionDocument {
@@ -56,6 +63,8 @@ export interface BuildDocument {
   description: string
   target: string
   platform: string
+  /** The commands listed that the target has, as listed. */
+  commands: string[]
   values: Record<string, unknown>
   connections: ConnectionDocument[]
 }
@@ -63,7 +72,7 @@ export interface BuildDocument {
 /** The parts the JSON tab locks. */
 export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 
-const KEYS = ["factory", "description", "target", "platform", "values", "connections"]
+const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections"]
 const CONNECTION_KEYS = ["channel", "name", "description", "settings", "values"]
 
 const channelFields = (channels: ReadonlyMap<string, ChannelKind>, moduleName: string) =>
@@ -77,6 +86,7 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
     description: doc.description,
     target: doc.target,
     platform: doc.platform,
+    commands: doc.commands,
     values: jsonFieldValues(targetFields(kind, target), doc.values),
     connections: doc.connections.map((c) => ({
       channel: c.moduleName,
@@ -95,6 +105,7 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
     description: form.description,
     target: form.target,
     platform: form.platform,
+    commands: form.commands,
     values: formValues(targetFields(kind, target), form.drafts),
     connections: form.connections.map((c) => ({
       moduleName: c.moduleName,
@@ -114,6 +125,7 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
     target: doc.target,
     platform: doc.platform,
     drafts: draftsFor(targetFields(kind, target), doc.values),
+    commands: pickedCommands(kind, target, doc.commands),
     connections: doc.connections.map((c) =>
       connectionDraft(kind, channels.get(c.moduleName), {
         moduleName: c.moduleName,
@@ -133,6 +145,7 @@ export function documentInput(doc: BuildDocument): FormInput {
     target: doc.target,
     platform: doc.platform,
     values: doc.values,
+    commands: doc.commands,
     connections: doc.connections.map((c) => ({
       moduleName: c.moduleName,
       name: c.name.trim() || null,
@@ -165,6 +178,7 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
   const targetId = textOf(root.target, "/target", at)
   const platform = textOf(root.platform, "/platform", at)
   const target = kind.targets.find((t) => t.id === targetId)
+  const commands = readCommands(root.commands, kind, target, at)
   const values = readFieldValues(
     targetFields(kind, target),
     root.values,
@@ -220,7 +234,7 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
 
   // The checks the form makes on itself, said the JSON's way.
   const errors: Record<string, string> = {}
-  const doc: BuildDocument = { description, target: targetId, platform, values, connections }
+  const doc: BuildDocument = { description, target: targetId, platform, commands, values, connections }
   checkBuild(kind, doc, channels, errors)
   for (const [key, message] of Object.entries(errors)) {
     if (key === "target" && targetId !== "") {
@@ -233,6 +247,36 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
     }
   }
   return { ok: true, doc, problems }
+}
+
+/**
+ * The commands listed that target has, each a problem where it is not one of
+ * them; none listed (no key, null), the target's defaults.
+ */
+function readCommands(
+  raw: unknown,
+  kind: FactoryKind,
+  target: Target | undefined,
+  at: (path: string, message: string) => void,
+): string[] {
+  if (raw === undefined || raw === null) return defaultCommands(kind, target)
+  if (!Array.isArray(raw)) {
+    // The one problem there: the form goes on with the defaults.
+    at("/commands", "Must be a list of command ids")
+    return defaultCommands(kind, target)
+  }
+  const own = new Set(targetCommands(kind, target).map((c) => c.id))
+  const out: string[] = []
+  raw.forEach((id: unknown, i) => {
+    const here = childPointer("/commands", i)
+    if (typeof id !== "string") at(here, "Must be a command id")
+    else if (out.includes(id)) at(here, "Listed twice")
+    else if (!kind.commands.some((c) => c.id === id)) at(here, `Not a command of ${kind.name}`)
+    // Without a target there is nothing to tell; the target is marked.
+    else if (target && !own.has(id)) at(here, `Not a command of the ${target.id} target`)
+    else out.push(id)
+  })
+  return out
 }
 
 /** A text property's value: "" when absent or null, a problem when not text. */
@@ -248,6 +292,8 @@ function textOf(value: unknown, path: string, at: (path: string, message: string
  */
 export function buildProblemPointer(key: string): string {
   if (key === "") return ""
+  const command = /^commands\[(\d+)\]$/.exec(key)
+  if (command) return childPointer("/commands", command[1])
   const value = /^values\.(.+)$/.exec(key)
   if (value) return childPointer("/values", value[1])
   const field = /^connections\[(\d+)\]\.(settings|values)\.(.+)$/.exec(key)
@@ -281,6 +327,16 @@ export function buildJsonHints(
       },
       { key: "target", detail: "text, required", info: "What the factory produces.", values: kind.targets.map((t) => t.id) },
       { key: "platform", detail: "text, required", info: "Where the minion runs.", values: target?.platforms },
+      {
+        key: "commands",
+        detail: "list",
+        info: "What the minion can do, by command id: it has these and no others. The target's required ones stay in; null or none listed: its defaults.",
+        items: targetCommands(kind, target).map((c) => ({
+          value: c.id,
+          detail: c.required ? `${c.label}, required` : c.label,
+          info: c.description ?? undefined,
+        })),
+      },
       { key: "values", detail: "object", info: `${kind.name}'s values for the target; empty or null leaves one at its default.` },
       { key: "connections", detail: "list, required", info: "How the minion reaches its channels, tried in this order." },
     ],

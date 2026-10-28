@@ -194,6 +194,8 @@ export function completeJson(context: CompletionContext): CompletionResult | nul
 
   // A value of a key that has values to offer.
   const node = syntaxTree(state).resolveInner(pos, -1)
+  const item = itemContext(context, node)
+  if (item) return item
   const property = node.name === "Property" ? node : node.parent?.name === "Property" ? node.parent : null
   const name = property?.getChild("PropertyName")
   if (!property || !name || pos <= name.to) return null
@@ -209,6 +211,43 @@ export function completeJson(context: CompletionContext): CompletionResult | nul
     options: hint.values.map((v) => ({ label: JSON.stringify(v), type: v === null ? "keyword" : "constant" })),
   }
 }
+
+/**
+ * An item of a list whose key offers items: those the list does not hold
+ * yet, in place of the item there (one being typed, say), or between items.
+ */
+function itemContext(context: CompletionContext, node: SyntaxNode): CompletionResult | null {
+  const { state, pos } = context
+  // In the list, or in what the parser could not make sense of there (an
+  // item being typed without its closing quote).
+  const at = node.type.isError && node.parent?.name === "Array" ? node.parent : node
+  const inArray = at === node && node.parent?.name === "Array"
+  const array = at.name === "Array" ? at : inArray ? node.parent : null
+  const property = array?.parent
+  const name = property?.name === "Property" ? property.getChild("PropertyName") : null
+  if (!array || !property || !name) return null
+  const doc = state.doc.toString()
+  const pointer = pointerOfNode(property.parent!, doc)
+  const items = pointer === null ? undefined : hintsAt(state.field(config).hints, pointer)?.find((h) => h.key === keyOf(name, doc))?.items
+  if (!items?.length) return null
+  // An item written out is replaced; one being typed too.
+  const current = inArray && VALUE_ITEMS.has(node.name) && pos > node.from ? node : null
+  // Typed text starts an item only after "[" or ","; a quote before it may
+  // close the item before.
+  const match = current ? null : context.matchBefore(/"[^"\\]*$|[\w-]+$/)
+  const typed = match && /[[,]$/.test(state.sliceDoc(array.from, match.from).trimEnd()) ? match : null
+  const listed = new Set<string>()
+  for (let c = array.firstChild; c; c = c.nextSibling) {
+    if (c !== current && VALUE_ITEMS.has(c.name)) listed.add(doc.slice(c.from, c.to))
+  }
+  const options: Completion[] = items
+    .filter((i) => !listed.has(JSON.stringify(i.value)))
+    .map((i) => ({ label: JSON.stringify(i.value), detail: i.detail, info: i.info, type: "constant" }))
+  if (options.length === 0) return null
+  return { from: current?.from ?? typed?.from ?? pos, to: current?.to ?? pos, options, validFor: /^"?[^"\\]*"?$/ }
+}
+
+const VALUE_ITEMS = new Set(["String", "Number", "True", "False", "Null"])
 
 // --- Commands --------------------------------------------------------------
 

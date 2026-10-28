@@ -114,7 +114,8 @@ var (
 )
 
 // ValidationError is a client error. Problems holds reasons by where they
-// are: "description", "target", "platform", "values.<key>", "connections",
+// are: "description", "target", "platform", "values.<key>", "commands[<i>]",
+// "connections",
 // "connections[<i>]", "connections[<i>].name", "connections[<i>].description",
 // "connections[<i>].settings.<key>", "connections[<i>].values.<key>", or ""
 // when the problem is not one place's.

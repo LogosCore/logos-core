@@ -100,6 +100,10 @@ export function fieldHints(fields: readonly FieldDef[]): JsonKeyHint[] {
         : f.type === "bool"
           ? [true, false, null]
           : undefined,
+    items:
+      f.type === "enum_list"
+        ? (f.options ?? []).map((o) => ({ value: o.value, detail: o.label ?? undefined, info: o.description ?? undefined }))
+        : undefined,
   }))
 }
 

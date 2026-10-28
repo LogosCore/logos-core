@@ -20,6 +20,18 @@ export interface JsonKeyHint {
   info?: string
   /** Values to offer for it (an enum's options), as JSON values. */
   values?: readonly unknown[]
+  /** Items to offer in its list (an enum list's options), each once. */
+  items?: readonly JsonItemHint[]
+}
+
+/** An item a list's key offers. */
+export interface JsonItemHint {
+  /** The item, as a JSON value. */
+  value: unknown
+  /** Beside it in the completion list, e.g. its label. */
+  detail?: string
+  /** What it is, in the completion list. */
+  info?: string
 }
 
 /**

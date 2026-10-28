@@ -27,6 +27,9 @@ type BuildInput struct {
 	Target      string
 	Platform    string
 	Values      map[string]any
+	// Commands are the commands picked for the minion, by id; the target's
+	// required ones are added. nil: the target's default ones.
+	Commands    []string
 	Connections []ConnectionInput
 	Actor       models.ModuleActor
 }
@@ -37,9 +40,9 @@ func artifactKey(op, minionID uuid.UUID) string {
 }
 
 // CreateBuild validates a build against the factory kind's current schema and
-// queues it: defaults filled in, each connection's settings resolved against
-// its channel's current schema, a minion id chosen. The scheduler then offers
-// it to a factory instance.
+// queues it: defaults filled in, the target's required commands added, each
+// connection's settings resolved against its channel's current schema, a
+// minion id chosen. The scheduler then offers it to a factory instance.
 func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) (*models.Build, error) {
 	moduleName := strings.TrimSpace(in.ModuleName)
 	schema, err := s.schema(ctx, moduleName)
@@ -63,7 +66,9 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 
 	values := compact(in.Values)
 	conns := compactConnections(in.Connections)
-	c, probs, err := s.check(ctx, op, *schema, settings{Target: in.Target, Platform: in.Platform, Values: values, Connections: conns})
+	c, probs, err := s.check(ctx, op, *schema, settings{
+		Target: in.Target, Platform: in.Platform, Values: values, Commands: in.Commands, Connections: conns,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +87,7 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		MinionID: uuid.New(), OperationID: op, ModuleName: moduleName, Description: description,
 		Target: in.Target, Platform: in.Platform, SchemaVersion: schema.Version,
 		Values:    protocol.ResolveFieldValues(c.fields, values),
+		Commands:  c.commands,
 		FileIDs:   c.fileIDs,
 		State:     models.BuildStateQueued,
 		Deadline:  s.now().Add(s.cfg.Timeout),

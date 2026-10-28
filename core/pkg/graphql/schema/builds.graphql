@@ -5,7 +5,8 @@
 # A factory declares a build schema at module.register (see
 # logos-golang-protocol/protocol/build.go and the docs repo's
 # contracts/minion-build.md): its targets, their fields, the channel kinds its
-# minions speak with the factory's own connection parameters for each. The
+# minions speak with the factory's own connection parameters for each, and the
+# commands its minions can be built with, of which each build picks its. The
 # schema belongs to the factory kind (module name, e.g. "bob"); a kind's
 # current schema is the highest version any of its instances declared.
 #
@@ -37,6 +38,29 @@ type BuildSchema {
   # Build parameters every target shares.
   fields: [ModuleField!]!
   targets: [BuildTarget!]!
+  # What the minions can do, in the factory's order. A build picks its from
+  # its target's.
+  commands: [BuildCommand!]!
+}
+
+# A command a factory's minions can be built with.
+type BuildCommand {
+  # Names the command in builds: a slug, unique in the schema.
+  id: String!
+  # The factory's label, or the id when it gave none.
+  label: String!
+  description: String
+  # The heading it is listed under; null for none.
+  group: String
+  # The targets whose builds can have it.
+  targets: [String!]!
+  # Picked in a new build until the operator unpicks it, and what a build
+  # that names no commands gets, with the required ones.
+  default: Boolean!
+  # In every build of its targets: the minion cannot run without it.
+  required: Boolean!
+  # What a task of the command takes.
+  params: [ModuleField!]!
 }
 
 type BuildChannel {
@@ -97,7 +121,7 @@ type BuildFile {
 
 type BuildProblem {
   # Where the problem is: "description", "target", "platform", "values.<key>",
-  # "connections", "connections[<i>]", "connections[<i>].name",
+  # "commands[<i>]", "connections", "connections[<i>]", "connections[<i>].name",
   # "connections[<i>].description", "connections[<i>].settings.<key>",
   # "connections[<i>].values.<key>"; null when it is not one place's.
   key: String
@@ -134,6 +158,9 @@ input BuildInput {
   # Values by field key; null, "" and [] leave a field unset (its default
   # applies). File fields take build file ids.
   values: JSON!
+  # The commands picked for the minion, by id, each one of the target's; the
+  # target's required ones are added. null: the target's default ones.
+  commands: [String!]
   # The connections, in the order the minion tries them.
   connections: [BuildConnectionInput!]!
 }
@@ -200,6 +227,9 @@ type Build {
   schemaVersion: Int!
   # Every field with a value or a default, as the factory got them.
   values: JSON!
+  # What the minion can do: the commands picked, with the target's required
+  # ones, in the factory's order. The minion has these and no others.
+  commands: [String!]!
   # The connections as the factory got them: [{endpoint: <export>, values:
   # {...}}], each export's params resolved over the channel's defaults.
   connections: JSON!
@@ -214,7 +244,6 @@ type Build {
   # The build's pipeline, in order.
   stages: [BuildStage!]!
   artifact: BuildArtifact
-  capabilities: [String!]!
   warnings: [String!]!
   # The build output, its last 64 KiB.
   log: String
@@ -236,7 +265,8 @@ type Minion {
   moduleName: String!
   target: String!
   platform: String!
-  capabilities: [String!]!
+  # What the minion can do: its build's commands.
+  commands: [String!]!
   createdBy: ModuleActor!
   createdAt: String!
 }
@@ -253,7 +283,7 @@ extend type Query {
   # An operation's builds, newest first, a page at a time. search is the
   # app's search (a substring, case aside; "quotes" for whole words) over the
   # factory, target, id, description, platform, state, factory instance, who
-  # started it, its plan's steps, error, artifact name, values and
+  # started it, its plan's steps, error, artifact name, values, commands and
   # connections (names, channels, settings, values and the operators' notes).
   # states and moduleNames (factory kinds) narrow the list. Needs at least
   # viewer.

@@ -28,6 +28,7 @@ describe("buildRecordJson", () => {
       warnings: ["debug build"],
       artifact: { filename: "bob.json" },
       values: { greeting: "hi" },
+      commands: ["sleep", "hello"],
       connections: [
         {
           endpoint: {
@@ -50,6 +51,7 @@ describe("buildRecordJson", () => {
       description: "EU dry run",
       target: "dummy",
       platform: "any/any",
+      commands: ["sleep", "hello"],
       values: { greeting: "hi" },
       connections: [
         {

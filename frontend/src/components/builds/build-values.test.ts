@@ -14,12 +14,15 @@ import {
   factoryKindsByName,
   fileFits,
   fillFromEndpoint,
+  groupCommands,
   initialForm,
   move,
+  pickedCommands,
   platformLabel,
   settingsSummary,
   sourceFromBuild,
   stageDuration,
+  targetCommands,
   withTarget,
   type BuildForm,
 } from "./build-values"
@@ -28,7 +31,8 @@ function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef 
   return { label: f.key, order: 0, required: false, ...f } as FieldDef
 }
 
-// BOB's build schema, plus a second target with a required field.
+// BOB's build schema, plus a second target with a required field, and
+// commands of each kind: required, default, picked, one target's only.
 const schema: BuildSchemaFieldsFragment = {
   version: 1,
   crypto: [],
@@ -60,6 +64,22 @@ const schema: BuildSchemaFieldsFragment = {
       fields: [field({ key: "service_name", type: "string", required: true })],
       channels: [{ moduleName: "http", versions: [2] }],
     },
+  ],
+  commands: [
+    {
+      id: "sleep",
+      label: "Sleep",
+      description: null,
+      group: "Session",
+      targets: ["dummy", "service"],
+      default: false,
+      required: true,
+      params: [field({ key: "jitter", type: "int", order: 2 }), field({ key: "interval", type: "duration", order: 1 })],
+    },
+    { id: "hello", label: "Say hello", description: "Answers.", group: "Session", targets: ["dummy", "service"], default: true, required: false, params: [] },
+    { id: "ls", label: "List", description: null, group: "Files", targets: ["dummy", "service"], default: false, required: false, params: [] },
+    { id: "shell", label: "Shell", description: null, group: "Session", targets: ["dummy"], default: true, required: false, params: [] },
+    { id: "stop", label: "Stop the service", description: null, group: null, targets: ["service"], default: true, required: false, params: [] },
   ],
 }
 
@@ -116,6 +136,55 @@ describe("factoryKindsByName", () => {
     expect(kind.fields.find((f) => f.key === "token")?.type).toBe("string")
     expect(kind.channelFields.get("http")?.map((f) => f.key)).toEqual(["method", "path_prefix"])
   })
+
+  it("keeps the commands in the factory's order, their params sorted", () => {
+    expect(kind.commands.map((c) => c.id)).toEqual(["sleep", "hello", "ls", "shell", "stop"])
+    expect(kind.commands[0].params.map((f) => f.key)).toEqual(["interval", "jitter"])
+    expect(kind.commands[4].group).toBe("")
+  })
+})
+
+describe("commands", () => {
+  const dummy = kind.targets[0]
+  const service = kind.targets[1]
+
+  it("are a target's", () => {
+    expect(targetCommands(kind, dummy).map((c) => c.id)).toEqual(["sleep", "hello", "ls", "shell"])
+    expect(targetCommands(kind, service).map((c) => c.id)).toEqual(["sleep", "hello", "ls", "stop"])
+    expect(targetCommands(kind, undefined)).toEqual([])
+  })
+
+  it("picked keep to the target's, required ones added, in the factory's order", () => {
+    expect(pickedCommands(kind, dummy, ["shell", "ls", "stop", "nope"])).toEqual(["sleep", "ls", "shell"])
+    expect(pickedCommands(kind, service, [])).toEqual(["sleep"])
+  })
+
+  it("go under their headings, in the order the headings first come", () => {
+    expect(groupCommands(targetCommands(kind, service)).map((g) => [g.group, g.items.map((c) => c.id)])).toEqual([
+      ["Session", ["sleep", "hello"]],
+      ["Files", ["ls"]],
+      ["General", ["stop"]],
+    ])
+  })
+
+  it("start as the target's defaults, or as the build again's picks", () => {
+    expect(initialForm(kind, null, channels).commands).toEqual(["sleep", "hello", "shell"])
+    expect(initialForm(kind, { target: "dummy", commands: ["ls"] }, channels).commands).toEqual(["sleep", "ls"])
+    expect(initialForm(kind, { target: "service", commands: null }, channels).commands).toEqual(["sleep", "hello", "stop"])
+  })
+
+  it("keep their picks across targets that share them; the new target's others start as its defaults", () => {
+    const form = initialForm(kind, null, channels)
+    form.commands = ["sleep", "ls", "shell"] // hello unpicked
+    expect(withTarget(kind, form, "service").commands).toEqual(["sleep", "ls", "stop"])
+    expect(withTarget(kind, withTarget(kind, form, "service"), "dummy").commands).toEqual(["sleep", "ls", "shell"])
+  })
+
+  it("must hold the target's required ones", () => {
+    const form = initialForm(kind, null, channels)
+    form.commands = ["hello"]
+    expect(evaluateForm(kind, form, channels).errors.commands).toBe("The dummy target requires sleep")
+  })
 })
 
 describe("channelUnusable", () => {
@@ -161,6 +230,7 @@ describe("the build form", () => {
       target: "dummy",
       platform: "any/any",
       values: { punches: ["jab", "hook"], badge: "file-1" },
+      commands: ["sleep", "hello", "shell"],
       connections: [
         {
           moduleName: "http",
@@ -364,6 +434,7 @@ describe("sourceFromBuild", () => {
       target: "dummy",
       platform: "any/any",
       values: { greeting: "hello from BOB", punches: ["jab"] },
+      commands: ["sleep", "ls"],
       connections: [
         {
           endpoint: {
@@ -404,7 +475,9 @@ describe("sourceFromBuild", () => {
       },
     ])
 
+    expect(source.commands).toEqual(["sleep", "ls"])
     const form: BuildForm = initialForm(kind, source, channels)
+    expect(form.commands).toEqual(["sleep", "ls"])
     expect(form.connections[1].notes).toEqual(["Saved for http settings v1; the channel is at v2. Check the settings."])
     expect(evaluateForm(kind, form, channels).errors).toEqual({})
   })

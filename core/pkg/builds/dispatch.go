@@ -204,7 +204,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 	expiry := time.Until(deadline) + time.Minute
 	req := protocol.BuildRequest{
 		MinionID: b.MinionID.String(), Target: b.Target, Platform: b.Platform,
-		SchemaVersion: b.SchemaVersion, Values: b.Values, Connections: b.Connections.Items,
+		SchemaVersion: b.SchemaVersion, Values: b.Values, Commands: b.Commands, Connections: b.Connections.Items,
 		Deadline: deadline, Actor: b.CreatedBy.Protocol(),
 	}
 	if len(b.FileIDs) > 0 {
@@ -278,7 +278,7 @@ func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
 	}
 	m := &models.Minion{
 		MinionID: b.MinionID, OperationID: b.OperationID, ModuleName: b.ModuleName,
-		Target: b.Target, Platform: b.Platform, Capabilities: b.Capabilities, CreatedBy: b.CreatedBy, CreatedAt: s.now(),
+		Target: b.Target, Platform: b.Platform, Commands: b.Commands, CreatedBy: b.CreatedBy, CreatedAt: s.now(),
 	}
 	if err := s.repos.Minions.Insert(ctx, m); err != nil {
 		s.logger.Error("record a built minion", zap.String("minion_id", minionID.String()), zap.Error(err))

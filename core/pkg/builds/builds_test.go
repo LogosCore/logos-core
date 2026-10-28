@@ -43,7 +43,18 @@ func bobSchema() protocol.BuildSchema {
 			{Key: "punches", Type: protocol.FieldEnumList, Options: []protocol.EnumOption{{Value: "jab"}, {Value: "hook"}}},
 			{Key: "badge", Type: protocol.FieldFile, Accept: []string{"image/*"}, MaxSize: 1024},
 		},
-		Targets: []protocol.BuildTarget{{ID: "dummy", Format: "json", Platforms: []string{"any/any"}}},
+		Targets: []protocol.BuildTarget{
+			{ID: "dummy", Format: "json", Platforms: []string{"any/any"}},
+			{ID: "dummy-lite", Format: "json", Platforms: []string{"any/any"}},
+		},
+		Commands: []protocol.BuildCommand{
+			{ID: "sleep", Required: true},
+			{ID: "exit", Required: true},
+			{ID: "hello", Default: true},
+			{ID: "ls", Default: true},
+			{ID: "download"},
+			{ID: "shell", Targets: []string{"dummy"}},
+		},
 	}
 }
 
@@ -218,6 +229,33 @@ func TestCreateBuildQueues(t *testing.T) {
 	if b.Description != "A dummy for the EU front's dry run" {
 		t.Fatalf("description %q", b.Description)
 	}
+	// None picked: the target's default and required ones.
+	if got := strings.Join(b.Commands, " "); got != "sleep exit hello ls" {
+		t.Fatalf("commands %s", got)
+	}
+}
+
+func TestCreateBuildCommands(t *testing.T) {
+	r := newRig(t)
+	for _, c := range []struct {
+		target string
+		picked []string
+		want   string
+	}{
+		// The required ones are added, and all of them sorted as the
+		// factory lists them.
+		{"dummy", []string{"shell", "hello"}, "sleep exit hello shell"},
+		{"dummy", []string{"exit", "download"}, "sleep exit download"},
+		// An empty pick is no commands but the required ones; none named
+		// is the defaults.
+		{"dummy", []string{}, "sleep exit"},
+		{"dummy-lite", nil, "sleep exit hello ls"},
+	} {
+		b := r.queue(t, func(in *BuildInput) { in.Target, in.Commands = c.target, c.picked })
+		if got := strings.Join(b.Commands, " "); got != c.want {
+			t.Errorf("%s %v: commands %s, want %s", c.target, c.picked, got, c.want)
+		}
+	}
 }
 
 func TestCreateBuildConnectionDescriptions(t *testing.T) {
@@ -275,6 +313,9 @@ func TestCreateBuildProblems(t *testing.T) {
 		{"values.color", func(in *BuildInput) { in.Values["color"] = "red" }},
 		{"values.badge", func(in *BuildInput) { in.Values["badge"] = uuid.NewString() }},
 		{"values.badge", func(in *BuildInput) { in.Values["badge"] = text.FileID.String() }}, // not an image
+		{"commands[1]", func(in *BuildInput) { in.Commands = []string{"hello", "keylog"} }},
+		{"commands[1]", func(in *BuildInput) { in.Commands = []string{"hello", "hello"} }},
+		{"commands[0]", func(in *BuildInput) { in.Target, in.Commands = "dummy-lite", []string{"shell"} }}, // the dummy's only
 		{"connections", func(in *BuildInput) { in.Connections = nil }},
 		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "" }},
 		{"connections[0]", func(in *BuildInput) { in.Connections[0].ModuleName = "smtp" }}, // no such channel
@@ -350,6 +391,9 @@ func TestOfferAccepted(t *testing.T) {
 	req := calls[0].payload.(protocol.BuildRequest)
 	if p := protocol.ValidateBuildRequest(bobSchema(), req); p != nil {
 		t.Fatalf("the request a factory gets does not pass its check: %v", p)
+	}
+	if got := strings.Join(req.Commands, " "); got != "sleep exit hello ls" {
+		t.Fatalf("the factory got commands %s", got)
 	}
 	// The operators' notes never reach a factory, nor so an artifact.
 	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") || strings.Contains(string(raw), "dry run") {
@@ -542,8 +586,8 @@ func (r *rig) succeed(t *testing.T, b *models.Build, body string, reported strin
 	t.Helper()
 	r.store.objects[artifactKey(opID, b.MinionID)] = []byte(body)
 	res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildSucceeded,
-		Artifact:     &protocol.BuildArtifact{Filename: "bob.json", Size: int64(len(reported)), SHA256: sha(reported), MediaType: "application/json"},
-		Capabilities: []string{"hello"}, Warnings: []string{"a dummy"}, Log: "built"}
+		Artifact: &protocol.BuildArtifact{Filename: "bob.json", Size: int64(len(reported)), SHA256: sha(reported), MediaType: "application/json"},
+		Warnings: []string{"a dummy"}, Log: "built"}
 	return r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res))
 }
 
@@ -559,11 +603,12 @@ func TestSucceededBuild(t *testing.T) {
 	}
 	r.settle()
 	got := r.get(t, b.MinionID.String(), models.BuildStateSucceeded)
-	if got.Artifact.Size != 12 || got.Capabilities[0] != "hello" || got.Log != "built" || got.FinishedAt == nil {
+	if got.Artifact.Size != 12 || got.Log != "built" || len(got.Warnings) != 1 || got.FinishedAt == nil {
 		t.Fatalf("build %+v", got)
 	}
+	// The minion can do what its build picked.
 	minions, _ := r.svc.Minions(context.Background(), opID)
-	if len(minions) != 1 || minions[0].MinionID != b.MinionID {
+	if len(minions) != 1 || minions[0].MinionID != b.MinionID || strings.Join(minions[0].Commands, " ") != "sleep exit hello ls" {
 		t.Fatalf("minions %+v", minions)
 	}
 

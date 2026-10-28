@@ -192,7 +192,7 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 	}
 	in := builds.BuildInput{
 		Description: input.Description, ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
-		Values: values, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
+		Values: values, Commands: input.Commands, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
 	}
 	b, err := r.builds.CreateBuild(ctx, op, in)
 	if err != nil {
@@ -239,7 +239,7 @@ func (r *buildResolver) Minions(ctx context.Context, operationID string) ([]*mod
 	for i, m := range ms {
 		out[i] = &model.Minion{
 			ID: m.MinionID.String(), OperationID: m.OperationID.String(), ModuleName: m.ModuleName,
-			Target: m.Target, Platform: m.Platform, Capabilities: orEmpty(m.Capabilities),
+			Target: m.Target, Platform: m.Platform, Commands: orEmpty(m.Commands),
 			CreatedBy: toActorModel(m.CreatedBy), CreatedAt: m.CreatedAt.Format(time.RFC3339),
 		}
 	}
@@ -314,6 +314,19 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 		}
 		out.Targets = append(out.Targets, mt)
 	}
+	out.Commands = make([]*model.BuildCommand, len(s.Commands))
+	for i, c := range s.Commands {
+		mc := &model.BuildCommand{
+			ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description), Group: strPtr(c.Group),
+			Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
+		}
+		for _, t := range s.Targets {
+			if c.For(t.ID) {
+				mc.Targets = append(mc.Targets, t.ID)
+			}
+		}
+		out.Commands[i] = mc
+	}
 	return out
 }
 
@@ -344,7 +357,7 @@ func toBuildModel(b *models.Build) *model.Build {
 		Platform: b.Platform, SchemaVersion: b.SchemaVersion, Values: copyMap(b.Values),
 		Connections: b.Connections.Items, State: b.State,
 		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion),
-		Stages: []*model.BuildStage{}, Capabilities: orEmpty(b.Capabilities), Warnings: orEmpty(b.Warnings),
+		Commands: orEmpty(b.Commands), Stages: []*model.BuildStage{}, Warnings: orEmpty(b.Warnings),
 		Log: strPtr(b.Log), CreatedBy: toActorModel(b.CreatedBy),
 		CreatedAt: b.CreatedAt.Format(time.RFC3339), StartedAt: timePtr(b.StartedAt), FinishedAt: timePtr(b.FinishedAt),
 		Deadline: b.Deadline.Format(time.RFC3339),

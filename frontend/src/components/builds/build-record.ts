@@ -24,11 +24,12 @@ export function defaultBuildTab(state: string): BuildTab {
 /**
  * The build as the JSON tab shows it: what it takes to build it, as the New
  * build modal's JSON tab writes a build (build-json.ts), so a build's JSON
- * pastes into a new build's. Its factory, description, target, platform and
- * values, and its connections, each with its channel, name, description, the
- * channel's settings and the factory's values for it; every value as the
- * factory got it, defaults filled in. What came of the build (state, stages,
- * artifact, error, warnings, times, its log) is the other tabs'.
+ * pastes into a new build's. Its factory, description, target, platform,
+ * commands and values, and its connections, each with its channel, name,
+ * description, the channel's settings and the factory's values for it; every
+ * value as the factory got it, defaults filled in. What came of the build
+ * (state, stages, artifact, error, warnings, times, its log) is the other
+ * tabs'.
  */
 export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
   return {
@@ -36,6 +37,7 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
     description: b.description,
     target: b.target,
     platform: b.platform,
+    commands: b.commands,
     values: b.values,
     connections: recordedConnections(b).map((c) => ({
       channel: c.moduleName,

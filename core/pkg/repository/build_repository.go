@@ -102,14 +102,13 @@ func (r *buildFileRepository) DeleteByOperationID(ctx context.Context, operation
 
 // BuildOutcome is what Finish records with a final state.
 type BuildOutcome struct {
-	State        string
-	Error        *models.BuildError
-	Artifact     *models.BuildArtifact
-	Capabilities []string
-	Warnings     []string
-	Log          string
-	CancelledBy  *models.ModuleActor
-	At           time.Time
+	State       string
+	Error       *models.BuildError
+	Artifact    *models.BuildArtifact
+	Warnings    []string
+	Log         string
+	CancelledBy *models.ModuleActor
+	At          time.Time
 }
 
 // IBuildRepository stores builds. State changes are compare-and-set.
@@ -153,7 +152,7 @@ type IBuildRepository interface {
 	// RecordResult stores a succeeded result, received at at, whose artifact
 	// is still to be checked. False when the build is not building on
 	// instance, or a result was already recorded.
-	RecordResult(ctx context.Context, minionID uuid.UUID, instance string, artifact models.BuildArtifact, capabilities, warnings []string, log string, at time.Time) (bool, error)
+	RecordResult(ctx context.Context, minionID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error)
 	// Finish moves a build in one of the from states to a final one. False
 	// when it was in none of them.
 	Finish(ctx context.Context, minionID uuid.UUID, from []string, out BuildOutcome) (bool, error)
@@ -212,8 +211,8 @@ func (r *buildRepository) ListUnfinished(ctx context.Context) ([]models.Build, e
 // search (searchPattern) over what the Builds page shows of a build (factory,
 // target, description, platform, state, factory instance, who started it, its
 // plan's steps), its error and artifact name, the operators' notes on its
-// connections, and its search text: its minion id, values and connections
-// (models.BuildSearchText).
+// connections, and its search text: its minion id, values, commands and
+// connections (models.BuildSearchText).
 type BuildFilter struct {
 	Search      string
 	States      []string
@@ -371,13 +370,10 @@ func reportStepUpdate(step, message string, at time.Time) bson.M {
 	return u
 }
 
-func (r *buildRepository) RecordResult(ctx context.Context, minionID uuid.UUID, instance string, artifact models.BuildArtifact, capabilities, warnings []string, log string, at time.Time) (bool, error) {
+func (r *buildRepository) RecordResult(ctx context.Context, minionID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error) {
 	filter := buildingOn(minionID, instance)
 	filter["result_received"] = bson.M{"$ne": true}
 	set := bson.M{"result_received": true, "result_at": at, "artifact": artifact, "log": log}
-	if len(capabilities) > 0 {
-		set["capabilities"] = capabilities
-	}
 	if len(warnings) > 0 {
 		set["warnings"] = warnings
 	}
@@ -392,9 +388,6 @@ func finishUpdate(out BuildOutcome) bson.M {
 	}
 	if out.Artifact != nil {
 		set["artifact"] = out.Artifact
-	}
-	if len(out.Capabilities) > 0 {
-		set["capabilities"] = out.Capabilities
 	}
 	if len(out.Warnings) > 0 {
 		set["warnings"] = out.Warnings

@@ -7,6 +7,7 @@
 
 import {
   compareFields,
+  DEFAULT_GROUP,
   emptyDraft,
   humanizeBytes,
   initialDraft,
@@ -91,6 +92,23 @@ export interface Target {
   channels: { moduleName: string; versions: number[] }[]
 }
 
+/** A command a factory's minions can be built with. */
+export interface Command {
+  id: string
+  label: string
+  description: string | null
+  /** The heading it is listed under; "" for none. */
+  group: string
+  /** The targets whose builds can have it. */
+  targets: string[]
+  /** Picked in a new build until the operator unpicks it. */
+  default: boolean
+  /** In every build of its targets: it cannot be unpicked. */
+  required: boolean
+  /** What a task of the command takes, sorted. */
+  params: FieldDef[]
+}
+
 export interface FactoryKind {
   name: string
   /** The kind's own icon; its SVGs are "" for the default. */
@@ -104,6 +122,8 @@ export interface FactoryKind {
   /** The factory's connection parameters per channel kind, sorted. */
   channelFields: Map<string, FieldDef[]>
   targets: Target[]
+  /** What the minions can do, in the factory's order. */
+  commands: Command[]
 }
 
 const asText = (f: FieldDef): FieldDef => (f.type === "secret" ? { ...f, type: "string" } : f)
@@ -138,6 +158,16 @@ export function factoryKindsByName(
         fields: sorted(t.fields),
         channels: t.channels.map((c) => ({ moduleName: c.moduleName, versions: c.versions })),
       })),
+      commands: k.schema.commands.map((c) => ({
+        id: c.id,
+        label: c.label,
+        description: c.description ?? null,
+        group: c.group ?? "",
+        targets: c.targets,
+        default: c.default,
+        required: c.required,
+        params: sorted(c.params),
+      })),
     })
   }
   return out
@@ -146,6 +176,48 @@ export function factoryKindsByName(
 /** The fields a build of target takes: the shared ones, then its own. */
 export function targetFields(kind: FactoryKind, target: Target | undefined): FieldDef[] {
   return target ? [...kind.fields, ...target.fields] : kind.fields
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+/** The commands a build of target can have, in the factory's order. */
+export function targetCommands(kind: FactoryKind, target: Target | undefined): Command[] {
+  return target ? kind.commands.filter((c) => c.targets.includes(target.id)) : []
+}
+
+/** What a new build of target starts with, and one naming none gets: its default and required commands. */
+export function defaultCommands(kind: FactoryKind, target: Target | undefined): string[] {
+  return targetCommands(kind, target)
+    .filter((c) => c.default || c.required)
+    .map((c) => c.id)
+}
+
+/**
+ * The commands picked, as a build of target has them: the target's among
+ * them, with its required ones, in the factory's order.
+ */
+export function pickedCommands(kind: FactoryKind, target: Target | undefined, picked: Iterable<string>): string[] {
+  const on = new Set(picked)
+  return targetCommands(kind, target)
+    .filter((c) => c.required || on.has(c.id))
+    .map((c) => c.id)
+}
+
+/**
+ * Commands under their headings, in the factory's order: the first command of
+ * each heading places it. One without a heading goes under fields' default.
+ */
+export function groupCommands(commands: readonly Command[]): { group: string; items: Command[] }[] {
+  const groups = new Map<string, Command[]>()
+  for (const c of commands) {
+    const g = c.group.trim() || DEFAULT_GROUP
+    const list = groups.get(g)
+    if (list) list.push(c)
+    else groups.set(g, [c])
+  }
+  return [...groups].map(([group, items]) => ({ group, items }))
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +281,8 @@ export interface BuildForm {
   target: string
   platform: string
   drafts: Record<string, Draft>
+  /** The commands picked, the target's required ones among them, in the factory's order. */
+  commands: string[]
   connections: ConnectionDraft[]
 }
 
@@ -230,6 +304,8 @@ export interface FormSource {
   target: string
   platform?: string | null
   values?: Record<string, unknown> | null
+  /** The commands it had; none named: the target's defaults. */
+  commands?: readonly string[] | null
   connections?: readonly ConnectionSource[]
 }
 
@@ -351,6 +427,7 @@ export function initialForm(
     target: target?.id ?? "",
     platform,
     drafts: draftsFor(targetFields(kind, target), source?.values),
+    commands: source?.commands ? pickedCommands(kind, target, source.commands) : defaultCommands(kind, target),
     connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c)),
   }
 }
@@ -361,6 +438,8 @@ export interface BuildRecordLike {
   target: string
   platform: string
   values?: unknown
+  /** The commands the minion was built with. */
+  commands?: readonly string[] | null
   /** What the factory got: [{endpoint: <export>, values}]. */
   connections?: unknown
   /** The operators' notes on the connections, by position. */
@@ -412,7 +491,8 @@ export function buildConnectionRows(
  * What "build again" fills the form with. A build holds every default
  * filled in: values equal to today's defaults are left out, so they read as
  * defaults; so are connection names the server gave, and settings the channel
- * no longer declares, with a note.
+ * no longer declares, with a note. Its commands are picked again, those the
+ * target no longer has aside.
  */
 export function sourceFromBuild(
   kind: FactoryKind,
@@ -444,6 +524,7 @@ export function sourceFromBuild(
     target: build.target,
     platform: build.platform,
     values: withoutDefaults(targetFields(kind, target), isRecord(build.values) ? build.values : {}),
+    commands: build.commands ?? null,
     connections,
   }
 }
@@ -473,6 +554,7 @@ export interface FormInput {
   target: string
   platform: string
   values: Record<string, unknown>
+  commands: string[]
   connections: ConnectionInput[]
 }
 
@@ -506,14 +588,15 @@ export interface BuildShape {
   description: string
   target: string
   platform: string
+  commands: readonly string[]
   connections: readonly { moduleName: string; name: string; description: string }[]
 }
 
 /**
  * Adds to errors what a build needs besides valid values: a description, a
- * target and one of its platforms, a connection, each through a channel the
- * target speaks and named apart from the others. Keyed like the server's
- * problems ("connections[1].name").
+ * target and one of its platforms, the target's required commands, a
+ * connection, each through a channel the target speaks and named apart from
+ * the others. Keyed like the server's problems ("connections[1].name").
  */
 export function checkBuild(
   kind: FactoryKind,
@@ -528,6 +611,13 @@ export function checkBuild(
   if (!target) errors.target = "Pick a target"
   else if (b.platform === "") errors.platform = "Pick a platform"
   else if (!target.platforms.includes(b.platform)) errors.platform = "Not a platform of this target"
+
+  // The form cannot leave a required command out; the JSON tab can.
+  const listed = new Set(b.commands)
+  const missing = targetCommands(kind, target).filter((c) => c.required && !listed.has(c.id))
+  if (missing.length > 0) {
+    errors.commands = `The ${target!.id} target requires ${missing.map((c) => c.id).join(", ")}`
+  }
 
   if (b.connections.length === 0) errors.connections = "Add at least one connection"
   const named = new Map<string, number>()
@@ -569,23 +659,37 @@ export function evaluateForm(
       values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, errors),
     }
   })
-  const input = { description: form.description.trim(), target: form.target, platform: form.platform, values, connections }
+  const input = {
+    description: form.description.trim(),
+    target: form.target,
+    platform: form.platform,
+    values,
+    commands: form.commands,
+    connections,
+  }
   return { input, errors }
 }
 
-/** The form with another target: drafts for its fields, kept where they carry over. */
+/**
+ * The form with another target: drafts for its fields, kept where they carry
+ * over, and so its commands: one both targets have keeps its pick, the new
+ * target's others start as in a new build.
+ */
 export function withTarget(kind: FactoryKind, form: BuildForm, targetId: string): BuildForm {
   const target = kind.targets.find((t) => t.id === targetId)
   const drafts: Record<string, Draft> = {}
   for (const f of targetFields(kind, target)) {
     drafts[f.key] = form.drafts[f.key] ?? initialDraft(f, f.default ?? null, AS_TEXT)
   }
+  const before = kind.targets.find((t) => t.id === form.target)
+  const had = new Set(targetCommands(kind, before).map((c) => c.id))
+  const picked = targetCommands(kind, target).filter((c) => (had.has(c.id) ? form.commands.includes(c.id) : c.default))
   const platform = target?.platforms.includes(form.platform)
     ? form.platform
     : target?.platforms.length === 1
       ? target.platforms[0]
       : ""
-  return { ...form, target: targetId, platform, drafts }
+  return { ...form, target: targetId, platform, drafts, commands: pickedCommands(kind, target, picked.map((c) => c.id)) }
 }
 
 /** Moves item i of a list one place up (-1) or down (+1). */
