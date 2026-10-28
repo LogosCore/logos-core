@@ -1,6 +1,5 @@
 import { Fragment, useMemo } from "react"
 import { CopyIcon, Trash2Icon } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { cn } from "@/lib/utils"
@@ -55,6 +54,8 @@ export function BuildOverview({
 
   return (
     <div className="flex min-w-0 flex-col gap-6 px-4 py-6">
+      {/* A build's capabilities (what the minion can do) are left out until
+          factories' command sets are worked out; core still keeps them. */}
       <Section title="Summary">
         <ItemList>
           {b.description && (
@@ -144,19 +145,6 @@ export function BuildOverview({
                   <CopyIcon />
                 </Button>
               </span>
-            </Item>
-            <Item label="Capabilities">
-              {b.capabilities.length === 0 ? (
-                <span className="text-muted-foreground">none reported</span>
-              ) : (
-                <span className="flex flex-wrap gap-1">
-                  {b.capabilities.map((c) => (
-                    <Badge key={c} variant="secondary" className="font-mono">
-                      {c}
-                    </Badge>
-                  ))}
-                </span>
-              )}
             </Item>
           </ItemList>
           {b.artifact.deleted ? (

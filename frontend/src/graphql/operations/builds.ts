@@ -71,7 +71,6 @@ export const BuildFields = graphql(`
       mediaType
       deleted
     }
-    capabilities
     error {
       code
       message

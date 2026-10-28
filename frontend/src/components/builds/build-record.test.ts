@@ -25,7 +25,6 @@ describe("buildRecordJson", () => {
       schemaVersion: 1,
       state: "SUCCEEDED",
       stages: [],
-      capabilities: [],
       warnings: [],
       values: { greeting: "hi" },
       connections: [],

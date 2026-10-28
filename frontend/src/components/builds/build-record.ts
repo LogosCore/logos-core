@@ -21,7 +21,8 @@ export function defaultBuildTab(state: string): BuildTab {
 /**
  * The build as the JSON tab shows it: the record as the API gives it, the
  * build itself first and what it was given last. Its log is left out: up to
- * 64 KiB of text, which the Pipeline tab shows as a log.
+ * 64 KiB of text, which the Pipeline tab shows as a log. So are its
+ * capabilities, until factories' command sets are worked out.
  */
 export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
   return {
@@ -44,7 +45,6 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
     error: b.error ?? null,
     warnings: b.warnings,
     artifact: b.artifact ?? null,
-    capabilities: b.capabilities,
     stages: b.stages,
     values: b.values,
     connections: b.connections,
