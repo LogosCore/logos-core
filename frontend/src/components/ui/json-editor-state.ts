@@ -1,9 +1,9 @@
 import type { CompletionContext, Completion, CompletionResult } from "@codemirror/autocomplete"
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language"
+import { ensureSyntaxTree, foldable, foldEffect, syntaxTree } from "@codemirror/language"
 import type { Diagnostic } from "@codemirror/lint"
-import { EditorState, StateEffect, StateField } from "@codemirror/state"
+import { EditorState, StateEffect, StateField, type TransactionSpec } from "@codemirror/state"
 import type { SyntaxNode } from "@lezer/common"
-import { parseJson, type JsonHints, type JsonProblem } from "@/lib/json-edit"
+import { formatJson, parseJson, type JsonHints, type JsonProblem } from "@/lib/json-edit"
 import { firstErrorAt, keyOf, keysOf, pointerOfNode, propertySpans, type PropertySpan } from "./json-editor-tree"
 
 // The JSON editor's state (json-editor.tsx) that needs no page: what the
@@ -208,4 +208,40 @@ export function completeJson(context: CompletionContext): CompletionResult | nul
     to,
     options: hint.values.map((v) => ({ label: JSON.stringify(v), type: v === null ? "keyword" : "constant" })),
   }
+}
+
+// --- Commands --------------------------------------------------------------
+
+/**
+ * The document indented two spaces, as the editors show one: after pasting
+ * minified JSON, say. Null when it is not JSON or already so. It replaces
+ * the whole text, which the locks let through; the values stay the same.
+ */
+export function formatSpec(state: EditorState): TransactionSpec | null {
+  const text = state.doc.toString()
+  const parsed = parseJson(text)
+  if (!parsed.ok) return null
+  const formatted = formatJson(parsed.value)
+  if (formatted === text) return null
+  return { changes: { from: 0, to: text.length, insert: formatted }, userEvent: "input.format" }
+}
+
+/**
+ * Folds every part inside the document's top value, each to one line, and
+ * leaves the top value open, so its keys stay in view. (CodeMirror's foldAll
+ * folds the top value itself, which leaves "{…}".)
+ */
+export function foldContentsEffects(state: EditorState): StateEffect<{ from: number; to: number }>[] {
+  const effects: StateEffect<{ from: number; to: number }>[] = []
+  const first = state.doc.line(1)
+  const top = foldable(state, first.from, first.to)
+  const end = top ? top.to : state.doc.length
+  let pos = top ? first.to + 1 : 0
+  while (pos < end) {
+    const line = state.doc.lineAt(pos)
+    const range = foldable(state, line.from, line.to)
+    if (range && range.to <= end) effects.push(foldEffect.of(range))
+    pos = (range ? state.doc.lineAt(range.to) : line).to + 1
+  }
+  return effects
 }

@@ -49,6 +49,7 @@ import {
   endpointDrafts,
   endpointImportFrom,
   evaluateEndpoint,
+  exportFileName,
   kindsByName,
   MAX_DESCRIPTION_LENGTH,
   nameError,
@@ -464,6 +465,7 @@ function EndpointEditor({
           problems={jsonProblems}
           hints={hints}
           readOnly={disabled}
+          fileName={exportFileName(name.trim() || "endpoint")}
           aria-label="The endpoint as JSON"
           className="flex-1 rounded-md border"
         />

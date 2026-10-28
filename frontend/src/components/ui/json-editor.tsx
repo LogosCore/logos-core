@@ -1,6 +1,28 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
+import {
+  CheckIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  CircleAlertIcon,
+  CopyIcon,
+  DownloadIcon,
+  Redo2Icon,
+  SearchIcon,
+  TextQuoteIcon,
+  Undo2Icon,
+  WrapTextIcon,
+} from "lucide-react"
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete"
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands"
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+  redo,
+  redoDepth,
+  undo,
+  undoDepth,
+} from "@codemirror/commands"
 import { json } from "@codemirror/lang-json"
 import {
   bracketMatching,
@@ -11,9 +33,10 @@ import {
   indentUnit,
   syntaxHighlighting,
   syntaxTree,
+  unfoldAll,
 } from "@codemirror/language"
-import { lintGutter, lintKeymap, setDiagnostics } from "@codemirror/lint"
-import { highlightSelectionMatches, searchKeymap } from "@codemirror/search"
+import { lintGutter, lintKeymap, nextDiagnostic, setDiagnostics } from "@codemirror/lint"
+import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from "@codemirror/search"
 import { Compartment, EditorState, type Extension } from "@codemirror/state"
 import {
   Decoration,
@@ -27,17 +50,33 @@ import {
   WidgetType,
 } from "@codemirror/view"
 import { tags as t } from "@lezer/highlight"
+import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
+import { downloadBlob } from "@/lib/file-export"
 import { cn } from "@/lib/utils"
-import type { JsonHints, JsonKeyHint, JsonProblem } from "@/lib/json-edit"
+import { parseJson, type JsonHints, type JsonKeyHint, type JsonProblem } from "@/lib/json-edit"
 import { keyOf, pointerOfNode } from "./json-editor-tree"
-import { completeJson, config, diagnosticsOf, keepLocks, lockedSpans, setConfig, spans } from "./json-editor-state"
+import {
+  completeJson,
+  config,
+  diagnosticsOf,
+  foldContentsEffects,
+  formatSpec,
+  keepLocks,
+  lockedSpans,
+  setConfig,
+  spans,
+} from "./json-editor-state"
 import "./json-editor.css"
 
 // A JSON document editor for a record's JSON tab, built on CodeMirror. It
 // knows nothing of the record: the record says which parts are locked, where
 // its problems are and what to offer as you type (lib/json-edit.ts), and
-// reads the text back itself. Load it through lazy-json-editor.tsx: it is
-// heavy, and most screens never show it.
+// reads the text back itself. A toolbar above the text: undo and redo,
+// format, fold and unfold all, wrap lines; the problems, find, copy all and
+// download. Load it through lazy-json-editor.tsx: it is heavy, and most
+// screens never show it.
 
 export interface JsonEditorProps {
   /** The document's text. */
@@ -54,6 +93,8 @@ export interface JsonEditorProps {
   /** Keys and values to offer, by the pointer of the object they go in. */
   hints?: JsonHints
   readOnly?: boolean
+  /** The name Download saves the text under; without one, no Download. */
+  fileName?: string
   className?: string
   "aria-label"?: string
 }
@@ -62,6 +103,14 @@ const NONE: readonly never[] = []
 const NO_HINTS: JsonHints = {}
 /** Whether the text can be changed; a key, so one serves every editor. */
 const editable = new Compartment()
+/** Whether long lines wrap. */
+const wrapping = new Compartment()
+
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+const MOD = IS_MAC ? "⌘" : "Ctrl+"
+const ALT = IS_MAC ? "⌥" : "Alt+"
+const SHIFT = IS_MAC ? "⇧" : "Shift+"
+const CTRL = IS_MAC ? "⌃" : "Ctrl+"
 
 export function JsonEditor({
   value,
@@ -70,6 +119,7 @@ export function JsonEditor({
   problems = NONE,
   hints = NO_HINTS,
   readOnly = false,
+  fileName,
   className,
   "aria-label": ariaLabel = "JSON",
 }: JsonEditorProps) {
@@ -77,6 +127,10 @@ export function JsonEditor({
   const view = useRef<EditorView | null>(null)
   const changed = useRef(onChange)
   const first = useRef({ value, ariaLabel })
+  // What the toolbar shows that only the editor knows.
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
+  const [wrap, setWrap] = useState(true)
 
   useEffect(() => {
     changed.current = onChange
@@ -90,9 +144,12 @@ export function JsonEditor({
         extensions: [
           base,
           editable.of([]),
+          wrapping.of(EditorView.lineWrapping),
           EditorView.contentAttributes.of({ "aria-label": first.current.ariaLabel }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) changed.current(u.state.doc.toString())
+            setCanUndo(undoDepth(u.state) > 0)
+            setCanRedo(redoDepth(u.state) > 0)
           }),
         ],
       }),
@@ -128,7 +185,141 @@ export function JsonEditor({
     if (v) v.dispatch(setDiagnostics(v.state, diagnosticsOf(v.state, problems)))
   }, [value, problems])
 
-  return <div ref={host} className={cn("json-editor min-h-0 overflow-hidden", className)} />
+  useEffect(() => {
+    view.current?.dispatch({ effects: wrapping.reconfigure(wrap ? EditorView.lineWrapping : []) })
+  }, [wrap])
+
+  /**
+   * Runs an editor command from the toolbar, then hands the keyboard back to
+   * the text; not after Find, whose panel takes it.
+   */
+  function run(command: (v: EditorView) => boolean, focus = true) {
+    const v = view.current
+    if (!v) return
+    command(v)
+    if (focus) v.focus()
+  }
+  const text = () => view.current?.state.doc.toString() ?? value
+  const parses = parseJson(value).ok
+  const problemCount = parses ? problems.length : 1
+
+  return (
+    <div className={cn("json-editor flex min-h-0 flex-col overflow-hidden", className)}>
+      <div role="toolbar" aria-label="JSON tools" className="flex shrink-0 flex-wrap items-center gap-0.5 border-b bg-muted/40 p-1">
+        <Tool label="Undo" keys={`${MOD}Z`} onClick={() => run(undo)} disabled={readOnly || !canUndo}>
+          <Undo2Icon />
+        </Tool>
+        <Tool label="Redo" keys={IS_MAC ? "⌘⇧Z" : "Ctrl+Y"} onClick={() => run(redo)} disabled={readOnly || !canRedo}>
+          <Redo2Icon />
+        </Tool>
+        <span aria-hidden className="mx-1 h-4 w-px bg-border" />
+        <Tool label="Format" keys={`${SHIFT}${ALT}F`} onClick={() => run(formatCommand)} disabled={readOnly || !parses}>
+          <TextQuoteIcon />
+        </Tool>
+        <Tool label="Fold all" keys={`${CTRL}${ALT}[`} onClick={() => run(foldContents)}>
+          <ChevronsDownUpIcon />
+        </Tool>
+        <Tool label="Unfold all" keys={`${CTRL}${ALT}]`} onClick={() => run(unfoldAll)}>
+          <ChevronsUpDownIcon />
+        </Tool>
+        <Tool label="Wrap long lines" onClick={() => setWrap((w) => !w)} pressed={wrap}>
+          <WrapTextIcon />
+        </Tool>
+
+        <span className="flex-1" />
+        {problemCount > 0 ? (
+          <Tool label="Go to the next problem" keys="F8" onClick={() => run(nextDiagnostic)} wide>
+            <span className="flex items-center gap-1 text-destructive">
+              <CircleAlertIcon />
+              {problemCount === 1 ? "1 problem" : `${problemCount} problems`}
+            </span>
+          </Tool>
+        ) : (
+          <span className="flex items-center gap-1 px-2 text-xs text-muted-foreground">
+            <CheckIcon className="size-3.5" />
+            No problems
+          </span>
+        )}
+        <Tool label="Find" keys={`${MOD}F`} onClick={() => run(openSearchPanel, false)}>
+          <SearchIcon />
+        </Tool>
+        <Tool label="Copy all" onClick={() => void copyToClipboard(text(), "JSON")}>
+          <CopyIcon />
+        </Tool>
+        {fileName && (
+          <Tool label={`Download as ${fileName}`} onClick={() => downloadBlob(withNewline(text()), fileName, "application/json")}>
+            <DownloadIcon />
+          </Tool>
+        )}
+      </div>
+      <div ref={host} className="min-h-0 flex-1" />
+    </div>
+  )
+}
+
+/** A toolbar button, its name and keys in a tooltip. */
+function Tool({
+  label,
+  keys,
+  onClick,
+  disabled,
+  pressed,
+  wide,
+  children,
+}: {
+  label: string
+  keys?: string
+  onClick: () => void
+  disabled?: boolean
+  /** For a switch: whether it is on. */
+  pressed?: boolean
+  /** Text beside the icon rather than an icon alone. */
+  wide?: boolean
+  children: ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size={wide ? "sm" : "icon-sm"}
+            aria-label={label}
+            aria-pressed={pressed}
+            disabled={disabled}
+            onClick={onClick}
+            className={cn(pressed && "bg-accent text-accent-foreground")}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>
+        {label}
+        {keys && <kbd className="font-sans opacity-70">{keys}</kbd>}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function withNewline(text: string): string {
+  return text.endsWith("\n") ? text : `${text}\n`
+}
+
+/** Indents the document two spaces (formatSpec); nothing in a read-only editor. */
+function formatCommand(view: EditorView): boolean {
+  if (view.state.readOnly) return false
+  const spec = formatSpec(view.state)
+  if (spec) view.dispatch(spec)
+  return spec !== null
+}
+
+/** Folds the parts inside the document, leaving its keys in view (foldContentsEffects). */
+function foldContents(view: EditorView): boolean {
+  const effects = foldContentsEffects(view.state)
+  if (effects.length) view.dispatch({ effects })
+  return effects.length > 0
 }
 
 class LockWidget extends WidgetType {
@@ -218,6 +409,35 @@ const theme = EditorView.theme({
   ".cm-completionDetail": { color: "var(--muted-foreground)", fontStyle: "normal", marginLeft: "0.75em" },
   ".cm-completionInfo": { whiteSpace: "pre-line", maxWidth: "24rem" },
   ".cm-diagnostic": { whiteSpace: "pre-line" },
+  // Find (and replace): CodeMirror's panel, in the app's colours.
+  ".cm-panels": { backgroundColor: "var(--muted)", color: "var(--foreground)" },
+  ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
+  ".cm-panel.cm-search": { padding: "6px 8px", fontSize: "12px" },
+  ".cm-panel.cm-search label": { color: "var(--muted-foreground)", fontSize: "12px" },
+  ".cm-textfield": {
+    backgroundColor: "var(--background)",
+    color: "var(--foreground)",
+    border: "1px solid var(--input)",
+    borderRadius: "6px",
+    padding: "2px 6px",
+    fontSize: "12px",
+  },
+  ".cm-button": {
+    backgroundImage: "none",
+    backgroundColor: "var(--background)",
+    color: "var(--foreground)",
+    border: "1px solid var(--border)",
+    borderRadius: "6px",
+    padding: "2px 8px",
+    fontSize: "12px",
+  },
+  ".cm-button:active": { backgroundImage: "none", backgroundColor: "var(--accent)" },
+  ".cm-panel.cm-search [name=close]": { color: "var(--muted-foreground)", fontSize: "16px" },
+  ".cm-searchMatch": { backgroundColor: "color-mix(in oklab, var(--json-literal) 22%, transparent)" },
+  ".cm-searchMatch.cm-searchMatch-selected": {
+    backgroundColor: "color-mix(in oklab, var(--json-key) 35%, transparent)",
+  },
+  ".cm-selectionMatch": { backgroundColor: "color-mix(in oklab, var(--json-key) 14%, transparent)" },
 })
 
 const base: Extension = [
@@ -243,7 +463,11 @@ const base: Extension = [
   hintHover,
   keepLocks,
   lockDecorations,
+  search({ top: true }),
   keymap.of([
+    { key: "Shift-Alt-f", run: formatCommand },
+    // Before foldKeymap, whose Ctrl-Alt-[ would fold the whole document.
+    { key: "Ctrl-Alt-[", run: foldContents },
     ...closeBracketsKeymap,
     ...defaultKeymap,
     ...searchKeymap,

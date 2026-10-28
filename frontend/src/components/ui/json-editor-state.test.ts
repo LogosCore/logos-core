@@ -3,7 +3,16 @@ import { CompletionContext } from "@codemirror/autocomplete"
 import { json } from "@codemirror/lang-json"
 import { EditorState, type TransactionSpec } from "@codemirror/state"
 import type { JsonHints } from "@/lib/json-edit"
-import { completeJson, config, diagnosticsOf, keepLocks, setConfig, spans } from "./json-editor-state"
+import {
+  completeJson,
+  config,
+  diagnosticsOf,
+  foldContentsEffects,
+  formatSpec,
+  keepLocks,
+  setConfig,
+  spans,
+} from "./json-editor-state"
 
 function stateOf(doc: string, locked: string[] = [], hints: JsonHints = {}) {
   const s = EditorState.create({ doc, extensions: [json(), config, spans, keepLocks] })
@@ -102,5 +111,27 @@ describe("diagnosticsOf", () => {
     expect(d).toHaveLength(1)
     expect(d[0].from).toBe(broken.indexOf(",,") + 1)
     expect(d[0].message).toMatch(/^Not JSON: /)
+  })
+})
+
+describe("formatSpec", () => {
+  it("indents the document two spaces, past the locks", () => {
+    const s = stateOf('{"format":"x","params":{"a":1}}', ["/format"])
+    const spec = formatSpec(s)!
+    expect(s.update(spec).state.doc.toString()).toBe('{\n  "format": "x",\n  "params": {\n    "a": 1\n  }\n}')
+  })
+
+  it("does nothing to text that is not JSON, or already indented", () => {
+    expect(formatSpec(stateOf('{"a": '))).toBeNull()
+    expect(formatSpec(stateOf('{\n  "a": 1\n}'))).toBeNull()
+  })
+})
+
+describe("foldContentsEffects", () => {
+  it("folds each part inside the document, leaving its keys in view", () => {
+    const doc = '{\n  "name": "a",\n  "channel": {\n    "x": 1\n  },\n  "params": {\n    "b": [\n      1\n    ]\n  }\n}'
+    const folded = foldContentsEffects(stateOf(doc)).map((e) => doc.slice(e.value.from - 1, e.value.to + 1))
+    // channel and params, not the document, and not params' own list on its own.
+    expect(folded).toEqual(['{\n    "x": 1\n  }', '{\n    "b": [\n      1\n    ]\n  }'])
   })
 })
