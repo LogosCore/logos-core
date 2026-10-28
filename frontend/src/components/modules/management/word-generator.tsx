@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQueries, useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import { DicesIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -115,22 +115,26 @@ function Panel({
   const set = (patch: Partial<GeneratorSettings>) => save(format, { ...s, ...patch })
   const [query, setQuery] = useState("")
 
+  const queryClient = useQueryClient()
   const catalog = useQuery({ queryKey: ["wordlists"], queryFn: fetchWordlistCatalog, ...FOREVER })
   const lists = catalog.data?.lists ?? []
   const from = drawsFrom(s, lists)
   const ids = [...new Set([...from.first, ...from.last])]
-  const loaded = useQueries({
-    queries: ids.map((id) => ({ queryKey: ["wordlist", id], queryFn: () => fetchWordlist(id), ...FOREVER })),
-  })
+  const wordlist = (id: string) => ({ queryKey: ["wordlist", id], queryFn: () => fetchWordlist(id), ...FOREVER })
+  const loaded = useQueries({ queries: ids.map(wordlist) })
   const words = new Map(ids.map((id, i) => [id, loaded[i]?.data]))
-  const ready = catalog.isSuccess && ids.every((id) => words.get(id))
+  const loading = catalog.isPending || loaded.some((q) => q.isPending)
   const failed = catalog.isError || loaded.some((q) => q.isError)
+  // Made of the lists that are here: while a list just picked loads, the
+  // candidates stay those of the others, and change once when it comes.
   const pools = {
     first: pool(from.first.map((id) => words.get(id) ?? [])),
     last: pool(from.last.map((id) => words.get(id) ?? [])),
   }
-  const values = ready ? candidates(s, pools, CANDIDATES, fits, fromDrawn(drawn)) : []
+  const values = candidates(s, pools, CANDIDATES, fits, fromDrawn(drawn))
   const log10 = log10Combinations(s, { first: pools.first.length, last: pools.last.length })
+  // Fetched while the pointer is on a list, so it is mostly here by the click.
+  const prefetch = (id: string) => void queryClient.prefetchQuery(wordlist(id))
 
   const shown = lists.filter((l) => l.name.toLowerCase().includes(query.trim().toLowerCase()))
   const sourcesOf = (ids: readonly string[]) => ids.map((id) => catalog.data?.sources[id]?.name ?? id).join("; ")
@@ -216,6 +220,7 @@ function Panel({
                   <label
                     key={l.id}
                     title={`From ${sourcesOf(l.sources)}`}
+                    onPointerEnter={() => prefetch(l.id)}
                     className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted/60"
                   >
                     {/* The last one picked stays: a value needs words. */}
@@ -241,11 +246,16 @@ function Panel({
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Pick one</span>
-            {failed ? (
+          {/* As tall as five candidates whatever it shows, so the popover
+              keeps its size. */}
+          <div className="flex min-h-[13.5rem] flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              Pick one
+              {loading && values.length > 0 && <span className="font-normal"> · loading words…</span>}
+            </span>
+            {values.length === 0 && failed ? (
               <p className="text-sm text-destructive">The word lists did not load.</p>
-            ) : !ready ? (
+            ) : values.length === 0 && loading ? (
               <p className="text-sm text-muted-foreground">Loading the words…</p>
             ) : values.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -268,7 +278,7 @@ function Panel({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-3 py-2 text-xs text-muted-foreground">
-        {ready && (
+        {values.length > 0 && (
           <span className="tabular-nums">
             {log10 >= 6 && "≈ "}
             {formatCombinations(log10)} possible values
