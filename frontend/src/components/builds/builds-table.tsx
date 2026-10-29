@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
-import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react"
-import { ContextMenuItem } from "@/components/ui/context-menu"
+import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { VirtualizedDataTable } from "@/components/ui/virtualized-data-table"
@@ -20,7 +20,7 @@ const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minm
 /**
  * An operation's builds, newest first. A row opens the build; its menu
  * (right-click, or ⋯) also downloads the artifact and starts a new build from
- * the same settings, as the build's page does.
+ * the same settings, as the build's page does, and deletes the build.
  */
 export function BuildsTable({
   builds,
@@ -30,6 +30,7 @@ export function BuildsTable({
   hasNextPage,
   fetchNextPage,
   canWrite,
+  onDelete,
   emptyState,
 }: {
   builds: BuildFieldsFragment[]
@@ -39,6 +40,7 @@ export function BuildsTable({
   hasNextPage: boolean
   fetchNextPage: () => void
   canWrite: boolean
+  onDelete: (build: BuildFieldsFragment) => void
   emptyState: ReactNode
 }) {
   const modals = useRecordModals()
@@ -96,6 +98,15 @@ export function BuildsTable({
                     <RotateCcwIcon className="size-4" />
                     Build again
                   </ContextMenuItem>
+                )}
+                {canWrite && (
+                  <>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem variant="destructive" onClick={() => onDelete(b)}>
+                      <Trash2Icon className="size-4" />
+                      Delete
+                    </ContextMenuItem>
+                  </>
                 )}
               </>
             }

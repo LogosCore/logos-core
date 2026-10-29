@@ -10,6 +10,7 @@ import {
   CreateBuildDocument,
   CancelBuildDocument,
   DeleteBuildArtifactDocument,
+  DeleteBuildDocument,
   type CreateBuildMutationVariables,
 } from "@/graphql/gql/graphql"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
@@ -132,6 +133,14 @@ export function useCancelBuild() {
   const invalidate = useInvalidateBuilds()
   return useMutation({
     mutationFn: (id: string) => graphqlClient(CancelBuildDocument, { id }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteBuild() {
+  const invalidate = useInvalidateBuilds()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(DeleteBuildDocument, { id }),
     onSuccess: invalidate,
   })
 }

@@ -37,6 +37,11 @@ func (r *mutationResolver) DeleteBuildArtifact(ctx context.Context, id string) (
 	return r.BuildResolver.DeleteBuildArtifact(ctx, id)
 }
 
+// DeleteBuild is the resolver for the deleteBuild field.
+func (r *mutationResolver) DeleteBuild(ctx context.Context, id string) (bool, error) {
+	return r.BuildResolver.DeleteBuild(ctx, id)
+}
+
 // FactoryKinds is the resolver for the factoryKinds field.
 func (r *queryResolver) FactoryKinds(ctx context.Context) ([]*model.FactoryKind, error) {
 	return r.BuildResolver.FactoryKinds(ctx)

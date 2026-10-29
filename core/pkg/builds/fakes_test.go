@@ -309,6 +309,14 @@ func (f *fakeBuilds) CountFileReferences(_ context.Context, id uuid.UUID) (int64
 	return n, nil
 }
 
+func (f *fakeBuilds) Delete(_ context.Context, id uuid.UUID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.rows[id]
+	delete(f.rows, id)
+	return ok, nil
+}
+
 func (f *fakeBuilds) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -344,6 +352,13 @@ func (f *fakeMinions) List(_ context.Context, op uuid.UUID) ([]models.Minion, er
 		}
 	}
 	return out, nil
+}
+
+func (f *fakeMinions) DeleteByBuildID(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.rows, id)
+	return nil
 }
 
 func (f *fakeMinions) DeleteByOperationID(_ context.Context, op uuid.UUID) error {

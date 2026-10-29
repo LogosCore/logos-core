@@ -805,6 +805,52 @@ func TestCancel(t *testing.T) {
 	}
 }
 
+// A build of any state can be deleted: its record, its minion and its
+// artifact go, a running one is cancelled on its factory first, and the
+// operation's files stay.
+func TestDeleteBuild(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	f := r.upload(t, "badge.png", "image/png", "png!")
+	done := r.started(t)
+	if _, err := r.succeed(t, done, "x", "x"); err != nil {
+		t.Fatal(err)
+	}
+	r.settle()
+	if len(r.minions.rows) != 1 || !r.store.has(artifactKey(opID, done.BuildID)) {
+		t.Fatal("no minion or artifact to delete")
+	}
+	if err := r.svc.DeleteBuild(ctx, done.BuildID.String(), alice); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.builds.rows[done.BuildID]; ok || len(r.minions.rows) != 0 || r.store.has(artifactKey(opID, done.BuildID)) {
+		t.Fatal("a succeeded build left something behind")
+	}
+
+	running := r.started(t)
+	if err := r.svc.DeleteBuild(ctx, running.BuildID.String(), alice); err != nil {
+		t.Fatal(err)
+	}
+	r.settle()
+	calls := r.rpc.recorded()
+	if last := calls[len(calls)-1]; last.op != protocol.TypeFactoryBuildCancel || last.payload.(protocol.BuildCancelRequest).BuildID != running.BuildID.String() {
+		t.Fatalf("the running build was not cancelled on its factory: %+v", last)
+	}
+	queued := r.queue(t, nil)
+	if err := r.svc.DeleteBuild(ctx, queued.BuildID.String(), alice); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.builds.rows) != 0 {
+		t.Fatalf("builds left: %d", len(r.builds.rows))
+	}
+	if _, err := r.svc.File(ctx, f.FileID.String()); err != nil || !r.store.has(f.ObjectKey) {
+		t.Fatal("deleting builds deleted an operation's file")
+	}
+	if err := r.svc.DeleteBuild(ctx, queued.BuildID.String(), alice); !errors.Is(err, ErrBuildNotFound) {
+		t.Fatalf("deleting a deleted build: %v", err)
+	}
+}
+
 func TestTimeoutsAndLostFactories(t *testing.T) {
 	r := newRig(t)
 	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) { return refuse(c, protocol.CodeBusy, "busy"), nil }

@@ -652,6 +652,7 @@ type ComplexityRoot struct {
 		CreateWikiDocument            func(childComplexity int, operationID string, input model.CreateWikiDocumentInput) int
 		CreateWikiDocumentBackup      func(childComplexity int, documentID string, description *string) int
 		DeleteAgentKey                func(childComplexity int, id string) int
+		DeleteBuild                   func(childComplexity int, id string) int
 		DeleteBuildArtifact           func(childComplexity int, id string) int
 		DeleteBuildFile               func(childComplexity int, id string) int
 		DeleteChannelEndpoint         func(childComplexity int, id string) int
@@ -1362,6 +1363,7 @@ type MutationResolver interface {
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
+	DeleteBuild(ctx context.Context, id string) (bool, error)
 	CreateChannelEndpoint(ctx context.Context, operationID string, moduleName string, input model.ChannelEndpointInput) (*model.ChannelEndpoint, error)
 	UpdateChannelEndpoint(ctx context.Context, id string, input model.ChannelEndpointInput, expectedRevision int) (*model.ChannelEndpoint, error)
 	DeleteChannelEndpoint(ctx context.Context, id string) (bool, error)
@@ -4247,6 +4249,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteAgentKey(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteBuild":
+		if e.ComplexityRoot.Mutation.DeleteBuild == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteBuild_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteBuild(childComplexity, args["id"].(string)), true
 	case "Mutation.deleteBuildArtifact":
 		if e.ComplexityRoot.Mutation.DeleteBuildArtifact == nil {
 			break
@@ -8359,6 +8372,13 @@ extend type Mutation {
   # Removes a finished build's artifact bytes; the build stays.
   deleteBuildArtifact(id: ID!): Build!
     @hasPermission(permission: "operation:member")
+
+  # Deletes a build, whatever its state: an unfinished one is cancelled first.
+  # Its artifact and the minion it made go with it; a minion of it that is
+  # already out can no longer open a session. Build files stay. Needs at least
+  # operator; agent API keys are rejected.
+  deleteBuild(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
 	{Name: "../schema/channel_endpoints.graphql", Input: `# =============================================================================
@@ -11993,6 +12013,17 @@ func (ec *executionContext) field_Mutation_deleteBuildArtifact_args(ctx context.
 }
 
 func (ec *executionContext) field_Mutation_deleteBuildFile_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteBuild_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -29398,6 +29429,65 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteBuildArtifact_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteBuild(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteBuild,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteBuild(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal bool
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal bool
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteBuild(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteBuild_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -60308,6 +60398,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteBuildArtifact":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteBuildArtifact(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteBuild":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteBuild(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

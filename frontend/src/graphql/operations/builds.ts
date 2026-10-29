@@ -193,6 +193,12 @@ export const CancelBuildMutation = graphql(`
   }
 `)
 
+export const DeleteBuildMutation = graphql(`
+  mutation DeleteBuild($id: ID!) {
+    deleteBuild(id: $id)
+  }
+`)
+
 export const DeleteBuildArtifactMutation = graphql(`
   mutation DeleteBuildArtifact($id: ID!) {
     deleteBuildArtifact(id: $id) {

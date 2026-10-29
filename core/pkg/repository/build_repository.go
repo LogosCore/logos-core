@@ -163,6 +163,8 @@ type IBuildRepository interface {
 	MarkArtifactDeleted(ctx context.Context, buildID uuid.UUID) error
 	// CountFileReferences counts builds whose values name a build file.
 	CountFileReferences(ctx context.Context, fileID uuid.UUID) (int64, error)
+	// Delete removes one build; false when there was none.
+	Delete(ctx context.Context, buildID uuid.UUID) (bool, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
 }
 
@@ -417,6 +419,10 @@ func (r *buildRepository) CountFileReferences(ctx context.Context, fileID uuid.U
 	return r.coll.Find(ctx, bson.M{"file_ids": fileID}).Count()
 }
 
+func (r *buildRepository) Delete(ctx context.Context, buildID uuid.UUID) (bool, error) {
+	return matched(r.coll.Remove(ctx, bson.M{"build_id": buildID}))
+}
+
 func (r *buildRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
@@ -438,6 +444,8 @@ type IMinionRepository interface {
 	Insert(ctx context.Context, m *models.Minion) error
 	// List returns an operation's minions, newest first.
 	List(ctx context.Context, operationID uuid.UUID) ([]models.Minion, error)
+	// DeleteByBuildID removes the minion a build made, if any.
+	DeleteByBuildID(ctx context.Context, buildID uuid.UUID) error
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
 }
 
@@ -463,6 +471,11 @@ func (r *minionRepository) List(ctx context.Context, operationID uuid.UUID) ([]m
 	out := []models.Minion{}
 	err := r.coll.Find(ctx, bson.M{"operation_id": operationID}).Sort("-created_at").All(&out)
 	return out, err
+}
+
+func (r *minionRepository) DeleteByBuildID(ctx context.Context, buildID uuid.UUID) error {
+	_, err := r.coll.RemoveAll(ctx, bson.M{"build_id": buildID})
+	return err
 }
 
 func (r *minionRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {

@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { ChevronDownIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/ui/search-input"
@@ -18,6 +18,7 @@ import { useBuildStore } from "@/stores/builds"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
+import { DeleteBuildDialog, type DeletableBuild } from "@/components/builds/delete-build-dialog"
 import { KindName } from "@/components/modules/module-icon"
 import { factoryKindsByName, STATE_LABEL, type FactoryKind } from "@/components/builds/build-values"
 
@@ -40,6 +41,7 @@ export function BuildsPage() {
 
 function BuildsPageInner({ operationId }: { operationId: string }) {
   const modals = useRecordModals()
+  const [deleting, setDeleting] = useState<DeletableBuild | null>(null)
   const { canWrite } = useCanBuild(operationId)
   const kindsQuery = useFactoryKinds()
   const kinds = useMemo(() => [...factoryKindsByName(kindsQuery.data?.factoryKinds ?? []).values()], [kindsQuery.data])
@@ -108,6 +110,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
           hasNextPage={hasNextPage}
           fetchNextPage={fetchNextPage}
           canWrite={canWrite}
+          onDelete={setDeleting}
           emptyState={
             !filtered ? (
               <>
@@ -128,6 +131,7 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
           }
         />
       )}
+      <DeleteBuildDialog build={deleting} onClose={() => setDeleting(null)} />
     </div>
   )
 }

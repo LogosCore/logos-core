@@ -43,6 +43,7 @@ type Documents = {
     "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      crypto\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": typeof types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.CancelBuildDocument,
+    "\n  mutation DeleteBuild($id: ID!) {\n    deleteBuild(id: $id)\n  }\n": typeof types.DeleteBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.ChannelEndpointFieldsFragmentDoc,
     "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      iconLight\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": typeof types.ChannelKindsDocument,
@@ -261,6 +262,7 @@ const documents: Documents = {
     "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      crypto\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.CancelBuildDocument,
+    "\n  mutation DeleteBuild($id: ID!) {\n    deleteBuild(id: $id)\n  }\n": types.DeleteBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.DeleteBuildArtifactDocument,
     "\n  fragment ChannelEndpointFields on ChannelEndpoint {\n    id\n    operationId\n    name\n    description\n    moduleName\n    schemaVersion\n    schemaChanged\n    values\n    problems {\n      key\n      message\n    }\n    revision\n    updatedBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": types.ChannelEndpointFieldsFragmentDoc,
     "\n  query ChannelKinds {\n    channelKinds {\n      moduleName\n      icon\n      iconLight\n      schema {\n        version\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": types.ChannelKindsDocument,
@@ -563,6 +565,10 @@ export function graphql(source: "\n  mutation CreateBuild($operationId: ID!, $in
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n"): typeof import('./graphql').CancelBuildDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation DeleteBuild($id: ID!) {\n    deleteBuild(id: $id)\n  }\n"): typeof import('./graphql').DeleteBuildDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

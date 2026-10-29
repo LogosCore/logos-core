@@ -244,6 +244,40 @@ func (s *Service) DeleteArtifact(ctx context.Context, id string) (*models.Build,
 	return s.build(ctx, b.BuildID)
 }
 
+// DeleteBuild removes a build, whatever its state: an unfinished one is
+// cancelled first (and its factory told to stop), then its artifact, the
+// minion it made and its record go. Build files stay: they belong to the
+// operation, and become deletable when no build refers to them. A minion of
+// the build that is already out cannot open a session any more: core no
+// longer has its keys.
+func (s *Service) DeleteBuild(ctx context.Context, id string, actor models.ModuleActor) error {
+	b, err := s.Build(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !b.Finished() {
+		ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateQueued, models.BuildStateBuilding},
+			repository.BuildOutcome{State: models.BuildStateCancelled, CancelledBy: &actor, At: s.now()})
+		if err != nil {
+			return fmt.Errorf("cancel build: %w", err)
+		}
+		if ok && b.State == models.BuildStateBuilding {
+			s.cancelOn(b.BuildID, b.Instance)
+		}
+	}
+	if err := s.store.Delete(ctx, artifactKey(b.OperationID, b.BuildID)); err != nil {
+		return fmt.Errorf("delete artifact: %w", err)
+	}
+	if err := s.repos.Minions.DeleteByBuildID(ctx, b.BuildID); err != nil {
+		return fmt.Errorf("delete minion: %w", err)
+	}
+	if _, err := s.repos.Builds.Delete(ctx, b.BuildID); err != nil {
+		return fmt.Errorf("delete build: %w", err)
+	}
+	s.logger.Info("build deleted", zap.String("build_id", b.BuildID.String()), zap.String("state", b.State), zap.String("by", actor.ID))
+	return nil
+}
+
 // Minions returns an operation's minions, newest first.
 func (s *Service) Minions(ctx context.Context, op uuid.UUID) ([]models.Minion, error) {
 	return s.repos.Minions.List(ctx, op)

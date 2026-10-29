@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon, TriangleAlertIcon } from "lucide-react"
+import { DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,6 +31,7 @@ import { BuildRun } from "@/components/builds/build-run"
 import { StageIcon } from "@/components/builds/build-pipeline"
 import { buildRecordJson, defaultBuildTab, type BuildRecord as Build } from "@/components/builds/build-record"
 import { ModuleIcon } from "@/components/modules/module-icon"
+import { DeleteBuildDialog } from "@/components/builds/delete-build-dialog"
 
 /**
  * One build (the build modal, ?build=<id>[&buildTab=]): Overview, what it is;
@@ -66,11 +67,12 @@ const STAGE_OF_STATE: Record<string, string> = {
 }
 
 function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | null }) {
-  const { open } = useRecordModals()
+  const { open, close } = useRecordModals()
   const icons = useFactoryIcons()
   const { canWrite } = useCanBuild(b.operationId)
   const cancel = useCancelBuild()
   const [deleting, setDeleting] = useState(false)
+  const [deletingBuild, setDeletingBuild] = useState(false)
   const running = isUnfinished(b.state)
   const artifact = b.artifact && !b.artifact.deleted ? b.artifact : null
   // The tab the URL names; else the one for the state the build was in when
@@ -145,6 +147,17 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
                 Download
               </Button>
             )}
+            {canWrite && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setDeletingBuild(true)}
+                title="Delete the build"
+                aria-label="Delete the build"
+              >
+                <Trash2Icon />
+              </Button>
+            )}
           </div>
         </RecordModalHeader>
 
@@ -174,6 +187,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
       </Tabs>
 
       <DeleteArtifactDialog build={deleting ? b : null} onClose={() => setDeleting(false)} />
+      <DeleteBuildDialog build={deletingBuild ? b : null} onClose={() => setDeletingBuild(false)} onDeleted={close} />
     </>
   )
 }

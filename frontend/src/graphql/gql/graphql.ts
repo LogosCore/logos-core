@@ -855,6 +855,7 @@ export type Mutation = {
   createWikiDocument: WikiDocument;
   createWikiDocumentBackup: WikiDocumentBackup;
   deleteAgentKey: Scalars['Boolean']['output'];
+  deleteBuild: Scalars['Boolean']['output'];
   deleteBuildArtifact: Build;
   deleteBuildFile: Scalars['Boolean']['output'];
   deleteChannelEndpoint: Scalars['Boolean']['output'];
@@ -1046,6 +1047,11 @@ export type MutationCreateWikiDocumentBackupArgs = {
 
 
 export type MutationDeleteAgentKeyArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDeleteBuildArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -2797,6 +2803,13 @@ export type CancelBuildMutationVariables = Exact<{
 
 
 export type CancelBuildMutation = { cancelBuild: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
+
+export type DeleteBuildMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DeleteBuildMutation = { deleteBuild: boolean };
 
 export type DeleteBuildArtifactMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5618,6 +5631,11 @@ export const CancelBuildDocument = new TypedDocumentString(`
   finishedAt
   deadline
 }`) as unknown as TypedDocumentString<CancelBuildMutation, CancelBuildMutationVariables>;
+export const DeleteBuildDocument = new TypedDocumentString(`
+    mutation DeleteBuild($id: ID!) {
+  deleteBuild(id: $id)
+}
+    `) as unknown as TypedDocumentString<DeleteBuildMutation, DeleteBuildMutationVariables>;
 export const DeleteBuildArtifactDocument = new TypedDocumentString(`
     mutation DeleteBuildArtifact($id: ID!) {
   deleteBuildArtifact(id: $id) {

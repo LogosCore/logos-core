@@ -329,4 +329,11 @@ extend type Mutation {
   # Removes a finished build's artifact bytes; the build stays.
   deleteBuildArtifact(id: ID!): Build!
     @hasPermission(permission: "operation:member")
+
+  # Deletes a build, whatever its state: an unfinished one is cancelled first.
+  # Its artifact and the minion it made go with it; a minion of it that is
+  # already out can no longer open a session. Build files stay. Needs at least
+  # operator; agent API keys are rejected.
+  deleteBuild(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
 }
