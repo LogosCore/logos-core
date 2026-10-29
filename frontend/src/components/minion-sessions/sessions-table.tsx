@@ -5,9 +5,11 @@ import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
+import { useNow } from "@/hooks/use-now"
+import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 
 const GRID_COLS =
-  "grid-cols-[3rem_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]"
+  "grid-cols-[3rem_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)]"
 
 /**
  * An operation's minion sessions, newest first: one per running process of a
@@ -31,6 +33,8 @@ export function SessionsTable({
   fetchNextPage: () => void
   emptyState: ReactNode
 }) {
+  // Ticks the relative last-seen times.
+  const now = useNow(15_000)
   return (
     <VirtualizedDataTable
       items={sessions}
@@ -48,7 +52,6 @@ export function SessionsTable({
           <div>OS</div>
           <div>Addresses</div>
           <div>Build</div>
-          <div>Opened</div>
           <div>Last seen</div>
         </>
       }
@@ -76,16 +79,28 @@ export function SessionsTable({
             <KindName type="factory" name={s.moduleName} icon={icons.get(s.moduleName)} className="font-medium" />
             <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
           </div>
-          <div className="truncate text-sm text-muted-foreground">
-            <FormattedDateTimeText date={s.createdAt} />
-          </div>
-          <div className="truncate text-sm text-muted-foreground">
-            {s.lastSeenAt ? <FormattedDateTimeText date={s.lastSeenAt} /> : "not yet"}
+          <div
+            className="truncate text-sm text-muted-foreground"
+            title={[s.lastSeenAt && `Last seen ${formatAbsolute(s.lastSeenAt)}`, `Opened ${formatAbsolute(s.createdAt)}`]
+              .filter(Boolean)
+              .join("\n")}
+          >
+            {s.lastSeenAt ? <LastSeen at={s.lastSeenAt} now={now} /> : "not yet"}
           </div>
         </div>
       )}
     />
   )
+}
+
+const DAY = 24 * 60 * 60 * 1000
+const HOUR = 60 * 60 * 1000
+
+/** Within the last day: how long ago ("just now", "5m ago", "3h ago"); older, the date and time. */
+function LastSeen({ at, now }: { at: string; now: number }) {
+  const diff = now - Date.parse(at)
+  if (diff >= DAY) return <FormattedDateTimeText date={at} />
+  return <>{diff < HOUR ? relativeTime(at, new Date(now)) : `${Math.floor(diff / HOUR)}h ago`}</>
 }
 
 /** The user as the OS reports it, with the domain when the minion sent one apart. */
