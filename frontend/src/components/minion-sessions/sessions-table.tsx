@@ -9,7 +9,7 @@ import { useNow } from "@/hooks/use-now"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 
 const GRID_COLS =
-  "grid-cols-[3rem_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)]"
+  "grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.4fr)]"
 
 /**
  * An operation's minion sessions, newest first: one per running process of a
@@ -47,12 +47,12 @@ export function SessionsTable({
       header={
         <>
           <div>#</div>
+          <div>Addresses</div>
           <div>Host</div>
           <div>Process</div>
           <div>OS</div>
-          <div>Addresses</div>
-          <div>Build</div>
           <div>Last seen</div>
+          <div>Build</div>
         </>
       }
       emptyState={emptyState}
@@ -61,6 +61,9 @@ export function SessionsTable({
           {/* The display id operators call the session by. */}
           <div className="truncate font-mono font-medium" title={`Session ${s.number}, ${s.id}`}>
             {s.number}
+          </div>
+          <div className="truncate font-mono text-xs" title={s.addrs.join("\n") || undefined}>
+            {s.addrs.length > 0 ? s.addrs.join(", ") : <span className="text-muted-foreground">—</span>}
           </div>
           <div className="truncate font-medium" title={s.host ?? undefined}>
             {s.host || <span className="text-muted-foreground">unknown host</span>}
@@ -72,13 +75,6 @@ export function SessionsTable({
             )}
           </div>
           <div className="truncate text-sm">{platformLabel(`${s.os}/${s.arch}`)}</div>
-          <div className="truncate font-mono text-xs" title={s.addrs.join("\n") || undefined}>
-            {s.addrs.length > 0 ? s.addrs.join(", ") : <span className="text-muted-foreground">—</span>}
-          </div>
-          <div className="flex min-w-0 items-baseline" title={`Build ${s.buildId}${s.staged ? "" : ", without staging"}`}>
-            <KindName type="factory" name={s.moduleName} icon={icons.get(s.moduleName)} className="font-medium" />
-            <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
-          </div>
           <div
             className="truncate text-sm text-muted-foreground"
             title={[s.lastSeenAt && `Last seen ${formatAbsolute(s.lastSeenAt)}`, `Opened ${formatAbsolute(s.createdAt)}`]
@@ -86,6 +82,10 @@ export function SessionsTable({
               .join("\n")}
           >
             {s.lastSeenAt ? <LastSeen at={s.lastSeenAt} now={now} /> : "not yet"}
+          </div>
+          <div className="flex min-w-0 items-baseline" title={`Build ${s.buildId}${s.staged ? "" : ", without staging"}`}>
+            <KindName type="factory" name={s.moduleName} icon={icons.get(s.moduleName)} className="font-medium" />
+            <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
           </div>
         </div>
       )}
