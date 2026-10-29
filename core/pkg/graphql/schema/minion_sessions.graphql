@@ -11,6 +11,9 @@
 type MinionSession {
   # The session id the minion sends its messages under.
   id: ID!
+  # The display id for operators: the operation's count of sessions when it
+  # opened, 1 for the first. Never reused.
+  number: Int!
   operationId: ID!
   # The build the minion was made by. The build may have been deleted since.
   buildId: ID!
@@ -65,8 +68,9 @@ extend type Query {
   # An operation's sessions, newest first, a page at a time. search is the
   # app's search (a substring, case aside; "quotes" for whole words) over the
   # host, user, domain, process, os, arch, integrity, addresses, version, the
-  # build's description, factory, target and platform; a whole UUID also
-  # matches a session or build id. Needs at least viewer.
+  # build's description, factory, target and platform; a number ("12",
+  # "#12") also matches the session numbered so, and a whole UUID a session
+  # or build id. Needs at least viewer.
   minionSessions(
     operationId: ID!
     search: String

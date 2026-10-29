@@ -19,7 +19,11 @@ type MinionSession struct {
 
 	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
-	BuildID     uuid.UUID `bson:"build_id" json:"build_id"`
+	// Number is the session's display id for operators: the operation's
+	// count of sessions when it opened, 1 for the first. Never reused, so a
+	// removed session leaves a gap.
+	Number  int64     `bson:"number" json:"number"`
+	BuildID uuid.UUID `bson:"build_id" json:"build_id"`
 	// The build's, copied when the session opens: the build may be deleted
 	// while its minions run.
 	BuildDescription string `bson:"build_description,omitempty" json:"build_description,omitempty"`

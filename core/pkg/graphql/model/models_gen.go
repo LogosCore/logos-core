@@ -455,6 +455,7 @@ type Minion struct {
 
 type MinionSession struct {
 	ID               string   `json:"id"`
+	Number           int      `json:"number"`
 	OperationID      string   `json:"operationId"`
 	BuildID          string   `json:"buildId"`
 	BuildDescription string   `json:"buildDescription"`

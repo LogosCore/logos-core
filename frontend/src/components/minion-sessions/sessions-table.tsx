@@ -7,11 +7,12 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 
 const GRID_COLS =
-  "grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]"
+  "grid-cols-[4rem_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]"
 
 /**
  * An operation's minion sessions, newest first: one per running process of a
- * minion, as its hello described it. Read-only.
+ * minion, as its hello described it, by its number in the operation (#1, #2,
+ * …). Read-only.
  */
 export function SessionsTable({
   sessions,
@@ -41,6 +42,7 @@ export function SessionsTable({
       entityNoun="sessions"
       header={
         <>
+          <div>#</div>
           <div>Host</div>
           <div>Process</div>
           <div>OS</div>
@@ -53,6 +55,10 @@ export function SessionsTable({
       emptyState={emptyState}
       renderRow={(s) => (
         <div className={dataTableRowClass(GRID_COLS)}>
+          {/* The display id operators call the session by; the UUID is under the host. */}
+          <div className="truncate font-mono font-medium" title={`Session ${s.number}`}>
+            #{s.number}
+          </div>
           <div className="flex min-w-0 flex-col">
             <span className="truncate font-medium" title={s.host ?? undefined}>
               {s.host || <span className="text-muted-foreground">unknown host</span>}

@@ -56,7 +56,15 @@ func (f *fakeStagings) Delete(_ context.Context, id uuid.UUID) error {
 	return qmgo.ErrNoSuchDocuments
 }
 
-type fakeSessions struct{ rows []models.MinionSession }
+type fakeSessions struct {
+	rows []models.MinionSession
+	seq  int64
+}
+
+func (f *fakeSessions) NextNumber(context.Context, uuid.UUID) (int64, error) {
+	f.seq++
+	return f.seq, nil
+}
 
 func (f *fakeSessions) Insert(_ context.Context, s *models.MinionSession) error {
 	f.rows = append(f.rows, *s)
@@ -357,7 +365,7 @@ func TestHelloUnderTemporaryID(t *testing.T) {
 	s := r.sessions.rows[0]
 	var stored protocol.AES256CBCHMACSHA256Material
 	_ = json.Unmarshal(s.Crypto.Material, &stored)
-	if s.SessionID != sid || !s.Staged || s.BuildID != r.build.BuildID || s.OperationID != r.build.OperationID ||
+	if s.SessionID != sid || s.Number != 1 || !s.Staged || s.BuildID != r.build.BuildID || s.OperationID != r.build.OperationID ||
 		s.Target != "linux-elf" || s.Hello.Host != "web01" || s.Hello.PID != 4242 || s.ExpiresAt == nil ||
 		!bytes.Equal(stored.EncKey, keys.EncKey) {
 		t.Fatalf("session %+v", s)
@@ -379,7 +387,7 @@ func TestHelloUnderBuildID(t *testing.T) {
 		t.Fatal(err)
 	}
 	sid := sessionID(t, r.open(t, reply))
-	if len(r.sessions.rows) != 1 || r.sessions.rows[0].SessionID != sid || r.sessions.rows[0].Staged {
+	if len(r.sessions.rows) != 1 || r.sessions.rows[0].SessionID != sid || r.sessions.rows[0].Number != 1 || r.sessions.rows[0].Staged {
 		t.Fatalf("sessions %+v", r.sessions.rows)
 	}
 	// The session has the build's own keys.

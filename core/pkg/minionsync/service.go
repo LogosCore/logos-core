@@ -213,10 +213,13 @@ func (s *Service) openSession(ctx context.Context, from *sender, raw cbor.RawMes
 			return nil, fmt.Errorf("remove the staging: %w", err)
 		}
 	}
+	if session.Number, err = s.sessions.NextNumber(ctx, b.OperationID); err != nil {
+		return nil, fmt.Errorf("number the session: %w", err)
+	}
 	if err := s.sessions.Insert(ctx, session); err != nil {
 		return nil, fmt.Errorf("store the session: %w", err)
 	}
-	s.logger.Info("minion session opened", zap.String("session_id", session.SessionID.String()),
+	s.logger.Info("minion session opened", zap.Int64("number", session.Number), zap.String("session_id", session.SessionID.String()),
 		zap.String("build_id", b.BuildID.String()), zap.Bool("staged", session.Staged),
 		zap.String("host", hello.Host), zap.Uint64("pid", hello.PID))
 	s.bus.Publish(eventbus.NewMinionSessionCreatedEvent(sessionPayload(session)))

@@ -82,7 +82,7 @@ func (r *minionSessionResolver) Load(ctx context.Context, sessionID string) *mod
 func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	h := s.Hello
 	out := &model.MinionSession{
-		ID: s.SessionID.String(), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
+		ID: s.SessionID.String(), Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
 		BuildDescription: s.BuildDescription, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),

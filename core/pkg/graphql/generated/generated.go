@@ -470,6 +470,7 @@ type ComplexityRoot struct {
 		Integrity        func(childComplexity int) int
 		LastSeenAt       func(childComplexity int) int
 		ModuleName       func(childComplexity int) int
+		Number           func(childComplexity int) int
 		OperationID      func(childComplexity int) int
 		Os               func(childComplexity int) int
 		Pid              func(childComplexity int) int
@@ -3378,6 +3379,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.ModuleName(childComplexity), true
+	case "MinionSession.number":
+		if e.ComplexityRoot.MinionSession.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Number(childComplexity), true
 	case "MinionSession.operationId":
 		if e.ComplexityRoot.MinionSession.OperationID == nil {
 			break
@@ -9630,6 +9637,9 @@ extend type Subscription {
 type MinionSession {
   # The session id the minion sends its messages under.
   id: ID!
+  # The display id for operators: the operation's count of sessions when it
+  # opened, 1 for the first. Never reused.
+  number: Int!
   operationId: ID!
   # The build the minion was made by. The build may have been deleted since.
   buildId: ID!
@@ -9684,8 +9694,9 @@ extend type Query {
   # An operation's sessions, newest first, a page at a time. search is the
   # app's search (a substring, case aside; "quotes" for whole words) over the
   # host, user, domain, process, os, arch, integrity, addresses, version, the
-  # build's description, factory, target and platform; a whole UUID also
-  # matches a session or build id. Needs at least viewer.
+  # build's description, factory, target and platform; a number ("12",
+  # "#12") also matches the session numbered so, and a whole UUID a session
+  # or build id. Needs at least viewer.
   minionSessions(
     operationId: ID!
     search: String
@@ -23906,6 +23917,35 @@ func (ec *executionContext) fieldContext_MinionSession_id(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_number(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_number,
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_operationId(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24615,6 +24655,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
 			case "operationId":
 				return ec.fieldContext_MinionSession_operationId(ctx, field)
 			case "buildId":
@@ -24804,6 +24846,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
 			case "operationId":
 				return ec.fieldContext_MinionSession_operationId(ctx, field)
 			case "buildId":
@@ -60450,6 +60494,11 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = graphql.MarshalString("MinionSession")
 		case "id":
 			out.Values[i] = ec._MinionSession_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "number":
+			out.Values[i] = ec._MinionSession_number(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
