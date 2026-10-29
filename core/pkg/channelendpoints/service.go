@@ -301,8 +301,9 @@ func (s *Service) Create(ctx context.Context, operationID uuid.UUID, moduleName 
 	return view(*ep, schema), nil
 }
 
-// Update replaces an endpoint's name, description and values, and its slug
-// when Input.Slug is set. expectedRevision
+// Update replaces an endpoint's name, description and values. Its slug is
+// Input.Slug when set; otherwise it follows the name: kept while the name
+// makes the same slug, a free one made from a new name. expectedRevision
 // is the revision the caller read; a mismatch is a ConflictError.
 func (s *Service) Update(ctx context.Context, id string, expectedRevision int64, in Input) (View, error) {
 	ep, err := s.find(ctx, id)
@@ -321,7 +322,7 @@ func (s *Service) Update(ctx context.Context, id string, expectedRevision int64,
 		return View{}, err
 	}
 	slug := ep.Slug
-	if strings.TrimSpace(in.Slug) != "" || slug == "" {
+	if strings.TrimSpace(in.Slug) != "" || slug == "" || Slugify(name) != Slugify(ep.Name) {
 		if slug, err = s.slugFor(ctx, ep.OperationID, in.Slug, name); err != nil {
 			return View{}, err
 		}

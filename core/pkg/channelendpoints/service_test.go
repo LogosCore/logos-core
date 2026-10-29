@@ -229,7 +229,7 @@ func TestUpdateReplacesValuesAndChecksRevision(t *testing.T) {
 }
 
 // Names are any text and may repeat; slugs are made from them, unique in an
-// operation, and kept when the name changes.
+// operation, and made again when the name changes.
 func TestNamesAndSlugs(t *testing.T) {
 	svc, _, _ := newService()
 	ctx := context.Background()
@@ -249,12 +249,16 @@ func TestNamesAndSlugs(t *testing.T) {
 	if _, err := svc.Create(ctx, opA, "http", Input{Name: "x", Slug: first.Slug, Values: in.Values}); !errors.As(err, &ve) {
 		t.Errorf("a taken slug given: %v", err)
 	}
-	renamed, err := svc.Update(ctx, first.EndpointID.String(), first.Revision, Input{Name: "Dev box", Values: in.Values})
-	if err != nil || renamed.Name != "Dev box" || renamed.Slug != first.Slug {
-		t.Errorf("rename keeps the slug: %+v %v", renamed.ChannelEndpoint, err)
+	same, err := svc.Update(ctx, first.EndpointID.String(), first.Revision, Input{Name: "LOCALHOST 8090 dev", Values: in.Values})
+	if err != nil || same.Slug != first.Slug {
+		t.Errorf("a name making the same slug keeps it: %+v %v", same.ChannelEndpoint, err)
 	}
-	reslugged, err := svc.Update(ctx, first.EndpointID.String(), renamed.Revision, Input{Name: "Dev box", Slug: "dev-box", Values: in.Values})
-	if err != nil || reslugged.Slug != "dev-box" {
+	renamed, err := svc.Update(ctx, first.EndpointID.String(), same.Revision, Input{Name: "Dev box", Values: in.Values})
+	if err != nil || renamed.Name != "Dev box" || renamed.Slug != "dev-box" {
+		t.Errorf("a rename makes a new slug: %+v %v", renamed.ChannelEndpoint, err)
+	}
+	reslugged, err := svc.Update(ctx, first.EndpointID.String(), renamed.Revision, Input{Name: "Dev box", Slug: "box", Values: in.Values})
+	if err != nil || reslugged.Slug != "box" {
 		t.Errorf("a new slug: %+v %v", reslugged.ChannelEndpoint, err)
 	}
 	if _, err := svc.Update(ctx, first.EndpointID.String(), reslugged.Revision, Input{Name: "Dev box", Slug: second.Slug, Values: in.Values}); !errors.As(err, &ve) {

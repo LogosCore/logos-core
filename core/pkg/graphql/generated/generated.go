@@ -8458,7 +8458,8 @@ type ChannelEndpoint {
   name: String!
   # The endpoint's identifier, unique within the operation: lowercase
   # letters, digits, '.', '_' and '-', at most 63. A build's connection, an
-  # export and a download's file name carry it. Made from the name unless set.
+  # export and a download's file name carry it. Made from the name unless set,
+  # and again when the name changes; the app does not show it.
   slug: String!
   description: String
   # The channel kind, e.g. "http".
@@ -8483,8 +8484,8 @@ type ChannelEndpoint {
 
 input ChannelEndpointInput {
   name: String!
-  # null or "": made from the name on create (the first free one), kept on
-  # update.
+  # null or "": made from the name (the first free one), and made again when
+  # the name changes. The app leaves it to core.
   slug: String
   description: String
   # Values by field key, replacing the stored ones. null, "" and [] leave a

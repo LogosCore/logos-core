@@ -48,7 +48,6 @@ import {
   MAX_ENDPOINT_NAME_LENGTH,
   endpointNameError,
   problemsFromError,
-  slugError,
   slugify,
   type Kind,
 } from "@/components/endpoints/endpoint-values"
@@ -100,7 +99,7 @@ export function NewEndpoint({ channel, from: fromId }: { channel: string; from: 
     ? {
         label: (
           <>
-            duplicate of <span className="font-mono">{from.slug}</span>
+            duplicate of <span className="font-medium">{from.name}</span>
           </>
         ),
         name: `${from.name} (copy)`.slice(0, MAX_ENDPOINT_NAME_LENGTH),
@@ -182,9 +181,6 @@ function EndpointEditor({
 
   const fields = kind.fields
   const [name, setName] = useState(endpoint?.name ?? source?.name ?? "")
-  // "" makes one from the name when created, and keeps the stored one when
-  // saved.
-  const [slug, setSlug] = useState(endpoint?.slug ?? "")
   const [description, setDescription] = useState(endpoint?.description ?? source?.description ?? "")
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
     endpointDrafts(fields, endpoint ? ((endpoint.values ?? {}) as Record<string, unknown>) : (source?.values ?? null)),
@@ -197,7 +193,7 @@ function EndpointEditor({
   const setPreferred = useEditorModeStore((s) => s.setMode)
   const [tab, setTab] = useState(preferred)
   const [jsonText, setJsonText] = useState(() =>
-    preferred === "json" ? endpointJson(kind, { name, slug, description, values: formValues(fields, drafts) }) : "",
+    preferred === "json" ? endpointJson(kind, { name, description, values: formValues(fields, drafts) }) : "",
   )
   const [leavingJson, setLeavingJson] = useState(false)
   const read = tab === "json" ? readEndpointJson(jsonText, kind) : null
@@ -207,7 +203,7 @@ function EndpointEditor({
 
   // Changed from how it opened, or JSON that no longer reads: closing then
   // asks before throwing it away.
-  const snapshot = JSON.stringify({ name, slug, description, drafts })
+  const snapshot = JSON.stringify({ name, description, drafts })
   const [initial] = useState(snapshot)
   const saved = useCloseGuard(snapshot !== initial || (read !== null && !read.ok))
   const body = useRef<HTMLDivElement>(null)
@@ -221,14 +217,10 @@ function EndpointEditor({
 
   const { values, errors } = evaluateEndpoint(fields, drafts)
   const nameErr = endpointNameError(name)
-  const slugErr = slug.trim() === "" ? null : slugError(slug)
-  // What the slug will be when left empty: the stored one, or one made from
-  // the name (the server takes the next free one if it is taken).
-  const slugPlaceholder = endpoint ? endpoint.slug : slugify(name)
   const shownErrors: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
   const hasErrors = read
     ? !read.ok || read.problems.length > 0
-    : nameErr !== null || slugErr !== null || Object.keys(errors).length > 0
+    : nameErr !== null || Object.keys(errors).length > 0
   // The JSON tab marks problems as they appear, as code editors do, and the
   // server's from the last save at their settings.
   const jsonProblems: JsonProblem[] = read?.ok
@@ -241,7 +233,7 @@ function EndpointEditor({
     : []
 
   function showJson() {
-    setJsonText(endpointJson(kind, { name, slug, description, values: formValues(fields, drafts) }))
+    setJsonText(endpointJson(kind, { name, description, values: formValues(fields, drafts) }))
     setTab("json")
     setPreferred("json")
   }
@@ -263,7 +255,6 @@ function EndpointEditor({
     const next = readEndpointJson(text, kind)
     if (next.ok) {
       setName(next.doc.name)
-      setSlug(next.doc.slug)
       setDescription(next.doc.description)
       setDrafts(endpointDrafts(fields, next.doc.values))
     }
@@ -299,13 +290,8 @@ function EndpointEditor({
     // From the JSON tab, what it holds as it reads, without a trip through
     // the form's fields.
     const input = read?.ok
-      ? {
-          name: read.doc.name.trim(),
-          slug: read.doc.slug.trim() || null,
-          description: read.doc.description.trim() || null,
-          values: read.doc.values,
-        }
-      : { name: name.trim(), slug: slug.trim() || null, description: description.trim() || null, values }
+      ? { name: read.doc.name.trim(), description: read.doc.description.trim() || null, values: read.doc.values }
+      : { name: name.trim(), description: description.trim() || null, values }
     try {
       if (endpoint) {
         await update.mutateAsync({ id: endpoint.id, input, expectedRevision: endpoint.revision })
@@ -334,7 +320,7 @@ function EndpointEditor({
 
   // Side list markers: a section with an error, or with values set.
   const sectionState = (s: Section): "error" | "set" | null => {
-    if (s.title === GENERAL) return submitted && (nameErr || slugErr) ? "error" : name.trim() ? "set" : null
+    if (s.title === GENERAL) return submitted && nameErr ? "error" : name.trim() ? "set" : null
     if (s.fields.some((f) => shownErrors[f.key])) return "error"
     if (s.fields.some((f) => values[f.key] !== undefined)) return "set"
     return null
@@ -432,28 +418,6 @@ function EndpointEditor({
                 aria-invalid={(submitted && !!nameErr) || undefined}
               />
             </SettingRow>
-            <SettingRow
-              id="endpoint-slug"
-              label="Slug"
-              help={
-                endpoint
-                  ? "The endpoint's identifier in builds, exports and file names, unique in this operation: lowercase letters, digits, '.', '_' and '-'. Left empty, it stays as it is."
-                  : "The endpoint's identifier in builds, exports and file names, unique in this operation: lowercase letters, digits, '.', '_' and '-'. Left empty, it is made from the name (the next free one if that is taken)."
-              }
-              error={slugErr ?? serverErrors.slug}
-            >
-              <Input
-                id="endpoint-slug"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder={slugPlaceholder}
-                className="font-mono"
-                autoComplete="off"
-                spellCheck={false}
-                disabled={disabled}
-                aria-invalid={!!slugErr || undefined}
-              />
-            </SettingRow>
             <SettingRow id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
               <Textarea
                 id="endpoint-description"
@@ -516,7 +480,7 @@ function EndpointEditor({
           problems={jsonProblems}
           hints={hints}
           readOnly={disabled}
-          fileName={exportFileName(slug.trim() || slugPlaceholder)}
+          fileName={exportFileName(endpoint?.slug ?? slugify(name))}
           aria-label="The endpoint as JSON"
           className="flex-1 rounded-md border"
         />

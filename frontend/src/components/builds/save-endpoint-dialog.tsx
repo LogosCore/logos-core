@@ -91,8 +91,7 @@ function SaveBody({ operationId, factory, channel, channelIcon, connection, inde
       await create.mutateAsync({
         operationId,
         moduleName: channel.name,
-        // No slug: made from the connection's name, which is one already.
-        input: { name: name.trim(), slug: null, description: description.trim() || null, values: draft.values },
+        input: { name: name.trim(), description: description.trim() || null, values: draft.values },
       })
       toast.success(`Saved as endpoint ${name.trim()}`)
       onClose()

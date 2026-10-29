@@ -86,12 +86,7 @@ export function EndpointsTable({
               <ModuleIconCell
                 type="channel"
                 icon={kinds.get(ep.moduleName)?.icon}
-                title={
-                  <>
-                    <span className="truncate font-medium">{ep.name}</span>
-                    <span className="truncate font-mono text-xs text-muted-foreground">&nbsp;· {ep.slug}</span>
-                  </>
-                }
+                title={<span className="truncate font-medium">{ep.name}</span>}
                 subtitle={ep.description}
                 subtitleTitle={ep.description ?? undefined}
               />
