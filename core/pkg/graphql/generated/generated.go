@@ -8216,8 +8216,8 @@ type BuildArtifact {
 }
 
 type BuildError {
-  # The factory's own code, or core's: timeout, factory_lost,
-  # artifact_mismatch, schema_changed, refused.
+  # The factory's own code, or core's: timeout, factory_lost, refused,
+  # schema_changed, artifact_mismatch, artifact_too_large.
   code: String!
   message: String!
 }

@@ -51,7 +51,8 @@ const (
 	BuildErrorFactoryLost      = "factory_lost"
 	BuildErrorArtifactMismatch = "artifact_mismatch"
 	BuildErrorSchemaChanged    = "schema_changed"
-	BuildErrorRefused          = "refused" // the factory would not take the build
+	BuildErrorRefused          = "refused"            // the factory would not take the build
+	BuildErrorArtifactTooLarge = "artifact_too_large" // over the max_size the factory was given
 )
 
 // Build is one build: what was asked for, with defaults filled in (the build
@@ -97,6 +98,10 @@ type Build struct {
 	// Deadline is when core stops waiting: for a factory to take the build
 	// while queued, for the result once building.
 	Deadline time.Time `bson:"deadline" json:"deadline"`
+	// ArtifactMaxSize is the max_size the instance building it was given:
+	// a result reporting a larger artifact fails the build. Zero for a
+	// build offered before core kept it.
+	ArtifactMaxSize int64 `bson:"artifact_max_size,omitempty" json:"-"`
 	// ResultReceived is set when a succeeded result arrived and its artifact
 	// is being checked; ResultAt is when.
 	ResultReceived bool       `bson:"result_received,omitempty" json:"-"`

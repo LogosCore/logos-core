@@ -86,6 +86,31 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		return recorded, nil
 	}
 
+	// A presigned upload cannot be capped, so the limit is kept here: an
+	// artifact over it is never read, and never becomes a minion.
+	limit := b.ArtifactMaxSize
+	if limit <= 0 {
+		limit = s.cfg.ArtifactMaxSize // offered before core kept the limit
+	}
+	if r.Artifact.Size > limit {
+		if err := s.store.Delete(ctx, artifactKey(b.OperationID, b.MinionID)); err != nil {
+			s.logger.Warn("delete an artifact over its limit", zap.String("minion_id", r.MinionID), zap.Error(err))
+		}
+		ok, err := s.repos.Builds.Finish(ctx, b.MinionID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
+			State: models.BuildStateFailed, Error: &models.BuildError{Code: models.BuildErrorArtifactTooLarge, Message: fmt.Sprintf(
+				"the factory reported a %d-byte artifact; it was given a limit of %d bytes", r.Artifact.Size, limit)},
+			Warnings: r.Warnings, Log: r.Log, At: s.now(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("record a build over its artifact limit: %w", err)
+		}
+		if !ok {
+			return nil, notWaiting(r.MinionID, instance)
+		}
+		s.logger.Info("build failed", zap.String("minion_id", r.MinionID), zap.String("code", models.BuildErrorArtifactTooLarge))
+		return recorded, nil
+	}
+
 	art := models.BuildArtifact{
 		Filename: r.Artifact.Filename, Size: r.Artifact.Size, SHA256: r.Artifact.SHA256,
 		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.MinionID),
@@ -118,7 +143,7 @@ func resultRecorded(b *models.Build) bool {
 		case models.BuildErrorArtifactMismatch:
 			return b.ResultReceived
 		}
-		return true
+		return true // the factory's code, or artifact_too_large: core's verdict on its result
 	}
 	return false
 }

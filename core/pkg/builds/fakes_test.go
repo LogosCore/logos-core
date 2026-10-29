@@ -186,7 +186,7 @@ func (f *fakeBuilds) ReleaseClaim(_ context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, version string, deadline, at time.Time) (bool, error) {
+func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, version string, deadline time.Time, maxSize int64, at time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -194,18 +194,19 @@ func (f *fakeBuilds) MarkBuilding(_ context.Context, id uuid.UUID, instance, ver
 		return false, nil
 	}
 	b.State, b.Instance, b.FactoryVersion, b.Deadline, b.StartedAt, b.LeaseUntil = models.BuildStateBuilding, instance, version, deadline, &at, nil
+	b.ArtifactMaxSize = maxSize
 	return true, nil
 }
 
-func (f *fakeBuilds) Unoffer(_ context.Context, id uuid.UUID, instance string, until time.Time) (bool, error) {
+func (f *fakeBuilds) Unoffer(_ context.Context, id uuid.UUID, instance string, queueDeadline, until time.Time) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
 	if !ok || b.State != models.BuildStateBuilding || b.Instance != instance || b.ResultReceived {
 		return false, nil
 	}
-	b.State, b.LeaseUntil, b.Instance, b.FactoryVersion, b.StartedAt = models.BuildStateQueued, &until, "", "", nil
-	b.Plan, b.StepReports = nil, nil
+	b.State, b.Deadline, b.LeaseUntil, b.Instance, b.FactoryVersion, b.StartedAt = models.BuildStateQueued, queueDeadline, &until, "", "", nil
+	b.ArtifactMaxSize, b.Plan, b.StepReports = 0, nil, nil
 	return true, nil
 }
 

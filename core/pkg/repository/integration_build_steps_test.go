@@ -17,7 +17,7 @@ import (
 // are stored: a step keeps the time of its first report whatever order the
 // reports arrive in, its message is the latest (an empty one clears it), only
 // the instance building it can report, and a build put back in the queue
-// forgets them.
+// forgets them and has its queue deadline again.
 func TestIntegrationBuildStepReports(t *testing.T) {
 	db := integrationDB(t)
 	ctx := context.Background()
@@ -27,11 +27,11 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	b := &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob",
-		State: models.BuildStateQueued, CreatedAt: now}
+		State: models.BuildStateQueued, Deadline: now.Add(30 * time.Minute), CreatedAt: now}
 	if err := repo.Insert(ctx, b); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := repo.MarkBuilding(ctx, b.MinionID, "bob-1", "dev", now.Add(time.Hour), now); !ok || err != nil {
+	if ok, err := repo.MarkBuilding(ctx, b.MinionID, "bob-1", "dev", now.Add(time.Hour), 1<<20, now); !ok || err != nil {
 		t.Fatalf("mark building: %v %v", ok, err)
 	}
 
@@ -71,13 +71,18 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	if len(got.Plan) != 2 || got.Plan[1] != plan[1] {
 		t.Errorf("plan %+v", got.Plan)
 	}
+	if !got.Deadline.Equal(now.Add(time.Hour)) || got.ArtifactMaxSize != 1<<20 {
+		t.Errorf("building: deadline %s, artifact limit %d", got.Deadline, got.ArtifactMaxSize)
+	}
 
 	// Not taken after all: back in the queue, with nothing of that instance.
-	if ok, err := repo.Unoffer(ctx, b.MinionID, "bob-1", now.Add(time.Minute)); !ok || err != nil {
+	if ok, err := repo.Unoffer(ctx, b.MinionID, "bob-1", b.Deadline, now.Add(time.Minute)); !ok || err != nil {
 		t.Fatalf("unoffer: %v %v", ok, err)
 	}
-	if got, _ := repo.FindByMinionID(ctx, b.MinionID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil {
-		t.Errorf("after unoffer: plan %+v, reports %+v", got.Plan, got.StepReports)
+	if got, _ := repo.FindByMinionID(ctx, b.MinionID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil ||
+		!got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 {
+		t.Errorf("after unoffer: plan %+v, reports %+v, deadline %s (queued with %s), artifact limit %d",
+			got.Plan, got.StepReports, got.Deadline, b.Deadline, got.ArtifactMaxSize)
 	}
 }
 

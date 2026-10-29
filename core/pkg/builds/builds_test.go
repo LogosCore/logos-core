@@ -441,6 +441,26 @@ func TestOfferWhenNoneTakesIt(t *testing.T) {
 	r.get(t, b.MinionID.String(), models.BuildStateBuilding)
 }
 
+// An offer turned down puts the build back with its queue deadline: busy
+// instances cannot keep a build queued past the build timeout.
+func TestBusyOffersKeepTheQueueDeadline(t *testing.T) {
+	r := newRig(t)
+	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) { return refuse(c, protocol.CodeBusy, "busy"), nil }
+	b := r.queue(t, nil)
+
+	r.clock = r.clock.Add(20 * time.Minute)
+	r.svc.Tick(context.Background())
+	if got := r.get(t, b.MinionID.String(), models.BuildStateQueued); !got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 {
+		t.Fatalf("after a busy offer: deadline %s (queued with %s), artifact limit %d", got.Deadline, b.Deadline, got.ArtifactMaxSize)
+	}
+
+	r.clock = r.clock.Add(11 * time.Minute)
+	r.svc.Tick(context.Background())
+	if got := r.get(t, b.MinionID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorTimeout {
+		t.Fatalf("error %+v", got.Error)
+	}
+}
+
 // A factory starts, and reports, as soon as it accepts: its first progress
 // can reach core before its acceptance does.
 func TestReportBeforeAcceptance(t *testing.T) {
@@ -636,6 +656,7 @@ func TestArtifactChecks(t *testing.T) {
 		uploaded       bool
 	}{
 		"mismatch":     {upload: "tampered", report: "original", uploaded: true},
+		"larger":       {upload: "original, and more", report: "original", uploaded: true},
 		"not uploaded": {report: "original"},
 	} {
 		r := newRig(t)
@@ -660,6 +681,45 @@ func TestArtifactChecks(t *testing.T) {
 			t.Fatalf("%s: a minion was created", name)
 		}
 	}
+}
+
+// A presigned upload cannot be capped: a result reporting an artifact over the
+// max_size its instance was given fails the build, and the upload is deleted.
+func TestArtifactOverItsLimit(t *testing.T) {
+	r := newRig(t)
+	b := r.started(t)
+	if got := r.get(t, b.MinionID.String(), ""); got.ArtifactMaxSize != 256<<20 {
+		t.Fatalf("the limit the instance was given is not kept: %d", got.ArtifactMaxSize)
+	}
+	r.builds.rows[b.MinionID].ArtifactMaxSize = 4 // the setting when it was offered
+
+	if rep, err := r.succeed(t, b, "too big", "too big"); err != nil || !rep.(protocol.BuildResultReply).Recorded {
+		t.Fatalf("result: %v", err)
+	}
+	res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildSucceeded,
+		Artifact: &protocol.BuildArtifact{Filename: "bob.json", Size: 7, SHA256: sha("too big")}}
+	if rep, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res)); err != nil ||
+		!rep.(protocol.BuildResultReply).Recorded {
+		t.Fatalf("repeated result: %v", err)
+	}
+	r.settle()
+	got := r.get(t, b.MinionID.String(), models.BuildStateFailed)
+	if got.Error.Code != models.BuildErrorArtifactTooLarge || got.Artifact != nil || got.Log != "built" ||
+		r.store.has(artifactKey(opID, b.MinionID)) {
+		t.Fatalf("build %+v, error %+v", got, got.Error)
+	}
+	if minions, _ := r.svc.Minions(context.Background(), opID); len(minions) != 0 {
+		t.Fatal("a minion was created")
+	}
+
+	// A build offered before core kept the limit is held to the setting.
+	old := r.started(t)
+	r.builds.rows[old.MinionID].ArtifactMaxSize = 0
+	if _, err := r.succeed(t, old, "small", "small"); err != nil {
+		t.Fatal(err)
+	}
+	r.settle()
+	r.get(t, old.MinionID.String(), models.BuildStateSucceeded)
 }
 
 func TestFailedBuild(t *testing.T) {

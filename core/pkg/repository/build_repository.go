@@ -134,14 +134,17 @@ type IBuildRepository interface {
 	ClaimQueued(ctx context.Context, now, leaseUntil time.Time) (*models.Build, error)
 	// ReleaseClaim ends a claim that placed the build nowhere.
 	ReleaseClaim(ctx context.Context, minionID uuid.UUID) error
-	// MarkBuilding moves a queued build to BUILDING on instance. Core does it
-	// before offering the build there, so a report the instance sends at
-	// once already finds the build its own.
-	MarkBuilding(ctx context.Context, minionID uuid.UUID, instance, factoryVersion string, deadline, at time.Time) (bool, error)
+	// MarkBuilding moves a queued build to BUILDING on instance, with the
+	// deadline and artifact max size of the request it is offered with. Core
+	// does it before offering the build there, so a report the instance sends
+	// at once already finds the build its own.
+	MarkBuilding(ctx context.Context, minionID uuid.UUID, instance, factoryVersion string, deadline time.Time, artifactMaxSize int64, at time.Time) (bool, error)
 	// Unoffer puts a build that instance did not take back in the queue,
 	// claimed until leaseUntil, unless the instance already reported a
-	// result. False when it is no longer building there.
-	Unoffer(ctx context.Context, minionID uuid.UUID, instance string, leaseUntil time.Time) (bool, error)
+	// result. Its deadline is queueDeadline again: the one it had queued,
+	// which an offer must not extend. False when it is no longer building
+	// there.
+	Unoffer(ctx context.Context, minionID uuid.UUID, instance string, queueDeadline, leaseUntil time.Time) (bool, error)
 	// SetPlan stores the factory's plan for the build while instance builds
 	// it. False when it is not building there.
 	SetPlan(ctx context.Context, minionID uuid.UUID, instance string, plan []models.BuildPlanStep) (bool, error)
@@ -322,24 +325,25 @@ func (r *buildRepository) ReleaseClaim(ctx context.Context, minionID uuid.UUID) 
 	return err
 }
 
-func (r *buildRepository) MarkBuilding(ctx context.Context, minionID uuid.UUID, instance, factoryVersion string, deadline, at time.Time) (bool, error) {
+func (r *buildRepository) MarkBuilding(ctx context.Context, minionID uuid.UUID, instance, factoryVersion string, deadline time.Time, artifactMaxSize int64, at time.Time) (bool, error) {
 	return matched(r.coll.UpdateOne(ctx,
 		bson.M{"minion_id": minionID, "state": models.BuildStateQueued},
 		bson.M{
 			"$set": bson.M{
 				"state": models.BuildStateBuilding, "instance": instance, "factory_version": factoryVersion,
-				"deadline": deadline, "started_at": at, "updateAt": at,
+				"deadline": deadline, "artifact_max_size": artifactMaxSize, "started_at": at, "updateAt": at,
 			},
 			"$unset": bson.M{"lease_until": ""},
 		}))
 }
 
-func (r *buildRepository) Unoffer(ctx context.Context, minionID uuid.UUID, instance string, leaseUntil time.Time) (bool, error) {
+func (r *buildRepository) Unoffer(ctx context.Context, minionID uuid.UUID, instance string, queueDeadline, leaseUntil time.Time) (bool, error) {
 	filter := buildingOn(minionID, instance)
 	filter["result_received"] = bson.M{"$ne": true}
 	return matched(r.coll.UpdateOne(ctx, filter, bson.M{
-		"$set":   bson.M{"state": models.BuildStateQueued, "lease_until": leaseUntil},
-		"$unset": bson.M{"instance": "", "factory_version": "", "started_at": "", "plan": "", "step_reports": ""},
+		"$set": bson.M{"state": models.BuildStateQueued, "deadline": queueDeadline, "lease_until": leaseUntil},
+		"$unset": bson.M{"instance": "", "factory_version": "", "artifact_max_size": "", "started_at": "",
+			"plan": "", "step_reports": ""},
 	}))
 }
 

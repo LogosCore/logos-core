@@ -135,16 +135,17 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 	start := int(s.next.Add(1))
 	for i := range insts {
 		inst := insts[(start+i)%len(insts)]
-		ok, err := s.repos.Builds.MarkBuilding(ctx, b.MinionID, inst.Instance, inst.Version, deadline, s.now())
+		ok, err := s.repos.Builds.MarkBuilding(ctx, b.MinionID, inst.Instance, inst.Version, deadline, req.Artifact.MaxSize, s.now())
 		if err != nil || !ok {
 			return // cancelled meanwhile
 		}
 		if s.offerTo(ctx, b, inst, req) {
 			return
 		}
-		// Not taken there: back in the queue, unless the instance already
-		// reported a result (its acceptance was lost on the way back).
-		if ok, err := s.repos.Builds.Unoffer(ctx, b.MinionID, inst.Instance, s.now().Add(s.cfg.Lease)); err != nil || !ok {
+		// Not taken there: back in the queue with its queue deadline (b is
+		// the build as claimed), unless the instance already reported a
+		// result (its acceptance was lost on the way back).
+		if ok, err := s.repos.Builds.Unoffer(ctx, b.MinionID, inst.Instance, b.Deadline, s.now().Add(s.cfg.Lease)); err != nil || !ok {
 			return
 		}
 	}
@@ -252,7 +253,7 @@ func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
 	if err != nil || b.State != models.BuildStateBuilding || !b.ResultReceived || b.Artifact == nil {
 		return
 	}
-	size, sum, err := s.digest(ctx, b.Artifact.ObjectKey)
+	size, sum, err := s.digest(ctx, b.Artifact.ObjectKey, b.Artifact.Size)
 	switch {
 	case blob.IsNotFound(err):
 		s.fail(ctx, b, models.BuildErrorArtifactMismatch, "the factory reported an artifact it did not upload")
@@ -264,11 +265,15 @@ func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
 		}
 		s.logger.Warn("check a build artifact; will retry", zap.String("minion_id", minionID.String()), zap.Error(err))
 		return
-	case size != b.Artifact.Size || sum != b.Artifact.SHA256:
+	case size != b.Artifact.Size:
 		_ = s.store.Delete(ctx, b.Artifact.ObjectKey)
 		s.fail(ctx, b, models.BuildErrorArtifactMismatch, fmt.Sprintf(
-			"the stored artifact is %d bytes with SHA-256 %s; the factory reported %d bytes with %s",
-			size, sum, b.Artifact.Size, b.Artifact.SHA256))
+			"the stored artifact is %d bytes; the factory reported %d", size, b.Artifact.Size))
+		return
+	case sum != b.Artifact.SHA256:
+		_ = s.store.Delete(ctx, b.Artifact.ObjectKey)
+		s.fail(ctx, b, models.BuildErrorArtifactMismatch, fmt.Sprintf(
+			"the stored artifact's SHA-256 is %s; the factory reported %s", sum, b.Artifact.SHA256))
 		return
 	}
 	ok, err := s.repos.Builds.Finish(ctx, minionID, []string{models.BuildStateBuilding},
@@ -286,17 +291,26 @@ func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
 	s.logger.Info("build succeeded", zap.String("minion_id", minionID.String()))
 }
 
-// digest reads an object to its end: its size and SHA-256.
-func (s *Service) digest(ctx context.Context, key string) (int64, string, error) {
-	r, _, err := s.store.Get(ctx, key)
+// digest reads an object of want bytes: its size and SHA-256. A larger one
+// is not read past want plus one byte, nor at all when the store says it is
+// larger, and comes back with no SHA-256: what the factory reports bounds
+// what core reads.
+func (s *Service) digest(ctx context.Context, key string, want int64) (int64, string, error) {
+	r, info, err := s.store.Get(ctx, key)
 	if err != nil {
 		return 0, "", err
 	}
 	defer r.Close()
+	if info.ContentLength > want {
+		return info.ContentLength, "", nil
+	}
 	h := sha256.New()
-	n, err := io.Copy(h, r)
+	n, err := io.Copy(h, io.LimitReader(r, want+1))
 	if err != nil {
 		return 0, "", err
+	}
+	if n > want {
+		return n, "", nil
 	}
 	return n, hex.EncodeToString(h.Sum(nil)), nil
 }
