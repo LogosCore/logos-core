@@ -2,17 +2,17 @@ import type { ReactNode } from "react"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { VirtualizedDataTable, dataTableRowClass } from "@/components/ui/virtualized-data-table"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
-import { ModuleIconCell } from "@/components/modules/module-icon"
+import { KindName } from "@/components/modules/module-icon"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 
 const GRID_COLS =
-  "grid-cols-[4rem_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]"
+  "grid-cols-[3rem_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]"
 
 /**
  * An operation's minion sessions, newest first: one per running process of a
- * minion, as its hello described it, by its number in the operation (#1, #2,
- * …). Read-only.
+ * minion, as its hello described it, by its number in the operation (1, 2,
+ * …), one line each. Read-only.
  */
 export function SessionsTable({
   sessions,
@@ -55,45 +55,27 @@ export function SessionsTable({
       emptyState={emptyState}
       renderRow={(s) => (
         <div className={dataTableRowClass(GRID_COLS)}>
-          {/* The display id operators call the session by; the UUID is under the host. */}
-          <div className="truncate font-mono font-medium" title={`Session ${s.number}`}>
-            #{s.number}
+          {/* The display id operators call the session by. */}
+          <div className="truncate font-mono font-medium" title={`Session ${s.number}, ${s.id}`}>
+            {s.number}
           </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate font-medium" title={s.host ?? undefined}>
-              {s.host || <span className="text-muted-foreground">unknown host</span>}
-            </span>
-            <span className="truncate font-mono text-xs text-muted-foreground" title="Session id">
-              {s.id}
-            </span>
+          <div className="truncate font-medium" title={s.host ?? undefined}>
+            {s.host || <span className="text-muted-foreground">unknown host</span>}
           </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate text-sm" title={s.proc ?? undefined}>
-              {s.proc || <span className="text-muted-foreground">pid</span>} {s.pid}
-            </span>
-            <span className="truncate text-xs text-muted-foreground" title={userOf(s) || undefined}>
-              {[userOf(s), s.integrity].filter(Boolean).join(" · ") || "—"}
-            </span>
+          <div className="truncate text-sm" title={[s.proc, userOf(s)].filter(Boolean).join("\n") || undefined}>
+            {s.proc || <span className="text-muted-foreground">pid</span>} {s.pid}
+            {(userOf(s) || s.integrity) && (
+              <span className="text-muted-foreground"> · {[userOf(s), s.integrity].filter(Boolean).join(" · ")}</span>
+            )}
           </div>
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate text-sm">{platformLabel(`${s.os}/${s.arch}`)}</span>
-            {s.version && <span className="truncate text-xs text-muted-foreground">minion {s.version}</span>}
-          </div>
+          <div className="truncate text-sm">{platformLabel(`${s.os}/${s.arch}`)}</div>
           <div className="truncate font-mono text-xs" title={s.addrs.join("\n") || undefined}>
             {s.addrs.length > 0 ? s.addrs.join(", ") : <span className="text-muted-foreground">—</span>}
           </div>
-          <ModuleIconCell
-            type="factory"
-            icon={icons.get(s.moduleName)}
-            title={
-              <>
-                <span className="truncate font-mono font-medium">{s.moduleName}</span>
-                <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
-              </>
-            }
-            subtitle={<span>{s.buildDescription || s.buildId}</span>}
-            subtitleTitle={`Build ${s.buildId}${s.staged ? "" : ", without staging"}`}
-          />
+          <div className="flex min-w-0 items-baseline" title={`Build ${s.buildId}${s.staged ? "" : ", without staging"}`}>
+            <KindName type="factory" name={s.moduleName} icon={icons.get(s.moduleName)} className="font-medium" />
+            <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
+          </div>
           <div className="truncate text-sm text-muted-foreground">
             <FormattedDateTimeText date={s.createdAt} />
           </div>

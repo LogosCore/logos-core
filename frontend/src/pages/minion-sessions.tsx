@@ -40,7 +40,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput value={search} onValueChange={setSearch} placeholder="Search sessions or #number..." />
+        <SearchInput value={search} onValueChange={setSearch} placeholder="Search sessions or a number..." />
       </div>
       {error ? (
         <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
