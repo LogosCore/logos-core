@@ -282,6 +282,22 @@ func NewHostDeletedEvent(actor Actor, p HostEventPayload) Event {
 	return NewEvent(TopicHostDeleted, actor, p)
 }
 
+// --- Minion session event payloads ---
+
+// MinionSessionEventPayload is the payload for minion session events.
+type MinionSessionEventPayload struct {
+	SessionID   string
+	OperationID string
+}
+
+func NewMinionSessionCreatedEvent(p MinionSessionEventPayload) Event {
+	return NewEvent(TopicMinionSessionCreated, SystemActor(), p)
+}
+
+func NewMinionSessionUpdatedEvent(p MinionSessionEventPayload) Event {
+	return NewEvent(TopicMinionSessionUpdated, SystemActor(), p)
+}
+
 // --- Task event payloads ---
 
 // TaskEventPayload is the payload for every task topic. The bus stays

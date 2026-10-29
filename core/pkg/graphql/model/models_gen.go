@@ -453,6 +453,48 @@ type Minion struct {
 	CreatedAt   string       `json:"createdAt"`
 }
 
+type MinionSession struct {
+	ID               string   `json:"id"`
+	OperationID      string   `json:"operationId"`
+	BuildID          string   `json:"buildId"`
+	BuildDescription string   `json:"buildDescription"`
+	ModuleName       string   `json:"moduleName"`
+	Target           string   `json:"target"`
+	Platform         string   `json:"platform"`
+	Staged           bool     `json:"staged"`
+	Pid              int      `json:"pid"`
+	Os               string   `json:"os"`
+	Arch             string   `json:"arch"`
+	Host             *string  `json:"host,omitempty"`
+	User             *string  `json:"user,omitempty"`
+	Domain           *string  `json:"domain,omitempty"`
+	Proc             *string  `json:"proc,omitempty"`
+	Integrity        *string  `json:"integrity,omitempty"`
+	Addrs            []string `json:"addrs"`
+	Version          *string  `json:"version,omitempty"`
+	X                any      `json:"x,omitempty"`
+	CreatedAt        string   `json:"createdAt"`
+	LastSeenAt       *string  `json:"lastSeenAt,omitempty"`
+}
+
+type MinionSessionConnection struct {
+	Edges      []*MinionSessionEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+}
+
+type MinionSessionEdge struct {
+	Node   *MinionSession `json:"node"`
+	Cursor string         `json:"cursor"`
+}
+
+type MinionSessionEvent struct {
+	Action      EventAction    `json:"action"`
+	SessionID   string         `json:"sessionId"`
+	OperationID string         `json:"operationId"`
+	Session     *MinionSession `json:"session,omitempty"`
+}
+
 type ModuleAction struct {
 	Name              string         `json:"name"`
 	Label             string         `json:"label"`

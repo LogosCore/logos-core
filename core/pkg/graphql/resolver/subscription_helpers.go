@@ -234,6 +234,8 @@ func extractOperationID(event eventbus.Event) string {
 		return p.OperationID
 	case eventbus.HostEventPayload:
 		return p.OperationID
+	case eventbus.MinionSessionEventPayload:
+		return p.OperationID
 	case eventbus.TaskEventPayload:
 		return p.OperationID
 	case eventbus.OperationEventLoggedPayload:
@@ -445,6 +447,13 @@ func toHostEvent(event eventbus.Event) *model.HostEvent {
 	return evt
 }
 
+// minionSessionTopics is the list of minion session topics for the
+// minionSessionChanged subscription.
+var minionSessionTopics = []eventbus.Topic{
+	eventbus.TopicMinionSessionCreated,
+	eventbus.TopicMinionSessionUpdated,
+}
+
 // skillTopics is the list of community skill registry topics for the
 // skillChanged subscription.
 var skillTopics = []eventbus.Topic{
@@ -646,6 +655,19 @@ func (r *subscriptionResolver) hostEvent(ctx context.Context, event eventbus.Eve
 		evt.Host = load(ctx, evt.HostID, r.HostRepo.FindByID)
 	}
 	return evt
+}
+
+func (r *subscriptionResolver) minionSessionEvent(ctx context.Context, event eventbus.Event) *model.MinionSessionEvent {
+	p, ok := event.Payload.(eventbus.MinionSessionEventPayload)
+	if !ok {
+		return nil
+	}
+	action := model.EventActionUpdated
+	if event.Topic == eventbus.TopicMinionSessionCreated {
+		action = model.EventActionCreated
+	}
+	return &model.MinionSessionEvent{Action: action, SessionID: p.SessionID, OperationID: p.OperationID,
+		Session: r.MinionSessionResolver.Load(ctx, p.SessionID)}
 }
 
 func (r *subscriptionResolver) taskEvent(ctx context.Context, event eventbus.Event) *model.TaskEvent {

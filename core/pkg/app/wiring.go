@@ -58,6 +58,8 @@ type resolvers struct {
 	skill       resolver.ISkillResolver
 	endpoint    resolver.IChannelEndpointResolver
 	builds      resolver.IBuildResolver
+	// minionSessions is read-only: pkg/minionsync opens the sessions.
+	minionSessions resolver.IMinionSessionResolver
 }
 
 // buildControllers constructs every REST handler. Order is not significant
@@ -82,7 +84,7 @@ func (a *App) buildControllers() *controllers {
 			OIDCStatus:        a.oidcStatus,
 		}),
 		channel: controller.NewChannelController(a.cache, a.moduleGate,
-			minionsync.NewService(a.repos.Build, a.repos.MinionStaging, a.cache, a.logger), a.logger, a.env.ChannelSyncMaxSize),
+			minionsync.NewService(a.repos.Build, a.repos.MinionStaging, a.repos.MinionSession, a.cache, a.eventBus, a.logger), a.logger, a.env.ChannelSyncMaxSize),
 		skill: controller.NewSkillController(a.skillService, a.logger),
 		build: controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
 		wiki:  controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
@@ -171,6 +173,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithHostRepo(a.repos.Host),
 			resolver.WithChannelEndpointRepo(a.repos.ChannelEndpoint),
 			resolver.WithBuildCleanup(a.builds),
+			resolver.WithMinionSessionRepo(a.repos.MinionSession),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -197,6 +200,7 @@ func (a *App) buildResolvers() *resolvers {
 		// Channel endpoints are operation data, authorized by operation role.
 		endpoint: resolver.NewChannelEndpointResolver(a.endpoints, a.repos.Operation),
 		// Builds too: operation data, authorized by operation role.
-		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
+		builds:         resolver.NewBuildResolver(a.builds, a.repos.Operation),
+		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation),
 	}
 }

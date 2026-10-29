@@ -100,6 +100,9 @@ type Documents = {
     "\n  mutation UpdateHost($id: ID!, $input: UpdateHostInput!) {\n    updateHost(id: $id, input: $input) {\n      ...HostFields\n    }\n  }\n": typeof types.UpdateHostDocument,
     "\n  mutation DeleteHost($id: ID!) {\n    deleteHost(id: $id)\n  }\n": typeof types.DeleteHostDocument,
     "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n": typeof types.HostChangedDocument,
+    "\n  fragment MinionSessionFields on MinionSession {\n    id\n    operationId\n    buildId\n    buildDescription\n    moduleName\n    target\n    platform\n    staged\n    pid\n    os\n    arch\n    host\n    user\n    domain\n    proc\n    integrity\n    addrs\n    version\n    x\n    createdAt\n    lastSeenAt\n  }\n": typeof types.MinionSessionFieldsFragmentDoc,
+    "\n  query MinionSessions($operationId: ID!, $search: String, $first: Int, $after: String) {\n    minionSessions(operationId: $operationId, search: $search, first: $first, after: $after) {\n      edges {\n        node {\n          ...MinionSessionFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.MinionSessionsDocument,
+    "\n  subscription MinionSessionChanged($operationId: ID!) {\n    minionSessionChanged(operationId: $operationId) {\n      action\n      sessionId\n      operationId\n      session {\n        ...MinionSessionFields\n      }\n    }\n  }\n": typeof types.MinionSessionChangedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    iconLight\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": typeof types.ModuleFieldsFragmentDoc,
     "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": typeof types.BlockModuleDocument,
@@ -318,6 +321,9 @@ const documents: Documents = {
     "\n  mutation UpdateHost($id: ID!, $input: UpdateHostInput!) {\n    updateHost(id: $id, input: $input) {\n      ...HostFields\n    }\n  }\n": types.UpdateHostDocument,
     "\n  mutation DeleteHost($id: ID!) {\n    deleteHost(id: $id)\n  }\n": types.DeleteHostDocument,
     "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n": types.HostChangedDocument,
+    "\n  fragment MinionSessionFields on MinionSession {\n    id\n    operationId\n    buildId\n    buildDescription\n    moduleName\n    target\n    platform\n    staged\n    pid\n    os\n    arch\n    host\n    user\n    domain\n    proc\n    integrity\n    addrs\n    version\n    x\n    createdAt\n    lastSeenAt\n  }\n": types.MinionSessionFieldsFragmentDoc,
+    "\n  query MinionSessions($operationId: ID!, $search: String, $first: Int, $after: String) {\n    minionSessions(operationId: $operationId, search: $search, first: $first, after: $after) {\n      edges {\n        node {\n          ...MinionSessionFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.MinionSessionsDocument,
+    "\n  subscription MinionSessionChanged($operationId: ID!) {\n    minionSessionChanged(operationId: $operationId) {\n      action\n      sessionId\n      operationId\n      session {\n        ...MinionSessionFields\n      }\n    }\n  }\n": types.MinionSessionChangedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    iconLight\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": types.ModuleFieldsFragmentDoc,
     "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": types.BlockModuleDocument,
@@ -791,6 +797,18 @@ export function graphql(source: "\n  mutation DeleteHost($id: ID!) {\n    delete
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  subscription HostChanged($operationId: ID!) {\n    hostChanged(operationId: $operationId) {\n      action\n      hostId\n      host {\n        ...HostFields\n      }\n    }\n  }\n"): typeof import('./graphql').HostChangedDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment MinionSessionFields on MinionSession {\n    id\n    operationId\n    buildId\n    buildDescription\n    moduleName\n    target\n    platform\n    staged\n    pid\n    os\n    arch\n    host\n    user\n    domain\n    proc\n    integrity\n    addrs\n    version\n    x\n    createdAt\n    lastSeenAt\n  }\n"): typeof import('./graphql').MinionSessionFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query MinionSessions($operationId: ID!, $search: String, $first: Int, $after: String) {\n    minionSessions(operationId: $operationId, search: $search, first: $first, after: $after) {\n      edges {\n        node {\n          ...MinionSessionFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n"): typeof import('./graphql').MinionSessionsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  subscription MinionSessionChanged($operationId: ID!) {\n    minionSessionChanged(operationId: $operationId) {\n      action\n      sessionId\n      operationId\n      session {\n        ...MinionSessionFields\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionChangedDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

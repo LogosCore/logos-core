@@ -76,6 +76,7 @@ type Repositories struct {
 	Build              repository.IBuildRepository
 	Minion             repository.IMinionRepository
 	MinionStaging      repository.IMinionStagingRepository
+	MinionSession      repository.IMinionSessionRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository

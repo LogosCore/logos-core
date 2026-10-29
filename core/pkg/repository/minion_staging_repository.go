@@ -23,6 +23,9 @@ type IMinionStagingRepository interface {
 	Insert(ctx context.Context, s *models.MinionStaging) error
 	// FindByTempID returns one entry; IsNotFound on a miss.
 	FindByTempID(ctx context.Context, tempID uuid.UUID) (*models.MinionStaging, error)
+	// Delete removes one entry: it serves one hello. IsNotFound when it is
+	// gone already, to a hello that came first.
+	Delete(ctx context.Context, tempID uuid.UUID) error
 }
 
 type minionStagingRepository struct{ coll database.Collection }
@@ -46,4 +49,8 @@ func (r *minionStagingRepository) FindByTempID(ctx context.Context, tempID uuid.
 		return nil, err
 	}
 	return &s, nil
+}
+
+func (r *minionStagingRepository) Delete(ctx context.Context, tempID uuid.UUID) error {
+	return r.coll.Remove(ctx, bson.M{"temp_id": tempID})
 }

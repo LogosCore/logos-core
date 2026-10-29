@@ -36,6 +36,7 @@ const FindingsPage = page(() => import("@/pages/findings"), "FindingsPage")
 const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
 const EndpointsPage = page(() => import("@/pages/endpoints"), "EndpointsPage")
 const BuildsPage = page(() => import("@/pages/builds"), "BuildsPage")
+const MinionSessionsPage = page(() => import("@/pages/minion-sessions"), "MinionSessionsPage")
 const AgentsPage = page(() => import("@/pages/agents"), "AgentsPage")
 const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
 
@@ -78,6 +79,7 @@ function AppRoutes() {
             <Route path="tasks" element={<TasksPage />} />
             <Route path="endpoints" element={<EndpointsPage />} />
             <Route path="builds" element={<BuildsPage />} />
+            <Route path="sessions" element={<MinionSessionsPage />} />
             {/* Builds and endpoints open in modals now (?build=<id>, …);
                 their old pages, for anyone's bookmark. */}
             <Route path="endpoints/new" element={<RecordPageRedirect list="endpoints" />} />

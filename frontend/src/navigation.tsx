@@ -4,6 +4,7 @@ import {
   FileCode2Icon,
   HammerIcon,
   KanbanSquareIcon,
+  MonitorDotIcon,
   PackageIcon,
   RadioTowerIcon,
   RouteIcon,
@@ -22,6 +23,17 @@ export interface NavigationItem {
   // The `url` field is ignored for routing-active-state matching in this case.
   externalUrl?: string;
 }
+
+// Operation-scoped entries rendered ABOVE the global block: the operation's
+// live minion sessions come first. Hidden until an operation is picked.
+export const navigationOperationTopItems: NavigationItem[] = [
+  {
+    title: "Sessions",
+    url: "/sessions",
+    permission: null,
+    icon: MonitorDotIcon,
+  },
+]
 
 // Navigation entries that work even when no operation is scoped. Findings
 // has a "global / cross-operation" mode for cross-op credential search; Wiki

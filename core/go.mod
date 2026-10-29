@@ -5,6 +5,7 @@ go 1.25.7
 require (
 	github.com/99designs/gqlgen v0.17.88
 	github.com/coreos/go-oidc/v3 v3.20.0
+	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-redis/redis/v8 v8.11.5
@@ -36,7 +37,6 @@ require (
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.6 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.19.6 // indirect

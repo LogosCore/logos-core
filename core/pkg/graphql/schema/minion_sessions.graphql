@@ -1,0 +1,85 @@
+# =============================================================================
+# Minion sessions — the running processes of an operation's minions
+# =============================================================================
+#
+# A minion's hello opens a session (docs: contracts/minion-messages.md): one
+# per running process of a build, with the host and process the hello
+# described. Core opens them from the data plane; nobody edits them here. A
+# session nobody checks in to within a day of its hello is removed. Viewers of
+# an operation read them.
+
+type MinionSession {
+  # The session id the minion sends its messages under.
+  id: ID!
+  operationId: ID!
+  # The build the minion was made by. The build may have been deleted since.
+  buildId: ID!
+  # The build's description when the session opened.
+  buildDescription: String!
+  # The factory kind, target and platform of the build.
+  moduleName: String!
+  target: String!
+  platform: String!
+  # Opened under a temporary id after a stage (new keys), not straight under
+  # the build id (the build's own keys).
+  staged: Boolean!
+  # What the latest hello said: the process id, Go's os and arch names, and
+  # what else the minion could learn.
+  pid: Int!
+  os: String!
+  arch: String!
+  host: String
+  user: String
+  domain: String
+  proc: String
+  # low | medium | high | system (Windows) | root | user
+  integrity: String
+  addrs: [String!]!
+  version: String
+  # The factory's own fields.
+  x: JSON
+  createdAt: String!
+  # The latest message under the session id; null before the first check-in.
+  lastSeenAt: String
+}
+
+type MinionSessionEdge {
+  node: MinionSession!
+  cursor: String!
+}
+
+type MinionSessionConnection {
+  edges: [MinionSessionEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type MinionSessionEvent {
+  action: EventAction!
+  sessionId: ID!
+  operationId: ID!
+  session: MinionSession
+}
+
+extend type Query {
+  # An operation's sessions, newest first, a page at a time. search is the
+  # app's search (a substring, case aside; "quotes" for whole words) over the
+  # host, user, domain, process, os, arch, integrity, addresses, version, the
+  # build's description, factory, target and platform; a whole UUID also
+  # matches a session or build id. Needs at least viewer.
+  minionSessions(
+    operationId: ID!
+    search: String
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): MinionSessionConnection!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Subscription {
+  # A session opened, checked in or said hello again.
+  minionSessionChanged(operationId: ID!): MinionSessionEvent!
+    @hasPermission(permission: "operation:member")
+}

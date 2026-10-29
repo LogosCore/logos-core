@@ -65,6 +65,7 @@ type operationResolver struct {
 	hostRepo       repository.IHostRepository               // needed for cascade delete
 	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
 	buildCleanup   BuildCleanup                             // needed for cascade delete
+	sessionRepo    repository.IMinionSessionRepository      // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
 
@@ -134,6 +135,13 @@ type BuildCleanup interface {
 func WithBuildCleanup(c BuildCleanup) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.buildCleanup = c
+	}
+}
+
+// WithMinionSessionRepo adds the minion session repository for cascade delete.
+func WithMinionSessionRepo(repo repository.IMinionSessionRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.sessionRepo = repo
 	}
 }
 
@@ -292,6 +300,13 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.buildCleanup != nil {
 		if err := r.buildCleanup.DeleteOperationData(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's builds: %w", err)
+		}
+	}
+
+	// Cascade delete: remove the operation's minion sessions
+	if r.sessionRepo != nil {
+		if err := r.sessionRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's minion sessions: %w", err)
 		}
 	}
 

@@ -625,6 +625,48 @@ export type Minion = {
   target: Scalars['String']['output'];
 };
 
+export type MinionSession = {
+  addrs: Array<Scalars['String']['output']>;
+  arch: Scalars['String']['output'];
+  buildDescription: Scalars['String']['output'];
+  buildId: Scalars['ID']['output'];
+  createdAt: Scalars['String']['output'];
+  domain?: Maybe<Scalars['String']['output']>;
+  host?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  integrity?: Maybe<Scalars['String']['output']>;
+  lastSeenAt?: Maybe<Scalars['String']['output']>;
+  moduleName: Scalars['String']['output'];
+  operationId: Scalars['ID']['output'];
+  os: Scalars['String']['output'];
+  pid: Scalars['Int']['output'];
+  platform: Scalars['String']['output'];
+  proc?: Maybe<Scalars['String']['output']>;
+  staged: Scalars['Boolean']['output'];
+  target: Scalars['String']['output'];
+  user?: Maybe<Scalars['String']['output']>;
+  version?: Maybe<Scalars['String']['output']>;
+  x?: Maybe<Scalars['JSON']['output']>;
+};
+
+export type MinionSessionConnection = {
+  edges: Array<MinionSessionEdge>;
+  pageInfo: PageInfo;
+  totalCount: Scalars['Int']['output'];
+};
+
+export type MinionSessionEdge = {
+  cursor: Scalars['String']['output'];
+  node: MinionSession;
+};
+
+export type MinionSessionEvent = {
+  action: EventAction;
+  operationId: Scalars['ID']['output'];
+  session?: Maybe<MinionSession>;
+  sessionId: Scalars['ID']['output'];
+};
+
 export type Module = {
   blockReason: Scalars['String']['output'];
   blockedAt?: Maybe<Scalars['String']['output']>;
@@ -1512,6 +1554,7 @@ export type Query = {
   host: Host;
   hosts: HostConnection;
   me: User;
+  minionSessions: MinionSessionConnection;
   minions: Array<Minion>;
   module?: Maybe<Module>;
   moduleActionInvocations: Array<ModuleActionInvocation>;
@@ -1684,6 +1727,16 @@ export type QueryHostsArgs = {
   search?: InputMaybe<Scalars['String']['input']>;
   sortBy?: InputMaybe<HostSortField>;
   sortDirection?: InputMaybe<SortDirection>;
+};
+
+
+export type QueryMinionSessionsArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  before?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  operationId: Scalars['ID']['input'];
+  search?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -2156,6 +2209,7 @@ export type Subscription = {
   credentialChanged: CredentialEvent;
   hashChanged: HashEvent;
   hostChanged: HostEvent;
+  minionSessionChanged: MinionSessionEvent;
   moduleChanged: ModuleEvent;
   moduleLogs: ModuleLogEvent;
   myAgentActionOccurred: AgentActivityEvent;
@@ -2190,6 +2244,11 @@ export type SubscriptionHashChangedArgs = {
 
 
 export type SubscriptionHostChangedArgs = {
+  operationId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionMinionSessionChangedArgs = {
   operationId: Scalars['ID']['input'];
 };
 
@@ -3205,6 +3264,25 @@ export type HostChangedSubscriptionVariables = Exact<{
 
 
 export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
+
+export type MinionSessionFieldsFragment = { id: string, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null };
+
+export type MinionSessionsQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  search?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
+export type MinionSessionChangedSubscriptionVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -4479,6 +4557,31 @@ export const HostFieldsFragmentDoc = new TypedDocumentString(`
   updatedAt
 }
     `, {"fragmentName":"HostFields"}) as unknown as TypedDocumentString<HostFieldsFragment, unknown>;
+export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
+    fragment MinionSessionFields on MinionSession {
+  id
+  operationId
+  buildId
+  buildDescription
+  moduleName
+  target
+  platform
+  staged
+  pid
+  os
+  arch
+  host
+  user
+  domain
+  proc
+  integrity
+  addrs
+  version
+  x
+  createdAt
+  lastSeenAt
+}
+    `, {"fragmentName":"MinionSessionFields"}) as unknown as TypedDocumentString<MinionSessionFieldsFragment, unknown>;
 export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
     fragment ModuleFields on Module {
   instance
@@ -7029,6 +7132,84 @@ export const HostChangedDocument = new TypedDocumentString(`
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<HostChangedSubscription, HostChangedSubscriptionVariables>;
+export const MinionSessionsDocument = new TypedDocumentString(`
+    query MinionSessions($operationId: ID!, $search: String, $first: Int, $after: String) {
+  minionSessions(
+    operationId: $operationId
+    search: $search
+    first: $first
+    after: $after
+  ) {
+    edges {
+      node {
+        ...MinionSessionFields
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+    fragment MinionSessionFields on MinionSession {
+  id
+  operationId
+  buildId
+  buildDescription
+  moduleName
+  target
+  platform
+  staged
+  pid
+  os
+  arch
+  host
+  user
+  domain
+  proc
+  integrity
+  addrs
+  version
+  x
+  createdAt
+  lastSeenAt
+}`) as unknown as TypedDocumentString<MinionSessionsQuery, MinionSessionsQueryVariables>;
+export const MinionSessionChangedDocument = new TypedDocumentString(`
+    subscription MinionSessionChanged($operationId: ID!) {
+  minionSessionChanged(operationId: $operationId) {
+    action
+    sessionId
+    operationId
+    session {
+      ...MinionSessionFields
+    }
+  }
+}
+    fragment MinionSessionFields on MinionSession {
+  id
+  operationId
+  buildId
+  buildDescription
+  moduleName
+  target
+  platform
+  staged
+  pid
+  os
+  arch
+  host
+  user
+  domain
+  proc
+  integrity
+  addrs
+  version
+  x
+  createdAt
+  lastSeenAt
+}`) as unknown as TypedDocumentString<MinionSessionChangedSubscription, MinionSessionChangedSubscriptionVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
   modules(

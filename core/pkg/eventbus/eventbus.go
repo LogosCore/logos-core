@@ -88,6 +88,12 @@ const (
 	TopicHostUpdated Topic = "host.updated"
 	TopicHostDeleted Topic = "host.deleted"
 
+	// Minion session events — emitted by pkg/minionsync: a hello opened a
+	// session, or a message under it (a check-in, a rehello) changed it.
+	// Power the live Sessions page; subscribers refetch the session.
+	TopicMinionSessionCreated Topic = "minion_session.created"
+	TopicMinionSessionUpdated Topic = "minion_session.updated"
+
 	// Module lifecycle events — emitted by the lifecycle Service + reaper
 	// (control plane) and the ModuleResolver (admin remove). Power the
 	// real-time Modules admin page; subscribers refetch the changed row via
