@@ -65,6 +65,7 @@ type Build struct {
 	Commands               []string       `json:"commands"`
 	Connections            any            `json:"connections"`
 	ConnectionDescriptions []string       `json:"connectionDescriptions"`
+	Crypto                 any            `json:"crypto,omitempty"`
 	State                  string         `json:"state"`
 	Instance               *string        `json:"instance,omitempty"`
 	FactoryVersion         *string        `json:"factoryVersion,omitempty"`

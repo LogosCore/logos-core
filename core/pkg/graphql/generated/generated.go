@@ -143,6 +143,7 @@ type ComplexityRoot struct {
 		Connections            func(childComplexity int) int
 		CreatedAt              func(childComplexity int) int
 		CreatedBy              func(childComplexity int) int
+		Crypto                 func(childComplexity int) int
 		Deadline               func(childComplexity int) int
 		Description            func(childComplexity int) int
 		Error                  func(childComplexity int) int
@@ -1995,6 +1996,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.CreatedBy(childComplexity), true
+	case "Build.crypto":
+		if e.ComplexityRoot.Build.Crypto == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Crypto(childComplexity), true
 	case "Build.deadline":
 		if e.ComplexityRoot.Build.Deadline == nil {
 			break
@@ -8257,6 +8264,9 @@ type Build {
   # The operators' notes on the connections, by position ("" for none). Core's
   # own: the factory never got them, so they are not in connections.
   connectionDescriptions: [String!]!
+  # The minion's payload crypto as the factory got it: {suite, material}.
+  # null when its factory declares no suite.
+  crypto: JSON
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
   state: String!
   # The factory instance building it.
@@ -16406,6 +16416,35 @@ func (ec *executionContext) fieldContext_Build_connectionDescriptions(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_crypto(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_crypto,
+		func(ctx context.Context) (any, error) {
+			return obj.Crypto, nil
+		},
+		nil,
+		ec.marshalOJSON2interface,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_crypto(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_state(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -17588,6 +17627,8 @@ func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "crypto":
+				return ec.fieldContext_Build_crypto(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -29088,6 +29129,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "crypto":
+				return ec.fieldContext_Build_crypto(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -29199,6 +29242,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "crypto":
+				return ec.fieldContext_Build_crypto(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -29310,6 +29355,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "crypto":
+				return ec.fieldContext_Build_crypto(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -36762,6 +36809,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "crypto":
+				return ec.fieldContext_Build_crypto(ctx, field)
 			case "state":
 				return ec.fieldContext_Build_state(ctx, field)
 			case "instance":
@@ -55584,6 +55633,8 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "crypto":
+			out.Values[i] = ec._Build_crypto(ctx, field, obj)
 		case "state":
 			out.Values[i] = ec._Build_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

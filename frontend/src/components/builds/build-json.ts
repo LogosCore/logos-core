@@ -169,6 +169,8 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
   const problems: JsonProblem[] = []
   const at = (path: string, message: string) => problems.push({ path, message })
   for (const key of Object.keys(root)) {
+    // A build's own JSON lists its keys; a new build gets fresh ones.
+    if (key === "crypto") continue
     if (!KEYS.includes(key)) at(childPointer("", key), `Not part of a build, which has ${KEYS.join(", ")}`)
   }
   if (root.factory !== undefined && !sameJSON(root.factory, { module_name: kind.name, schema_version: kind.version })) {

@@ -27,7 +27,9 @@ export function defaultBuildTab(state: string): BuildTab {
  * pastes into a new build's. Its factory, description, target, platform,
  * commands and values, and its connections, each with its channel, name,
  * description, the channel's settings and the factory's values for it; every
- * value as the factory got it, defaults filled in. What came of the build
+ * value as the factory got it, defaults filled in; and the payload crypto core
+ * generated for it (suite and keys), when its factory declares a suite. A new
+ * build ignores crypto: it gets keys of its own. What came of the build
  * (state, stages, artifact, error, warnings, times, its log) is the other
  * tabs'.
  */
@@ -46,6 +48,7 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
       settings: c.params,
       values: c.values,
     })),
+    ...(b.crypto ? { crypto: b.crypto } : {}),
   }
 }
 

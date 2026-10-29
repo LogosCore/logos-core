@@ -108,6 +108,7 @@ export type Build = {
   connections: Scalars['JSON']['output'];
   createdAt: Scalars['String']['output'];
   createdBy: ModuleActor;
+  crypto?: Maybe<Scalars['JSON']['output']>;
   deadline: Scalars['String']['output'];
   description: Scalars['String']['output'];
   error?: Maybe<BuildError>;
@@ -2780,7 +2781,7 @@ export type BuildQueryVariables = Exact<{
 }>;
 
 
-export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, warnings: Array<string>, log?: string | null, id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, crypto?: unknown | null, warnings: Array<string>, log?: string | null, id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
 
 export type CreateBuildMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -5475,6 +5476,7 @@ export const BuildDocument = new TypedDocumentString(`
     commands
     connections
     connectionDescriptions
+    crypto
     warnings
     log
     cancelledBy {

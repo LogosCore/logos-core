@@ -234,6 +234,9 @@ type Build {
   # The operators' notes on the connections, by position ("" for none). Core's
   # own: the factory never got them, so they are not in connections.
   connectionDescriptions: [String!]!
+  # The minion's payload crypto as the factory got it: {suite, material}.
+  # null when its factory declares no suite.
+  crypto: JSON
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
   state: String!
   # The factory instance building it.

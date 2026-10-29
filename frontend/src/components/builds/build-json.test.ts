@@ -121,6 +121,11 @@ describe("readBuildJson", () => {
     expect(read(buildJson(kind, channels, good))).toEqual({ ok: true, doc: good, problems: [] })
   })
 
+  it("ignores a pasted build's crypto: a new build gets keys of its own", () => {
+    const doc = { ...json(), crypto: { suite: "aes-256-cbc-hmac-sha256", material: {} } }
+    expect(read(doc)).toEqual({ ok: true, doc: good, problems: [] })
+  })
+
   it("is not a build when it is not a JSON object", () => {
     expect(read('{"target": ').ok).toBe(false)
     expect(read("[]")).toEqual({ ok: false, message: "A build is a JSON object." })

@@ -40,7 +40,7 @@ type Documents = {
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": typeof types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": typeof types.DeleteBuildFileDocument,
     "\n  query Builds(\n    $operationId: ID!\n    $search: String\n    $states: [String!]\n    $moduleNames: [String!]\n    $first: Int\n    $after: String\n  ) {\n    builds(\n      operationId: $operationId\n      search: $search\n      states: $states\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...BuildFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.BuildsDocument,
-    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
+    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      crypto\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": typeof types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": typeof types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.CancelBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": typeof types.DeleteBuildArtifactDocument,
@@ -258,7 +258,7 @@ const documents: Documents = {
     "\n  query BuildFiles($operationId: ID!) {\n    buildFiles(operationId: $operationId) {\n      ...BuildFileFields\n    }\n  }\n": types.BuildFilesDocument,
     "\n  mutation DeleteBuildFile($id: ID!) {\n    deleteBuildFile(id: $id)\n  }\n": types.DeleteBuildFileDocument,
     "\n  query Builds(\n    $operationId: ID!\n    $search: String\n    $states: [String!]\n    $moduleNames: [String!]\n    $first: Int\n    $after: String\n  ) {\n    builds(\n      operationId: $operationId\n      search: $search\n      states: $states\n      moduleNames: $moduleNames\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...BuildFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.BuildsDocument,
-    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
+    "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      crypto\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n": types.BuildDocument,
     "\n  mutation CreateBuild($operationId: ID!, $input: BuildInput!) {\n    createBuild(operationId: $operationId, input: $input) {\n      ...BuildFields\n    }\n  }\n": types.CreateBuildDocument,
     "\n  mutation CancelBuild($id: ID!) {\n    cancelBuild(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.CancelBuildDocument,
     "\n  mutation DeleteBuildArtifact($id: ID!) {\n    deleteBuildArtifact(id: $id) {\n      ...BuildFields\n    }\n  }\n": types.DeleteBuildArtifactDocument,
@@ -554,7 +554,7 @@ export function graphql(source: "\n  query Builds(\n    $operationId: ID!\n    $
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n"): typeof import('./graphql').BuildDocument;
+export function graphql(source: "\n  query Build($id: ID!) {\n    build(id: $id) {\n      ...BuildFields\n      values\n      commands\n      connections\n      connectionDescriptions\n      crypto\n      warnings\n      log\n      cancelledBy {\n        type\n        id\n        name\n      }\n    }\n  }\n"): typeof import('./graphql').BuildDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -362,6 +362,9 @@ func toBuildModel(b *models.Build) *model.Build {
 		CreatedAt: b.CreatedAt.Format(time.RFC3339), StartedAt: timePtr(b.StartedAt), FinishedAt: timePtr(b.FinishedAt),
 		Deadline: b.Deadline.Format(time.RFC3339),
 	}
+	if b.Crypto != nil {
+		out.Crypto = b.Crypto
+	}
 	if out.Connections == nil {
 		out.Connections = []protocol.BuildConnection{}
 	}

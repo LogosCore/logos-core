@@ -165,6 +165,7 @@ export const BuildQuery = graphql(`
       commands
       connections
       connectionDescriptions
+      crypto
       warnings
       log
       cancelledBy {

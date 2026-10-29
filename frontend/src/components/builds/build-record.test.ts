@@ -64,6 +64,16 @@ describe("buildRecordJson", () => {
       ],
     })
   })
+
+  it("lists the payload crypto core generated, when there is one", () => {
+    const crypto = { suite: "aes-256-cbc-hmac-sha256", material: { enc_key: "ZW5j", mac_key: "bWFj" } }
+    const b = {
+      moduleName: "bob", schemaVersion: 1, description: "", target: "dummy", platform: "any/any",
+      values: {}, commands: [], connections: [], connectionDescriptions: [], crypto,
+    } as unknown as BuildRecord
+    expect(buildRecordJson(b).crypto).toEqual(crypto)
+    expect("crypto" in buildRecordJson({ ...b, crypto: null })).toBe(false)
+  })
 })
 
 describe("valueRows", () => {
