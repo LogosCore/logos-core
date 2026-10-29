@@ -1,5 +1,18 @@
 basePath: /api/v1
 definitions:
+  controller.BuildFileUploadResponse:
+    properties:
+      id:
+        type: string
+      mediaType:
+        type: string
+      name:
+        type: string
+      sha256:
+        type: string
+      size:
+        type: integer
+    type: object
   controller.ExportRequest:
     properties:
       format:
@@ -167,56 +180,6 @@ definitions:
     - WikiTransferRunning
     - WikiTransferDone
     - WikiTransferFailed
-  protocol.InboundMinionMessage:
-    properties:
-      encrypted_data:
-        type: string
-      id:
-        type: string
-      message_id:
-        type: string
-      meta:
-        $ref: '#/definitions/protocol.MessageMeta'
-      source:
-        $ref: '#/definitions/protocol.SourceInfo'
-      timestamp:
-        type: string
-      type:
-        type: string
-      version:
-        type: string
-    type: object
-  protocol.MessageMeta:
-    additionalProperties: {}
-    type: object
-  protocol.OutboundMinionMessage:
-    properties:
-      encrypted_data:
-        type: string
-      id:
-        type: string
-      message_id:
-        type: string
-      meta:
-        $ref: '#/definitions/protocol.MessageMeta'
-      timestamp:
-        type: string
-      type:
-        type: string
-      version:
-        type: string
-    type: object
-  protocol.SourceInfo:
-    properties:
-      module:
-        type: string
-      module_instance:
-        type: string
-      tenant:
-        type: string
-      transport:
-        type: string
-    type: object
   requests.EnrollRequest:
     properties:
       password:
@@ -341,33 +304,119 @@ paths:
       summary: Start single sign-on
       tags:
       - Auth
+  /build-files:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file for a build's file fields (an icon, a signing certificate).
+        It is kept while a build refers to it; an upload nothing refers to is removed
+        after a day.
+      parameters:
+      - description: Operation ID (UUID)
+        in: formData
+        name: operationId
+        required: true
+        type: string
+      - description: File bytes (max 64MB by default)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.BuildFileUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a build file
+      tags:
+      - Builds
+  /builds/{id}/artifact:
+    get:
+      parameters:
+      - description: Build ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download a build's artifact
+      tags:
+      - Builds
   /channel/sync:
     post:
       consumes:
-      - application/json
-      description: Accepts an inbound.minion_message from a channel module and returns
-        an outbound.minion_message. Payloads are opaque encrypted blobs; core currently
-        returns a no-op outbound payload.
+      - application/octet-stream
+      description: 'A channel relays one minion message: the ciphertext as an application/octet-stream
+        body, its ids in Logos-* headers. Core answers 200 with ciphertext for the
+        minion, or 204 when it has nothing for it (today, always).'
       parameters:
-      - description: Inbound minion message
+      - description: Unique per request, a lowercase UUID
+        in: header
+        name: Logos-Message-Id
+        required: true
+        type: string
+      - description: The minion's id, a lowercase UUID
+        in: header
+        name: Logos-Minion-Id
+        required: true
+        type: string
+      - description: The sending channel's registered instance id
+        in: header
+        name: Logos-Channel-Instance
+        required: true
+        type: string
+      - description: W3C Trace Context
+        in: header
+        name: traceparent
+        type: string
+      - description: The minion's ciphertext
+        format: binary
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/protocol.InboundMinionMessage'
+          type: string
       produces:
-      - application/json
+      - application/octet-stream
       responses:
         "200":
           description: OK
-          schema:
-            $ref: '#/definitions/protocol.OutboundMinionMessage'
+        "204":
+          description: No Content
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/responses.ErrorResponse'
         "403":
           description: instance is not a registered module
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "415":
+          description: Unsupported Media Type
           schema:
             $ref: '#/definitions/responses.ErrorResponse'
         "503":

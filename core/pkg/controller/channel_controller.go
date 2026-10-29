@@ -2,8 +2,11 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"io"
+	"mime"
 	"net/http"
-	"time"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/logoscore/logos-core/core/pkg/cache"
@@ -29,112 +32,139 @@ type IChannelController interface {
 }
 
 type channelController struct {
-	cache cache.Cache
-	gate  RegistrationGate
-	log   *zap.Logger
+	cache   cache.Cache
+	gate    RegistrationGate
+	log     *zap.Logger
+	maxSize int64
 }
 
-func NewChannelController(c cache.Cache, gate RegistrationGate, log *zap.Logger) IChannelController {
+// NewChannelController serves the sync endpoint. maxSize caps a request's
+// body: the minion's ciphertext.
+func NewChannelController(c cache.Cache, gate RegistrationGate, log *zap.Logger, maxSize int64) IChannelController {
 	return &channelController{
-		cache: c,
-		gate:  gate,
-		log:   log,
+		cache:   c,
+		gate:    gate,
+		log:     log,
+		maxSize: maxSize,
 	}
 }
 
+// traceParentPattern is a W3C traceparent value; core ignores any other.
+var traceParentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$`)
+
 // Sync is the data-plane endpoint a channel module calls per inbound minion
-// message. It validates the contract envelope, dedups on message_id, and returns
-// a well-formed outbound.minion_message.
-//
-// Request/response types come from the shared protocol module so core and module
-// authors agree on one definition. This is still a skeleton of the channel↔core
-// HTTP contract: core does not yet hold minion keys, run a factory, or
-// decide tasking, so the response always carries an empty/no-op encrypted_data.
-// The decrypt → factory → tasking → encrypt pipeline will hang off this handler.
+// message: the minion's ciphertext as the raw body, its ids in headers. It
+// checks the headers, the registration gate and the size before it reads the
+// body, dedups on Logos-Message-Id, and answers 204: core holds no tasking
+// yet, so it has nothing for the minion. The decrypt → tasking → encrypt
+// pipeline will hang off this handler, answering 200 with ciphertext.
 //
 //	@Summary		Channel sync (data plane)
-//	@Description	Accepts an inbound.minion_message from a channel module and returns an outbound.minion_message. Payloads are opaque encrypted blobs; core currently returns a no-op outbound payload.
+//	@Description	A channel relays one minion message: the ciphertext as an application/octet-stream body, its ids in Logos-* headers. Core answers 200 with ciphertext for the minion, or 204 when it has nothing for it (today, always).
 //	@Tags			Channels
-//	@Accept			json
-//	@Produce		json
-//	@Param			request	body		protocol.InboundMinionMessage	true	"Inbound minion message"
-//	@Success		200		{object}	protocol.OutboundMinionMessage
-//	@Failure		400		{object}	responses.ErrorResponse
-//	@Failure		403		{object}	responses.ErrorResponse	"instance is not a registered module"
-//	@Failure		503		{object}	responses.ErrorResponse	"module registry unavailable"
+//	@Accept			octet-stream
+//	@Produce		octet-stream
+//	@Param			Logos-Message-Id		header	string	true	"Unique per request, a lowercase UUID"
+//	@Param			Logos-Minion-Id			header	string	true	"The minion's id, a lowercase UUID"
+//	@Param			Logos-Channel-Instance	header	string	true	"The sending channel's registered instance id"
+//	@Param			traceparent				header	string	false	"W3C Trace Context"
+//	@Param			request					body	string	true	"The minion's ciphertext"	format(binary)
+//	@Success		200
+//	@Success		204
+//	@Failure		400	{object}	responses.ErrorResponse
+//	@Failure		403	{object}	responses.ErrorResponse	"instance is not a registered module"
+//	@Failure		413	{object}	responses.ErrorResponse
+//	@Failure		415	{object}	responses.ErrorResponse
+//	@Failure		503	{object}	responses.ErrorResponse	"module registry unavailable"
 //	@Router			/channel/sync [post]
 func (ctrl *channelController) Sync(c *gin.Context) {
 	ctx := c.Request.Context()
 	log := logger.From(ctx)
 
-	var req protocol.InboundMinionMessage
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, responses.ErrInvalidInput)
+	if mt, _, _ := mime.ParseMediaType(c.GetHeader("Content-Type")); mt != protocol.SyncContentType {
+		c.JSON(http.StatusUnsupportedMediaType, responses.NewErrorResponse("the body must be %s", protocol.SyncContentType))
 		return
 	}
-
-	// Core-side validation per the data-plane contract: require type, message_id,
-	// id, encrypted_data, source.module_instance, and a parseable RFC3339
-	// timestamp. The instance identifies the sending channel for the registration
-	// gate below.
-	if req.Type != protocol.TypeInboundMinionMessage ||
-		req.MessageID == "" || req.ID == "" || req.EncryptedData == "" ||
-		req.Source.ModuleInstance == "" {
-		c.JSON(http.StatusBadRequest, responses.ErrInvalidInput)
-		return
+	in := protocol.InboundFromHeaders(c.Request.Header)
+	if !traceParentPattern.MatchString(in.TraceParent) {
+		in.TraceParent = ""
 	}
-	if _, err := time.Parse(time.RFC3339, req.Timestamp); err != nil {
-		c.JSON(http.StatusBadRequest, responses.ErrInvalidInput)
+	if err := protocol.ValidateInboundHeaders(in); err != nil {
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: %s", validationMessage(err)))
 		return
 	}
 
 	// Registration gate: reject data-plane traffic from channels that have not
-	// registered over the AMQP control plane. Checked before the dedup guard so
-	// an unregistered sender never consumes a dedup slot or does work. This is a
-	// registration check, not authentication — the instance id is self-asserted;
-	// cryptographic channel auth is a separate follow-up. A registry read failure
-	// fails closed (503) rather than admitting unverified senders.
-	instance := req.Source.ModuleInstance
-	registered, err := ctrl.gate.IsRegistered(ctx, instance)
+	// registered over the AMQP control plane. Checked before the body is read
+	// and before the dedup guard, so an unregistered sender never costs an
+	// upload or consumes a dedup slot. This is a registration check, not
+	// authentication — the instance id is self-asserted; cryptographic channel
+	// auth is a separate follow-up. A registry read failure fails closed (503)
+	// rather than admitting unverified senders.
+	registered, err := ctrl.gate.IsRegistered(ctx, in.ChannelInstance)
 	if err != nil {
 		log.Warn("channel sync: registration check failed, rejecting",
-			zap.String("instance", instance), zap.Error(err))
+			zap.String("instance", in.ChannelInstance), zap.Error(err))
 		c.JSON(http.StatusServiceUnavailable, responses.ErrRegistryUnavailable)
 		return
 	}
 	if !registered {
 		log.Info("channel sync: rejected unregistered instance",
-			zap.String("instance", instance))
+			zap.String("instance", in.ChannelInstance))
 		c.JSON(http.StatusForbidden, responses.ErrChannelNotRegistered)
 		return
 	}
 
-	// Idempotency guard. SetNX reports false when this message_id was already
-	// seen within the dedup window; we still return a valid no-op outbound so
-	// the exchange stays idempotent rather than erroring on replay. Fails open
-	// when the cache is disabled (noop cache reports every key as new).
-	fresh, err := ctrl.cache.SetNX(ctx, dedupKeyPrefix+req.MessageID, "1", cache.TTLChannelSyncDedup)
+	tooLarge := responses.NewErrorResponse("the body is over the %d-byte limit", ctrl.maxSize)
+	if c.Request.ContentLength > ctrl.maxSize {
+		c.JSON(http.StatusRequestEntityTooLarge, tooLarge)
+		return
+	}
+	data, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, ctrl.maxSize))
+	if err != nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			c.JSON(http.StatusRequestEntityTooLarge, tooLarge)
+			return
+		}
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: reading the body: %v", err))
+		return
+	}
+	in.Data = data
+	if err := protocol.ValidateInbound(in); err != nil {
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: %s", validationMessage(err)))
+		return
+	}
+
+	// Idempotency guard. SetNX reports false when this message id was already
+	// seen within the dedup window; the replay gets the same no-op answer
+	// rather than an error. Fails open when the cache is disabled (noop cache
+	// reports every key as new).
+	fresh, err := ctrl.cache.SetNX(ctx, dedupKeyPrefix+in.MessageID, "1", cache.TTLChannelSyncDedup)
 	if err != nil {
 		log.Warn("channel sync: dedup guard failed, processing anyway",
-			zap.String("message_id", req.MessageID), zap.Error(err))
+			zap.String("message_id", in.MessageID), zap.Error(err))
 	} else if !fresh {
-		log.Debug("channel sync: duplicate message_id, returning no-op",
-			zap.String("message_id", req.MessageID))
+		log.Debug("channel sync: duplicate message id, returning no-op",
+			zap.String("message_id", in.MessageID))
 	}
 
-	// Propagate the trace id from the inbound meta when present.
-	meta := protocol.MessageMeta{"status": "ok"}
-	if traceID, ok := req.Meta["trace_id"].(string); ok && traceID != "" {
-		meta["trace_id"] = traceID
+	out := protocol.OutboundMinionMessage{
+		MessageID:   protocol.NewID(),
+		MinionID:    in.MinionID,
+		TraceParent: in.TraceParent,
+		// No Data: no tasking pipeline yet, so nothing for the minion.
 	}
+	out.SetHeaders(c.Writer.Header())
+	c.Status(http.StatusNoContent)
+}
 
-	c.JSON(http.StatusOK, protocol.OutboundMinionMessage{
-		MessageID:     protocol.NewID(),
-		Type:          protocol.TypeOutboundMinionMessage,
-		Version:       protocol.VersionV1,
-		Timestamp:     protocol.NowTimestamp(),
-		ID:            req.ID,
-		EncryptedData: "", // no-op: no tasking pipeline yet
-		Meta:          meta,
-	})
+// validationMessage is a protocol validation error's message, without its
+// code.
+func validationMessage(err error) string {
+	var vErr *protocol.ValidationError
+	if errors.As(err, &vErr) && vErr.Message != "" {
+		return vErr.Message
+	}
+	return err.Error()
 }

@@ -70,35 +70,45 @@
                 }
             }
         },
-        "/channel/sync": {
+        "/build-files": {
             "post": {
-                "description": "Accepts an inbound.minion_message from a channel module and returns an outbound.minion_message. Payloads are opaque encrypted blobs; core currently returns a no-op outbound payload.",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload a file for a build's file fields (an icon, a signing certificate). It is kept while a build refers to it; an upload nothing refers to is removed after a day.",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Channels"
+                    "Builds"
                 ],
-                "summary": "Channel sync (data plane)",
+                "summary": "Upload a build file",
                 "parameters": [
                     {
-                        "description": "Inbound minion message",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/protocol.InboundMinionMessage"
-                        }
+                        "type": "string",
+                        "description": "Operation ID (UUID)",
+                        "name": "operationId",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "File bytes (max 64MB by default)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/protocol.OutboundMinionMessage"
+                            "$ref": "#/definitions/controller.BuildFileUploadResponse"
                         }
                     },
                     "400": {
@@ -108,7 +118,125 @@
                         }
                     },
                     "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/builds/{id}/artifact": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Builds"
+                ],
+                "summary": "Download a build's artifact",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Build ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/channel/sync": {
+            "post": {
+                "description": "A channel relays one minion message: the ciphertext as an application/octet-stream body, its ids in Logos-* headers. Core answers 200 with ciphertext for the minion, or 204 when it has nothing for it (today, always).",
+                "consumes": [
+                    "application/octet-stream"
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Channels"
+                ],
+                "summary": "Channel sync (data plane)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Unique per request, a lowercase UUID",
+                        "name": "Logos-Message-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The minion's id, a lowercase UUID",
+                        "name": "Logos-Minion-Id",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The sending channel's registered instance id",
+                        "name": "Logos-Channel-Instance",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "W3C Trace Context",
+                        "name": "traceparent",
+                        "in": "header"
+                    },
+                    {
+                        "format": "binary",
+                        "description": "The minion's ciphertext",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "403": {
                         "description": "instance is not a registered module",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "415": {
+                        "description": "Unsupported Media Type",
                         "schema": {
                             "$ref": "#/definitions/responses.ErrorResponse"
                         }
@@ -978,6 +1106,26 @@
         }
     },
     "definitions": {
+        "controller.BuildFileUploadResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "mediaType": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sha256": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
         "controller.ExportRequest": {
             "type": "object",
             "required": [
@@ -1210,82 +1358,6 @@
                 "WikiTransferDone",
                 "WikiTransferFailed"
             ]
-        },
-        "protocol.InboundMinionMessage": {
-            "type": "object",
-            "properties": {
-                "encrypted_data": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "message_id": {
-                    "type": "string"
-                },
-                "meta": {
-                    "$ref": "#/definitions/protocol.MessageMeta"
-                },
-                "source": {
-                    "$ref": "#/definitions/protocol.SourceInfo"
-                },
-                "timestamp": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "string"
-                }
-            }
-        },
-        "protocol.MessageMeta": {
-            "type": "object",
-            "additionalProperties": {}
-        },
-        "protocol.OutboundMinionMessage": {
-            "type": "object",
-            "properties": {
-                "encrypted_data": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "message_id": {
-                    "type": "string"
-                },
-                "meta": {
-                    "$ref": "#/definitions/protocol.MessageMeta"
-                },
-                "timestamp": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "string"
-                }
-            }
-        },
-        "protocol.SourceInfo": {
-            "type": "object",
-            "properties": {
-                "module": {
-                    "type": "string"
-                },
-                "module_instance": {
-                    "type": "string"
-                },
-                "tenant": {
-                    "type": "string"
-                },
-                "transport": {
-                    "type": "string"
-                }
-            }
         },
         "requests.EnrollRequest": {
             "type": "object",

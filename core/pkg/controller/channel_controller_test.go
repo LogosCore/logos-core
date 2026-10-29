@@ -3,10 +3,10 @@ package controller
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,140 +66,150 @@ func (g fakeGate) IsRegistered(_ context.Context, _ string) (bool, error) {
 
 func registeredGate() fakeGate { return fakeGate{registered: true} }
 
-func newSyncRequest(body string) (*httptest.ResponseRecorder, *gin.Context) {
+const (
+	testMessageID = "c4ca4238-a0b9-4382-8dcc-509a6f75849b"
+	testMinionID  = "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f"
+	testTrace     = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	testMaxSize   = 64
+)
+
+// ciphertext is not UTF-8: the body travels as raw bytes.
+var ciphertext = []byte{0x00, 0xff, 0xfe, 0x80, 0x0a}
+
+func validSyncHeaders() http.Header {
+	h := http.Header{}
+	protocol.InboundMinionMessage{
+		MessageID: testMessageID, MinionID: testMinionID, ChannelInstance: "http-1", TraceParent: testTrace,
+	}.SetHeaders(h)
+	return h
+}
+
+func newSyncRequest(h http.Header, body []byte) (*httptest.ResponseRecorder, *gin.Context) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/api/channel/sync", bytes.NewBufferString(body))
-	c.Request.Header.Set("Content-Type", "application/json")
+	c.Request = httptest.NewRequest(http.MethodPost, protocol.SyncPath, bytes.NewReader(body))
+	c.Request.Header = h
 	return w, c
 }
 
-const validInbound = `{
-  "message_id": "01JNX6R8VQ2H3CN4K9EJ1T2Z7M",
-  "type": "inbound.minion_message",
-  "version": "1.0",
-  "timestamp": "2026-03-09T21:05:12.481Z",
-  "source": {"module": "http", "module_instance": "http-1"},
-  "id": "s-2b77df",
-  "encrypted_data": "QkM4V1R=",
-  "meta": {"trace_id": "tr-6fd92d8b"}
-}`
+func doSync(ctrl IChannelController, h http.Header, body []byte) *httptest.ResponseRecorder {
+	w, c := newSyncRequest(h, body)
+	ctrl.Sync(c)
+	c.Writer.WriteHeaderNow()
+	return w
+}
+
+func newCtrl(gate RegistrationGate) IChannelController {
+	gin.SetMode(gin.TestMode)
+	return NewChannelController(newFakeCache(), gate, zap.NewNop(), testMaxSize)
+}
 
 func TestChannelSync_Valid(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctrl := NewChannelController(newFakeCache(), registeredGate(), zap.NewNop())
+	w := doSync(newCtrl(registeredGate()), validSyncHeaders(), ciphertext)
 
-	w, c := newSyncRequest(validInbound)
-	ctrl.Sync(c)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d (%s)", w.Code, w.Body.String())
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d (%s)", w.Code, w.Body.String())
 	}
-
-	var out protocol.OutboundMinionMessage
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
+	if w.Body.Len() != 0 || w.Header().Get("Content-Type") != "" {
+		t.Errorf("a 204 carries no body: %q, content type %q", w.Body.Bytes(), w.Header().Get("Content-Type"))
 	}
-	if out.Type != protocol.TypeOutboundMinionMessage {
-		t.Errorf("type = %q, want %q", out.Type, protocol.TypeOutboundMinionMessage)
+	out := protocol.OutboundFromHeaders(w.Header())
+	if err := protocol.ValidateOutbound(out); err != nil {
+		t.Fatalf("reply headers: %v", err)
 	}
-	if out.Version != protocol.VersionV1 {
-		t.Errorf("version = %q, want %q", out.Version, protocol.VersionV1)
-	}
-	if out.ID != "s-2b77df" {
-		t.Errorf("id = %q, want echoed s-2b77df", out.ID)
-	}
-	if out.EncryptedData != "" {
-		t.Errorf("encrypted_data = %q, want empty no-op", out.EncryptedData)
-	}
-	if out.Meta["status"] != "ok" {
-		t.Errorf("meta.status = %v, want ok", out.Meta["status"])
-	}
-	if out.Meta["trace_id"] != "tr-6fd92d8b" {
-		t.Errorf("meta.trace_id = %v, want propagated", out.Meta["trace_id"])
-	}
-	if out.MessageID == "" {
-		t.Error("message_id should be set")
-	}
-	if _, err := time.Parse(time.RFC3339, out.Timestamp); err != nil {
-		t.Errorf("timestamp %q not RFC3339: %v", out.Timestamp, err)
+	if out.MinionID != testMinionID || out.MessageID == testMessageID || out.TraceParent != testTrace {
+		t.Errorf("reply %+v: want the minion id echoed, core's own message id, the traceparent returned", out)
 	}
 }
 
 func TestChannelSync_ValidationErrors(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
 	tests := []struct {
-		name string
-		body string
+		name   string
+		mutate func(h http.Header)
+		body   []byte
+		code   int
 	}{
-		{"missing id", `{"message_id":"m1","type":"inbound.minion_message","timestamp":"2026-03-09T21:05:12.481Z","source":{"module_instance":"http-1"},"encrypted_data":"x"}`},
-		{"missing encrypted_data", `{"message_id":"m1","type":"inbound.minion_message","timestamp":"2026-03-09T21:05:12.481Z","source":{"module_instance":"http-1"},"id":"s-1"}`},
-		{"missing source.module_instance", `{"message_id":"m1","type":"inbound.minion_message","timestamp":"2026-03-09T21:05:12.481Z","id":"s-1","encrypted_data":"x"}`},
-		{"wrong type", `{"message_id":"m1","type":"outbound.minion_message","timestamp":"2026-03-09T21:05:12.481Z","source":{"module_instance":"http-1"},"id":"s-1","encrypted_data":"x"}`},
-		{"bad timestamp", `{"message_id":"m1","type":"inbound.minion_message","timestamp":"not-a-time","source":{"module_instance":"http-1"},"id":"s-1","encrypted_data":"x"}`},
-		{"malformed json", `{`},
+		{"json body", func(h http.Header) { h.Set("Content-Type", "application/json") }, ciphertext, http.StatusUnsupportedMediaType},
+		{"no content type", func(h http.Header) { h.Del("Content-Type") }, ciphertext, http.StatusUnsupportedMediaType},
+		{"missing minion id", func(h http.Header) { h.Del(protocol.HeaderMinionID) }, ciphertext, http.StatusBadRequest},
+		{"minion id not a UUID", func(h http.Header) { h.Set(protocol.HeaderMinionID, "s-2b77df") }, ciphertext, http.StatusBadRequest},
+		{"missing message id", func(h http.Header) { h.Del(protocol.HeaderMessageID) }, ciphertext, http.StatusBadRequest},
+		{"missing instance", func(h http.Header) { h.Del(protocol.HeaderChannelInstance) }, ciphertext, http.StatusBadRequest},
+		{"empty body", nil, nil, http.StatusBadRequest},
+		{"over the limit", nil, make([]byte, testMaxSize+1), http.StatusRequestEntityTooLarge},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := NewChannelController(newFakeCache(), registeredGate(), zap.NewNop())
-			w, c := newSyncRequest(tt.body)
-			ctrl.Sync(c)
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf("expected 400, got %d (%s)", w.Code, w.Body.String())
+			h := validSyncHeaders()
+			if tt.mutate != nil {
+				tt.mutate(h)
+			}
+			w := doSync(newCtrl(registeredGate()), h, tt.body)
+			if w.Code != tt.code {
+				t.Fatalf("expected %d, got %d (%s)", tt.code, w.Code, w.Body.String())
+			}
+			if ct := w.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				t.Errorf("error content type %q, want JSON", ct)
 			}
 		})
 	}
 }
 
+// A body without Content-Length (chunked) is cut off at the limit.
+func TestChannelSync_ChunkedOverTheLimit(t *testing.T) {
+	w, c := newSyncRequest(validSyncHeaders(), make([]byte, testMaxSize+1))
+	c.Request.ContentLength = -1
+	newCtrl(registeredGate()).Sync(c)
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+// An invalid traceparent is ignored, not returned.
+func TestChannelSync_InvalidTraceParent(t *testing.T) {
+	h := validSyncHeaders()
+	h.Set(protocol.HeaderTraceParent, "not-a-trace")
+	w := doSync(newCtrl(registeredGate()), h, ciphertext)
+	if w.Code != http.StatusNoContent || w.Header().Get(protocol.HeaderTraceParent) != "" {
+		t.Fatalf("got %d, traceparent %q", w.Code, w.Header().Get(protocol.HeaderTraceParent))
+	}
+}
+
 func TestChannelSync_UnregisteredInstanceRejected(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctrl := NewChannelController(newFakeCache(), fakeGate{registered: false}, zap.NewNop())
-
-	w, c := newSyncRequest(validInbound)
-	ctrl.Sync(c)
-
+	w := doSync(newCtrl(fakeGate{registered: false}), validSyncHeaders(), ciphertext)
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for unregistered instance, got %d (%s)", w.Code, w.Body.String())
 	}
 }
 
+// The gate runs before the body is read: an unregistered sender is refused
+// even with a body over the limit.
+func TestChannelSync_GateBeforeBody(t *testing.T) {
+	w := doSync(newCtrl(fakeGate{registered: false}), validSyncHeaders(), make([]byte, testMaxSize+1))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}
+
 func TestChannelSync_RegistryErrorFailsClosed(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctrl := NewChannelController(newFakeCache(), fakeGate{err: errors.New("mongo down")}, zap.NewNop())
-
-	w, c := newSyncRequest(validInbound)
-	ctrl.Sync(c)
-
+	w := doSync(newCtrl(fakeGate{err: errors.New("mongo down")}), validSyncHeaders(), ciphertext)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 on registry error, got %d (%s)", w.Code, w.Body.String())
 	}
 }
 
 func TestChannelSync_DuplicateMessageIDReturnsNoOp(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 	// Shared cache across both calls so the second SetNX reports a duplicate.
-	ctrl := NewChannelController(newFakeCache(), registeredGate(), zap.NewNop())
-
-	w1, c1 := newSyncRequest(validInbound)
-	ctrl.Sync(c1)
-	if w1.Code != http.StatusOK {
-		t.Fatalf("first call: expected 200, got %d", w1.Code)
+	ctrl := newCtrl(registeredGate())
+	if w := doSync(ctrl, validSyncHeaders(), ciphertext); w.Code != http.StatusNoContent {
+		t.Fatalf("first call: expected 204, got %d", w.Code)
 	}
-
-	w2, c2 := newSyncRequest(validInbound)
-	ctrl.Sync(c2)
-	if w2.Code != http.StatusOK {
-		t.Fatalf("duplicate call: expected 200 no-op, got %d (%s)", w2.Code, w2.Body.String())
+	w := doSync(ctrl, validSyncHeaders(), ciphertext)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("duplicate call: expected 204 no-op, got %d (%s)", w.Code, w.Body.String())
 	}
-
-	var out protocol.OutboundMinionMessage
-	if err := json.Unmarshal(w2.Body.Bytes(), &out); err != nil {
-		t.Fatalf("unmarshal duplicate response: %v", err)
-	}
-	if out.ID != "s-2b77df" || out.Meta["status"] != "ok" {
-		t.Errorf("duplicate response not a valid no-op outbound: %+v", out)
+	if out := protocol.OutboundFromHeaders(w.Header()); out.MinionID != testMinionID {
+		t.Errorf("duplicate response not a valid no-op: %+v", out)
 	}
 }
 

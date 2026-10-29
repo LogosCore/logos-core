@@ -96,6 +96,10 @@ type EnvironmentSettings struct {
 	BuildFileMaxSize     int64 // bytes; cap on one uploaded build file
 	BuildArtifactMaxSize int64 // bytes; the max_size factories are given
 
+	// ChannelSyncMaxSize caps one minion message a channel relays: the sync
+	// request's body, the ciphertext.
+	ChannelSyncMaxSize int64
+
 	// Wiki transfer (export/import jobs)
 	WikiImportZipMaxSize    int64         // bytes; cap on an uploaded import archive
 	WikiTransferArtifactTTL time.Duration // how long finished jobs and their archives are kept
@@ -187,6 +191,7 @@ func init() {
 	viper.SetDefault("BUILD_TIMEOUT", "30m")
 	viper.SetDefault("BUILD_FILE_MAX_SIZE", int64(64<<20))
 	viper.SetDefault("BUILD_ARTIFACT_MAX_SIZE", int64(256<<20))
+	viper.SetDefault("CHANNEL_SYNC_MAX_SIZE", int64(16<<20))
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
 	viper.SetDefault("WIKI_FILE_MAX_SIZE", int64(50*1024*1024))
 	viper.SetDefault("WIKI_FILE_DENIED_CONTENT_TYPES", "")
@@ -291,6 +296,8 @@ func init() {
 		BuildTimeout:         parseDurationOrFatal("BUILD_TIMEOUT", viper.GetString("BUILD_TIMEOUT")),
 		BuildFileMaxSize:     sizeUpTo("BUILD_FILE_MAX_SIZE", viper.GetInt64("BUILD_FILE_MAX_SIZE"), 1<<30),
 		BuildArtifactMaxSize: sizeUpTo("BUILD_ARTIFACT_MAX_SIZE", viper.GetInt64("BUILD_ARTIFACT_MAX_SIZE"), 1<<30),
+
+		ChannelSyncMaxSize: sizeUpTo("CHANNEL_SYNC_MAX_SIZE", viper.GetInt64("CHANNEL_SYNC_MAX_SIZE"), 1<<30),
 
 		// Wiki transfer
 		WikiImportZipMaxSize:    viper.GetInt64("WIKI_IMPORT_ZIP_MAX_SIZE"),

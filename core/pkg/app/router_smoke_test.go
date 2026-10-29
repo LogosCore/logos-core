@@ -146,7 +146,7 @@ func TestRouteAuthTiers(t *testing.T) {
 		"POST /api/v1/enroll":                500,
 		"POST /api/v1/login":                 403,
 		"POST /api/v1/internal/wiki/webhook": 400,
-		"POST /api/channel/sync":             400,
+		"POST /api/channel/sync":             415,
 	}
 
 	r := testRouter(t).NewRouter()
