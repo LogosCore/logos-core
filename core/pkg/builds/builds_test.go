@@ -357,7 +357,7 @@ func TestCreateBuildRefusals(t *testing.T) {
 			r.reg.schemas["bob"].Version = 2
 			r.reg.setActive(bobInstance("bob-1", 1))
 		}, want: "schema version 2"},
-		"crypto": {setup: func(r *rig) { r.reg.schemas["bob"].Crypto = []string{"x25519-xchacha20poly1305"} }, want: "payload crypto"},
+		"crypto": {setup: func(r *rig) { r.reg.schemas["bob"].Crypto = "x25519-xchacha20poly1305" }, want: "payload crypto"},
 		// BOB's minions read version 2 of the HTTP channel's settings.
 		"channel version": {setup: func(r *rig) { r.chs.schemas["http"].Version = 3 }, want: "does not fit"},
 	} {
@@ -404,6 +404,28 @@ func TestOfferAccepted(t *testing.T) {
 		req.Files[badge.FileID.String()].URL != "http://store.test/"+badge.ObjectKey+"?sig=get" ||
 		req.Files[badge.FileID.String()].SHA256 != sha("png!") || req.Actor.ID != "u-alice" {
 		t.Fatalf("request %+v", req)
+	}
+}
+
+func TestOfferWithCrypto(t *testing.T) {
+	r := newRig(t)
+	r.reg.schemas["bob"].Crypto = protocol.CryptoAES256CBCHMACSHA256
+	b := r.queue(t, nil)
+	r.svc.Tick(context.Background())
+
+	stored := r.get(t, b.MinionID.String(), models.BuildStateBuilding)
+	req := r.rpc.recorded()[0].payload.(protocol.BuildRequest)
+	if req.Crypto == nil || req.Crypto.Suite != protocol.CryptoAES256CBCHMACSHA256 ||
+		stored.Crypto == nil || string(req.Crypto.Material) != string(stored.Crypto.Material) {
+		t.Fatalf("request crypto %+v, stored %+v", req.Crypto, stored.Crypto)
+	}
+	var m protocol.AES256CBCHMACSHA256Material
+	if err := json.Unmarshal(req.Crypto.Material, &m); err != nil || len(m.EncKey) != 32 || len(m.MACKey) != 32 {
+		t.Fatalf("material %s: %v", req.Crypto.Material, err)
+	}
+	// The keys never leave core but to the factory.
+	if raw, _ := json.Marshal(stored); strings.Contains(string(raw), "enc_key") {
+		t.Fatalf("keys in the build's JSON: %s", raw)
 	}
 }
 

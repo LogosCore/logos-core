@@ -113,7 +113,7 @@ export interface FactoryKind {
   version: number
   /** Registered instances declaring this version: a build needs one. */
   instances: number
-  crypto: string[]
+  crypto?: string | null
   /** Fields every target shares, sorted. */
   fields: FieldDef[]
   /** The factory's connection parameters per channel kind, sorted. */

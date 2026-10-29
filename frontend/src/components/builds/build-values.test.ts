@@ -34,7 +34,7 @@ function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef 
 // commands of each kind: required, default, picked, one target's only.
 const schema: BuildSchemaFieldsFragment = {
   version: 1,
-  crypto: [],
+  crypto: null,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
     field({ key: "kill_date", type: "datetime", order: 2 }),

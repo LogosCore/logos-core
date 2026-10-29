@@ -298,7 +298,7 @@ func mapBuildError(ctx context.Context, err error) error {
 // --- mapping ---
 
 func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
-	out := &model.BuildSchema{Version: s.Version, Crypto: orEmpty(s.Crypto), Fields: toBuildFieldModels(s.Fields)}
+	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields)}
 	for _, c := range s.Channels {
 		out.Channels = append(out.Channels, &model.BuildChannel{
 			ModuleName: c.ModuleName, Versions: c.Versions, Fields: toBuildFieldModels(c.Fields),

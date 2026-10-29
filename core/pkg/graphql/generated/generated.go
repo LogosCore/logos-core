@@ -8056,8 +8056,8 @@ type BuildSchema {
   version: Int!
   # Channel kinds the minions speak.
   channels: [BuildChannel!]!
-  # Payload crypto suites the minions implement.
-  crypto: [String!]!
+  # Payload crypto suite the minions implement; null for none.
+  crypto: String
   # Build parameters every target shares.
   fields: [ModuleField!]!
   targets: [BuildTarget!]!
@@ -18084,9 +18084,9 @@ func (ec *executionContext) _BuildSchema_crypto(ctx context.Context, field graph
 			return obj.Crypto, nil
 		},
 		nil,
-		ec.marshalNString2ᚕstringᚄ,
+		ec.marshalOString2ᚖstring,
 		true,
-		true,
+		false,
 	)
 }
 
@@ -56140,9 +56140,6 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 			}
 		case "crypto":
 			out.Values[i] = ec._BuildSchema_crypto(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
 		case "fields":
 			out.Values[i] = ec._BuildSchema_fields(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

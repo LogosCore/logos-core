@@ -206,7 +206,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 	req := protocol.BuildRequest{
 		MinionID: b.MinionID.String(), Target: b.Target, Platform: b.Platform,
 		SchemaVersion: b.SchemaVersion, Values: b.Values, Commands: b.Commands, Connections: b.Connections.Items,
-		Deadline: deadline, Actor: b.CreatedBy.Protocol(),
+		Crypto: b.Crypto, Deadline: deadline, Actor: b.CreatedBy.Protocol(),
 	}
 	if len(b.FileIDs) > 0 {
 		req.Files = make(map[string]protocol.BuildFile, len(b.FileIDs))

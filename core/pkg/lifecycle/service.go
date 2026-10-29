@@ -18,6 +18,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/payloadcrypto"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
@@ -234,6 +235,10 @@ func (s *Service) HandleRegister(ctx context.Context, req messaging.Envelope) (a
 		}
 		if err := protocol.ValidateBuildSchema(*p.Build); err != nil {
 			return nil, validationErr("invalid build schema: " + err.Error())
+		}
+		if c := p.Build.Crypto; c != "" && !payloadcrypto.Supported(c) {
+			return nil, validationErr(fmt.Sprintf("unsupported crypto suite %q: core implements %s",
+				c, strings.Join(payloadcrypto.Suites(), ", ")))
 		}
 		reg.Build = &models.ModuleBuildSchema{BuildSchema: *p.Build}
 	}

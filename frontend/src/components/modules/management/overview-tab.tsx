@@ -41,7 +41,7 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
  * crypto. Operators fill them in on an operation's Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
-  const crypto = build.crypto.length > 0 ? `payload crypto ${build.crypto.join(", ")}` : "no payload crypto"
+  const crypto = build.crypto ? `payload crypto ${build.crypto}` : "no payload crypto"
   return (
     <InfoCard title="Build parameters" note={`schema v${build.version} · ${crypto}`}>
       {build.fields.length > 0 && (

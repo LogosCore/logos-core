@@ -702,3 +702,28 @@ func TestBlockUnblockDelete(t *testing.T) {
 		t.Error("blocked an unknown instance")
 	}
 }
+
+func TestHandleRegister_CryptoSuite(t *testing.T) {
+	schema := func(suite string) *protocol.BuildSchema {
+		return &protocol.BuildSchema{
+			SchemaVersion: protocol.BuildSchemaV1, Version: 1, Crypto: suite,
+			Channels: []protocol.BuildChannel{{ChannelVersions: protocol.ChannelVersions{ModuleName: "http", Versions: []int{2}}}},
+			Targets:  []protocol.BuildTarget{{ID: "linux-elf", Label: "Linux binary", Format: "elf", Platforms: []string{"linux/amd64"}}},
+		}
+	}
+	register := func(suite string) error {
+		svc, _, _ := newTestService()
+		_, err := svc.HandleRegister(context.Background(), envFor(t, OpRegister, registerRequest{
+			ModuleType: "factory", ModuleName: "bob", Instance: "bob-1", Version: "1.0.0",
+			RPCQueue: "logos.factory.rpc.bob-1", Build: schema(suite),
+		}))
+		return err
+	}
+	if err := register(protocol.CryptoAES256CBCHMACSHA256); err != nil {
+		t.Fatalf("supported suite: %v", err)
+	}
+	if err := register(""); err != nil {
+		t.Fatalf("no suite: %v", err)
+	}
+	assertRPCCode(t, register("x25519-xchacha20poly1305"), messaging.CodeValidationFailed)
+}

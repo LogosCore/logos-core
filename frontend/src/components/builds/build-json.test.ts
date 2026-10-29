@@ -23,7 +23,7 @@ function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef 
 // BOB's build schema (as build-values.test.ts has it), and the HTTP channel.
 const schema: BuildSchemaFieldsFragment = {
   version: 1,
-  crypto: [],
+  crypto: null,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
     field({ key: "punches", type: "enum_list", order: 2, options: [{ value: "jab" }, { value: "hook" }] }),

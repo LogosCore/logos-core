@@ -163,7 +163,7 @@ type BuildProblem struct {
 type BuildSchema struct {
 	Version  int             `json:"version"`
 	Channels []*BuildChannel `json:"channels"`
-	Crypto   []string        `json:"crypto"`
+	Crypto   *string         `json:"crypto,omitempty"`
 	Fields   []*ModuleField  `json:"fields"`
 	Targets  []*BuildTarget  `json:"targets"`
 	Commands []*BuildCommand `json:"commands"`

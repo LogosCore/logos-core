@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/payloadcrypto"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
@@ -52,9 +53,9 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if schema == nil {
 		return nil, invalid("no %q factory has declared a build schema", moduleName)
 	}
-	if len(schema.Crypto) > 0 {
-		return nil, invalid("the %q factory's minions need payload crypto (%s), which core does not implement yet",
-			moduleName, strings.Join(schema.Crypto, ", "))
+	if schema.Crypto != "" && !payloadcrypto.Supported(schema.Crypto) {
+		return nil, invalid("the %q factory's minions need payload crypto suite %q, which core does not implement",
+			moduleName, schema.Crypto)
 	}
 	insts, err := s.instances(ctx, moduleName, schema.Version)
 	if err != nil {
@@ -92,6 +93,11 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		State:     models.BuildStateQueued,
 		Deadline:  s.now().Add(s.cfg.Timeout),
 		CreatedBy: in.Actor, CreatedAt: s.now(),
+	}
+	if schema.Crypto != "" {
+		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {
+			return nil, err
+		}
 	}
 	for i, conn := range conns {
 		if conn.Description != "" && b.ConnectionDescriptions == nil {
