@@ -9,7 +9,7 @@ import { useNow } from "@/hooks/use-now"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 
 const GRID_COLS =
-  "grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.4fr)]"
+  "grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,1.4fr)]"
 
 /**
  * An operation's minion sessions, newest first: one per running process of a
@@ -49,6 +49,7 @@ export function SessionsTable({
           <div>#</div>
           <div>Addresses</div>
           <div>Host</div>
+          <div>User</div>
           <div>Process</div>
           <div>OS</div>
           <div>Last seen</div>
@@ -68,11 +69,12 @@ export function SessionsTable({
           <div className="truncate font-medium" title={s.host ?? undefined}>
             {s.host || <span className="text-muted-foreground">unknown host</span>}
           </div>
-          <div className="truncate text-sm" title={[s.proc, userOf(s)].filter(Boolean).join("\n") || undefined}>
+          <div className="truncate text-sm" title={userOf(s) || undefined}>
+            {userOf(s) || <span className="text-muted-foreground">—</span>}
+            {s.integrity && <span className="text-muted-foreground"> · {s.integrity}</span>}
+          </div>
+          <div className="truncate text-sm" title={s.proc ?? undefined}>
             {s.proc || <span className="text-muted-foreground">pid</span>} {s.pid}
-            {(userOf(s) || s.integrity) && (
-              <span className="text-muted-foreground"> · {[userOf(s), s.integrity].filter(Boolean).join(" · ")}</span>
-            )}
           </div>
           <div className="truncate text-sm">{platformLabel(`${s.os}/${s.arch}`)}</div>
           <div
