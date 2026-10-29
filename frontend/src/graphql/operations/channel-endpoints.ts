@@ -5,6 +5,7 @@ export const ChannelEndpointFields = graphql(`
     id
     operationId
     name
+    slug
     description
     moduleName
     schemaVersion
@@ -62,12 +63,6 @@ export const ChannelEndpointsQuery = graphql(`
       }
       totalCount
     }
-  }
-`)
-
-export const FreeChannelEndpointNameQuery = graphql(`
-  query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {
-    freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)
   }
 `)
 

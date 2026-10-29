@@ -31,7 +31,7 @@ type ChannelEndpointManager interface {
 	Kinds(ctx context.Context) ([]channelendpoints.Kind, error)
 	List(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]channelendpoints.View, error)
 	Count(ctx context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter) (int64, error)
-	FreeName(ctx context.Context, operationID uuid.UUID, name, tag string) (string, error)
+	FreeSlug(ctx context.Context, operationID uuid.UUID, text, tag string) (string, error)
 	Get(ctx context.Context, id string) (channelendpoints.View, error)
 	Create(ctx context.Context, operationID uuid.UUID, moduleName string, in channelendpoints.Input) (channelendpoints.View, error)
 	Update(ctx context.Context, id string, expectedRevision int64, in channelendpoints.Input) (channelendpoints.View, error)
@@ -44,7 +44,7 @@ type ChannelEndpointManager interface {
 type IChannelEndpointResolver interface {
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
 	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
-	FreeChannelEndpointName(ctx context.Context, operationID string, name string, tag *string) (string, error)
+	FreeChannelEndpointSlug(ctx context.Context, operationID string, text string, tag *string) (string, error)
 	ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error)
 	ChannelEndpointExport(ctx context.Context, id string) (any, error)
 	CreateChannelEndpoint(ctx context.Context, operationID string, moduleName string, input model.ChannelEndpointInput) (*model.ChannelEndpoint, error)
@@ -127,7 +127,7 @@ func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operatio
 	return &model.ChannelEndpointConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
-func (r *channelEndpointResolver) FreeChannelEndpointName(ctx context.Context, operationID string, name string, tag *string) (string, error) {
+func (r *channelEndpointResolver) FreeChannelEndpointSlug(ctx context.Context, operationID string, text string, tag *string) (string, error) {
 	opID, err := uuid.Parse(operationID)
 	if err != nil {
 		return "", fmt.Errorf("invalid operation ID: %w", err)
@@ -135,7 +135,7 @@ func (r *channelEndpointResolver) FreeChannelEndpointName(ctx context.Context, o
 	if err := r.authorize(ctx, opID, models.OperationRoleViewer, false); err != nil {
 		return "", err
 	}
-	free, err := r.endpoints.FreeName(ctx, opID, name, deref(tag))
+	free, err := r.endpoints.FreeSlug(ctx, opID, text, deref(tag))
 	if err != nil {
 		return "", mapEndpointError(ctx, err)
 	}
@@ -220,6 +220,7 @@ func endpointInput(ctx context.Context, input model.ChannelEndpointInput) (chann
 	}
 	in := channelendpoints.Input{
 		Name:   input.Name,
+		Slug:   deref(input.Slug),
 		Values: values,
 		Actor:  managementActor(gqlctx.AuthFromContext(ctx)),
 	}
@@ -290,6 +291,7 @@ func toEndpointModel(v channelendpoints.View) *model.ChannelEndpoint {
 		ID:            v.EndpointID.String(),
 		OperationID:   v.OperationID.String(),
 		Name:          v.Name,
+		Slug:          v.Slug,
 		Description:   strPtr(v.Description),
 		ModuleName:    v.ModuleName,
 		SchemaVersion: v.SchemaVersion,

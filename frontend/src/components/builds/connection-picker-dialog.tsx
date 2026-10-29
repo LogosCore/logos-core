@@ -210,7 +210,8 @@ function PickerBody({
               <ModuleIcon type="channel" icon={channelIcons.get(ep.moduleName)} className="mt-0.5 size-5" />
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <span className="truncate font-mono text-sm font-medium">{ep.name}</span>
+                  <span className="truncate text-sm font-medium">{ep.name}</span>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">{ep.slug}</span>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">{ep.moduleName}</span>
                 </div>
                 {ep.description && <span className="truncate text-xs text-muted-foreground">{ep.description}</span>}

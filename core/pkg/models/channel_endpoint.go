@@ -24,8 +24,14 @@ type ChannelEndpoint struct {
 
 	EndpointID  uuid.UUID `bson:"endpoint_id" json:"endpoint_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
-	// Name is unique within the operation.
-	Name        string `bson:"name" json:"name"`
+	// Name is what operators call the endpoint: any text. It need not be
+	// unique; Slug is the endpoint's identifier.
+	Name string `bson:"name" json:"name"`
+	// Slug is unique within the operation, a plain identifier made from the
+	// name unless set: what a build's connection, an export and a download's
+	// file name carry. Empty only on endpoints stored before slugs, until the
+	// startup backfill gives them one.
+	Slug        string `bson:"slug,omitempty" json:"slug"`
 	Description string `bson:"description,omitempty" json:"description,omitempty"`
 	// ModuleName is the channel kind (Module.Name, e.g. "http").
 	ModuleName string `bson:"module_name" json:"module_name"`

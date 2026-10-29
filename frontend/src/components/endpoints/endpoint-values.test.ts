@@ -5,9 +5,11 @@ import {
   endpointDrafts,
   endpointImportFrom,
   evaluateEndpoint,
-  freeName,
-  nameError,
+  endpointNameError,
+  freeSlug,
   parseEndpointImport,
+  slugError,
+  slugify,
   problemsFromError,
   settingRows,
   type Kind,
@@ -26,12 +28,34 @@ const fields: FieldDef[] = [
   field({ key: "token", type: "secret" }),
 ]
 
-describe("nameError", () => {
+describe("endpointNameError", () => {
+  it("takes any text on one line, up to 120 characters", () => {
+    expect(endpointNameError("localhost:8090 (dev) — EU")).toBeNull()
+    expect(endpointNameError("  ")).toBe("Required")
+    expect(endpointNameError("two\nlines")).not.toBeNull()
+    expect(endpointNameError("é".repeat(120))).toBeNull()
+    expect(endpointNameError("é".repeat(121))).not.toBeNull()
+  })
+})
+
+describe("slugError", () => {
   it("accepts slugs and rejects the rest", () => {
-    expect(nameError("edge-eu.1")).toBeNull()
-    expect(nameError("")).toBe("Required")
-    expect(nameError("Edge EU")).not.toBeNull()
-    expect(nameError("-edge")).not.toBeNull()
+    expect(slugError("edge-eu.1")).toBeNull()
+    expect(slugError("")).toBe("Required")
+    expect(slugError("Edge EU")).not.toBeNull()
+    expect(slugError("-edge")).not.toBeNull()
+  })
+})
+
+describe("slugify", () => {
+  it("makes a slug of any text, as the server does", () => {
+    expect(slugify("edge-eu")).toBe("edge-eu")
+    expect(slugify("Edge EU (CDN)")).toBe("edge-eu-cdn")
+    expect(slugify("localhost:8090")).toBe("localhost-8090")
+    expect(slugify("  --Mixed__Case.v2--")).toBe("mixed__case.v2")
+    expect(slugify("..dots first")).toBe("dots-first")
+    expect(slugify("привет")).toBe("endpoint")
+    expect(slugify("a".repeat(70))).toBe("a".repeat(63))
   })
 })
 
@@ -122,21 +146,21 @@ describe("problemsFromError", () => {
   })
 })
 
-describe("freeName", () => {
-  it("adds the tag, then a number while the name is taken", () => {
-    expect(freeName("edge", [], "-dup")).toBe("edge-dup")
-    expect(freeName("edge", ["edge", "edge-dup"], "-dup")).toBe("edge-dup-2")
-    expect(freeName("edge", ["edge", "edge-2"], "")).toBe("edge-3")
+describe("freeSlug", () => {
+  it("adds the tag, then a number while the slug is taken", () => {
+    expect(freeSlug("edge", [], "-dup")).toBe("edge-dup")
+    expect(freeSlug("edge", ["edge", "edge-dup"], "-dup")).toBe("edge-dup-2")
+    expect(freeSlug("edge", ["edge", "edge-2"], "")).toBe("edge-3")
   })
 
-  it("stays a valid name at the length limit", () => {
+  it("stays a valid slug at the length limit", () => {
     const long = "e".repeat(63)
-    const dup = freeName(long, [], "-dup")
+    const dup = freeSlug(long, [], "-dup")
     expect(dup).toHaveLength(63)
     expect(dup.endsWith("-dup")).toBe(true)
-    expect(nameError(dup)).toBeNull()
-    expect(freeName(long, [dup], "-dup")).toMatch(/^e+-dup-2$/)
-    expect(freeName(long, [dup], "-dup")).toHaveLength(63)
+    expect(slugError(dup)).toBeNull()
+    expect(freeSlug(long, [dup], "-dup")).toMatch(/^e+-dup-2$/)
+    expect(freeSlug(long, [dup], "-dup")).toHaveLength(63)
   })
 })
 
@@ -174,14 +198,14 @@ describe("parseEndpointImport", () => {
     })
   })
 
-  it("picks a valid name (the form makes it a free one)", () => {
+  it("starts from the export's name (its slug), as any text", () => {
     const name = (doc: Record<string, unknown>) => {
       const r = parseEndpointImport(exported(doc), kinds)
       return r.ok ? r.value.name : r.error
     }
     expect(name({})).toBe("edge")
-    expect(name({ name: "EU CDN / Edge" })).toBe("eu-cdn-edge")
-    expect(name({ name: "--" })).toBe("imported")
+    expect(name({ name: "EU CDN / Edge" })).toBe("EU CDN / Edge")
+    expect(name({ name: "  " })).toBe("imported")
     expect(name({ name: 7 })).toBe("imported")
   })
 

@@ -272,6 +272,7 @@ type ComplexityRoot struct {
 		Revision      func(childComplexity int) int
 		SchemaChanged func(childComplexity int) int
 		SchemaVersion func(childComplexity int) int
+		Slug          func(childComplexity int) int
 		UpdatedAt     func(childComplexity int) int
 		UpdatedBy     func(childComplexity int) int
 		Values        func(childComplexity int) int
@@ -797,7 +798,7 @@ type ComplexityRoot struct {
 		CredentialTags                     func(childComplexity int, operationID string) int
 		Credentials                        func(childComplexity int, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		FactoryKinds                       func(childComplexity int) int
-		FreeChannelEndpointName            func(childComplexity int, operationID string, name string, tag *string) int
+		FreeChannelEndpointSlug            func(childComplexity int, operationID string, text string, tag *string) int
 		Hash                               func(childComplexity int, id string) int
 		HashTags                           func(childComplexity int, operationID string) int
 		Hashes                             func(childComplexity int, operationID string, search *string, statuses []models.HashStatus, tags []string, hasCredential *bool, first *int, after *string, last *int, before *string) int
@@ -1452,7 +1453,7 @@ type QueryResolver interface {
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
 	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
-	FreeChannelEndpointName(ctx context.Context, operationID string, name string, tag *string) (string, error)
+	FreeChannelEndpointSlug(ctx context.Context, operationID string, text string, tag *string) (string, error)
 	ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error)
 	ChannelEndpointExport(ctx context.Context, id string) (any, error)
 	Credential(ctx context.Context, id string) (*models.Credential, error)
@@ -2534,6 +2535,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ChannelEndpoint.SchemaVersion(childComplexity), true
+	case "ChannelEndpoint.slug":
+		if e.ComplexityRoot.ChannelEndpoint.Slug == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Slug(childComplexity), true
 	case "ChannelEndpoint.updatedAt":
 		if e.ComplexityRoot.ChannelEndpoint.UpdatedAt == nil {
 			break
@@ -5294,17 +5301,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.FactoryKinds(childComplexity), true
-	case "Query.freeChannelEndpointName":
-		if e.ComplexityRoot.Query.FreeChannelEndpointName == nil {
+	case "Query.freeChannelEndpointSlug":
+		if e.ComplexityRoot.Query.FreeChannelEndpointSlug == nil {
 			break
 		}
 
-		args, err := ec.field_Query_freeChannelEndpointName_args(ctx, rawArgs)
+		args, err := ec.field_Query_freeChannelEndpointSlug_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.FreeChannelEndpointName(childComplexity, args["operationId"].(string), args["name"].(string), args["tag"].(*string)), true
+		return e.ComplexityRoot.Query.FreeChannelEndpointSlug(childComplexity, args["operationId"].(string), args["text"].(string), args["tag"].(*string)), true
 	case "Query.hash":
 		if e.ComplexityRoot.Query.Hash == nil {
 			break
@@ -8446,8 +8453,13 @@ type ChannelEndpointConnection {
 type ChannelEndpoint {
   id: ID!
   operationId: ID!
-  # Unique within the operation.
+  # What operators call it: any text, at most 120 characters. Need not be
+  # unique.
   name: String!
+  # The endpoint's identifier, unique within the operation: lowercase
+  # letters, digits, '.', '_' and '-', at most 63. A build's connection, an
+  # export and a download's file name carry it. Made from the name unless set.
+  slug: String!
   description: String
   # The channel kind, e.g. "http".
   moduleName: String!
@@ -8471,6 +8483,9 @@ type ChannelEndpoint {
 
 input ChannelEndpointInput {
   name: String!
+  # null or "": made from the name on create (the first free one), kept on
+  # update.
+  slug: String
   description: String
   # Values by field key, replacing the stored ones. null, "" and [] leave a
   # field unset (its default applies).
@@ -8484,7 +8499,7 @@ extend type Query {
 
   # An operation's endpoints by name, case aside, a page at a time. search is
   # the app's search (a substring, case aside; "quotes" for whole words) over
-  # the name, description, channel kind and values; moduleNames (channel
+  # the name, slug, description, channel kind and values; moduleNames (channel
   # kinds) narrow the list. Needs at least viewer in the operation.
   channelEndpoints(
     operationId: ID!
@@ -8497,11 +8512,12 @@ extend type Query {
   ): ChannelEndpointConnection!
     @hasPermission(permission: "operation:member")
 
-  # The first of name+tag, name+tag-2, -3… (tag "" or starting with "-") that
-  # no endpoint of the operation is called, the base shortened to fit a name:
-  # what a form suggests for a copy, an import, or a connection saved as an
-  # endpoint. Needs at least viewer in the operation.
-  freeChannelEndpointName(operationId: ID!, name: String!, tag: String): String!
+  # The first of slug+tag, slug+tag-2, -3… (tag "" or starting with "-") that
+  # no endpoint of the operation has, where slug is text made a slug
+  # ("Edge EU" is "edge-eu"), shortened to fit: what a form suggests for a new
+  # endpoint, a copy, an import, or a connection saved as an endpoint. Needs
+  # at least viewer in the operation.
+  freeChannelEndpointSlug(operationId: ID!, text: String!, tag: String): String!
     @hasPermission(permission: "operation:member")
 
   # One endpoint; null when it does not exist. Needs at least viewer in its
@@ -13081,7 +13097,7 @@ func (ec *executionContext) field_Query_credentials_args(ctx context.Context, ra
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_freeChannelEndpointName_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Query_freeChannelEndpointSlug_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
@@ -13089,11 +13105,11 @@ func (ec *executionContext) field_Query_freeChannelEndpointName_args(ctx context
 		return nil, err
 	}
 	args["operationId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "name", ec.unmarshalNString2string)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "text", ec.unmarshalNString2string)
 	if err != nil {
 		return nil, err
 	}
-	args["name"] = arg1
+	args["text"] = arg1
 	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "tag", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
@@ -18995,6 +19011,35 @@ func (ec *executionContext) fieldContext_ChannelEndpoint_name(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _ChannelEndpoint_slug(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_slug,
+		func(ctx context.Context) (any, error) {
+			return obj.Slug, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_slug(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ChannelEndpoint_description(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19469,6 +19514,8 @@ func (ec *executionContext) fieldContext_ChannelEndpointEdge_node(_ context.Cont
 				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
 			case "name":
 				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "slug":
+				return ec.fieldContext_ChannelEndpoint_slug(ctx, field)
 			case "description":
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
@@ -29543,6 +29590,8 @@ func (ec *executionContext) fieldContext_Mutation_createChannelEndpoint(ctx cont
 				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
 			case "name":
 				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "slug":
+				return ec.fieldContext_ChannelEndpoint_slug(ctx, field)
 			case "description":
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
@@ -29632,6 +29681,8 @@ func (ec *executionContext) fieldContext_Mutation_updateChannelEndpoint(ctx cont
 				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
 			case "name":
 				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "slug":
+				return ec.fieldContext_ChannelEndpoint_slug(ctx, field)
 			case "description":
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
@@ -37149,15 +37200,15 @@ func (ec *executionContext) fieldContext_Query_channelEndpoints(ctx context.Cont
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_freeChannelEndpointName(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_freeChannelEndpointSlug(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Query_freeChannelEndpointName,
+		ec.fieldContext_Query_freeChannelEndpointSlug,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().FreeChannelEndpointName(ctx, fc.Args["operationId"].(string), fc.Args["name"].(string), fc.Args["tag"].(*string))
+			return ec.Resolvers.Query().FreeChannelEndpointSlug(ctx, fc.Args["operationId"].(string), fc.Args["text"].(string), fc.Args["tag"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -37184,7 +37235,7 @@ func (ec *executionContext) _Query_freeChannelEndpointName(ctx context.Context, 
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_freeChannelEndpointName(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_freeChannelEndpointSlug(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -37201,7 +37252,7 @@ func (ec *executionContext) fieldContext_Query_freeChannelEndpointName(ctx conte
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_freeChannelEndpointName_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Query_freeChannelEndpointSlug_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -37257,6 +37308,8 @@ func (ec *executionContext) fieldContext_Query_channelEndpoint(ctx context.Conte
 				return ec.fieldContext_ChannelEndpoint_operationId(ctx, field)
 			case "name":
 				return ec.fieldContext_ChannelEndpoint_name(ctx, field)
+			case "slug":
+				return ec.fieldContext_ChannelEndpoint_slug(ctx, field)
 			case "description":
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
@@ -52784,7 +52837,7 @@ func (ec *executionContext) unmarshalInputChannelEndpointInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "values"}
+	fieldsInOrder := [...]string{"name", "slug", "description", "values"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -52798,6 +52851,13 @@ func (ec *executionContext) unmarshalInputChannelEndpointInput(ctx context.Conte
 				return it, err
 			}
 			it.Name = data
+		case "slug":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("slug"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Slug = data
 		case "description":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -56518,6 +56578,11 @@ func (ec *executionContext) _ChannelEndpoint(ctx context.Context, sel ast.Select
 			}
 		case "name":
 			out.Values[i] = ec._ChannelEndpoint_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "slug":
+			out.Values[i] = ec._ChannelEndpoint_slug(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -61859,7 +61924,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "freeChannelEndpointName":
+		case "freeChannelEndpointSlug":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -61868,7 +61933,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_freeChannelEndpointName(ctx, field)
+				res = ec._Query_freeChannelEndpointSlug(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

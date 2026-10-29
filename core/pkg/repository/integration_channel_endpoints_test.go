@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -26,7 +28,7 @@ func TestIntegrationChannelEndpointsList(t *testing.T) {
 	op := uuid.New()
 	add := func(name, kind, desc string, values models.JSONMap) *models.ChannelEndpoint {
 		t.Helper()
-		ep := &models.ChannelEndpoint{OperationID: op, Name: name, ModuleName: kind, Description: desc, SchemaVersion: 1, Values: values}
+		ep := &models.ChannelEndpoint{OperationID: op, Name: name, Slug: strings.ToLower(name), ModuleName: kind, Description: desc, SchemaVersion: 1, Values: values}
 		if err := repo.Insert(ctx, ep); err != nil {
 			t.Fatal(err)
 		}
@@ -35,8 +37,19 @@ func TestIntegrationChannelEndpointsList(t *testing.T) {
 	eu := add("edge-eu", "http", "EU CDN front", models.JSONMap{"base_url": "https://edge-eu.example.com", "extra_base_urls": []any{"https://backup.example.net"}})
 	add("Alpha", "http", "", models.JSONMap{"base_url": "https://alpha.example.org"})
 	add("zone", "dns", "Resolver", models.JSONMap{"domain": "c2.example.com"})
-	if err := repo.Insert(ctx, &models.ChannelEndpoint{OperationID: uuid.New(), Name: "edge-eu", ModuleName: "http"}); err != nil {
+	if err := repo.Insert(ctx, &models.ChannelEndpoint{OperationID: uuid.New(), Name: "edge-eu", Slug: "edge-eu", ModuleName: "http"}); err != nil {
 		t.Fatal(err)
+	}
+	// Names repeat; slugs do not.
+	twin := &models.ChannelEndpoint{OperationID: op, Name: "zone", Slug: "zone-dns", ModuleName: "dns"}
+	if err := repo.Insert(ctx, twin); err != nil {
+		t.Fatalf("a repeated name: %v", err)
+	}
+	if ok, err := repo.Delete(ctx, twin.EndpointID); !ok || err != nil {
+		t.Fatalf("delete the twin: %v %v", ok, err)
+	}
+	if err := repo.Insert(ctx, &models.ChannelEndpoint{OperationID: op, Name: "other", Slug: "zone", ModuleName: "dns"}); !errors.Is(err, ErrChannelEndpointSlugTaken) {
+		t.Fatalf("a repeated slug: %v", err)
 	}
 
 	list := func(f ChannelEndpointFilter) []string {
@@ -99,11 +112,22 @@ func TestIntegrationChannelEndpointsList(t *testing.T) {
 		t.Errorf("new value: %q", got)
 	}
 
-	if taken, err := repo.NameTaken(ctx, op, "zone"); !taken || err != nil {
+	if taken, err := repo.SlugTaken(ctx, op, "zone"); !taken || err != nil {
 		t.Errorf("zone taken: %v %v", taken, err)
 	}
-	if taken, err := repo.NameTaken(ctx, op, "zone-2"); taken || err != nil {
+	if taken, err := repo.SlugTaken(ctx, op, "zone-2"); taken || err != nil {
 		t.Errorf("zone-2 taken: %v %v", taken, err)
+	}
+
+	// An endpoint stored before slugs gets its name as slug.
+	if err := db.Collection(channelEndpointCollection).UpdateOne(ctx, bson.M{"slug": "alpha"}, bson.M{"$unset": bson.M{"slug": ""}}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := repo.BackfillSlugs(ctx); err != nil || n != 1 {
+		t.Fatalf("slug backfill: %d %v", n, err)
+	}
+	if taken, _ := repo.SlugTaken(ctx, op, "Alpha"); !taken {
+		t.Error("the backfill did not give Alpha its name as slug")
 	}
 
 	// An endpoint stored before endpoints had a search text gets one.

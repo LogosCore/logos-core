@@ -50,8 +50,8 @@ func (f *fakeEndpoints) List(context.Context, uuid.UUID, repository.ChannelEndpo
 func (f *fakeEndpoints) Count(context.Context, uuid.UUID, repository.ChannelEndpointFilter) (int64, error) {
 	return 0, nil
 }
-func (f *fakeEndpoints) FreeName(_ context.Context, _ uuid.UUID, name, tag string) (string, error) {
-	return name + tag, nil
+func (f *fakeEndpoints) FreeSlug(_ context.Context, _ uuid.UUID, text, tag string) (string, error) {
+	return text + tag, nil
 }
 func (f *fakeEndpoints) Get(context.Context, string) (channelendpoints.View, error) {
 	return channelendpoints.View{ChannelEndpoint: models.ChannelEndpoint{OperationID: f.op}}, nil

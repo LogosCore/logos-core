@@ -67,9 +67,9 @@ func (f *fakeRepo) CountByOperationID(ctx context.Context, operationID uuid.UUID
 	return int64(len(eps)), err
 }
 
-func (f *fakeRepo) NameTaken(_ context.Context, operationID uuid.UUID, name string) (bool, error) {
+func (f *fakeRepo) SlugTaken(_ context.Context, operationID uuid.UUID, slug string) (bool, error) {
 	for _, ep := range f.rows {
-		if ep.OperationID == operationID && ep.Name == name {
+		if ep.OperationID == operationID && ep.Slug == slug {
 			return true, nil
 		}
 	}
@@ -77,6 +77,8 @@ func (f *fakeRepo) NameTaken(_ context.Context, operationID uuid.UUID, name stri
 }
 
 func (f *fakeRepo) BackfillSearchText(context.Context) (int64, error) { return 0, nil }
+
+func (f *fakeRepo) BackfillSlugs(context.Context) (int64, error) { return 0, nil }
 
 func (f *fakeRepo) FindByEndpointID(_ context.Context, id uuid.UUID) (*models.ChannelEndpoint, error) {
 	ep, ok := f.rows[id]
@@ -89,8 +91,8 @@ func (f *fakeRepo) FindByEndpointID(_ context.Context, id uuid.UUID) (*models.Ch
 
 func (f *fakeRepo) Insert(_ context.Context, ep *models.ChannelEndpoint) error {
 	for _, r := range f.rows {
-		if r.OperationID == ep.OperationID && r.Name == ep.Name {
-			return repository.ErrChannelEndpointNameTaken
+		if r.OperationID == ep.OperationID && r.Slug == ep.Slug {
+			return repository.ErrChannelEndpointSlugTaken
 		}
 	}
 	if ep.EndpointID == uuid.Nil {
@@ -106,6 +108,11 @@ func (f *fakeRepo) Update(_ context.Context, ep *models.ChannelEndpoint) error {
 	r, ok := f.rows[ep.EndpointID]
 	if !ok || r.Revision != ep.Revision {
 		return repository.ErrChannelEndpointConflict
+	}
+	for id, o := range f.rows {
+		if id != ep.EndpointID && o.OperationID == ep.OperationID && o.Slug == ep.Slug {
+			return repository.ErrChannelEndpointSlugTaken
+		}
 	}
 	ep.Revision++
 	cp := *ep
@@ -170,11 +177,16 @@ func TestCreateValidatesAndNormalizes(t *testing.T) {
 	if !errors.As(err, &ve) || ve.Problems["base_url"] == "" {
 		t.Errorf("path in base_url: %v", err)
 	}
-	if _, err = svc.Create(ctx, opA, "http", Input{Name: "edge-eu", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
-		t.Errorf("duplicate name: %v", err)
+	if _, err = svc.Create(ctx, opA, "http", Input{Name: "edge-eu", Slug: "edge-eu", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
+		t.Errorf("duplicate slug: %v", err)
 	}
-	if _, err = svc.Create(ctx, opA, "http", Input{Name: "Edge EU", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
-		t.Errorf("bad name: %v", err)
+	if _, err = svc.Create(ctx, opA, "http", Input{Name: "Edge", Slug: "Edge EU", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
+		t.Errorf("bad slug: %v", err)
+	}
+	for _, name := range []string{"", "  ", "two\nlines", strings.Repeat("é", MaxNameLength+1)} {
+		if _, err = svc.Create(ctx, opA, "http", Input{Name: name, Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
+			t.Errorf("name %q: %v", name, err)
+		}
 	}
 	if _, err = svc.Create(ctx, opA, "telegram", Input{Name: "tg", Values: map[string]any{}}); !errors.As(err, &ve) {
 		t.Errorf("kind without schema: %v", err)
@@ -216,19 +228,37 @@ func TestUpdateReplacesValuesAndChecksRevision(t *testing.T) {
 	}
 }
 
-func TestNamesAreUniquePerOperation(t *testing.T) {
+// Names are any text and may repeat; slugs are made from them, unique in an
+// operation, and kept when the name changes.
+func TestNamesAndSlugs(t *testing.T) {
 	svc, _, _ := newService()
 	ctx := context.Background()
-	in := Input{Name: "edge", Values: map[string]any{"base_url": "https://a.example.com"}}
-	if _, err := svc.Create(ctx, opA, "http", in); err != nil {
-		t.Fatal(err)
+	in := Input{Name: "localhost:8090 (dev)", Values: map[string]any{"base_url": "https://a.example.com"}}
+	first, err := svc.Create(ctx, opA, "http", in)
+	if err != nil || first.Name != "localhost:8090 (dev)" || first.Slug != "localhost-8090-dev" {
+		t.Fatalf("first: %+v %v", first.ChannelEndpoint, err)
 	}
-	if _, err := svc.Create(ctx, opB, "http", in); err != nil {
-		t.Errorf("same name in another operation: %v", err)
+	second, err := svc.Create(ctx, opA, "http", in)
+	if err != nil || second.Name != first.Name || second.Slug != "localhost-8090-dev-2" {
+		t.Fatalf("same name again: %+v %v", second.ChannelEndpoint, err)
+	}
+	if other, err := svc.Create(ctx, opB, "http", in); err != nil || other.Slug != first.Slug {
+		t.Errorf("another operation: %+v %v", other.ChannelEndpoint, err)
 	}
 	var ve *ValidationError
-	if _, err := svc.Create(ctx, opA, "http", in); !errors.As(err, &ve) {
-		t.Errorf("duplicate in one operation: %v", err)
+	if _, err := svc.Create(ctx, opA, "http", Input{Name: "x", Slug: first.Slug, Values: in.Values}); !errors.As(err, &ve) {
+		t.Errorf("a taken slug given: %v", err)
+	}
+	renamed, err := svc.Update(ctx, first.EndpointID.String(), first.Revision, Input{Name: "Dev box", Values: in.Values})
+	if err != nil || renamed.Name != "Dev box" || renamed.Slug != first.Slug {
+		t.Errorf("rename keeps the slug: %+v %v", renamed.ChannelEndpoint, err)
+	}
+	reslugged, err := svc.Update(ctx, first.EndpointID.String(), renamed.Revision, Input{Name: "Dev box", Slug: "dev-box", Values: in.Values})
+	if err != nil || reslugged.Slug != "dev-box" {
+		t.Errorf("a new slug: %+v %v", reslugged.ChannelEndpoint, err)
+	}
+	if _, err := svc.Update(ctx, first.EndpointID.String(), reslugged.Revision, Input{Name: "Dev box", Slug: second.Slug, Values: in.Values}); !errors.As(err, &ve) {
+		t.Errorf("another endpoint's slug: %v", err)
 	}
 	if list, _ := svc.List(ctx, opB, repository.ChannelEndpointFilter{}, nil, 20, true); len(list) != 1 {
 		t.Errorf("operation B lists %d endpoints", len(list))
@@ -237,6 +267,23 @@ func TestNamesAreUniquePerOperation(t *testing.T) {
 	if err != nil || len(kinds) != 1 || kinds[0].ModuleName != "http" || kinds[0].Icon != "<svg http/>" ||
 		kinds[0].IconLight != "<svg http light/>" {
 		t.Errorf("kinds = %+v (%v)", kinds, err)
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	for in, want := range map[string]string{
+		"edge-eu":               "edge-eu",
+		"Edge EU (CDN)":         "edge-eu-cdn",
+		"localhost:8090":        "localhost-8090",
+		"  --Mixed__Case.v2--":  "mixed__case.v2",
+		"..dots first":          "dots-first",
+		"привет":                "endpoint",
+		"":                      "endpoint",
+		strings.Repeat("a", 70): strings.Repeat("a", 63),
+	} {
+		if got := Slugify(in); got != want || !slugPattern.MatchString(got) {
+			t.Errorf("Slugify(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 
@@ -252,7 +299,7 @@ func TestExportAndProblems(t *testing.T) {
 		t.Fatal(err)
 	}
 	params := doc["params"].(map[string]any)
-	if doc["format"] != ExportFormat || params["base_url"] != "https://a.example.com" || params["tls_verify"] != false || params["token"] != "s3cret" {
+	if doc["format"] != ExportFormat || doc["name"] != v.Slug || params["base_url"] != "https://a.example.com" || params["tls_verify"] != false || params["token"] != "s3cret" {
 		t.Errorf("export = %v", doc)
 	}
 
@@ -287,28 +334,28 @@ func TestExportAndProblems(t *testing.T) {
 	}
 }
 
-// TestFreeName pins the names the forms suggest: name+tag, then -2, -3… past
-// the taken ones, the base shortened so the whole fits a name.
-func TestFreeName(t *testing.T) {
+// TestFreeSlug pins the slugs the forms suggest: slug+tag, then -2, -3…
+// past the taken ones, the base shortened so the whole fits a slug.
+func TestFreeSlug(t *testing.T) {
 	svc, repo, _ := newService()
 	ctx := context.Background()
-	for _, name := range []string{"edge", "edge-dup", "edge-dup-2", strings.Repeat("a", 63)} {
-		repo.rows[uuid.New()] = &models.ChannelEndpoint{OperationID: opA, Name: name}
+	for _, slug := range []string{"edge", "edge-dup", "edge-dup-2", strings.Repeat("a", 63)} {
+		repo.rows[uuid.New()] = &models.ChannelEndpoint{OperationID: opA, Slug: slug}
 	}
-	for _, c := range []struct{ name, tag, want string }{
+	for _, c := range []struct{ text, tag, want string }{
 		{"fresh", "", "fresh"},
-		{"edge", "", "edge-2"},
+		{"Edge", "", "edge-2"},
 		{"edge", "-dup", "edge-dup-3"},
 		{"edge", "-x", "edge-x"},
 		{strings.Repeat("a", 70), "", strings.Repeat("a", 61) + "-2"},
 		{strings.Repeat("b", 70), "-dup", strings.Repeat("b", 59) + "-dup"},
 	} {
-		got, err := svc.FreeName(ctx, opA, c.name, c.tag)
+		got, err := svc.FreeSlug(ctx, opA, c.text, c.tag)
 		if err != nil || got != c.want {
-			t.Errorf("FreeName(%q, %q) = %q %v, want %q", c.name, c.tag, got, err, c.want)
+			t.Errorf("FreeSlug(%q, %q) = %q %v, want %q", c.text, c.tag, got, err, c.want)
 		}
 	}
-	if got, _ := svc.FreeName(ctx, opB, "edge", ""); got != "edge" {
-		t.Errorf("another operation's names count: %q", got)
+	if got, _ := svc.FreeSlug(ctx, opB, "edge", ""); got != "edge" {
+		t.Errorf("another operation's slugs count: %q", got)
 	}
 }

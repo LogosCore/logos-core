@@ -420,6 +420,8 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		// What the list searches read of records' values (models/search_text.go).
 		"build search texts":    repos.Build.BackfillSearchText,
 		"endpoint search texts": repos.ChannelEndpoint.BackfillSearchText,
+		// Endpoint names were slugs before they were free text.
+		"endpoint slugs": repos.ChannelEndpoint.BackfillSlugs,
 	} {
 		if n, err := backfill(ctx); err != nil {
 			l.Warn(name+" backfill failed", zap.Error(err))

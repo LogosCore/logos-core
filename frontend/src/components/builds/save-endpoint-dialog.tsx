@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { KindName } from "@/components/modules/module-icon"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import { nameError, problemsFromError } from "@/components/endpoints/endpoint-values"
-import { useCreateChannelEndpoint, useFreeChannelEndpointName } from "@/graphql/hooks/channel-endpoints"
+import { MAX_ENDPOINT_NAME_LENGTH, endpointNameError, problemsFromError } from "@/components/endpoints/endpoint-values"
+import { useCreateChannelEndpoint } from "@/graphql/hooks/channel-endpoints"
 import { endpointFromConnection, type ChannelKind, type ConnectionDraft } from "./build-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
@@ -68,33 +68,19 @@ interface SaveBodyProps {
   onClose: () => void
 }
 
-/** Asks the server for a free name like the connection's, then shows the form. */
-function SaveBody(props: SaveBodyProps) {
-  const [draft] = useState(() => endpointFromConnection(props.connection, props.index, props.channel))
-  const freeName = useFreeChannelEndpointName(props.operationId, draft.name, "")
-  if (freeName === null) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
-  }
-  return <SaveForm {...props} draft={draft} initialName={freeName} />
-}
-
-function SaveForm({
-  operationId,
-  factory,
-  channel,
-  channelIcon,
-  index,
-  onClose,
-  draft,
-  initialName,
-}: SaveBodyProps & { draft: ReturnType<typeof endpointFromConnection>; initialName: string }) {
+/**
+ * The form, named after the connection. The endpoint's slug is the
+ * connection's name when free (the server takes the next free one when not),
+ * so builds keep calling the connection what they called it.
+ */
+function SaveBody({ operationId, factory, channel, channelIcon, connection, index, onClose }: SaveBodyProps) {
+  const [draft] = useState(() => endpointFromConnection(connection, index, channel))
   const create = useCreateChannelEndpoint()
-  const [name, setName] = useState(initialName)
+  const [name, setName] = useState(draft.name)
   const [description, setDescription] = useState(draft.description)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The server checks the name is free again when it saves.
-  const nameErr = nameError(name)
+  const nameErr = endpointNameError(name)
   const blocked = draft.problems.length > 0
 
   async function save() {
@@ -105,7 +91,8 @@ function SaveForm({
       await create.mutateAsync({
         operationId,
         moduleName: channel.name,
-        input: { name: name.trim(), description: description.trim() || null, values: draft.values },
+        // No slug: made from the connection's name, which is one already.
+        input: { name: name.trim(), slug: null, description: description.trim() || null, values: draft.values },
       })
       toast.success(`Saved as endpoint ${name.trim()}`)
       onClose()
@@ -154,15 +141,15 @@ function SaveForm({
               void save()
             }
           }}
+          maxLength={MAX_ENDPOINT_NAME_LENGTH}
           autoComplete="off"
-          spellCheck={false}
           disabled={blocked}
           aria-invalid={(submitted && !!nameErr) || undefined}
         />
         {submitted && nameErr ? (
           <p className="text-sm text-destructive">{nameErr}</p>
         ) : (
-          <p className="text-xs text-muted-foreground">Unique in this operation: lowercase letters, digits, '.', '_' and '-'.</p>
+          <p className="text-xs text-muted-foreground">What you call this endpoint: any text.</p>
         )}
       </div>
       <div className="flex flex-col gap-1.5">

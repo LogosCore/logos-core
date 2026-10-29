@@ -86,7 +86,12 @@ export function EndpointsTable({
               <ModuleIconCell
                 type="channel"
                 icon={kinds.get(ep.moduleName)?.icon}
-                title={<span className="truncate font-mono font-medium">{ep.name}</span>}
+                title={
+                  <>
+                    <span className="truncate font-medium">{ep.name}</span>
+                    <span className="truncate font-mono text-xs text-muted-foreground">&nbsp;· {ep.slug}</span>
+                  </>
+                }
                 subtitle={ep.description}
                 subtitleTitle={ep.description ?? undefined}
               />
@@ -207,7 +212,7 @@ async function exportEndpoint(ep: Endpoint, mode: "copy" | "download") {
     const url = URL.createObjectURL(new Blob([json], { type: "application/json" }))
     const a = document.createElement("a")
     a.href = url
-    a.download = exportFileName(ep.name)
+    a.download = exportFileName(ep.slug)
     a.click()
     URL.revokeObjectURL(url)
     return

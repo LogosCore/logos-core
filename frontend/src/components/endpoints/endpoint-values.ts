@@ -54,26 +54,56 @@ export function kindsByName(
   return out
 }
 
-/** Endpoint names: unique slugs. Mirrors the server's rule. */
-export const ENDPOINT_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
+/**
+ * Slugs: an endpoint's identifier and a build connection's name, the plain
+ * text a build, an export and a file name carry. Mirrors the server's rule.
+ */
+export const SLUG_PATTERN = /^[a-z0-9][a-z0-9._-]{0,62}$/
 
-/** The longest endpoint name ENDPOINT_NAME_PATTERN allows. */
-const MAX_NAME_LENGTH = 63
+/** The longest slug SLUG_PATTERN allows. */
+const MAX_SLUG_LENGTH = 63
+
+/** The longest endpoint name core takes (channelendpoints.MaxNameLength), in characters: any text. */
+export const MAX_ENDPOINT_NAME_LENGTH = 120
 
 /** The longest description core takes (channelendpoints.MaxDescriptionLength), in characters. */
 export const MAX_DESCRIPTION_LENGTH = 500
 
 /**
- * The first free name of name+tag, name+tag-2, -3…, the base shortened to
- * stay within the name length. tag is "" or starts with "-".
+ * The first free slug of slug+tag, slug+tag-2, -3…, the base shortened to
+ * stay within the slug length. tag is "" or starts with "-".
  */
-export function freeName(name: string, taken: Iterable<string>, tag: string): string {
+export function freeSlug(slug: string, taken: Iterable<string>, tag: string): string {
   const used = new Set(taken)
   for (let n = 1; ; n++) {
     const suffix = n === 1 ? tag : `${tag}-${n}`
-    const candidate = name.slice(0, MAX_NAME_LENGTH - suffix.length) + suffix
+    const candidate = slug.slice(0, MAX_SLUG_LENGTH - suffix.length) + suffix
     if (!used.has(candidate)) return candidate
   }
+}
+
+/**
+ * Any text made a slug, as the server makes one from an endpoint's name
+ * (channelendpoints.Slugify): lowercased, each run of other characters one
+ * "-", at most 63 long, "endpoint" when nothing is left. "Edge EU (CDN)" is
+ * "edge-eu-cdn".
+ */
+export function slugify(text: string): string {
+  let out = ""
+  let dash = false
+  for (const ch of text.toLowerCase()) {
+    if (/[a-z0-9._-]/.test(ch)) {
+      if (ch === "-" && (dash || out === "")) continue
+      if (out === "" && (ch === "." || ch === "_")) continue
+      out += ch
+      dash = ch === "-"
+    } else if (out !== "" && !dash) {
+      out += "-"
+      dash = true
+    }
+  }
+  out = out.slice(0, MAX_SLUG_LENGTH).replace(/-+$/, "")
+  return out || "endpoint"
 }
 
 /** The export format of an endpoint (Copy / Download as JSON), as imports take it. */
@@ -147,26 +177,29 @@ export function parseEndpointImport(
   if (unknown.length > 0) {
     notes.push(`Left out, not settings of ${moduleName} v${kind.version}: ${unknown.sort().join(", ")}.`)
   }
-  const name = typeof doc.name === "string" ? slug(doc.name) : ""
+  // An export names the endpoint by its slug: the name to start from.
+  const name = typeof doc.name === "string" ? doc.name.trim().slice(0, MAX_ENDPOINT_NAME_LENGTH) : ""
   return { ok: true, value: { kind, name: name || "imported", values, notes } }
-}
-
-/** name as an endpoint name: lowercase, other characters as "-". */
-function slug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^[^a-z0-9]+/, "")
-    .slice(0, MAX_NAME_LENGTH)
 }
 
 // Generic JSON helpers, kept importable from here for the code that always did.
 export { isRecord, sameJSON } from "@/lib/json-edit"
 
-export function nameError(name: string): string | null {
+/** An endpoint's name: any text, at most MAX_ENDPOINT_NAME_LENGTH characters, on one line. */
+export function endpointNameError(name: string): string | null {
   const n = name.trim()
   if (n === "") return "Required"
-  if (!ENDPOINT_NAME_PATTERN.test(n)) {
+  if ([...n].length > MAX_ENDPOINT_NAME_LENGTH) return `At most ${MAX_ENDPOINT_NAME_LENGTH} characters`
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(n)) return "One line: no line breaks or tabs"
+  return null
+}
+
+/** A slug (an endpoint's, a connection's name): see SLUG_PATTERN. */
+export function slugError(slug: string): string | null {
+  const s = slug.trim()
+  if (s === "") return "Required"
+  if (!SLUG_PATTERN.test(s)) {
     return "Lowercase letters, digits, '.', '_' or '-', starting with a letter or digit (at most 63)"
   }
   return null
@@ -235,9 +268,9 @@ export function problemsFromError(err: unknown): Record<string, string> {
   return out
 }
 
-/** File name for a downloaded endpoint. */
-export function exportFileName(name: string): string {
-  return `${name}.endpoint.json`
+/** File name for a downloaded endpoint, by its slug. */
+export function exportFileName(slug: string): string {
+  return `${slug}.endpoint.json`
 }
 
 /** One set value of an endpoint, as the list shows it. */

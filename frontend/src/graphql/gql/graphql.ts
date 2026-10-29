@@ -268,6 +268,7 @@ export type ChannelEndpoint = {
   revision: Scalars['Int']['output'];
   schemaChanged: Scalars['Boolean']['output'];
   schemaVersion: Scalars['Int']['output'];
+  slug: Scalars['String']['output'];
   updatedAt: Scalars['String']['output'];
   updatedBy: ModuleActor;
   values: Scalars['JSON']['output'];
@@ -287,6 +288,7 @@ export type ChannelEndpointEdge = {
 export type ChannelEndpointInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
+  slug?: InputMaybe<Scalars['String']['input']>;
   values: Scalars['JSON']['input'];
 };
 
@@ -1503,7 +1505,7 @@ export type Query = {
   credentialTags: Array<Scalars['String']['output']>;
   credentials: CredentialConnection;
   factoryKinds: Array<FactoryKind>;
-  freeChannelEndpointName: Scalars['String']['output'];
+  freeChannelEndpointSlug: Scalars['String']['output'];
   hash: Hash;
   hashTags: Array<Scalars['String']['output']>;
   hashes: HashConnection;
@@ -1638,10 +1640,10 @@ export type QueryCredentialsArgs = {
 };
 
 
-export type QueryFreeChannelEndpointNameArgs = {
-  name: Scalars['String']['input'];
+export type QueryFreeChannelEndpointSlugArgs = {
   operationId: Scalars['ID']['input'];
   tag?: InputMaybe<Scalars['String']['input']>;
+  text: Scalars['String']['input'];
 };
 
 
@@ -2818,7 +2820,7 @@ export type DeleteBuildArtifactMutationVariables = Exact<{
 
 export type DeleteBuildArtifactMutation = { deleteBuildArtifact: { id: string, operationId: string, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
-export type ChannelEndpointFieldsFragment = { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
+export type ChannelEndpointFieldsFragment = { id: string, operationId: string, name: string, slug: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } };
 
 export type ChannelKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -2834,23 +2836,14 @@ export type ChannelEndpointsQueryVariables = Exact<{
 }>;
 
 
-export type ChannelEndpointsQuery = { channelEndpoints: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
-
-export type FreeChannelEndpointNameQueryVariables = Exact<{
-  operationId: Scalars['ID']['input'];
-  name: Scalars['String']['input'];
-  tag?: InputMaybe<Scalars['String']['input']>;
-}>;
-
-
-export type FreeChannelEndpointNameQuery = { freeChannelEndpointName: string };
+export type ChannelEndpointsQuery = { channelEndpoints: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, slug: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type ChannelEndpointQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type ChannelEndpointQuery = { channelEndpoint?: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } | null };
+export type ChannelEndpointQuery = { channelEndpoint?: { id: string, operationId: string, name: string, slug: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } | null };
 
 export type ChannelEndpointExportQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2866,7 +2859,7 @@ export type CreateChannelEndpointMutationVariables = Exact<{
 }>;
 
 
-export type CreateChannelEndpointMutation = { createChannelEndpoint: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
+export type CreateChannelEndpointMutation = { createChannelEndpoint: { id: string, operationId: string, name: string, slug: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
 
 export type UpdateChannelEndpointMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -2875,7 +2868,7 @@ export type UpdateChannelEndpointMutationVariables = Exact<{
 }>;
 
 
-export type UpdateChannelEndpointMutation = { updateChannelEndpoint: { id: string, operationId: string, name: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
+export type UpdateChannelEndpointMutation = { updateChannelEndpoint: { id: string, operationId: string, name: string, slug: string, description?: string | null, moduleName: string, schemaVersion: number, schemaChanged: boolean, values: unknown, revision: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, updatedBy: { type: string, id: string, name?: string | null } } };
 
 export type DeleteChannelEndpointMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4239,6 +4232,7 @@ export const ChannelEndpointFieldsFragmentDoc = new TypedDocumentString(`
   id
   operationId
   name
+  slug
   description
   moduleName
   schemaVersion
@@ -5748,6 +5742,7 @@ export const ChannelEndpointsDocument = new TypedDocumentString(`
   id
   operationId
   name
+  slug
   description
   moduleName
   schemaVersion
@@ -5766,11 +5761,6 @@ export const ChannelEndpointsDocument = new TypedDocumentString(`
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<ChannelEndpointsQuery, ChannelEndpointsQueryVariables>;
-export const FreeChannelEndpointNameDocument = new TypedDocumentString(`
-    query FreeChannelEndpointName($operationId: ID!, $name: String!, $tag: String) {
-  freeChannelEndpointName(operationId: $operationId, name: $name, tag: $tag)
-}
-    `) as unknown as TypedDocumentString<FreeChannelEndpointNameQuery, FreeChannelEndpointNameQueryVariables>;
 export const ChannelEndpointDocument = new TypedDocumentString(`
     query ChannelEndpoint($id: ID!) {
   channelEndpoint(id: $id) {
@@ -5781,6 +5771,7 @@ export const ChannelEndpointDocument = new TypedDocumentString(`
   id
   operationId
   name
+  slug
   description
   moduleName
   schemaVersion
@@ -5818,6 +5809,7 @@ export const CreateChannelEndpointDocument = new TypedDocumentString(`
   id
   operationId
   name
+  slug
   description
   moduleName
   schemaVersion
@@ -5850,6 +5842,7 @@ export const UpdateChannelEndpointDocument = new TypedDocumentString(`
   id
   operationId
   name
+  slug
   description
   moduleName
   schemaVersion

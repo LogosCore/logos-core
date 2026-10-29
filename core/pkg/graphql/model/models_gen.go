@@ -213,6 +213,7 @@ type ChannelEndpoint struct {
 	ID            string                    `json:"id"`
 	OperationID   string                    `json:"operationId"`
 	Name          string                    `json:"name"`
+	Slug          string                    `json:"slug"`
 	Description   *string                   `json:"description,omitempty"`
 	ModuleName    string                    `json:"moduleName"`
 	SchemaVersion int                       `json:"schemaVersion"`
@@ -239,6 +240,7 @@ type ChannelEndpointEdge struct {
 
 type ChannelEndpointInput struct {
 	Name        string  `json:"name"`
+	Slug        *string `json:"slug,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Values      any     `json:"values"`
 }

@@ -42,9 +42,9 @@ func (r *queryResolver) ChannelEndpoints(ctx context.Context, operationID string
 	return r.ChannelEndpointResolver.ChannelEndpoints(ctx, operationID, search, moduleNames, first, after, last, before)
 }
 
-// FreeChannelEndpointName is the resolver for the freeChannelEndpointName field.
-func (r *queryResolver) FreeChannelEndpointName(ctx context.Context, operationID string, name string, tag *string) (string, error) {
-	return r.ChannelEndpointResolver.FreeChannelEndpointName(ctx, operationID, name, tag)
+// FreeChannelEndpointSlug is the resolver for the freeChannelEndpointSlug field.
+func (r *queryResolver) FreeChannelEndpointSlug(ctx context.Context, operationID string, text string, tag *string) (string, error) {
+	return r.ChannelEndpointResolver.FreeChannelEndpointSlug(ctx, operationID, text, tag)
 }
 
 // ChannelEndpoint is the resolver for the channelEndpoint field.

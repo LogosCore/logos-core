@@ -17,9 +17,9 @@ import {
 } from "@/components/modules/management/field-values"
 import {
   evaluateEndpoint,
-  freeName,
+  freeSlug,
   isRecord,
-  nameError,
+  slugError,
   sameJSON,
   settingRows,
   type Kind,
@@ -327,19 +327,19 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
 
 /**
  * The connection with its settings replaced by an endpoint's values. It takes
- * the endpoint's name and description too, unless the operator wrote their
- * own: the name as the first of name, name-2, -3… no other connection is
- * called (taken).
+ * the endpoint's slug and description too, unless the operator wrote their
+ * own: the connection named the first of slug, slug-2, -3… no other
+ * connection is called (taken).
  */
 export function fillFromEndpoint(
   c: ConnectionDraft,
   ch: ChannelKind,
-  ep: { name: string; description?: string | null; values?: unknown },
+  ep: { name: string; slug: string; description?: string | null; values?: unknown },
   taken: Iterable<string> = [],
 ): ConnectionDraft {
   return {
     ...c,
-    name: c.named ? c.name : freeName(ep.name, taken, ""),
+    name: c.named ? c.name : freeSlug(ep.slug, taken, ""),
     description: c.described ? c.description : (ep.description ?? ""),
     filledFrom: ep.name,
     settings: draftsFor(ch.fields, isRecord(ep.values) ? ep.values : null),
@@ -608,7 +608,7 @@ export function checkBuild(
     if (why) errors[at] = why
     const name = c.name.trim()
     const resolved = name || defaultConnectionName(c.moduleName, i)
-    const nameErr = name === "" ? null : nameError(name)
+    const nameErr = name === "" ? null : slugError(name)
     if (nameErr) errors[`${at}.name`] = nameErr
     else if (named.has(resolved)) errors[`${at}.name`] = `Connection ${named.get(resolved)! + 1} is called ${resolved} too`
     else named.set(resolved, i)

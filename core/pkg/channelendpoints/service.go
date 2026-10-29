@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -37,11 +38,53 @@ const ExportFormat = "logos.channel-endpoint.v1"
 // MaxDescriptionLength bounds an endpoint's description.
 const MaxDescriptionLength = 500
 
-// namePattern: endpoints are picked by name, so it is a plain slug of at
-// most maxNameLength characters.
-var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
+// MaxNameLength bounds an endpoint's name: any text, in characters.
+const MaxNameLength = 120
 
-const maxNameLength = 63
+// slugPattern is an endpoint's slug: a plain identifier, safe in a build's
+// connection, an export and a file name.
+var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
+
+const maxSlugLength = 63
+
+// fallbackSlug is the slug of a name with nothing a slug can keep.
+const fallbackSlug = "endpoint"
+
+// Slugify makes a slug of any text: lowercased, every run of characters a
+// slug cannot hold one '-', at most maxSlugLength long, and fallbackSlug
+// when nothing is left. "Edge EU (CDN)" is "edge-eu-cdn", "localhost:8090"
+// "localhost-8090".
+func Slugify(text string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(text) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+			if r == '-' && (dash || b.Len() == 0) {
+				continue
+			}
+			if b.Len() == 0 && (r == '.' || r == '_') {
+				continue
+			}
+			b.WriteRune(r)
+			dash = r == '-'
+		default:
+			if b.Len() > 0 && !dash {
+				b.WriteByte('-')
+				dash = true
+			}
+		}
+	}
+	slug := b.String()
+	if len(slug) > maxSlugLength {
+		slug = slug[:maxSlugLength]
+	}
+	slug = strings.TrimRight(slug, "-")
+	if slug == "" {
+		return fallbackSlug
+	}
+	return slug
+}
 
 // ErrNotFound is mapped to a client error by the GraphQL layer.
 var ErrNotFound = errors.New("channel endpoint not found")
@@ -112,7 +155,10 @@ func (v View) SchemaChanged() bool {
 
 // Input is what an operator submits for an endpoint.
 type Input struct {
-	Name        string
+	Name string
+	// Slug is the endpoint's identifier; empty makes one from Name on
+	// create, and keeps the stored one on update.
+	Slug        string
 	Description string
 	// Values by schema field key, replacing the stored ones. Null, "" and []
 	// leave a field unset (its default applies).
@@ -184,31 +230,31 @@ func (s *Service) Count(ctx context.Context, operationID uuid.UUID, filter repos
 	return n, nil
 }
 
-// maxFreeNameTries bounds FreeName's search for a free suffix.
-const maxFreeNameTries = 1000
+// maxFreeSlugTries bounds FreeSlug's search for a free suffix.
+const maxFreeSlugTries = 1000
 
-// FreeName is the first of name+tag, name+tag-2, -3… that no endpoint of the
-// operation is called, the base shortened to fit a name: what the forms
-// suggest for a copy, an import, or a connection saved as an endpoint. tag
-// is "" or starts with "-".
-func (s *Service) FreeName(ctx context.Context, operationID uuid.UUID, name, tag string) (string, error) {
-	base := []rune(strings.TrimSpace(name))
-	for n := 1; n <= maxFreeNameTries; n++ {
+// FreeSlug is the first of slug+tag, slug+tag-2, -3… that no endpoint of the
+// operation has, where slug is Slugify(text), shortened to fit: what the
+// forms suggest for a new endpoint, a copy, an import, or a connection saved
+// as an endpoint. tag is "" or starts with "-".
+func (s *Service) FreeSlug(ctx context.Context, operationID uuid.UUID, text, tag string) (string, error) {
+	base := Slugify(text)
+	for n := 1; n <= maxFreeSlugTries; n++ {
 		suffix := tag
 		if n > 1 {
 			suffix = fmt.Sprintf("%s-%d", tag, n)
 		}
-		room := max(0, maxNameLength-utf8.RuneCountInString(suffix))
-		candidate := string(base[:min(len(base), room)]) + suffix
-		taken, err := s.repo.NameTaken(ctx, operationID, candidate)
+		room := max(0, maxSlugLength-len(suffix))
+		candidate := strings.TrimRight(base[:min(len(base), room)], "-") + suffix
+		taken, err := s.repo.SlugTaken(ctx, operationID, candidate)
 		if err != nil {
-			return "", fmt.Errorf("check endpoint name: %w", err)
+			return "", fmt.Errorf("check endpoint slug: %w", err)
 		}
 		if !taken {
 			return candidate, nil
 		}
 	}
-	return "", invalid("no free name like %q", name)
+	return "", invalid("no free slug like %q", base)
 }
 
 // Get returns one endpoint.
@@ -235,23 +281,28 @@ func (s *Service) Create(ctx context.Context, operationID uuid.UUID, moduleName 
 	if err != nil {
 		return View{}, err
 	}
+	slug, err := s.slugFor(ctx, operationID, in.Slug, name)
+	if err != nil {
+		return View{}, err
+	}
 	values, err := checkValues(*schema, in.Values)
 	if err != nil {
 		return View{}, err
 	}
 	now := s.now()
 	ep := &models.ChannelEndpoint{
-		OperationID: operationID, Name: name, Description: desc, ModuleName: moduleName,
+		OperationID: operationID, Name: name, Slug: slug, Description: desc, ModuleName: moduleName,
 		SchemaVersion: schema.Version, Values: values,
 		CreatedBy: in.Actor, UpdatedBy: in.Actor, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repo.Insert(ctx, ep); err != nil {
-		return View{}, s.writeErr(err, name)
+		return View{}, s.writeErr(err, slug)
 	}
 	return view(*ep, schema), nil
 }
 
-// Update replaces an endpoint's name, description and values. expectedRevision
+// Update replaces an endpoint's name, description and values, and its slug
+// when Input.Slug is set. expectedRevision
 // is the revision the caller read; a mismatch is a ConflictError.
 func (s *Service) Update(ctx context.Context, id string, expectedRevision int64, in Input) (View, error) {
 	ep, err := s.find(ctx, id)
@@ -269,14 +320,20 @@ func (s *Service) Update(ctx context.Context, id string, expectedRevision int64,
 	if err != nil {
 		return View{}, err
 	}
+	slug := ep.Slug
+	if strings.TrimSpace(in.Slug) != "" || slug == "" {
+		if slug, err = s.slugFor(ctx, ep.OperationID, in.Slug, name); err != nil {
+			return View{}, err
+		}
+	}
 	values, err := checkValues(*schema, in.Values)
 	if err != nil {
 		return View{}, err
 	}
-	ep.Name, ep.Description, ep.Values, ep.SchemaVersion = name, desc, values, schema.Version
+	ep.Name, ep.Slug, ep.Description, ep.Values, ep.SchemaVersion = name, slug, desc, values, schema.Version
 	ep.UpdatedBy, ep.UpdatedAt = in.Actor, s.now()
 	if err := s.repo.Update(ctx, ep); err != nil {
-		return View{}, s.writeErr(err, name)
+		return View{}, s.writeErr(err, slug)
 	}
 	return view(*ep, schema), nil
 }
@@ -310,7 +367,7 @@ func (s *Service) Export(ctx context.Context, id string) (map[string]any, error)
 	}
 	return map[string]any{
 		"format": ExportFormat,
-		"name":   v.Name,
+		"name":   v.Slug,
 		"channel": map[string]any{
 			"module_name":    v.ModuleName,
 			"schema_version": v.Schema.Version,
@@ -357,10 +414,22 @@ func (s *Service) find(ctx context.Context, id string) (*models.ChannelEndpoint,
 	return ep, nil
 }
 
-func (s *Service) writeErr(err error, name string) error {
+// slugFor is the slug an endpoint is saved with: the one given, checked, or
+// a free one made from name.
+func (s *Service) slugFor(ctx context.Context, operationID uuid.UUID, given, name string) (string, error) {
+	if given = strings.TrimSpace(given); given != "" {
+		if !slugPattern.MatchString(given) {
+			return "", invalid("slug must be 1-63 lowercase letters, digits, '.', '_' or '-', starting with a letter or digit")
+		}
+		return given, nil
+	}
+	return s.FreeSlug(ctx, operationID, name, "")
+}
+
+func (s *Service) writeErr(err error, slug string) error {
 	switch {
-	case errors.Is(err, repository.ErrChannelEndpointNameTaken):
-		return invalid("this operation already has an endpoint named %q", name)
+	case errors.Is(err, repository.ErrChannelEndpointSlugTaken):
+		return invalid("this operation already has an endpoint with the slug %q", slug)
 	case errors.Is(err, repository.ErrChannelEndpointConflict):
 		return &ConflictError{}
 	}
@@ -370,8 +439,13 @@ func (s *Service) writeErr(err error, name string) error {
 func checkMeta(in Input) (name, desc string, err error) {
 	name = strings.TrimSpace(in.Name)
 	desc = strings.TrimSpace(in.Description)
-	if !namePattern.MatchString(name) {
-		return "", "", invalid("name must be 1-63 lowercase letters, digits, '.', '_' or '-', starting with a letter or digit")
+	switch {
+	case name == "":
+		return "", "", invalid("a name is required")
+	case utf8.RuneCountInString(name) > MaxNameLength:
+		return "", "", invalid("name longer than %d characters", MaxNameLength)
+	case strings.IndexFunc(name, unicode.IsControl) >= 0:
+		return "", "", invalid("name has a control character (a line break, a tab…)")
 	}
 	if utf8.RuneCountInString(desc) > MaxDescriptionLength {
 		return "", "", invalid("description longer than %d characters", MaxDescriptionLength)

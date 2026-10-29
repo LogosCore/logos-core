@@ -5,7 +5,6 @@ import {
   ChannelKindsDocument,
   ChannelEndpointsDocument,
   ChannelEndpointDocument,
-  FreeChannelEndpointNameDocument,
   ChannelEndpointExportDocument,
   CreateChannelEndpointDocument,
   UpdateChannelEndpointDocument,
@@ -21,8 +20,6 @@ export const channelEndpointKeys = {
   infiniteList: (params: EndpointListParams) => [...channelEndpointKeys.list(params.operationId), params] as const,
   count: (operationId: string, moduleNames: readonly string[]) =>
     [...channelEndpointKeys.list(operationId), "count", moduleNames] as const,
-  freeName: (operationId: string, name: string, tag: string) =>
-    [...channelEndpointKeys.list(operationId), "free-name", name, tag] as const,
   detail: (id: string) => [...channelEndpointKeys.all, "detail", id] as const,
   kinds: () => [...channelEndpointKeys.all, "kinds"] as const,
 }
@@ -76,22 +73,6 @@ export function useChannelEndpointCount(operationId: string, moduleNames: readon
     enabled: operationId !== "" && moduleNames.length > 0,
   })
   return query.data?.channelEndpoints.totalCount ?? null
-}
-
-/**
- * The name to suggest for a new endpoint like name: the first of name+tag,
- * name+tag-2, -3… the operation has no endpoint called (the server's
- * freeChannelEndpointName). Null until known; enabled=false skips it.
- */
-export function useFreeChannelEndpointName(operationId: string, name: string, tag: string, enabled = true) {
-  const query = useQuery({
-    queryKey: channelEndpointKeys.freeName(operationId, name, tag),
-    queryFn: () => graphqlClient(FreeChannelEndpointNameDocument, { operationId, name, tag }),
-    enabled: enabled && operationId !== "",
-    // A suggestion, read once: it is checked again when the endpoint is saved.
-    staleTime: Infinity,
-  })
-  return query.data?.freeChannelEndpointName ?? null
 }
 
 /** One endpoint (the editor). */

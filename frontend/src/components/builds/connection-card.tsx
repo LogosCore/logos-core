@@ -16,6 +16,7 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 export interface EndpointOption {
   id: string
   name: string
+  slug: string
   description?: string | null
   moduleName: string
   values?: unknown

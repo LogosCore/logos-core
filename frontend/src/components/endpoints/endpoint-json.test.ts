@@ -36,10 +36,11 @@ const doc = (over: Record<string, unknown> = {}) =>
 
 describe("endpointJson", () => {
   it("lists every setting with the value it uses, its default where none is set, in the export's shape", () => {
-    const text = endpointJson(kind, { name: "edge", description: "CDN", values: { base_url: "https://a.example.com", retries: 3 } })
+    const text = endpointJson(kind, { name: "Edge", slug: "edge", description: "CDN", values: { base_url: "https://a.example.com", retries: 3 } })
     expect(JSON.parse(text)).toEqual({
       format: ENDPOINT_EXPORT_FORMAT,
-      name: "edge",
+      name: "Edge",
+      slug: "edge",
       description: "CDN",
       channel: { module_name: "http", schema_version: 2 },
       params: { base_url: "https://a.example.com", tls_verify: false, retries: 3, mode: "" },
@@ -51,8 +52,8 @@ describe("endpointJson", () => {
 describe("readEndpointJson", () => {
   it("reads what it wrote back", () => {
     const values = { base_url: "https://a.example.com", tls_verify: true, mode: "safe" }
-    const read = readEndpointJson(endpointJson(kind, { name: "edge", description: "CDN", values }), kind)
-    expect(read).toEqual({ ok: true, doc: { name: "edge", description: "CDN", values }, problems: [] })
+    const read = readEndpointJson(endpointJson(kind, { name: "Edge (EU)", slug: "edge", description: "CDN", values }), kind)
+    expect(read).toEqual({ ok: true, doc: { name: "Edge (EU)", slug: "edge", description: "CDN", values }, problems: [] })
   })
 
   it("is not an endpoint when it is not a JSON object", () => {
@@ -62,12 +63,12 @@ describe("readEndpointJson", () => {
 
   it("marks what the form would, by place", () => {
     const read = readEndpointJson(
-      doc({ name: "Not A Slug", params: { base_url: "nope", tls_verify: "yes", retries: 9, mode: "slow" } }),
+      doc({ name: "Any Name Will Do", slug: "Not A Slug", params: { base_url: "nope", tls_verify: "yes", retries: 9, mode: "slow" } }),
       kind,
     )
     if (!read.ok) throw new Error(read.message)
     expect(Object.fromEntries(read.problems.map((p) => [p.path, p.message]))).toEqual({
-      "/name": expect.any(String),
+      "/slug": expect.any(String),
       "/params/base_url": "Must be a valid URL",
       "/params/tls_verify": "Must be true or false",
       "/params/retries": "Must be at most 5",
@@ -130,7 +131,7 @@ describe("empty lists and maps", () => {
   }
 
   it("shows one with no default as empty when not set, one with a default as its default", () => {
-    const params = JSON.parse(endpointJson(withLists, { name: "e", description: "", values: {} })).params
+    const params = JSON.parse(endpointJson(withLists, { name: "e", slug: "", description: "", values: {} })).params
     expect(params.extra).toEqual([])
     expect(params.headers).toEqual({})
     expect(params.tags).toEqual(["a"])

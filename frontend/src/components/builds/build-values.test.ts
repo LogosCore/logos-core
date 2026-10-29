@@ -328,14 +328,15 @@ describe("the build form", () => {
 })
 
 describe("fillFromEndpoint", () => {
-  const eu = { name: "eu", values: { base_url: "https://eu.example.com", request_timeout: "10s", gone: true } }
-  const us = { name: "us", values: { base_url: "https://us.example.com" } }
+  const eu = { name: "EU front", slug: "eu", values: { base_url: "https://eu.example.com", request_timeout: "10s", gone: true } }
+  const us = { name: "US front", slug: "us", values: { base_url: "https://us.example.com" } }
 
-  it("copies the endpoint's settings and name, until the operator names the connection", () => {
+  it("names the connection after the endpoint's slug, until the operator names it, and copies its settings", () => {
     const c = fillFromEndpoint(connection("http", { settings: { token: "typed" } }), http, eu)
     expect(c.name).toBe("eu")
     expect(c.named).toBe(false)
-    expect(c.filledFrom).toBe("eu")
+    // What the card says it was filled from: the endpoint's name, any text.
+    expect(c.filledFrom).toBe("EU front")
     expect(c.settings).toEqual({
       base_url: { kind: "text", text: "https://eu.example.com" },
       request_timeout: { kind: "text", text: "10s" },
