@@ -87,8 +87,8 @@ export function BuildOverview({
           <LabelRow label="Platform">
             {platformLabel(b.platform)} <span className="font-mono text-muted-foreground">· {b.platform}</span>
           </LabelRow>
-          <LabelRow label="Minion id">
-            <Copyable text={b.id} what="Minion id" />
+          <LabelRow label="Build id">
+            <Copyable text={b.id} what="Build id" />
           </LabelRow>
           <LabelRow label="Started">
             {formatAbsolute(b.createdAt)}

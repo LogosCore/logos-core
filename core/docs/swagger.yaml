@@ -375,9 +375,9 @@ paths:
         name: Logos-Message-Id
         required: true
         type: string
-      - description: The minion's id, a lowercase UUID
+      - description: The build id, a lowercase UUID
         in: header
-        name: Logos-Minion-Id
+        name: Logos-Build-Id
         required: true
         type: string
       - description: The sending channel's registered instance id

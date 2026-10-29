@@ -238,7 +238,7 @@ func (r *buildResolver) Minions(ctx context.Context, operationID string) ([]*mod
 	out := make([]*model.Minion, len(ms))
 	for i, m := range ms {
 		out[i] = &model.Minion{
-			ID: m.MinionID.String(), OperationID: m.OperationID.String(), ModuleName: m.ModuleName,
+			ID: m.BuildID.String(), OperationID: m.OperationID.String(), ModuleName: m.ModuleName,
 			Target: m.Target, Platform: m.Platform, Commands: orEmpty(m.Commands),
 			CreatedBy: toActorModel(m.CreatedBy), CreatedAt: m.CreatedAt.Format(time.RFC3339),
 		}
@@ -353,7 +353,7 @@ func toBuildFileModel(f *models.BuildFile) *model.BuildFile {
 
 func toBuildModel(b *models.Build) *model.Build {
 	out := &model.Build{
-		ID: b.MinionID.String(), OperationID: b.OperationID.String(), Description: b.Description, ModuleName: b.ModuleName, Target: b.Target,
+		ID: b.BuildID.String(), OperationID: b.OperationID.String(), Description: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, SchemaVersion: b.SchemaVersion, Values: copyMap(b.Values),
 		Connections: b.Connections.Items, State: b.State,
 		Instance: strPtr(b.Instance), FactoryVersion: strPtr(b.FactoryVersion),

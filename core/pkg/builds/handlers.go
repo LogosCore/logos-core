@@ -26,15 +26,15 @@ func (s *Service) HandleProgress(ctx context.Context, req messaging.Envelope) (a
 	if err := p.Validate(); err != nil {
 		return nil, rpcErr(protocol.CodeValidationFailed, err.Error())
 	}
-	// Validate checked the minion id is a UUIDv4.
-	ok, err := s.repos.Builds.ReportStep(ctx, uuid.MustParse(p.MinionID), req.Source.Instance, p.Step, p.Message, s.now())
+	// Validate checked the build id is a UUIDv4.
+	ok, err := s.repos.Builds.ReportStep(ctx, uuid.MustParse(p.BuildID), req.Source.Instance, p.Step, p.Message, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record progress: %w", err)
 	}
 	if !ok {
-		return nil, notWaiting(p.MinionID, req.Source.Instance)
+		return nil, notWaiting(p.BuildID, req.Source.Instance)
 	}
-	return protocol.BuildProgressReply{MinionID: p.MinionID, Ack: true}, nil
+	return protocol.BuildProgressReply{BuildID: p.BuildID, Ack: true}, nil
 }
 
 // HandleResult serves factory.build.result. A failed result finishes the
@@ -50,17 +50,17 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		return nil, rpcErr(protocol.CodeValidationFailed, err.Error())
 	}
 	instance := req.Source.Instance
-	b, err := s.repos.Builds.FindByMinionID(ctx, uuid.MustParse(r.MinionID)) // checked by Validate
+	b, err := s.repos.Builds.FindByBuildID(ctx, uuid.MustParse(r.BuildID)) // checked by Validate
 	if repository.IsNotFound(err) {
-		return nil, notWaiting(r.MinionID, instance)
+		return nil, notWaiting(r.BuildID, instance)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("load build: %w", err)
 	}
 	if b.Instance != instance {
-		return nil, notWaiting(r.MinionID, instance)
+		return nil, notWaiting(r.BuildID, instance)
 	}
-	recorded := protocol.BuildResultReply{MinionID: r.MinionID, Recorded: true}
+	recorded := protocol.BuildResultReply{BuildID: r.BuildID, Recorded: true}
 
 	if b.State != models.BuildStateBuilding {
 		// The same result again (the reply was lost) is answered the same
@@ -68,11 +68,11 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		if resultRecorded(b) {
 			return recorded, nil
 		}
-		return nil, notWaiting(r.MinionID, instance)
+		return nil, notWaiting(r.BuildID, instance)
 	}
 
 	if r.Status == protocol.BuildFailed {
-		ok, err := s.repos.Builds.Finish(ctx, b.MinionID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
+		ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
 			State: models.BuildStateFailed, Error: &models.BuildError{Code: r.Error.Code, Message: r.Error.Message},
 			Warnings: r.Warnings, Log: r.Log, At: s.now(),
 		})
@@ -80,9 +80,9 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 			return nil, fmt.Errorf("record a failed build: %w", err)
 		}
 		if !ok {
-			return nil, notWaiting(r.MinionID, instance)
+			return nil, notWaiting(r.BuildID, instance)
 		}
-		s.logger.Info("build failed", zap.String("minion_id", r.MinionID), zap.String("code", r.Error.Code), zap.String("reason", r.Error.Message))
+		s.logger.Info("build failed", zap.String("build_id", r.BuildID), zap.String("code", r.Error.Code), zap.String("reason", r.Error.Message))
 		return recorded, nil
 	}
 
@@ -93,10 +93,10 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 		limit = s.cfg.ArtifactMaxSize // offered before core kept the limit
 	}
 	if r.Artifact.Size > limit {
-		if err := s.store.Delete(ctx, artifactKey(b.OperationID, b.MinionID)); err != nil {
-			s.logger.Warn("delete an artifact over its limit", zap.String("minion_id", r.MinionID), zap.Error(err))
+		if err := s.store.Delete(ctx, artifactKey(b.OperationID, b.BuildID)); err != nil {
+			s.logger.Warn("delete an artifact over its limit", zap.String("build_id", r.BuildID), zap.Error(err))
 		}
-		ok, err := s.repos.Builds.Finish(ctx, b.MinionID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
+		ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{models.BuildStateBuilding}, repository.BuildOutcome{
 			State: models.BuildStateFailed, Error: &models.BuildError{Code: models.BuildErrorArtifactTooLarge, Message: fmt.Sprintf(
 				"the factory reported a %d-byte artifact; it was given a limit of %d bytes", r.Artifact.Size, limit)},
 			Warnings: r.Warnings, Log: r.Log, At: s.now(),
@@ -105,24 +105,24 @@ func (s *Service) HandleResult(ctx context.Context, req messaging.Envelope) (any
 			return nil, fmt.Errorf("record a build over its artifact limit: %w", err)
 		}
 		if !ok {
-			return nil, notWaiting(r.MinionID, instance)
+			return nil, notWaiting(r.BuildID, instance)
 		}
-		s.logger.Info("build failed", zap.String("minion_id", r.MinionID), zap.String("code", models.BuildErrorArtifactTooLarge))
+		s.logger.Info("build failed", zap.String("build_id", r.BuildID), zap.String("code", models.BuildErrorArtifactTooLarge))
 		return recorded, nil
 	}
 
 	art := models.BuildArtifact{
 		Filename: r.Artifact.Filename, Size: r.Artifact.Size, SHA256: r.Artifact.SHA256,
-		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.MinionID),
+		MediaType: r.Artifact.MediaType, ObjectKey: artifactKey(b.OperationID, b.BuildID),
 	}
-	ok, err := s.repos.Builds.RecordResult(ctx, b.MinionID, instance, art, r.Warnings, r.Log, s.now())
+	ok, err := s.repos.Builds.RecordResult(ctx, b.BuildID, instance, art, r.Warnings, r.Log, s.now())
 	if err != nil {
 		return nil, fmt.Errorf("record a build result: %w", err)
 	}
 	if !ok && !b.ResultReceived {
-		return nil, notWaiting(r.MinionID, instance)
+		return nil, notWaiting(r.BuildID, instance)
 	}
-	s.verifyAsync(b.MinionID)
+	s.verifyAsync(b.BuildID)
 	return recorded, nil
 }
 
@@ -150,6 +150,6 @@ func resultRecorded(b *models.Build) bool {
 
 func rpcErr(code, msg string) error { return &messaging.RPCError{Code: code, Message: msg} }
 
-func notWaiting(minionID, instance string) error {
-	return rpcErr(protocol.CodeNotFound, fmt.Sprintf("core does not wait for build %s from %s", minionID, instance))
+func notWaiting(buildID, instance string) error {
+	return rpcErr(protocol.CodeNotFound, fmt.Sprintf("core does not wait for build %s from %s", buildID, instance))
 }

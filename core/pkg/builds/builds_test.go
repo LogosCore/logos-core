@@ -149,7 +149,7 @@ func (r *rig) started(t *testing.T) *models.Build {
 	t.Helper()
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	return r.get(t, b.MinionID.String(), models.BuildStateBuilding)
+	return r.get(t, b.BuildID.String(), models.BuildStateBuilding)
 }
 
 func (r *rig) get(t *testing.T, id, wantState string) *models.Build {
@@ -204,7 +204,7 @@ func TestCreateBuildQueues(t *testing.T) {
 	b := r.queue(t, func(in *BuildInput) { in.Values["badge"] = badge.FileID.String() })
 
 	if b.State != models.BuildStateQueued || b.SchemaVersion != 1 || b.Deadline != r.clock.Add(30*time.Minute) ||
-		b.CreatedBy != alice || b.MinionID.Version() != 4 {
+		b.CreatedBy != alice || b.BuildID.Version() != 4 {
 		t.Fatalf("build %+v", b)
 	}
 	// Defaults filled in, as a factory gets them.
@@ -380,7 +380,7 @@ func TestOfferAccepted(t *testing.T) {
 	b := r.queue(t, func(in *BuildInput) { in.Values["badge"] = badge.FileID.String() })
 	r.svc.Tick(context.Background())
 
-	got := r.get(t, b.MinionID.String(), models.BuildStateBuilding)
+	got := r.get(t, b.BuildID.String(), models.BuildStateBuilding)
 	if got.Instance != "bob-1" || got.FactoryVersion != "dev" || got.StartedAt == nil || got.Deadline != r.clock.Add(30*time.Minute) {
 		t.Fatalf("build %+v", got)
 	}
@@ -399,7 +399,7 @@ func TestOfferAccepted(t *testing.T) {
 	if raw, _ := json.Marshal(req); strings.Contains(string(raw), "first stage") || strings.Contains(string(raw), "dry run") {
 		t.Fatalf("a description went to the factory: %s", raw)
 	}
-	key := artifactKey(opID, b.MinionID)
+	key := artifactKey(opID, b.BuildID)
 	if req.Artifact.UploadURL != "http://store.test/"+key+"?sig=put" || req.Artifact.MaxSize != 256<<20 ||
 		req.Files[badge.FileID.String()].URL != "http://store.test/"+badge.ObjectKey+"?sig=get" ||
 		req.Files[badge.FileID.String()].SHA256 != sha("png!") || req.Actor.ID != "u-alice" {
@@ -413,7 +413,7 @@ func TestOfferWithCrypto(t *testing.T) {
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
 
-	stored := r.get(t, b.MinionID.String(), models.BuildStateBuilding)
+	stored := r.get(t, b.BuildID.String(), models.BuildStateBuilding)
 	req := r.rpc.recorded()[0].payload.(protocol.BuildRequest)
 	if req.Crypto == nil || req.Crypto.Suite != protocol.CryptoAES256CBCHMACSHA256 ||
 		stored.Crypto == nil || string(req.Crypto.Material) != string(stored.Crypto.Material) {
@@ -443,7 +443,7 @@ func TestOfferPassesBusyAndUnreachable(t *testing.T) {
 	}
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.MinionID.String(), models.BuildStateBuilding); got.Instance != "bob-3" {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateBuilding); got.Instance != "bob-3" {
 		t.Fatalf("built on %s", got.Instance)
 	}
 }
@@ -453,14 +453,14 @@ func TestOfferWhenNoneTakesIt(t *testing.T) {
 	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) { return refuse(c, protocol.CodeBusy, "busy"), nil }
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.MinionID.String(), models.BuildStateQueued); got.LeaseUntil != nil || got.Instance != "" || got.StartedAt != nil {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateQueued); got.LeaseUntil != nil || got.Instance != "" || got.StartedAt != nil {
 		t.Fatalf("not put back in the queue: %+v", got)
 	}
 
 	// Later, the instance has room.
 	r.rpc.answer = nil
 	r.svc.Tick(context.Background())
-	r.get(t, b.MinionID.String(), models.BuildStateBuilding)
+	r.get(t, b.BuildID.String(), models.BuildStateBuilding)
 }
 
 // An offer turned down puts the build back with its queue deadline: busy
@@ -472,13 +472,13 @@ func TestBusyOffersKeepTheQueueDeadline(t *testing.T) {
 
 	r.clock = r.clock.Add(20 * time.Minute)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.MinionID.String(), models.BuildStateQueued); !got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateQueued); !got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 {
 		t.Fatalf("after a busy offer: deadline %s (queued with %s), artifact limit %d", got.Deadline, b.Deadline, got.ArtifactMaxSize)
 	}
 
 	r.clock = r.clock.Add(11 * time.Minute)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.MinionID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorTimeout {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorTimeout {
 		t.Fatalf("error %+v", got.Error)
 	}
 }
@@ -490,7 +490,7 @@ func TestReportBeforeAcceptance(t *testing.T) {
 	var progress error
 	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) {
 		req := c.payload.(protocol.BuildRequest)
-		p := protocol.BuildProgress{MinionID: req.MinionID, Step: "badge"}
+		p := protocol.BuildProgress{BuildID: req.BuildID, Step: "badge"}
 		_, progress = r.svc.HandleProgress(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildProgress, p))
 		return accept(c), nil
 	}
@@ -500,7 +500,7 @@ func TestReportBeforeAcceptance(t *testing.T) {
 		t.Fatalf("progress sent right after accepting: %v", progress)
 	}
 	// The report came before the plan: both are kept.
-	if got := r.get(t, b.MinionID.String(), models.BuildStateBuilding); len(got.StepReports) != 1 || len(got.Plan) != len(bobPlan) {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateBuilding); len(got.StepReports) != 1 || len(got.Plan) != len(bobPlan) {
 		t.Fatalf("reports %+v, plan %+v", got.StepReports, got.Plan)
 	}
 }
@@ -510,13 +510,13 @@ func TestOfferWithoutAValidPlan(t *testing.T) {
 	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) {
 		req := c.payload.(protocol.BuildRequest)
 		rep, _ := protocol.NewReply(protocol.Envelope{Type: c.op, Version: protocol.EnvelopeVersionV1}, protocol.Source{Service: "factory"},
-			protocol.BuildReply{MinionID: req.MinionID, Accepted: true, Steps: []protocol.BuildStep{{ID: "Bad Id", Label: "x"}}})
+			protocol.BuildReply{BuildID: req.BuildID, Accepted: true, Steps: []protocol.BuildStep{{ID: "Bad Id", Label: "x"}}})
 		return rep, nil
 	}
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
 	// Built all the same, shown as one step.
-	got := r.get(t, b.MinionID.String(), models.BuildStateBuilding)
+	got := r.get(t, b.BuildID.String(), models.BuildStateBuilding)
 	if got.Plan != nil {
 		t.Fatalf("plan %+v", got.Plan)
 	}
@@ -531,7 +531,7 @@ func TestResultBeforeLostAcceptance(t *testing.T) {
 	r := newRig(t)
 	r.rpc.answer = func(c call) (protocol.ReplyEnvelope, error) {
 		req := c.payload.(protocol.BuildRequest)
-		res := protocol.BuildResult{MinionID: req.MinionID, Status: protocol.BuildFailed, Error: &protocol.BuildError{Code: "compile_failed", Message: "x"}}
+		res := protocol.BuildResult{BuildID: req.BuildID, Status: protocol.BuildFailed, Error: &protocol.BuildError{Code: "compile_failed", Message: "x"}}
 		if _, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res)); err != nil {
 			t.Errorf("result: %v", err)
 		}
@@ -539,7 +539,7 @@ func TestResultBeforeLostAcceptance(t *testing.T) {
 	}
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.MinionID.String(), models.BuildStateFailed); got.Error.Code != "compile_failed" {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateFailed); got.Error.Code != "compile_failed" {
 		t.Fatalf("error %+v", got.Error)
 	}
 	if n := len(r.rpc.recorded()); n != 1 {
@@ -554,7 +554,7 @@ func TestOfferRefused(t *testing.T) {
 	}
 	b := r.queue(t, nil)
 	r.svc.Tick(context.Background())
-	got := r.get(t, b.MinionID.String(), models.BuildStateFailed)
+	got := r.get(t, b.BuildID.String(), models.BuildStateFailed)
 	if got.Error.Code != models.BuildErrorRefused || !strings.Contains(got.Error.Message, "too loud") {
 		t.Fatalf("error %+v", got.Error)
 	}
@@ -567,14 +567,14 @@ func TestOfferWithoutInstances(t *testing.T) {
 	// Restarting: same schema, no instance for now. The build waits.
 	r.reg.setActive()
 	r.svc.Tick(context.Background())
-	r.get(t, b.MinionID.String(), models.BuildStateQueued)
+	r.get(t, b.BuildID.String(), models.BuildStateQueued)
 
 	// The factory came back with a new schema version: the values no longer
 	// follow what it declares.
 	r.reg.schemas["bob"].Version = 2
 	r.reg.setActive(bobInstance("bob-1", 2))
 	r.svc.Tick(context.Background())
-	if got := r.get(t, b.MinionID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorSchemaChanged {
+	if got := r.get(t, b.BuildID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorSchemaChanged {
 		t.Fatalf("error %+v", got.Error)
 	}
 }
@@ -586,7 +586,7 @@ func TestProgress(t *testing.T) {
 	b := r.started(t)
 	report := func(step, message string) {
 		t.Helper()
-		p := protocol.BuildProgress{MinionID: b.MinionID.String(), Step: step, Message: message}
+		p := protocol.BuildProgress{BuildID: b.BuildID.String(), Step: step, Message: message}
 		rep, err := r.svc.HandleProgress(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildProgress, p))
 		if err != nil || !rep.(protocol.BuildProgressReply).Ack {
 			t.Fatalf("progress %s: %v", step, err)
@@ -597,7 +597,7 @@ func TestProgress(t *testing.T) {
 	r.clock = r.clock.Add(time.Second)
 	report("render", "2 of 3") // a step's time is its first report's; its message the latest
 	report("upload", "")
-	got := r.get(t, b.MinionID.String(), "")
+	got := r.get(t, b.BuildID.String(), "")
 	if rr := got.StepReports["render"]; !rr.StartedAt.Equal(first) || rr.Message != "2 of 3" || len(got.StepReports) != 2 {
 		t.Fatalf("reports %+v", got.StepReports)
 	}
@@ -607,17 +607,17 @@ func TestProgress(t *testing.T) {
 		t.Fatalf("pipeline %+v", st)
 	}
 
-	p := protocol.BuildProgress{MinionID: b.MinionID.String(), Step: "render"}
+	p := protocol.BuildProgress{BuildID: b.BuildID.String(), Step: "render"}
 	if _, err := r.svc.HandleProgress(context.Background(), envelope(t, "bob-2", protocol.TypeFactoryBuildProgress, p)); rpcCode(err) != protocol.CodeNotFound {
 		t.Errorf("another instance's progress: %v", err)
 	}
-	if _, err := r.svc.CancelBuild(context.Background(), b.MinionID.String(), alice); err != nil {
+	if _, err := r.svc.CancelBuild(context.Background(), b.BuildID.String(), alice); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := r.svc.HandleProgress(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildProgress, p)); rpcCode(err) != protocol.CodeNotFound {
 		t.Errorf("progress of a cancelled build: %v", err)
 	}
-	bad := protocol.BuildProgress{MinionID: b.MinionID.String(), Step: "Not A Step"}
+	bad := protocol.BuildProgress{BuildID: b.BuildID.String(), Step: "Not A Step"}
 	if _, err := r.svc.HandleProgress(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildProgress, bad)); rpcCode(err) != protocol.CodeValidationFailed {
 		t.Errorf("malformed progress: %v", err)
 	}
@@ -626,8 +626,8 @@ func TestProgress(t *testing.T) {
 // succeed has bob-1 upload body and report it as the artifact.
 func (r *rig) succeed(t *testing.T, b *models.Build, body string, reported string) (any, error) {
 	t.Helper()
-	r.store.objects[artifactKey(opID, b.MinionID)] = []byte(body)
-	res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildSucceeded,
+	r.store.objects[artifactKey(opID, b.BuildID)] = []byte(body)
+	res := protocol.BuildResult{BuildID: b.BuildID.String(), Status: protocol.BuildSucceeded,
 		Artifact: &protocol.BuildArtifact{Filename: "bob.json", Size: int64(len(reported)), SHA256: sha(reported), MediaType: "application/json"},
 		Warnings: []string{"a dummy"}, Log: "built"}
 	return r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res))
@@ -644,13 +644,13 @@ func TestSucceededBuild(t *testing.T) {
 		t.Fatalf("result: %v", err)
 	}
 	r.settle()
-	got := r.get(t, b.MinionID.String(), models.BuildStateSucceeded)
+	got := r.get(t, b.BuildID.String(), models.BuildStateSucceeded)
 	if got.Artifact.Size != 12 || got.Log != "built" || len(got.Warnings) != 1 || got.FinishedAt == nil {
 		t.Fatalf("build %+v", got)
 	}
 	// The minion can do what its build picked.
 	minions, _ := r.svc.Minions(context.Background(), opID)
-	if len(minions) != 1 || minions[0].MinionID != b.MinionID || strings.Join(minions[0].Commands, " ") != "sleep exit hello ls" {
+	if len(minions) != 1 || minions[0].BuildID != b.BuildID || strings.Join(minions[0].Commands, " ") != "sleep exit hello ls" {
 		t.Fatalf("minions %+v", minions)
 	}
 
@@ -658,16 +658,16 @@ func TestSucceededBuild(t *testing.T) {
 	if rep, err := r.succeed(t, b, `{"minion":1}`, `{"minion":1}`); err != nil || !rep.(protocol.BuildResultReply).Recorded {
 		t.Fatalf("repeated result: %v", err)
 	}
-	rc, _, err := r.svc.OpenArtifact(context.Background(), b.MinionID.String())
+	rc, _, err := r.svc.OpenArtifact(context.Background(), b.BuildID.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = rc.Close()
 
-	if _, err := r.svc.DeleteArtifact(context.Background(), b.MinionID.String()); err != nil || r.store.has(got.Artifact.ObjectKey) {
+	if _, err := r.svc.DeleteArtifact(context.Background(), b.BuildID.String()); err != nil || r.store.has(got.Artifact.ObjectKey) {
 		t.Fatalf("delete artifact: %v", err)
 	}
-	if _, _, err := r.svc.OpenArtifact(context.Background(), b.MinionID.String()); err == nil {
+	if _, _, err := r.svc.OpenArtifact(context.Background(), b.BuildID.String()); err == nil {
 		t.Fatal("a deleted artifact opened")
 	}
 }
@@ -687,7 +687,7 @@ func TestArtifactChecks(t *testing.T) {
 		if c.uploaded {
 			_, err = r.succeed(t, b, c.upload, c.report)
 		} else {
-			res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildSucceeded,
+			res := protocol.BuildResult{BuildID: b.BuildID.String(), Status: protocol.BuildSucceeded,
 				Artifact: &protocol.BuildArtifact{Filename: "bob.json", Size: int64(len(c.report)), SHA256: sha(c.report)}}
 			_, err = r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res))
 		}
@@ -695,8 +695,8 @@ func TestArtifactChecks(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		r.settle()
-		got := r.get(t, b.MinionID.String(), models.BuildStateFailed)
-		if got.Error.Code != models.BuildErrorArtifactMismatch || r.store.has(artifactKey(opID, b.MinionID)) {
+		got := r.get(t, b.BuildID.String(), models.BuildStateFailed)
+		if got.Error.Code != models.BuildErrorArtifactMismatch || r.store.has(artifactKey(opID, b.BuildID)) {
 			t.Fatalf("%s: error %+v", name, got.Error)
 		}
 		if minions, _ := r.svc.Minions(context.Background(), opID); len(minions) != 0 {
@@ -710,24 +710,24 @@ func TestArtifactChecks(t *testing.T) {
 func TestArtifactOverItsLimit(t *testing.T) {
 	r := newRig(t)
 	b := r.started(t)
-	if got := r.get(t, b.MinionID.String(), ""); got.ArtifactMaxSize != 256<<20 {
+	if got := r.get(t, b.BuildID.String(), ""); got.ArtifactMaxSize != 256<<20 {
 		t.Fatalf("the limit the instance was given is not kept: %d", got.ArtifactMaxSize)
 	}
-	r.builds.rows[b.MinionID].ArtifactMaxSize = 4 // the setting when it was offered
+	r.builds.rows[b.BuildID].ArtifactMaxSize = 4 // the setting when it was offered
 
 	if rep, err := r.succeed(t, b, "too big", "too big"); err != nil || !rep.(protocol.BuildResultReply).Recorded {
 		t.Fatalf("result: %v", err)
 	}
-	res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildSucceeded,
+	res := protocol.BuildResult{BuildID: b.BuildID.String(), Status: protocol.BuildSucceeded,
 		Artifact: &protocol.BuildArtifact{Filename: "bob.json", Size: 7, SHA256: sha("too big")}}
 	if rep, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res)); err != nil ||
 		!rep.(protocol.BuildResultReply).Recorded {
 		t.Fatalf("repeated result: %v", err)
 	}
 	r.settle()
-	got := r.get(t, b.MinionID.String(), models.BuildStateFailed)
+	got := r.get(t, b.BuildID.String(), models.BuildStateFailed)
 	if got.Error.Code != models.BuildErrorArtifactTooLarge || got.Artifact != nil || got.Log != "built" ||
-		r.store.has(artifactKey(opID, b.MinionID)) {
+		r.store.has(artifactKey(opID, b.BuildID)) {
 		t.Fatalf("build %+v, error %+v", got, got.Error)
 	}
 	if minions, _ := r.svc.Minions(context.Background(), opID); len(minions) != 0 {
@@ -736,18 +736,18 @@ func TestArtifactOverItsLimit(t *testing.T) {
 
 	// A build offered before core kept the limit is held to the setting.
 	old := r.started(t)
-	r.builds.rows[old.MinionID].ArtifactMaxSize = 0
+	r.builds.rows[old.BuildID].ArtifactMaxSize = 0
 	if _, err := r.succeed(t, old, "small", "small"); err != nil {
 		t.Fatal(err)
 	}
 	r.settle()
-	r.get(t, old.MinionID.String(), models.BuildStateSucceeded)
+	r.get(t, old.BuildID.String(), models.BuildStateSucceeded)
 }
 
 func TestFailedBuild(t *testing.T) {
 	r := newRig(t)
 	b := r.started(t)
-	res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildFailed,
+	res := protocol.BuildResult{BuildID: b.BuildID.String(), Status: protocol.BuildFailed,
 		Error: &protocol.BuildError{Code: "compile_failed", Message: "go build exited with status 1"}, Log: "undefined: x"}
 	for range 2 { // the second is a repeat
 		rep, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res))
@@ -755,7 +755,7 @@ func TestFailedBuild(t *testing.T) {
 			t.Fatalf("result: %v", err)
 		}
 	}
-	got := r.get(t, b.MinionID.String(), models.BuildStateFailed)
+	got := r.get(t, b.BuildID.String(), models.BuildStateFailed)
 	if got.Error.Code != "compile_failed" || got.Log != "undefined: x" {
 		t.Fatalf("build %+v", got)
 	}
@@ -764,18 +764,18 @@ func TestFailedBuild(t *testing.T) {
 func TestLateAndForeignResults(t *testing.T) {
 	r := newRig(t)
 	b := r.started(t)
-	res := protocol.BuildResult{MinionID: b.MinionID.String(), Status: protocol.BuildFailed, Error: &protocol.BuildError{Code: "x", Message: "y"}}
+	res := protocol.BuildResult{BuildID: b.BuildID.String(), Status: protocol.BuildFailed, Error: &protocol.BuildError{Code: "x", Message: "y"}}
 	if _, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-2", protocol.TypeFactoryBuildResult, res)); rpcCode(err) != protocol.CodeNotFound {
 		t.Errorf("another instance's result: %v", err)
 	}
 	r.clock = r.clock.Add(31 * time.Minute)
 	r.svc.Tick(context.Background())
-	r.get(t, b.MinionID.String(), models.BuildStateFailed)
+	r.get(t, b.BuildID.String(), models.BuildStateFailed)
 	if _, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, res)); rpcCode(err) != protocol.CodeNotFound {
 		t.Errorf("a result after the deadline: %v", err)
 	}
 	unknown := res
-	unknown.MinionID = protocol.NewID()
+	unknown.BuildID = protocol.NewID()
 	if _, err := r.svc.HandleResult(context.Background(), envelope(t, "bob-1", protocol.TypeFactoryBuildResult, unknown)); rpcCode(err) != protocol.CodeNotFound {
 		t.Errorf("an unknown build's result: %v", err)
 	}
@@ -786,21 +786,21 @@ func TestLateAndForeignResults(t *testing.T) {
 func TestCancel(t *testing.T) {
 	r := newRig(t)
 	queued := r.queue(t, nil)
-	if got, err := r.svc.CancelBuild(context.Background(), queued.MinionID.String(), alice); err != nil || got.State != models.BuildStateCancelled || got.CancelledBy.ID != "u-alice" {
+	if got, err := r.svc.CancelBuild(context.Background(), queued.BuildID.String(), alice); err != nil || got.State != models.BuildStateCancelled || got.CancelledBy.ID != "u-alice" {
 		t.Fatalf("cancel a queued build: %v %+v", err, got)
 	}
 
 	running := r.started(t)
-	if _, err := r.svc.CancelBuild(context.Background(), running.MinionID.String(), alice); err != nil {
+	if _, err := r.svc.CancelBuild(context.Background(), running.BuildID.String(), alice); err != nil {
 		t.Fatal(err)
 	}
 	r.settle()
 	calls := r.rpc.recorded()
 	last := calls[len(calls)-1]
-	if last.op != protocol.TypeFactoryBuildCancel || last.queue != bobQueue || last.payload.(protocol.BuildCancelRequest).MinionID != running.MinionID.String() {
+	if last.op != protocol.TypeFactoryBuildCancel || last.queue != bobQueue || last.payload.(protocol.BuildCancelRequest).BuildID != running.BuildID.String() {
 		t.Fatalf("cancel call %+v", last)
 	}
-	if _, err := r.svc.CancelBuild(context.Background(), running.MinionID.String(), alice); err == nil {
+	if _, err := r.svc.CancelBuild(context.Background(), running.BuildID.String(), alice); err == nil {
 		t.Fatal("a finished build was cancelled again")
 	}
 }
@@ -815,7 +815,7 @@ func TestTimeoutsAndLostFactories(t *testing.T) {
 
 	r.clock = r.clock.Add(31 * time.Minute)
 	r.svc.Tick(context.Background())
-	for _, id := range []string{queued.MinionID.String(), running.MinionID.String()} {
+	for _, id := range []string{queued.BuildID.String(), running.BuildID.String()} {
 		if got := r.get(t, id, models.BuildStateFailed); got.Error.Code != models.BuildErrorTimeout {
 			t.Fatalf("%s: %+v", id, got.Error)
 		}
@@ -825,7 +825,7 @@ func TestTimeoutsAndLostFactories(t *testing.T) {
 	lost := r.started(t)
 	r.reg.setActive() // the instance died
 	r.svc.Tick(context.Background())
-	if got := r.get(t, lost.MinionID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorFactoryLost {
+	if got := r.get(t, lost.BuildID.String(), models.BuildStateFailed); got.Error.Code != models.BuildErrorFactoryLost {
 		t.Fatalf("lost factory: %+v", got.Error)
 	}
 }
@@ -887,11 +887,11 @@ func TestDeleteOperationData(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.settle()
-	if len(r.builds.rows)+len(r.files.rows)+len(r.minions.rows) != 0 || r.store.has(f.ObjectKey) || r.store.has(artifactKey(opID, done.MinionID)) {
+	if len(r.builds.rows)+len(r.files.rows)+len(r.minions.rows) != 0 || r.store.has(f.ObjectKey) || r.store.has(artifactKey(opID, done.BuildID)) {
 		t.Fatal("operation data left behind")
 	}
 	calls := r.rpc.recorded()
-	if last := calls[len(calls)-1]; last.op != protocol.TypeFactoryBuildCancel || last.payload.(protocol.BuildCancelRequest).MinionID != running.MinionID.String() {
+	if last := calls[len(calls)-1]; last.op != protocol.TypeFactoryBuildCancel || last.payload.(protocol.BuildCancelRequest).BuildID != running.BuildID.String() {
 		t.Fatalf("the running build was not cancelled on its factory: %+v", last)
 	}
 }
@@ -910,12 +910,12 @@ func TestKinds(t *testing.T) {
 	}
 }
 
-// TestBuildByID pins how a build is named: by its minion id, nothing else.
+// TestBuildByID pins how a build is named: by its build id, nothing else.
 func TestBuildByID(t *testing.T) {
 	r := newRig(t)
 	b := r.queue(t, nil)
-	for _, id := range []string{b.MinionID.String(), " " + b.MinionID.String() + " "} {
-		if got, err := r.svc.Build(context.Background(), id); err != nil || got.MinionID != b.MinionID {
+	for _, id := range []string{b.BuildID.String(), " " + b.BuildID.String() + " "} {
+		if got, err := r.svc.Build(context.Background(), id); err != nil || got.BuildID != b.BuildID {
 			t.Fatalf("%q: %v %+v", id, err, got)
 		}
 	}

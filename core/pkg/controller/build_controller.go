@@ -134,14 +134,14 @@ func (bc *BuildController) DownloadArtifact(c *gin.Context) {
 		c.JSON(http.StatusForbidden, responses.ErrForbidden)
 		return
 	}
-	r, b, err := bc.builds.OpenArtifact(ctx, b.MinionID.String())
+	r, b, err := bc.builds.OpenArtifact(ctx, b.BuildID.String())
 	var invalid *builds.ValidationError
 	switch {
 	case errors.As(err, &invalid):
 		c.JSON(http.StatusNotFound, responses.NewErrorResponse("%s", invalid.Message))
 		return
 	case err != nil:
-		bc.logger.Error("Failed to open a build artifact", zap.String("minion_id", c.Param("id")), zap.Error(err))
+		bc.logger.Error("Failed to open a build artifact", zap.String("build_id", c.Param("id")), zap.Error(err))
 		c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
 		return
 	}

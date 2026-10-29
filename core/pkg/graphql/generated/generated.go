@@ -8241,8 +8241,8 @@ type BuildConnection {
 }
 
 type Build {
-  # The build's id, and the minion's: factories know the build by it, and the
-  # minion sends it on the data plane.
+  # The build id: factories know the build by it, and the minion it makes
+  # sends it on the data plane.
   id: ID!
   operationId: ID!
   # What the build is for: the operators' note, core's own (see
@@ -8290,6 +8290,7 @@ type Build {
 
 # What a successful build created. Its id is its build's.
 type Minion {
+  # Its build id.
   id: ID!
   operationId: ID!
   # The factory kind that built it.

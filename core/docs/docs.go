@@ -188,8 +188,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "The minion's id, a lowercase UUID",
-                        "name": "Logos-Minion-Id",
+                        "description": "The build id, a lowercase UUID",
+                        "name": "Logos-Build-Id",
                         "in": "header",
                         "required": true
                     },

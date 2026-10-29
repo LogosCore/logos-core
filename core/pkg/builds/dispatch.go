@@ -68,7 +68,7 @@ func (s *Service) expire(ctx context.Context) {
 		b := &unfinished[i]
 		switch {
 		case b.State == models.BuildStateBuilding && b.ResultReceived:
-			s.verifyAsync(b.MinionID)
+			s.verifyAsync(b.BuildID)
 		case now.After(b.Deadline):
 			msg := "the build ran out of time"
 			if b.State == models.BuildStateQueued {
@@ -83,15 +83,15 @@ func (s *Service) expire(ctx context.Context) {
 
 // fail finishes an unfinished build as failed with core's own reason.
 func (s *Service) fail(ctx context.Context, b *models.Build, code, msg string) {
-	ok, err := s.repos.Builds.Finish(ctx, b.MinionID, []string{b.State}, repository.BuildOutcome{
+	ok, err := s.repos.Builds.Finish(ctx, b.BuildID, []string{b.State}, repository.BuildOutcome{
 		State: models.BuildStateFailed, Error: &models.BuildError{Code: code, Message: msg}, At: s.now(),
 	})
 	if err != nil {
-		s.logger.Warn("fail a build", zap.String("minion_id", b.MinionID.String()), zap.Error(err))
+		s.logger.Warn("fail a build", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 		return
 	}
 	if ok {
-		s.logger.Info("build failed", zap.String("minion_id", b.MinionID.String()), zap.String("code", code), zap.String("reason", msg))
+		s.logger.Info("build failed", zap.String("build_id", b.BuildID.String()), zap.String("code", code), zap.String("reason", msg))
 	}
 }
 
@@ -104,13 +104,13 @@ func (s *Service) fail(ctx context.Context, b *models.Build, code, msg string) {
 // reply reaches core. One that does not take it puts the build back.
 func (s *Service) offer(ctx context.Context, b *models.Build) {
 	release := func() {
-		if err := s.repos.Builds.ReleaseClaim(ctx, b.MinionID); err != nil {
-			s.logger.Warn("release a build claim", zap.String("minion_id", b.MinionID.String()), zap.Error(err))
+		if err := s.repos.Builds.ReleaseClaim(ctx, b.BuildID); err != nil {
+			s.logger.Warn("release a build claim", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 		}
 	}
 	insts, err := s.instances(ctx, b.ModuleName, b.SchemaVersion)
 	if err != nil {
-		s.logger.Warn("offer a build", zap.String("minion_id", b.MinionID.String()), zap.Error(err))
+		s.logger.Warn("offer a build", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 		release()
 		return
 	}
@@ -128,14 +128,14 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 	deadline := s.now().Add(s.cfg.Timeout)
 	req, err := s.request(ctx, b, deadline)
 	if err != nil {
-		s.logger.Warn("prepare a build request", zap.String("minion_id", b.MinionID.String()), zap.Error(err))
+		s.logger.Warn("prepare a build request", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 		release()
 		return
 	}
 	start := int(s.next.Add(1))
 	for i := range insts {
 		inst := insts[(start+i)%len(insts)]
-		ok, err := s.repos.Builds.MarkBuilding(ctx, b.MinionID, inst.Instance, inst.Version, deadline, req.Artifact.MaxSize, s.now())
+		ok, err := s.repos.Builds.MarkBuilding(ctx, b.BuildID, inst.Instance, inst.Version, deadline, req.Artifact.MaxSize, s.now())
 		if err != nil || !ok {
 			return // cancelled meanwhile
 		}
@@ -145,7 +145,7 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 		// Not taken there: back in the queue with its queue deadline (b is
 		// the build as claimed), unless the instance already reported a
 		// result (its acceptance was lost on the way back).
-		if ok, err := s.repos.Builds.Unoffer(ctx, b.MinionID, inst.Instance, b.Deadline, s.now().Add(s.cfg.Lease)); err != nil || !ok {
+		if ok, err := s.repos.Builds.Unoffer(ctx, b.BuildID, inst.Instance, b.Deadline, s.now().Add(s.cfg.Lease)); err != nil || !ok {
 			return
 		}
 	}
@@ -174,20 +174,20 @@ func (s *Service) offerTo(ctx context.Context, b *models.Build, inst models.Modu
 		return true
 	}
 	var accepted protocol.BuildReply
-	if json.Unmarshal(rep.Payload, &accepted) != nil || !accepted.Accepted || accepted.MinionID != b.MinionID.String() {
+	if json.Unmarshal(rep.Payload, &accepted) != nil || !accepted.Accepted || accepted.BuildID != b.BuildID.String() {
 		return false
 	}
-	s.setPlan(ctx, b.MinionID, inst.Instance, accepted.Steps)
-	s.logger.Info("build started", zap.String("minion_id", b.MinionID.String()), zap.String("instance", inst.Instance),
+	s.setPlan(ctx, b.BuildID, inst.Instance, accepted.Steps)
+	s.logger.Info("build started", zap.String("build_id", b.BuildID.String()), zap.String("instance", inst.Instance),
 		zap.Int("steps", len(accepted.Steps)))
 	return true
 }
 
 // setPlan stores the plan an instance accepted a build with. Without a valid
 // one the build is still built, and shows as a single step.
-func (s *Service) setPlan(ctx context.Context, minionID uuid.UUID, instance string, steps []protocol.BuildStep) {
+func (s *Service) setPlan(ctx context.Context, buildID uuid.UUID, instance string, steps []protocol.BuildStep) {
 	if err := protocol.ValidateBuildSteps(steps); err != nil {
-		s.logger.Warn("a factory accepted a build without a valid plan", zap.String("minion_id", minionID.String()),
+		s.logger.Warn("a factory accepted a build without a valid plan", zap.String("build_id", buildID.String()),
 			zap.String("instance", instance), zap.Error(err))
 		return
 	}
@@ -195,8 +195,8 @@ func (s *Service) setPlan(ctx context.Context, minionID uuid.UUID, instance stri
 	for i, st := range steps {
 		plan[i] = models.BuildPlanStep{ID: st.ID, Label: st.Label}
 	}
-	if _, err := s.repos.Builds.SetPlan(ctx, minionID, instance, plan); err != nil {
-		s.logger.Warn("store a build's plan", zap.String("minion_id", minionID.String()), zap.Error(err))
+	if _, err := s.repos.Builds.SetPlan(ctx, buildID, instance, plan); err != nil {
+		s.logger.Warn("store a build's plan", zap.String("build_id", buildID.String()), zap.Error(err))
 	}
 }
 
@@ -204,7 +204,7 @@ func (s *Service) setPlan(ctx context.Context, minionID uuid.UUID, instance stri
 func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time) (protocol.BuildRequest, error) {
 	expiry := time.Until(deadline) + time.Minute
 	req := protocol.BuildRequest{
-		MinionID: b.MinionID.String(), Target: b.Target, Platform: b.Platform,
+		BuildID: b.BuildID.String(), Target: b.Target, Platform: b.Platform,
 		SchemaVersion: b.SchemaVersion, Values: b.Values, Commands: b.Commands, Connections: b.Connections.Items,
 		Crypto: b.Crypto, Deadline: deadline, Actor: b.CreatedBy.Protocol(),
 	}
@@ -222,7 +222,7 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		}
 		req.Files[pf.ID] = pf
 	}
-	upload, err := s.signer.PutURL(ctx, artifactKey(b.OperationID, b.MinionID), expiry)
+	upload, err := s.signer.PutURL(ctx, artifactKey(b.OperationID, b.BuildID), expiry)
 	if err != nil {
 		return req, err
 	}
@@ -232,24 +232,24 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 
 // verifyAsync checks a received artifact in the background, once per build
 // per process.
-func (s *Service) verifyAsync(minionID uuid.UUID) {
-	if _, busy := s.verifying.LoadOrStore(minionID, true); busy {
+func (s *Service) verifyAsync(buildID uuid.UUID) {
+	if _, busy := s.verifying.LoadOrStore(buildID, true); busy {
 		return
 	}
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		defer s.verifying.Delete(minionID)
+		defer s.verifying.Delete(buildID)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		s.verify(ctx, minionID)
+		s.verify(ctx, buildID)
 	}()
 }
 
 // verify reads the uploaded artifact and compares it with what the factory
 // reported. Only then does the build succeed and the minion exist.
-func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
-	b, err := s.repos.Builds.FindByMinionID(ctx, minionID)
+func (s *Service) verify(ctx context.Context, buildID uuid.UUID) {
+	b, err := s.repos.Builds.FindByBuildID(ctx, buildID)
 	if err != nil || b.State != models.BuildStateBuilding || !b.ResultReceived || b.Artifact == nil {
 		return
 	}
@@ -263,7 +263,7 @@ func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
 			s.fail(ctx, b, models.BuildErrorArtifactMismatch, "the artifact could not be read to check it")
 			return
 		}
-		s.logger.Warn("check a build artifact; will retry", zap.String("minion_id", minionID.String()), zap.Error(err))
+		s.logger.Warn("check a build artifact; will retry", zap.String("build_id", buildID.String()), zap.Error(err))
 		return
 	case size != b.Artifact.Size:
 		_ = s.store.Delete(ctx, b.Artifact.ObjectKey)
@@ -276,19 +276,19 @@ func (s *Service) verify(ctx context.Context, minionID uuid.UUID) {
 			"the stored artifact's SHA-256 is %s; the factory reported %s", sum, b.Artifact.SHA256))
 		return
 	}
-	ok, err := s.repos.Builds.Finish(ctx, minionID, []string{models.BuildStateBuilding},
+	ok, err := s.repos.Builds.Finish(ctx, buildID, []string{models.BuildStateBuilding},
 		repository.BuildOutcome{State: models.BuildStateSucceeded, At: s.now()})
 	if err != nil || !ok {
 		return // cancelled meanwhile, or another core instance finished it
 	}
 	m := &models.Minion{
-		MinionID: b.MinionID, OperationID: b.OperationID, ModuleName: b.ModuleName,
+		BuildID: b.BuildID, OperationID: b.OperationID, ModuleName: b.ModuleName,
 		Target: b.Target, Platform: b.Platform, Commands: b.Commands, CreatedBy: b.CreatedBy, CreatedAt: s.now(),
 	}
 	if err := s.repos.Minions.Insert(ctx, m); err != nil {
-		s.logger.Error("record a built minion", zap.String("minion_id", minionID.String()), zap.Error(err))
+		s.logger.Error("record a built minion", zap.String("build_id", buildID.String()), zap.Error(err))
 	}
-	s.logger.Info("build succeeded", zap.String("minion_id", minionID.String()))
+	s.logger.Info("build succeeded", zap.String("build_id", buildID.String()))
 }
 
 // digest reads an object of want bytes: its size and SHA-256. A larger one

@@ -90,7 +90,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 			t.Fatalf("the build did not finish: %s, pipeline %+v", b.State, Pipeline(b))
 		}
 		time.Sleep(250 * time.Millisecond)
-		if b, err = svc.Build(ctx, b.MinionID.String()); err != nil {
+		if b, err = svc.Build(ctx, b.BuildID.String()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -110,17 +110,17 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	}
 
 	minions, err := svc.Minions(ctx, op)
-	if err != nil || len(minions) != 1 || minions[0].MinionID != b.MinionID {
+	if err != nil || len(minions) != 1 || minions[0].BuildID != b.BuildID {
 		t.Fatalf("minions %+v: %v", minions, err)
 	}
-	r, _, err := svc.OpenArtifact(ctx, b.MinionID.String())
+	r, _, err := svc.OpenArtifact(ctx, b.BuildID.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = r.Close() }()
 	raw, _ := io.ReadAll(r)
 	var minion struct {
-		MinionID    string                  `json:"minion_id"`
+		BuildID     string                  `json:"build_id"`
 		Punches     []string                `json:"punches"`
 		Badge       struct{ SHA256 string } `json:"badge"`
 		Connections []struct {
@@ -130,7 +130,7 @@ func TestIntegrationBuildWithBOB(t *testing.T) {
 	if err := json.Unmarshal(raw, &minion); err != nil {
 		t.Fatalf("artifact %s: %v", raw, err)
 	}
-	if minion.MinionID != b.MinionID.String() || minion.Badge.SHA256 != badge.SHA256 || len(minion.Punches) != 2 ||
+	if minion.BuildID != b.BuildID.String() || minion.Badge.SHA256 != badge.SHA256 || len(minion.Punches) != 2 ||
 		minion.Connections[0].Values["path_prefix"] != "/cdn/assets/" {
 		t.Fatalf("artifact %s", raw)
 	}

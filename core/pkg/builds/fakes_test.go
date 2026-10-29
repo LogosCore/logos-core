@@ -95,11 +95,11 @@ func (f *fakeBuilds) Insert(_ context.Context, b *models.Build) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	cp := *b
-	f.rows[b.MinionID] = &cp
+	f.rows[b.BuildID] = &cp
 	return nil
 }
 
-func (f *fakeBuilds) FindByMinionID(_ context.Context, id uuid.UUID) (*models.Build, error) {
+func (f *fakeBuilds) FindByBuildID(_ context.Context, id uuid.UUID) (*models.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	b, ok := f.rows[id]
@@ -171,7 +171,7 @@ func (f *fakeBuilds) ClaimQueued(_ context.Context, now, until time.Time) (*mode
 	if len(queued) == 0 {
 		return nil, nil
 	}
-	b := f.rows[queued[0].MinionID]
+	b := f.rows[queued[0].BuildID]
 	b.LeaseUntil = &until
 	cp := *b
 	return &cp, nil
@@ -328,8 +328,8 @@ type fakeMinions struct {
 func (f *fakeMinions) Insert(_ context.Context, m *models.Minion) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if _, ok := f.rows[m.MinionID]; !ok {
-		f.rows[m.MinionID] = *m
+	if _, ok := f.rows[m.BuildID]; !ok {
+		f.rows[m.BuildID] = *m
 	}
 	return nil
 }
@@ -459,9 +459,9 @@ func accept(c call) protocol.ReplyEnvelope {
 	var payload any = struct{}{}
 	switch p := c.payload.(type) {
 	case protocol.BuildRequest:
-		payload = protocol.BuildReply{MinionID: p.MinionID, Accepted: true, Steps: bobPlan}
+		payload = protocol.BuildReply{BuildID: p.BuildID, Accepted: true, Steps: bobPlan}
 	case protocol.BuildCancelRequest:
-		payload = protocol.BuildCancelReply{MinionID: p.MinionID, Cancelled: true}
+		payload = protocol.BuildCancelReply{BuildID: p.BuildID, Cancelled: true}
 	}
 	rep, _ := protocol.NewReply(req, protocol.Source{Service: "factory"}, payload)
 	return rep

@@ -20,10 +20,10 @@ func EndpointSearchText(e *ChannelEndpoint) string {
 }
 
 // BuildSearchText is what a build's list search reads beyond the build's own
-// fields: its minion id, its values, and its connections' names, channels,
+// fields: its build id, its values, and its connections' names, channels,
 // settings and values.
 func BuildSearchText(b *Build) string {
-	parts := jsonLeaves([]string{b.MinionID.String()}, map[string]any(b.Values))
+	parts := jsonLeaves([]string{b.BuildID.String()}, map[string]any(b.Values))
 	parts = append(parts, b.Commands...)
 	for _, c := range b.Connections.Items {
 		parts = append(parts, c.Endpoint.Name, c.Endpoint.Channel.ModuleName)

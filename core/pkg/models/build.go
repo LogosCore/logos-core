@@ -60,9 +60,9 @@ const (
 type Build struct {
 	field.DefaultField `bson:",inline"`
 
-	// MinionID is the id of the build and of the minion it makes: factories
+	// BuildID is the id of the build and of the minion it makes: factories
 	// know the build by it, and the minion sends it on the data plane.
-	MinionID    uuid.UUID `bson:"minion_id" json:"minion_id"`
+	BuildID     uuid.UUID `bson:"build_id" json:"build_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	// ModuleName is the factory kind.
 	ModuleName string `bson:"module_name" json:"module_name"`
@@ -197,7 +197,7 @@ type BuildError struct {
 type Minion struct {
 	field.DefaultField `bson:",inline"`
 
-	MinionID    uuid.UUID `bson:"minion_id" json:"minion_id"`
+	BuildID     uuid.UUID `bson:"build_id" json:"build_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	ModuleName  string    `bson:"module_name" json:"module_name"`
 	Target      string    `bson:"target" json:"target"`

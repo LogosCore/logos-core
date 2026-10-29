@@ -68,7 +68,7 @@ func registeredGate() fakeGate { return fakeGate{registered: true} }
 
 const (
 	testMessageID = "c4ca4238-a0b9-4382-8dcc-509a6f75849b"
-	testMinionID  = "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f"
+	testBuildID   = "5b0c4f6e-8a1d-4c2b-9e7f-3d2a1b0c9e8f"
 	testTrace     = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 	testMaxSize   = 64
 )
@@ -79,7 +79,7 @@ var ciphertext = []byte{0x00, 0xff, 0xfe, 0x80, 0x0a}
 func validSyncHeaders() http.Header {
 	h := http.Header{}
 	protocol.InboundMinionMessage{
-		MessageID: testMessageID, MinionID: testMinionID, ChannelInstance: "http-1", TraceParent: testTrace,
+		MessageID: testMessageID, BuildID: testBuildID, ChannelInstance: "http-1", TraceParent: testTrace,
 	}.SetHeaders(h)
 	return h
 }
@@ -117,8 +117,8 @@ func TestChannelSync_Valid(t *testing.T) {
 	if err := protocol.ValidateOutbound(out); err != nil {
 		t.Fatalf("reply headers: %v", err)
 	}
-	if out.MinionID != testMinionID || out.MessageID == testMessageID || out.TraceParent != testTrace {
-		t.Errorf("reply %+v: want the minion id echoed, core's own message id, the traceparent returned", out)
+	if out.BuildID != testBuildID || out.MessageID == testMessageID || out.TraceParent != testTrace {
+		t.Errorf("reply %+v: want the build id echoed, core's own message id, the traceparent returned", out)
 	}
 }
 
@@ -131,8 +131,8 @@ func TestChannelSync_ValidationErrors(t *testing.T) {
 	}{
 		{"json body", func(h http.Header) { h.Set("Content-Type", "application/json") }, ciphertext, http.StatusUnsupportedMediaType},
 		{"no content type", func(h http.Header) { h.Del("Content-Type") }, ciphertext, http.StatusUnsupportedMediaType},
-		{"missing minion id", func(h http.Header) { h.Del(protocol.HeaderMinionID) }, ciphertext, http.StatusBadRequest},
-		{"minion id not a UUID", func(h http.Header) { h.Set(protocol.HeaderMinionID, "s-2b77df") }, ciphertext, http.StatusBadRequest},
+		{"missing build id", func(h http.Header) { h.Del(protocol.HeaderBuildID) }, ciphertext, http.StatusBadRequest},
+		{"build id not a UUID", func(h http.Header) { h.Set(protocol.HeaderBuildID, "s-2b77df") }, ciphertext, http.StatusBadRequest},
 		{"missing message id", func(h http.Header) { h.Del(protocol.HeaderMessageID) }, ciphertext, http.StatusBadRequest},
 		{"missing instance", func(h http.Header) { h.Del(protocol.HeaderChannelInstance) }, ciphertext, http.StatusBadRequest},
 		{"empty body", nil, nil, http.StatusBadRequest},
@@ -208,7 +208,7 @@ func TestChannelSync_DuplicateMessageIDReturnsNoOp(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("duplicate call: expected 204 no-op, got %d (%s)", w.Code, w.Body.String())
 	}
-	if out := protocol.OutboundFromHeaders(w.Header()); out.MinionID != testMinionID {
+	if out := protocol.OutboundFromHeaders(w.Header()); out.BuildID != testBuildID {
 		t.Errorf("duplicate response not a valid no-op: %+v", out)
 	}
 }

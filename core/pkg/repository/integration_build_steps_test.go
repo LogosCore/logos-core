@@ -26,12 +26,12 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 		t.Fatalf("index setup: %v", err)
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	b := &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob",
+	b := &models.Build{BuildID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob",
 		State: models.BuildStateQueued, Deadline: now.Add(30 * time.Minute), CreatedAt: now}
 	if err := repo.Insert(ctx, b); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := repo.MarkBuilding(ctx, b.MinionID, "bob-1", "dev", now.Add(time.Hour), 1<<20, now); !ok || err != nil {
+	if ok, err := repo.MarkBuilding(ctx, b.BuildID, "bob-1", "dev", now.Add(time.Hour), 1<<20, now); !ok || err != nil {
 		t.Fatalf("mark building: %v %v", ok, err)
 	}
 
@@ -46,19 +46,19 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 		{"upload", "uploading", second},
 		{"upload", "", second.Add(time.Second)}, // clears the message
 	} {
-		if ok, err := repo.ReportStep(ctx, b.MinionID, "bob-1", r.step, r.message, r.at); !ok || err != nil {
+		if ok, err := repo.ReportStep(ctx, b.BuildID, "bob-1", r.step, r.message, r.at); !ok || err != nil {
 			t.Fatalf("report %s: %v %v", r.step, ok, err)
 		}
 	}
 	plan := []models.BuildPlanStep{{ID: "render", Label: "Render"}, {ID: "upload", Label: "Upload"}}
-	if ok, err := repo.SetPlan(ctx, b.MinionID, "bob-1", plan); !ok || err != nil {
+	if ok, err := repo.SetPlan(ctx, b.BuildID, "bob-1", plan); !ok || err != nil {
 		t.Fatalf("set plan: %v %v", ok, err)
 	}
-	if ok, _ := repo.ReportStep(ctx, b.MinionID, "bob-2", "render", "not mine", now); ok {
+	if ok, _ := repo.ReportStep(ctx, b.BuildID, "bob-2", "render", "not mine", now); ok {
 		t.Error("another instance reported")
 	}
 
-	got, err := repo.FindByMinionID(ctx, b.MinionID)
+	got, err := repo.FindByBuildID(ctx, b.BuildID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,10 +76,10 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 	}
 
 	// Not taken after all: back in the queue, with nothing of that instance.
-	if ok, err := repo.Unoffer(ctx, b.MinionID, "bob-1", b.Deadline, now.Add(time.Minute)); !ok || err != nil {
+	if ok, err := repo.Unoffer(ctx, b.BuildID, "bob-1", b.Deadline, now.Add(time.Minute)); !ok || err != nil {
 		t.Fatalf("unoffer: %v %v", ok, err)
 	}
-	if got, _ := repo.FindByMinionID(ctx, b.MinionID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil ||
+	if got, _ := repo.FindByBuildID(ctx, b.BuildID); got.Plan != nil || got.StepReports != nil || got.StartedAt != nil ||
 		!got.Deadline.Equal(b.Deadline) || got.ArtifactMaxSize != 0 {
 		t.Errorf("after unoffer: plan %+v, reports %+v, deadline %s (queued with %s), artifact limit %d",
 			got.Plan, got.StepReports, got.Deadline, b.Deadline, got.ArtifactMaxSize)
@@ -88,7 +88,7 @@ func TestIntegrationBuildStepReports(t *testing.T) {
 
 // TestIntegrationBuildsList pins the Builds page's query: newest first, a
 // page at a time; the app's search over the build's fields, its plan, its
-// connections' notes and its search text (minion id, values, connection
+// connections' notes and its search text (build id, values, connection
 // settings), but not the keys of those; state and factory filters; and the
 // backfill that gives older builds their search text.
 func TestIntegrationBuildsList(t *testing.T) {
@@ -106,17 +106,17 @@ func TestIntegrationBuildsList(t *testing.T) {
 			Values: map[string]any{"path_prefix": "/cdn/"},
 		}}}
 	}
-	eu := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "bob", Target: "dummy", Platform: "any/any",
+	eu := &models.Build{BuildID: uuid.New(), OperationID: op, ModuleName: "bob", Target: "dummy", Platform: "any/any",
 		Description: "Dry run for the EU front", State: models.BuildStateFailed, Instance: "bob-local",
 		Values: models.JSONMap{"greeting": "hello", "punches": []any{"jab", "hook"}}, Connections: conn("https://edge-eu.example.com"),
 		ConnectionDescriptions: []string{"EU CDN front"}, Plan: []models.BuildPlanStep{{ID: "punches", Label: "Take punches"}},
 		Error: &models.BuildError{Code: "knocked_out", Message: "BOB is set to fail"}, CreatedAt: now}
-	us := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "bob", Target: "dummy2", Platform: "windows/amd64",
+	us := &models.Build{BuildID: uuid.New(), OperationID: op, ModuleName: "bob", Target: "dummy2", Platform: "windows/amd64",
 		Description: "Second wave", State: models.BuildStateSucceeded, Connections: conn("https://cdn.other.net"),
 		Artifact: &models.BuildArtifact{Filename: "minion.exe"}, CreatedAt: now.Add(time.Minute)}
-	tank := &models.Build{MinionID: uuid.New(), OperationID: op, ModuleName: "tank", Target: "dummy", Platform: "linux/amd64",
+	tank := &models.Build{BuildID: uuid.New(), OperationID: op, ModuleName: "tank", Target: "dummy", Platform: "linux/amd64",
 		Description: "Third", State: models.BuildStateQueued, Connections: conn("https://tank.example.org"), CreatedAt: now.Add(2 * time.Minute)}
-	elsewhere := &models.Build{MinionID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob", Description: "Dry run elsewhere", CreatedAt: now}
+	elsewhere := &models.Build{BuildID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob", Description: "Dry run elsewhere", CreatedAt: now}
 	for _, b := range []*models.Build{eu, us, tank, elsewhere} {
 		if err := repo.Insert(ctx, b); err != nil {
 			t.Fatal(err)
@@ -153,7 +153,7 @@ func TestIntegrationBuildsList(t *testing.T) {
 		"the artifact":             {BuildFilter{Search: "minion.exe"}, []string{"Second wave"}},
 		"the factory instance":     {BuildFilter{Search: "bob-local"}, []string{"Dry run for the EU front"}},
 		"the platform":             {BuildFilter{Search: "windows"}, []string{"Second wave"}},
-		"the minion id":            {BuildFilter{Search: us.MinionID.String()[:13]}, []string{"Second wave"}},
+		"the build id":             {BuildFilter{Search: us.BuildID.String()[:13]}, []string{"Second wave"}},
 		"a setting's key: nothing": {BuildFilter{Search: "base_url"}, []string{}},
 		"a quoted whole word":      {BuildFilter{Search: `"dummy"`}, []string{"Third", "Dry run for the EU front"}},
 		"by state":                 {BuildFilter{States: []string{models.BuildStateFailed, models.BuildStateQueued}}, []string{"Third", "Dry run for the EU front"}},
@@ -175,13 +175,13 @@ func TestIntegrationBuildsList(t *testing.T) {
 		t.Fatal(err)
 	}
 	next, err := repo.FindByOperationIDWithCursor(ctx, op, BuildFilter{}, &cur, 2, true)
-	if err != nil || len(next) != 1 || next[0].MinionID != eu.MinionID {
+	if err != nil || len(next) != 1 || next[0].BuildID != eu.BuildID {
 		t.Fatalf("next page %+v: %v", next, err)
 	}
 
 	// A build stored before builds had a search text is given one.
 	raw := db.Collection(buildCollection)
-	if err := raw.UpdateOne(ctx, bson.M{"minion_id": tank.MinionID}, bson.M{"$unset": bson.M{"search_text": ""}}); err != nil {
+	if err := raw.UpdateOne(ctx, bson.M{"build_id": tank.BuildID}, bson.M{"$unset": bson.M{"search_text": ""}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := list(BuildFilter{Search: "tank.example.org"}); len(got) != 0 {

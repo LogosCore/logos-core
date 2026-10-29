@@ -20,7 +20,7 @@ import (
 
 // Minion builds: build files, builds and minions. See
 // models/build.go. A build's state only moves through compare-and-set updates
-// on minion_id + state, so concurrent core instances (and a cancel racing a
+// on build_id + state, so concurrent core instances (and a cancel racing a
 // result) never both win.
 
 const (
@@ -114,8 +114,8 @@ type BuildOutcome struct {
 // IBuildRepository stores builds. State changes are compare-and-set.
 type IBuildRepository interface {
 	Insert(ctx context.Context, b *models.Build) error
-	// FindByMinionID returns one build; IsNotFound on a miss.
-	FindByMinionID(ctx context.Context, minionID uuid.UUID) (*models.Build, error)
+	// FindByBuildID returns one build; IsNotFound on a miss.
+	FindByBuildID(ctx context.Context, buildID uuid.UUID) (*models.Build, error)
 	// List returns an operation's builds, newest first, at most limit (0:
 	// all).
 	List(ctx context.Context, operationID uuid.UUID, limit int64) ([]models.Build, error)
@@ -133,34 +133,34 @@ type IBuildRepository interface {
 	// first, until leaseUntil. Nil when there is none.
 	ClaimQueued(ctx context.Context, now, leaseUntil time.Time) (*models.Build, error)
 	// ReleaseClaim ends a claim that placed the build nowhere.
-	ReleaseClaim(ctx context.Context, minionID uuid.UUID) error
+	ReleaseClaim(ctx context.Context, buildID uuid.UUID) error
 	// MarkBuilding moves a queued build to BUILDING on instance, with the
 	// deadline and artifact max size of the request it is offered with. Core
 	// does it before offering the build there, so a report the instance sends
 	// at once already finds the build its own.
-	MarkBuilding(ctx context.Context, minionID uuid.UUID, instance, factoryVersion string, deadline time.Time, artifactMaxSize int64, at time.Time) (bool, error)
+	MarkBuilding(ctx context.Context, buildID uuid.UUID, instance, factoryVersion string, deadline time.Time, artifactMaxSize int64, at time.Time) (bool, error)
 	// Unoffer puts a build that instance did not take back in the queue,
 	// claimed until leaseUntil, unless the instance already reported a
 	// result. Its deadline is queueDeadline again: the one it had queued,
 	// which an offer must not extend. False when it is no longer building
 	// there.
-	Unoffer(ctx context.Context, minionID uuid.UUID, instance string, queueDeadline, leaseUntil time.Time) (bool, error)
+	Unoffer(ctx context.Context, buildID uuid.UUID, instance string, queueDeadline, leaseUntil time.Time) (bool, error)
 	// SetPlan stores the factory's plan for the build while instance builds
 	// it. False when it is not building there.
-	SetPlan(ctx context.Context, minionID uuid.UUID, instance string, plan []models.BuildPlanStep) (bool, error)
+	SetPlan(ctx context.Context, buildID uuid.UUID, instance string, plan []models.BuildPlanStep) (bool, error)
 	// ReportStep records that instance is on step (an id of the plan, a slug
 	// without dots) at at: the step's first report time is kept, its message
 	// replaced. False when the build is not building there.
-	ReportStep(ctx context.Context, minionID uuid.UUID, instance, step, message string, at time.Time) (bool, error)
+	ReportStep(ctx context.Context, buildID uuid.UUID, instance, step, message string, at time.Time) (bool, error)
 	// RecordResult stores a succeeded result, received at at, whose artifact
 	// is still to be checked. False when the build is not building on
 	// instance, or a result was already recorded.
-	RecordResult(ctx context.Context, minionID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error)
+	RecordResult(ctx context.Context, buildID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error)
 	// Finish moves a build in one of the from states to a final one. False
 	// when it was in none of them.
-	Finish(ctx context.Context, minionID uuid.UUID, from []string, out BuildOutcome) (bool, error)
+	Finish(ctx context.Context, buildID uuid.UUID, from []string, out BuildOutcome) (bool, error)
 	// MarkArtifactDeleted records that the artifact's bytes were removed.
-	MarkArtifactDeleted(ctx context.Context, minionID uuid.UUID) error
+	MarkArtifactDeleted(ctx context.Context, buildID uuid.UUID) error
 	// CountFileReferences counts builds whose values name a build file.
 	CountFileReferences(ctx context.Context, fileID uuid.UUID) (int64, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
@@ -170,7 +170,7 @@ type buildRepository struct{ coll database.Collection }
 
 func NewBuildRepository(db database.Database) IBuildRepository {
 	db.EnsureIndexes(context.Background(), buildCollection, []opts.IndexModel{
-		{Key: []string{"minion_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
+		{Key: []string{"build_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		// -_id matches the list's tiebreak, so the index serves the sort.
 		{Key: []string{"operation_id", "-created_at", "-_id"}},
 		{Key: []string{"state", "created_at"}},
@@ -187,9 +187,9 @@ func (r *buildRepository) Insert(ctx context.Context, b *models.Build) error {
 	return err
 }
 
-func (r *buildRepository) FindByMinionID(ctx context.Context, minionID uuid.UUID) (*models.Build, error) {
+func (r *buildRepository) FindByBuildID(ctx context.Context, buildID uuid.UUID) (*models.Build, error) {
 	var b models.Build
-	if err := r.coll.Find(ctx, bson.M{"minion_id": minionID}).One(&b); err != nil {
+	if err := r.coll.Find(ctx, bson.M{"build_id": buildID}).One(&b); err != nil {
 		return nil, err
 	}
 	return &b, nil
@@ -214,7 +214,7 @@ func (r *buildRepository) ListUnfinished(ctx context.Context) ([]models.Build, e
 // search (searchPattern) over what the Builds page shows of a build (factory,
 // target, description, platform, state, factory instance, who started it, its
 // plan's steps), its error and artifact name, the operators' notes on its
-// connections, and its search text: its minion id, values, commands and
+// connections, and its search text: its build id, values, commands and
 // connections (models.BuildSearchText).
 type BuildFilter struct {
 	Search      string
@@ -281,7 +281,7 @@ func (r *buildRepository) BackfillSearchText(ctx context.Context) (int64, error)
 		ok, err := matched(r.coll.UpdateOne(ctx, bson.M{"_id": bs[i].Id, "search_text": bson.M{"$exists": false}},
 			bson.M{"$set": bson.M{"search_text": models.BuildSearchText(&bs[i])}}))
 		if err != nil {
-			return n, fmt.Errorf("give build %s its search text: %w", bs[i].MinionID, err)
+			return n, fmt.Errorf("give build %s its search text: %w", bs[i].BuildID, err)
 		}
 		if ok {
 			n++
@@ -316,8 +316,8 @@ func (r *buildRepository) ClaimQueued(ctx context.Context, now, leaseUntil time.
 	return &b, nil
 }
 
-func (r *buildRepository) ReleaseClaim(ctx context.Context, minionID uuid.UUID) error {
-	err := r.coll.UpdateOne(ctx, bson.M{"minion_id": minionID, "state": models.BuildStateQueued},
+func (r *buildRepository) ReleaseClaim(ctx context.Context, buildID uuid.UUID) error {
+	err := r.coll.UpdateOne(ctx, bson.M{"build_id": buildID, "state": models.BuildStateQueued},
 		bson.M{"$unset": bson.M{"lease_until": ""}})
 	if errors.Is(err, qmgo.ErrNoSuchDocuments) {
 		return nil
@@ -325,9 +325,9 @@ func (r *buildRepository) ReleaseClaim(ctx context.Context, minionID uuid.UUID) 
 	return err
 }
 
-func (r *buildRepository) MarkBuilding(ctx context.Context, minionID uuid.UUID, instance, factoryVersion string, deadline time.Time, artifactMaxSize int64, at time.Time) (bool, error) {
+func (r *buildRepository) MarkBuilding(ctx context.Context, buildID uuid.UUID, instance, factoryVersion string, deadline time.Time, artifactMaxSize int64, at time.Time) (bool, error) {
 	return matched(r.coll.UpdateOne(ctx,
-		bson.M{"minion_id": minionID, "state": models.BuildStateQueued},
+		bson.M{"build_id": buildID, "state": models.BuildStateQueued},
 		bson.M{
 			"$set": bson.M{
 				"state": models.BuildStateBuilding, "instance": instance, "factory_version": factoryVersion,
@@ -337,8 +337,8 @@ func (r *buildRepository) MarkBuilding(ctx context.Context, minionID uuid.UUID, 
 		}))
 }
 
-func (r *buildRepository) Unoffer(ctx context.Context, minionID uuid.UUID, instance string, queueDeadline, leaseUntil time.Time) (bool, error) {
-	filter := buildingOn(minionID, instance)
+func (r *buildRepository) Unoffer(ctx context.Context, buildID uuid.UUID, instance string, queueDeadline, leaseUntil time.Time) (bool, error) {
+	filter := buildingOn(buildID, instance)
 	filter["result_received"] = bson.M{"$ne": true}
 	return matched(r.coll.UpdateOne(ctx, filter, bson.M{
 		"$set": bson.M{"state": models.BuildStateQueued, "deadline": queueDeadline, "lease_until": leaseUntil},
@@ -348,16 +348,16 @@ func (r *buildRepository) Unoffer(ctx context.Context, minionID uuid.UUID, insta
 }
 
 // buildingOn matches a build while instance builds it.
-func buildingOn(minionID uuid.UUID, instance string) bson.M {
-	return bson.M{"minion_id": minionID, "state": models.BuildStateBuilding, "instance": instance}
+func buildingOn(buildID uuid.UUID, instance string) bson.M {
+	return bson.M{"build_id": buildID, "state": models.BuildStateBuilding, "instance": instance}
 }
 
-func (r *buildRepository) SetPlan(ctx context.Context, minionID uuid.UUID, instance string, plan []models.BuildPlanStep) (bool, error) {
-	return matched(r.coll.UpdateOne(ctx, buildingOn(minionID, instance), bson.M{"$set": bson.M{"plan": plan}}))
+func (r *buildRepository) SetPlan(ctx context.Context, buildID uuid.UUID, instance string, plan []models.BuildPlanStep) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, buildingOn(buildID, instance), bson.M{"$set": bson.M{"plan": plan}}))
 }
 
-func (r *buildRepository) ReportStep(ctx context.Context, minionID uuid.UUID, instance, step, message string, at time.Time) (bool, error) {
-	return matched(r.coll.UpdateOne(ctx, buildingOn(minionID, instance), reportStepUpdate(step, message, at)))
+func (r *buildRepository) ReportStep(ctx context.Context, buildID uuid.UUID, instance, step, message string, at time.Time) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, buildingOn(buildID, instance), reportStepUpdate(step, message, at)))
 }
 
 // reportStepUpdate is the update of ReportStep. Reports of different steps
@@ -374,8 +374,8 @@ func reportStepUpdate(step, message string, at time.Time) bson.M {
 	return u
 }
 
-func (r *buildRepository) RecordResult(ctx context.Context, minionID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error) {
-	filter := buildingOn(minionID, instance)
+func (r *buildRepository) RecordResult(ctx context.Context, buildID uuid.UUID, instance string, artifact models.BuildArtifact, warnings []string, log string, at time.Time) (bool, error) {
+	filter := buildingOn(buildID, instance)
 	filter["result_received"] = bson.M{"$ne": true}
 	set := bson.M{"result_received": true, "result_at": at, "artifact": artifact, "log": log}
 	if len(warnings) > 0 {
@@ -405,12 +405,12 @@ func finishUpdate(out BuildOutcome) bson.M {
 	return bson.M{"$set": set, "$unset": bson.M{"lease_until": ""}}
 }
 
-func (r *buildRepository) Finish(ctx context.Context, minionID uuid.UUID, from []string, out BuildOutcome) (bool, error) {
-	return matched(r.coll.UpdateOne(ctx, bson.M{"minion_id": minionID, "state": bson.M{"$in": from}}, finishUpdate(out)))
+func (r *buildRepository) Finish(ctx context.Context, buildID uuid.UUID, from []string, out BuildOutcome) (bool, error) {
+	return matched(r.coll.UpdateOne(ctx, bson.M{"build_id": buildID, "state": bson.M{"$in": from}}, finishUpdate(out)))
 }
 
-func (r *buildRepository) MarkArtifactDeleted(ctx context.Context, minionID uuid.UUID) error {
-	return r.coll.UpdateOne(ctx, bson.M{"minion_id": minionID}, bson.M{"$set": bson.M{"artifact.deleted": true}})
+func (r *buildRepository) MarkArtifactDeleted(ctx context.Context, buildID uuid.UUID) error {
+	return r.coll.UpdateOne(ctx, bson.M{"build_id": buildID}, bson.M{"$set": bson.M{"artifact.deleted": true}})
 }
 
 func (r *buildRepository) CountFileReferences(ctx context.Context, fileID uuid.UUID) (int64, error) {
@@ -434,7 +434,7 @@ func matched(err error) (bool, error) {
 
 // IMinionRepository stores minions.
 type IMinionRepository interface {
-	// Insert stores a minion; storing the same minion id again is a no-op.
+	// Insert stores a minion; storing the same build id again is a no-op.
 	Insert(ctx context.Context, m *models.Minion) error
 	// List returns an operation's minions, newest first.
 	List(ctx context.Context, operationID uuid.UUID) ([]models.Minion, error)
@@ -445,7 +445,7 @@ type minionRepository struct{ coll database.Collection }
 
 func NewMinionRepository(db database.Database) IMinionRepository {
 	db.EnsureIndexes(context.Background(), minionCollection, []opts.IndexModel{
-		{Key: []string{"minion_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
+		{Key: []string{"build_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "-created_at"}},
 	})
 	return &minionRepository{coll: db.Collection(minionCollection)}

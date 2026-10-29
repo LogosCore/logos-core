@@ -65,7 +65,7 @@ var traceParentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{
 //	@Accept			octet-stream
 //	@Produce		octet-stream
 //	@Param			Logos-Message-Id		header	string	true	"Unique per request, a lowercase UUID"
-//	@Param			Logos-Minion-Id			header	string	true	"The minion's id, a lowercase UUID"
+//	@Param			Logos-Build-Id			header	string	true	"The build id, a lowercase UUID"
 //	@Param			Logos-Channel-Instance	header	string	true	"The sending channel's registered instance id"
 //	@Param			traceparent				header	string	false	"W3C Trace Context"
 //	@Param			request					body	string	true	"The minion's ciphertext"	format(binary)
@@ -151,7 +151,7 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 
 	out := protocol.OutboundMinionMessage{
 		MessageID:   protocol.NewID(),
-		MinionID:    in.MinionID,
+		BuildID:     in.BuildID,
 		TraceParent: in.TraceParent,
 		// No Data: no tasking pipeline yet, so nothing for the minion.
 	}
