@@ -71,7 +71,7 @@ export function SessionsTable({
           </div>
           <div className="truncate text-sm" title={userOf(s) || undefined}>
             {userOf(s) || <span className="text-muted-foreground">—</span>}
-            {s.integrity && <span className="text-muted-foreground"> · {s.integrity}</span>}
+            {s.integrity && ELEVATED.has(s.integrity) && <span className="font-medium"> · {s.integrity}</span>}
           </div>
           <div className="truncate text-sm" title={s.proc ?? undefined}>
             {s.proc || <span className="text-muted-foreground">pid</span>} {s.pid}
@@ -94,6 +94,10 @@ export function SessionsTable({
     />
   )
 }
+
+// Integrity levels the User column names: elevated ones. The usual
+// (user, medium, low) go unsaid.
+const ELEVATED = new Set(["root", "system", "high"])
 
 const DAY = 24 * 60 * 60 * 1000
 const HOUR = 60 * 60 * 1000
