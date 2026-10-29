@@ -248,6 +248,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/responses.ErrorResponse"
                         }
                     },
+                    "422": {
+                        "description": "the message does not open",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
                     "503": {
                         "description": "module registry unavailable",
                         "schema": {

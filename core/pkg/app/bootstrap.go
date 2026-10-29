@@ -84,6 +84,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		BuildFile:          repository.NewBuildFileRepository(db),
 		Build:              repository.NewBuildRepository(db),
 		Minion:             repository.NewMinionRepository(db),
+		MinionStaging:      repository.NewMinionStagingRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed

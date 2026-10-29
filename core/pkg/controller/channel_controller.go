@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/logger"
+	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/responses"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
@@ -31,19 +32,28 @@ type IChannelController interface {
 	Sync(c *gin.Context)
 }
 
+// MinionHandler opens a minion's sealed message sent under id and returns
+// core's sealed answer, nil for none. Satisfied by *minionsync.Service; an
+// error wrapping minionsync.ErrUnopened is the sync call's 422.
+type MinionHandler interface {
+	Handle(ctx context.Context, id string, frame []byte) ([]byte, error)
+}
+
 type channelController struct {
 	cache   cache.Cache
 	gate    RegistrationGate
+	minions MinionHandler
 	log     *zap.Logger
 	maxSize int64
 }
 
 // NewChannelController serves the sync endpoint. maxSize caps a request's
-// body: the minion's ciphertext.
-func NewChannelController(c cache.Cache, gate RegistrationGate, log *zap.Logger, maxSize int64) IChannelController {
+// body: the minion's ciphertext. minions answers what the minion sent.
+func NewChannelController(c cache.Cache, gate RegistrationGate, minions MinionHandler, log *zap.Logger, maxSize int64) IChannelController {
 	return &channelController{
 		cache:   c,
 		gate:    gate,
+		minions: minions,
 		log:     log,
 		maxSize: maxSize,
 	}
@@ -55,9 +65,9 @@ var traceParentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{
 // Sync is the data-plane endpoint a channel module calls per inbound minion
 // message: the minion's ciphertext as the raw body, its ids in headers. It
 // checks the headers, the registration gate and the size before it reads the
-// body, dedups on Logos-Message-Id, and answers 204: core holds no tasking
-// yet, so it has nothing for the minion. The decrypt → tasking → encrypt
-// pipeline will hang off this handler, answering 200 with ciphertext.
+// body, dedups on Logos-Message-Id, and hands the message to minions: 200
+// with core's sealed answer, 204 when it has none, 422 when the message does
+// not open (minion-messages contract).
 //
 //	@Summary		Channel sync (data plane)
 //	@Description	A channel relays one minion message: the ciphertext as an application/octet-stream body, its ids in Logos-* headers. Core answers 200 with ciphertext for the minion, or 204 when it has nothing for it (today, always).
@@ -75,6 +85,7 @@ var traceParentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{
 //	@Failure		403	{object}	responses.ErrorResponse	"instance is not a registered module"
 //	@Failure		413	{object}	responses.ErrorResponse
 //	@Failure		415	{object}	responses.ErrorResponse
+//	@Failure		422	{object}	responses.ErrorResponse	"the message does not open"
 //	@Failure		503	{object}	responses.ErrorResponse	"module registry unavailable"
 //	@Router			/channel/sync [post]
 func (ctrl *channelController) Sync(c *gin.Context) {
@@ -153,10 +164,26 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 		MessageID:   protocol.NewID(),
 		BuildID:     in.BuildID,
 		TraceParent: in.TraceParent,
-		// No Data: no tasking pipeline yet, so nothing for the minion.
+	}
+	if fresh || err != nil {
+		reply, err := ctrl.minions.Handle(ctx, in.BuildID, in.Data)
+		switch {
+		case errors.Is(err, minionsync.ErrUnopened):
+			c.JSON(http.StatusUnprocessableEntity, responses.NewErrorResponse("the message does not open"))
+			return
+		case err != nil:
+			log.Error("channel sync: handle the minion's message", zap.String("build_id", in.BuildID), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+			return
+		}
+		out.Data = reply
 	}
 	out.SetHeaders(c.Writer.Header())
-	c.Status(http.StatusNoContent)
+	if len(out.Data) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+	c.Data(http.StatusOK, protocol.SyncContentType, out.Data)
 }
 
 // validationMessage is a protocol validation error's message, without its

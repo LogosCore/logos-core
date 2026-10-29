@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/logoscore/logos-core/core/pkg/cache"
+	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
@@ -99,9 +101,61 @@ func doSync(ctrl IChannelController, h http.Header, body []byte) *httptest.Respo
 	return w
 }
 
+// fakeMinions answers every message with reply and err, and counts them.
+type fakeMinions struct {
+	reply []byte
+	err   error
+	calls int
+	id    string
+	frame []byte
+}
+
+func (f *fakeMinions) Handle(_ context.Context, id string, frame []byte) ([]byte, error) {
+	f.calls++
+	f.id, f.frame = id, frame
+	return f.reply, f.err
+}
+
 func newCtrl(gate RegistrationGate) IChannelController {
+	return newCtrlWith(gate, &fakeMinions{})
+}
+
+func newCtrlWith(gate RegistrationGate, minions MinionHandler) IChannelController {
 	gin.SetMode(gin.TestMode)
-	return NewChannelController(newFakeCache(), gate, zap.NewNop(), testMaxSize)
+	return NewChannelController(newFakeCache(), gate, minions, zap.NewNop(), testMaxSize)
+}
+
+// What the minion handler answers decides the reply: its sealed answer as a
+// 200 body, nothing as a 204, a message that does not open as a 422.
+func TestChannelSync_MinionAnswers(t *testing.T) {
+	m := &fakeMinions{reply: []byte{0x01, 0xff}}
+	w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext)
+	if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), m.reply) || w.Header().Get("Content-Type") != protocol.SyncContentType {
+		t.Fatalf("answer: %d %x %q", w.Code, w.Body.Bytes(), w.Header().Get("Content-Type"))
+	}
+	if m.id != testBuildID || !bytes.Equal(m.frame, ciphertext) {
+		t.Fatalf("handler got %s %x", m.id, m.frame)
+	}
+	if out := protocol.OutboundFromHeaders(w.Header()); out.BuildID != testBuildID {
+		t.Fatalf("reply headers %+v", out)
+	}
+
+	m = &fakeMinions{err: fmt.Errorf("wrapped: %w", minionsync.ErrUnopened)}
+	if w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext); w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unopened: %d %s", w.Code, w.Body.String())
+	}
+	m = &fakeMinions{err: errors.New("mongo down")}
+	if w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext); w.Code != http.StatusInternalServerError {
+		t.Fatalf("failure: %d", w.Code)
+	}
+
+	// A replay of the channel's message id is not handed on again.
+	m = &fakeMinions{reply: []byte{1}}
+	ctrl := newCtrlWith(registeredGate(), m)
+	doSync(ctrl, validSyncHeaders(), ciphertext)
+	if w := doSync(ctrl, validSyncHeaders(), ciphertext); w.Code != http.StatusNoContent || m.calls != 1 {
+		t.Fatalf("replay: %d after %d calls", w.Code, m.calls)
+	}
 }
 
 func TestChannelSync_Valid(t *testing.T) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/logoscore/logos-core/core/pkg/controller"
+	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
 )
@@ -80,10 +81,11 @@ func (a *App) buildControllers() *controllers {
 			LocalLoginEnabled: a.authCfg.localLoginEnabled,
 			OIDCStatus:        a.oidcStatus,
 		}),
-		channel: controller.NewChannelController(a.cache, a.moduleGate, a.logger, a.env.ChannelSyncMaxSize),
-		skill:   controller.NewSkillController(a.skillService, a.logger),
-		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
-		wiki:    controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
+		channel: controller.NewChannelController(a.cache, a.moduleGate,
+			minionsync.NewService(a.repos.Build, a.repos.MinionStaging, a.cache, a.logger), a.logger, a.env.ChannelSyncMaxSize),
+		skill: controller.NewSkillController(a.skillService, a.logger),
+		build: controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
+		wiki:  controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
 		// The runner and its pipeline are built in NewApp; this controller only
 		// stages uploads, queues jobs and serves status and downloads.
