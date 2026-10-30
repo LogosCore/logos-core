@@ -51,6 +51,12 @@ type IMinionSessionRepository interface {
 	// SetArchived archives a session or restores it; IsNotFound when there
 	// is none.
 	SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error
+	// SetArchivedMany archives or restores the operation's sessions with
+	// these ids, and SetArchivedMatching those q lists (its Archived view,
+	// search and filters; not its sort): one write each. Both return how
+	// many changed.
+	SetArchivedMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, archived bool) (int64, error)
+	SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error)
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
 	// Claim gives an open session to the process that claimed it: its
@@ -298,11 +304,38 @@ type MinionSessionClaim struct {
 }
 
 func (r *minionSessionRepository) SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error {
-	update := bson.M{"$set": bson.M{"archived": true}}
-	if !archived {
-		update = bson.M{"$unset": bson.M{"archived": ""}}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, archiveUpdate(archived))
+}
+
+// archiveUpdate archives (sets the flag) or restores (removes it).
+func archiveUpdate(archived bool) bson.M {
+	if archived {
+		return bson.M{"$set": bson.M{"archived": true}}
 	}
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
+	return bson.M{"$unset": bson.M{"archived": ""}}
+}
+
+func (r *minionSessionRepository) SetArchivedMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, archived bool) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	in := make(bson.A, len(ids))
+	for i, id := range ids {
+		in[i] = id
+	}
+	res, err := r.coll.UpdateAll(ctx, bson.M{"operation_id": operationID, "session_id": bson.M{"$in": in}}, archiveUpdate(archived))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error) {
+	res, err := r.coll.UpdateAll(ctx, minionSessionFilter(operationID, q, time.Now().UTC()), archiveUpdate(archived))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {

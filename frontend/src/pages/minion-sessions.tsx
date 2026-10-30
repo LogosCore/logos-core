@@ -78,6 +78,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
                 isFetchingNextPage={isFetchingNextPage}
                 hasNextPage={hasNextPage}
                 fetchNextPage={fetchNextPage}
+              total={data?.pages[0]?.minionSessions.totalCount ?? 0}
                 emptyState={
                   archived && !narrowed ? (
               <p className="text-sm">No archived sessions.</p>

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Virtuoso } from "react-virtuoso"
 import {
   DndContext,
@@ -29,6 +29,7 @@ import {
   FilterXIcon,
   CopyIcon,
   ListRestartIcon,
+  ListChecksIcon,
   LoaderIcon,
   PinIcon,
   XIcon,
@@ -66,7 +67,22 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useFactoryKinds } from "@/graphql/hooks/builds"
 import { factoryKindsByName } from "@/components/builds/build-values"
-import { useSetMinionSessionAddress, useSetMinionSessionArchived } from "@/graphql/hooks/minion-sessions"
+import {
+  useSetMinionSessionAddress,
+  useSetMinionSessionArchived,
+  useSetMinionSessionsArchived,
+} from "@/graphql/hooks/minion-sessions"
+import { Checkbox } from "@/components/ui/checkbox"
+import { errorMessage } from "@/components/modules/management/api-errors"
+import { toast } from "sonner"
+import {
+  emptySelection,
+  selectLoaded,
+  selectedIds,
+  selectionIn,
+  toggleSelected,
+  type SessionSelection,
+} from "./session-selection"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
 import { SessionFilterEditor } from "./session-filter-editor"
@@ -97,6 +113,7 @@ import {
 
 const SKELETON_ROWS = 5
 const MENU_TRACK = "2.25rem"
+const CHECK_TRACK = "1.25rem"
 
 /** Where a column's filter editor is open: the column, and the element it hangs from. */
 interface FilterTarget {
@@ -117,9 +134,12 @@ export function SessionsDatatable({
   isFetchingNextPage,
   hasNextPage,
   fetchNextPage,
+  total,
   emptyState,
 }: {
   operationId: string
+  /** How many sessions the list matches, every page: for "select all matching". */
+  total: number
   /** Whether the viewer may change sessions (pick an address, archive). */
   canWrite: boolean
   /** The archived sessions are listed instead of the others. */
@@ -163,8 +183,28 @@ export function SessionsDatatable({
     [icons, now, matchAddress, canWrite, pick],
   )
 
+  // The selection for bulk actions, made under this view and these filters
+  // (session-selection.ts): a change to either empties it.
+  const scope = JSON.stringify([archived, layout.filters])
+  const [selectionState, setSelection] = useState<SessionSelection>(() => emptySelection(scope))
+  const selection = selectionIn(selectionState, scope)
+  const order = useMemo(() => sessions.map((s) => s.id), [sessions])
+  const picked = selectedIds(selection, order)
+  const pickedSet = new Set(picked)
+  const selecting = selection.all || picked.length > 0
+  const clearSelection = () => setSelection(emptySelection(scope))
+  // Esc leaves selecting.
+  useEffect(() => {
+    if (!selecting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelection(emptySelection(scope))
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [selecting, scope])
+
   const columns = useMemo(() => layout.columns.map((id) => SESSION_COLUMN_BY_ID.get(id)!), [layout.columns])
-  const template = [...columns.map((c) => c.width), MENU_TRACK].join(" ")
+  const template = [...(selecting ? [CHECK_TRACK] : []), ...columns.map((c) => c.width), MENU_TRACK].join(" ")
   const grid = { gridTemplateColumns: template }
 
   const sensors = useSensors(
@@ -215,6 +255,22 @@ export function SessionsDatatable({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <FilterChips
+        selectionBar={
+          selecting ? (
+            <SelectionBar
+              operationId={operationId}
+              archived={archived}
+              canWrite={canWrite}
+              selection={selection}
+              picked={picked}
+              loaded={order.length}
+              total={total}
+              filters={layout.filters}
+              onSelectAll={() => setSelection({ ...selection, all: true, anchor: null })}
+              onDone={clearSelection}
+            />
+          ) : null
+        }
         archived={archived}
         onShowLive={() => onArchivedChange(false)}
         layout={layout}
@@ -241,6 +297,15 @@ export function SessionsDatatable({
                     if (e.target === e.currentTarget) setMenuColumn(null)
                   }}
                 >
+                  {selecting && (
+                    <Checkbox
+                      aria-label="Select every loaded session"
+                      className="self-center"
+                      checked={selection.all || (order.length > 0 && picked.length === order.length)}
+                      indeterminate={!selection.all && picked.length > 0 && picked.length < order.length}
+                      onCheckedChange={(on) => setSelection(selectLoaded(selection, order, on))}
+                    />
+                  )}
                   {columns.map((col) => (
                     <HeaderCell
                       key={col.id}
@@ -302,12 +367,31 @@ export function SessionsDatatable({
                 <ContextMenuRow
                   gridCols=""
                   style={grid}
+                  className={cn(pickedSet.has(s.id) && "bg-muted")}
+                  // While selecting, a click picks the row (shift: a range).
+                  onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
                   menuLabel="Session actions"
                   menuButtonSize="icon-xs"
-                  menu={<SessionMenu session={s} canWrite={canWrite} persistable={persistable(s)} />}
+                  menu={
+                    <SessionMenu
+                      session={s}
+                      canWrite={canWrite}
+                      persistable={persistable(s)}
+                      onSelect={() => setSelection(toggleSelected(selection, order, s.id, false))}
+                      selected={pickedSet.has(s.id)}
+                    />
+                  }
                 >
                   {(menuButton) => (
                     <>
+                      {selecting && (
+                        <Checkbox
+                          aria-label={`Select session ${s.number}`}
+                          className="pointer-events-none self-center"
+                          checked={pickedSet.has(s.id)}
+                          tabIndex={-1}
+                        />
+                      )}
                       {columns.map((col) => (
                         <div key={col.id} className="min-w-0">
                           <SessionCell id={col.id} session={s} ctx={ctx} />
@@ -582,6 +666,7 @@ function ColumnsButton({
 
 /** The filters in force, above the table: a click edits one, × removes it. */
 function FilterChips({
+  selectionBar,
   archived,
   onShowLive,
   layout,
@@ -589,6 +674,8 @@ function FilterChips({
   onRemove,
   onClearAll,
 }: {
+  /** The bulk-action bar while rows are selected; it leads the row. */
+  selectionBar: ReactNode
   archived: boolean
   onShowLive: () => void
   layout: SessionsLayout
@@ -596,9 +683,10 @@ function FilterChips({
   onRemove: (column: SessionColumnId) => void
   onClearAll: () => void
 }) {
-  if (layout.filters.length === 0 && !archived) return null
+  if (layout.filters.length === 0 && !archived && !selectionBar) return null
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {selectionBar}
       {archived && (
         <span className="inline-flex items-center rounded-md border border-foreground/30 bg-muted text-xs">
           <span className="flex items-center gap-1 py-1 pr-1 pl-2">
@@ -659,10 +747,15 @@ function SessionMenu({
   session: s,
   canWrite,
   persistable,
+  onSelect,
+  selected,
 }: {
   session: MinionSessionFieldsFragment
   canWrite: boolean
   persistable: boolean
+  /** Picks the row for bulk actions (or unpicks it). */
+  onSelect: () => void
+  selected: boolean
 }) {
   const modals = useRecordModals()
   const archive = useSetMinionSessionArchived()
@@ -673,6 +766,15 @@ function SessionMenu({
       : undefined
   return (
     <>
+      {canWrite && (
+        <>
+          <ContextMenuItem onClick={onSelect}>
+            <ListChecksIcon />
+            {selected ? "Unselect" : "Select"}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
       <ContextMenuItem
         disabled={why !== undefined}
         title={why}
@@ -695,5 +797,98 @@ function SessionMenu({
         Copy session id
       </ContextMenuItem>
     </>
+  )
+}
+
+/**
+ * The bar while sessions are selected: how many, the bulk action of the view
+ * (Archive, or Restore among the archived), "select all matching" once every
+ * loaded row is picked and more match, and Done. An action on all matching
+ * asks first: it reaches rows not on screen.
+ */
+function SelectionBar({
+  operationId,
+  archived,
+  canWrite,
+  selection,
+  picked,
+  loaded,
+  total,
+  filters,
+  onSelectAll,
+  onDone,
+}: {
+  operationId: string
+  archived: boolean
+  canWrite: boolean
+  selection: SessionSelection
+  picked: string[]
+  loaded: number
+  total: number
+  filters: SessionsLayout["filters"]
+  onSelectAll: () => void
+  onDone: () => void
+}) {
+  const bulk = useSetMinionSessionsArchived()
+  const [confirming, setConfirming] = useState(false)
+  const count = selection.all ? total : picked.length
+  const verb = archived ? "Restore" : "Archive"
+  const run = () => {
+    setConfirming(false)
+    bulk.mutate(
+      {
+        operationId,
+        archived: !archived,
+        ...(selection.all ? { matching: { archived, filters } } : { ids: picked }),
+      },
+      {
+        onSuccess: (data) => {
+          const n = data.setMinionSessionsArchived
+          toast.success(`${archived ? "Restored" : "Archived"} ${n} ${n === 1 ? "session" : "sessions"}`)
+          onDone()
+        },
+        onError: (err) => toast.error(errorMessage(err, `Failed to ${verb.toLowerCase()} the sessions`)),
+      },
+    )
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 rounded-md border border-foreground/30 bg-muted px-2 py-0.5 text-xs">
+      <ListChecksIcon className="size-3 shrink-0" />
+      <span className="font-medium">
+        {selection.all ? `All ${total} matching selected` : `${count} selected`}
+      </span>
+      {!selection.all && picked.length === loaded && total > loaded && (
+        <Button variant="link" size="xs" className="h-auto px-0 text-xs" onClick={onSelectAll}>
+          Select all {total} matching
+        </Button>
+      )}
+      {canWrite &&
+        (confirming ? (
+          <>
+            <span>
+              {verb} {count} sessions?
+            </span>
+            <Button size="xs" onClick={run} disabled={bulk.isPending}>
+              {verb}
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={bulk.isPending || count === 0}
+            onClick={() => (selection.all ? setConfirming(true) : run())}
+          >
+            {archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+            {verb}
+          </Button>
+        ))}
+      <Button size="xs" variant="ghost" onClick={onDone} title="Done (Esc)">
+        Done
+      </Button>
+    </span>
   )
 }

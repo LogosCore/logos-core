@@ -3,6 +3,7 @@ import { EllipsisIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { dataTableRowClass } from "@/components/ui/virtualized-data-table"
+import { cn } from "@/lib/utils"
 
 /**
  * A data-table row with a menu. A click (or Enter) calls onOpen, when there is
@@ -14,6 +15,7 @@ import { dataTableRowClass } from "@/components/ui/virtualized-data-table"
 export function ContextMenuRow({
   gridCols,
   style,
+  className,
   onOpen,
   menu,
   menuLabel,
@@ -24,7 +26,10 @@ export function ContextMenuRow({
   /** The ⋯ button's size: icon-xs keeps a one-line row one line. */
   menuButtonSize?: "icon-xs" | "icon-sm"
   style?: CSSProperties
-  onOpen?: () => void
+  /** More classes for the row, e.g. a selected one's. */
+  className?: string
+  /** A click, or Enter; shiftKey says whether shift was down (a range). */
+  onOpen?: (e: { shiftKey: boolean }) => void
   menu: ReactNode
   /** The ⋯ button's accessible name, e.g. "Module actions". */
   menuLabel: string
@@ -65,13 +70,13 @@ export function ContextMenuRow({
       <ContextMenuTrigger
         render={
           <div
-            className={`${dataTableRowClass(gridCols)} ${onOpen ? "cursor-pointer" : ""}`}
+            className={dataTableRowClass(gridCols, cn(onOpen && "cursor-pointer", className))}
             style={style}
             role={onOpen ? "link" : undefined}
             tabIndex={onOpen ? 0 : undefined}
             onClick={onOpen}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onOpen?.()
+              if (e.key === "Enter") onOpen?.(e)
             }}
           />
         }

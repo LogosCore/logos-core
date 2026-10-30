@@ -725,6 +725,12 @@ export type MinionSessionFilterOp =
   | 'RANGE'
   | 'WITHIN';
 
+export type MinionSessionMatchInput = {
+  archived?: InputMaybe<Scalars['Boolean']['input']>;
+  filters?: InputMaybe<Array<MinionSessionFilterInput>>;
+  search?: InputMaybe<Scalars['String']['input']>;
+};
+
 export type MinionSessionPeer = {
   address: Scalars['String']['output'];
   count: Scalars['Int']['output'];
@@ -1035,6 +1041,7 @@ export type Mutation = {
   setHiddenIdentities: User;
   setMinionSessionAddress: MinionSession;
   setMinionSessionArchived: MinionSession;
+  setMinionSessionsArchived: Scalars['Int']['output'];
   setMinionSessionsLayout?: Maybe<MinionSessionsLayout>;
   setMyAPIKeyEnabled: ApiKey;
   setTaskAssignees: Task;
@@ -1393,6 +1400,14 @@ export type MutationSetMinionSessionAddressArgs = {
 export type MutationSetMinionSessionArchivedArgs = {
   archived: Scalars['Boolean']['input'];
   id: Scalars['ID']['input'];
+};
+
+
+export type MutationSetMinionSessionsArchivedArgs = {
+  archived: Scalars['Boolean']['input'];
+  ids?: InputMaybe<Array<Scalars['ID']['input']>>;
+  matching?: InputMaybe<MinionSessionMatchInput>;
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -3464,6 +3479,16 @@ export type SetMinionSessionArchivedMutationVariables = Exact<{
 
 
 export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
+
+export type SetMinionSessionsArchivedMutationVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  ids?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
+  matching?: InputMaybe<MinionSessionMatchInput>;
+  archived: Scalars['Boolean']['input'];
+}>;
+
+
+export type SetMinionSessionsArchivedMutation = { setMinionSessionsArchived: number };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -7710,6 +7735,16 @@ export const SetMinionSessionArchivedDocument = new TypedDocumentString(`
   createdAt
   lastSeenAt
 }`) as unknown as TypedDocumentString<SetMinionSessionArchivedMutation, SetMinionSessionArchivedMutationVariables>;
+export const SetMinionSessionsArchivedDocument = new TypedDocumentString(`
+    mutation SetMinionSessionsArchived($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $archived: Boolean!) {
+  setMinionSessionsArchived(
+    operationId: $operationId
+    ids: $ids
+    matching: $matching
+    archived: $archived
+  )
+}
+    `) as unknown as TypedDocumentString<SetMinionSessionsArchivedMutation, SetMinionSessionsArchivedMutationVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
   modules(

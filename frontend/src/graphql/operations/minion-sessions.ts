@@ -166,3 +166,14 @@ export const SetMinionSessionArchivedMutation = graphql(`
     }
   }
 `)
+
+export const SetMinionSessionsArchivedMutation = graphql(`
+  mutation SetMinionSessionsArchived(
+    $operationId: ID!
+    $ids: [ID!]
+    $matching: MinionSessionMatchInput
+    $archived: Boolean!
+  ) {
+    setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)
+  }
+`)

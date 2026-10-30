@@ -537,6 +537,12 @@ type MinionSessionFilterInput struct {
 	To      *string               `json:"to,omitempty"`
 }
 
+type MinionSessionMatchInput struct {
+	Archived *bool                       `json:"archived,omitempty"`
+	Search   *string                     `json:"search,omitempty"`
+	Filters  []*MinionSessionFilterInput `json:"filters,omitempty"`
+}
+
 type MinionSessionPeer struct {
 	Address   string `json:"address"`
 	FirstSeen string `json:"firstSeen"`

@@ -34,6 +34,9 @@ type IMinionSessionResolver interface {
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
 	// SetMinionSessionArchived archives a session or restores it.
 	SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error)
+	// SetMinionSessionsArchived archives or restores many: by ids, or every
+	// one matching a list's view, search and filters.
+	SetMinionSessionsArchived(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) (int, error)
 	// Load reads one session for a subscription event, already authorized
 	// by the subscription's filter; nil when it cannot be read.
 	Load(ctx context.Context, sessionID string) *model.MinionSession
@@ -157,6 +160,60 @@ func (r *minionSessionResolver) SetMinionSessionArchived(ctx context.Context, id
 		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
 	}))
 	return toMinionSessionModel(s), nil
+}
+
+// maxBulkSessionIDs caps the ids one bulk change names; more go by filters.
+const maxBulkSessionIDs = 500
+
+func (r *minionSessionResolver) SetMinionSessionsArchived(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) (int, error) {
+	if gqlctx.AuthFromContext(ctx).Agent != nil {
+		return 0, moduleGQLError(ctx, errCodeForbidden, "forbidden")
+	}
+	op, err := uuid.Parse(operationID)
+	if err != nil {
+		return 0, moduleGQLError(ctx, errCodeBadUserInput, "invalid operation ID")
+	}
+	operation, err := gqlctx.LoadOperation(ctx, r.operationRepo, op)
+	if err != nil {
+		return 0, fmt.Errorf("operation not found: %w", err)
+	}
+	if err := authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleOperator); err != nil {
+		return 0, err
+	}
+	if (ids == nil) == (matching == nil) {
+		return 0, moduleGQLError(ctx, errCodeBadUserInput, "name the sessions by ids or by matching, one of the two")
+	}
+	var n int64
+	if matching != nil {
+		q := repository.MinionSessionQuery{Archived: matching.Archived != nil && *matching.Archived,
+			Search: strings.TrimSpace(deref(matching.Search)), Sort: models.DefaultMinionSessionSort}
+		if q.Filters, err = fromSessionFilterInputs(matching.Filters); err != nil {
+			return 0, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
+		if err := q.Validate(); err != nil {
+			return 0, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
+		n, err = r.sessions.SetArchivedMatching(ctx, op, q, archived)
+	} else {
+		if len(ids) > maxBulkSessionIDs {
+			return 0, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("at most %d ids; name more by matching", maxBulkSessionIDs))
+		}
+		sids := make([]uuid.UUID, len(ids))
+		for i, id := range ids {
+			if sids[i], err = uuid.Parse(id); err != nil {
+				return 0, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("invalid session ID %q", id))
+			}
+		}
+		n, err = r.sessions.SetArchivedMany(ctx, op, sids, archived)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("archive the sessions: %w", err)
+	}
+	// One event for them all, naming no session: lists refetch once.
+	if n > 0 {
+		r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{OperationID: op.String()}))
+	}
+	return int(n), nil
 }
 
 func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {

@@ -110,6 +110,7 @@ type Documents = {
     "\n  mutation SetMinionSessionAddress($id: ID!, $address: String) {\n    setMinionSessionAddress(id: $id, address: $address) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionAddressDocument,
     "\n  query MinionSession($id: ID!) {\n    minionSession(id: $id) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.MinionSessionDocument,
     "\n  mutation SetMinionSessionArchived($id: ID!, $archived: Boolean!) {\n    setMinionSessionArchived(id: $id, archived: $archived) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionArchivedDocument,
+    "\n  mutation SetMinionSessionsArchived(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $archived: Boolean!\n  ) {\n    setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)\n  }\n": typeof types.SetMinionSessionsArchivedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    iconLight\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": typeof types.ModuleFieldsFragmentDoc,
     "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": typeof types.BlockModuleDocument,
@@ -338,6 +339,7 @@ const documents: Documents = {
     "\n  mutation SetMinionSessionAddress($id: ID!, $address: String) {\n    setMinionSessionAddress(id: $id, address: $address) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionAddressDocument,
     "\n  query MinionSession($id: ID!) {\n    minionSession(id: $id) {\n      ...MinionSessionFields\n    }\n  }\n": types.MinionSessionDocument,
     "\n  mutation SetMinionSessionArchived($id: ID!, $archived: Boolean!) {\n    setMinionSessionArchived(id: $id, archived: $archived) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionArchivedDocument,
+    "\n  mutation SetMinionSessionsArchived(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $archived: Boolean!\n  ) {\n    setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)\n  }\n": types.SetMinionSessionsArchivedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    iconLight\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": types.ModuleFieldsFragmentDoc,
     "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": types.BlockModuleDocument,
@@ -851,6 +853,10 @@ export function graphql(source: "\n  query MinionSession($id: ID!) {\n    minion
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation SetMinionSessionArchived($id: ID!, $archived: Boolean!) {\n    setMinionSessionArchived(id: $id, archived: $archived) {\n      ...MinionSessionFields\n    }\n  }\n"): typeof import('./graphql').SetMinionSessionArchivedDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation SetMinionSessionsArchived(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $archived: Boolean!\n  ) {\n    setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)\n  }\n"): typeof import('./graphql').SetMinionSessionsArchivedDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

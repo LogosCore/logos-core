@@ -19,6 +19,8 @@ import {
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
   SetMinionSessionArchivedDocument,
+  SetMinionSessionsArchivedDocument,
+  type SetMinionSessionsArchivedMutationVariables,
   type MinionSessionFieldsFragment,
   type MinionSessionsLayoutQuery,
   type MinionSessionsQuery,
@@ -235,5 +237,17 @@ export function useSetMinionSessionArchived() {
   return useMutation({
     mutationFn: (vars: { id: string; archived: boolean }) => graphqlClient(SetMinionSessionArchivedDocument, vars),
     onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionArchived),
+  })
+}
+
+/**
+ * Archives or restores many sessions at once: by ids, or every one a list's
+ * view and filters match. The lists refetch; returns how many changed.
+ */
+export function useSetMinionSessionsArchived() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: SetMinionSessionsArchivedMutationVariables) => graphqlClient(SetMinionSessionsArchivedDocument, vars),
+    onSuccess: () => scheduleRefresh(queryClient, minionSessionKeys.lists()),
   })
 }

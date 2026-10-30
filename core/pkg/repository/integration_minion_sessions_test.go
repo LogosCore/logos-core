@@ -546,3 +546,57 @@ func TestIntegrationMinionSessionArchive(t *testing.T) {
 		t.Fatalf("restored but archived: %v", got)
 	}
 }
+
+// Bulk archiving: by ids, and by what a list shows (its view and filters),
+// in one write each, never past its operation.
+func TestIntegrationMinionSessionArchiveMany(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op, other := uuid.New(), uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	ids := make([]uuid.UUID, 5)
+	for i := range ids {
+		ids[i] = uuid.New()
+		os := "linux"
+		if i >= 3 {
+			os = "windows"
+		}
+		if err := repo.Insert(ctx, &models.MinionSession{SessionID: ids[i], OperationID: op, Number: int64(i + 1), CreatedAt: now,
+			LastSeenAt: &now, Hello: models.MinionHello{OS: os}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	foreign := uuid.New()
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: foreign, OperationID: other, Number: 1, CreatedAt: now, LastSeenAt: &now}); err != nil {
+		t.Fatal(err)
+	}
+	list := func(archived bool) []int64 {
+		page, _ := repo.FindByOperationIDWithCursor(ctx, op, MinionSessionQuery{Archived: archived, Sort: models.MinionSessionSort{Column: "number"}}, nil, 10, true)
+		return numbers(page)
+	}
+
+	// Another operation's id in the list changes nothing there.
+	n, err := repo.SetArchivedMany(ctx, op, []uuid.UUID{ids[0], ids[1], foreign}, true)
+	if err != nil || n != 2 {
+		t.Fatalf("by ids: %d %v", n, err)
+	}
+	if f, _ := repo.FindBySessionID(ctx, foreign); f.Archived {
+		t.Fatal("another operation's session was archived")
+	}
+	// Every live windows session.
+	q := MinionSessionQuery{Filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"windows"}}}, Sort: models.DefaultMinionSessionSort}
+	if n, err = repo.SetArchivedMatching(ctx, op, q, true); err != nil || n != 2 {
+		t.Fatalf("matching: %d %v", n, err)
+	}
+	if got, arch := list(false), list(true); !slices.Equal(got, []int64{3}) || !slices.Equal(arch, []int64{1, 2, 4, 5}) {
+		t.Fatalf("live %v, archived %v", got, arch)
+	}
+	// Restore every archived one.
+	if n, err = repo.SetArchivedMatching(ctx, op, MinionSessionQuery{Archived: true, Sort: models.DefaultMinionSessionSort}, false); err != nil || n != 4 {
+		t.Fatalf("restore matching: %d %v", n, err)
+	}
+	if got := list(false); len(got) != 5 {
+		t.Fatalf("after restoring: %v", got)
+	}
+}
