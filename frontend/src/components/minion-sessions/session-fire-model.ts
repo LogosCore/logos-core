@@ -16,24 +16,25 @@ export const LEVELS = 14
 
 // The bed: its heat, BED_MIN..BED_MAX, wanders along the row in stretches of
 // BED_STRETCH columns, each on its own; a column now and then burns a
-// degree lower. About 5 rows of fire, under the text: a hotter bed (8 rows)
-// burned through the letters' lower half.
+// degree lower. About 4 rows of fire, under the text: a hotter bed (8 rows)
+// burned through the letters' lower half. (A cooler bed burns lower too, but
+// as a dim line of embers: it keeps its heat, and cools faster as it rises.)
 const BED_MIN = 4
-const BED_MAX = 6
+const BED_MAX = 5
 const BED_STRETCH = 6
 
-// The hot spots: HOT, 2-4 columns either side of their middle, burning
+// The hot spots: HOT, 1-3 columns either side of their middle, burning
 // HOT_LIFE frames; about one alive every HOT_SPACING columns. Their flames
-// reach two thirds of the way up and more.
-export const HOT = 12
-const HOT_HALF: [number, number] = [2, 4]
+// reach half way up, now and then to the top. (Wider, they burned as bushes.)
+export const HOT = 13
+const HOT_HALF: [number, number] = [1, 3]
 const HOT_LIFE: [number, number] = [6, 16]
 const HOT_SPACING = 135
 
 // Rising a row, heat cools 0 (COOL_0 of the time), 1 (COOL_1) or 2 (the
 // rest), and drifts a column left or right DRIFT of the time (either way
 // alike: no wind).
-const COOL_0 = 0.3
+const COOL_0 = 0.2
 const COOL_1 = 0.45
 const DRIFT = 0.4
 
