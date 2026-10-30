@@ -373,17 +373,27 @@ export function shownAddress(
 }
 
 /**
- * How long ago, to the second, for the last day: "just now" for up to 3
- * seconds (a minion checking in every second stays there), then "4s ago",
- * "4m 05s ago", "3h 12m ago"; null from a day on (the date and time say it
- * better). A minion that stops shows its silence growing second by second.
+ * How long ago, for the last day, at one unit: "just now" for up to 3
+ * seconds (a minion checking in every second stays there), then seconds
+ * under a minute ("47s ago"), minutes under an hour ("4m ago"), hours
+ * ("3h ago"); null from a day on (the date and time say it better). The
+ * hover gives it exactly (formatAgoExact).
  */
 export function formatAgo(diffMs: number): string | null {
   const s = Math.max(0, Math.floor(diffMs / 1000))
   if (s >= 86400) return null
   if (s <= 3) return "just now"
   if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  return `${Math.floor(s / 3600)}h ago`
+}
+
+/** How long ago to the second, for a hover: "4m 05s ago", "3h 12m 09s ago", "2d 3h ago". */
+export function formatAgoExact(diffMs: number): string {
+  const s = Math.max(0, Math.floor(diffMs / 1000))
   const pad = (n: number) => String(n).padStart(2, "0")
+  if (s < 60) return `${s}s ago`
   if (s < 3600) return `${Math.floor(s / 60)}m ${pad(s % 60)}s ago`
-  return `${Math.floor(s / 3600)}h ${pad(Math.floor(s / 60) % 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ${pad(Math.floor(s / 60) % 60)}m ${pad(s % 60)}s ago`
+  return `${Math.floor(s / 86400)}d ${Math.floor(s / 3600) % 24}h ago`
 }

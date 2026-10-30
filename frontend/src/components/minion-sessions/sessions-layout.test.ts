@@ -8,6 +8,7 @@ import {
   SESSION_COLUMN_BY_ID,
   addressMatcher,
   formatAgo,
+  formatAgoExact,
   isClockFilter,
   lateness,
   shownAddress,
@@ -93,15 +94,21 @@ describe("layout", () => {
 })
 
 describe("formatAgo", () => {
-  test("to the second for the last day", () => {
+  test("one unit: seconds under a minute, minutes under an hour, then hours", () => {
     expect(formatAgo(0)).toBe("just now")
     expect(formatAgo(-500)).toBe("just now")
     expect(formatAgo(3_999)).toBe("just now")
     expect(formatAgo(4_000)).toBe("4s ago")
-    expect(formatAgo(47_900)).toBe("47s ago")
-    expect(formatAgo(245_000)).toBe("4m 05s ago")
-    expect(formatAgo(3 * 3600_000 + 12 * 60_000 + 9_000)).toBe("3h 12m ago")
+    expect(formatAgo(59_999)).toBe("59s ago")
+    expect(formatAgo(245_000)).toBe("4m ago")
+    expect(formatAgo(3 * 3600_000 + 12 * 60_000)).toBe("3h ago")
     expect(formatAgo(86400_000)).toBeNull()
+  })
+  test("the hover's exact one", () => {
+    expect(formatAgoExact(47_000)).toBe("47s ago")
+    expect(formatAgoExact(245_000)).toBe("4m 05s ago")
+    expect(formatAgoExact(3 * 3600_000 + 12 * 60_000 + 9_000)).toBe("3h 12m 09s ago")
+    expect(formatAgoExact(2 * 86400_000 + 3 * 3600_000)).toBe("2d 3h ago")
   })
 })
 

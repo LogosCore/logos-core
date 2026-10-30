@@ -8,7 +8,7 @@ import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
 import { cn } from "@/lib/utils"
-import { formatAgo, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
+import { formatAgo, formatAgoExact, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it.
@@ -152,7 +152,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           )}
           title={[
             state && scheduleNote(s, state, ctx.now),
-            s.lastSeenAt && `Last seen ${formatAbsolute(s.lastSeenAt)}`,
+            s.lastSeenAt &&
+              `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(ctx.now - Date.parse(s.lastSeenAt))})`,
             `Opened ${formatAbsolute(s.createdAt)}`,
           ]
             .filter(Boolean)
