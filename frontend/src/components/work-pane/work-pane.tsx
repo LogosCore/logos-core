@@ -177,8 +177,8 @@ function Tab({
                 if (e.button === 1) onClose("this")
               }}
               className={cn(
-                "group/tab flex h-9 max-w-56 cursor-pointer items-center gap-2 border-r border-b-2 border-b-transparent pr-1.5 pl-3 text-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                active ? "border-b-foreground bg-card text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                "group/tab relative flex h-9 max-w-56 cursor-pointer items-center gap-2 border-r pr-1.5 pl-3 text-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                active ? "bg-card text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 isDragging && "bg-muted shadow-sm",
                 tab.className,
               )}
@@ -186,6 +186,9 @@ function Tab({
           }
         >
           {tab.backdrop}
+          {/* The front tab's underline: drawn over a backdrop, where a bottom
+              border left a strip of its own under it (On Fire's flames). */}
+          {active && <span aria-hidden className="absolute inset-x-0 bottom-0 z-10 h-0.5 bg-foreground" />}
           <span data-cell className="flex min-w-0 items-center gap-1.5 truncate">
             {tab.label}
           </span>
