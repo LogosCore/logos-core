@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from "react"
-import { CheckIcon, XIcon } from "lucide-react"
+import { CheckIcon, PlusIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { errorMessage } from "@/components/modules/management/api-errors"
@@ -147,9 +147,20 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
             }}
             allowAdaptive={false}
             hideColors
+            // No icon yet: an empty slot to fill, not the wiki's page glyph
+            // (which read as an icon already chosen). Also the picker's
+            // "No icon" tile.
+            derivedDefault={{
+              glyph: (
+                <span className="flex size-[18px] items-center justify-center rounded-[4px] border border-dashed border-muted-foreground/60 text-muted-foreground">
+                  <PlusIcon className="size-3" />
+                </span>
+              ),
+              label: "No icon",
+              title: "Mark without an icon",
+            }}
           />
         </span>
-        {!icon && !emoji && <span className="text-xs text-muted-foreground">None: pick one</span>}
         {(icon || emoji) && (
           <Button
             type="button"
