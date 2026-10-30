@@ -16,16 +16,12 @@ import { cn } from "@/lib/utils"
 
 // A table cell for a list value (a host's addresses): one item shown, and a
 // "+N" button that opens all of them. Where the viewer may change it, the
-// menu also picks which item the row shows; "Automatic" leaves it to the
-// guess. Each item has its own copy button; the last entry copies them all.
-
-const AUTO = "\u0000auto"
+// menu also picks which item the row shows: the checked one. Each item has
+// its own copy button; the last entry copies them all.
 
 export function ListCell({
   items,
   shown,
-  picked,
-  autoItem,
   noun,
   onPick,
   mono = true,
@@ -33,14 +29,10 @@ export function ListCell({
   items: readonly string[]
   /** The item the row shows. */
   shown: string | null
-  /** The item someone picked; null while the guess decides. */
-  picked: string | null
-  /** What "Automatic" would show. */
-  autoItem: string | null
   /** Plural, for the menu: "addresses". */
   noun: string
-  /** Picks the shown item (null: automatic); absent where the viewer may not. */
-  onPick?: (item: string | null) => void
+  /** Picks the shown item; absent where the viewer may not. */
+  onPick?: (item: string) => void
   mono?: boolean
 }) {
   if (items.length === 0) return <span className="text-muted-foreground">—</span>
@@ -72,17 +64,10 @@ export function ListCell({
                 {items.length} {noun}
               </DropdownMenuLabel>
               {onPick ? (
-                <DropdownMenuRadioGroup
-                  value={picked ?? AUTO}
-                  onValueChange={(v) => onPick(v === AUTO ? null : (v as string))}
-                >
-                  <DropdownMenuRadioItem value={AUTO}>
-                    <span>Automatic</span>
-                    {autoItem && <span className={cn("truncate text-muted-foreground", mono && "font-mono text-xs")}>{autoItem}</span>}
-                  </DropdownMenuRadioItem>
+                <DropdownMenuRadioGroup value={shown} onValueChange={(v) => v !== shown && onPick(v as string)}>
                   {items.map((item) => (
                     <DropdownMenuRadioItem key={item} value={item}>
-                      <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+                      <span className={cn("truncate", mono && "font-mono text-xs")}>{item}</span>
                       <CopyItemButton item={item} />
                     </DropdownMenuRadioItem>
                   ))}

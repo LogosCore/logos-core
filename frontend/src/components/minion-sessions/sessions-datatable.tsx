@@ -139,7 +139,7 @@ export function SessionsDatatable({
       now,
       matchAddress,
       pickAddress: canWrite
-        ? (s: MinionSessionFieldsFragment, address: string | null) => pick({ id: s.id, address })
+        ? (s: MinionSessionFieldsFragment, address: string) => pick({ id: s.id, address })
         : undefined,
     }),
     [icons, now, matchAddress, canWrite, pick],
