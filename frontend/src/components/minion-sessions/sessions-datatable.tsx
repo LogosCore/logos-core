@@ -267,7 +267,7 @@ export function SessionsDatatable({
   const filterColumn = filterTarget ? SESSION_COLUMN_BY_ID.get(filterTarget.column)! : null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
       <FilterChips
         selectionBar={
           selecting ? (
@@ -308,7 +308,8 @@ export function SessionsDatatable({
         onRemove={(column) => onLayoutChange(setFilter(layout, column, null))}
         onClearAll={() => onLayoutChange({ ...layout, filters: [] })}
       />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+      {/* Edge to edge: no card around it, a line where the divider below starts. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-b bg-card">
         <ContextMenu>
           <ContextMenuTrigger
             // A right click past the cells is about the table, not a column.
@@ -736,7 +737,8 @@ function FilterChips({
 }) {
   if (layout.filters.length === 0 && !archived && !selectionBar) return null
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    // A strip across the top of the table, as wide as it.
+    <div className="flex flex-wrap items-center gap-1.5 border-b px-2 py-1.5">
       {selectionBar}
       {archived && (
         <span className="inline-flex items-center rounded-md border border-foreground/30 bg-muted text-xs">

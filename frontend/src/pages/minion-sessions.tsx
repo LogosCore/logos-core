@@ -50,7 +50,9 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   const narrowed = layout.filters.length > 0
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col p-2">
+    // No padding: the table runs edge to edge, from the sidebar to the
+    // window's edge, where the page's padding and a card's border ate space.
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* The list above, the session it works with below; the divider
           between them is the operator's, kept with their layout. */}
       <SplitPane
@@ -61,15 +63,15 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
         max={MAX_SPLIT}
         onChange={(split) => setLayout({ ...layout, split })}
         top={
-          <div className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="flex min-h-0 flex-1 flex-col">
             {error ? (
-              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
+              <div className="m-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
             ) : (
               <SessionsDatatable
                 operationId={operationId}
                 canWrite={canWrite}
-              archived={archived}
-              onArchivedChange={setArchived}
+                archived={archived}
+                onArchivedChange={setArchived}
                 layout={layout}
                 onLayoutChange={setLayout}
                 sessions={sessions}
@@ -78,11 +80,11 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
                 isFetchingNextPage={isFetchingNextPage}
                 hasNextPage={hasNextPage}
                 fetchNextPage={fetchNextPage}
-              total={data?.pages[0]?.minionSessions.totalCount ?? 0}
+                total={data?.pages[0]?.minionSessions.totalCount ?? 0}
                 emptyState={
                   archived && !narrowed ? (
-              <p className="text-sm">No archived sessions.</p>
-            ) : !narrowed ? (
+                    <p className="text-sm">No archived sessions.</p>
+                  ) : !narrowed ? (
                     <>
                       <MonitorDotIcon className="size-8 opacity-50" />
                       <p className="text-sm">No sessions in this operation yet.</p>
@@ -108,7 +110,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
 /** Where the operator will work with a session: not built yet. */
 function SessionWorkspace() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-muted-foreground">
+    <div className="m-2 mt-0 flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-muted-foreground">
       <SquareTerminalIcon className="size-6 opacity-50" />
       <p className="text-sm">Working with a session comes here.</p>
     </div>
