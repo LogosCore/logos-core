@@ -97,7 +97,6 @@ interface FilterTarget {
 
 export function SessionsDatatable({
   operationId,
-  search,
   canWrite,
   layout,
   onLayoutChange,
@@ -110,8 +109,6 @@ export function SessionsDatatable({
   emptyState,
 }: {
   operationId: string
-  /** The page's search, for which address a row shows. */
-  search: string | null
   /** Whether the viewer may change sessions (pick an address). */
   canWrite: boolean
   layout: SessionsLayout
@@ -131,7 +128,7 @@ export function SessionsDatatable({
   const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)
   const cells = useRef(new Map<SessionColumnId, HTMLElement>())
   const setAddress = useSetMinionSessionAddress()
-  const matchAddress = useMemo(() => addressMatcher(layout.filters, search), [layout.filters, search])
+  const matchAddress = useMemo(() => addressMatcher(layout.filters, null), [layout.filters])
   const { mutate: pick } = setAddress
   const ctx = useMemo(
     () => ({
