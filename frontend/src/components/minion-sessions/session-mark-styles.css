@@ -289,7 +289,8 @@
   isolation: isolate;
 }
 /* The pixel fire: the canvas fills the row behind the text, its few pixels
- * scaled up crisp. Faint enough for the text to read over it. */
+ * scaled up crisp. Strong enough to read as fire (fainter, it read as
+ * smoke); it burns low, mostly under the text, its tall flames rare. */
 .mark-fx-fire {
   position: absolute;
   inset: 0;
@@ -299,10 +300,10 @@
   pointer-events: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  opacity: 0.35;
+  opacity: 0.8;
 }
 .dark .mark-fx-fire {
-  opacity: 0.45;
+  opacity: 0.75;
 }
 .dark .mark-fx-on-fire {
   --fx-icon: #ff8a00;

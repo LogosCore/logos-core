@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { BASE_MAX, FLOOR, ROWS, burnFrame, newFire } from "./session-fire-model"
+import { HOT, ROWS, burnFrame, flameHeights, newFire } from "./session-fire-model"
 
 const WIDTH = 900
 
@@ -19,37 +19,47 @@ function likeness(a: number[], b: number[], shift: number): number {
 }
 
 describe("the fire behind an On Fire row", () => {
-  test("burns along the whole row, within the canvas", () => {
-    const fire = newFire()
-    for (let frame = 0; frame < 200; frame++) {
-      const heights = burnFrame(fire, WIDTH)
-      expect(heights).toHaveLength(WIDTH)
-      expect(Math.min(...heights)).toBeGreaterThanOrEqual(FLOOR)
-      expect(Math.max(...heights)).toBeLessThanOrEqual(ROWS)
+  test("burns along the whole row from the start, its heats within the palette", () => {
+    const fire = newFire(WIDTH)
+    for (let frame = 0; frame < 100; frame++) {
+      // The bottom row burns everywhere: a line of fire, not patches.
+      expect(flameHeights(fire).every((h) => h > 0)).toBe(true)
+      expect(Math.max(...fire.heat)).toBeLessThanOrEqual(HOT)
+      burnFrame(fire)
     }
   })
 
-  test("burns in place: each frame matches the last best unshifted", () => {
-    // A wave rolling along the row made the fire flow from left to right;
-    // then a frame matched the last best a couple of columns over.
-    const fire = newFire()
-    let last = burnFrame(fire, WIDTH)
+  test("leans neither way: a frame matches the last as well a column left as right", () => {
+    // Doom takes the columns left to right, so heat drifting right climbs
+    // faster and the fire leans; as first drawn, a wave rolled along it.
+    const fire = newFire(WIDTH)
+    let last = flameHeights(fire)
     const totals = new Map<number, number>()
-    for (let frame = 0; frame < 100; frame++) {
-      const next = burnFrame(fire, WIDTH)
-      for (let shift = -4; shift <= 4; shift++) totals.set(shift, (totals.get(shift) ?? 0) + likeness(last, next, shift))
+    for (let frame = 0; frame < 300; frame++) {
+      burnFrame(fire)
+      const next = flameHeights(fire)
+      for (const shift of [-1, 0, 1]) totals.set(shift, (totals.get(shift) ?? 0) + likeness(last, next, shift))
       last = next
     }
-    const [best] = [...totals].sort((a, b) => b[1] - a[1])[0]
-    expect(best).toBe(0)
+    const [left, still, right] = [-1, 0, 1].map((s) => totals.get(s)!)
+    expect(still).toBeGreaterThan(Math.max(left, right))
+    expect(Math.abs(left - right) / still).toBeLessThan(0.03)
   })
 
-  test("tall flames are rare, but there are some", () => {
-    const fire = newFire()
+  test("burns low, its tall flames rare", () => {
+    const fire = newFire(WIDTH)
+    let low = 0
     let tall = 0
-    for (let frame = 0; frame < 300; frame++) tall += burnFrame(fire, WIDTH).filter((h) => h > BASE_MAX + 1).length
-    const share = tall / (300 * WIDTH)
-    expect(share).toBeGreaterThan(0)
-    expect(share).toBeLessThan(0.05)
+    for (let frame = 0; frame < 200; frame++) {
+      burnFrame(fire)
+      for (const h of flameHeights(fire)) {
+        if (h <= ROWS / 2) low++
+        if (h >= ROWS * 0.8) tall++
+      }
+    }
+    const all = 200 * WIDTH
+    expect(low / all).toBeGreaterThan(0.6)
+    expect(tall / all).toBeGreaterThan(0)
+    expect(tall / all).toBeLessThan(0.1)
   })
 })
