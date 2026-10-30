@@ -34,6 +34,7 @@ import {
   LoaderIcon,
   PencilIcon,
   PinIcon,
+  SquareTerminalIcon,
   TagIcon,
   XIcon,
 } from "lucide-react"
@@ -137,6 +138,7 @@ export function SessionsDatatable({
   onArchivedChange,
   layout,
   onLayoutChange,
+  onInteract,
   sessions,
   icons,
   isLoading,
@@ -156,6 +158,8 @@ export function SessionsDatatable({
   onArchivedChange: (archived: boolean) => void
   layout: SessionsLayout
   onLayoutChange: (layout: SessionsLayout | null) => void
+  /** Opens the session in the work pane below. */
+  onInteract: (session: MinionSessionFieldsFragment) => void
   sessions: MinionSessionFieldsFragment[]
   icons: ReadonlyMap<string, ModuleIconSvgs>
   isLoading: boolean
@@ -419,6 +423,7 @@ export function SessionsDatatable({
                       persistable={persistable(s)}
                       onSelect={() => setSelection(toggleSelected(selection, order, s.id, false))}
                       onEditDescription={() => setDescribing(s)}
+                      onInteract={() => onInteract(s)}
                       onMark={() =>
                         setMarking({
                           title: `session #${s.number}`,
@@ -807,6 +812,7 @@ function SessionMenu({
   selected,
   onEditDescription,
   onMark,
+  onInteract,
 }: {
   session: MinionSessionFieldsFragment
   canWrite: boolean
@@ -815,6 +821,8 @@ function SessionMenu({
   onEditDescription: () => void
   /** Opens the caller's mark for the session. */
   onMark: () => void
+  /** Opens the session in the work pane. */
+  onInteract: () => void
   /** Picks the row for bulk actions (or unpicks it). */
   onSelect: () => void
   selected: boolean
@@ -828,6 +836,10 @@ function SessionMenu({
       : undefined
   return (
     <>
+      <ContextMenuItem onClick={onInteract}>
+        <SquareTerminalIcon />
+        Interact
+      </ContextMenuItem>
       <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
         <InfoIcon />
         Details

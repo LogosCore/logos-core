@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { MonitorDotIcon, SquareTerminalIcon } from "lucide-react"
+import { MonitorDotIcon } from "lucide-react"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
@@ -14,6 +14,9 @@ import { SessionsDatatable } from "@/components/minion-sessions/sessions-datatab
 import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT } from "@/components/minion-sessions/sessions-layout"
 import { SplitPane } from "@/components/ui/split-pane"
 import { useCanBuild } from "@/components/builds/build-access"
+import { SessionWorkspace } from "@/components/minion-sessions/session-workspace"
+import { useSessionTabs } from "@/components/minion-sessions/use-session-tabs"
+import { openTab } from "@/components/work-pane/work-pane-tabs"
 
 /**
  * The scoped operation's minion sessions, live: a minion's hello opens one,
@@ -48,6 +51,8 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   useMinionSessionChangedSubscription(operationId)
   const sessions = useConnectionNodes(data, (p) => p.minionSessions)
   const narrowed = layout.filters.length > 0
+  // The sessions being worked with, below: an operator's own, in this browser.
+  const [tabs, setTabs] = useSessionTabs(operationId)
 
   return (
     // No padding: the table runs edge to edge, from the sidebar to the
@@ -74,6 +79,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
                 onArchivedChange={setArchived}
                 layout={layout}
                 onLayoutChange={setLayout}
+                onInteract={(s) => setTabs(openTab(tabs, s.id))}
                 sessions={sessions}
                 icons={icons}
                 isLoading={isLoading || layoutLoading}
@@ -101,18 +107,8 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
             )}
           </div>
         }
-        bottom={<SessionWorkspace />}
+        bottom={<SessionWorkspace tabs={tabs} onTabsChange={setTabs} />}
       />
-    </div>
-  )
-}
-
-/** Where the operator will work with a session: not built yet. */
-function SessionWorkspace() {
-  return (
-    <div className="m-2 mt-0 flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-muted-foreground">
-      <SquareTerminalIcon className="size-6 opacity-50" />
-      <p className="text-sm">Working with a session comes here.</p>
     </div>
   )
 }
