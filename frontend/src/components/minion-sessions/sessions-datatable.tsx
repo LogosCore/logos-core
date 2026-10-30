@@ -467,7 +467,8 @@ function HeaderMenu({
               key={c.id}
               checked={layout.columns.includes(c.id)}
               disabled={layout.columns.length === 1 && layout.columns[0] === c.id}
-              onCheckedChange={() => onLayoutChange(toggleColumn(layout, c.id))}
+              // Added next to the column the menu is about.
+              onCheckedChange={() => onLayoutChange(toggleColumn(layout, c.id, column))}
             >
               {c.id === "number" ? "Number" : c.label}
             </ContextMenuCheckboxItem>

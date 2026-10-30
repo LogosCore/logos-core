@@ -47,6 +47,8 @@ describe("layout", () => {
     expect(shiftColumn(l, "host", 1).columns).toEqual(["number", "os", "host"])
     expect(shiftColumn(l, "number", -1)).toBe(l)
     expect(toggleColumn(l, "pid").columns).toEqual(["number", "host", "os", "pid"])
+    expect(toggleColumn(l, "pid", "host").columns).toEqual(["number", "host", "pid", "os"])
+    expect(toggleColumn(l, "pid", "os").columns).toEqual(["number", "host", "os", "pid"])
     expect(toggleColumn(l, "host").columns).toEqual(["number", "os"])
     const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null }
     expect(toggleColumn(one, "host")).toBe(one)

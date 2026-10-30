@@ -184,16 +184,19 @@ export function shiftColumn(layout: SessionsLayout, id: SessionColumnId, by: -1 
 }
 
 /**
- * Shows a hidden column (at the end) or hides a shown one. The last column
- * stays. Hiding a column keeps its filter and sort: they still apply, and the
- * chips above the table say so.
+ * Shows a hidden column, right after the column `after` (a header's menu
+ * adds next to its column) or at the end, or hides a shown one. The last
+ * column stays. Hiding a column keeps its filter and sort: they still apply,
+ * and the chips above the table say so.
  */
-export function toggleColumn(layout: SessionsLayout, id: SessionColumnId): SessionsLayout {
+export function toggleColumn(layout: SessionsLayout, id: SessionColumnId, after?: SessionColumnId | null): SessionsLayout {
   if (layout.columns.includes(id)) {
     if (layout.columns.length === 1) return layout
     return { ...layout, columns: layout.columns.filter((c) => c !== id) }
   }
-  return { ...layout, columns: [...layout.columns, id] }
+  const at = after ? layout.columns.indexOf(after) : -1
+  if (at < 0) return { ...layout, columns: [...layout.columns, id] }
+  return { ...layout, columns: [...layout.columns.slice(0, at + 1), id, ...layout.columns.slice(at + 1)] }
 }
 
 export function setSort(layout: SessionsLayout, sort: SessionSort | null): SessionsLayout {
