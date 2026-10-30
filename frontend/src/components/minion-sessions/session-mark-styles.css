@@ -239,14 +239,53 @@
 }
 
 /* On Fire: flame text, red at the foot to yellow at the tips, flickering
- * out of step from column to column; an ember line under the row. Deeper
- * flames on white, brighter ones on dark. */
+ * out of step from column to column, and flames licking along the bottom of
+ * the row, behind the text. Deeper flames on white, brighter ones on dark. */
 .mark-fx-on-fire {
   --fx-icon: #e65c00;
   --fx-ink: linear-gradient(0deg, #b91c00 0%, #e04800 30%, #f07800 55%, #d99000 75%, #e04800 100%);
   --fx-ink-size: 100% 300%;
   --fx-ink-animation: mark-fx-flicker 1.6s ease-in-out infinite alternate;
-  border-bottom-color: #ff6a00;
+  /* The flames go under the cells, but not under the row's background. */
+  isolation: isolate;
+}
+/* Three rows of tongues at different spacings, so they never line up into a
+ * pattern; they sway sideways and stretch up and down. */
+.mark-fx-on-fire::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 13px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 5px 12px at 50% 100%, rgb(255 230 120 / 0.95), rgb(255 160 0 / 0.7) 45%, transparent 72%)
+      0 100% / 15px 13px repeat-x,
+    radial-gradient(ellipse 8px 13px at 50% 100%, rgb(255 120 0 / 0.85), rgb(240 60 0 / 0.5) 50%, transparent 74%)
+      7px 100% / 23px 13px repeat-x,
+    radial-gradient(ellipse 12px 10px at 50% 100%, rgb(220 40 0 / 0.7), rgb(180 20 0 / 0.3) 55%, transparent 76%)
+      3px 100% / 37px 13px repeat-x;
+  -webkit-mask-image: linear-gradient(to top, #000 35%, transparent);
+  mask-image: linear-gradient(to top, #000 35%, transparent);
+  transform-origin: bottom;
+  animation: mark-fx-burn 0.9s ease-in-out infinite alternate;
+}
+@keyframes mark-fx-burn {
+  0% {
+    transform: scaleY(0.8);
+    background-position: 0 100%, 7px 100%, 3px 100%;
+  }
+  40% {
+    transform: scaleY(1.15);
+  }
+  70% {
+    transform: scaleY(0.95);
+    background-position: 4px 100%, 2px 100%, 9px 100%;
+  }
+  100% {
+    transform: scaleY(1.05);
+    background-position: -3px 100%, 11px 100%, 0 100%;
+  }
 }
 .dark .mark-fx-on-fire {
   --fx-icon: #ff8a00;
@@ -453,6 +492,7 @@
  * frame, so a rainbow's columns keep their different hues. */
 @media (prefers-reduced-motion: reduce) {
   .mark-fx,
+  .mark-fx::before,
   .mark-fx *,
   .mark-fx *::after {
     animation-play-state: paused !important;
