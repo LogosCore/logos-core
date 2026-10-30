@@ -7,6 +7,7 @@ import {
   DEFAULT_SESSIONS_LAYOUT,
   SESSION_COLUMN_BY_ID,
   addressMatcher,
+  formatAgo,
   isClockFilter,
   lateness,
   shownAddress,
@@ -88,6 +89,17 @@ describe("layout", () => {
     expect(isComplete({ column: "buildId", op: "EQUALS", text: "160a41b2-e202-4841-9766-5dedfb861947" }, col("buildId"))).toBe(true)
     expect(isComplete({ column: "lastSeen", op: "NEVER" }, col("lastSeen"))).toBe(true)
     expect(isComplete({ column: "pid", op: "RANGE" }, col("pid"))).toBe(false)
+  })
+})
+
+describe("formatAgo", () => {
+  test("to the second for the last day", () => {
+    expect(formatAgo(0)).toBe("0s ago")
+    expect(formatAgo(-500)).toBe("0s ago")
+    expect(formatAgo(47_900)).toBe("47s ago")
+    expect(formatAgo(245_000)).toBe("4m 05s ago")
+    expect(formatAgo(3 * 3600_000 + 12 * 60_000 + 9_000)).toBe("3h 12m ago")
+    expect(formatAgo(86400_000)).toBeNull()
   })
 })
 

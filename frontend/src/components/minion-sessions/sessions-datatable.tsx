@@ -128,8 +128,9 @@ export function SessionsDatatable({
   fetchNextPage: () => void
   emptyState: ReactNode
 }) {
-  // Ticks the relative times.
-  const now = useNow(15_000)
+  // Ticks the relative times every second: "Last seen" counts a silent
+  // minion's seconds, and turns late on time.
+  const now = useNow(1_000)
   const [filterTarget, setFilterTarget] = useState<FilterTarget | null>(null)
   // The column a right click landed on; null: the header past the columns.
   const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)

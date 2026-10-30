@@ -5,10 +5,10 @@ import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
-import { formatAbsolute, relativeTime } from "@/lib/relative-time"
+import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
 import { cn } from "@/lib/utils"
-import { lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
+import { formatAgo, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it.
@@ -43,14 +43,10 @@ function userOf(s: MinionSessionFieldsFragment): string {
   return s.domain && !s.user.includes("\\") ? `${s.domain}\\${s.user}` : s.user
 }
 
-const DAY = 24 * 60 * 60 * 1000
-const HOUR = 60 * 60 * 1000
-
-/** Within the last day: how long ago ("just now", "5m ago", "3h ago"); older, the date and time. */
+/** Within the last day, how long ago to the second (formatAgo); older, the date and time. */
 function Ago({ at, now }: { at: string; now: number }) {
-  const diff = now - Date.parse(at)
-  if (diff >= DAY) return <FormattedDateTimeText date={at} />
-  return <>{diff < HOUR ? relativeTime(at, new Date(now)) : `${Math.floor(diff / HOUR)}h ago`}</>
+  const ago = formatAgo(now - Date.parse(at))
+  return ago === null ? <FormattedDateTimeText date={at} /> : <>{ago}</>
 }
 
 /** The schedule and where the session stands by it: "Late: every 60s ± 20%, due 3m ago". */
