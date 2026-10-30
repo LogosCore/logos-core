@@ -94,8 +94,10 @@ describe("layout", () => {
 
 describe("formatAgo", () => {
   test("to the second for the last day", () => {
-    expect(formatAgo(0)).toBe("0s ago")
-    expect(formatAgo(-500)).toBe("0s ago")
+    expect(formatAgo(0)).toBe("just now")
+    expect(formatAgo(-500)).toBe("just now")
+    expect(formatAgo(3_999)).toBe("just now")
+    expect(formatAgo(4_000)).toBe("4s ago")
     expect(formatAgo(47_900)).toBe("47s ago")
     expect(formatAgo(245_000)).toBe("4m 05s ago")
     expect(formatAgo(3 * 3600_000 + 12 * 60_000 + 9_000)).toBe("3h 12m ago")

@@ -373,13 +373,15 @@ export function shownAddress(
 }
 
 /**
- * How long ago, to the second, for the last day: "3s ago", "4m 05s ago",
- * "3h 12m ago"; null from a day on (the date and time say it better). A
- * minion that stops shows its silence growing second by second.
+ * How long ago, to the second, for the last day: "just now" for up to 3
+ * seconds (a minion checking in every second stays there), then "4s ago",
+ * "4m 05s ago", "3h 12m ago"; null from a day on (the date and time say it
+ * better). A minion that stops shows its silence growing second by second.
  */
 export function formatAgo(diffMs: number): string | null {
   const s = Math.max(0, Math.floor(diffMs / 1000))
   if (s >= 86400) return null
+  if (s <= 3) return "just now"
   if (s < 60) return `${s}s ago`
   const pad = (n: number) => String(n).padStart(2, "0")
   if (s < 3600) return `${Math.floor(s / 60)}m ${pad(s % 60)}s ago`
