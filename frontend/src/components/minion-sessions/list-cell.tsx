@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
 // A table cell for a list value (a host's addresses): one item shown, and a
 // "+N" button that opens all of them. Where the viewer may change it, the
 // menu also picks which item the row shows; "Automatic" leaves it to the
-// guess. Copy the shown item or all of them from the same menu.
+// guess. Each item has its own copy button; the last entry copies them all.
 
 const AUTO = "\u0000auto"
 
@@ -83,6 +83,7 @@ export function ListCell({
                   {items.map((item) => (
                     <DropdownMenuRadioItem key={item} value={item}>
                       <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+                      <CopyItemButton item={item} />
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
@@ -90,17 +91,12 @@ export function ListCell({
                 items.map((item) => (
                   <DropdownMenuItem key={item} onClick={() => void copyToClipboard(item, item)}>
                     <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+                    <CopyItemButton item={item} />
                   </DropdownMenuItem>
                 ))
               )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {shown && (
-              <DropdownMenuItem onClick={() => void copyToClipboard(shown, shown)}>
-                <CopyIcon />
-                Copy {shown}
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onClick={() => void copyToClipboard(items.join("\n"), `${items.length} ${noun}`)}>
               <CopyIcon />
               Copy all {noun}
@@ -109,5 +105,33 @@ export function ListCell({
         </DropdownMenu>
       )}
     </div>
+  )
+}
+
+/**
+ * Copies one item, at the end of its menu row. Its events stop here: the
+ * click copies without picking the row's item or closing the menu.
+ */
+function CopyItemButton({ item }: { item: string }) {
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation()
+  return (
+    <button
+      type="button"
+      aria-label={`Copy ${item}`}
+      title={`Copy ${item}`}
+      className="ml-auto shrink-0 cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+      onPointerDown={stop}
+      onPointerUp={stop}
+      onMouseDown={stop}
+      onMouseUp={stop}
+      onKeyDown={stop}
+      onClick={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        void copyToClipboard(item, item)
+      }}
+    >
+      <CopyIcon className="size-3.5" />
+    </button>
   )
 }
