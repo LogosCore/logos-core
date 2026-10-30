@@ -425,6 +425,8 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		"endpoint search texts": repos.ChannelEndpoint.BackfillSearchText,
 		// Endpoint names were slugs before they were free text.
 		"endpoint slugs": repos.ChannelEndpoint.BackfillSlugs,
+		// Sessions turned lost after they could turn late.
+		"session lost times": repos.MinionSession.BackfillLostAt,
 	} {
 		if n, err := backfill(ctx); err != nil {
 			l.Warn(name+" backfill failed", zap.Error(err))

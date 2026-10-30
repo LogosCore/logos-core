@@ -99,7 +99,7 @@ func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, c repository.Min
 			r.Sleep = c.Sleep
 		}
 		if c.LateAt != nil {
-			r.LateAt = c.LateAt
+			r.LateAt, r.LostAt = c.LateAt, c.LostAt
 		}
 	}
 	return nil
@@ -133,7 +133,7 @@ func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.Minio
 		r.Restarts = append([]models.MinionSessionRestart{{At: c.At, PID: c.Hello.PID, Host: c.Hello.Host, BuildID: c.BuildID}}, r.Restarts...)
 		r.RestartCount++
 		r.Crypto, r.Hello, r.BuildID, r.Address, r.AddressPicked, r.Persisted = c.Crypto, c.Hello, c.BuildID, c.Address, c.AddressPicked, true
-		r.Sleep, r.LateAt = c.Sleep, nil
+		r.Sleep, r.LateAt, r.LostAt = c.Sleep, nil, nil
 		return nil
 	}
 	return qmgo.ErrNoSuchDocuments
@@ -718,6 +718,10 @@ func TestSessionSchedule(t *testing.T) {
 	if s.Sleep == nil || s.LateAt == nil || s.LateAt.Sub(s.CreatedAt) != 72*time.Second+models.SessionLateGrace {
 		t.Fatalf("at hello: %+v late at %v", s.Sleep, s.LateAt)
 	}
+	// Lost: three such intervals missed, the grace once.
+	if s.LostAt == nil || s.LostAt.Sub(s.CreatedAt) != 3*72*time.Second+models.SessionLateGrace {
+		t.Fatalf("at hello: lost at %v", s.LostAt)
+	}
 
 	// A plain check-in pushes it on by the same schedule.
 	before := *r.sessions.rows[0].LateAt
@@ -733,7 +737,8 @@ func TestSessionSchedule(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = r.sessions.rows[0]
-	if s.Sleep.Interval != 3_600_000 || s.LateAt.Sub(*s.LastSeenAt) != time.Hour+models.SessionLateGrace {
+	if s.Sleep.Interval != 3_600_000 || s.LateAt.Sub(*s.LastSeenAt) != time.Hour+models.SessionLateGrace ||
+		s.LostAt.Sub(*s.LastSeenAt) != 3*time.Hour+models.SessionLateGrace {
 		t.Fatalf("after the update: %+v, late %v after the check-in", s.Sleep, s.LateAt.Sub(*s.LastSeenAt))
 	}
 
@@ -753,7 +758,7 @@ func TestSessionSchedule(t *testing.T) {
 	// No schedule, no late_at.
 	reply, _ = r.send(t, protocol.NewMessageID(), hello("web02"))
 	sessionID(t, r.open(t, reply))
-	if s := r.sessions.rows[1]; s.Sleep != nil || s.LateAt != nil {
+	if s := r.sessions.rows[1]; s.Sleep != nil || s.LateAt != nil || s.LostAt != nil {
 		t.Fatalf("without a schedule: %+v %v", s.Sleep, s.LateAt)
 	}
 }

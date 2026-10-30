@@ -58,9 +58,11 @@ type MinionSession struct {
 	// Sleep is the check-in schedule the minion last said (its hello's, or
 	// a sleep_update); nil when it never did. LateAt is when the session
 	// turns late: its next check-in overdue by that schedule (LateAtFrom);
-	// nil without a schedule.
+	// LostAt when it is lost: SessionLostMissed check-ins missed
+	// (LostAtFrom). Both nil without a schedule.
 	Sleep  *MinionSessionSleep `bson:"sleep,omitempty" json:"sleep,omitempty"`
 	LateAt *time.Time          `bson:"late_at,omitempty" json:"late_at,omitempty"`
+	LostAt *time.Time          `bson:"lost_at,omitempty" json:"lost_at,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
@@ -140,11 +142,25 @@ func SleepFrom(s protocol.Sleep) *MinionSessionSleep {
 	return &MinionSessionSleep{Interval: int64(s.Interval), Jitter: int64(s.Jitter)} //nolint:gosec // validated small
 }
 
+// SessionLostMissed is how many check-ins a session misses before it is lost.
+const SessionLostMissed = 3
+
 // LateAtFrom is when a session that checked in at base turns late: the
 // interval stretched by its jitter, and the grace.
 func (s MinionSessionSleep) LateAtFrom(base time.Time) time.Time {
+	return base.Add(s.stretched() + SessionLateGrace)
+}
+
+// LostAtFrom is when it is lost: SessionLostMissed stretched intervals,
+// and the grace once.
+func (s MinionSessionSleep) LostAtFrom(base time.Time) time.Time {
+	return base.Add(SessionLostMissed*s.stretched() + SessionLateGrace)
+}
+
+// stretched is the interval with its jitter added.
+func (s MinionSessionSleep) stretched() time.Duration {
 	period := time.Duration(s.Interval) * time.Millisecond
-	return base.Add(period + period*time.Duration(s.Jitter)/100 + SessionLateGrace)
+	return period + period*time.Duration(s.Jitter)/100
 }
 
 // MaxSessionPeers caps MinionSession.Peers.

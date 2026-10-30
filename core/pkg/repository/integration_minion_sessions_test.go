@@ -39,8 +39,11 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 		{Hello: models.MinionHello{PID: 1, OS: "darwin", Arch: "arm64"}}, // no host, never seen
 		{Hello: models.MinionHello{Host: "mail", PID: 7, OS: "linux", Arch: "amd64", Addrs: []string{"192.168.1.9"}}, LastSeenAt: ago(10 * time.Second)},
 	}
-	soon, past := now.Add(time.Minute), now.Add(-time.Minute)
-	rows[0].LateAt, rows[1].LateAt = &soon, &past
+	soon, past, later, long := now.Add(time.Minute), now.Add(-time.Minute), now.Add(time.Hour), now.Add(-time.Hour)
+	// 1 on time, 2 late, 4 lost.
+	rows[0].LateAt, rows[0].LostAt = &soon, &later
+	rows[1].LateAt, rows[1].LostAt = &past, &later
+	rows[3].LateAt, rows[3].LostAt = &long, &past
 	for i := range rows {
 		r := &rows[i]
 		r.SessionID, r.OperationID, r.BuildID = uuid.New(), op, uuid.New()
@@ -147,6 +150,7 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 		"seen over 1h ago":  {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "OLDER_THAN", Seconds: secs(3600)}}, want: []int64{2, 5}},
 		"live":              {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "LIVE"}}, want: []int64{1}},
 		"late":              {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "LATE"}}, want: []int64{2}},
+		"lost":              {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "LOST"}}, want: []int64{4}},
 		"never seen":        {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "NEVER"}}, want: []int64{3, 6}},
 		"seen in a range":   {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "RANGE", From: ago(4 * time.Hour), To: ago(time.Hour)}}, want: []int64{2}},
 		"session id":        {filters: []models.MinionSessionFilter{{Column: "sessionId", Op: "EQUALS", Text: rows[3].SessionID.String()}}, want: []int64{4}},
@@ -444,12 +448,12 @@ func TestIntegrationMinionSessionSchedule(t *testing.T) {
 	}
 	sleep := &models.MinionSessionSleep{Interval: 60_000, Jitter: 20}
 	for _, peer := range []string{"203.0.113.7", ""} {
-		late := sleep.LateAtFrom(now)
-		if err := repo.CheckIn(ctx, sid, MinionSessionCheckIn{At: now, Peer: peer, Sleep: sleep, LateAt: &late}); err != nil {
+		late, lost := sleep.LateAtFrom(now), sleep.LostAtFrom(now)
+		if err := repo.CheckIn(ctx, sid, MinionSessionCheckIn{At: now, Peer: peer, Sleep: sleep, LateAt: &late, LostAt: &lost}); err != nil {
 			t.Fatal(err)
 		}
 		s, _ := repo.FindBySessionID(ctx, sid)
-		if s.Sleep == nil || *s.Sleep != *sleep || s.LateAt == nil || !s.LateAt.Equal(late) {
+		if s.Sleep == nil || *s.Sleep != *sleep || s.LateAt == nil || !s.LateAt.Equal(late) || s.LostAt == nil || !s.LostAt.Equal(lost) {
 			t.Fatalf("peer %q: %+v late %v", peer, s.Sleep, s.LateAt)
 		}
 		sleep = &models.MinionSessionSleep{Interval: 3_600_000}
@@ -458,7 +462,38 @@ func TestIntegrationMinionSessionSchedule(t *testing.T) {
 	if err := repo.Claim(ctx, sid, MinionSessionClaim{At: now, BuildID: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}
-	if s, _ := repo.FindBySessionID(ctx, sid); s.Sleep != nil || s.LateAt != nil {
+	if s, _ := repo.FindBySessionID(ctx, sid); s.Sleep != nil || s.LateAt != nil || s.LostAt != nil {
 		t.Fatalf("after a claim without one: %+v %v", s.Sleep, s.LateAt)
+	}
+}
+
+// Sessions from before lost_at get theirs from late_at and their schedule.
+func TestIntegrationMinionSessionBackfillLostAt(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	sleep := &models.MinionSessionSleep{Interval: 60_000, Jitter: 20}
+	late := sleep.LateAtFrom(now)
+	old := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New(), Number: 1, CreatedAt: now, Sleep: sleep, LateAt: &late}
+	bare := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New(), Number: 1, CreatedAt: now}
+	for _, s := range []*models.MinionSession{old, bare} {
+		if err := repo.Insert(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := repo.BackfillLostAt(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("backfilled %d: %v", n, err)
+	}
+	s, _ := repo.FindBySessionID(ctx, old.SessionID)
+	if s.LostAt == nil || !s.LostAt.Equal(sleep.LostAtFrom(now)) {
+		t.Fatalf("lost at %v, want %v", s.LostAt, sleep.LostAtFrom(now))
+	}
+	if s, _ := repo.FindBySessionID(ctx, bare.SessionID); s.LostAt != nil {
+		t.Fatal("a session without a schedule got lost_at")
+	}
+	if n, _ := repo.BackfillLostAt(ctx); n != 0 {
+		t.Fatalf("backfilled %d again", n)
 	}
 }

@@ -113,15 +113,19 @@ describe("formatAgo", () => {
 })
 
 describe("lateness", () => {
-  test("on time before late_at, late after, unknown without a schedule", () => {
+  test("on time before late_at, late after, lost past lost_at, unknown without a schedule", () => {
     const at = Date.parse("2026-10-30T10:00:00Z")
-    expect(lateness({ lateAt: "2026-10-30T10:00:00Z" }, at - 1)).toBe("live")
-    expect(lateness({ lateAt: "2026-10-30T10:00:00Z" }, at)).toBe("late")
-    expect(lateness({ lateAt: null }, at)).toBeNull()
+    const s = { lateAt: "2026-10-30T10:00:00Z", lostAt: "2026-10-30T10:05:00Z" }
+    expect(lateness(s, at - 1)).toBe("live")
+    expect(lateness(s, at)).toBe("late")
+    expect(lateness(s, at + 300_000)).toBe("lost")
+    expect(lateness({ lateAt: "2026-10-30T10:00:00Z", lostAt: null }, at + 3600_000)).toBe("late")
+    expect(lateness({ lateAt: null, lostAt: null }, at)).toBeNull()
   })
   test("live and late filters read and refresh with the clock", () => {
     expect(describeFilter({ column: "lastSeen", op: "LATE" })).toBe("late")
     expect(isClockFilter({ column: "lastSeen", op: "LIVE" })).toBe(true)
+    expect(describeFilter({ column: "lastSeen", op: "LOST" })).toBe("lost")
   })
 })
 
@@ -169,6 +173,7 @@ describe("live updates", () => {
     sleepInterval: null,
     sleepJitter: null,
     lateAt: null,
+    lostAt: null,
     persisted: false,
     restartCount: 0,
     restarts: [],

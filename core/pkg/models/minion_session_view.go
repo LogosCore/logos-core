@@ -99,10 +99,11 @@ const (
 	SessionFilterOlderThan   = "OLDER_THAN"
 	SessionFilterNever       = "NEVER"
 	SessionFilterEquals      = "EQUALS"
-	// LIVE and LATE: Last seen only, by late_at (a session without a
-	// schedule is neither).
+	// LIVE, LATE and LOST: Last seen only, by late_at and lost_at (a
+	// session without a schedule is none of them). LATE is late, not lost.
 	SessionFilterLive = "LIVE"
 	SessionFilterLate = "LATE"
+	SessionFilterLost = "LOST"
 )
 
 // sessionFilterOps are the operations each kind takes.
@@ -112,7 +113,7 @@ var sessionFilterOps = map[MinionSessionColumnKind][]string{
 	SessionColumnEnum:   {SessionFilterIn, SessionFilterNotIn},
 	SessionColumnBool:   {SessionFilterIn, SessionFilterNotIn},
 	SessionColumnNumber: {SessionFilterRange},
-	SessionColumnTime:   {SessionFilterWithin, SessionFilterOlderThan, SessionFilterNever, SessionFilterRange, SessionFilterLive, SessionFilterLate},
+	SessionColumnTime:   {SessionFilterWithin, SessionFilterOlderThan, SessionFilterNever, SessionFilterRange, SessionFilterLive, SessionFilterLate, SessionFilterLost},
 	SessionColumnID:     {SessionFilterEquals},
 }
 
@@ -153,7 +154,7 @@ func (f MinionSessionFilter) Validate() error {
 		return fmt.Errorf("filter on %s: text is at most %d bytes", f.Column, MaxSessionFilterText)
 	}
 	switch f.Op {
-	case SessionFilterLive, SessionFilterLate:
+	case SessionFilterLive, SessionFilterLate, SessionFilterLost:
 		if f.Column != "lastSeen" {
 			return fmt.Errorf("filter on %s: %s is for lastSeen only", f.Column, f.Op)
 		}

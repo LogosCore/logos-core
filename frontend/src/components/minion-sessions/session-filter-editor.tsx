@@ -32,7 +32,8 @@ const OP_LABEL: Record<MinionSessionFilterOp, string> = {
   NEVER: "never",
   EQUALS: "is",
   LIVE: "is on time",
-  LATE: "is late",
+  LATE: "is late (not lost yet)",
+  LOST: "is lost",
 }
 
 const WITHIN_PRESETS = [60, 300, 900, 3600, 86400]
@@ -59,8 +60,8 @@ export function SessionFilterEditor({
   const ops = FILTER_OPS[column.kind]
   const [draft, setDraft] = useState<SessionFilter>(initial ?? { column: column.id, op: ops[0] })
   const set = (patch: Partial<SessionFilter>) => setDraft((d) => ({ ...d, ...patch }))
-  // Never, on time and late are Last seen's alone.
-  const ops2 = column.id === "lastSeen" ? ops : ops.filter((o) => o !== "NEVER" && o !== "LIVE" && o !== "LATE")
+  // Never, on time, late and lost are Last seen's alone.
+  const ops2 = column.id === "lastSeen" ? ops : ops.filter((o) => !["NEVER", "LIVE", "LATE", "LOST"].includes(o))
   const ready = isComplete(draft, column)
 
   return (

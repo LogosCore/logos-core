@@ -261,8 +261,8 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	}
 	if hello.Sleep != nil {
 		session.Sleep = models.SleepFrom(*hello.Sleep)
-		late := session.Sleep.LateAtFrom(now)
-		session.LateAt = &late
+		late, lost := session.Sleep.LateAtFrom(now), session.Sleep.LostAtFrom(now)
+		session.LateAt, session.LostAt = &late, &lost
 	}
 	var err error
 	if session.Number, err = s.sessions.NextNumber(ctx, b.OperationID); err != nil {
@@ -458,8 +458,8 @@ func sleepOf(h protocol.HelloItem) *models.MinionSessionSleep {
 func checkIn(now time.Time, peer string, said, schedule *models.MinionSessionSleep) repository.MinionSessionCheckIn {
 	c := repository.MinionSessionCheckIn{At: now, Peer: peer, Sleep: said}
 	if schedule != nil {
-		late := schedule.LateAtFrom(now)
-		c.LateAt = &late
+		late, lost := schedule.LateAtFrom(now), schedule.LostAtFrom(now)
+		c.LateAt, c.LostAt = &late, &lost
 	}
 	return c
 }

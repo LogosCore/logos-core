@@ -74,8 +74,10 @@ type MinionSession {
   sleepInterval: Int
   sleepJitter: Int
   # When the session turns late: its next check-in overdue by that schedule,
-  # with a 30 s grace. null without a schedule.
+  # with a 30 s grace; and lost: three check-ins missed. null without a
+  # schedule.
   lateAt: String
+  lostAt: String
   # The latest message under the session id; null before the first check-in.
   lastSeenAt: String
 }
@@ -118,8 +120,9 @@ type MinionSessionConnection {
 #   numbers (number, pid): RANGE (min, max; either may be left out)
 #   times (lastSeen, opened): WITHIN or OLDER_THAN (seconds before now),
 #   NEVER (no value: lastSeen before the first check-in), RANGE (from, to);
-#   lastSeen also LIVE (on time by its schedule) and LATE (a check-in
-#   overdue): a session whose minion never said its schedule is neither
+#   lastSeen also LIVE (on time by its schedule), LATE (a check-in overdue,
+#   not lost yet) and LOST (three missed): a session whose minion never said
+#   its schedule is none of them
 #   ids (sessionId, buildId): EQUALS (text, a whole UUID)
 # A missing value is empty: NOT_IN and NOT_CONTAINS keep it.
 enum MinionSessionFilterOp {
@@ -136,6 +139,7 @@ enum MinionSessionFilterOp {
   EQUALS
   LIVE
   LATE
+  LOST
 }
 
 # One column filter. column is a column id: number, sessionId, addrs, peer

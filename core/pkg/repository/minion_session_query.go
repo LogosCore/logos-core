@@ -133,7 +133,12 @@ func columnFilter(f models.MinionSessionFilter, now time.Time) bson.M {
 	case models.SessionFilterLive:
 		return bson.M{"late_at": bson.M{"$gt": now}}
 	case models.SessionFilterLate:
-		return bson.M{"late_at": bson.M{"$lte": now}}
+		// Late, not lost yet (or with no lost_at: from before core kept one).
+		return bson.M{"late_at": bson.M{"$lte": now}, "$or": bson.A{
+			bson.M{"lost_at": bson.M{"$gt": now}}, bson.M{"lost_at": nil},
+		}}
+	case models.SessionFilterLost:
+		return bson.M{"lost_at": bson.M{"$lte": now}}
 	}
 	// Validate refuses anything else.
 	return bson.M{"_id": nil}

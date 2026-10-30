@@ -474,6 +474,7 @@ type ComplexityRoot struct {
 		Integrity        func(childComplexity int) int
 		LastSeenAt       func(childComplexity int) int
 		LateAt           func(childComplexity int) int
+		LostAt           func(childComplexity int) int
 		ModuleName       func(childComplexity int) int
 		Number           func(childComplexity int) int
 		OperationID      func(childComplexity int) int
@@ -3464,6 +3465,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.LateAt(childComplexity), true
+	case "MinionSession.lostAt":
+		if e.ComplexityRoot.MinionSession.LostAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.LostAt(childComplexity), true
 	case "MinionSession.moduleName":
 		if e.ComplexityRoot.MinionSession.ModuleName == nil {
 			break
@@ -10048,8 +10055,10 @@ type MinionSession {
   sleepInterval: Int
   sleepJitter: Int
   # When the session turns late: its next check-in overdue by that schedule,
-  # with a 30 s grace. null without a schedule.
+  # with a 30 s grace; and lost: three check-ins missed. null without a
+  # schedule.
   lateAt: String
+  lostAt: String
   # The latest message under the session id; null before the first check-in.
   lastSeenAt: String
 }
@@ -10092,8 +10101,9 @@ type MinionSessionConnection {
 #   numbers (number, pid): RANGE (min, max; either may be left out)
 #   times (lastSeen, opened): WITHIN or OLDER_THAN (seconds before now),
 #   NEVER (no value: lastSeen before the first check-in), RANGE (from, to);
-#   lastSeen also LIVE (on time by its schedule) and LATE (a check-in
-#   overdue): a session whose minion never said its schedule is neither
+#   lastSeen also LIVE (on time by its schedule), LATE (a check-in overdue,
+#   not lost yet) and LOST (three missed): a session whose minion never said
+#   its schedule is none of them
 #   ids (sessionId, buildId): EQUALS (text, a whole UUID)
 # A missing value is empty: NOT_IN and NOT_CONTAINS keep it.
 enum MinionSessionFilterOp {
@@ -10110,6 +10120,7 @@ enum MinionSessionFilterOp {
   EQUALS
   LIVE
   LATE
+  LOST
 }
 
 # One column filter. column is a column id: number, sessionId, addrs, peer
@@ -25483,6 +25494,35 @@ func (ec *executionContext) fieldContext_MinionSession_lateAt(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_lostAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_lostAt,
+		func(ctx context.Context) (any, error) {
+			return obj.LostAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_lostAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_lastSeenAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25703,6 +25743,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
 			case "lateAt":
 				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			}
@@ -25916,6 +25958,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
 			case "lateAt":
 				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			}
@@ -34281,6 +34325,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
 			case "lateAt":
 				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			}
@@ -41902,6 +41948,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
 			case "lateAt":
 				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			}
@@ -62983,6 +63031,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = ec._MinionSession_sleepJitter(ctx, field, obj)
 		case "lateAt":
 			out.Values[i] = ec._MinionSession_lateAt(ctx, field, obj)
+		case "lostAt":
+			out.Values[i] = ec._MinionSession_lostAt(ctx, field, obj)
 		case "lastSeenAt":
 			out.Values[i] = ec._MinionSession_lastSeenAt(ctx, field, obj)
 		default:

@@ -50,11 +50,12 @@ function Ago({ at, now }: { at: string; now: number }) {
 }
 
 /** The schedule and where the session stands by it: "Late: every 60s ± 20%, due 3m ago". */
-function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late", now: number): string {
+function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late" | "lost", now: number): string {
   const every = s.sleepInterval != null ? `every ${formatInterval(s.sleepInterval)}${s.sleepJitter ? ` ± ${s.sleepJitter}%` : ""}` : ""
   const due = Date.parse(s.lateAt!) - now
   const when = due > 0 ? `late in ${formatInterval(due)}` : `due ${formatInterval(-due)} ago`
-  return `${state === "live" ? "On time" : "Late"}: ${[every, when].filter(Boolean).join(", ")}`
+  const label = { live: "On time", late: "Late", lost: "Lost, 3 check-ins missed" }[state]
+  return `${label}: ${[every, when].filter(Boolean).join(", ")}`
 }
 
 /** Milliseconds as the schedule says them: "800ms", "60s", "5m", "1h 30m". */
@@ -139,8 +140,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "version":
       return text(s.version, "truncate font-mono")
     case "lastSeen": {
-      // Green while on time by its schedule, yellow once late; plain when
-      // the minion never said its schedule.
+      // Green while on time by its schedule, yellow once late, red once
+      // lost; plain when the minion never said its schedule.
       const state = lateness(s, ctx.now)
       return (
         <div
@@ -148,6 +149,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
             "truncate",
             state === "live" && "text-emerald-600 dark:text-emerald-400",
             state === "late" && "text-amber-600 dark:text-amber-400",
+            state === "lost" && "text-red-600 dark:text-red-400",
             state === null && "text-muted-foreground",
           )}
           title={[

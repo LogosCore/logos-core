@@ -54,6 +54,9 @@ type IMinionSessionRepository interface {
 	// keys, build and hello, the previous keys kept as replaced, the restart
 	// recorded. IsNotFound when the session is not open.
 	Claim(ctx context.Context, sessionID uuid.UUID, c MinionSessionClaim) error
+	// BackfillLostAt gives sessions with a schedule and late_at but no
+	// lost_at (from before core kept one) theirs, from those two.
+	BackfillLostAt(ctx context.Context) (int64, error)
 	// CloseByOperationID closes an operation's sessions (a tombstone each)
 	// and forgets its session numbers.
 	CloseByOperationID(ctx context.Context, operationID uuid.UUID, reason string, at time.Time) error
@@ -67,6 +70,7 @@ func NewMinionSessionRepository(db database.Database) IMinionSessionRepository {
 		{Key: []string{"operation_id", "number"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "-created_at", "-_id"}},
 		{Key: []string{"operation_id", "late_at"}},
+		{Key: []string{"operation_id", "lost_at"}},
 		// A session without purge_at (checked in, open) stays.
 		{Key: []string{"purge_at"}, IndexOptions: new(options.IndexOptions).SetExpireAfterSeconds(0)},
 	})
@@ -113,10 +117,10 @@ type MinionSessionCheckIn struct {
 	// Peer is the IP address it came from; "" for unknown.
 	Peer string
 	// Sleep is a schedule the message said (a sleep_update, a rehello); nil
-	// leaves the session's. LateAt is when the session turns late from now;
-	// nil leaves it (no schedule known).
-	Sleep  *models.MinionSessionSleep
-	LateAt *time.Time
+	// leaves the session's. LateAt and LostAt are when the session turns
+	// late and lost from now; nil leaves them (no schedule known).
+	Sleep          *models.MinionSessionSleep
+	LateAt, LostAt *time.Time
 }
 
 func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, c MinionSessionCheckIn) error {
@@ -126,6 +130,9 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 	}
 	if c.LateAt != nil {
 		set["late_at"] = *c.LateAt
+	}
+	if c.LostAt != nil {
+		set["lost_at"] = *c.LostAt
 	}
 	if c.Peer == "" {
 		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": set, "$unset": bson.M{"purge_at": ""}})
@@ -320,6 +327,7 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 		"persisted":         true,
 		"sleep":             sleepOrRemove(c.Sleep),
 		"late_at":           "$$REMOVE", // set again by the claim's check-in
+		"lost_at":           "$$REMOVE",
 	}}})
 }
 
@@ -330,4 +338,21 @@ func sleepOrRemove(s *models.MinionSessionSleep) any {
 		return "$$REMOVE"
 	}
 	return bson.M{"$literal": s}
+}
+
+// BackfillLostAt is one update inside Mongo: lost_at = late_at plus the
+// missed check-ins past the first, each the interval with its jitter (late_at
+// already holds the first and the grace). Idempotent: only sessions without
+// one.
+func (r *minionSessionRepository) BackfillLostAt(ctx context.Context) (int64, error) {
+	stretched := bson.M{"$multiply": bson.A{"$sleep.interval", bson.M{"$add": bson.A{1, bson.M{"$divide": bson.A{"$sleep.jitter", 100}}}}}}
+	res, err := r.coll.UpdateAll(ctx,
+		bson.M{"lost_at": nil, "late_at": bson.M{"$ne": nil}, "sleep.interval": bson.M{"$gt": 0}},
+		bson.A{bson.M{"$set": bson.M{"lost_at": bson.M{"$add": bson.A{
+			"$late_at", bson.M{"$multiply": bson.A{models.SessionLostMissed - 1, stretched}},
+		}}}}})
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }

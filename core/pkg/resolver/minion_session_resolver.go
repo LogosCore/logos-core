@@ -335,7 +335,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
 		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
 		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
-		LateAt: timePtr(s.LateAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
+		LateAt: timePtr(s.LateAt), LostAt: timePtr(s.LostAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X
