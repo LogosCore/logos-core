@@ -10,7 +10,8 @@ import (
 )
 
 // MinionSessionMark is how one operator marks a session for themselves: a
-// color (SessionMarkColors), an icon (a lucide name, or "si:<slug>" for a
+// color (SessionMarkColors) or a style (SessionMarkStyles, in the same field:
+// a row has one or the other), an icon (a lucide name, or "si:<slug>" for a
 // brand) or an emoji, each optional. Private to the operator, kept for them
 // in every browser; nobody else sees it.
 type MinionSessionMark struct {
@@ -40,6 +41,11 @@ var (
 	}()
 )
 
+// SessionMarkStyles are the special looks a mark gives a row in place of a
+// color: their own background, font and text effects (session-mark-styles.css
+// in the SPA). They share the color field, as one choice of the operator's.
+var SessionMarkStyles = []string{"haxor", "rainbow", "amber-crt", "synthwave", "glitch", "on-fire", "gold", "ghost"}
+
 var sessionMarkIconPattern = regexp.MustCompile(`^[A-Za-z0-9:_-]{1,64}$`)
 
 // Empty reports whether the mark marks nothing: it is then removed.
@@ -49,8 +55,8 @@ func (m MinionSessionMark) Empty() bool { return m.Color == "" && m.Icon == "" &
 // at most: an emoji or an icon).
 func ValidateSessionMark(color, icon, emoji string) string {
 	switch {
-	case color != "" && !slices.Contains(SessionMarkColors, color):
-		return "not one of the mark colors"
+	case color != "" && !slices.Contains(SessionMarkColors, color) && !slices.Contains(SessionMarkStyles, color):
+		return "not one of the mark colors or styles"
 	case icon != "" && !sessionMarkIconPattern.MatchString(icon):
 		return "not an icon name"
 	case emoji != "" && (utf8.RuneCountInString(emoji) > 8 || len(emoji) > 32):

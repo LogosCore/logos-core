@@ -10196,8 +10196,9 @@ type MinionSessionRestart {
 
 # An operator's own mark on a session: a color (one of 36, "<hue>-<strength>":
 # red, orange, amber, yellow, lime, green, teal, cyan, blue, indigo, violet or
-# pink; soft, medium or strong), and an icon (a lucide name, or si:<slug>) or
-# an emoji. Each may be null.
+# pink; soft, medium or strong) or in its place a style (haxor, rainbow,
+# amber-crt, synthwave, glitch, on-fire, gold or ghost), and an icon (a lucide
+# name, or si:<slug>) or an emoji. Each may be null.
 type MinionSessionMark {
   color: String
   icon: String

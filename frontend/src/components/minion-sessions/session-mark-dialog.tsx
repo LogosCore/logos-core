@@ -6,7 +6,15 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { DocumentIconPicker } from "@/components/wiki/document-icon-picker"
 import type { MinionSessionMarkInput } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
-import { MARK_TONE_CLASSES, SESSION_MARK_COLORS, markColorVars } from "./session-mark-colors"
+import {
+  MARK_TONE_CLASSES,
+  SESSION_MARK_COLORS,
+  SESSION_MARK_HUES,
+  SESSION_MARK_STRENGTHS,
+  SESSION_MARK_STYLES,
+  isMarkColor,
+  markColorVars,
+} from "./session-mark-colors"
 
 // An operator's mark on sessions: a color that tints the row and an icon (or
 // emoji) beside the number. Marks are the operator's own; nobody else sees
@@ -63,18 +71,18 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
     >
       <DialogHeader>
         <DialogTitle>Mark {target.title}</DialogTitle>
-        <DialogDescription>A color for the row and an icon beside the number. Only you see your marks.</DialogDescription>
+        <DialogDescription>A color or a style for the row, and an icon beside the number. Only you see your marks.</DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Color</span>
+          <span className="text-sm font-medium">Color or style</span>
           <Button type="button" variant="ghost" size="xs" disabled={!color} onClick={() => setColor("")}>
             <XIcon />
-            No color
+            None
           </Button>
         </div>
-        {/* A column per hue, soft to strong down. */}
-        <div role="radiogroup" aria-label="Color" className="grid grid-flow-col grid-cols-12 grid-rows-3 gap-1">
+        {/* A column per hue, soft to strong down; the styles a row below. */}
+        <div role="radiogroup" aria-label="Color or style" className="grid grid-cols-12 gap-1">
           {SESSION_MARK_COLORS.map((c) => (
             <button
               key={c.id}
@@ -84,7 +92,11 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               aria-label={c.label}
               title={c.label}
               onClick={() => setColor(color === c.id ? "" : c.id)}
-              style={markColorVars(c.id)}
+              style={{
+                ...markColorVars(c.id),
+                gridColumn: SESSION_MARK_HUES.indexOf(c.hue) + 1,
+                gridRow: SESSION_MARK_STRENGTHS.indexOf(c.strength) + 1,
+              }}
               className={cn(
                 "flex aspect-square items-center justify-center rounded-md border border-foreground/10 bg-(color:--mark-row) outline-none hover:bg-(color:--mark-row-hover) focus-visible:ring-2 focus-visible:ring-ring dark:bg-(color:--mark-row-dark) dark:hover:bg-(color:--mark-row-dark-hover)",
                 MARK_TONE_CLASSES,
@@ -94,12 +106,30 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               {color === c.id ? <CheckIcon className="size-3.5" /> : <span className="size-2 rounded-full bg-current" />}
             </button>
           ))}
+          {SESSION_MARK_STYLES.map((st, i) => (
+            <button
+              key={st.id}
+              type="button"
+              role="radio"
+              aria-checked={color === st.id}
+              aria-label={st.label}
+              title={st.label}
+              onClick={() => setColor(color === st.id ? "" : st.id)}
+              style={{ ...st.swatch, gridColumn: i + 1, gridRow: SESSION_MARK_STRENGTHS.length + 1 }}
+              className={cn(
+                "flex aspect-square items-center justify-center rounded-md border border-foreground/10 outline-none hover:brightness-125 focus-visible:ring-2 focus-visible:ring-ring",
+                color === st.id && "ring-2 ring-foreground/70",
+              )}
+            >
+              <st.Icon className="size-3.5" />
+            </button>
+          ))}
         </div>
       </div>
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium">Icon</span>
         {/* The picker's icon takes the chosen color's tone. */}
-        <span style={markColorVars(color)} className={cn("inline-flex", color && MARK_TONE_CLASSES)}>
+        <span style={markColorVars(color)} className={cn("inline-flex", isMarkColor(color) && MARK_TONE_CLASSES)}>
           <DocumentIconPicker
             value={{ emoji, icon, color: "" }}
             onSelect={(v) => {

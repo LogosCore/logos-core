@@ -5,6 +5,11 @@
 // theme, low), so a marked row reads as marked without turning the table
 // into a quilt, and the app's neutral look holds.
 
+import type { CSSProperties } from "react"
+import type { LucideIcon } from "lucide-react"
+import { CrownIcon, FlameIcon, GhostIcon, MonitorIcon, RainbowIcon, SquareTerminalIcon, SunsetIcon, ZapIcon } from "lucide-react"
+import "./session-mark-styles.css"
+
 export type SessionMarkStrength = "soft" | "medium" | "strong"
 
 export interface SessionMarkColor {
@@ -47,6 +52,10 @@ const STRENGTHS: Record<SessionMarkStrength, { lightL: number; darkL: number; ro
 
 const oklch = (l: number, c: number, h: number) => `oklch(${l} ${c} ${h})`
 
+/** The hues and strengths in the order the picker lays them out. */
+export const SESSION_MARK_HUES: readonly string[] = HUES.map((h) => h.id)
+export const SESSION_MARK_STRENGTHS = Object.keys(STRENGTHS) as SessionMarkStrength[]
+
 export const SESSION_MARK_COLORS: readonly SessionMarkColor[] = HUES.flatMap((hue) =>
   (Object.keys(STRENGTHS) as SessionMarkStrength[]).map((strength) => {
     const s = STRENGTHS[strength]
@@ -84,6 +93,83 @@ export function markColorVars(id: string | null | undefined): Record<string, str
     "--mark-tone": c.toneLight,
     "--mark-tone-dark": c.toneDark,
   }
+}
+
+/**
+ * The special looks a mark gives a row in place of a color (core's
+ * SessionMarkStyles; drawn by session-mark-styles.css). They share the mark's
+ * color field. text says how the row's text is drawn there: "solid" one color,
+ * "ink" a gradient through the text, "none" left as it is.
+ */
+export interface SessionMarkStyle {
+  id: string
+  label: string
+  text: "solid" | "ink" | "none"
+  /** The swatch: its own background and icon, in the style's colors. */
+  swatch: CSSProperties
+  Icon: LucideIcon
+}
+
+export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
+  { id: "haxor", label: "Haxor", text: "solid", Icon: SquareTerminalIcon, swatch: { background: "#070b07", color: "#39ff14" } },
+  {
+    id: "rainbow",
+    label: "Rainbow",
+    text: "ink",
+    Icon: RainbowIcon,
+    swatch: {
+      background: "conic-gradient(from 90deg, #ff4d4d, #ff9f1a, #ffe14d, #4dff88, #4dd2ff, #8f6bff, #ff4dd2, #ff4d4d)",
+      color: "#fff",
+    },
+  },
+  { id: "amber-crt", label: "Amber CRT", text: "solid", Icon: MonitorIcon, swatch: { background: "#160e02", color: "#ffb000" } },
+  {
+    id: "synthwave",
+    label: "Synthwave",
+    text: "solid",
+    Icon: SunsetIcon,
+    swatch: { background: "linear-gradient(135deg, #2a0d52, #9c1c63)", color: "#ffa6ea" },
+  },
+  { id: "glitch", label: "Glitch", text: "solid", Icon: ZapIcon, swatch: { background: "#0b0b10", color: "#00f0ff" } },
+  {
+    id: "on-fire",
+    label: "On Fire",
+    text: "ink",
+    Icon: FlameIcon,
+    swatch: { background: "linear-gradient(180deg, #2c0b03, #1a0703)", color: "#ff7a00" },
+  },
+  {
+    id: "gold",
+    label: "Gold",
+    text: "ink",
+    Icon: CrownIcon,
+    swatch: { background: "linear-gradient(135deg, #15110a, #2b220f)", color: "#ffd700" },
+  },
+  {
+    id: "ghost",
+    label: "Ghost",
+    text: "none",
+    Icon: GhostIcon,
+    swatch: { background: "linear-gradient(135deg, #e5e7eb, #9ca3af)", color: "#ffffff" },
+  },
+]
+
+export const SESSION_MARK_STYLE_BY_ID: ReadonlyMap<string, SessionMarkStyle> = new Map(
+  SESSION_MARK_STYLES.map((s) => [s.id, s]),
+)
+
+/** Whether a mark's color field holds one of the colors (not a style). */
+export function isMarkColor(id: string | null | undefined): boolean {
+  return !!id && SESSION_MARK_COLOR_BY_ID.has(id)
+}
+
+/** The classes a row takes for its mark's color or style. */
+export function markRowClass(id: string | null | undefined): string | undefined {
+  if (!id) return undefined
+  if (SESSION_MARK_COLOR_BY_ID.has(id)) return MARKED_ROW_CLASSES
+  const style = SESSION_MARK_STYLE_BY_ID.get(id)
+  if (!style) return undefined
+  return `mark-fx mark-fx-${style.id}${style.text === "none" ? "" : ` mark-fx-${style.text}`}`
 }
 
 /** A marked row's tint, in either theme and on hover. */

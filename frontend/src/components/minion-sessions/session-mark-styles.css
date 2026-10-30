@@ -1,0 +1,464 @@
+/*
+ * The special looks a session mark gives a row in place of a color
+ * (SESSION_MARK_STYLES in session-mark-colors.ts; core's SessionMarkStyles).
+ * Most bring their own background, so they look alike in either theme; the
+ * ink ones (Rainbow, On Fire, Gold) keep the table's and pick their colors
+ * per theme.
+ *
+ * Two kinds of text:
+ *   .mark-fx-solid  every text in the row takes the style's color;
+ *   .mark-fx-ink    the text shows the style's gradient (--fx-ink) through it:
+ *                   each cell paints the gradient clipped to its own text, so
+ *                   the text is transparent and icons take --fx-icon. Per
+ *                   cell, not per row: a row's clip does not reach its
+ *                   cells' text, and the gradient covered the whole row.
+ * Last seen keeps saying live, late or lost under both: in colors that read
+ * on a style's dark background, or the table's own where the style keeps the
+ * table's background (the ink ones). Ghost touches neither.
+ *
+ * Plain (unlayered) CSS on purpose: it wins over the row's utilities (its
+ * hover background) without !important, and leaves the picked row's ring
+ * (a box-shadow) alone.
+ */
+
+.mark-fx {
+  position: relative;
+  background-color: var(--fx-bg, transparent);
+  background-image: var(--fx-wash, none);
+}
+.mark-fx:hover {
+  background-color: var(--fx-bg-hover, var(--fx-bg, transparent));
+}
+
+.mark-fx-solid,
+.mark-fx-solid * {
+  color: var(--fx-fg);
+}
+.mark-fx-ink > [data-cell] {
+  background-image: var(--fx-ink);
+  background-size: var(--fx-ink-size, auto);
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: var(--fx-ink-animation, none);
+}
+.mark-fx-ink,
+.mark-fx-ink * {
+  color: transparent;
+}
+.mark-fx-ink svg {
+  color: var(--fx-icon);
+}
+
+:is(.mark-fx-solid, .mark-fx-ink) [data-seen="live"],
+:is(.mark-fx-solid, .mark-fx-ink) [data-seen="live"] * {
+  color: #4ade80;
+}
+:is(.mark-fx-solid, .mark-fx-ink) [data-seen="late"],
+:is(.mark-fx-solid, .mark-fx-ink) [data-seen="late"] * {
+  color: #facc15;
+}
+:is(.mark-fx-solid, .mark-fx-ink) [data-seen="lost"],
+:is(.mark-fx-solid, .mark-fx-ink) [data-seen="lost"] * {
+  color: #f87171;
+}
+
+/* Haxor: a terminal. Acid green on black, a glow, a blinking cursor. */
+.mark-fx-haxor {
+  --fx-bg: #070b07;
+  --fx-bg-hover: #0d160d;
+  --fx-fg: #39ff14;
+  font-family: var(--font-mono);
+  text-shadow: 0 0 4px rgb(57 255 20 / 0.55);
+}
+.mark-fx-haxor [data-seen="live"],
+.mark-fx-haxor [data-seen="live"] * {
+  /* Live is the style's own green already. */
+  color: #39ff14;
+}
+.mark-fx-haxor [data-session-number]::after {
+  content: "\2588";
+  margin-left: 2px;
+  animation: mark-fx-blink 1s steps(1) infinite;
+}
+@keyframes mark-fx-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Rainbow: every letter its own hue, the whole spectrum every dozen
+ * letters, drifting along the row. On the row's own background: the hues keep
+ * one lightness per theme (yellow is a deep gold on white), and the text is
+ * bolder to carry them. Each cell paints its own rainbow (one fixed to the
+ * viewport, to run on across cells, came out one flat pink), so each column
+ * starts at another hue: its animation is that far along. */
+.mark-fx-rainbow {
+  --fx-icon: oklch(0.6 0.2 300);
+  --fx-ink: repeating-linear-gradient(
+    90deg,
+    oklch(0.6 0.2 0) 0px,
+    oklch(0.6 0.2 30) 8px,
+    oklch(0.6 0.2 60) 16px,
+    oklch(0.6 0.2 90) 24px,
+    oklch(0.6 0.2 120) 32px,
+    oklch(0.6 0.2 150) 40px,
+    oklch(0.6 0.2 180) 48px,
+    oklch(0.6 0.2 210) 56px,
+    oklch(0.6 0.2 240) 64px,
+    oklch(0.6 0.2 270) 72px,
+    oklch(0.6 0.2 300) 80px,
+    oklch(0.6 0.2 330) 88px,
+    oklch(0.6 0.2 360) 96px
+  );
+  --fx-ink-animation: mark-fx-rainbow 4s linear infinite;
+}
+.dark .mark-fx-rainbow {
+  --fx-icon: oklch(0.8 0.15 300);
+  --fx-ink: repeating-linear-gradient(
+    90deg,
+    oklch(0.8 0.16 0) 0px,
+    oklch(0.8 0.16 30) 8px,
+    oklch(0.8 0.16 60) 16px,
+    oklch(0.8 0.16 90) 24px,
+    oklch(0.8 0.16 120) 32px,
+    oklch(0.8 0.16 150) 40px,
+    oklch(0.8 0.16 180) 48px,
+    oklch(0.8 0.16 210) 56px,
+    oklch(0.8 0.16 240) 64px,
+    oklch(0.8 0.16 270) 72px,
+    oklch(0.8 0.16 300) 80px,
+    oklch(0.8 0.16 330) 88px,
+    oklch(0.8 0.16 360) 96px
+  );
+}
+.mark-fx-rainbow > [data-cell]:nth-child(2) {
+  animation-delay: -2.96s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(3) {
+  animation-delay: -0.44s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(4) {
+  animation-delay: -1.92s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(5) {
+  animation-delay: -3.4s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(6) {
+  animation-delay: -0.88s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(7) {
+  animation-delay: -2.36s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(8) {
+  animation-delay: -3.84s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(9) {
+  animation-delay: -1.32s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(10) {
+  animation-delay: -2.8s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(11) {
+  animation-delay: -0.28s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(12) {
+  animation-delay: -1.76s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(13) {
+  animation-delay: -3.24s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(14) {
+  animation-delay: -0.72s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(15) {
+  animation-delay: -2.2s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(16) {
+  animation-delay: -3.68s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(17) {
+  animation-delay: -1.16s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(18) {
+  animation-delay: -2.64s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(19) {
+  animation-delay: -0.12s;
+}
+.mark-fx-rainbow > [data-cell]:nth-child(20) {
+  animation-delay: -1.6s;
+}
+
+@keyframes mark-fx-rainbow {
+  to {
+    background-position: 96px 0;
+  }
+}
+
+/* Amber CRT: an old amber monitor, phosphor glow and scanlines. */
+.mark-fx-amber-crt {
+  --fx-bg: #160e02;
+  --fx-bg-hover: #221603;
+  --fx-fg: #ffb000;
+  font-family: "Space Mono", var(--font-mono);
+  text-shadow: 0 0 5px rgb(255 176 0 / 0.5);
+}
+.mark-fx-amber-crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(0 0 0 / 0.28) 0 1px, transparent 1px 3px);
+}
+
+/* Synthwave: a purple-to-pink sunset, neon pink text with a cyan glow. */
+.mark-fx-synthwave {
+  --fx-bg: #2a0d52;
+  --fx-wash: linear-gradient(90deg, #2a0d52, #5a1670 55%, #9c1c63);
+  --fx-fg: #ffa6ea;
+  text-shadow: 0 0 6px rgb(1 205 254 / 0.75);
+}
+.mark-fx-synthwave:hover {
+  --fx-wash: linear-gradient(90deg, #35116a, #6a1b84 55%, #b02270);
+}
+
+/* Glitch: the text split into red and cyan, jumping now and then. */
+.mark-fx-glitch {
+  --fx-bg: #0b0b10;
+  --fx-bg-hover: #13131b;
+  --fx-fg: #ecebf5;
+  text-shadow: -1px 0 rgb(255 0 60 / 0.8), 1px 0 rgb(0 240 255 / 0.8);
+  animation: mark-fx-glitch 4s steps(1) infinite;
+}
+@keyframes mark-fx-glitch {
+  90% {
+    text-shadow: -3px 0 rgb(255 0 60 / 0.9), 3px 0 rgb(0 240 255 / 0.9);
+  }
+  93% {
+    text-shadow: 2px 1px rgb(255 0 60 / 0.9), -2px -1px rgb(0 240 255 / 0.9);
+  }
+  96% {
+    text-shadow: -1px 0 rgb(255 0 60 / 0.8), 1px 0 rgb(0 240 255 / 0.8);
+  }
+}
+
+/* On Fire: flame text, red at the foot to yellow at the tips, flickering
+ * out of step from column to column; an ember line under the row. Deeper
+ * flames on white, brighter ones on dark. */
+.mark-fx-on-fire {
+  --fx-icon: #e65c00;
+  --fx-ink: linear-gradient(0deg, #b91c00 0%, #e04800 30%, #f07800 55%, #d99000 75%, #e04800 100%);
+  --fx-ink-size: 100% 300%;
+  --fx-ink-animation: mark-fx-flicker 1.6s ease-in-out infinite alternate;
+  border-bottom-color: #ff6a00;
+}
+.dark .mark-fx-on-fire {
+  --fx-icon: #ff8a00;
+  --fx-ink: linear-gradient(0deg, #ff3b1f 0%, #ff7a00 30%, #ffc400 55%, #ffe9a0 75%, #ff7a00 100%);
+}
+.mark-fx-on-fire > [data-cell]:nth-child(2) {
+  animation-delay: -1.22s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(3) {
+  animation-delay: -0.23s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(4) {
+  animation-delay: -0.84s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(5) {
+  animation-delay: -1.45s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(6) {
+  animation-delay: -0.46s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(7) {
+  animation-delay: -1.07s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(8) {
+  animation-delay: -0.08s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(9) {
+  animation-delay: -0.69s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(10) {
+  animation-delay: -1.3s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(11) {
+  animation-delay: -0.31s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(12) {
+  animation-delay: -0.92s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(13) {
+  animation-delay: -1.53s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(14) {
+  animation-delay: -0.54s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(15) {
+  animation-delay: -1.15s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(16) {
+  animation-delay: -0.16s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(17) {
+  animation-delay: -0.77s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(18) {
+  animation-delay: -1.38s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(19) {
+  animation-delay: -0.39s;
+}
+.mark-fx-on-fire > [data-cell]:nth-child(20) {
+  animation-delay: -1.0s;
+}
+@keyframes mark-fx-flicker {
+  0% {
+    background-position: 0 0%;
+  }
+  35% {
+    background-position: 0 60%;
+  }
+  55% {
+    background-position: 0 30%;
+  }
+  100% {
+    background-position: 0 100%;
+  }
+}
+
+/* Gold: metallic text, a shine sweeping along the row every few seconds:
+ * each column shines a little after the one before. Old gold on white, bright
+ * gold on dark. */
+.mark-fx-gold {
+  --fx-icon: #b8860b;
+  --fx-ink: linear-gradient(
+    105deg,
+    #8a6410 0%,
+    #a9800f 40%,
+    #e0b52a 47%,
+    #c99a12 50%,
+    #a9800f 56%,
+    #8a6410 100%
+  );
+  --fx-ink-size: 300% 100%;
+  --fx-ink-animation: mark-fx-shine 5s ease-in-out infinite;
+}
+.dark .mark-fx-gold {
+  --fx-icon: #ffd700;
+  --fx-ink: linear-gradient(
+    105deg,
+    #c9971a 0%,
+    #e6be3a 40%,
+    #fff7cf 47%,
+    #ffe27a 50%,
+    #e6be3a 56%,
+    #c9971a 100%
+  );
+}
+.mark-fx-gold > [data-cell]:nth-child(2) {
+  animation-delay: 0.24s;
+}
+.mark-fx-gold > [data-cell]:nth-child(3) {
+  animation-delay: 0.36s;
+}
+.mark-fx-gold > [data-cell]:nth-child(4) {
+  animation-delay: 0.48s;
+}
+.mark-fx-gold > [data-cell]:nth-child(5) {
+  animation-delay: 0.6s;
+}
+.mark-fx-gold > [data-cell]:nth-child(6) {
+  animation-delay: 0.72s;
+}
+.mark-fx-gold > [data-cell]:nth-child(7) {
+  animation-delay: 0.84s;
+}
+.mark-fx-gold > [data-cell]:nth-child(8) {
+  animation-delay: 0.96s;
+}
+.mark-fx-gold > [data-cell]:nth-child(9) {
+  animation-delay: 1.08s;
+}
+.mark-fx-gold > [data-cell]:nth-child(10) {
+  animation-delay: 1.2s;
+}
+.mark-fx-gold > [data-cell]:nth-child(11) {
+  animation-delay: 1.32s;
+}
+.mark-fx-gold > [data-cell]:nth-child(12) {
+  animation-delay: 1.44s;
+}
+.mark-fx-gold > [data-cell]:nth-child(13) {
+  animation-delay: 1.56s;
+}
+.mark-fx-gold > [data-cell]:nth-child(14) {
+  animation-delay: 1.68s;
+}
+.mark-fx-gold > [data-cell]:nth-child(15) {
+  animation-delay: 1.8s;
+}
+.mark-fx-gold > [data-cell]:nth-child(16) {
+  animation-delay: 1.92s;
+}
+.mark-fx-gold > [data-cell]:nth-child(17) {
+  animation-delay: 2.04s;
+}
+.mark-fx-gold > [data-cell]:nth-child(18) {
+  animation-delay: 2.16s;
+}
+.mark-fx-gold > [data-cell]:nth-child(19) {
+  animation-delay: 2.28s;
+}
+.mark-fx-gold > [data-cell]:nth-child(20) {
+  animation-delay: 2.4s;
+}
+@keyframes mark-fx-shine {
+  0%,
+  30% {
+    background-position: 100% 0;
+  }
+  70%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+/* The ink styles above sit on the table's own background: bolder text to
+ * carry the color (over the cells' own weights), the table's hover, and Last
+ * seen in the table's own live/late/lost colors. */
+:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) {
+  --fx-bg-hover: color-mix(in oklab, var(--muted) 50%, transparent);
+}
+:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold),
+:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) * {
+  font-weight: 600;
+}
+:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) [data-seen],
+:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) [data-seen] * {
+  color: revert-layer;
+}
+
+/* Ghost: faded and blurred, back in focus on hover. For the dead. */
+.mark-fx-ghost {
+  opacity: 0.45;
+  filter: blur(0.6px) grayscale(1);
+  transition:
+    opacity 0.3s,
+    filter 0.3s;
+}
+.mark-fx-ghost:hover {
+  opacity: 1;
+  filter: none;
+}
+
+/* Held still rather than stopped: a paused animation keeps its delay's
+ * frame, so a rainbow's columns keep their different hues. */
+@media (prefers-reduced-motion: reduce) {
+  .mark-fx,
+  .mark-fx *,
+  .mark-fx *::after {
+    animation-play-state: paused !important;
+  }
+}

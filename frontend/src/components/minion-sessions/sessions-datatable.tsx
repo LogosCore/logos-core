@@ -92,7 +92,7 @@ import { SessionCell } from "./session-cells"
 import { SessionFilterEditor } from "./session-filter-editor"
 import { SessionDescriptionDialog } from "./session-description-dialog"
 import { SessionMarkDialog, type SessionMarkTarget } from "./session-mark-dialog"
-import { MARKED_ROW_CLASSES, markColorVars } from "./session-mark-colors"
+import { markColorVars, markRowClass } from "./session-mark-colors"
 import {
   DEFAULT_SESSIONS_LAYOUT,
   addressMatcher,
@@ -395,13 +395,13 @@ export function SessionsDatatable({
               itemContent={(_, s) => (
                 <ContextMenuRow
                   gridCols=""
-                  // The caller's mark tints the row; a picked row is outlined,
+                  // The caller's mark tints (or styles) the row; a picked row is outlined,
                   // so it shows marked and picked at once.
                   style={{ ...grid, ...markColorVars(s.mark?.color) }}
                   // While selecting, a drag or shift-click does not select text.
                   className={cn(
                     selecting && "select-none",
-                    s.mark?.color && MARKED_ROW_CLASSES,
+                    markRowClass(s.mark?.color),
                     pickedSet.has(s.id) && "ring-2 ring-primary/60 ring-inset",
                   )}
                   // While selecting, a click picks the row (shift: a range).
@@ -439,7 +439,7 @@ export function SessionsDatatable({
                         />
                       )}
                       {columns.map((col) => (
-                        <div key={col.id} className="min-w-0">
+                        <div key={col.id} data-cell className="min-w-0">
                           <SessionCell id={col.id} session={s} ctx={ctx} />
                         </div>
                       ))}

@@ -84,6 +84,7 @@ func TestValidateSessionMark(t *testing.T) {
 		"color and icon":   {"teal-medium", "Crosshair", "", true},
 		"brand icon":       {"", "si:linux", "", true},
 		"emoji":            {"red-strong", "", "🎯", true},
+		"style":            {"haxor", "Terminal", "", true},
 		"nothing":          {"", "", "", true},
 		"unknown color":    {"teal", "", "", false},
 		"bad icon":         {"", "<script>", "", false},

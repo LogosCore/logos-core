@@ -8,7 +8,7 @@ import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
 import { DocumentIcon } from "@/components/wiki/document-icon"
-import { MARK_TONE_CLASSES } from "./session-mark-colors"
+import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
@@ -86,10 +86,12 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "number":
       return (
         <div className="flex min-w-0 items-baseline gap-1.5" title={`Session ${s.number}, ${s.id}`}>
-          <span className="truncate font-mono font-medium">{s.number}</span>
+          <span data-session-number className="truncate font-mono font-medium">
+            {s.number}
+          </span>
           {/* The caller's mark, in its color's tone (the row sets it). */}
           {(s.mark?.icon || s.mark?.emoji) && (
-            <span className={cn("self-center", s.mark.color && MARK_TONE_CLASSES)}>
+            <span className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
               <DocumentIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
             </span>
           )}
@@ -153,6 +155,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       const state = lateness(s, ctx.now)
       return (
         <div
+          // A marked row's style recolors these (session-mark-styles.css).
+          data-seen={state ?? undefined}
           className={cn(
             "truncate",
             state === "live" && "text-emerald-600 dark:text-emerald-400",
