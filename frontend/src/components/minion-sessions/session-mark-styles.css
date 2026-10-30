@@ -62,14 +62,13 @@
 
 /* Haxor: a terminal, in a terminal font. On dark, a dark green screen and
  * acid green text with a glow. On white, a backlit green LCD: dark phosphor
- * text on a pale green screen under fine scanlines, the acid green a bar down
- * the left edge. (Both a dark screen and green text on a faint tint looked
- * wrong on white: a black bar, a row merely colored.) */
+ * text on a pale green screen under fine scanlines. (Both a dark screen and
+ * green text on a faint tint looked wrong on white: a black bar, a row
+ * merely colored.) */
 .mark-fx-haxor {
   --fx-bg: oklch(0.94 0.05 140);
   --fx-bg-hover: oklch(0.915 0.065 140);
   --fx-fg: oklch(0.34 0.08 150);
-  --fx-wash: linear-gradient(90deg, #39ff14 0 3px, transparent 3px);
   --fx-scan: rgb(0 60 20 / 0.05);
   font-family: var(--font-mono);
 }
@@ -77,7 +76,6 @@
   --fx-bg: oklch(0.18 0.03 145);
   --fx-bg-hover: oklch(0.22 0.04 145);
   --fx-fg: #39ff14;
-  --fx-wash: none;
   --fx-scan: transparent;
   text-shadow: 0 0 4px rgb(57 255 20 / 0.5);
 }
@@ -193,12 +191,11 @@
 
 /* Amber CRT: an old amber monitor, in a retro mono font, under scanlines. On
  * dark, glowing amber on a dark screen. On white, Haxor's LCD in amber: dark
- * brown text on a warm amber screen, the amber a bar down the left edge. */
+ * brown text on a warm amber screen. */
 .mark-fx-amber-crt {
   --fx-bg: oklch(0.94 0.065 82);
   --fx-bg-hover: oklch(0.915 0.08 80);
   --fx-fg: oklch(0.37 0.08 55);
-  --fx-wash: linear-gradient(90deg, #ffb000 0 3px, transparent 3px);
   --fx-scan: rgb(90 50 0 / 0.06);
   font-family: "Space Mono", var(--font-mono);
 }
@@ -206,7 +203,6 @@
   --fx-bg: oklch(0.18 0.03 70);
   --fx-bg-hover: oklch(0.22 0.04 70);
   --fx-fg: #ffb000;
-  --fx-wash: none;
   --fx-scan: rgb(0 0 0 / 0.25);
   text-shadow: 0 0 5px rgb(255 176 0 / 0.45);
 }

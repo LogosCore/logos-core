@@ -118,7 +118,7 @@ export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
     Icon: SquareTerminalIcon,
     swatch: {
       light:
-        "repeating-linear-gradient(0deg, rgb(0 60 20 / 0.06) 0 1px, transparent 1px 3px), linear-gradient(90deg, #39ff14 0 3px, oklch(0.94 0.05 140) 3px)",
+        "repeating-linear-gradient(0deg, rgb(0 60 20 / 0.06) 0 1px, transparent 1px 3px), linear-gradient(oklch(0.94 0.05 140), oklch(0.94 0.05 140))",
       dark: "linear-gradient(#070b07, #070b07)",
       fg: "oklch(0.34 0.08 150)",
       fgDark: "#39ff14",
@@ -143,7 +143,7 @@ export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
     Icon: MonitorIcon,
     swatch: {
       light:
-        "repeating-linear-gradient(0deg, rgb(90 50 0 / 0.07) 0 1px, transparent 1px 3px), linear-gradient(90deg, #ffb000 0 3px, oklch(0.94 0.065 82) 3px)",
+        "repeating-linear-gradient(0deg, rgb(90 50 0 / 0.07) 0 1px, transparent 1px 3px), linear-gradient(oklch(0.94 0.065 82), oklch(0.94 0.065 82))",
       dark: "linear-gradient(#160e02, #160e02)",
       fg: "oklch(0.37 0.08 55)",
       fgDark: "#ffb000",
