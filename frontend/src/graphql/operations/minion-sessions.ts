@@ -6,6 +6,7 @@ export const MinionSessionFields = graphql(`
   fragment MinionSessionFields on MinionSession {
     id
     state
+    archived
     number
     operationId
     buildId
@@ -54,6 +55,7 @@ export const MinionSessionFields = graphql(`
 export const MinionSessionsQuery = graphql(`
   query MinionSessions(
     $operationId: ID!
+    $archived: Boolean
     $search: String
     $filters: [MinionSessionFilterInput!]
     $sort: MinionSessionSortInput
@@ -62,6 +64,7 @@ export const MinionSessionsQuery = graphql(`
   ) {
     minionSessions(
       operationId: $operationId
+      archived: $archived
       search: $search
       filters: $filters
       sort: $sort
@@ -151,6 +154,14 @@ export const SetMinionSessionAddressMutation = graphql(`
 export const MinionSessionQuery = graphql(`
   query MinionSession($id: ID!) {
     minionSession(id: $id) {
+      ...MinionSessionFields
+    }
+  }
+`)
+
+export const SetMinionSessionArchivedMutation = graphql(`
+  mutation SetMinionSessionArchived($id: ID!, $archived: Boolean!) {
+    setMinionSessionArchived(id: $id, archived: $archived) {
       ...MinionSessionFields
     }
   }

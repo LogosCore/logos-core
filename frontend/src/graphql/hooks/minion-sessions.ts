@@ -18,6 +18,7 @@ import {
   MinionSessionsLayoutDocument,
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
+  SetMinionSessionArchivedDocument,
   type MinionSessionFieldsFragment,
   type MinionSessionsLayoutQuery,
   type MinionSessionsQuery,
@@ -36,6 +37,8 @@ import {
 /** What a sessions list shows: the server searches, filters and sorts. */
 export interface MinionSessionListParams {
   operationId: string
+  /** The archived sessions instead of the others. */
+  archived: boolean
   search: string | null
   filters: SessionFilter[]
   sort: SessionSort | null
@@ -61,6 +64,7 @@ export function useInfiniteMinionSessions(params: MinionSessionListParams, optio
     queryFn: ({ pageParam }) =>
       graphqlClient(MinionSessionsDocument, {
         operationId: params.operationId,
+        archived: params.archived,
         search: params.search,
         filters: params.filters,
         sort: params.sort,
@@ -165,7 +169,12 @@ export function applyMinionSessionEvent(
     if (!data) continue
     const params = key[key.length - 1] as MinionSessionListParams
     const before = data.pages.flatMap((p) => p.minionSessions.edges).find((e) => e.node.id === session.id)?.node
-    const narrowed = params.search !== null || params.filters.length > 0 || params.sort !== null
+    // Archiving or restoring moves the row between the two lists.
+    if (before && before.archived !== session.archived) {
+      scheduleRefresh(queryClient, minionSessionKeys.lists())
+      continue
+    }
+    const narrowed = params.archived || params.search !== null || params.filters.length > 0 || params.sort !== null
     if (!before) {
       // Not loaded here: it may belong now, unless the list is every
       // session newest first, which nothing but a new session changes.
@@ -217,5 +226,14 @@ export function useMinionSession(id: string) {
     queryKey: minionSessionKeys.detail(id),
     queryFn: () => graphqlClient(MinionSessionDocument, { id }),
     enabled: id !== "",
+  })
+}
+
+/** Archives a session or restores it, for the whole operation. */
+export function useSetMinionSessionArchived() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; archived: boolean }) => graphqlClient(SetMinionSessionArchivedDocument, vars),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionArchived),
   })
 }

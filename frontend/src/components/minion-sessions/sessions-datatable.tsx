@@ -17,6 +17,8 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -64,7 +66,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { useFactoryKinds } from "@/graphql/hooks/builds"
 import { factoryKindsByName } from "@/components/builds/build-values"
-import { useSetMinionSessionAddress } from "@/graphql/hooks/minion-sessions"
+import { useSetMinionSessionAddress, useSetMinionSessionArchived } from "@/graphql/hooks/minion-sessions"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
 import { SessionFilterEditor } from "./session-filter-editor"
@@ -105,6 +107,8 @@ interface FilterTarget {
 export function SessionsDatatable({
   operationId,
   canWrite,
+  archived,
+  onArchivedChange,
   layout,
   onLayoutChange,
   sessions,
@@ -116,8 +120,11 @@ export function SessionsDatatable({
   emptyState,
 }: {
   operationId: string
-  /** Whether the viewer may change sessions (pick an address). */
+  /** Whether the viewer may change sessions (pick an address, archive). */
   canWrite: boolean
+  /** The archived sessions are listed instead of the others. */
+  archived: boolean
+  onArchivedChange: (archived: boolean) => void
   layout: SessionsLayout
   onLayoutChange: (layout: SessionsLayout | null) => void
   sessions: MinionSessionFieldsFragment[]
@@ -208,6 +215,8 @@ export function SessionsDatatable({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <FilterChips
+        archived={archived}
+        onShowLive={() => onArchivedChange(false)}
         layout={layout}
         onEdit={(column, anchor) => openFilter(column, anchor)}
         onRemove={(column) => onLayoutChange(setFilter(layout, column, null))}
@@ -246,13 +255,20 @@ export function SessionsDatatable({
                       onContextMenu={() => setMenuColumn(col.id)}
                     />
                   ))}
-                  <ColumnsButton layout={layout} onLayoutChange={onLayoutChange} />
+                  <ColumnsButton
+                    layout={layout}
+                    onLayoutChange={onLayoutChange}
+                    archived={archived}
+                    onArchivedChange={onArchivedChange}
+                  />
                 </div>
               </SortableContext>
             </DndContext>
           </ContextMenuTrigger>
           <HeaderMenu
             column={menuColumn}
+            archived={archived}
+            onArchivedChange={onArchivedChange}
             layout={layout}
             onLayoutChange={onLayoutChange}
             onFilter={(column) => openFilter(column)}
@@ -400,11 +416,15 @@ function HeaderCell({
 /** The header's right-click menu: about the column clicked, then the table. */
 function HeaderMenu({
   column,
+  archived,
+  onArchivedChange,
   layout,
   onLayoutChange,
   onFilter,
 }: {
   column: SessionColumnId | null
+  archived: boolean
+  onArchivedChange: (archived: boolean) => void
   layout: SessionsLayout
   onLayoutChange: (layout: SessionsLayout | null) => void
   onFilter: (column: SessionColumnId) => void
@@ -493,6 +513,9 @@ function HeaderMenu({
           ))}
         </ContextMenuSubContent>
       </ContextMenuSub>
+      <ContextMenuCheckboxItem checked={archived} onCheckedChange={(on) => onArchivedChange(on)}>
+        Show archived sessions
+      </ContextMenuCheckboxItem>
       {layout.filters.length > 0 && (
         <ContextMenuItem onClick={() => onLayoutChange({ ...layout, filters: [] })}>
           <FilterXIcon />
@@ -511,9 +534,13 @@ function HeaderMenu({
 function ColumnsButton({
   layout,
   onLayoutChange,
+  archived,
+  onArchivedChange,
 }: {
   layout: SessionsLayout
   onLayoutChange: (layout: SessionsLayout | null) => void
+  archived: boolean
+  onArchivedChange: (archived: boolean) => void
 }) {
   const isDefault = JSON.stringify(layout) === JSON.stringify(DEFAULT_SESSIONS_LAYOUT)
   return (
@@ -541,6 +568,9 @@ function ColumnsButton({
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem checked={archived} onCheckedChange={(on) => onArchivedChange(on)}>
+          Show archived sessions
+        </DropdownMenuCheckboxItem>
         <DropdownMenuItem disabled={isDefault} onClick={() => onLayoutChange(null)}>
           <ListRestartIcon />
           Reset to default
@@ -552,19 +582,40 @@ function ColumnsButton({
 
 /** The filters in force, above the table: a click edits one, × removes it. */
 function FilterChips({
+  archived,
+  onShowLive,
   layout,
   onEdit,
   onRemove,
   onClearAll,
 }: {
+  archived: boolean
+  onShowLive: () => void
   layout: SessionsLayout
   onEdit: (column: SessionColumnId, anchor: HTMLElement) => void
   onRemove: (column: SessionColumnId) => void
   onClearAll: () => void
 }) {
-  if (layout.filters.length === 0) return null
+  if (layout.filters.length === 0 && !archived) return null
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {archived && (
+        <span className="inline-flex items-center rounded-md border border-foreground/30 bg-muted text-xs">
+          <span className="flex items-center gap-1 py-1 pr-1 pl-2">
+            <ArchiveIcon className="size-3 shrink-0" />
+            <span className="font-medium">Archived sessions</span>
+          </span>
+          <button
+            type="button"
+            aria-label="Back to the sessions"
+            title="Back to the sessions"
+            className="cursor-pointer rounded p-1 text-muted-foreground hover:text-foreground"
+            onClick={onShowLive}
+          >
+            <XIcon className="size-3" />
+          </button>
+        </span>
+      )}
       {layout.filters.map((f) => {
         const col = SESSION_COLUMN_BY_ID.get(f.column)!
         const hidden = !layout.columns.includes(f.column)
@@ -614,6 +665,7 @@ function SessionMenu({
   persistable: boolean
 }) {
   const modals = useRecordModals()
+  const archive = useSetMinionSessionArchived()
   const why = !canWrite
     ? "Needs operator in this operation"
     : !persistable
@@ -628,6 +680,14 @@ function SessionMenu({
       >
         <PinIcon />
         Build with persisted session
+      </ContextMenuItem>
+      <ContextMenuItem
+        disabled={!canWrite}
+        title={canWrite ? undefined : "Needs operator in this operation"}
+        onClick={() => archive.mutate({ id: s.id, archived: !s.archived })}
+      >
+        {s.archived ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+        {s.archived ? "Restore" : "Archive"}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onClick={() => void copyToClipboard(s.id, "session id")}>

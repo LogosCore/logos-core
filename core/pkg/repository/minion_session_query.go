@@ -22,9 +22,11 @@ import (
 // MinionSessionQuery is what an operator asks of an operation's sessions: the
 // app's search, column filters (all of them hold) and the order.
 type MinionSessionQuery struct {
-	Search  string
-	Filters []models.MinionSessionFilter
-	Sort    models.MinionSessionSort
+	// Archived lists the archived sessions instead of the others.
+	Archived bool
+	Search   string
+	Filters  []models.MinionSessionFilter
+	Sort     models.MinionSessionSort
 }
 
 // Validate checks the filters and the sort.
@@ -43,7 +45,11 @@ func (q MinionSessionQuery) Validate() error {
 // minionSessionFilter is the Mongo filter of q at now: the operation, the
 // search and each column filter.
 func minionSessionFilter(operationID uuid.UUID, q MinionSessionQuery, now time.Time) bson.M {
-	and := bson.A{minionSessionListFilter(operationID, q.Search), openSessions(now)}
+	archived := bson.M{"archived": bson.M{"$ne": true}}
+	if q.Archived {
+		archived = bson.M{"archived": true}
+	}
+	and := bson.A{minionSessionListFilter(operationID, q.Search), openSessions(now), archived}
 	for _, f := range q.Filters {
 		and = append(and, columnFilter(f, now))
 	}

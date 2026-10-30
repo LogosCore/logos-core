@@ -484,6 +484,7 @@ type MinionSession struct {
 	Version          *string                 `json:"version,omitempty"`
 	X                any                     `json:"x,omitempty"`
 	CreatedAt        string                  `json:"createdAt"`
+	Archived         bool                    `json:"archived"`
 	Persisted        bool                    `json:"persisted"`
 	Restarts         []*MinionSessionRestart `json:"restarts"`
 	RestartCount     int                     `json:"restartCount"`

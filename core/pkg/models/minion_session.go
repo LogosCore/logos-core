@@ -66,6 +66,10 @@ type MinionSession struct {
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
+	// Archived hides the session from the operation's sessions (the
+	// Archived view lists it); an operator archives and restores it, and a
+	// check-in restores it: a minion that comes back is never hidden.
+	Archived bool `bson:"archived,omitempty" json:"archived,omitempty"`
 	// Persisted is set once a build names the session (Build.PersistedSessionID):
 	// that build's minions claim it when they start.
 	Persisted bool `bson:"persisted,omitempty" json:"persisted,omitempty"`

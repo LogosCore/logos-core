@@ -48,6 +48,9 @@ type IMinionSessionRepository interface {
 	// Values are the distinct values an operation's sessions have in a
 	// column, sorted; missing values are left out.
 	Values(ctx context.Context, operationID uuid.UUID, column string) ([]string, error)
+	// SetArchived archives a session or restores it; IsNotFound when there
+	// is none.
+	SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
 	// Claim gives an open session to the process that claimed it: its
@@ -134,8 +137,9 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 	if c.LostAt != nil {
 		set["lost_at"] = *c.LostAt
 	}
+	// A check-in also restores an archived session: its minion is back.
 	if c.Peer == "" {
-		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": set, "$unset": bson.M{"purge_at": ""}})
+		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": set, "$unset": bson.M{"purge_at": "", "archived": ""}})
 	}
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(c.At, c.Peer, set))
 }
@@ -178,7 +182,7 @@ func checkInPipeline(at time.Time, peer string, set bson.M) bson.A {
 	for k, v := range set {
 		stage[k] = bson.M{"$literal": v}
 	}
-	return bson.A{bson.M{"$set": stage}, bson.M{"$unset": "purge_at"}}
+	return bson.A{bson.M{"$set": stage}, bson.M{"$unset": bson.A{"purge_at", "archived"}}}
 }
 
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
@@ -291,6 +295,14 @@ type MinionSessionClaim struct {
 	// Sleep is the schedule the claim's hello says; nil drops the earlier
 	// process's (and its late_at) until the new one says one.
 	Sleep *models.MinionSessionSleep
+}
+
+func (r *minionSessionRepository) SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error {
+	update := bson.M{"$set": bson.M{"archived": true}}
+	if !archived {
+		update = bson.M{"$unset": bson.M{"archived": ""}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
 }
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {

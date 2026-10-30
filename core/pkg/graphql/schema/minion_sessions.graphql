@@ -61,6 +61,9 @@ type MinionSession {
   # The factory's own fields.
   x: JSON
   createdAt: String!
+  # Hidden from the operation's sessions, listed with archived: true. A
+  # check-in restores it.
+  archived: Boolean!
   # A build persists the session: its minions claim it when they start, so
   # a restarted process comes back here instead of opening a new session.
   persisted: Boolean!
@@ -220,6 +223,8 @@ extend type Query {
   # cursor is only good for the sort it came with. Needs at least viewer.
   minionSessions(
     operationId: ID!
+    # The archived sessions instead of the others.
+    archived: Boolean = false
     search: String
     filters: [MinionSessionFilterInput!]
     sort: MinionSessionSortInput
@@ -247,6 +252,12 @@ extend type Query {
 }
 
 extend type Mutation {
+  # Archives a session (hidden from the operation's sessions) or restores it,
+  # for everyone in the operation; a check-in restores it too. Needs at least
+  # operator; agent API keys are rejected.
+  setMinionSessionArchived(id: ID!, archived: Boolean!): MinionSession!
+    @hasPermission(permission: "operation:member")
+
   # Picks the address a session shows, one of its addrs, for everyone in the
   # operation; null goes back to core's guess. Needs at least operator; agent
   # API keys are rejected.

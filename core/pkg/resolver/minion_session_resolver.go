@@ -22,7 +22,7 @@ import (
 
 // IMinionSessionResolver is the business logic behind minion_sessions.graphql.
 type IMinionSessionResolver interface {
-	MinionSessions(ctx context.Context, operationID string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
+	MinionSessions(ctx context.Context, operationID string, archived *bool, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
 	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
 	MinionSession(ctx context.Context, id string) (*model.MinionSession, error)
 	// MinionSessionsLayout and SetMinionSessionsLayout are the caller's own
@@ -32,6 +32,8 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionAddress picks the address a session shows; nil goes
 	// back to core's guess.
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
+	// SetMinionSessionArchived archives a session or restores it.
+	SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error)
 	// Load reads one session for a subscription event, already authorized
 	// by the subscription's filter; nil when it cannot be read.
 	Load(ctx context.Context, sessionID string) *model.MinionSession
@@ -66,12 +68,12 @@ func (r *minionSessionResolver) viewer(ctx context.Context, operationID string) 
 	return op, authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleViewer)
 }
 
-func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
+func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
 	op, err := r.viewer(ctx, operationID)
 	if err != nil {
 		return nil, err
 	}
-	q := repository.MinionSessionQuery{Search: strings.TrimSpace(deref(search)), Sort: models.DefaultMinionSessionSort}
+	q := repository.MinionSessionQuery{Archived: archived != nil && *archived, Search: strings.TrimSpace(deref(search)), Sort: models.DefaultMinionSessionSort}
 	if sort != nil {
 		q.Sort = fromSessionSortInput(sort)
 	}
@@ -115,7 +117,9 @@ func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID 
 	return &model.MinionSessionConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
 
-func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
+// operatorSession loads a session for a change: an operator (or admin) of
+// its operation, no agent key.
+func (r *minionSessionResolver) operatorSession(ctx context.Context, id string) (*models.MinionSession, error) {
 	if gqlctx.AuthFromContext(ctx).Agent != nil {
 		return nil, moduleGQLError(ctx, errCodeForbidden, "forbidden")
 	}
@@ -137,6 +141,30 @@ func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id 
 	if err := authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleOperator); err != nil {
 		return nil, err
 	}
+	return s, nil
+}
+
+func (r *minionSessionResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
+	s, err := r.operatorSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.sessions.SetArchived(ctx, s.SessionID, archived); err != nil {
+		return nil, fmt.Errorf("archive the session: %w", err)
+	}
+	s.Archived = archived
+	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
+		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
+	}))
+	return toMinionSessionModel(s), nil
+}
+
+func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
+	s, err := r.operatorSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	sid := s.SessionID
 	addr, picked := models.DefaultAddress(s.Hello.Addrs), false
 	if address != nil {
 		if !slices.Contains(s.Hello.Addrs, *address) {
@@ -328,7 +356,7 @@ func (r *minionSessionResolver) Load(ctx context.Context, sessionID string) *mod
 func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	h := s.Hello
 	out := &model.MinionSession{
-		ID: s.SessionID.String(), State: sessionState(s), Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
+		ID: s.SessionID.String(), State: sessionState(s), Archived: s.Archived, Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
 		BuildDescription: s.BuildDescription, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),

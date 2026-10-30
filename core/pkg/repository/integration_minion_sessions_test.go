@@ -497,3 +497,52 @@ func TestIntegrationMinionSessionBackfillLostAt(t *testing.T) {
 		t.Fatalf("backfilled %d again", n)
 	}
 }
+
+// Archiving hides a session from the list, the archived list holds it, and a
+// check-in (with or without a peer address) brings it back.
+func TestIntegrationMinionSessionArchive(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op := uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	ids := []uuid.UUID{uuid.New(), uuid.New()}
+	for i, id := range ids {
+		if err := repo.Insert(ctx, &models.MinionSession{SessionID: id, OperationID: op, Number: int64(i + 1), CreatedAt: now, LastSeenAt: &now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list := func(archived bool) []int64 {
+		page, err := repo.FindByOperationIDWithCursor(ctx, op, MinionSessionQuery{Archived: archived, Sort: models.MinionSessionSort{Column: "number"}}, nil, 10, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return numbers(page)
+	}
+	if err := repo.SetArchived(ctx, ids[0], true); err != nil {
+		t.Fatal(err)
+	}
+	if got, arch := list(false), list(true); !slices.Equal(got, []int64{2}) || !slices.Equal(arch, []int64{1}) {
+		t.Fatalf("listed %v, archived %v", got, arch)
+	}
+	for _, peer := range []string{"203.0.113.7", ""} {
+		if err := repo.SetArchived(ctx, ids[0], true); err != nil {
+			t.Fatal(err)
+		}
+		if err := repo.CheckIn(ctx, ids[0], MinionSessionCheckIn{At: now, Peer: peer}); err != nil {
+			t.Fatal(err)
+		}
+		if got := list(false); !slices.Equal(got, []int64{1, 2}) {
+			t.Fatalf("after a check-in (peer %q): %v", peer, got)
+		}
+	}
+	if err := repo.SetArchived(ctx, ids[1], true); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetArchived(ctx, ids[1], false); err != nil {
+		t.Fatal(err)
+	}
+	if got := list(true); len(got) != 0 {
+		t.Fatalf("restored but archived: %v", got)
+	}
+}

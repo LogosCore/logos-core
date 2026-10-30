@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { MonitorDotIcon, SquareTerminalIcon } from "lucide-react"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
@@ -36,8 +37,11 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   // Columns, sort and filters are the operator's layout, saved in core for
   // all operations; the column filters are the way to narrow the list.
   const { layout, isLoading: layoutLoading, setLayout } = useMinionSessionsLayout()
+  // The archived sessions instead of the others: the page's, not the layout's,
+  // so it always opens on the live ones.
+  const [archived, setArchived] = useState(false)
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } = useInfiniteMinionSessions(
-    { operationId, search: null, filters: layout.filters, sort: layout.sort },
+    { operationId, archived, search: null, filters: layout.filters, sort: layout.sort },
     // The first page waits for the layout, so it is fetched once, as kept.
     { enabled: !layoutLoading },
   )
@@ -64,6 +68,8 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
               <SessionsDatatable
                 operationId={operationId}
                 canWrite={canWrite}
+              archived={archived}
+              onArchivedChange={setArchived}
                 layout={layout}
                 onLayoutChange={setLayout}
                 sessions={sessions}
@@ -73,7 +79,9 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
                 hasNextPage={hasNextPage}
                 fetchNextPage={fetchNextPage}
                 emptyState={
-                  !narrowed ? (
+                  archived && !narrowed ? (
+              <p className="text-sm">No archived sessions.</p>
+            ) : !narrowed ? (
                     <>
                       <MonitorDotIcon className="size-8 opacity-50" />
                       <p className="text-sm">No sessions in this operation yet.</p>

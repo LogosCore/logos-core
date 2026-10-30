@@ -149,6 +149,7 @@ describe("live updates", () => {
   const session = (id: string, patch: Partial<MinionSessionFieldsFragment> = {}): MinionSessionFieldsFragment => ({
     id,
     state: "OPEN",
+    archived: false,
     number: 1,
     operationId: "op",
     buildId: "b",
@@ -197,6 +198,7 @@ describe("live updates", () => {
   })
   const params = (patch: Partial<MinionSessionListParams> = {}): MinionSessionListParams => ({
     operationId: "op",
+    archived: false,
     search: null,
     filters: [],
     sort: null,
@@ -253,6 +255,15 @@ describe("live updates", () => {
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: filtered, exact: true })
+  })
+
+  test("archiving or restoring refetches the lists: the row moves between them", () => {
+    const qc = new QueryClient()
+    qc.setQueryData(minionSessionKeys.infiniteList(params()), listData(session("a")))
+    const invalidate = vi.spyOn(qc, "invalidateQueries")
+    applyMinionSessionEvent(qc, "UPDATED", session("a", { archived: true }))
+    vi.advanceTimersByTime(REFRESH_WINDOW_MS)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: minionSessionKeys.lists(), exact: false })
   })
 
   test("a new session refetches the lists", () => {
