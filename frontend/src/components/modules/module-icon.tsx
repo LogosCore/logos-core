@@ -50,7 +50,9 @@ function IconGlyph({ svg, className }: { svg: string; className?: string }) {
     maskPosition: "center",
     WebkitMaskPosition: "center",
   }
-  return <span aria-hidden className={cn("inline-block size-4 shrink-0 bg-current", className)} style={style} />
+  return (
+    <span aria-hidden data-module-icon className={cn("inline-block size-4 shrink-0 bg-current", className)} style={style} />
+  )
 }
 
 /**

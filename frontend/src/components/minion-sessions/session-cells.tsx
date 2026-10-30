@@ -91,7 +91,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           </span>
           {/* The caller's mark, in its color's tone (the row sets it). */}
           {(s.mark?.icon || s.mark?.emoji) && (
-            <span className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
+            <span data-mark-icon className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
               <DocumentIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
             </span>
           )}
