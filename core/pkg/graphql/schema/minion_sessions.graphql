@@ -45,12 +45,29 @@ type MinionSession {
   # the hello sent none.
   address: String
   addressPicked: Boolean!
+  # The IP address the latest message came from, as its channel saw it (the
+  # host's NAT's outside address, or the client a trusted proxy forwarded
+  # for): the session's current external address. null where the channels
+  # gave none.
+  peerAddress: String
+  # Every external address the session was seen from, most recent first, at
+  # most 32.
+  peers: [MinionSessionPeer!]!
   version: String
   # The factory's own fields.
   x: JSON
   createdAt: String!
   # The latest message under the session id; null before the first check-in.
   lastSeenAt: String
+}
+
+# One external address a session was seen from.
+type MinionSessionPeer {
+  address: String!
+  firstSeen: String!
+  lastSeen: String!
+  # The messages from it.
+  count: Int!
 }
 
 type MinionSessionEdge {
@@ -66,8 +83,8 @@ type MinionSessionConnection {
 
 # How a filter narrows its column. Which ones a column takes depends on what
 # it holds:
-#   text (host, user, domain, proc, buildDescription) and the address list
-#   (addrs): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
+#   text (host, user, domain, proc, buildDescription) and the address lists
+#   (addrs, peer: any address the session was seen from): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
 #   a few values (integrity, os, arch, version, build: the factory, target,
 #   platform) and staged ("true" / "false"): IN, NOT_IN (values)
 #   numbers (number, pid): RANGE (min, max; either may be left out)
@@ -89,7 +106,8 @@ enum MinionSessionFilterOp {
   EQUALS
 }
 
-# One column filter. column is a column id: number, sessionId, addrs, host,
+# One column filter. column is a column id: number, sessionId, addrs, peer
+# (the external addresses), host,
 # user, domain, integrity, proc, pid, os, arch, version, lastSeen, opened,
 # build, target, platform, buildDescription, buildId, staged.
 input MinionSessionFilterInput {

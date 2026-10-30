@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/netip"
 	"regexp"
 
 	"github.com/gin-gonic/gin"
@@ -36,7 +37,9 @@ type IChannelController interface {
 // core's sealed answer, nil for none. Satisfied by *minionsync.Service; an
 // error wrapping minionsync.ErrUnopened is the sync call's 422.
 type MinionHandler interface {
-	Handle(ctx context.Context, id string, frame []byte) ([]byte, error)
+	// Handle takes a frame sent under id, from peer: the IP address the
+	// channel got it from, "" when it has none.
+	Handle(ctx context.Context, id, peer string, frame []byte) ([]byte, error)
 }
 
 type channelController struct {
@@ -99,6 +102,12 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 	in := protocol.InboundFromHeaders(c.Request.Header)
 	if !traceParentPattern.MatchString(in.TraceParent) {
 		in.TraceParent = ""
+	}
+	// What a channel says the peer was is kept only as an IP address.
+	if a, err := netip.ParseAddr(in.PeerAddress); err == nil {
+		in.PeerAddress = a.Unmap().WithZone("").String()
+	} else {
+		in.PeerAddress = ""
 	}
 	if err := protocol.ValidateInboundHeaders(in); err != nil {
 		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: %s", validationMessage(err)))
@@ -166,7 +175,7 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 		TraceParent: in.TraceParent,
 	}
 	if fresh || err != nil {
-		reply, err := ctrl.minions.Handle(ctx, in.BuildID, in.Data)
+		reply, err := ctrl.minions.Handle(ctx, in.BuildID, in.PeerAddress, in.Data)
 		switch {
 		case errors.Is(err, minionsync.ErrUnopened):
 			c.JSON(http.StatusUnprocessableEntity, responses.NewErrorResponse("the message does not open"))

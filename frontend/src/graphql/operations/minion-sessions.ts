@@ -24,6 +24,13 @@ export const MinionSessionFields = graphql(`
     addrs
     address
     addressPicked
+    peerAddress
+    peers {
+      address
+      firstSeen
+      lastSeen
+      count
+    }
     version
     x
     createdAt

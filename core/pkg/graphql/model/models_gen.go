@@ -454,30 +454,32 @@ type Minion struct {
 }
 
 type MinionSession struct {
-	ID               string   `json:"id"`
-	Number           int      `json:"number"`
-	OperationID      string   `json:"operationId"`
-	BuildID          string   `json:"buildId"`
-	BuildDescription string   `json:"buildDescription"`
-	ModuleName       string   `json:"moduleName"`
-	Target           string   `json:"target"`
-	Platform         string   `json:"platform"`
-	Staged           bool     `json:"staged"`
-	Pid              int      `json:"pid"`
-	Os               string   `json:"os"`
-	Arch             string   `json:"arch"`
-	Host             *string  `json:"host,omitempty"`
-	User             *string  `json:"user,omitempty"`
-	Domain           *string  `json:"domain,omitempty"`
-	Proc             *string  `json:"proc,omitempty"`
-	Integrity        *string  `json:"integrity,omitempty"`
-	Addrs            []string `json:"addrs"`
-	Address          *string  `json:"address,omitempty"`
-	AddressPicked    bool     `json:"addressPicked"`
-	Version          *string  `json:"version,omitempty"`
-	X                any      `json:"x,omitempty"`
-	CreatedAt        string   `json:"createdAt"`
-	LastSeenAt       *string  `json:"lastSeenAt,omitempty"`
+	ID               string               `json:"id"`
+	Number           int                  `json:"number"`
+	OperationID      string               `json:"operationId"`
+	BuildID          string               `json:"buildId"`
+	BuildDescription string               `json:"buildDescription"`
+	ModuleName       string               `json:"moduleName"`
+	Target           string               `json:"target"`
+	Platform         string               `json:"platform"`
+	Staged           bool                 `json:"staged"`
+	Pid              int                  `json:"pid"`
+	Os               string               `json:"os"`
+	Arch             string               `json:"arch"`
+	Host             *string              `json:"host,omitempty"`
+	User             *string              `json:"user,omitempty"`
+	Domain           *string              `json:"domain,omitempty"`
+	Proc             *string              `json:"proc,omitempty"`
+	Integrity        *string              `json:"integrity,omitempty"`
+	Addrs            []string             `json:"addrs"`
+	Address          *string              `json:"address,omitempty"`
+	AddressPicked    bool                 `json:"addressPicked"`
+	PeerAddress      *string              `json:"peerAddress,omitempty"`
+	Peers            []*MinionSessionPeer `json:"peers"`
+	Version          *string              `json:"version,omitempty"`
+	X                any                  `json:"x,omitempty"`
+	CreatedAt        string               `json:"createdAt"`
+	LastSeenAt       *string              `json:"lastSeenAt,omitempty"`
 }
 
 type MinionSessionConnection struct {
@@ -520,6 +522,13 @@ type MinionSessionFilterInput struct {
 	Seconds *int                  `json:"seconds,omitempty"`
 	From    *string               `json:"from,omitempty"`
 	To      *string               `json:"to,omitempty"`
+}
+
+type MinionSessionPeer struct {
+	Address   string `json:"address"`
+	FirstSeen string `json:"firstSeen"`
+	LastSeen  string `json:"lastSeen"`
+	Count     int    `json:"count"`
 }
 
 type MinionSessionSort struct {

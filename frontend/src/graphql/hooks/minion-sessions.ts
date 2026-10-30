@@ -140,7 +140,7 @@ export function useMinionSessionsLayout() {
 type ListData = InfiniteData<MinionSessionsQuery>
 
 // The columns the app's search reads (core's minionSessionListFilter).
-const SEARCHED = ["host", "user", "domain", "proc", "os", "arch", "integrity", "addrs", "version", "buildDescription", "build", "target", "platform"] as const
+const SEARCHED = ["peer", "host", "user", "domain", "proc", "os", "arch", "integrity", "addrs", "version", "buildDescription", "build", "target", "platform"] as const
 
 /**
  * Folds one session change into every cached list. A new session refetches

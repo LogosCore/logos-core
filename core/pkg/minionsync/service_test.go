@@ -84,10 +84,13 @@ func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models
 	return nil, qmgo.ErrNoSuchDocuments
 }
 
-func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, at time.Time) error {
+func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, at time.Time, peer string) error {
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].LastSeenAt, f.rows[i].ExpiresAt = &at, nil
+			if peer != "" {
+				f.rows[i].PeerAddress = peer
+			}
 		}
 	}
 	return nil
@@ -147,7 +150,9 @@ type rig struct {
 	bus      *fakeBus
 	build    *models.Build
 	keys     protocol.AES256CBCHMACSHA256Material
-	priv     *rsa.PrivateKey
+	// peer is the address the next messages come from.
+	peer string
+	priv *rsa.PrivateKey
 }
 
 func newRig(t *testing.T) *rig {
@@ -191,7 +196,7 @@ func (r *rig) sendUnder(t *testing.T, under uuid.UUID, keys protocol.AES256CBCHM
 	if err != nil {
 		t.Fatal(err)
 	}
-	return r.svc.Handle(context.Background(), under.String(), frame)
+	return r.svc.Handle(context.Background(), under.String(), r.peer, frame)
 }
 
 func (r *rig) stage(t *testing.T) protocol.StageItem {
@@ -278,7 +283,7 @@ func TestStageRefusals(t *testing.T) {
 		"bad frame":     {r.build.BuildID.String(), append(bytes.Clone(frame[:len(frame)-1]), frame[len(frame)-1]^1)},
 		"no head":       {r.build.BuildID.String(), frame}, // {}: neither id nor re
 	} {
-		if _, err := r.svc.Handle(ctx, c.id, c.frame); !errors.Is(err, ErrUnopened) {
+		if _, err := r.svc.Handle(ctx, c.id, "", c.frame); !errors.Is(err, ErrUnopened) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -468,6 +473,25 @@ func TestSessionAddress(t *testing.T) {
 	}
 	if s := r.sessions.rows[0]; s.Address != "10.0.0.7" || s.AddressPicked {
 		t.Fatalf("pick gone: %q picked=%v", s.Address, s.AddressPicked)
+	}
+}
+
+// A session keeps the external address its messages came from.
+func TestSessionPeerAddress(t *testing.T) {
+	r := newRig(t)
+	r.peer = "203.0.113.7"
+	reply, _ := r.send(t, protocol.NewMessageID(), hello("web01"))
+	sid := sessionID(t, r.open(t, reply))
+	s := r.sessions.rows[0]
+	if s.PeerAddress != "203.0.113.7" || len(s.Peers) != 1 || s.Peers[0].Address != "203.0.113.7" || s.Peers[0].Count != 1 {
+		t.Fatalf("at hello: %q %+v", s.PeerAddress, s.Peers)
+	}
+	r.peer = "198.51.100.2"
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID()); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.sessions.rows[0].PeerAddress; got != "198.51.100.2" {
+		t.Fatalf("after a check-in from elsewhere: %q", got)
 	}
 }
 

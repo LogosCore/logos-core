@@ -45,12 +45,31 @@ type MinionSession struct {
 	AddressPicked bool   `bson:"address_picked,omitempty" json:"address_picked,omitempty"`
 
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
+	// PeerAddress is the IP address the latest message came from, as its
+	// channel saw it (protocol.InboundMinionMessage.PeerAddress): the
+	// session's current external address. Peers is every one it was seen
+	// from, most recent first, at most MaxSessionPeers. Empty where the
+	// channels had none.
+	PeerAddress string              `bson:"peer_address,omitempty" json:"peer_address,omitempty"`
+	Peers       []MinionSessionPeer `bson:"peers,omitempty" json:"peers,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
 	// ExpiresAt is when MongoDB removes a session nobody checked in to;
 	// cleared by the first check-in.
 	ExpiresAt *time.Time `bson:"expires_at,omitempty" json:"-"`
+}
+
+// MaxSessionPeers caps MinionSession.Peers.
+const MaxSessionPeers = 32
+
+// MinionSessionPeer is one external address a session was seen from.
+type MinionSessionPeer struct {
+	Address   string    `bson:"address" json:"address"`
+	FirstSeen time.Time `bson:"first_seen" json:"first_seen"`
+	LastSeen  time.Time `bson:"last_seen" json:"last_seen"`
+	// Count is the messages from it.
+	Count int64 `bson:"count" json:"count"`
 }
 
 // MinionHello is a hello's host and process (protocol.HelloItem).

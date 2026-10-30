@@ -51,6 +51,15 @@ function Ago({ at, now }: { at: string; now: number }) {
   return <>{diff < HOUR ? relativeTime(at, new Date(now)) : `${Math.floor(diff / HOUR)}h ago`}</>
 }
 
+/** When an external address was last seen, and how many messages came from it. */
+function PeerSeen({ lastSeen, count, now }: { lastSeen: string; count: number; now: number }) {
+  return (
+    <span title={`Last seen ${formatAbsolute(lastSeen)}`}>
+      <Ago at={lastSeen} now={now} /> · {count}×
+    </span>
+  )
+}
+
 /** One column's cell for a session. */
 export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; session: MinionSessionFieldsFragment; ctx: CellContext }) {
   switch (id) {
@@ -69,6 +78,18 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           shown={shownAddress(s, ctx.matchAddress)}
           noun="addresses"
           onPick={ctx.pickAddress && ((a) => ctx.pickAddress!(s, a))}
+        />
+      )
+    case "peer":
+      return (
+        <ListCell
+          items={s.peers.map((p) => p.address)}
+          shown={s.peerAddress ?? null}
+          noun="external addresses"
+          detail={(address) => {
+            const p = s.peers.find((x) => x.address === address)
+            return p && <PeerSeen lastSeen={p.lastSeen} count={p.count} now={ctx.now} />
+          }}
         />
       )
     case "host":

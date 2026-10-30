@@ -3,6 +3,7 @@ package repository
 import (
 	"bytes"
 	"cmp"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -210,4 +211,59 @@ func compareSortValues(a, b any) int {
 		return 1
 	}
 	panic("unknown sort value")
+}
+
+// A check-in records where it came from, in one update inside Mongo: the
+// current address, and the history, most recent first, counted, capped.
+func TestIntegrationMinionSessionPeers(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op, sid := uuid.New(), uuid.New()
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	expires := t0.Add(time.Hour)
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: op, Number: 1, CreatedAt: t0, ExpiresAt: &expires}); err != nil {
+		t.Fatal(err)
+	}
+	at := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
+	for i, peer := range []string{"203.0.113.7", "203.0.113.7", "198.51.100.2", ""} {
+		if err := repo.CheckIn(ctx, sid, at(i+1), peer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := repo.FindBySessionID(ctx, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.PeerAddress != "198.51.100.2" || s.ExpiresAt != nil || !s.LastSeenAt.Equal(at(4)) {
+		t.Fatalf("session %q expires=%v last seen %v", s.PeerAddress, s.ExpiresAt, s.LastSeenAt)
+	}
+	if len(s.Peers) != 2 {
+		t.Fatalf("peers %+v", s.Peers)
+	}
+	b, a := s.Peers[0], s.Peers[1]
+	if b.Address != "198.51.100.2" || b.Count != 1 || a.Address != "203.0.113.7" || a.Count != 2 ||
+		!a.FirstSeen.Equal(at(1)) || !a.LastSeen.Equal(at(2)) {
+		t.Fatalf("peers %+v", s.Peers)
+	}
+
+	// Capped, the oldest dropped.
+	for i := range models.MaxSessionPeers + 1 {
+		if err := repo.CheckIn(ctx, sid, at(10+i), fmt.Sprintf("10.9.0.%d", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, _ = repo.FindBySessionID(ctx, sid)
+	if len(s.Peers) != models.MaxSessionPeers || s.Peers[0].Address != fmt.Sprintf("10.9.0.%d", models.MaxSessionPeers) {
+		t.Fatalf("%d peers, newest %+v", len(s.Peers), s.Peers[0])
+	}
+
+	// The column filters on any address it was seen from.
+	q := MinionSessionQuery{Sort: models.MinionSessionSort{Column: "peer"}, Filters: []models.MinionSessionFilter{{Column: "peer", Op: "CONTAINS", Text: "10.9.0.5"}}}
+	if err := q.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := repo.CountByOperationID(ctx, op, q); n != 1 {
+		t.Errorf("filter on the history: %d", n)
+	}
 }

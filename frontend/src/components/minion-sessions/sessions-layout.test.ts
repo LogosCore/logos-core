@@ -125,6 +125,8 @@ describe("live updates", () => {
     addrs: [],
     address: null,
     addressPicked: false,
+    peerAddress: null,
+    peers: [],
     version: null,
     x: null,
     createdAt: "2026-10-30T10:00:00Z",
@@ -169,6 +171,25 @@ describe("live updates", () => {
     }
     expect(invalidate).toHaveBeenCalledTimes(1)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: byLastSeen, exact: true })
+  })
+
+  test("a check-in from a new external address moves rows only where the list depends on it", () => {
+    const qc = new QueryClient()
+    const plain = minionSessionKeys.infiniteList(params())
+    const byPeer = minionSessionKeys.infiniteList(params({ sort: { column: "peer", direction: "ASC" } }))
+    const seen = { address: "203.0.113.7", firstSeen: "2026-10-30T10:00:00Z", lastSeen: "2026-10-30T10:00:00Z", count: 1 }
+    const row = session("a", { peerAddress: "203.0.113.7", peers: [seen] })
+    for (const key of [plain, byPeer]) qc.setQueryData(key, listData(row))
+    const invalidate = vi.spyOn(qc, "invalidateQueries")
+    // The same address again: counted, nothing moves.
+    applyMinionSessionEvent(qc, "UPDATED", { ...row, peers: [{ ...seen, count: 2 }] })
+    vi.advanceTimersByTime(REFRESH_WINDOW_MS)
+    expect(invalidate).not.toHaveBeenCalled()
+    // Another one: the list sorted by it refetches.
+    applyMinionSessionEvent(qc, "UPDATED", { ...row, peerAddress: "198.51.100.2", peers: [{ ...seen, address: "198.51.100.2" }, seen] })
+    vi.advanceTimersByTime(REFRESH_WINDOW_MS)
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: byPeer, exact: true })
   })
 
   test("a session not loaded refetches only lists it may now belong to", () => {

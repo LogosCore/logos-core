@@ -289,10 +289,20 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		BuildDescription: s.BuildDescription, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
-		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked, CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
+		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
+		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X
+	}
+	return out
+}
+
+func toSessionPeerModels(peers []models.MinionSessionPeer) []*model.MinionSessionPeer {
+	out := make([]*model.MinionSessionPeer, len(peers))
+	for i, p := range peers {
+		out[i] = &model.MinionSessionPeer{Address: p.Address, FirstSeen: p.FirstSeen.UTC().Format(time.RFC3339),
+			LastSeen: p.LastSeen.UTC().Format(time.RFC3339), Count: int(p.Count)}
 	}
 	return out
 }

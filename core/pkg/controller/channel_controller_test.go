@@ -110,7 +110,7 @@ type fakeMinions struct {
 	frame []byte
 }
 
-func (f *fakeMinions) Handle(_ context.Context, id string, frame []byte) ([]byte, error) {
+func (f *fakeMinions) Handle(_ context.Context, id, _ string, frame []byte) ([]byte, error) {
 	f.calls++
 	f.id, f.frame = id, frame
 	return f.reply, f.err

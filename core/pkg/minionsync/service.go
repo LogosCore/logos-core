@@ -74,9 +74,10 @@ func NewService(builds Builds, stagings repository.IMinionStagingRepository, ses
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() }}
 }
 
-// Handle opens a minion's sealed frame sent under id and returns core's
-// sealed answer: nil when there is nothing to say (the sync call's 204).
-func (s *Service) Handle(ctx context.Context, id string, frame []byte) ([]byte, error) {
+// Handle opens a minion's sealed frame sent under id from peer (the IP
+// address its channel got it from, "" for unknown) and returns core's sealed
+// answer: nil when there is nothing to say (the sync call's 204).
+func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]byte, error) {
 	sentUnder, err := uuid.Parse(id)
 	if err != nil {
 		return nil, ErrUnopened
@@ -111,11 +112,11 @@ func (s *Service) Handle(ctx context.Context, id string, frame []byte) ([]byte, 
 	var items []cbor.RawMessage
 	switch {
 	case from.session != nil:
-		items, err = s.underSession(ctx, from.session, msg)
+		items, err = s.underSession(ctx, from.session, peer, msg)
 	case from.staging != nil:
-		items, err = s.underStaging(ctx, from, msg)
+		items, err = s.underStaging(ctx, from, peer, msg)
 	default:
-		items, err = s.underBuild(ctx, from, msg)
+		items, err = s.underBuild(ctx, from, peer, msg)
 	}
 	if err != nil || len(items) == 0 {
 		return nil, err
@@ -129,9 +130,9 @@ func (s *Service) Handle(ctx context.Context, id string, frame []byte) ([]byte, 
 
 // underBuild answers a message sent under a build id: one stage, or one
 // hello that opens a session with the build's own keys.
-func (s *Service) underBuild(ctx context.Context, from *sender, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
+func (s *Service) underBuild(ctx context.Context, from *sender, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
 	if len(msg.Items) == 1 && protocol.ItemType(msg.Items[0]) == protocol.ItemHello {
-		return s.openSession(ctx, from, msg.Items[0])
+		return s.openSession(ctx, from, peer, msg.Items[0])
 	}
 	if len(msg.Items) != 1 || protocol.ItemType(msg.Items[0]) != protocol.ItemStage {
 		return errItem(protocol.ErrItemBadMessage, "under a build id the only item taken is one stage or one hello", 0)
@@ -185,17 +186,17 @@ func (s *Service) underBuild(ctx context.Context, from *sender, msg protocol.Min
 
 // underStaging answers a message sent under a temporary id: one hello,
 // which opens a session with the keys the stage got.
-func (s *Service) underStaging(ctx context.Context, from *sender, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
+func (s *Service) underStaging(ctx context.Context, from *sender, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
 	if len(msg.Items) != 1 || protocol.ItemType(msg.Items[0]) != protocol.ItemHello {
 		return errItem(protocol.ErrItemBadMessage, "under a temporary id the only item taken is one hello", 0)
 	}
-	return s.openSession(ctx, from, msg.Items[0])
+	return s.openSession(ctx, from, peer, msg.Items[0])
 }
 
 // openSession reads a hello and opens a session for it with the keys of the
 // id it came under. A temporary id serves one hello: its entry goes first,
 // so of two hellos racing on it one opens a session.
-func (s *Service) openSession(ctx context.Context, from *sender, raw cbor.RawMessage) ([]cbor.RawMessage, error) {
+func (s *Service) openSession(ctx context.Context, from *sender, peer string, raw cbor.RawMessage) ([]cbor.RawMessage, error) {
 	hello, err := readHello(raw)
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
@@ -207,6 +208,10 @@ func (s *Service) openSession(ctx context.Context, from *sender, raw cbor.RawMes
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.Addrs),
 		CreatedAt: now, ExpiresAt: &expires,
+	}
+	if peer != "" {
+		session.PeerAddress = peer
+		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
 	}
 	if from.staging != nil {
 		if err := s.stagings.Delete(ctx, from.staging.TempID); err != nil {
@@ -233,8 +238,8 @@ func (s *Service) openSession(ctx context.Context, from *sender, raw cbor.RawMes
 // check-in; a hello replaces what the session recorded (a rehello) and gets
 // the same session id back; a get_tasks is taken (no tasks wait yet). Other
 // items are not built yet.
-func (s *Service) underSession(ctx context.Context, session *models.MinionSession, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
-	if err := s.sessions.CheckIn(ctx, session.SessionID, s.now()); err != nil {
+func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
+	if err := s.sessions.CheckIn(ctx, session.SessionID, s.now(), peer); err != nil {
 		return nil, fmt.Errorf("check in: %w", err)
 	}
 	var items []cbor.RawMessage

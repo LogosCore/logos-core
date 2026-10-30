@@ -33,9 +33,10 @@ type IMinionSessionRepository interface {
 	Insert(ctx context.Context, s *models.MinionSession) error
 	// FindBySessionID returns one session; IsNotFound on a miss.
 	FindBySessionID(ctx context.Context, sessionID uuid.UUID) (*models.MinionSession, error)
-	// CheckIn records a message under the session id: the time, and the end
-	// of the wait for the first check-in.
-	CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time) error
+	// CheckIn records a message under the session id: the time, the end of
+	// the wait for the first check-in, and where it came from (peer, an IP
+	// address; "" for unknown) in the session's external addresses.
+	CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time, peer string) error
 	// SetHello replaces what the session's hello said (a rehello), with the
 	// address the session shows now.
 	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error
@@ -99,9 +100,51 @@ func (r *minionSessionRepository) FindBySessionID(ctx context.Context, sessionID
 	return &s, nil
 }
 
-func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time) error {
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
-		bson.M{"$set": bson.M{"last_seen_at": at}, "$unset": bson.M{"expires_at": ""}})
+func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time, peer string) error {
+	if peer == "" {
+		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
+			bson.M{"$set": bson.M{"last_seen_at": at}, "$unset": bson.M{"expires_at": ""}})
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(at, peer))
+}
+
+// checkInPipeline is CheckIn's update with a peer address, in one write:
+//
+//	old   = the peers entry for peer, if any
+//	peers = slice(sort(peers without it + {peer, old.first_seen ?? at, at,
+//	        old.count+1}, by last_seen desc), MaxSessionPeers)
+//
+// The address goes in through $literal, as a client's value must.
+func checkInPipeline(at time.Time, peer string) bson.A {
+	lit := bson.M{"$literal": peer}
+	byAddress := func(op string) bson.M {
+		return bson.M{"$filter": bson.M{"input": "$$cur", "cond": bson.M{op: bson.A{"$$this.address", lit}}}}
+	}
+	return bson.A{
+		bson.M{"$set": bson.M{
+			"last_seen_at": at,
+			"peer_address": lit,
+			"peers": bson.M{"$let": bson.M{
+				"vars": bson.M{"cur": bson.M{"$ifNull": bson.A{"$peers", bson.A{}}}},
+				"in": bson.M{"$let": bson.M{
+					"vars": bson.M{"old": bson.M{"$first": byAddress("$eq")}, "rest": byAddress("$ne")},
+					"in": bson.M{"$slice": bson.A{
+						bson.M{"$sortArray": bson.M{
+							"input": bson.M{"$concatArrays": bson.A{"$$rest", bson.A{bson.M{
+								"address":    lit,
+								"first_seen": bson.M{"$ifNull": bson.A{"$$old.first_seen", at}},
+								"last_seen":  at,
+								"count":      bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$$old.count", 0}}, 1}},
+							}}}},
+							"sortBy": bson.M{"last_seen": -1},
+						}},
+						models.MaxSessionPeers,
+					}},
+				}},
+			}},
+		}},
+		bson.M{"$unset": "expires_at"},
+	}
 }
 
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
@@ -130,7 +173,7 @@ func minionSessionListFilter(operationID uuid.UUID, search string) bson.M {
 	or := bson.A{}
 	for _, field := range []string{
 		"hello.host", "hello.user", "hello.domain", "hello.proc", "hello.os", "hello.arch", "hello.integrity",
-		"hello.addrs", "hello.version", "build_description", "module_name", "target", "platform",
+		"hello.addrs", "hello.version", "build_description", "module_name", "target", "platform", "peers.address",
 	} {
 		or = append(or, bson.M{field: rx})
 	}

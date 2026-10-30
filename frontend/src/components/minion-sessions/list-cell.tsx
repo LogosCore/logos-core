@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { CopyIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -24,6 +25,7 @@ export function ListCell({
   shown,
   noun,
   onPick,
+  detail,
   mono = true,
 }: {
   items: readonly string[]
@@ -33,6 +35,8 @@ export function ListCell({
   noun: string
   /** Picks the shown item; absent where the viewer may not. */
   onPick?: (item: string) => void
+  /** More about an item, muted after it in the menu. */
+  detail?: (item: string) => ReactNode
   mono?: boolean
 }) {
   if (items.length === 0) return <span className="text-muted-foreground">—</span>
@@ -68,6 +72,7 @@ export function ListCell({
                   {items.map((item) => (
                     <DropdownMenuRadioItem key={item} value={item}>
                       <span className={cn("truncate", mono && "font-mono text-xs")}>{item}</span>
+                      {detail && <span className="truncate text-xs text-muted-foreground">{detail(item)}</span>}
                       <CopyItemButton item={item} />
                     </DropdownMenuRadioItem>
                   ))}
@@ -76,6 +81,7 @@ export function ListCell({
                 items.map((item) => (
                   <DropdownMenuItem key={item} onClick={() => void copyToClipboard(item, item)}>
                     <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+                    {detail && <span className="truncate text-xs text-muted-foreground">{detail(item)}</span>}
                     <CopyItemButton item={item} />
                   </DropdownMenuItem>
                 ))

@@ -475,6 +475,8 @@ type ComplexityRoot struct {
 		Number           func(childComplexity int) int
 		OperationID      func(childComplexity int) int
 		Os               func(childComplexity int) int
+		PeerAddress      func(childComplexity int) int
+		Peers            func(childComplexity int) int
 		Pid              func(childComplexity int) int
 		Platform         func(childComplexity int) int
 		Proc             func(childComplexity int) int
@@ -513,6 +515,13 @@ type ComplexityRoot struct {
 		Text    func(childComplexity int) int
 		To      func(childComplexity int) int
 		Values  func(childComplexity int) int
+	}
+
+	MinionSessionPeer struct {
+		Address   func(childComplexity int) int
+		Count     func(childComplexity int) int
+		FirstSeen func(childComplexity int) int
+		LastSeen  func(childComplexity int) int
 	}
 
 	MinionSessionSort struct {
@@ -3443,6 +3452,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Os(childComplexity), true
+	case "MinionSession.peerAddress":
+		if e.ComplexityRoot.MinionSession.PeerAddress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.PeerAddress(childComplexity), true
+	case "MinionSession.peers":
+		if e.ComplexityRoot.MinionSession.Peers == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Peers(childComplexity), true
 	case "MinionSession.pid":
 		if e.ComplexityRoot.MinionSession.Pid == nil {
 			break
@@ -3603,6 +3624,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSessionFilter.Values(childComplexity), true
+
+	case "MinionSessionPeer.address":
+		if e.ComplexityRoot.MinionSessionPeer.Address == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionPeer.Address(childComplexity), true
+	case "MinionSessionPeer.count":
+		if e.ComplexityRoot.MinionSessionPeer.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionPeer.Count(childComplexity), true
+	case "MinionSessionPeer.firstSeen":
+		if e.ComplexityRoot.MinionSessionPeer.FirstSeen == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionPeer.FirstSeen(childComplexity), true
+	case "MinionSessionPeer.lastSeen":
+		if e.ComplexityRoot.MinionSessionPeer.LastSeen == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionPeer.LastSeen(childComplexity), true
 
 	case "MinionSessionSort.column":
 		if e.ComplexityRoot.MinionSessionSort.Column == nil {
@@ -9852,12 +9898,29 @@ type MinionSession {
   # the hello sent none.
   address: String
   addressPicked: Boolean!
+  # The IP address the latest message came from, as its channel saw it (the
+  # host's NAT's outside address, or the client a trusted proxy forwarded
+  # for): the session's current external address. null where the channels
+  # gave none.
+  peerAddress: String
+  # Every external address the session was seen from, most recent first, at
+  # most 32.
+  peers: [MinionSessionPeer!]!
   version: String
   # The factory's own fields.
   x: JSON
   createdAt: String!
   # The latest message under the session id; null before the first check-in.
   lastSeenAt: String
+}
+
+# One external address a session was seen from.
+type MinionSessionPeer {
+  address: String!
+  firstSeen: String!
+  lastSeen: String!
+  # The messages from it.
+  count: Int!
 }
 
 type MinionSessionEdge {
@@ -9873,8 +9936,8 @@ type MinionSessionConnection {
 
 # How a filter narrows its column. Which ones a column takes depends on what
 # it holds:
-#   text (host, user, domain, proc, buildDescription) and the address list
-#   (addrs): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
+#   text (host, user, domain, proc, buildDescription) and the address lists
+#   (addrs, peer: any address the session was seen from): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
 #   a few values (integrity, os, arch, version, build: the factory, target,
 #   platform) and staged ("true" / "false"): IN, NOT_IN (values)
 #   numbers (number, pid): RANGE (min, max; either may be left out)
@@ -9896,7 +9959,8 @@ enum MinionSessionFilterOp {
   EQUALS
 }
 
-# One column filter. column is a column id: number, sessionId, addrs, host,
+# One column filter. column is a column id: number, sessionId, addrs, peer
+# (the external addresses), host,
 # user, domain, integrity, proc, pid, os, arch, version, lastSeen, opened,
 # build, target, platform, buildDescription, buildId, staged.
 input MinionSessionFilterInput {
@@ -24820,6 +24884,74 @@ func (ec *executionContext) fieldContext_MinionSession_addressPicked(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_peerAddress(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_peerAddress,
+		func(ctx context.Context) (any, error) {
+			return obj.PeerAddress, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_peerAddress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSession_peers(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_peers,
+		func(ctx context.Context) (any, error) {
+			return obj.Peers, nil
+		},
+		nil,
+		ec.marshalNMinionSessionPeer2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionPeerᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_peers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "address":
+				return ec.fieldContext_MinionSessionPeer_address(ctx, field)
+			case "firstSeen":
+				return ec.fieldContext_MinionSessionPeer_firstSeen(ctx, field)
+			case "lastSeen":
+				return ec.fieldContext_MinionSessionPeer_lastSeen(ctx, field)
+			case "count":
+				return ec.fieldContext_MinionSessionPeer_count(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionPeer", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_version(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25103,6 +25235,10 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
 			case "x":
@@ -25298,6 +25434,10 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
 			case "x":
@@ -25569,6 +25709,122 @@ func (ec *executionContext) fieldContext_MinionSessionFilter_to(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionPeer_address(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionPeer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionPeer_address,
+		func(ctx context.Context) (any, error) {
+			return obj.Address, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionPeer_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionPeer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionPeer_firstSeen(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionPeer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionPeer_firstSeen,
+		func(ctx context.Context) (any, error) {
+			return obj.FirstSeen, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionPeer_firstSeen(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionPeer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionPeer_lastSeen(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionPeer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionPeer_lastSeen,
+		func(ctx context.Context) (any, error) {
+			return obj.LastSeen, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionPeer_lastSeen(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionPeer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionPeer_count(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionPeer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionPeer_count,
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionPeer_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionPeer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -33405,6 +33661,10 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_address(ctx, field)
 			case "addressPicked":
 				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
 			case "x":
@@ -61921,6 +62181,13 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "peerAddress":
+			out.Values[i] = ec._MinionSession_peerAddress(ctx, field, obj)
+		case "peers":
+			out.Values[i] = ec._MinionSession_peers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "version":
 			out.Values[i] = ec._MinionSession_version(ctx, field, obj)
 		case "x":
@@ -62134,6 +62401,60 @@ func (ec *executionContext) _MinionSessionFilter(ctx context.Context, sel ast.Se
 			out.Values[i] = ec._MinionSessionFilter_from(ctx, field, obj)
 		case "to":
 			out.Values[i] = ec._MinionSessionFilter_to(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionSessionPeerImplementors = []string{"MinionSessionPeer"}
+
+func (ec *executionContext) _MinionSessionPeer(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionPeer) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionPeerImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionPeer")
+		case "address":
+			out.Values[i] = ec._MinionSessionPeer_address(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "firstSeen":
+			out.Values[i] = ec._MinionSessionPeer_firstSeen(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastSeen":
+			out.Values[i] = ec._MinionSessionPeer_lastSeen(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._MinionSessionPeer_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -72994,6 +73315,32 @@ func (ec *executionContext) unmarshalNMinionSessionFilterOp2githubᚗcomᚋlogos
 
 func (ec *executionContext) marshalNMinionSessionFilterOp2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterOp(ctx context.Context, sel ast.SelectionSet, v model.MinionSessionFilterOp) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNMinionSessionPeer2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionPeerᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionSessionPeer) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionSessionPeer2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionPeer(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionSessionPeer2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionPeer(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionPeer) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionSessionPeer(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNModule2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v models.Module) graphql.Marshaler {

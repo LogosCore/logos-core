@@ -125,6 +125,8 @@ func sessionSortValue(s *models.MinionSession, column string) any {
 		return s.Number
 	case "addrs":
 		return str(s.Address)
+	case "peer":
+		return str(s.PeerAddress)
 	case "host":
 		return str(h.Host)
 	case "user":

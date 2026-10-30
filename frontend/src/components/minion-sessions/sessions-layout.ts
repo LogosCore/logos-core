@@ -20,6 +20,7 @@ export type SessionColumnId =
   | "number"
   | "sessionId"
   | "addrs"
+  | "peer"
   | "host"
   | "user"
   | "domain"
@@ -61,6 +62,18 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "number", label: "#", kind: "number", sortable: true, initialDirection: "DESC", width: "3.5rem", value: (s) => s.number },
   // Sorts by the address each row shows (MinionSession.address).
   { id: "addrs", label: "Addresses", kind: "list", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => [s.address, s.addrs] },
+  // The address the latest message came from (the channel saw it); sorts by
+  // that one, filters on any it was seen from. A check-in from the same
+  // address moves nothing.
+  {
+    id: "peer",
+    label: "External address",
+    kind: "list",
+    sortable: true,
+    initialDirection: "ASC",
+    width: fr(1),
+    value: (s) => [s.peerAddress, s.peers.map((p) => p.address)],
+  },
   { id: "host", label: "Host", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.2), value: (s) => s.host },
   { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => s.user },
   { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.domain },
@@ -103,7 +116,7 @@ export interface SessionsLayout {
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
-  columns: ["number", "addrs", "host", "user", "proc", "os", "lastSeen", "build"],
+  columns: ["number", "addrs", "peer", "host", "user", "proc", "os", "lastSeen", "build"],
   sort: null,
   filters: [],
   split: null,

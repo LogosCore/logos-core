@@ -60,6 +60,7 @@ var MinionSessionColumns = map[string]MinionSessionColumn{
 	"number":           {Field: "number", Kind: SessionColumnNumber, Sortable: true},
 	"sessionId":        {Field: "session_id", Kind: SessionColumnID},
 	"addrs":            {Field: "hello.addrs", Kind: SessionColumnList, Sortable: true, SortField: "address"},
+	"peer":             {Field: "peers.address", Kind: SessionColumnList, Sortable: true, SortField: "peer_address"},
 	"host":             {Field: "hello.host", Kind: SessionColumnText, Sortable: true},
 	"user":             {Field: "hello.user", Kind: SessionColumnText, Sortable: true},
 	"domain":           {Field: "hello.domain", Kind: SessionColumnText, Sortable: true},
