@@ -1,9 +1,11 @@
 /*
  * The special looks a session mark gives a row in place of a color
  * (SESSION_MARK_STYLES in session-mark-colors.ts; core's SessionMarkStyles).
- * Every style keeps the table's background, at most faintly tinted, and has
- * its own colors in either theme (.dark): a style that brought a dark
- * background of its own read as a black bar in the light theme.
+ * Most styles keep the table's background, at most faintly tinted, and have
+ * their own colors in either theme (.dark): a style that brought a dark
+ * background of its own read as a black bar in the light theme. The
+ * terminals (Haxor, Amber CRT) are the exception: dark by nature, they are
+ * dark in either theme, their rows dark-theme islands.
  *
  * Two kinds of text:
  *   .mark-fx-solid  every text in the row takes the style's color;
@@ -59,18 +61,16 @@
   color: revert-layer;
 }
 
-/* Haxor: a terminal. Terminal font, green text: deep green on white,
- * acid green with a glow on dark, the row faintly green. */
+/* Haxor: a terminal. Terminal font, acid green with a glow on a dark green
+ * screen, in either theme: a terminal is dark by nature, and a light one
+ * looked wrong. The row is a dark-theme island (session-mark-colors.ts gives
+ * it the dark class), so Last seen, the checkbox and the picked row's ring
+ * take their dark-theme colors on it. */
 .mark-fx-haxor {
-  --fx-bg: oklch(0.975 0.02 145);
-  --fx-bg-hover: oklch(0.95 0.035 145);
-  --fx-fg: oklch(0.5 0.15 145);
-  font-family: var(--font-mono);
-}
-.dark .mark-fx-haxor {
-  --fx-bg: oklch(0.22 0.035 145);
-  --fx-bg-hover: oklch(0.26 0.045 145);
+  --fx-bg: oklch(0.18 0.03 145);
+  --fx-bg-hover: oklch(0.22 0.04 145);
   --fx-fg: #39ff14;
+  font-family: var(--font-mono);
   text-shadow: 0 0 4px rgb(57 255 20 / 0.5);
 }
 
@@ -183,20 +183,15 @@
   }
 }
 
-/* Amber CRT: an old amber monitor. Retro mono font, amber text, faint
- * scanlines; dark amber on a warm tint on white, glowing amber on dark. */
+/* Amber CRT: an old amber monitor. Retro mono font, glowing amber on a
+ * dark screen with scanlines, in either theme, a dark-theme island like
+ * Haxor. */
 .mark-fx-amber-crt {
-  --fx-bg: oklch(0.975 0.022 75);
-  --fx-bg-hover: oklch(0.95 0.035 75);
-  --fx-fg: oklch(0.55 0.13 65);
-  --fx-scan: rgb(120 80 0 / 0.07);
-  font-family: "Space Mono", var(--font-mono);
-}
-.dark .mark-fx-amber-crt {
-  --fx-bg: oklch(0.21 0.03 75);
-  --fx-bg-hover: oklch(0.25 0.04 75);
+  --fx-bg: oklch(0.18 0.03 70);
+  --fx-bg-hover: oklch(0.22 0.04 70);
   --fx-fg: #ffb000;
   --fx-scan: rgb(0 0 0 / 0.25);
+  font-family: "Space Mono", var(--font-mono);
   text-shadow: 0 0 5px rgb(255 176 0 / 0.45);
 }
 .mark-fx-amber-crt::after {

@@ -6,6 +6,7 @@
 // into a quilt, and the app's neutral look holds.
 
 import type { LucideIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { CrownIcon, FlameIcon, GhostIcon, MonitorIcon, RainbowIcon, SquareTerminalIcon, SunsetIcon, ZapIcon } from "lucide-react"
 import "./session-mark-styles.css"
 
@@ -104,6 +105,9 @@ export interface SessionMarkStyle {
   id: string
   label: string
   text: "solid" | "ink" | "none"
+  /** Dark in either theme (a terminal): the row takes the app's dark class,
+   *  so what it holds (Last seen, the checkbox, the ring) reads on it. */
+  dark?: boolean
   /** The swatch, a square in the style's colors with its icon, per theme
    *  (backgrounds as images: some are gradients). */
   swatch: { light: string; dark: string; fg: string; fgDark: string }
@@ -115,11 +119,12 @@ export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
     id: "haxor",
     label: "Haxor",
     text: "solid",
+    dark: true,
     Icon: SquareTerminalIcon,
     swatch: {
-      light: "linear-gradient(oklch(0.95 0.04 145), oklch(0.95 0.04 145))",
+      light: "linear-gradient(#070b07, #070b07)",
       dark: "linear-gradient(#070b07, #070b07)",
-      fg: "oklch(0.5 0.15 145)",
+      fg: "#39ff14",
       fgDark: "#39ff14",
     },
   },
@@ -139,11 +144,12 @@ export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
     id: "amber-crt",
     label: "Amber CRT",
     text: "solid",
+    dark: true,
     Icon: MonitorIcon,
     swatch: {
-      light: "linear-gradient(oklch(0.95 0.04 75), oklch(0.95 0.04 75))",
+      light: "linear-gradient(#160e02, #160e02)",
       dark: "linear-gradient(#160e02, #160e02)",
-      fg: "oklch(0.55 0.13 65)",
+      fg: "#ffb000",
       fgDark: "#ffb000",
     },
   },
@@ -224,7 +230,7 @@ export function markRowClass(id: string | null | undefined): string | undefined 
   if (SESSION_MARK_COLOR_BY_ID.has(id)) return MARKED_ROW_CLASSES
   const style = SESSION_MARK_STYLE_BY_ID.get(id)
   if (!style) return undefined
-  return `mark-fx mark-fx-${style.id}${style.text === "none" ? "" : ` mark-fx-${style.text}`}`
+  return cn("mark-fx", `mark-fx-${style.id}`, style.text !== "none" && `mark-fx-${style.text}`, style.dark && "dark")
 }
 
 /** A marked row's tint, in either theme and on hover. */
