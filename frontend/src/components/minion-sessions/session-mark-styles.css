@@ -68,7 +68,7 @@
   color: #f87171;
 }
 
-/* Haxor: a terminal. Acid green on black, a glow, a blinking cursor. */
+/* Haxor: a terminal. Acid green on black, a glow. */
 .mark-fx-haxor {
   --fx-bg: #070b07;
   --fx-bg-hover: #0d160d;
@@ -80,16 +80,6 @@
 .mark-fx-haxor [data-seen="live"] * {
   /* Live is the style's own green already. */
   color: #39ff14;
-}
-.mark-fx-haxor [data-session-number]::after {
-  content: "\2588";
-  margin-left: 2px;
-  animation: mark-fx-blink 1s steps(1) infinite;
-}
-@keyframes mark-fx-blink {
-  50% {
-    opacity: 0;
-  }
 }
 
 /* Rainbow: every letter its own hue, the whole spectrum every dozen

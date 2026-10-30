@@ -1,5 +1,4 @@
 import { describe, expect, test } from "vitest"
-import { ALL_LUCIDE_NAMES } from "@/components/wiki/icon-catalog"
 import { SESSION_MARK_COLORS, SESSION_MARK_STYLES, markRowClass } from "./session-mark-colors"
 
 describe("session mark colors and styles", () => {
@@ -16,10 +15,6 @@ describe("session mark colors and styles", () => {
       "gold",
       "ghost",
     ])
-  })
-
-  test("each style's icon is a lucide icon the mark can show", () => {
-    for (const s of SESSION_MARK_STYLES) expect(ALL_LUCIDE_NAMES.has(s.icon), s.id).toBe(true)
   })
 
   test("a row's classes: a color's tint, a style's look, nothing for unknown", () => {

@@ -86,9 +86,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "number":
       return (
         <div className="flex min-w-0 items-baseline gap-1.5" title={`Session ${s.number}, ${s.id}`}>
-          <span data-session-number className="truncate font-mono font-medium">
-            {s.number}
-          </span>
+          <span className="truncate font-mono font-medium">{s.number}</span>
           {/* The caller's mark, in its color's tone (the row sets it). */}
           {(s.mark?.icon || s.mark?.emoji) && (
             <span data-mark-icon className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>

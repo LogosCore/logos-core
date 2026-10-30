@@ -108,60 +108,34 @@ export interface SessionMarkStyle {
   /** The swatch: its own background and icon, in the style's colors. */
   swatch: CSSProperties
   Icon: LucideIcon
-  /** The same icon's lucide name: picking the style marks with it too. */
-  icon: string
 }
 
 export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
-  {
-    id: "haxor",
-    label: "Haxor",
-    text: "solid",
-    Icon: SquareTerminalIcon,
-    icon: "SquareTerminal",
-    swatch: { background: "#070b07", color: "#39ff14" },
-  },
+  { id: "haxor", label: "Haxor", text: "solid", Icon: SquareTerminalIcon, swatch: { background: "#070b07", color: "#39ff14" } },
   {
     id: "rainbow",
     label: "Rainbow",
     text: "ink",
     Icon: RainbowIcon,
-    icon: "Rainbow",
     swatch: {
       background: "conic-gradient(from 90deg, #ff4d4d, #ff9f1a, #ffe14d, #4dff88, #4dd2ff, #8f6bff, #ff4dd2, #ff4d4d)",
       color: "#fff",
     },
   },
-  {
-    id: "amber-crt",
-    label: "Amber CRT",
-    text: "solid",
-    Icon: MonitorIcon,
-    icon: "Monitor",
-    swatch: { background: "#160e02", color: "#ffb000" },
-  },
+  { id: "amber-crt", label: "Amber CRT", text: "solid", Icon: MonitorIcon, swatch: { background: "#160e02", color: "#ffb000" } },
   {
     id: "synthwave",
     label: "Synthwave",
     text: "solid",
     Icon: SunsetIcon,
-    icon: "Sunset",
     swatch: { background: "linear-gradient(135deg, #2a0d52, #9c1c63)", color: "#ffa6ea" },
   },
-  {
-    id: "glitch",
-    label: "Glitch",
-    text: "solid",
-    Icon: ZapIcon,
-    icon: "Zap",
-    swatch: { background: "#0b0b10", color: "#00f0ff" },
-  },
+  { id: "glitch", label: "Glitch", text: "solid", Icon: ZapIcon, swatch: { background: "#0b0b10", color: "#00f0ff" } },
   {
     id: "on-fire",
     label: "On Fire",
     text: "ink",
     Icon: FlameIcon,
-    icon: "Flame",
     swatch: { background: "linear-gradient(180deg, #2c0b03, #1a0703)", color: "#ff7a00" },
   },
   {
@@ -169,7 +143,6 @@ export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
     label: "Gold",
     text: "ink",
     Icon: CrownIcon,
-    icon: "Crown",
     swatch: { background: "linear-gradient(135deg, #15110a, #2b220f)", color: "#ffd700" },
   },
   {
@@ -177,7 +150,6 @@ export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
     label: "Ghost",
     text: "none",
     Icon: GhostIcon,
-    icon: "Ghost",
     swatch: { background: "linear-gradient(135deg, #e5e7eb, #9ca3af)", color: "#ffffff" },
   },
 ]

@@ -12,7 +12,6 @@ import {
   SESSION_MARK_HUES,
   SESSION_MARK_STRENGTHS,
   SESSION_MARK_STYLES,
-  SESSION_MARK_STYLE_BY_ID,
   isMarkColor,
   markColorVars,
 } from "./session-mark-colors"
@@ -48,18 +47,6 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
   const [icon, setIcon] = useState(target.mark?.icon ?? "")
   const [emoji, setEmoji] = useState(target.mark?.emoji ?? "")
   const [pending, setPending] = useState(false)
-  // Picks a color or a style, or none. A style brings its own icon; leaving
-  // it takes that icon away too, unless the operator chose another since.
-  const choose = (next: string) => {
-    const was = SESSION_MARK_STYLE_BY_ID.get(color)
-    if (was && icon === was.icon) setIcon("")
-    const style = SESSION_MARK_STYLE_BY_ID.get(next)
-    if (style) {
-      setIcon(style.icon)
-      setEmoji("")
-    }
-    setColor(next)
-  }
   const [error, setError] = useState<string | null>(null)
   const submit = async (mark: MinionSessionMarkInput | null) => {
     setError(null)
@@ -89,7 +76,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Color or style</span>
-          <Button type="button" variant="ghost" size="xs" disabled={!color} onClick={() => choose("")}>
+          <Button type="button" variant="ghost" size="xs" disabled={!color} onClick={() => setColor("")}>
             <XIcon />
             None
           </Button>
@@ -104,7 +91,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               aria-checked={color === c.id}
               aria-label={c.label}
               title={c.label}
-              onClick={() => choose(color === c.id ? "" : c.id)}
+              onClick={() => setColor(color === c.id ? "" : c.id)}
               style={{
                 ...markColorVars(c.id),
                 gridColumn: SESSION_MARK_HUES.indexOf(c.hue) + 1,
@@ -127,7 +114,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               aria-checked={color === st.id}
               aria-label={st.label}
               title={st.label}
-              onClick={() => choose(color === st.id ? "" : st.id)}
+              onClick={() => setColor(color === st.id ? "" : st.id)}
               style={{ ...st.swatch, gridColumn: i + 1, gridRow: SESSION_MARK_STRENGTHS.length + 1 }}
               className={cn(
                 "flex aspect-square items-center justify-center rounded-md border border-foreground/10 outline-none hover:brightness-125 focus-visible:ring-2 focus-visible:ring-ring",
