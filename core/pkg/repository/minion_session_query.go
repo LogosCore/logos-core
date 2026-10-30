@@ -123,6 +123,8 @@ func sessionSortValue(s *models.MinionSession, column string) any {
 	switch column {
 	case "number":
 		return s.Number
+	case "addrs":
+		return str(s.Address)
 	case "host":
 		return str(h.Host)
 	case "user":
@@ -259,7 +261,7 @@ func keysetFilter(field string, k *MinionSessionKeyset, ascending bool) bson.M {
 
 // sortFields are the Mongo sort for sort, traversed forward or back.
 func sortFields(sort models.MinionSessionSort, forward bool) []string {
-	field := models.MinionSessionColumns[sort.Column].Field
+	field := models.MinionSessionColumns[sort.Column].SortBy()
 	ascending := !sort.Desc == forward
 	if ascending {
 		return []string{field, "_id"}

@@ -459,6 +459,8 @@ type ComplexityRoot struct {
 	}
 
 	MinionSession struct {
+		Address          func(childComplexity int) int
+		AddressPicked    func(childComplexity int) int
 		Addrs            func(childComplexity int) int
 		Arch             func(childComplexity int) int
 		BuildDescription func(childComplexity int) int
@@ -757,6 +759,7 @@ type ComplexityRoot struct {
 		RevokeSession                 func(childComplexity int, id string) int
 		SetAgentKeyEnabled            func(childComplexity int, id string, enabled bool) int
 		SetHiddenIdentities           func(childComplexity int, names []string) int
+		SetMinionSessionAddress       func(childComplexity int, id string, address *string) int
 		SetMinionSessionsLayout       func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
 		SetMyAPIKeyEnabled            func(childComplexity int, enabled bool) int
 		SetTaskAssignees              func(childComplexity int, taskID string, assigneeIds []string) int
@@ -1454,6 +1457,7 @@ type MutationResolver interface {
 	CreateHost(ctx context.Context, operationID string, input model.CreateHostInput) (*models.Host, error)
 	UpdateHost(ctx context.Context, id string, input model.UpdateHostInput) (*models.Host, error)
 	DeleteHost(ctx context.Context, id string) (bool, error)
+	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
 	SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
@@ -3342,6 +3346,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Minion.Target(childComplexity), true
 
+	case "MinionSession.address":
+		if e.ComplexityRoot.MinionSession.Address == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Address(childComplexity), true
+	case "MinionSession.addressPicked":
+		if e.ComplexityRoot.MinionSession.AddressPicked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.AddressPicked(childComplexity), true
 	case "MinionSession.addrs":
 		if e.ComplexityRoot.MinionSession.Addrs == nil {
 			break
@@ -5012,6 +5028,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetHiddenIdentities(childComplexity, args["names"].([]string)), true
+	case "Mutation.setMinionSessionAddress":
+		if e.ComplexityRoot.Mutation.SetMinionSessionAddress == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionSessionAddress_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionSessionAddress(childComplexity, args["id"].(string), args["address"].(*string)), true
 	case "Mutation.setMinionSessionsLayout":
 		if e.ComplexityRoot.Mutation.SetMinionSessionsLayout == nil {
 			break
@@ -9811,6 +9838,13 @@ type MinionSession {
   # low | medium | high | system (Windows) | root | user
   integrity: String
   addrs: [String!]!
+  # The one of addrs the session shows, and sorts by in the addrs column: an
+  # operator's pick (addressPicked), shared by the whole team, or core's
+  # guess at the host's real one (an ordinary IPv4 network before IPv6,
+  # before virtual bridges such as Docker's, before link-local). null when
+  # the hello sent none.
+  address: String
+  addressPicked: Boolean!
   version: String
   # The factory's own fields.
   x: JSON
@@ -9949,6 +9983,12 @@ extend type Query {
 }
 
 extend type Mutation {
+  # Picks the address a session shows, one of its addrs, for everyone in the
+  # operation; null goes back to core's guess. Needs at least operator; agent
+  # API keys are rejected.
+  setMinionSessionAddress(id: ID!, address: String): MinionSession!
+    @hasPermission(permission: "operation:member")
+
   # Keeps the caller's Sessions table layout, for every operation and every
   # browser they use; null goes back to the default.
   setMinionSessionsLayout(layout: MinionSessionsLayoutInput): MinionSessionsLayout
@@ -13071,6 +13111,22 @@ func (ec *executionContext) field_Mutation_setHiddenIdentities_args(ctx context.
 		return nil, err
 	}
 	args["names"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setMinionSessionAddress_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "address", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["address"] = arg1
 	return args, nil
 }
 
@@ -24694,6 +24750,64 @@ func (ec *executionContext) fieldContext_MinionSession_addrs(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_address(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_address,
+		func(ctx context.Context) (any, error) {
+			return obj.Address, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSession_addressPicked(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_addressPicked,
+		func(ctx context.Context) (any, error) {
+			return obj.AddressPicked, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_addressPicked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_version(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -24973,6 +25087,10 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
 				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
 			case "x":
@@ -25164,6 +25282,10 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
 				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
 			case "version":
 				return ec.fieldContext_MinionSession_version(ctx, field)
 			case "x":
@@ -33153,6 +33275,115 @@ func (ec *executionContext) fieldContext_Mutation_deleteHost(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteHost_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMinionSessionAddress(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionSessionAddress,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionSessionAddress(ctx, fc.Args["id"].(string), fc.Args["address"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionSession
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionSession
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionSession_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionSession_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionSession_buildDescription(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionSession_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_MinionSession_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_MinionSession_platform(ctx, field)
+			case "staged":
+				return ec.fieldContext_MinionSession_staged(ctx, field)
+			case "pid":
+				return ec.fieldContext_MinionSession_pid(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionSession_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionSession_arch(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionSession_user(ctx, field)
+			case "domain":
+				return ec.fieldContext_MinionSession_domain(ctx, field)
+			case "proc":
+				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionSession_integrity(ctx, field)
+			case "addrs":
+				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionSession_x(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionSession_createdAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionSessionAddress_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -61631,6 +61862,13 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "address":
+			out.Values[i] = ec._MinionSession_address(ctx, field, obj)
+		case "addressPicked":
+			out.Values[i] = ec._MinionSession_addressPicked(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "version":
 			out.Values[i] = ec._MinionSession_version(ctx, field, obj)
 		case "x":
@@ -63612,6 +63850,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteHost":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteHost(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setMinionSessionAddress":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionSessionAddress(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -72571,6 +72816,10 @@ func (ec *executionContext) marshalNMinion2ᚖgithubᚗcomᚋlogoscoreᚋlogos�
 		return graphql.Null
 	}
 	return ec._Minion(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionSession2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v model.MinionSession) graphql.Marshaler {
+	return ec._MinionSession(ctx, sel, &v)
 }
 
 func (ec *executionContext) marshalNMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v *model.MinionSession) graphql.Marshaler {

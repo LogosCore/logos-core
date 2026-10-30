@@ -38,6 +38,13 @@ type MinionSession {
   # low | medium | high | system (Windows) | root | user
   integrity: String
   addrs: [String!]!
+  # The one of addrs the session shows, and sorts by in the addrs column: an
+  # operator's pick (addressPicked), shared by the whole team, or core's
+  # guess at the host's real one (an ordinary IPv4 network before IPv6,
+  # before virtual bridges such as Docker's, before link-local). null when
+  # the hello sent none.
+  address: String
+  addressPicked: Boolean!
   version: String
   # The factory's own fields.
   x: JSON
@@ -176,6 +183,12 @@ extend type Query {
 }
 
 extend type Mutation {
+  # Picks the address a session shows, one of its addrs, for everyone in the
+  # operation; null goes back to core's guess. Needs at least operator; agent
+  # API keys are rejected.
+  setMinionSessionAddress(id: ID!, address: String): MinionSession!
+    @hasPermission(permission: "operation:member")
+
   # Keeps the caller's Sessions table layout, for every operation and every
   # browser they use; null goes back to the default.
   setMinionSessionsLayout(layout: MinionSessionsLayoutInput): MinionSessionsLayout

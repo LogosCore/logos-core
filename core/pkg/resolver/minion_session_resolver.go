@@ -3,11 +3,13 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -26,6 +28,9 @@ type IMinionSessionResolver interface {
 	// Sessions table layout.
 	MinionSessionsLayout(ctx context.Context) (*model.MinionSessionsLayout, error)
 	SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error)
+	// SetMinionSessionAddress picks the address a session shows; nil goes
+	// back to core's guess.
+	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
 	// Load reads one session for a subscription event, already authorized
 	// by the subscription's filter; nil when it cannot be read.
 	Load(ctx context.Context, sessionID string) *model.MinionSession
@@ -36,11 +41,12 @@ type minionSessionResolver struct {
 	operationRepo repository.IOperationRepository
 	userRepo      repository.IUserRepository
 	preferences   repository.IUserPreferencesRepository
+	bus           eventbus.IEventBus
 }
 
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,
-	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository) IMinionSessionResolver {
-	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences}
+	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository, bus eventbus.IEventBus) IMinionSessionResolver {
+	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences, bus: bus}
 }
 
 // viewer authorizes a viewer of the operation.
@@ -103,6 +109,49 @@ func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID 
 			return &model.MinionSessionEdge{Node: toMinionSessionModel(s), Cursor: cursor}
 		})
 	return &model.MinionSessionConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
+}
+
+func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
+	if gqlctx.AuthFromContext(ctx).Agent != nil {
+		return nil, moduleGQLError(ctx, errCodeForbidden, "forbidden")
+	}
+	sid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid session ID")
+	}
+	s, err := r.sessions.FindBySessionID(ctx, sid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "session not found")
+		}
+		return nil, err
+	}
+	operation, err := gqlctx.LoadOperation(ctx, r.operationRepo, s.OperationID)
+	if err != nil {
+		return nil, fmt.Errorf("operation not found: %w", err)
+	}
+	if err := authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleOperator); err != nil {
+		return nil, err
+	}
+	addr, picked := models.DefaultAddress(s.Hello.Addrs), false
+	if address != nil {
+		if !slices.Contains(s.Hello.Addrs, *address) {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%q is not one of the session's addresses", *address))
+		}
+		addr, picked = *address, true
+	}
+	if err := r.sessions.SetAddress(ctx, sid, addr, picked); err != nil {
+		if repository.IsNotFound(err) {
+			// The host's addresses changed under us (a rehello).
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%q is not one of the session's addresses", addr))
+		}
+		return nil, fmt.Errorf("set the address: %w", err)
+	}
+	s.Address, s.AddressPicked = addr, picked
+	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
+		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
+	}))
+	return toMinionSessionModel(s), nil
 }
 
 func (r *minionSessionResolver) MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error) {
@@ -240,7 +289,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		BuildDescription: s.BuildDescription, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
-		Version: strPtr(h.Version), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
+		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked, CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X

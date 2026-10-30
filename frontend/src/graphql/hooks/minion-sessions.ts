@@ -16,6 +16,7 @@ import {
   MinionSessionValuesDocument,
   MinionSessionsLayoutDocument,
   SetMinionSessionsLayoutDocument,
+  SetMinionSessionAddressDocument,
   type MinionSessionFieldsFragment,
   type MinionSessionsLayoutQuery,
   type MinionSessionsQuery,
@@ -197,4 +198,13 @@ export function useMinionSessionChangedSubscription(operationId: string) {
       enabled: operationId !== "",
     },
   )
+}
+
+/** Picks the address a session shows, for the whole operation; null goes back to core's guess. */
+export function useSetMinionSessionAddress() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; address: string | null }) => graphqlClient(SetMinionSessionAddressDocument, vars),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionAddress),
+  })
 }

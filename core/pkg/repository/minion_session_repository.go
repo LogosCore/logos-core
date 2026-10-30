@@ -36,8 +36,12 @@ type IMinionSessionRepository interface {
 	// CheckIn records a message under the session id: the time, and the end
 	// of the wait for the first check-in.
 	CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time) error
-	// SetHello replaces what the session's hello said (a rehello).
-	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello) error
+	// SetHello replaces what the session's hello said (a rehello), with the
+	// address the session shows now.
+	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error
+	// SetAddress sets the address the session shows, one of its hello's;
+	// IsNotFound when the session has no such address.
+	SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error
 	// FindByOperationIDWithCursor is a page of an operation's sessions as q
 	// asks, from after (nil: the start); forward false pages back.
 	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, after *MinionSessionKeyset, limit int64, forward bool) ([]models.MinionSession, error)
@@ -100,8 +104,17 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 		bson.M{"$set": bson.M{"last_seen_at": at}, "$unset": bson.M{"expires_at": ""}})
 }
 
-func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello) error {
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": bson.M{"hello": hello}})
+func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
+		bson.M{"$set": bson.M{"hello": hello, "address": address, "address_picked": picked}})
+}
+
+func (r *minionSessionRepository) SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error {
+	filter := bson.M{"session_id": sessionID}
+	if address != "" {
+		filter["hello.addrs"] = address
+	}
+	return r.coll.UpdateOne(ctx, filter, bson.M{"$set": bson.M{"address": address, "address_picked": picked}})
 }
 
 // minionSessionListFilter is an operation's sessions, searched (searchPattern)
@@ -136,7 +149,7 @@ func (r *minionSessionRepository) FindByOperationIDWithCursor(ctx context.Contex
 	filter := minionSessionFilter(operationID, q, time.Now().UTC())
 	if after != nil {
 		ascending := !q.Sort.Desc == forward
-		filter = bson.M{"$and": bson.A{filter, keysetFilter(models.MinionSessionColumns[q.Sort.Column].Field, after, ascending)}}
+		filter = bson.M{"$and": bson.A{filter, keysetFilter(models.MinionSessionColumns[q.Sort.Column].SortBy(), after, ascending)}}
 	}
 	out := []models.MinionSession{}
 	err := r.coll.Find(ctx, filter).Sort(sortFields(q.Sort, forward)...).Limit(limit).All(&out)

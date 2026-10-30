@@ -56,11 +56,13 @@ import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
 import { useNow } from "@/hooks/use-now"
 import { cn } from "@/lib/utils"
+import { useSetMinionSessionAddress } from "@/graphql/hooks/minion-sessions"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
 import { SessionFilterEditor } from "./session-filter-editor"
 import {
   DEFAULT_SESSIONS_LAYOUT,
+  addressMatcher,
   SESSION_COLUMNS,
   SESSION_COLUMN_BY_ID,
   cycleSort,
@@ -94,6 +96,8 @@ interface FilterTarget {
 
 export function SessionsDatatable({
   operationId,
+  search,
+  canWrite,
   layout,
   onLayoutChange,
   sessions,
@@ -105,6 +109,10 @@ export function SessionsDatatable({
   emptyState,
 }: {
   operationId: string
+  /** The page's search, for which address a row shows. */
+  search: string | null
+  /** Whether the viewer may change sessions (pick an address). */
+  canWrite: boolean
   layout: SessionsLayout
   onLayoutChange: (layout: SessionsLayout | null) => void
   sessions: MinionSessionFieldsFragment[]
@@ -121,6 +129,20 @@ export function SessionsDatatable({
   // The column a right click landed on; null: the header past the columns.
   const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)
   const cells = useRef(new Map<SessionColumnId, HTMLElement>())
+  const setAddress = useSetMinionSessionAddress()
+  const matchAddress = useMemo(() => addressMatcher(layout.filters, search), [layout.filters, search])
+  const { mutate: pick } = setAddress
+  const ctx = useMemo(
+    () => ({
+      icons,
+      now,
+      matchAddress,
+      pickAddress: canWrite
+        ? (s: MinionSessionFieldsFragment, address: string | null) => pick({ id: s.id, address })
+        : undefined,
+    }),
+    [icons, now, matchAddress, canWrite, pick],
+  )
 
   const columns = useMemo(() => layout.columns.map((id) => SESSION_COLUMN_BY_ID.get(id)!), [layout.columns])
   const template = [...columns.map((c) => c.width), MENU_TRACK].join(" ")
@@ -255,7 +277,7 @@ export function SessionsDatatable({
                 >
                   {columns.map((col) => (
                     <div key={col.id} className="min-w-0">
-                      <SessionCell id={col.id} session={s} ctx={{ icons, now }} />
+                      <SessionCell id={col.id} session={s} ctx={ctx} />
                     </div>
                   ))}
                   <div />

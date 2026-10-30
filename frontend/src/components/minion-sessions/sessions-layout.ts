@@ -59,7 +59,8 @@ const fr = (n: number) => `minmax(0,${n}fr)`
 
 export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "number", label: "#", kind: "number", sortable: true, initialDirection: "DESC", width: "3.5rem", value: (s) => s.number },
-  { id: "addrs", label: "Addresses", kind: "list", sortable: false, initialDirection: "ASC", width: fr(1), value: (s) => s.addrs },
+  // Sorts by the address each row shows (MinionSession.address).
+  { id: "addrs", label: "Addresses", kind: "list", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => [s.address, s.addrs] },
   { id: "host", label: "Host", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.2), value: (s) => s.host },
   { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => s.user },
   { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.domain },
@@ -303,4 +304,31 @@ export function isComplete(f: SessionFilter, column: SessionColumnDef): boolean 
       return (f.seconds ?? 0) > 0
   }
   return true
+}
+
+/**
+ * What the address filters and the search look for, as a finder over a
+ * session's addresses: the first one that contains any of it, case aside.
+ * A row a filter brought in shows the address that matched.
+ */
+export function addressMatcher(filters: SessionFilter[], search: string | null): (addrs: readonly string[]) => string | undefined {
+  const needles = filters
+    .filter((f) => f.column === "addrs" && f.op === "CONTAINS" && f.text)
+    .map((f) => f.text!.toLowerCase())
+  const term = search?.trim().replace(/^"(.*)"$/, "$1").toLowerCase()
+  if (term) needles.push(term)
+  if (needles.length === 0) return () => undefined
+  return (addrs) => addrs.find((a) => needles.some((n) => a.toLowerCase().includes(n)))
+}
+
+/**
+ * The address a row shows: one someone picked, else one the filters or the
+ * search matched, else core's guess.
+ */
+export function shownAddress(
+  s: Pick<MinionSessionFieldsFragment, "address" | "addressPicked" | "addrs">,
+  match: (addrs: readonly string[]) => string | undefined,
+): string | null {
+  if (s.addressPicked && s.address) return s.address
+  return match(s.addrs) ?? s.address ?? s.addrs[0] ?? null
 }

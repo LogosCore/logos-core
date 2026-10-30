@@ -6,6 +6,8 @@ import { REFRESH_WINDOW_MS } from "@/lib/live-lists"
 import {
   DEFAULT_SESSIONS_LAYOUT,
   SESSION_COLUMN_BY_ID,
+  addressMatcher,
+  shownAddress,
   cycleSort,
   describeFilter,
   isComplete,
@@ -21,7 +23,7 @@ describe("layout", () => {
   test("a stored layout drops what this build does not know", () => {
     const layout = readSessionsLayout({
       columns: ["host", "gone", "host", "lastSeen"],
-      sort: { column: "addrs", direction: "ASC" }, // addrs does not sort
+      sort: { column: "buildId", direction: "ASC" }, // ids do not sort
       filters: [
         { column: "os", op: "IN", values: ["linux"], text: null, min: null, max: null, seconds: null, from: null, to: null },
         { column: "gone", op: "EMPTY", values: null, text: null, min: null, max: null, seconds: null, from: null, to: null },
@@ -53,7 +55,7 @@ describe("layout", () => {
     expect(l.sort).toEqual({ column: "lastSeen", direction: "ASC" })
     expect(cycleSort(l, "lastSeen").sort).toBeNull()
     expect(cycleSort(l, "host").sort).toEqual({ column: "host", direction: "ASC" })
-    expect(cycleSort(l, "addrs")).toBe(l)
+    expect(cycleSort(l, "buildId")).toBe(l)
   })
 
   test("one filter per column", () => {
@@ -80,6 +82,19 @@ describe("layout", () => {
   })
 })
 
+describe("the shown address", () => {
+  const row = { addrs: ["172.17.0.1", "10.0.0.5", "192.168.1.9"], address: "10.0.0.5", addressPicked: false }
+  test("core's guess, unless a filter or the search matched another, unless someone picked one", () => {
+    expect(shownAddress(row, addressMatcher([], null))).toBe("10.0.0.5")
+    expect(shownAddress(row, addressMatcher([{ column: "addrs", op: "CONTAINS", text: "192.168" }], null))).toBe("192.168.1.9")
+    expect(shownAddress(row, addressMatcher([], '"172.17"'))).toBe("172.17.0.1")
+    expect(shownAddress(row, addressMatcher([{ column: "host", op: "CONTAINS", text: "192" }], "nothing"))).toBe("10.0.0.5")
+    const picked = { ...row, address: "172.17.0.1", addressPicked: true }
+    expect(shownAddress(picked, addressMatcher([{ column: "addrs", op: "CONTAINS", text: "192.168" }], null))).toBe("172.17.0.1")
+    expect(shownAddress({ addrs: [], address: null, addressPicked: false }, addressMatcher([], null))).toBeNull()
+  })
+})
+
 describe("live updates", () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
@@ -103,6 +118,8 @@ describe("live updates", () => {
     proc: null,
     integrity: null,
     addrs: [],
+    address: null,
+    addressPicked: false,
     version: null,
     x: null,
     createdAt: "2026-10-30T10:00:00Z",

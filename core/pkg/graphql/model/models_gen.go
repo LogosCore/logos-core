@@ -472,6 +472,8 @@ type MinionSession struct {
 	Proc             *string  `json:"proc,omitempty"`
 	Integrity        *string  `json:"integrity,omitempty"`
 	Addrs            []string `json:"addrs"`
+	Address          *string  `json:"address,omitempty"`
+	AddressPicked    bool     `json:"addressPicked"`
 	Version          *string  `json:"version,omitempty"`
 	X                any      `json:"x,omitempty"`
 	CreatedAt        string   `json:"createdAt"`

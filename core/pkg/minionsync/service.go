@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -204,7 +205,8 @@ func (s *Service) openSession(ctx context.Context, from *sender, raw cbor.RawMes
 	session := &models.MinionSession{
 		SessionID: uuid.New(), OperationID: b.OperationID, BuildID: b.BuildID, BuildDescription: b.Description,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
-		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), CreatedAt: now, ExpiresAt: &expires,
+		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.Addrs),
+		CreatedAt: now, ExpiresAt: &expires,
 	}
 	if from.staging != nil {
 		if err := s.stagings.Delete(ctx, from.staging.TempID); err != nil {
@@ -246,7 +248,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				out, err = errItem(protocol.ErrItemBadMessage, err.Error(), i)
 				break
 			}
-			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello)); err != nil {
+			// An operator's pick stays while the host still has it.
+			address, picked := models.DefaultAddress(hello.Addrs), false
+			if session.AddressPicked && slices.Contains(hello.Addrs, session.Address) {
+				address, picked = session.Address, true
+			}
+			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello), address, picked); err != nil {
 				return nil, fmt.Errorf("rehello: %w", err)
 			}
 			s.logger.Info("minion rehello", zap.String("session_id", session.SessionID.String()))

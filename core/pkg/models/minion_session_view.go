@@ -40,6 +40,17 @@ type MinionSessionColumn struct {
 	Field    string
 	Kind     MinionSessionColumnKind
 	Sortable bool
+	// SortField is what the column sorts by when not Field: the addresses
+	// sort by the one the session shows.
+	SortField string
+}
+
+// SortBy is the stored field the column sorts by.
+func (c MinionSessionColumn) SortBy() string {
+	if c.SortField != "" {
+		return c.SortField
+	}
+	return c.Field
 }
 
 // MinionSessionColumns are the Sessions table's columns by id: every property
@@ -48,7 +59,7 @@ type MinionSessionColumn struct {
 var MinionSessionColumns = map[string]MinionSessionColumn{
 	"number":           {Field: "number", Kind: SessionColumnNumber, Sortable: true},
 	"sessionId":        {Field: "session_id", Kind: SessionColumnID},
-	"addrs":            {Field: "hello.addrs", Kind: SessionColumnList},
+	"addrs":            {Field: "hello.addrs", Kind: SessionColumnList, Sortable: true, SortField: "address"},
 	"host":             {Field: "hello.host", Kind: SessionColumnText, Sortable: true},
 	"user":             {Field: "hello.user", Kind: SessionColumnText, Sortable: true},
 	"domain":           {Field: "hello.domain", Kind: SessionColumnText, Sortable: true},

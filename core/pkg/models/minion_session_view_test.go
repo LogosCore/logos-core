@@ -43,11 +43,27 @@ func TestMinionSessionsLayoutValidate(t *testing.T) {
 		"no columns":      {},
 		"twice":           {Columns: []string{"host", "host"}},
 		"unknown":         {Columns: []string{"nope"}},
-		"unsortable sort": {Columns: []string{"host"}, Sort: &MinionSessionSort{Column: "addrs"}},
+		"unsortable sort": {Columns: []string{"host"}, Sort: &MinionSessionSort{Column: "buildId"}},
 		"bad filter":      {Columns: []string{"host"}, Filters: []MinionSessionFilter{{Column: "host", Op: "NEVER"}}},
 	} {
 		if l.Validate() == nil {
 			t.Errorf("%s passed", name)
+		}
+	}
+}
+
+func TestDefaultAddress(t *testing.T) {
+	for want, addrs := range map[string][]string{
+		"10.0.0.5":      {"127.0.0.1", "fe80::1", "172.17.0.1", "fd00::5", "2001:db8::5", "10.0.0.5"},
+		"192.168.0.124": {"192.168.122.1", "192.168.0.124", "172.18.0.1"},
+		"172.16.4.20":   {"172.20.0.1", "172.16.4.20"}, // 172.16/16 is a common LAN, not Docker's
+		"2001:db8::5":   {"172.17.0.1", "2001:db8::5", "fe80::1"},
+		"172.17.0.1":    {"fe80::1", "172.17.0.1"},
+		"203.0.113.9":   {"203.0.113.9", "10.0.0.1"}, // the minion's order among equals
+		"":              nil,
+	} {
+		if got := DefaultAddress(addrs); got != want {
+			t.Errorf("%v: %q, want %q", addrs, got, want)
 		}
 	}
 }

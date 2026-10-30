@@ -22,6 +22,8 @@ export const MinionSessionFields = graphql(`
     proc
     integrity
     addrs
+    address
+    addressPicked
     version
     x
     createdAt
@@ -113,6 +115,14 @@ export const SetMinionSessionsLayoutMutation = graphql(`
   mutation SetMinionSessionsLayout($layout: MinionSessionsLayoutInput) {
     setMinionSessionsLayout(layout: $layout) {
       ...MinionSessionsLayoutFields
+    }
+  }
+`)
+
+export const SetMinionSessionAddressMutation = graphql(`
+  mutation SetMinionSessionAddress($id: ID!, $address: String) {
+    setMinionSessionAddress(id: $id, address: $address) {
+      ...MinionSessionFields
     }
   }
 `)

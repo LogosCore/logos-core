@@ -1,6 +1,7 @@
 package models
 
 import (
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,6 +38,11 @@ type MinionSession struct {
 	Crypto protocol.BuildCrypto `bson:"crypto" json:"-"`
 	// Hello is what the latest hello said, as it said it.
 	Hello MinionHello `bson:"hello" json:"hello"`
+	// Address is the one of Hello.Addrs the session shows: an operator's
+	// pick (AddressPicked), shared by the whole team, or else core's guess at
+	// the host's real one (DefaultAddress). Empty when the hello sent none.
+	Address       string `bson:"address,omitempty" json:"address,omitempty"`
+	AddressPicked bool   `bson:"address_picked,omitempty" json:"address_picked,omitempty"`
 
 	CreatedAt time.Time `bson:"created_at" json:"created_at"`
 	// LastSeenAt is the latest message under the session id; nil before the
@@ -68,4 +74,46 @@ func MinionHelloFrom(h protocol.HelloItem) MinionHello {
 		PID: h.PID, OS: h.OS, Arch: h.Arch, Host: h.Host, User: h.User, Domain: h.Domain, Proc: h.Proc,
 		Integrity: h.Integrity, Addrs: h.Addrs, Version: h.Version, X: h.X,
 	}
+}
+
+// DefaultAddress is core's guess at which of a host's addresses is its real
+// one: an IPv4 address on an ordinary network (LAN or public) before a global
+// IPv6 one, before a virtual bridge's (Docker's 172.17-31.x, libvirt's
+// 192.168.122.x, IPv6 ULA), before link-local and loopback; the minion's
+// order among equals. Empty for none.
+func DefaultAddress(addrs []string) string {
+	best, bestRank := "", 99
+	for _, a := range addrs {
+		if r := addressRank(a); r < bestRank {
+			best, bestRank = a, r
+		}
+	}
+	return best
+}
+
+var (
+	dockerBridges  = netip.MustParsePrefix("172.16.0.0/12")
+	dockerFirst    = netip.MustParsePrefix("172.16.0.0/16")
+	libvirtDefault = netip.MustParsePrefix("192.168.122.0/24")
+	ipv6ULA        = netip.MustParsePrefix("fc00::/7")
+)
+
+func addressRank(s string) int {
+	ip, err := netip.ParseAddr(s)
+	if err != nil {
+		return 5
+	}
+	switch {
+	case ip.IsLoopback() || ip.IsUnspecified():
+		return 4
+	case ip.IsLinkLocalUnicast():
+		return 3
+	case ip.Is4() && (dockerBridges.Contains(ip) && !dockerFirst.Contains(ip) || libvirtDefault.Contains(ip)):
+		return 2
+	case ip.Is6() && ipv6ULA.Contains(ip):
+		return 2
+	case ip.Is4() || ip.Is4In6():
+		return 0
+	}
+	return 1
 }

@@ -626,6 +626,8 @@ export type Minion = {
 };
 
 export type MinionSession = {
+  address?: Maybe<Scalars['String']['output']>;
+  addressPicked: Scalars['Boolean']['output'];
   addrs: Array<Scalars['String']['output']>;
   arch: Scalars['String']['output'];
   buildDescription: Scalars['String']['output'];
@@ -997,6 +999,7 @@ export type Mutation = {
   revokeSession: Scalars['Boolean']['output'];
   setAgentKeyEnabled: AgentKey;
   setHiddenIdentities: User;
+  setMinionSessionAddress: MinionSession;
   setMinionSessionsLayout?: Maybe<MinionSessionsLayout>;
   setMyAPIKeyEnabled: ApiKey;
   setTaskAssignees: Task;
@@ -1343,6 +1346,12 @@ export type MutationSetAgentKeyEnabledArgs = {
 
 export type MutationSetHiddenIdentitiesArgs = {
   names: Array<Scalars['String']['input']>;
+};
+
+
+export type MutationSetMinionSessionAddressArgs = {
+  address?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['ID']['input'];
 };
 
 
@@ -3341,7 +3350,7 @@ export type HostChangedSubscriptionVariables = Exact<{
 
 export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
 
-export type MinionSessionFieldsFragment = { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null };
+export type MinionSessionFieldsFragment = { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null };
 
 export type MinionSessionsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3353,14 +3362,14 @@ export type MinionSessionsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MinionSessionChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } | null } };
+export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } | null } };
 
 export type MinionSessionValuesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3383,6 +3392,14 @@ export type SetMinionSessionsLayoutMutationVariables = Exact<{
 
 
 export type SetMinionSessionsLayoutMutation = { setMinionSessionsLayout?: { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
+
+export type SetMinionSessionAddressMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  address?: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -4677,6 +4694,8 @@ export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
   proc
   integrity
   addrs
+  address
+  addressPicked
   version
   x
   createdAt
@@ -7295,6 +7314,8 @@ export const MinionSessionsDocument = new TypedDocumentString(`
   proc
   integrity
   addrs
+  address
+  addressPicked
   version
   x
   createdAt
@@ -7330,6 +7351,8 @@ export const MinionSessionChangedDocument = new TypedDocumentString(`
   proc
   integrity
   addrs
+  address
+  addressPicked
   version
   x
   createdAt
@@ -7388,6 +7411,38 @@ export const SetMinionSessionsLayoutDocument = new TypedDocumentString(`
     to
   }
 }`) as unknown as TypedDocumentString<SetMinionSessionsLayoutMutation, SetMinionSessionsLayoutMutationVariables>;
+export const SetMinionSessionAddressDocument = new TypedDocumentString(`
+    mutation SetMinionSessionAddress($id: ID!, $address: String) {
+  setMinionSessionAddress(id: $id, address: $address) {
+    ...MinionSessionFields
+  }
+}
+    fragment MinionSessionFields on MinionSession {
+  id
+  number
+  operationId
+  buildId
+  buildDescription
+  moduleName
+  target
+  platform
+  staged
+  pid
+  os
+  arch
+  host
+  user
+  domain
+  proc
+  integrity
+  addrs
+  address
+  addressPicked
+  version
+  x
+  createdAt
+  lastSeenAt
+}`) as unknown as TypedDocumentString<SetMinionSessionAddressMutation, SetMinionSessionAddressMutationVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
   modules(

@@ -5,7 +5,8 @@ import { KindName } from "@/components/modules/module-icon"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
-import type { SessionColumnId } from "./sessions-layout"
+import { ListCell } from "./list-cell"
+import { shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it.
@@ -13,6 +14,10 @@ import type { SessionColumnId } from "./sessions-layout"
 export interface CellContext {
   icons: ReadonlyMap<string, ModuleIconSvgs>
   now: number
+  /** The address the filters or the search matched, if any. */
+  matchAddress: (addrs: readonly string[]) => string | undefined
+  /** Picks a session's shown address; absent where the viewer may not. */
+  pickAddress?: (s: MinionSessionFieldsFragment, address: string | null) => void
 }
 
 const muted = (text: string) => <span className="text-muted-foreground">{text}</span>
@@ -59,9 +64,14 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return text(s.id, "truncate font-mono text-xs")
     case "addrs":
       return (
-        <div className="truncate font-mono text-xs" title={s.addrs.join("\n") || undefined}>
-          {s.addrs.length > 0 ? s.addrs.join(", ") : none}
-        </div>
+        <ListCell
+          items={s.addrs}
+          shown={shownAddress(s, ctx.matchAddress)}
+          picked={s.addressPicked ? (s.address ?? null) : null}
+          autoItem={ctx.matchAddress(s.addrs) ?? s.address ?? null}
+          noun="addresses"
+          onPick={ctx.pickAddress && ((a) => ctx.pickAddress!(s, a))}
+        />
       )
     case "host":
       return (

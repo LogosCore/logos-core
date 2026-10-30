@@ -11,6 +11,11 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
 
+// SetMinionSessionAddress is the resolver for the setMinionSessionAddress field.
+func (r *mutationResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.SetMinionSessionAddress(ctx, id, address)
+}
+
 // SetMinionSessionsLayout is the resolver for the setMinionSessionsLayout field.
 func (r *mutationResolver) SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error) {
 	return r.MinionSessionResolver.SetMinionSessionsLayout(ctx, layout)

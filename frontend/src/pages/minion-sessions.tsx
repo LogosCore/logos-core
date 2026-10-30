@@ -12,6 +12,7 @@ import {
 import { useMinionSessionStore } from "@/stores/minion-sessions"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { SessionsDatatable } from "@/components/minion-sessions/sessions-datatable"
+import { useCanBuild } from "@/components/builds/build-access"
 
 /**
  * The scoped operation's minion sessions, live: a minion's hello opens one,
@@ -31,6 +32,7 @@ export function MinionSessionsPage() {
 
 function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   const icons = useFactoryIcons()
+  const { canWrite } = useCanBuild(operationId)
   // The search is the page's; columns, sort and filters are the operator's
   // layout, saved in core for all operations.
   const search = useMinionSessionStore((s) => s.search)
@@ -62,6 +64,8 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
       ) : (
         <SessionsDatatable
           operationId={operationId}
+          search={search.trim() || null}
+          canWrite={canWrite}
           layout={layout}
           onLayoutChange={setLayout}
           sessions={sessions}

@@ -93,10 +93,10 @@ func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, at time.Time) er
 	return nil
 }
 
-func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.MinionHello) error {
+func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.MinionHello, address string, picked bool) error {
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
-			f.rows[i].Hello = h
+			f.rows[i].Hello, f.rows[i].Address, f.rows[i].AddressPicked = h, address, picked
 		}
 	}
 	return nil
@@ -439,6 +439,35 @@ func TestUnderSession(t *testing.T) {
 	// The build's keys do not open a session's messages.
 	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID()); !errors.Is(err, ErrUnopened) {
 		t.Fatalf("build keys under a session: %v", err)
+	}
+}
+
+// A session shows core's guess at its address; a rehello keeps an
+// operator's pick while the host still has it.
+func TestSessionAddress(t *testing.T) {
+	r := newRig(t)
+	h := hello("web01")
+	h.Addrs = []string{"172.17.0.1", "10.0.0.5", "10.0.0.6"}
+	reply, _ := r.send(t, protocol.NewMessageID(), h)
+	sid := sessionID(t, r.open(t, reply))
+	if s := r.sessions.rows[0]; s.Address != "10.0.0.5" || s.AddressPicked {
+		t.Fatalf("guess %q picked=%v", s.Address, s.AddressPicked)
+	}
+	r.sessions.rows[0].Address, r.sessions.rows[0].AddressPicked = "10.0.0.6", true
+
+	h.Addrs = []string{"10.0.0.6", "10.0.0.7"}
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), h); err != nil {
+		t.Fatal(err)
+	}
+	if s := r.sessions.rows[0]; s.Address != "10.0.0.6" || !s.AddressPicked {
+		t.Fatalf("kept pick %q picked=%v", s.Address, s.AddressPicked)
+	}
+	h.Addrs = []string{"10.0.0.7"}
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), h); err != nil {
+		t.Fatal(err)
+	}
+	if s := r.sessions.rows[0]; s.Address != "10.0.0.7" || s.AddressPicked {
+		t.Fatalf("pick gone: %q picked=%v", s.Address, s.AddressPicked)
 	}
 }
 
