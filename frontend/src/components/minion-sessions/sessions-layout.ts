@@ -121,7 +121,7 @@ export interface SessionsLayout {
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
-  columns: ["number", "addrs", "peer", "host", "user", "proc", "os", "lastSeen", "description", "build"],
+  columns: ["number", "peer", "addrs", "user", "host", "domain", "arch", "pid", "proc", "os", "lastSeen", "build", "description"],
   sort: null,
   filters: [],
   split: null,
