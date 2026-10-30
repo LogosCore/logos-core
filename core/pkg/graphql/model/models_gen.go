@@ -536,12 +536,14 @@ type MinionSessionsLayout struct {
 	Columns []string               `json:"columns"`
 	Sort    *MinionSessionSort     `json:"sort,omitempty"`
 	Filters []*MinionSessionFilter `json:"filters"`
+	Split   *float64               `json:"split,omitempty"`
 }
 
 type MinionSessionsLayoutInput struct {
 	Columns []string                    `json:"columns"`
 	Sort    *MinionSessionSortInput     `json:"sort,omitempty"`
 	Filters []*MinionSessionFilterInput `json:"filters"`
+	Split   *float64                    `json:"split,omitempty"`
 }
 
 type ModuleAction struct {

@@ -524,6 +524,7 @@ type ComplexityRoot struct {
 		Columns func(childComplexity int) int
 		Filters func(childComplexity int) int
 		Sort    func(childComplexity int) int
+		Split   func(childComplexity int) int
 	}
 
 	Module struct {
@@ -3634,6 +3635,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSessionsLayout.Sort(childComplexity), true
+	case "MinionSessionsLayout.split":
+		if e.ComplexityRoot.MinionSessionsLayout.Split == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.Split(childComplexity), true
 
 	case "Module.blockReason":
 		if e.ComplexityRoot.Module.BlockReason == nil {
@@ -9929,19 +9936,24 @@ type MinionSessionSort {
   direction: SortDirection!
 }
 
-# How the caller keeps the Sessions table, one for all operations: the
-# columns shown, in order, the sort and the filters.
+# How the caller keeps the Sessions page, one for all operations: the
+# table's columns, in order, its sort and filters, and where the divider
+# between the list and the session below sits.
 type MinionSessionsLayout {
   columns: [String!]!
   # null: newest first.
   sort: MinionSessionSort
   filters: [MinionSessionFilter!]!
+  # The share of the page's height the list takes, 0.1 to 0.9; null for the
+  # default.
+  split: Float
 }
 
 input MinionSessionsLayoutInput {
   columns: [String!]!
   sort: MinionSessionSortInput
   filters: [MinionSessionFilterInput!]!
+  split: Float
 }
 
 type MinionSessionEvent {
@@ -25733,6 +25745,35 @@ func (ec *executionContext) fieldContext_MinionSessionsLayout_filters(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSessionsLayout_split(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_split,
+		func(ctx context.Context) (any, error) {
+			return obj.Split, nil
+		},
+		nil,
+		ec.marshalOFloat2ᚖfloat64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_split(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Module_instance(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -33439,6 +33480,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionsLayout(ctx co
 				return ec.fieldContext_MinionSessionsLayout_sort(ctx, field)
 			case "filters":
 				return ec.fieldContext_MinionSessionsLayout_filters(ctx, field)
+			case "split":
+				return ec.fieldContext_MinionSessionsLayout_split(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -40987,6 +41030,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionsLayout(_ context.Co
 				return ec.fieldContext_MinionSessionsLayout_sort(ctx, field)
 			case "filters":
 				return ec.fieldContext_MinionSessionsLayout_filters(ctx, field)
+			case "split":
+				return ec.fieldContext_MinionSessionsLayout_split(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -56578,7 +56623,7 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"columns", "sort", "filters"}
+	fieldsInOrder := [...]string{"columns", "sort", "filters", "split"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -56606,6 +56651,13 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 				return it, err
 			}
 			it.Filters = data
+		case "split":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("split"))
+			data, err := ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Split = data
 		}
 	}
 	return it, nil
@@ -62172,6 +62224,8 @@ func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "split":
+			out.Values[i] = ec._MinionSessionsLayout_split(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

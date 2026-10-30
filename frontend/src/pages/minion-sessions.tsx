@@ -1,4 +1,4 @@
-import { MonitorDotIcon } from "lucide-react"
+import { MonitorDotIcon, SquareTerminalIcon } from "lucide-react"
 import { SearchInput } from "@/components/ui/search-input"
 import { usePageMetadata } from "@/hooks/use-page-metadata"
 import { useScopedOperation } from "@/hooks/use-scoped-operation"
@@ -12,6 +12,8 @@ import {
 import { useMinionSessionStore } from "@/stores/minion-sessions"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { SessionsDatatable } from "@/components/minion-sessions/sessions-datatable"
+import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT } from "@/components/minion-sessions/sessions-layout"
+import { SplitPane } from "@/components/ui/split-pane"
 import { useCanBuild } from "@/components/builds/build-access"
 
 /**
@@ -49,47 +51,72 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   const narrowed = search.trim() !== "" || layout.filters.length > 0
 
   return (
-    <div className="flex flex-1 flex-col gap-2 p-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchInput value={search} onValueChange={setSearch} placeholder="Search sessions or a number..." />
-        {total !== undefined && (
-          <span className="text-sm text-muted-foreground">
-            {total} {total === 1 ? "session" : "sessions"}
-            {narrowed && " match"}
-          </span>
-        )}
-      </div>
-      {error ? (
-        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
-      ) : (
-        <SessionsDatatable
-          operationId={operationId}
-          search={search.trim() || null}
-          canWrite={canWrite}
-          layout={layout}
-          onLayoutChange={setLayout}
-          sessions={sessions}
-          icons={icons}
-          isLoading={isLoading || layoutLoading}
-          isFetchingNextPage={isFetchingNextPage}
-          hasNextPage={hasNextPage}
-          fetchNextPage={fetchNextPage}
-          emptyState={
-            !narrowed ? (
-              <>
-                <MonitorDotIcon className="size-8 opacity-50" />
-                <p className="text-sm">No sessions in this operation yet.</p>
-                <p className="max-w-md text-center text-xs">
-                  A minion opens a session when it starts: it says hello through one of its channels with its host and
-                  process, and shows up here. Each running process of a build is a session of its own.
-                </p>
-              </>
+    <div className="flex min-h-0 flex-1 flex-col p-2">
+      {/* The list above, the session it works with below; the divider
+          between them is the operator's, kept with their layout. */}
+      <SplitPane
+        label="Resize the sessions list and the session below"
+        split={layout.split ?? DEFAULT_SPLIT}
+        defaultSplit={DEFAULT_SPLIT}
+        min={MIN_SPLIT}
+        max={MAX_SPLIT}
+        onChange={(split) => setLayout({ ...layout, split })}
+        top={
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <SearchInput value={search} onValueChange={setSearch} placeholder="Search sessions or a number..." />
+              {total !== undefined && (
+                <span className="text-sm text-muted-foreground">
+                  {total} {total === 1 ? "session" : "sessions"}
+                  {narrowed && " match"}
+                </span>
+              )}
+            </div>
+            {error ? (
+              <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
             ) : (
-              <p className="text-sm">No sessions match the search and filters.</p>
-            )
-          }
-        />
-      )}
+              <SessionsDatatable
+                operationId={operationId}
+                search={search.trim() || null}
+                canWrite={canWrite}
+                layout={layout}
+                onLayoutChange={setLayout}
+                sessions={sessions}
+                icons={icons}
+                isLoading={isLoading || layoutLoading}
+                isFetchingNextPage={isFetchingNextPage}
+                hasNextPage={hasNextPage}
+                fetchNextPage={fetchNextPage}
+                emptyState={
+                  !narrowed ? (
+                    <>
+                      <MonitorDotIcon className="size-8 opacity-50" />
+                      <p className="text-sm">No sessions in this operation yet.</p>
+                      <p className="max-w-md text-center text-xs">
+                        A minion opens a session when it starts: it says hello through one of its channels with its host and
+                        process, and shows up here. Each running process of a build is a session of its own.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm">No sessions match the search and filters.</p>
+                  )
+                }
+              />
+            )}
+          </div>
+        }
+        bottom={<SessionWorkspace />}
+      />
+    </div>
+  )
+}
+
+/** Where the operator will work with a session: not built yet. */
+function SessionWorkspace() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-muted-foreground">
+      <SquareTerminalIcon className="size-6 opacity-50" />
+      <p className="text-sm">Working with a session comes here.</p>
     </div>
   )
 }

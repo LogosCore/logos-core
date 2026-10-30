@@ -35,6 +35,7 @@ func TestMinionSessionFilterValidate(t *testing.T) {
 }
 
 func TestMinionSessionsLayoutValidate(t *testing.T) {
+	tooSmall := 0.05
 	ok := MinionSessionsLayout{Columns: []string{"number", "host"}, Sort: &MinionSessionSort{Column: "lastSeen", Desc: true}}
 	if err := ok.Validate(); err != nil {
 		t.Fatal(err)
@@ -45,6 +46,7 @@ func TestMinionSessionsLayoutValidate(t *testing.T) {
 		"unknown":         {Columns: []string{"nope"}},
 		"unsortable sort": {Columns: []string{"host"}, Sort: &MinionSessionSort{Column: "buildId"}},
 		"bad filter":      {Columns: []string{"host"}, Filters: []MinionSessionFilter{{Column: "host", Op: "NEVER"}}},
+		"split too small": {Columns: []string{"host"}, Split: &tooSmall},
 	} {
 		if l.Validate() == nil {
 			t.Errorf("%s passed", name)

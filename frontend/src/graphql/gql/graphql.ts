@@ -721,12 +721,14 @@ export type MinionSessionsLayout = {
   columns: Array<Scalars['String']['output']>;
   filters: Array<MinionSessionFilter>;
   sort?: Maybe<MinionSessionSort>;
+  split?: Maybe<Scalars['Float']['output']>;
 };
 
 export type MinionSessionsLayoutInput = {
   columns: Array<Scalars['String']['input']>;
   filters: Array<MinionSessionFilterInput>;
   sort?: InputMaybe<MinionSessionSortInput>;
+  split?: InputMaybe<Scalars['Float']['input']>;
 };
 
 export type Module = {
@@ -3379,19 +3381,19 @@ export type MinionSessionValuesQueryVariables = Exact<{
 
 export type MinionSessionValuesQuery = { minionSessionValues: Array<string> };
 
-export type MinionSessionsLayoutFieldsFragment = { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> };
+export type MinionSessionsLayoutFieldsFragment = { columns: Array<string>, split?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> };
 
 export type MinionSessionsLayoutQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type MinionSessionsLayoutQuery = { minionSessionsLayout?: { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
+export type MinionSessionsLayoutQuery = { minionSessionsLayout?: { columns: Array<string>, split?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
 
 export type SetMinionSessionsLayoutMutationVariables = Exact<{
   layout?: InputMaybe<MinionSessionsLayoutInput>;
 }>;
 
 
-export type SetMinionSessionsLayoutMutation = { setMinionSessionsLayout?: { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
+export type SetMinionSessionsLayoutMutation = { setMinionSessionsLayout?: { columns: Array<string>, split?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
 
 export type SetMinionSessionAddressMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4720,6 +4722,7 @@ export const MinionSessionsLayoutFieldsFragmentDoc = new TypedDocumentString(`
     from
     to
   }
+  split
 }
     `, {"fragmentName":"MinionSessionsLayoutFields"}) as unknown as TypedDocumentString<MinionSessionsLayoutFieldsFragment, unknown>;
 export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
@@ -7386,6 +7389,7 @@ export const MinionSessionsLayoutDocument = new TypedDocumentString(`
     from
     to
   }
+  split
 }`) as unknown as TypedDocumentString<MinionSessionsLayoutQuery, MinionSessionsLayoutQueryVariables>;
 export const SetMinionSessionsLayoutDocument = new TypedDocumentString(`
     mutation SetMinionSessionsLayout($layout: MinionSessionsLayoutInput) {
@@ -7410,6 +7414,7 @@ export const SetMinionSessionsLayoutDocument = new TypedDocumentString(`
     from
     to
   }
+  split
 }`) as unknown as TypedDocumentString<SetMinionSessionsLayoutMutation, SetMinionSessionsLayoutMutationVariables>;
 export const SetMinionSessionAddressDocument = new TypedDocumentString(`
     mutation SetMinionSessionAddress($id: ID!, $address: String) {

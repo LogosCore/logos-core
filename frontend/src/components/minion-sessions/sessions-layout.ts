@@ -98,13 +98,21 @@ export interface SessionsLayout {
   /** null: newest first (core's default). */
   sort: SessionSort | null
   filters: SessionFilter[]
+  /** The share of the page's height the list takes above the session; null: DEFAULT_SPLIT. */
+  split: number | null
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   columns: ["number", "addrs", "host", "user", "proc", "os", "lastSeen", "build"],
   sort: null,
   filters: [],
+  split: null,
 }
+
+/** Where the divider sits by default, and the range it keeps to (core's too). */
+export const DEFAULT_SPLIT = 0.6
+export const MIN_SPLIT = 0.1
+export const MAX_SPLIT = 0.9
 
 const isColumn = (id: string): id is SessionColumnId => SESSION_COLUMN_BY_ID.has(id)
 
@@ -125,12 +133,13 @@ export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | 
     if (!isColumn(f.column) || filters.some((g) => g.column === f.column)) continue
     filters.push(withoutNulls({ ...f, column: f.column }))
   }
-  return { columns: columns.length > 0 ? columns : DEFAULT_SESSIONS_LAYOUT.columns, sort, filters }
+  const split = stored.split != null ? Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, stored.split)) : null
+  return { columns: columns.length > 0 ? columns : DEFAULT_SESSIONS_LAYOUT.columns, sort, filters, split }
 }
 
 /** The layout as the mutation takes it. */
 export function sessionsLayoutInput(layout: SessionsLayout) {
-  return { columns: layout.columns, sort: layout.sort, filters: layout.filters }
+  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split }
 }
 
 function withoutNulls(f: SessionFilter): SessionFilter {

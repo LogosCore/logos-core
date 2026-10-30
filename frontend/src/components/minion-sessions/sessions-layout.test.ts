@@ -33,17 +33,22 @@ describe("layout", () => {
     expect(layout.sort).toBeNull()
     expect(layout.filters).toEqual([{ column: "os", op: "IN", values: ["linux"] }])
     expect(readSessionsLayout(null)).toBe(DEFAULT_SESSIONS_LAYOUT)
-    expect(readSessionsLayout({ columns: ["gone"], sort: null, filters: [] }).columns).toEqual(DEFAULT_SESSIONS_LAYOUT.columns)
+    expect(readSessionsLayout({ columns: ["gone"], sort: null, filters: [], split: null }).columns).toEqual(DEFAULT_SESSIONS_LAYOUT.columns)
+  })
+
+  test("a stored split keeps to its range", () => {
+    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: 0.02 }).split).toBe(0.1)
+    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: 0.45 }).split).toBe(0.45)
   })
 
   test("columns move, show and hide; the last one stays", () => {
-    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [] }
+    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null }
     expect(moveColumn(l, "os", "number").columns).toEqual(["os", "number", "host"])
     expect(shiftColumn(l, "host", 1).columns).toEqual(["number", "os", "host"])
     expect(shiftColumn(l, "number", -1)).toBe(l)
     expect(toggleColumn(l, "pid").columns).toEqual(["number", "host", "os", "pid"])
     expect(toggleColumn(l, "host").columns).toEqual(["number", "os"])
-    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [] }
+    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null }
     expect(toggleColumn(one, "host")).toBe(one)
   })
 

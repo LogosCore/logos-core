@@ -129,19 +129,24 @@ type MinionSessionSort {
   direction: SortDirection!
 }
 
-# How the caller keeps the Sessions table, one for all operations: the
-# columns shown, in order, the sort and the filters.
+# How the caller keeps the Sessions page, one for all operations: the
+# table's columns, in order, its sort and filters, and where the divider
+# between the list and the session below sits.
 type MinionSessionsLayout {
   columns: [String!]!
   # null: newest first.
   sort: MinionSessionSort
   filters: [MinionSessionFilter!]!
+  # The share of the page's height the list takes, 0.1 to 0.9; null for the
+  # default.
+  split: Float
 }
 
 input MinionSessionsLayoutInput {
   columns: [String!]!
   sort: MinionSessionSortInput
   filters: [MinionSessionFilterInput!]!
+  split: Float
 }
 
 type MinionSessionEvent {

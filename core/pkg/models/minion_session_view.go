@@ -204,7 +204,17 @@ type MinionSessionsLayout struct {
 	Columns []string              `bson:"columns" json:"columns"`
 	Sort    *MinionSessionSort    `bson:"sort,omitempty" json:"sort,omitempty"`
 	Filters []MinionSessionFilter `bson:"filters,omitempty" json:"filters,omitempty"`
+	// Split is the share of the page's height the sessions list takes above
+	// the session it works with, MinSessionsSplit to MaxSessionsSplit; nil
+	// for the default.
+	Split *float64 `bson:"split,omitempty" json:"split,omitempty"`
 }
+
+// The range a layout's Split keeps to: neither half shrinks away.
+const (
+	MinSessionsSplit = 0.1
+	MaxSessionsSplit = 0.9
+)
 
 // Validate checks every column once, at least one, the sort and the filters.
 func (l MinionSessionsLayout) Validate() error {
@@ -228,6 +238,9 @@ func (l MinionSessionsLayout) Validate() error {
 	}
 	if len(l.Filters) > MaxSessionFilters {
 		return fmt.Errorf("layout: at most %d filters", MaxSessionFilters)
+	}
+	if l.Split != nil && (*l.Split < MinSessionsSplit || *l.Split > MaxSessionsSplit) {
+		return fmt.Errorf("layout: split is %g to %g", MinSessionsSplit, MaxSessionsSplit)
 	}
 	for _, f := range l.Filters {
 		if err := f.Validate(); err != nil {
