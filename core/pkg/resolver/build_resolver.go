@@ -341,18 +341,24 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	}
 	out.Commands = make([]*model.BuildCommand, len(s.Commands))
 	for i, c := range s.Commands {
-		mc := &model.BuildCommand{
-			ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
-			Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
-		}
-		for _, t := range s.Targets {
-			if c.For(t.ID) {
-				mc.Targets = append(mc.Targets, t.ID)
-			}
-		}
-		out.Commands[i] = mc
+		out.Commands[i] = toBuildCommandModel(*s, c)
 	}
 	return out
+}
+
+// toBuildCommandModel is one of a schema's commands, with the targets
+// whose builds can have it.
+func toBuildCommandModel(s protocol.BuildSchema, c protocol.BuildCommand) *model.BuildCommand {
+	mc := &model.BuildCommand{
+		ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
+		Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
+	}
+	for _, t := range s.Targets {
+		if c.For(t.ID) {
+			mc.Targets = append(mc.Targets, t.ID)
+		}
+	}
+	return mc
 }
 
 // toBuildFieldModels maps build fields. Build values are operation data

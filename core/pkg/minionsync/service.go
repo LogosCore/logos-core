@@ -7,8 +7,9 @@
 // sealed with those keys, opens a session with them (a hello straight under
 // the build id opens one with the build's own keys), and every message after
 // is sent under the session id. Under a session core records the check-in,
-// takes a hello again (a rehello) and get_tasks (no tasks wait yet); the
-// other task items are not built yet.
+// takes a hello again (a rehello), and runs the tasks operators gave it
+// (tasks.go): get_tasks, acks, results and cancels. File transfers (chunks)
+// are not built yet.
 package minionsync
 
 import (
@@ -73,10 +74,12 @@ type Service struct {
 	// reservations are the session ids reserved with builds, a first claim
 	// opens.
 	reservations repository.IMinionSessionReservationRepository
-	cache        cache.Cache
-	bus          eventbus.IEventBus
-	logger       *zap.Logger
-	now          func() time.Time
+	// tasks are what operators queue for sessions (tasks.go); nil takes none.
+	tasks  repository.IMinionTaskRepository
+	cache  cache.Cache
+	bus    eventbus.IEventBus
+	logger *zap.Logger
+	now    func() time.Time
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
@@ -364,8 +367,8 @@ func (s *Service) claimReserved(ctx context.Context, from *sender, peer string, 
 
 // underSession answers a message sent under a session id. Any message is a
 // check-in; a hello replaces what the session recorded (a rehello) and gets
-// the same session id back; a get_tasks is taken (no tasks wait yet). Other
-// items are not built yet.
+// the same session id back; acks and results are taken, a get_tasks gets the
+// tasks waiting, and cancels go with any reply (tasks.go).
 func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
 	// A schedule the message says (a sleep_update, or a rehello's) takes
 	// effect with this check-in: the last one that reads.
@@ -390,6 +393,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		return nil, fmt.Errorf("check in: %w", err)
 	}
 	var items []cbor.RawMessage
+	var wantTasks bool
+	var wantMax *uint64
 	for i, raw := range msg.Items {
 		var out []cbor.RawMessage
 		var err error
@@ -416,13 +421,35 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
 			}
 		case protocol.ItemGetTasks:
-			// The minion takes tasks. None are built yet, so none wait:
-			// nothing to answer.
-			var get protocol.GetTasksItem
-			if protocol.UnmarshalCBOR(raw, &get) != nil {
-				out, err = errItem(protocol.ErrItemBadMessage, "the get_tasks does not read", i)
-			} else if vErr := get.Validate(); vErr != nil {
-				out, err = errItem(protocol.ErrItemBadMessage, vErr.Error(), i)
+			// Answered after the other items (tasks.go): an ack or a result
+			// in the same message first stops those tasks being sent again.
+			get, gErr := readGetTasks(raw)
+			switch {
+			case gErr != nil:
+				out, err = errItem(protocol.ErrItemBadMessage, gErr.Error(), i)
+			case wantTasks:
+				out, err = errItem(protocol.ErrItemBadMessage, "one get_tasks per message", i)
+			default:
+				wantTasks, wantMax = true, get.Max
+			}
+		case protocol.ItemAck:
+			if s.tasks == nil {
+				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)
+				break
+			}
+			out, err = s.takeAck(ctx, session, raw, i)
+		case protocol.ItemResult:
+			if s.tasks == nil {
+				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)
+				break
+			}
+			out, err = s.takeResult(ctx, session, raw, i)
+		case protocol.ItemErr:
+			// The minion's word on an earlier item of core's (a cancel for a
+			// task it no longer has): noted, not answered.
+			var e protocol.ErrItem
+			if protocol.UnmarshalCBOR(raw, &e) == nil {
+				s.logger.Info("minion err", zap.String("session_id", session.SessionID.String()), zap.String("code", e.Code), zap.String("msg", e.Msg))
 			}
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
@@ -431,6 +458,21 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			return nil, err
 		}
 		items = append(items, out...)
+	}
+	if s.tasks != nil {
+		// Cancels go whenever core has them; tasks only when asked.
+		cancels, err := s.cancels(ctx, session)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, cancels...)
+		if wantTasks {
+			tasks, err := s.deliver(ctx, session, wantMax)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, tasks...)
+		}
 	}
 	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
 	return items, nil

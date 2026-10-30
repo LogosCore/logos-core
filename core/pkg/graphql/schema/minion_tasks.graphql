@@ -1,0 +1,88 @@
+# A command an operator gave a session's minion (docs:
+# contracts/minion-messages.md). It waits until the minion asks for tasks
+# at a check-in, is sent again until the minion acks it, streams its output
+# as it runs, and ends done, failed or cancelled. The team's: every member
+# of the session's operation sees a session's tasks, and who gave each.
+type MinionTask {
+  # The id it travels under.
+  id: ID!
+  sessionId: ID!
+  operationId: ID!
+  # One of the session's build's commands (minionSessionCommands).
+  command: String!
+  # Its params' values as the operator gave them; the task carries them
+  # with the params' defaults filled in.
+  args: JSON
+  issuedBy: ID!
+  # The operator's username; null when the user is gone.
+  issuedByName: String
+  # QUEUED (waiting for the minion to ask), SENT, RUNNING (output coming),
+  # DONE (the minion did it), FAILED or CANCELLED.
+  state: String!
+  queuedAt: String!
+  # When it first went out, and how many times it did.
+  sentAt: String
+  sendCount: Int!
+  # When the minion acked it, or its first output came.
+  ackedAt: String
+  startedAt: String
+  doneAt: String
+  # When an operator asked to stop it; a cancel goes with every reply to the
+  # minion until it ends.
+  cancelRequestedAt: String
+  # What the minion said at the end: whether it did what the task asked,
+  # the exit code of a process it ran, and what went wrong.
+  ok: Boolean
+  exit: Int
+  err: String
+  # The output: the parts joined in order, read as UTF-8 (bytes that are not
+  # stand as U+FFFD; outputUtf8 says whether all were). At most 4 MiB is
+  # kept (outputTruncated).
+  output: String!
+  outputSize: Int!
+  outputUtf8: Boolean!
+  outputTruncated: Boolean!
+  # The command's structured output (ls entries, say): the parts' data
+  # joined, arrays appended.
+  data: JSON
+}
+
+# A page of a session's tasks, newest first.
+type MinionTaskPage {
+  tasks: [MinionTask!]!
+  # Where the next (older) page starts; null on the last.
+  before: String
+}
+
+extend type Query {
+  # A session's tasks, newest first, at most last (50 by default, 200 at
+  # most), before a page's cursor. Needs at least viewer.
+  minionTasks(sessionId: ID!, last: Int, before: String): MinionTaskPage!
+    @hasPermission(permission: "operation:member")
+
+  # The commands a session's minion takes: its build's, with what a task of
+  # each takes. Needs at least viewer.
+  minionSessionCommands(sessionId: ID!): [BuildCommand!]!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Mutation {
+  # Gives a session's minion a command: args are checked against the
+  # command's params and the task waits for the minion's next check-in.
+  # Needs operator; agent API keys are rejected.
+  queueMinionTask(sessionId: ID!, command: String!, args: JSON): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Stops a task: one not sent yet is cancelled at once, one sent is asked
+  # to stop (it still sends its end). Nothing for one that ended. Needs
+  # operator.
+  cancelMinionTask(id: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Subscription {
+  # A session's tasks as they change: queued, sent, output, ended. Needs at
+  # least viewer.
+  minionTaskChanged(sessionId: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+}

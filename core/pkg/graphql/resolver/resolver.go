@@ -51,6 +51,7 @@ type Resolver struct {
 	ChannelEndpointResolver   resolver.IChannelEndpointResolver
 	BuildResolver             resolver.IBuildResolver
 	MinionSessionResolver     resolver.IMinionSessionResolver
+	MinionTaskResolver        resolver.IMinionTaskResolver
 
 	// Subscription dependencies — event bus for real-time events,
 	// repos for fetching full entities to include in event payloads.

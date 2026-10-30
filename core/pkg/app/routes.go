@@ -199,7 +199,7 @@ func (a *App) mountGraphQLRoutes(v1 *gin.RouterGroup, res *resolvers) {
 		res.user, res.operation, res.session, res.wikiDoc, res.wikiVisit,
 		res.credential, res.hash, res.host, res.task, res.timeline,
 		res.apiKey, res.agentKey, res.focus, res.agentAction, res.module, res.skill, res.endpoint, res.builds,
-		res.minionSessions,
+		res.minionSessions, res.minionTasks,
 		a.eventBus,
 		a.repos.User, a.repos.Operation, a.repos.Session, a.repos.WikiDocument,
 		a.repos.Credential, a.repos.Hash, a.repos.Host, a.repos.Task, a.repos.ModuleRegistry,

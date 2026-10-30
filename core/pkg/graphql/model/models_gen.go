@@ -595,6 +595,37 @@ type MinionSessionsLayoutInput struct {
 	Split   *float64                    `json:"split,omitempty"`
 }
 
+type MinionTask struct {
+	ID                string  `json:"id"`
+	SessionID         string  `json:"sessionId"`
+	OperationID       string  `json:"operationId"`
+	Command           string  `json:"command"`
+	Args              any     `json:"args,omitempty"`
+	IssuedBy          string  `json:"issuedBy"`
+	IssuedByName      *string `json:"issuedByName,omitempty"`
+	State             string  `json:"state"`
+	QueuedAt          string  `json:"queuedAt"`
+	SentAt            *string `json:"sentAt,omitempty"`
+	SendCount         int     `json:"sendCount"`
+	AckedAt           *string `json:"ackedAt,omitempty"`
+	StartedAt         *string `json:"startedAt,omitempty"`
+	DoneAt            *string `json:"doneAt,omitempty"`
+	CancelRequestedAt *string `json:"cancelRequestedAt,omitempty"`
+	Ok                *bool   `json:"ok,omitempty"`
+	Exit              *int    `json:"exit,omitempty"`
+	Err               *string `json:"err,omitempty"`
+	Output            string  `json:"output"`
+	OutputSize        int     `json:"outputSize"`
+	OutputUtf8        bool    `json:"outputUtf8"`
+	OutputTruncated   bool    `json:"outputTruncated"`
+	Data              any     `json:"data,omitempty"`
+}
+
+type MinionTaskPage struct {
+	Tasks  []*MinionTask `json:"tasks"`
+	Before *string       `json:"before,omitempty"`
+}
+
 type ModuleAction struct {
 	Name              string         `json:"name"`
 	Label             string         `json:"label"`

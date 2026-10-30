@@ -94,6 +94,11 @@ const (
 	TopicMinionSessionCreated Topic = "minion_session.created"
 	TopicMinionSessionUpdated Topic = "minion_session.updated"
 
+	// Minion task events — a task was queued, went out, got output, ended or
+	// was asked to stop (pkg/minionsync and the MinionTaskResolver). Power a
+	// session's work pane tab; subscribers refetch the task.
+	TopicMinionTaskChanged Topic = "minion_task.changed"
+
 	// Module lifecycle events — emitted by the lifecycle Service + reaper
 	// (control plane) and the ModuleResolver (admin remove). Power the
 	// real-time Modules admin page; subscribers refetch the changed row via

@@ -298,6 +298,17 @@ func NewMinionSessionUpdatedEvent(p MinionSessionEventPayload) Event {
 	return NewEvent(TopicMinionSessionUpdated, SystemActor(), p)
 }
 
+// MinionTaskEventPayload is the payload for minion task events.
+type MinionTaskEventPayload struct {
+	TaskID      string
+	SessionID   string
+	OperationID string
+}
+
+func NewMinionTaskChangedEvent(p MinionTaskEventPayload) Event {
+	return NewEvent(TopicMinionTaskChanged, SystemActor(), p)
+}
+
 // --- Task event payloads ---
 
 // TaskEventPayload is the payload for every task topic. The bus stays
