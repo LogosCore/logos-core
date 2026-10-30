@@ -2,6 +2,7 @@ package models
 
 import (
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -205,10 +206,10 @@ type MinionHello struct {
 	X         map[string]any `bson:"x,omitempty" json:"x,omitempty"`
 }
 
-// MinionHelloFrom keeps a hello's fields.
+// MinionHelloFrom keeps a hello's fields; proc as a process name.
 func MinionHelloFrom(h protocol.HelloItem) MinionHello {
 	return MinionHello{
-		PID: h.PID, OS: h.OS, Arch: h.Arch, Host: h.Host, User: h.User, Domain: h.Domain, Proc: h.Proc,
+		PID: h.PID, OS: h.OS, Arch: h.Arch, Host: h.Host, User: h.User, Domain: h.Domain, Proc: ProcessName(h.Proc),
 		Integrity: h.Integrity, Addrs: h.Addrs, Version: h.Version, X: h.X,
 	}
 }
@@ -253,4 +254,15 @@ func addressRank(s string) int {
 		return 0
 	}
 	return 1
+}
+
+// ProcessName is a hello's proc as the contract has it, the process's name
+// (its image's file name): the last part of a path, in either OS's form,
+// for agents that send the whole path. A path told operators only where
+// the Downloads folder was, cut off in the column.
+func ProcessName(proc string) string {
+	if i := strings.LastIndexAny(proc, `/\`); i >= 0 && i < len(proc)-1 {
+		return proc[i+1:]
+	}
+	return proc
 }

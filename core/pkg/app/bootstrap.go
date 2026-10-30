@@ -430,6 +430,8 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		"session lost times": repos.MinionSession.BackfillLostAt,
 		// Sessions had no description of their own before.
 		"session descriptions": repos.MinionSession.BackfillDescriptions,
+		// A hello's proc was kept as sent, a path from some agents.
+		"session process names": repos.MinionSession.BackfillProcessNames,
 	} {
 		if n, err := backfill(ctx); err != nil {
 			l.Warn(name+" backfill failed", zap.Error(err))

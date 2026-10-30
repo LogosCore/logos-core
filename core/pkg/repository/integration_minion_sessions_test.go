@@ -734,3 +734,41 @@ func TestIntegrationMinionSessionMarks(t *testing.T) {
 		t.Fatalf("a second sweep removed %d", n)
 	}
 }
+
+// Process paths stored before core kept a hello's proc as a name become
+// names, in either OS's form; a name, or nothing, stays.
+func TestIntegrationMinionSessionProcessNames(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	now := time.Now().UTC()
+	op := uuid.New()
+	want := map[string]string{
+		"/home/user/Downloads/bob-linux-elf": "bob-linux-elf",
+		`C:\Users\svc\AppData\updater.exe`:   "updater.exe",
+		"svchost.exe":                        "svchost.exe",
+		"":                                   "",
+	}
+	ids := map[uuid.UUID]string{}
+	i := 0
+	for proc := range want {
+		id := uuid.New()
+		ids[id] = proc
+		i++
+		s := &models.MinionSession{SessionID: id, OperationID: op, Number: int64(i), CreatedAt: now, Hello: models.MinionHello{Proc: proc}}
+		if err := repo.Insert(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := repo.BackfillProcessNames(ctx); err != nil || n != 2 {
+		t.Fatalf("backfilled %d: %v", n, err)
+	}
+	for id, proc := range ids {
+		if s, _ := repo.FindBySessionID(ctx, id); s.Hello.Proc != want[proc] {
+			t.Errorf("%q became %q, want %q", proc, s.Hello.Proc, want[proc])
+		}
+	}
+	if n, _ := repo.BackfillProcessNames(ctx); n != 0 {
+		t.Fatalf("a second run changed %d", n)
+	}
+}

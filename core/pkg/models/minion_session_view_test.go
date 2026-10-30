@@ -96,3 +96,17 @@ func TestValidateSessionMark(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessName(t *testing.T) {
+	for in, want := range map[string]string{
+		"/home/user/Downloads/bob-linux-elf": "bob-linux-elf",
+		`C:\Windows\System32\svchost.exe`:    "svchost.exe",
+		"bob-linux-elf":                      "bob-linux-elf",
+		"/odd/trailing/":                     "/odd/trailing/",
+		"":                                   "",
+	} {
+		if got := ProcessName(in); got != want {
+			t.Errorf("ProcessName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

@@ -62,6 +62,9 @@ type IMinionSessionRepository interface {
 	SessionIDs(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, limit int64) ([]uuid.UUID, error)
 	// OwnSessionIDs keeps the ids that are the operation's sessions.
 	OwnSessionIDs(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID) ([]uuid.UUID, error)
+	// BackfillProcessNames turns the process paths stored before core kept
+	// a hello's proc as a name into names (models.ProcessName).
+	BackfillProcessNames(ctx context.Context) (int64, error)
 	// SetDescription replaces a session's description; IsNotFound when
 	// there is none.
 	SetDescription(ctx context.Context, sessionID uuid.UUID, description string) error
@@ -364,6 +367,20 @@ func (r *minionSessionRepository) BackfillDescriptions(ctx context.Context) (int
 	res, err := r.coll.UpdateAll(ctx,
 		bson.M{"description_set": bson.M{"$exists": false}, "build_description": bson.M{"$nin": bson.A{nil, ""}}},
 		bson.A{bson.M{"$set": bson.M{"description": "$build_description", "description_set": true}}})
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) BackfillProcessNames(ctx context.Context) (int64, error) {
+	// The last part after a / and then after a \, as models.ProcessName.
+	last := func(in any, sep string) bson.M {
+		return bson.M{"$arrayElemAt": bson.A{bson.M{"$split": bson.A{in, sep}}, -1}}
+	}
+	res, err := r.coll.UpdateAll(ctx,
+		bson.M{"hello.proc": bson.M{"$regex": `[/\\][^/\\]`}},
+		bson.A{bson.M{"$set": bson.M{"hello.proc": last(last("$hello.proc", "/"), `\`)}}})
 	if err != nil {
 		return 0, err
 	}
