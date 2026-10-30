@@ -87,7 +87,7 @@ func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models
 func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, at time.Time, peer string) error {
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
-			f.rows[i].LastSeenAt, f.rows[i].ExpiresAt = &at, nil
+			f.rows[i].LastSeenAt, f.rows[i].PurgeAt = &at, nil
 			if peer != "" {
 				f.rows[i].PeerAddress = peer
 			}
@@ -264,8 +264,8 @@ func TestStage(t *testing.T) {
 		t.Fatalf("staging %+v", st)
 	}
 
-	// The same message again is a replay: dropped, nothing answered.
-	if reply, err := r.send(t, id, stage); err != nil || reply != nil {
+	// The same message again is a replay: refused, like any failure.
+	if reply, err := r.send(t, id, stage); !errors.Is(err, ErrReplayed) || reply != nil {
 		t.Fatalf("replay: %x %v", reply, err)
 	}
 }
@@ -364,7 +364,7 @@ func TestHelloUnderTemporaryID(t *testing.T) {
 	var stored protocol.AES256CBCHMACSHA256Material
 	_ = json.Unmarshal(s.Crypto.Material, &stored)
 	if s.SessionID != sid || s.Number != 1 || !s.Staged || s.BuildID != r.build.BuildID || s.OperationID != r.build.OperationID ||
-		s.Target != "linux-elf" || s.Hello.Host != "web01" || s.Hello.PID != 4242 || s.ExpiresAt == nil ||
+		s.Target != "linux-elf" || s.Hello.Host != "web01" || s.Hello.PID != 4242 || s.PurgeAt == nil ||
 		!bytes.Equal(stored.EncKey, keys.EncKey) {
 		t.Fatalf("session %+v", s)
 	}
@@ -404,7 +404,7 @@ func TestUnderSession(t *testing.T) {
 	if reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID()); err != nil || reply != nil {
 		t.Fatalf("check-in: %x %v", reply, err)
 	}
-	if s := r.sessions.rows[0]; s.LastSeenAt == nil || s.ExpiresAt != nil {
+	if s := r.sessions.rows[0]; s.LastSeenAt == nil || s.PurgeAt != nil {
 		t.Fatalf("after check-in %+v", s)
 	}
 
@@ -493,6 +493,38 @@ func TestSessionPeerAddress(t *testing.T) {
 	if got := r.sessions.rows[0].PeerAddress; got != "198.51.100.2" {
 		t.Fatalf("after a check-in from elsewhere: %q", got)
 	}
+}
+
+// A closed session, and one that expired waiting for its first check-in,
+// still open: their minion is told, sealed, to start over.
+func TestClosedSession(t *testing.T) {
+	r := newRig(t)
+	reply, _ := r.send(t, protocol.NewMessageID(), hello("web01"))
+	sid := sessionID(t, r.open(t, reply))
+	closedErr := func(name string) {
+		t.Helper()
+		reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 1})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var e protocol.ErrItem
+		msg := r.openUnder(t, sid, r.keys, reply)
+		if len(msg.Items) != 1 || protocol.UnmarshalCBOR(msg.Items[0], &e) != nil || e.Code != protocol.ErrItemSessionClosed || e.Item != nil {
+			t.Fatalf("%s: %+v", name, msg)
+		}
+		if r.sessions.rows[0].LastSeenAt != nil {
+			t.Fatalf("%s: a closed session checked in", name)
+		}
+	}
+
+	// Never checked in, a day and more ago.
+	r.sessions.rows[0].CreatedAt = time.Now().Add(-25 * time.Hour)
+	closedErr("expired")
+
+	// Closed by core.
+	closed := time.Now()
+	r.sessions.rows[0].CreatedAt, r.sessions.rows[0].ClosedAt = time.Now(), &closed
+	closedErr("closed")
 }
 
 // A deleted build's minions open no new sessions, staged or not.

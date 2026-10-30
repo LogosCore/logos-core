@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // The Sessions table's sort and filters, against a real server: keyset pages
@@ -222,7 +224,7 @@ func TestIntegrationMinionSessionPeers(t *testing.T) {
 	op, sid := uuid.New(), uuid.New()
 	t0 := time.Now().UTC().Truncate(time.Millisecond)
 	expires := t0.Add(time.Hour)
-	if err := repo.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: op, Number: 1, CreatedAt: t0, ExpiresAt: &expires}); err != nil {
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: op, Number: 1, CreatedAt: t0, PurgeAt: &expires}); err != nil {
 		t.Fatal(err)
 	}
 	at := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
@@ -235,8 +237,8 @@ func TestIntegrationMinionSessionPeers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.PeerAddress != "198.51.100.2" || s.ExpiresAt != nil || !s.LastSeenAt.Equal(at(4)) {
-		t.Fatalf("session %q expires=%v last seen %v", s.PeerAddress, s.ExpiresAt, s.LastSeenAt)
+	if s.PeerAddress != "198.51.100.2" || s.PurgeAt != nil || !s.LastSeenAt.Equal(at(4)) {
+		t.Fatalf("session %q expires=%v last seen %v", s.PeerAddress, s.PurgeAt, s.LastSeenAt)
 	}
 	if len(s.Peers) != 2 {
 		t.Fatalf("peers %+v", s.Peers)
@@ -265,5 +267,70 @@ func TestIntegrationMinionSessionPeers(t *testing.T) {
 	}
 	if n, _ := repo.CountByOperationID(ctx, op, q); n != 1 {
 		t.Errorf("filter on the history: %d", n)
+	}
+}
+
+// The list holds open sessions only; a closed one stays as a tombstone, its
+// keys there for the minion to be told, until MongoDB purges it.
+func TestIntegrationMinionSessionTombstones(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op := uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	seen := now.Add(-time.Hour)
+	insert := func(n int64, created time.Time, lastSeen *time.Time, os string) uuid.UUID {
+		t.Helper()
+		s := &models.MinionSession{SessionID: uuid.New(), OperationID: op, Number: n, CreatedAt: created, LastSeenAt: lastSeen,
+			Hello: models.MinionHello{OS: os}}
+		if err := repo.Insert(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+		return s.SessionID
+	}
+	insert(1, now.Add(-48*time.Hour), &seen, "linux") // checked in long ago: open
+	insert(2, now.Add(-48*time.Hour), nil, "windows") // expired waiting
+	insert(3, now.Add(-time.Hour), nil, "darwin")     // still waiting: open
+	q := MinionSessionQuery{Sort: models.MinionSessionSort{Column: "number"}}
+	list := func() []int64 {
+		page, err := repo.FindByOperationIDWithCursor(ctx, op, q, nil, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return numbers(page)
+	}
+	if got := list(); !slices.Equal(got, []int64{1, 3}) {
+		t.Fatalf("open sessions %v", got)
+	}
+	if values, _ := repo.Values(ctx, op, "os"); !slices.Equal(values, []string{"darwin", "linux"}) {
+		t.Errorf("values of open sessions %v", values)
+	}
+
+	if err := repo.CloseByOperationID(ctx, op, models.MinionSessionClosedOperationDeleted, now); err != nil {
+		t.Fatal(err)
+	}
+	if got := list(); len(got) != 0 {
+		t.Fatalf("after closing: %v", got)
+	}
+	tomb, err := repo.FindBySessionID(ctx, insert(4, now, &seen, "linux"))
+	if err != nil || tomb.Closed(now) {
+		t.Fatalf("a new session after the close: %+v %v", tomb, err)
+	}
+	page, _ := repo.FindByOperationIDWithCursor(ctx, op, MinionSessionQuery{Sort: q.Sort}, nil, 50, true)
+	if len(page) != 1 {
+		t.Fatalf("listed %v", numbers(page))
+	}
+	n, _ := repo.CountByOperationID(ctx, op, q)
+	if n != 1 {
+		t.Errorf("count %d", n)
+	}
+	raw, _ := db.Collection(minionSessionCollection).(*database.QmgoCollection).RawCollection()
+	var closed models.MinionSession
+	if err := raw.FindOne(ctx, bson.M{"operation_id": op, "number": 1}).Decode(&closed); err != nil {
+		t.Fatal(err)
+	}
+	if closed.ClosedAt == nil || closed.CloseReason != models.MinionSessionClosedOperationDeleted || closed.PurgeAt == nil ||
+		!closed.PurgeAt.Equal(now.Add(models.MinionSessionTombstone)) || !closed.Closed(now) {
+		t.Errorf("tombstone %+v", closed)
 	}
 }

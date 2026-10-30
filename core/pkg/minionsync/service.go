@@ -31,6 +31,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// ErrReplayed means the message's id was seen before: a captured message
+// sent again. The sync call answers 409, and the channel what any failure
+// gets, so whoever sent it learns nothing.
+var ErrReplayed = errors.New("the message was seen before")
+
 // ErrUnopened means the message did not open: no keys for its id, or a
 // frame that fails its checks. The sync call answers 422, and nothing more:
 // core cannot tell who sent it.
@@ -105,12 +110,16 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 	if err != nil {
 		s.logger.Warn("minion replay check failed, handling the message anyway", zap.Error(err))
 	} else if !fresh {
-		s.logger.Info("minion message replayed, dropped", zap.String("id", id))
-		return nil, nil
+		s.logger.Info("minion message replayed, refused", zap.String("id", id))
+		return nil, ErrReplayed
 	}
 
 	var items []cbor.RawMessage
 	switch {
+	case from.session != nil && from.session.Closed(s.now()):
+		// A tombstone: the one thing to tell its minion.
+		s.logger.Info("minion message under a closed session", zap.String("session_id", id))
+		items, err = errMessage(protocol.ErrItemSessionClosed, "the session is closed: start over")
 	case from.session != nil:
 		items, err = s.underSession(ctx, from.session, peer, msg)
 	case from.staging != nil:
@@ -202,12 +211,14 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
 	}
 	b, now := from.build, s.now()
-	expires := now.Add(repository.MinionSessionCheckInWindow)
+	// Until its first check-in a session is purged after the day's wait and
+	// its tombstone's time.
+	purge := now.Add(models.MinionSessionCheckInWindow + models.MinionSessionTombstone)
 	session := &models.MinionSession{
 		SessionID: uuid.New(), OperationID: b.OperationID, BuildID: b.BuildID, BuildDescription: b.Description,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.Addrs),
-		CreatedAt: now, ExpiresAt: &expires,
+		CreatedAt: now, PurgeAt: &purge,
 	}
 	if peer != "" {
 		session.PeerAddress = peer
@@ -354,6 +365,15 @@ func (f *sender) readKeys() error {
 		return fmt.Errorf("read the keys: %w", err)
 	}
 	return nil
+}
+
+// errMessage is a reply's one err item about the whole message.
+func errMessage(code, msg string) ([]cbor.RawMessage, error) {
+	data, err := protocol.MarshalCBOR(protocol.ErrItem{T: protocol.ItemErr, Code: code, Msg: msg})
+	if err != nil {
+		return nil, err
+	}
+	return []cbor.RawMessage{data}, nil
 }
 
 // errItem is a reply's one err item.

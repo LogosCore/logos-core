@@ -180,6 +180,9 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 		case errors.Is(err, minionsync.ErrUnopened):
 			c.JSON(http.StatusUnprocessableEntity, responses.NewErrorResponse("the message does not open"))
 			return
+		case errors.Is(err, minionsync.ErrReplayed):
+			c.JSON(http.StatusConflict, responses.NewErrorResponse("the message was seen before"))
+			return
 		case err != nil:
 			log.Error("channel sync: handle the minion's message", zap.String("build_id", in.BuildID), zap.Error(err))
 			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)

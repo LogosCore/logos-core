@@ -13,8 +13,11 @@ import (
 // (docs: contracts/minion-messages.md): under a temporary id with the keys
 // its stage got, or straight under the build id with the build's own keys.
 // Every message after the hello is sent under the session id and sealed with
-// the session's keys. A session waits a day for its first check-in
-// (ExpiresAt, a TTL index); after one it stays.
+// the session's keys. A session waits a day for its first check-in; after
+// one it stays until core closes it. A closed session (one that expired
+// waiting, or of a deleted operation) is a tombstone: its keys are kept for
+// MinionSessionTombstone so its minion can be told it is closed, then
+// MongoDB removes it (PurgeAt, a TTL index).
 type MinionSession struct {
 	field.DefaultField `bson:",inline"`
 
@@ -55,9 +58,32 @@ type MinionSession struct {
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
-	// ExpiresAt is when MongoDB removes a session nobody checked in to;
-	// cleared by the first check-in.
-	ExpiresAt *time.Time `bson:"expires_at,omitempty" json:"-"`
+	// ClosedAt is when core closed the session, and CloseReason why
+	// (MinionSessionClosedOperationDeleted); nil while it is open. A session
+	// that expired waiting for its first check-in is closed too, without
+	// these set (Closed tells).
+	ClosedAt    *time.Time `bson:"closed_at,omitempty" json:"closed_at,omitempty"`
+	CloseReason string     `bson:"close_reason,omitempty" json:"close_reason,omitempty"`
+	// PurgeAt is when MongoDB removes the session: a tombstone's end. Set
+	// from the start (the day's wait and the tombstone's 30 days), unset by
+	// the first check-in, set again when core closes it.
+	PurgeAt *time.Time `bson:"purge_at,omitempty" json:"-"`
+}
+
+// How long a session waits for its first check-in, and how long core keeps
+// a closed session's keys to tell its minion so.
+const (
+	MinionSessionCheckInWindow = 24 * time.Hour
+	MinionSessionTombstone     = 30 * 24 * time.Hour
+)
+
+// Why core closed a session.
+const MinionSessionClosedOperationDeleted = "operation_deleted"
+
+// Closed reports whether the session is closed at now: closed by core, or
+// expired waiting for its first check-in.
+func (s *MinionSession) Closed(now time.Time) bool {
+	return s.ClosedAt != nil || (s.LastSeenAt == nil && now.Sub(s.CreatedAt) >= MinionSessionCheckInWindow)
 }
 
 // MaxSessionPeers caps MinionSession.Peers.

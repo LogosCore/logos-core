@@ -303,10 +303,11 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 		}
 	}
 
-	// Cascade delete: remove the operation's minion sessions
+	// Cascade: close the operation's minion sessions. Their tombstones stay
+	// a while, so their minions are told the session is closed.
 	if r.sessionRepo != nil {
-		if err := r.sessionRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
-			return false, fmt.Errorf("failed to delete operation's minion sessions: %w", err)
+		if err := r.sessionRepo.CloseByOperationID(ctx, op.OperationID, models.MinionSessionClosedOperationDeleted, time.Now().UTC()); err != nil {
+			return false, fmt.Errorf("failed to close operation's minion sessions: %w", err)
 		}
 	}
 

@@ -144,6 +144,10 @@ func TestChannelSync_MinionAnswers(t *testing.T) {
 	if w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext); w.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("unopened: %d %s", w.Code, w.Body.String())
 	}
+	m = &fakeMinions{err: minionsync.ErrReplayed}
+	if w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext); w.Code != http.StatusConflict {
+		t.Fatalf("replayed: %d %s", w.Code, w.Body.String())
+	}
 	m = &fakeMinions{err: errors.New("mongo down")}
 	if w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext); w.Code != http.StatusInternalServerError {
 		t.Fatalf("failure: %d", w.Code)

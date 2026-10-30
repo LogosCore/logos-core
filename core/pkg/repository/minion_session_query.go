@@ -43,11 +43,20 @@ func (q MinionSessionQuery) Validate() error {
 // minionSessionFilter is the Mongo filter of q at now: the operation, the
 // search and each column filter.
 func minionSessionFilter(operationID uuid.UUID, q MinionSessionQuery, now time.Time) bson.M {
-	and := bson.A{minionSessionListFilter(operationID, q.Search)}
+	and := bson.A{minionSessionListFilter(operationID, q.Search), openSessions(now)}
 	for _, f := range q.Filters {
 		and = append(and, columnFilter(f, now))
 	}
 	return bson.M{"$and": and}
+}
+
+// openSessions keeps out closed ones (models.MinionSession.Closed): the
+// tombstones, and those that expired waiting for their first check-in.
+func openSessions(now time.Time) bson.M {
+	return bson.M{"closed_at": nil, "$or": bson.A{
+		bson.M{"last_seen_at": bson.M{"$ne": nil}},
+		bson.M{"created_at": bson.M{"$gt": now.Add(-models.MinionSessionCheckInWindow)}},
+	}}
 }
 
 // columnFilter is one validated filter as a Mongo condition. A missing value

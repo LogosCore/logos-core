@@ -22,10 +22,6 @@ const (
 	minionSessionCounterCollection = "minion_session_counters"
 )
 
-// MinionSessionCheckInWindow is how long a session waits for its first
-// check-in.
-const MinionSessionCheckInWindow = 24 * time.Hour
-
 // IMinionSessionRepository keeps minion sessions (models.MinionSession).
 type IMinionSessionRepository interface {
 	// NextNumber reserves the operation's next session number: 1, 2, 3, …
@@ -50,7 +46,9 @@ type IMinionSessionRepository interface {
 	// Values are the distinct values an operation's sessions have in a
 	// column, sorted; missing values are left out.
 	Values(ctx context.Context, operationID uuid.UUID, column string) ([]string, error)
-	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
+	// CloseByOperationID closes an operation's sessions (a tombstone each)
+	// and forgets its session numbers.
+	CloseByOperationID(ctx context.Context, operationID uuid.UUID, reason string, at time.Time) error
 }
 
 type minionSessionRepository struct{ coll, counters database.Collection }
@@ -60,8 +58,8 @@ func NewMinionSessionRepository(db database.Database) IMinionSessionRepository {
 		{Key: []string{"session_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "number"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "-created_at", "-_id"}},
-		// A document without expires_at (checked in) never expires.
-		{Key: []string{"expires_at"}, IndexOptions: new(options.IndexOptions).SetExpireAfterSeconds(0)},
+		// A session without purge_at (checked in, open) stays.
+		{Key: []string{"purge_at"}, IndexOptions: new(options.IndexOptions).SetExpireAfterSeconds(0)},
 	})
 	db.EnsureIndexes(context.Background(), minionSessionCounterCollection, []opts.IndexModel{
 		{Key: []string{"operation_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
@@ -103,7 +101,7 @@ func (r *minionSessionRepository) FindBySessionID(ctx context.Context, sessionID
 func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time, peer string) error {
 	if peer == "" {
 		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
-			bson.M{"$set": bson.M{"last_seen_at": at}, "$unset": bson.M{"expires_at": ""}})
+			bson.M{"$set": bson.M{"last_seen_at": at}, "$unset": bson.M{"purge_at": ""}})
 	}
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(at, peer))
 }
@@ -143,7 +141,7 @@ func checkInPipeline(at time.Time, peer string) bson.A {
 				}},
 			}},
 		}},
-		bson.M{"$unset": "expires_at"},
+		bson.M{"$unset": "purge_at"},
 	}
 }
 
@@ -215,7 +213,7 @@ func (r *minionSessionRepository) Values(ctx context.Context, operationID uuid.U
 	if err != nil {
 		return nil, err
 	}
-	found, err := raw.Distinct(ctx, col.Field, bson.M{"operation_id": operationID})
+	found, err := raw.Distinct(ctx, col.Field, bson.M{"$and": bson.A{bson.M{"operation_id": operationID}, openSessions(time.Now().UTC())}})
 	if err != nil {
 		return nil, err
 	}
@@ -234,8 +232,10 @@ func (r *minionSessionRepository) Values(ctx context.Context, operationID uuid.U
 	return out, nil
 }
 
-func (r *minionSessionRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
-	if _, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID}); err != nil {
+func (r *minionSessionRepository) CloseByOperationID(ctx context.Context, operationID uuid.UUID, reason string, at time.Time) error {
+	if _, err := r.coll.UpdateAll(ctx, bson.M{"operation_id": operationID, "closed_at": nil}, bson.M{"$set": bson.M{
+		"closed_at": at, "close_reason": reason, "purge_at": at.Add(models.MinionSessionTombstone),
+	}}); err != nil {
 		return err
 	}
 	_, err := r.counters.RemoveAll(ctx, bson.M{"operation_id": operationID})
