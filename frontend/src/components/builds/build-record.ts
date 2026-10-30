@@ -49,6 +49,7 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
       values: c.values,
     })),
     ...(b.crypto ? { crypto: b.crypto } : {}),
+    ...(b.persistedSession ? { persisted_session: b.persistedSession } : {}),
   }
 }
 

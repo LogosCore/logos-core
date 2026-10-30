@@ -42,12 +42,15 @@ type minionSessionResolver struct {
 	operationRepo repository.IOperationRepository
 	userRepo      repository.IUserRepository
 	preferences   repository.IUserPreferencesRepository
+	reservations  repository.IMinionSessionReservationRepository
 	bus           eventbus.IEventBus
 }
 
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,
-	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository, bus eventbus.IEventBus) IMinionSessionResolver {
-	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences, bus: bus}
+	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
+	reservations repository.IMinionSessionReservationRepository, bus eventbus.IEventBus) IMinionSessionResolver {
+	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
+		reservations: reservations, bus: bus}
 }
 
 // viewer authorizes a viewer of the operation.
@@ -162,7 +165,7 @@ func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*
 	}
 	s, err := r.sessions.FindBySessionID(ctx, sid)
 	if repository.IsNotFound(err) {
-		return nil, nil
+		return r.reservation(ctx, sid)
 	}
 	if err != nil {
 		return nil, err
@@ -171,6 +174,27 @@ func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*
 		return nil, err
 	}
 	return toMinionSessionModel(s), nil
+}
+
+// reservation is a session reserved with a build, not claimed yet, as a
+// RESERVED session: its ids and nothing else.
+func (r *minionSessionResolver) reservation(ctx context.Context, sid uuid.UUID) (*model.MinionSession, error) {
+	if r.reservations == nil {
+		return nil, nil
+	}
+	res, err := r.reservations.FindBySessionID(ctx, sid)
+	if repository.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.viewer(ctx, res.OperationID.String()); err != nil {
+		return nil, err
+	}
+	return &model.MinionSession{ID: res.SessionID.String(), State: "RESERVED", OperationID: res.OperationID.String(),
+		BuildID: res.BuildID.String(), Persisted: true, Addrs: []string{}, Peers: []*model.MinionSessionPeer{},
+		Restarts: []*model.MinionSessionRestart{}, CreatedAt: res.CreatedAt.Format(time.RFC3339)}, nil
 }
 
 func (r *minionSessionResolver) MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error) {
@@ -304,7 +328,7 @@ func (r *minionSessionResolver) Load(ctx context.Context, sessionID string) *mod
 func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	h := s.Hello
 	out := &model.MinionSession{
-		ID: s.SessionID.String(), Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
+		ID: s.SessionID.String(), State: sessionState(s), Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
 		BuildDescription: s.BuildDescription, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
@@ -334,4 +358,11 @@ func toSessionRestartModels(restarts []models.MinionSessionRestart) []*model.Min
 			Host: strPtr(r.Host), BuildID: r.BuildID.String()}
 	}
 	return out
+}
+
+func sessionState(s *models.MinionSession) string {
+	if s.Closed(time.Now().UTC()) {
+		return "CLOSED"
+	}
+	return "OPEN"
 }

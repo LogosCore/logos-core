@@ -221,6 +221,37 @@ describe("readBuildJson", () => {
   })
 })
 
+describe("persisted_session", () => {
+  const persisting = factoryKindsByName([{ moduleName: "bob", instances: 1, schema: { ...schema, persistedSessions: true } }]).get("bob")!
+  const readP = (doc: unknown) => readBuildJson(JSON.stringify(doc), persisting, channels)
+  const sid = "8fba1ac4-b8e7-46ca-b96e-bdddc9e52906"
+
+  it("writes the choice: false, true or the session's id", () => {
+    const write = (persisted: BuildDocument["persisted"]) =>
+      JSON.parse(buildJson(persisting, channels, { ...good, persisted })).persisted_session
+    expect(write({ kind: "off" })).toBe(false)
+    expect(write({ kind: "new" })).toBe(true)
+    expect(write({ kind: "same", id: sid })).toBe(sid)
+    expect(write(undefined)).toBeUndefined()
+  })
+
+  it("reads it back, and refuses anything else", () => {
+    const at = (value: unknown) => {
+      const r = readP({ ...json(), persisted_session: value })
+      if (!r.ok) throw new Error(r.message)
+      return { persisted: r.doc.persisted, problems: r.problems.map((p) => p.path) }
+    }
+    expect(at(true).persisted).toEqual({ kind: "new" })
+    expect(at(false).persisted).toEqual({ kind: "off" })
+    expect(at(sid.toUpperCase()).persisted).toEqual({ kind: "same", id: sid })
+    expect(at("nope").problems).toEqual(["/persisted_session"])
+  })
+
+  it("is not for a factory whose minions claim none", () => {
+    expect(problems({ ...json(), persisted_session: true })["/persisted_session"]).toMatch(/do not claim/)
+  })
+})
+
 describe("a finished build's JSON", () => {
   it("reads back as a new build's, the defaults it holds left to the server", () => {
     const record = {

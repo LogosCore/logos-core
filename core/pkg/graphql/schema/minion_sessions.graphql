@@ -11,6 +11,10 @@
 type MinionSession {
   # The session id the minion sends its messages under.
   id: ID!
+  # OPEN, CLOSED (expired or of a deleted operation), or RESERVED: reserved
+  # with a build for its minion's first claim, with no number, keys or host
+  # yet (only minionSession(id) returns one).
+  state: String!
   # The display id for operators: the operation's count of sessions when it
   # opened, 1 for the first. Never reused.
   number: Int!
@@ -210,8 +214,8 @@ extend type Query {
   ): MinionSessionConnection!
     @hasPermission(permission: "operation:member")
 
-  # One session, closed ones too; null when there is none. Needs at least
-  # viewer of its operation.
+  # One session, closed and reserved ones too; null when there is none.
+  # Needs at least viewer of its operation.
   minionSession(id: ID!): MinionSession
     @hasPermission(permission: "operation:member")
 

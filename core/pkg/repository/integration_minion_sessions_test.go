@@ -383,3 +383,46 @@ func TestIntegrationMinionSessionClaim(t *testing.T) {
 		t.Fatalf("a closed session claimed: %v", err)
 	}
 }
+
+// Reservations: one claim takes one, and unclaimed ones go with their build
+// or operation.
+func TestIntegrationMinionSessionReservations(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionReservationRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("reservation indexes: %v", err)
+	}
+	op, b1, b2 := uuid.New(), uuid.New(), uuid.New()
+	now := time.Now().UTC()
+	ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	for i, b := range []uuid.UUID{b1, b1, b2} {
+		if err := repo.Insert(ctx, &models.MinionSessionReservation{SessionID: ids[i], OperationID: op, BuildID: b, CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.Insert(ctx, &models.MinionSessionReservation{SessionID: ids[0], OperationID: op, BuildID: b2}); err == nil {
+		t.Fatal("a session id reserved twice")
+	}
+	if err := repo.Delete(ctx, ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(ctx, ids[0]); !IsNotFound(err) {
+		t.Fatalf("a second claim took it too: %v", err)
+	}
+	if err := repo.DeleteByBuildID(ctx, b1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.FindBySessionID(ctx, ids[1]); !IsNotFound(err) {
+		t.Fatalf("build b1's reservation stayed: %v", err)
+	}
+	if r, err := repo.FindBySessionID(ctx, ids[2]); err != nil || r.BuildID != b2 {
+		t.Fatalf("build b2's reservation: %+v %v", r, err)
+	}
+	if err := repo.DeleteByOperationID(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.FindBySessionID(ctx, ids[2]); !IsNotFound(err) {
+		t.Fatal("the operation's reservation stayed")
+	}
+}

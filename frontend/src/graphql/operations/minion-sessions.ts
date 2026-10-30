@@ -5,6 +5,7 @@ import { graphql } from "@/graphql/gql"
 export const MinionSessionFields = graphql(`
   fragment MinionSessionFields on MinionSession {
     id
+    state
     number
     operationId
     buildId

@@ -86,6 +86,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		Minion:             repository.NewMinionRepository(db),
 		MinionStaging:      repository.NewMinionStagingRepository(db),
 		MinionSession:      repository.NewMinionSessionRepository(db),
+		MinionReservation:  repository.NewMinionSessionReservationRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed
@@ -457,7 +458,7 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 		return nil, fmt.Errorf("failed to initialize the build URL signer: %w", err)
 	}
 	return builds.NewService(
-		builds.Repos{Files: repos.BuildFile, Builds: repos.Build, Minions: repos.Minion, Sessions: repos.MinionSession},
+		builds.Repos{Files: repos.BuildFile, Builds: repos.Build, Minions: repos.Minion, Sessions: repos.MinionSession, Reservations: repos.MinionReservation},
 		repos.ModuleRegistry, endpoints, rpc, store, signer,
 		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
 		l.Named("builds"),

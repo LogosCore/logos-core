@@ -52,6 +52,7 @@ import {
   fillFromEndpoint,
   initialForm,
   move,
+  persistedInput,
   pickedCommands,
   platformLabel,
   sourceFromBuild,
@@ -64,6 +65,7 @@ import {
   type ConnectionDraft,
   type FactoryKind,
   type FormSource,
+  type PersistedChoice,
 } from "@/components/builds/build-values"
 import {
   BUILD_JSON_LOCKED,
@@ -74,6 +76,7 @@ import {
   formDocument,
   formFromDocument,
   readBuildJson,
+  type BuildDocument,
 } from "@/components/builds/build-json"
 import { useCanBuild } from "@/components/builds/build-access"
 import { ModuleIcon } from "@/components/modules/module-icon"
@@ -101,11 +104,22 @@ export function BuildEditor({
   // Empty while loading, as the tables are.
   if (fromQuery.isLoading) return null
   const from = fromQuery.data?.build ?? null
-  // Build again from a build that persists a session persists it too.
-  const persistedSession = session ?? from?.persistedSession ?? null
-  return (
-    <EditorLoader operationId={scopedOperation.id} kindName={factory} from={from} persistedSession={persistedSession} />
-  )
+  // From a session ("Build with persisted session"): that session, fixed.
+  // Build again from a build that persists one: a new session by default,
+  // that one offered. Otherwise none by default.
+  const persisted: PersistedOptions = session
+    ? { initial: { kind: "same", id: session }, same: session, fixed: true }
+    : from?.persistedSession
+      ? { initial: { kind: "new" }, same: from.persistedSession, fixed: false }
+      : { initial: { kind: "off" }, same: null, fixed: false }
+  return <EditorLoader operationId={scopedOperation.id} kindName={factory} from={from} persisted={persisted} />
+}
+
+/** What the persisted-session choice offers: where it starts, the existing session it may keep, and whether it is fixed. */
+interface PersistedOptions {
+  initial: PersistedChoice
+  same: string | null
+  fixed: boolean
 }
 
 /** Loads what the form needs: the factory kind, the channels, the files. */
@@ -113,13 +127,13 @@ function EditorLoader({
   operationId,
   kindName,
   from,
-  persistedSession,
+  persisted,
 }: {
   operationId: string
   kindName: string
   /** The earlier build the form starts from, if any. */
   from: BuildRecordLike | null
-  persistedSession: string | null
+  persisted: PersistedOptions
 }) {
   const kinds = useFactoryKinds()
   const channelKinds = useChannelKinds()
@@ -137,7 +151,7 @@ function EditorLoader({
       source={from && sourceFromBuild(kind, from, channels)}
       channels={channels}
       files={(filesQuery.data?.buildFiles ?? []).map((f) => ({ id: f.id, name: f.name, size: f.size, mediaType: f.mediaType }))}
-      persistedSession={kind.persistedSessions ? persistedSession : null}
+      persistedOptions={kind.persistedSessions ? persisted : null}
     />
   )
 }
@@ -152,16 +166,22 @@ function Editor({
   source,
   channels,
   files,
-  persistedSession,
+  persistedOptions,
 }: {
   operationId: string
   kind: FactoryKind
   source: FormSource | null
   channels: ReadonlyMap<string, ChannelKind>
   files: BuildFilesContextValue["files"]
-  /** The session the minion claims when it starts; null for none. */
-  persistedSession: string | null
+  /** The persisted-session choice; null where the factory's minions claim none. */
+  persistedOptions: PersistedOptions | null
 }) {
+  const [persisted, setPersisted] = useState<PersistedChoice>(persistedOptions?.initial ?? { kind: "off" })
+  // The document as the JSON tab shows it: with the choice, where there is one.
+  const documentOf = (f: Form): BuildDocument => {
+    const doc = formDocument(kind, channels, f)
+    return persistedOptions ? { ...doc, persisted } : doc
+  }
   const { open } = useRecordModals()
   const requestClose = useRequestClose()
   const { canWrite, loading: roleLoading } = useCanBuild(operationId)
@@ -177,7 +197,7 @@ function Editor({
   const setPreferred = useEditorModeStore((s) => s.setMode)
   const [tab, setTab] = useState(preferred)
   const [jsonText, setJsonText] = useState(() =>
-    preferred === "json" ? buildJson(kind, channels, formDocument(kind, channels, form)) : "",
+    preferred === "json" ? buildJson(kind, channels, documentOf(form)) : "",
   )
   const [leavingJson, setLeavingJson] = useState(false)
   const read = tab === "json" ? readBuildJson(jsonText, kind, channels) : null
@@ -210,12 +230,17 @@ function Editor({
   const fields = targetFields(kind, target)
   const { input, errors } = evaluateForm(kind, form, channels)
   const shown: Record<string, string> = { ...(submitted ? errors : {}), ...serverErrors }
-  const hasErrors = read ? !read.ok || read.problems.length > 0 : Object.keys(errors).length > 0
+  const hasErrors = read
+    ? !read.ok || read.problems.length > 0 || persistedJsonProblemOf(read, persistedOptions) !== null
+    : Object.keys(errors).length > 0
   // The JSON tab marks problems as they appear, as code editors do, and the
   // server's from the last try at their place.
+  const persistedJsonProblem =
+    read?.ok && read.doc.persisted && persistedOptions ? persistedProblem(read.doc.persisted, persistedOptions) : null
   const jsonProblems: JsonProblem[] = read?.ok
     ? [
         ...read.problems,
+        ...(persistedJsonProblem ? [{ path: "/persisted_session", message: persistedJsonProblem }] : []),
         ...Object.entries(serverErrors)
           .filter(([key]) => key !== "")
           .map(([key, message]) => ({ path: buildProblemPointer(key), message })),
@@ -223,7 +248,7 @@ function Editor({
     : []
 
   function showJson() {
-    setJsonText(buildJson(kind, channels, formDocument(kind, channels, form)))
+    setJsonText(buildJson(kind, channels, documentOf(form)))
     setTab("json")
     setPreferred("json")
   }
@@ -243,7 +268,12 @@ function Editor({
     setJsonText(text)
     setServerErrors({})
     const next = readBuildJson(text, kind, channels)
-    if (next.ok) setForm(formFromDocument(kind, channels, next.doc))
+    if (next.ok) {
+      setForm(formFromDocument(kind, channels, next.doc))
+      if (next.doc.persisted && persistedOptions && !persistedProblem(next.doc.persisted, persistedOptions)) {
+        setPersisted(next.doc.persisted)
+      }
+    }
   }
 
   const filesCtx: BuildFilesContextValue = useMemo(
@@ -330,7 +360,7 @@ function Editor({
           values: request.values,
           commands: request.commands,
           connections: request.connections,
-          persistedSession,
+          ...(persistedOptions ? persistedInput(read?.ok && read.doc.persisted ? read.doc.persisted : persisted) : {}),
         },
       })
       toast.success("Build queued")
@@ -450,7 +480,8 @@ function Editor({
               <RecordModalTitle>New build</RecordModalTitle>
               <span className="truncate text-sm text-muted-foreground">
                 <span className="font-mono">{kind.name}</span> · schema v{kind.version} · {kind.instances} running
-                {persistedSession && <PersistedSessionNote id={persistedSession} />}
+                {persisted.kind === "same" && <PersistedSessionNote id={persisted.id} />}
+                {persisted.kind === "new" && <span className="text-foreground"> · a new persisted session</span>}
               </span>
             </div>
           </div>
@@ -548,6 +579,21 @@ function Editor({
                 </SelectContent>
               </Select>
             </SettingRow>
+            {persistedOptions && (
+              <SettingRow
+                id="build-persisted"
+                label="Persisted session"
+                help="A minion that comes back to its session when it restarts, instead of opening a new one. Chosen now; it cannot change once built."
+                error={shown.persistedSession}
+              >
+                <PersistedSessionChoice
+                  options={persistedOptions}
+                  value={persisted}
+                  onChange={setPersisted}
+                  disabled={disabled}
+                />
+              </SettingRow>
+            )}
           </SettingsSection>
 
           {kind.commands.length > 0 && (
@@ -734,5 +780,82 @@ function PersistedSessionNote({ id }: { id: string }) {
       {" "}
       · persists session {s ? `#${s.number}${s.host ? ` (${s.host})` : ""}` : id.slice(0, 8)}
     </span>
+  )
+}
+
+/** What is wrong with a persisted-session choice the JSON tab makes; null when nothing. */
+function persistedProblem(c: PersistedChoice, o: PersistedOptions): string | null {
+  if (o.fixed && !(c.kind === "same" && c.id === o.same)) return `Must stay ${o.same}: this build is made from that session`
+  if (c.kind === "same" && c.id !== o.same) {
+    return o.same ? `Only ${o.same}, the session the earlier build persists, or true for a new one` : "Only true (a new session) or false here"
+  }
+  return null
+}
+
+function persistedJsonProblemOf(read: ReturnType<typeof readBuildJson> | null, o: PersistedOptions | null): string | null {
+  return read?.ok && read.doc.persisted && o ? persistedProblem(read.doc.persisted, o) : null
+}
+
+/**
+ * The choice of persisted session: off, a new one, or the one the earlier
+ * build persists (unless it is closed). Fixed when the build is made from a
+ * session.
+ */
+function PersistedSessionChoice({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: PersistedOptions
+  value: PersistedChoice
+  onChange: (c: PersistedChoice) => void
+  disabled: boolean
+}) {
+  const { data, isLoading } = useMinionSession(options.same ?? "")
+  const same = data?.minionSession
+  const sameLabel = same
+    ? same.state === "RESERVED"
+      ? "The same session (reserved, not claimed yet)"
+      : `The same session: #${same.number}${same.host ? ` (${same.host})` : ""}`
+    : "The same session"
+  if (options.fixed) {
+    return (
+      <span className="text-sm">
+        {sameLabel}
+        <span className="text-muted-foreground"> · replaces the minion running there when it starts</span>
+      </span>
+    )
+  }
+  // The earlier build's session, offered while it is open or reserved.
+  const offerSame = options.same !== null && !isLoading && same != null && same.state !== "CLOSED"
+  const key = value.kind
+  return (
+    <Select
+      value={key}
+      onValueChange={(v) => {
+        if (v === "off") onChange({ kind: "off" })
+        else if (v === "new") onChange({ kind: "new" })
+        else if (v === "same" && options.same) onChange({ kind: "same", id: options.same })
+      }}
+      disabled={disabled}
+    >
+      <SelectTrigger id="build-persisted" className="w-full max-w-80">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="off" description="Each start of the minion opens a new session">
+          Off
+        </SelectItem>
+        <SelectItem value="new" description="Reserved with the build; the minion's first start opens it">
+          A new persisted session
+        </SelectItem>
+        {(offerSame || key === "same") && (
+          <SelectItem value="same" description="Replaces the minion running there when it starts">
+            {sameLabel}
+          </SelectItem>
+        )}
+      </SelectContent>
+    </Select>
   )
 }

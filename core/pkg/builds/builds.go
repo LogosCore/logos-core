@@ -36,7 +36,10 @@ type BuildInput struct {
 	// one of the operation's open sessions, for a factory whose minions
 	// claim persisted sessions. nil: the minion opens new ones.
 	PersistedSession *uuid.UUID
-	Actor            models.ModuleActor
+	// NewPersistedSession reserves a new session with the build for its
+	// minion to claim (one per build: not with PersistedSession).
+	NewPersistedSession bool
+	Actor               models.ModuleActor
 }
 
 // artifactKey is where a build's artifact is uploaded.
@@ -84,12 +87,19 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	case utf8.RuneCountInString(description) > MaxDescriptionLength:
 		probs.add("description", "longer than %d characters", MaxDescriptionLength)
 	}
-	if in.PersistedSession != nil {
+	if in.PersistedSession != nil || in.NewPersistedSession {
 		if probs == nil {
 			probs = problems{}
 		}
-		if err := s.checkPersistedSession(ctx, op, *schema, *in.PersistedSession, probs); err != nil {
-			return nil, err
+		switch {
+		case in.PersistedSession != nil && in.NewPersistedSession:
+			probs.add("persistedSession", "one persisted session per build: an existing one or a new one")
+		case !schema.PersistedSessions:
+			probs.add("persistedSession", "this factory's minions do not claim persisted sessions")
+		case in.PersistedSession != nil:
+			if err := s.checkPersistedSession(ctx, op, *in.PersistedSession, probs); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if err := probs.err("the build does not fit the factory's build schema"); err != nil {
@@ -106,6 +116,10 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		Deadline:  s.now().Add(s.cfg.Timeout),
 		CreatedBy: in.Actor, CreatedAt: s.now(),
 		PersistedSessionID: in.PersistedSession,
+	}
+	if in.NewPersistedSession {
+		sid := uuid.New()
+		b.PersistedSessionID = &sid
 	}
 	if schema.Crypto != "" {
 		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {
@@ -144,8 +158,15 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	if err := s.repos.Builds.Insert(ctx, b); err != nil {
 		return nil, fmt.Errorf("store build: %w", err)
 	}
-	if b.PersistedSessionID != nil {
-		if err := s.repos.Sessions.SetPersisted(ctx, *b.PersistedSessionID); err != nil {
+	switch {
+	case in.NewPersistedSession:
+		res := &models.MinionSessionReservation{SessionID: *b.PersistedSessionID, OperationID: op, BuildID: b.BuildID, CreatedAt: s.now()}
+		if err := s.repos.Reservations.Insert(ctx, res); err != nil {
+			return nil, fmt.Errorf("reserve the persisted session: %w", err)
+		}
+	case b.PersistedSessionID != nil:
+		// A reserved session is not one yet: it is persisted when it opens.
+		if err := s.repos.Sessions.SetPersisted(ctx, *b.PersistedSessionID); err != nil && !repository.IsNotFound(err) {
 			s.logger.Warn("mark a session persisted", zap.String("session_id", b.PersistedSessionID.String()), zap.Error(err))
 		}
 	}
@@ -289,6 +310,12 @@ func (s *Service) DeleteBuild(ctx context.Context, id string, actor models.Modul
 	if err := s.repos.Minions.DeleteByBuildID(ctx, b.BuildID); err != nil {
 		return fmt.Errorf("delete minion: %w", err)
 	}
+	// A session reserved with it and never claimed goes with it.
+	if s.repos.Reservations != nil {
+		if err := s.repos.Reservations.DeleteByBuildID(ctx, b.BuildID); err != nil {
+			return fmt.Errorf("delete the reserved session: %w", err)
+		}
+	}
 	if _, err := s.repos.Builds.Delete(ctx, b.BuildID); err != nil {
 		return fmt.Errorf("delete build: %w", err)
 	}
@@ -338,18 +365,18 @@ func (s *Service) DeleteOperationData(ctx context.Context, op uuid.UUID) error {
 			return fmt.Errorf("delete build %s: %w", name, err)
 		}
 	}
+	if s.repos.Reservations != nil {
+		if err := s.repos.Reservations.DeleteByOperationID(ctx, op); err != nil {
+			return fmt.Errorf("delete reserved sessions: %w", err)
+		}
+	}
 	return nil
 }
 
 // checkPersistedSession adds a problem when a build cannot persist session
-// id: the factory's minions do not claim sessions, or it is not an open
-// session of the operation.
-func (s *Service) checkPersistedSession(ctx context.Context, op uuid.UUID, schema protocol.BuildSchema, id uuid.UUID, probs problems) error {
+// id: it is neither an open session of the operation nor one reserved in it.
+func (s *Service) checkPersistedSession(ctx context.Context, op uuid.UUID, id uuid.UUID, probs problems) error {
 	const key = "persistedSession"
-	if !schema.PersistedSessions {
-		probs.add(key, "this factory's minions do not claim persisted sessions")
-		return nil
-	}
 	if s.repos.Sessions == nil {
 		probs.add(key, "no session to persist")
 		return nil
@@ -357,7 +384,20 @@ func (s *Service) checkPersistedSession(ctx context.Context, op uuid.UUID, schem
 	sess, err := s.repos.Sessions.FindBySessionID(ctx, id)
 	switch {
 	case repository.IsNotFound(err):
-		probs.add(key, "no such session")
+		// Or one reserved with another build, not claimed yet.
+		if s.repos.Reservations == nil {
+			probs.add(key, "no such session")
+			return nil
+		}
+		res, rerr := s.repos.Reservations.FindBySessionID(ctx, id)
+		switch {
+		case repository.IsNotFound(rerr):
+			probs.add(key, "no such session")
+		case rerr != nil:
+			return fmt.Errorf("load the reservation: %w", rerr)
+		case res.OperationID != op:
+			probs.add(key, "no such session")
+		}
 	case err != nil:
 		return fmt.Errorf("load the session: %w", err)
 	case sess.OperationID != op:

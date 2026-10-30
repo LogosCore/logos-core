@@ -26,6 +26,7 @@ import {
   type ChannelKind,
   type FactoryKind,
   type FormInput,
+  type PersistedChoice,
   type Target,
 } from "./build-values"
 
@@ -42,6 +43,10 @@ import {
 //     "connections": [
 //       { "channel": "http", "name": "", "description": "",
 //         "settings": { "base_url": "https://…" }, "values": { "method": "POST" } } ] }
+//
+// "persisted_session", for a factory whose minions claim persisted sessions:
+// false (none), true (a new one, reserved with the build), or an existing
+// session's id, which the minion takes over.
 //
 // "factory" says what builds it and stays as it is. "commands" are what the
 // minion can do, by id: the target's required ones stay in, and leaving the
@@ -67,12 +72,14 @@ export interface BuildDocument {
   commands: string[]
   values: Record<string, unknown>
   connections: ConnectionDocument[]
+  /** The persisted session; absent where the factory has none, or the JSON leaves it out. */
+  persisted?: PersistedChoice
 }
 
 /** The parts the JSON tab locks. */
 export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 
-const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections"]
+const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "persisted_session"]
 const CONNECTION_KEYS = ["channel", "name", "description", "settings", "values"]
 
 const channelFields = (channels: ReadonlyMap<string, ChannelKind>, moduleName: string) =>
@@ -95,7 +102,24 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
       settings: jsonFieldValues(channelFields(channels, c.moduleName), c.settings),
       values: jsonFieldValues(kind.channelFields.get(c.moduleName) ?? [], c.values),
     })),
+    ...(doc.persisted ? { persisted_session: persistedJson(doc.persisted) } : {}),
   })
+}
+
+function persistedJson(c: PersistedChoice): boolean | string {
+  return c.kind === "same" ? c.id : c.kind === "new"
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** "persisted_session" read back; undefined when absent. */
+function readPersisted(raw: unknown, at: (path: string, message: string) => void): PersistedChoice | undefined {
+  if (raw === undefined) return undefined
+  if (raw === false || raw === null) return { kind: "off" }
+  if (raw === true) return { kind: "new" }
+  if (typeof raw === "string" && UUID.test(raw)) return { kind: "same", id: raw.toLowerCase() }
+  at("/persisted_session", "false, true (a new session) or a session id")
+  return undefined
 }
 
 /** The form as the JSON tab's document: what it holds, typed text that does not parse kept as typed. */
@@ -237,6 +261,10 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
   // The checks the form makes on itself, said the JSON's way.
   const errors: Record<string, string> = {}
   const doc: BuildDocument = { description, target: targetId, platform, commands, values, connections }
+  if (root.persisted_session !== undefined) {
+    if (!kind.persistedSessions) at("/persisted_session", `${kind.name}'s minions do not claim persisted sessions`)
+    else doc.persisted = readPersisted(root.persisted_session, at)
+  }
   checkBuild(kind, doc, channels, errors)
   for (const [key, message] of Object.entries(errors)) {
     if (key === "target" && targetId !== "") {
@@ -341,6 +369,15 @@ export function buildJsonHints(
       },
       { key: "values", detail: "object", info: `${kind.name}'s values for the target; empty or null leaves one at its default.` },
       { key: "connections", detail: "list, required", info: "How the minion reaches its channels, tried in this order." },
+      ...(kind.persistedSessions
+        ? [
+            {
+              key: "persisted_session",
+              detail: "false, true or a session id",
+              info: "A minion that comes back to its session when it restarts. true: a new session, reserved with the build; a session id: that session, which the minion takes over. Chosen now, fixed once built.",
+            },
+          ]
+        : []),
     ],
     "/values": fieldHints(targetFields(kind, target)),
     "/connections/*": [

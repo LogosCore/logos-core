@@ -168,6 +168,9 @@ input BuildInput {
   # open session of the operation, for a factory with persistedSessions. One
   # per build.
   persistedSession: ID
+  # Reserves a new session with the build for its minion to claim when it
+  # first starts (a new persisted session); not with persistedSession.
+  newPersistedSession: Boolean
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps

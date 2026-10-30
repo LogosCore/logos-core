@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { formatBytes } from "@/lib/format-bytes"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { useBuildFiles, useFactoryIcons, useFactoryKinds } from "@/graphql/hooks/builds"
+import { useMinionSession } from "@/graphql/hooks/minion-sessions"
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
 import { formatElapsed, formatValue, type FieldDef } from "@/components/modules/management/field-values"
@@ -90,6 +91,11 @@ export function BuildOverview({
           <LabelRow label="Build id">
             <Copyable text={b.id} what="Build id" />
           </LabelRow>
+          {b.persistedSession && (
+            <LabelRow label="Persisted session">
+              <PersistedSession id={b.persistedSession} />
+            </LabelRow>
+          )}
           <LabelRow label="Started">
             {formatAbsolute(b.createdAt)}
             {b.createdBy.name && <span className="text-muted-foreground"> by {b.createdBy.name}</span>}
@@ -248,4 +254,33 @@ function valueText(r: ValueRow, fileNames: ReadonlyMap<string, string>): ReactNo
   const f: FieldDef | null = r.field
   if (f?.type === "file" && typeof r.value === "string") return fileNames.get(r.value) ?? r.value
   return formatValue(f?.type ?? "", r.value, f?.unit)
+}
+
+/**
+ * The session the build's minions come back to when they restart: its
+ * number and host once open, "reserved" until the first start claims it.
+ */
+function PersistedSession({ id }: { id: string }) {
+  const { data, isLoading } = useMinionSession(id)
+  const s = data?.minionSession
+  let what: ReactNode = null
+  if (!isLoading) {
+    if (!s) what = <span className="text-muted-foreground">gone</span>
+    else if (s.state === "RESERVED") what = <span className="text-muted-foreground">reserved, not claimed yet</span>
+    else {
+      what = (
+        <span>
+          #{s.number}
+          {s.host && <span className="text-muted-foreground"> · {s.host}</span>}
+          {s.state === "CLOSED" && <span className="text-muted-foreground"> · closed</span>}
+        </span>
+      )
+    }
+  }
+  return (
+    <span className="flex min-w-0 flex-col">
+      {what}
+      <Copyable text={id} what="Session id" />
+    </span>
+  )
 }

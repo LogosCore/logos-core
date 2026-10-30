@@ -129,6 +129,27 @@ func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.Minio
 	return qmgo.ErrNoSuchDocuments
 }
 
+// fakeReservations keeps reserved session ids; the rest is not used here.
+type fakeReservations struct {
+	repository.IMinionSessionReservationRepository
+	rows map[uuid.UUID]models.MinionSessionReservation
+}
+
+func (f *fakeReservations) FindBySessionID(_ context.Context, id uuid.UUID) (*models.MinionSessionReservation, error) {
+	if r, ok := f.rows[id]; ok {
+		return &r, nil
+	}
+	return nil, qmgo.ErrNoSuchDocuments
+}
+
+func (f *fakeReservations) Delete(_ context.Context, id uuid.UUID) error {
+	if _, ok := f.rows[id]; !ok {
+		return qmgo.ErrNoSuchDocuments
+	}
+	delete(f.rows, id)
+	return nil
+}
+
 // fakeBus keeps what is published.
 type fakeBus struct {
 	eventbus.NopEventBus
@@ -168,6 +189,7 @@ func (f *fakeCache) IsEnabled() bool                                       { ret
 
 type rig struct {
 	svc      *Service
+	reserved *fakeReservations
 	builds   fakeBuilds
 	stagings *fakeStagings
 	sessions *fakeSessions
@@ -192,9 +214,10 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	st, ss, bus, bs := &fakeStagings{}, &fakeSessions{}, &fakeBus{}, fakeBuilds{b.BuildID: b}
+	rs := &fakeReservations{rows: map[uuid.UUID]models.MinionSessionReservation{}}
 	return &rig{
-		svc:    NewService(bs, st, ss, &fakeCache{seen: map[string]bool{}}, bus, zap.NewNop()),
-		builds: bs, stagings: st, sessions: ss, bus: bus, build: b, keys: keys, priv: priv,
+		svc:      NewService(bs, st, ss, rs, &fakeCache{seen: map[string]bool{}}, bus, zap.NewNop()),
+		reserved: rs, builds: bs, stagings: st, sessions: ss, bus: bus, build: b, keys: keys, priv: priv,
 	}
 }
 
@@ -611,6 +634,35 @@ func TestClaimPersistedSession(t *testing.T) {
 	}
 	if r.sessions.rows[0].LastSeenAt != seen {
 		t.Fatal("a replaced holder checked in")
+	}
+}
+
+// A build made with a new persisted session: its minion's first claim opens
+// the reserved session, with the reserved id; a later one takes it over.
+func TestClaimReservedSession(t *testing.T) {
+	r := newRig(t)
+	rid := uuid.New()
+	b2, keys2 := r.persistedBuild(t, rid)
+	r.reserved.rows[rid] = models.MinionSessionReservation{SessionID: rid, OperationID: b2.OperationID, BuildID: b2.BuildID}
+
+	reply, err := r.sendUnder(t, b2.BuildID, keys2, protocol.NewMessageID(), claimHello("web01", rid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionID(t, r.openUnder(t, b2.BuildID, keys2, reply)); got != rid {
+		t.Fatalf("claimed %s, got %s", rid, got)
+	}
+	s := r.sessions.rows[0]
+	if len(r.sessions.rows) != 1 || s.SessionID != rid || !s.Persisted || s.Number != 1 || s.RestartCount != 0 || len(r.reserved.rows) != 0 {
+		t.Fatalf("opened %+v, reservations %d", s, len(r.reserved.rows))
+	}
+
+	// A restart of the minion: an ordinary claim of the open session.
+	if reply, err = r.sendUnder(t, b2.BuildID, keys2, protocol.NewMessageID(), claimHello("web01", rid)); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionID(t, r.openUnder(t, b2.BuildID, keys2, reply)); got != rid || r.sessions.rows[0].RestartCount != 1 || len(r.sessions.rows) != 1 {
+		t.Fatalf("restart: %s, %d restarts, %d sessions", got, r.sessions.rows[0].RestartCount, len(r.sessions.rows))
 	}
 }
 

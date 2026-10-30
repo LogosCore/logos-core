@@ -148,14 +148,15 @@ type BuildFile struct {
 }
 
 type BuildInput struct {
-	Description      string                  `json:"description"`
-	ModuleName       string                  `json:"moduleName"`
-	Target           string                  `json:"target"`
-	Platform         string                  `json:"platform"`
-	Values           any                     `json:"values"`
-	Commands         []string                `json:"commands,omitempty"`
-	Connections      []*BuildConnectionInput `json:"connections"`
-	PersistedSession *string                 `json:"persistedSession,omitempty"`
+	Description         string                  `json:"description"`
+	ModuleName          string                  `json:"moduleName"`
+	Target              string                  `json:"target"`
+	Platform            string                  `json:"platform"`
+	Values              any                     `json:"values"`
+	Commands            []string                `json:"commands,omitempty"`
+	Connections         []*BuildConnectionInput `json:"connections"`
+	PersistedSession    *string                 `json:"persistedSession,omitempty"`
+	NewPersistedSession *bool                   `json:"newPersistedSession,omitempty"`
 }
 
 type BuildProblem struct {
@@ -458,6 +459,7 @@ type Minion struct {
 
 type MinionSession struct {
 	ID               string                  `json:"id"`
+	State            string                  `json:"state"`
 	Number           int                     `json:"number"`
 	OperationID      string                  `json:"operationId"`
 	BuildID          string                  `json:"buildId"`

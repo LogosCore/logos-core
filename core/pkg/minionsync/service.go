@@ -70,15 +70,18 @@ type Service struct {
 	builds   Builds
 	stagings repository.IMinionStagingRepository
 	sessions repository.IMinionSessionRepository
-	cache    cache.Cache
-	bus      eventbus.IEventBus
-	logger   *zap.Logger
-	now      func() time.Time
+	// reservations are the session ids reserved with builds, a first claim
+	// opens.
+	reservations repository.IMinionSessionReservationRepository
+	cache        cache.Cache
+	bus          eventbus.IEventBus
+	logger       *zap.Logger
+	now          func() time.Time
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
-	c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
-	return &Service{builds: builds, stagings: stagings, sessions: sessions, cache: c, bus: bus,
+	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
+	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() }}
 }
 
@@ -236,13 +239,18 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 		}
 		// Not honoured: a new session, as without a claim.
 	}
+	return s.newSession(ctx, from, peer, hello, uuid.New(), false)
+}
 
+// newSession opens a session with id for a hello: a new one, or one its
+// build reserved (persisted).
+func (s *Service) newSession(ctx context.Context, from *sender, peer string, hello protocol.HelloItem, id uuid.UUID, persisted bool) ([]cbor.RawMessage, error) {
 	b, now := from.build, s.now()
 	// Until its first check-in a session is purged after the day's wait and
 	// its tombstone's time.
 	purge := now.Add(models.MinionSessionCheckInWindow + models.MinionSessionTombstone)
 	session := &models.MinionSession{
-		SessionID: uuid.New(), OperationID: b.OperationID, BuildID: b.BuildID, BuildDescription: b.Description,
+		SessionID: id, OperationID: b.OperationID, BuildID: b.BuildID, BuildDescription: b.Description, Persisted: persisted,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.Addrs),
 		CreatedAt: now, PurgeAt: &purge,
@@ -251,6 +259,7 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
 	}
+	var err error
 	if session.Number, err = s.sessions.NextNumber(ctx, b.OperationID); err != nil {
 		return nil, fmt.Errorf("number the session: %w", err)
 	}
@@ -283,7 +292,9 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	sess, err := s.sessions.FindBySessionID(ctx, sid)
 	switch {
 	case repository.IsNotFound(err):
-		return refuse("no such session")
+		// Not a session yet: maybe reserved with a build, for this first
+		// claim to open.
+		return s.claimReserved(ctx, from, peer, hello, sid, refuse)
 	case err != nil:
 		return nil, false, fmt.Errorf("load the claimed session: %w", err)
 	case sess.OperationID != b.OperationID:
@@ -315,6 +326,33 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 		zap.String("build_id", b.BuildID.String()), zap.String("host", hello.Host), zap.Uint64("pid", hello.PID))
 	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(sess)))
 	items, err = helloResponse(sid)
+	return items, err == nil, err
+}
+
+// claimReserved opens the session a build reserved (a new persisted
+// session), with the reserved id, at its minion's first claim. The
+// reservation goes first, so of two claims racing on it one opens it.
+func (s *Service) claimReserved(ctx context.Context, from *sender, peer string, hello protocol.HelloItem, sid uuid.UUID,
+	refuse func(string) ([]cbor.RawMessage, bool, error)) ([]cbor.RawMessage, bool, error) {
+	if s.reservations == nil {
+		return refuse("no such session")
+	}
+	res, err := s.reservations.FindBySessionID(ctx, sid)
+	switch {
+	case repository.IsNotFound(err):
+		return refuse("no such session")
+	case err != nil:
+		return nil, false, fmt.Errorf("load the reservation: %w", err)
+	case res.OperationID != from.build.OperationID:
+		return refuse("the session is another operation's")
+	}
+	if err := s.reservations.Delete(ctx, sid); err != nil {
+		if repository.IsNotFound(err) {
+			return refuse("another claim opened the session first")
+		}
+		return nil, false, fmt.Errorf("take the reservation: %w", err)
+	}
+	items, err := s.newSession(ctx, from, peer, hello, sid, true)
 	return items, err == nil, err
 }
 

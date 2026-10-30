@@ -486,6 +486,7 @@ type ComplexityRoot struct {
 		RestartCount     func(childComplexity int) int
 		Restarts         func(childComplexity int) int
 		Staged           func(childComplexity int) int
+		State            func(childComplexity int) int
 		Target           func(childComplexity int) int
 		User             func(childComplexity int) int
 		Version          func(childComplexity int) int
@@ -3532,6 +3533,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Staged(childComplexity), true
+	case "MinionSession.state":
+		if e.ComplexityRoot.MinionSession.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.State(childComplexity), true
 	case "MinionSession.target":
 		if e.ComplexityRoot.MinionSession.Target == nil {
 			break
@@ -8784,6 +8791,9 @@ input BuildInput {
   # open session of the operation, for a factory with persistedSessions. One
   # per build.
   persistedSession: ID
+  # Reserves a new session with the build for its minion to claim when it
+  # first starts (a new persisted session); not with persistedSession.
+  newPersistedSession: Boolean
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -9954,6 +9964,10 @@ extend type Subscription {
 type MinionSession {
   # The session id the minion sends its messages under.
   id: ID!
+  # OPEN, CLOSED (expired or of a deleted operation), or RESERVED: reserved
+  # with a build for its minion's first claim, with no number, keys or host
+  # yet (only minionSession(id) returns one).
+  state: String!
   # The display id for operators: the operation's count of sessions when it
   # opened, 1 for the first. Never reused.
   number: Int!
@@ -10153,8 +10167,8 @@ extend type Query {
   ): MinionSessionConnection!
     @hasPermission(permission: "operation:member")
 
-  # One session, closed ones too; null when there is none. Needs at least
-  # viewer of its operation.
+  # One session, closed and reserved ones too; null when there is none.
+  # Needs at least viewer of its operation.
   minionSession(id: ID!): MinionSession
     @hasPermission(permission: "operation:member")
 
@@ -24517,6 +24531,35 @@ func (ec *executionContext) fieldContext_MinionSession_id(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_state(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_number(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25478,6 +25521,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
 				return ec.fieldContext_MinionSession_number(ctx, field)
 			case "operationId":
@@ -25683,6 +25728,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
 				return ec.fieldContext_MinionSession_number(ctx, field)
 			case "operationId":
@@ -34040,6 +34087,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
 				return ec.fieldContext_MinionSession_number(ctx, field)
 			case "operationId":
@@ -41653,6 +41702,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
 				return ec.fieldContext_MinionSession_number(ctx, field)
 			case "operationId":
@@ -56187,7 +56238,7 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "commands", "connections", "persistedSession"}
+	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "commands", "connections", "persistedSession", "newPersistedSession"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -56250,6 +56301,13 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 				return it, err
 			}
 			it.PersistedSession = data
+		case "newPersistedSession":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("newPersistedSession"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NewPersistedSession = data
 		}
 	}
 	return it, nil
@@ -62659,6 +62717,11 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = graphql.MarshalString("MinionSession")
 		case "id":
 			out.Values[i] = ec._MinionSession_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._MinionSession_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

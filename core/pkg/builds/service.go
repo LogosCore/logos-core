@@ -61,8 +61,10 @@ type Repos struct {
 	Files   repository.IBuildFileRepository
 	Builds  repository.IBuildRepository
 	Minions repository.IMinionRepository
-	// Sessions are the minion sessions a build may persist.
-	Sessions repository.IMinionSessionRepository
+	// Sessions are the minion sessions a build may persist, and
+	// Reservations the ones reserved with builds (a new persisted session).
+	Sessions     repository.IMinionSessionRepository
+	Reservations repository.IMinionSessionReservationRepository
 }
 
 // Config tunes the service. Zero values take the defaults.

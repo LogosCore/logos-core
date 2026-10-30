@@ -737,3 +737,16 @@ export function stageDuration(s: StageLike, now = Date.now()): number | null {
 export function currentStage<S extends StageLike>(stages: readonly S[]): S | null {
   return stages.find((s) => s.state === "RUNNING") ?? stages.find((s) => s.state === "FAILED" || s.state === "CANCELLED") ?? null
 }
+
+/**
+ * A new build's persisted session: none, a new one reserved with the build,
+ * or an existing one the minion takes over. Chosen when the build is made.
+ */
+export type PersistedChoice = { kind: "off" } | { kind: "new" } | { kind: "same"; id: string }
+
+/** The createBuild input for a choice. */
+export function persistedInput(c: PersistedChoice): { persistedSession?: string; newPersistedSession?: boolean } {
+  if (c.kind === "new") return { newPersistedSession: true }
+  if (c.kind === "same") return { persistedSession: c.id }
+  return {}
+}

@@ -86,6 +86,7 @@ type rig struct {
 	builds   *fakeBuilds
 	minions  *fakeMinions
 	sessions *fakeSessions
+	reserved *fakeReservations
 	clock    time.Time
 }
 
@@ -106,7 +107,8 @@ func newRig(t *testing.T) *rig {
 	}
 	r.reg.setActive(bobInstance("bob-1", 1))
 	r.sessions = &fakeSessions{rows: map[uuid.UUID]*models.MinionSession{}}
-	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions, Sessions: r.sessions},
+	r.reserved = &fakeReservations{rows: map[uuid.UUID]models.MinionSessionReservation{}}
+	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions, Sessions: r.sessions, Reservations: r.reserved},
 		r.reg, r.chs, r.rpc, r.store, fakeSigner{}, Config{}, zap.NewNop())
 	r.svc.now = func() time.Time { return r.clock }
 	t.Cleanup(r.svc.Stop)
@@ -991,7 +993,11 @@ func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models
 }
 
 func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {
-	f.rows[id].Persisted = true
+	s, ok := f.rows[id]
+	if !ok {
+		return qmgo.ErrNoSuchDocuments // as UpdateOne answers a miss
+	}
+	s.Persisted = true
 	return nil
 }
 
@@ -1027,5 +1033,80 @@ func TestCreateBuildPersistedSession(t *testing.T) {
 	req, err := r.svc.request(context.Background(), b, b.Deadline)
 	if err != nil || req.SessionID != sid.String() {
 		t.Fatalf("the factory's request: %q %v", req.SessionID, err)
+	}
+}
+
+// fakeReservations keeps reserved session ids.
+type fakeReservations struct {
+	repository.IMinionSessionReservationRepository
+	rows map[uuid.UUID]models.MinionSessionReservation
+}
+
+func (f *fakeReservations) Insert(_ context.Context, r *models.MinionSessionReservation) error {
+	f.rows[r.SessionID] = *r
+	return nil
+}
+
+func (f *fakeReservations) FindBySessionID(_ context.Context, id uuid.UUID) (*models.MinionSessionReservation, error) {
+	if r, ok := f.rows[id]; ok {
+		return &r, nil
+	}
+	return nil, qmgo.ErrNoSuchDocuments
+}
+
+func (f *fakeReservations) DeleteByBuildID(_ context.Context, id uuid.UUID) error {
+	for sid, r := range f.rows {
+		if r.BuildID == id {
+			delete(f.rows, sid)
+		}
+	}
+	return nil
+}
+
+func (f *fakeReservations) DeleteByOperationID(_ context.Context, op uuid.UUID) error {
+	for sid, r := range f.rows {
+		if r.OperationID == op {
+			delete(f.rows, sid)
+		}
+	}
+	return nil
+}
+
+// A new persisted session is reserved with its build, and goes with it;
+// another build may persist it while it is unclaimed.
+func TestCreateBuildNewPersistedSession(t *testing.T) {
+	r := newRig(t)
+	r.reg.schemas["bob"].BuildSchema.PersistedSessions = true
+	b := r.queue(t, func(in *BuildInput) { in.NewPersistedSession = true })
+	if b.PersistedSessionID == nil {
+		t.Fatal("no session reserved")
+	}
+	res, ok := r.reserved.rows[*b.PersistedSessionID]
+	if !ok || res.BuildID != b.BuildID || res.OperationID != opID {
+		t.Fatalf("reservation %+v %v", res, ok)
+	}
+	req, _ := r.svc.request(context.Background(), b, b.Deadline)
+	if req.SessionID != b.PersistedSessionID.String() {
+		t.Fatalf("the factory's session id %q", req.SessionID)
+	}
+
+	// Build again, keeping it.
+	again := r.queue(t, func(in *BuildInput) { in.PersistedSession = b.PersistedSessionID })
+	if *again.PersistedSessionID != *b.PersistedSessionID {
+		t.Fatal("the reserved session was not kept")
+	}
+
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) {
+		in.NewPersistedSession, in.PersistedSession = true, b.PersistedSessionID
+	}))
+	if problemsOf(err)["persistedSession"] == "" {
+		t.Fatalf("both kinds at once: %v", err)
+	}
+
+	if err := r.svc.DeleteBuild(context.Background(), b.BuildID.String(), alice); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.reserved.rows) != 0 {
+		t.Fatal("the reservation outlived its build")
 	}
 }

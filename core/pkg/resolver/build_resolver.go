@@ -196,6 +196,7 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 		Description: input.Description, ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
 		Values: values, Commands: input.Commands, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
 	}
+	in.NewPersistedSession = input.NewPersistedSession != nil && *input.NewPersistedSession
 	if input.PersistedSession != nil {
 		sid, err := uuid.Parse(*input.PersistedSession)
 		if err != nil {
