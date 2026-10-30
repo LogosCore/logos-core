@@ -66,17 +66,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
   switch (id) {
     case "number":
       return (
-        <div
-          className="flex min-w-0 items-center gap-1 font-mono font-medium"
-          title={[
-            `Session ${s.number}, ${s.id}`,
-            s.persisted && `Persisted: its build's minions come back to it when they restart (${s.restartCount} so far)`,
-          ]
-            .filter(Boolean)
-            .join("\n")}
-        >
-          <span className="truncate">{s.number}</span>
-          {s.persisted && <PinIcon className="size-3 shrink-0 text-muted-foreground" />}
+        <div className="truncate font-mono font-medium" title={`Session ${s.number}, ${s.id}`}>
+          {s.number}
         </div>
       )
     case "sessionId":
@@ -153,6 +144,14 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
         <div className="flex min-w-0 items-baseline" title={`Build ${s.buildId}${s.staged ? "" : ", without staging"}`}>
           <KindName type="factory" name={s.moduleName} icon={ctx.icons.get(s.moduleName)} className="font-medium" />
           <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
+          {s.persisted && (
+            <span
+              className="ml-1.5 shrink-0 self-center text-muted-foreground"
+              title={`Persisted: the build's minions come back to this session when they restart (${s.restartCount} so far)`}
+            >
+              <PinIcon className="size-3" aria-label="Persisted" />
+            </span>
+          )}
         </div>
       )
     case "target":
