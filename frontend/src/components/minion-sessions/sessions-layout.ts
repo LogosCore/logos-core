@@ -408,3 +408,14 @@ export function formatAgoExact(diffMs: number): string {
   if (s < 86400) return `${Math.floor(s / 3600)}h ${pad(Math.floor(s / 60) % 60)}m ${pad(s % 60)}s ago`
   return `${Math.floor(s / 86400)}d ${Math.floor(s / 3600) % 24}h ago`
 }
+
+/** Milliseconds as the schedule says them: "800ms", "60s", "5m", "1h 30m". */
+export function formatInterval(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const s = Math.round(ms / 1000)
+  if (s < 120) return `${s}s`
+  const m = Math.round(s / 60)
+  if (m < 120) return `${m}m`
+  const h = Math.floor(m / 60)
+  return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
+}

@@ -2,10 +2,10 @@ import { Suspense, useEffect } from "react"
 import { useSearchParams } from "react-router"
 import { useLoaded, whenIdle } from "@/lib/preloadable"
 import { recordModalOf, type RecordModal } from "@/lib/record-modals"
-import { buildModalCode, endpointModalCode, preloadRecordModals } from "./record-modal-code"
+import { buildModalCode, endpointModalCode, preloadRecordModals, sessionModalCode } from "./record-modal-code"
 
 /**
- * The build or endpoint modal the URL names (lib/record-modals.ts), over
+ * The build, endpoint or session modal the URL names (lib/record-modals.ts), over
  * whatever page is showing, so any page can open one and a link to one
  * works anywhere.
  */
@@ -22,6 +22,8 @@ export function RecordModals() {
     <Suspense fallback={null}>
       {modal.kind === "build" || modal.kind === "new-build" ? (
         <BuildModalLoader modal={modal} />
+      ) : modal.kind === "session" ? (
+        <SessionModalLoader modal={modal} />
       ) : (
         <EndpointModalLoader modal={modal} />
       )}
@@ -37,4 +39,9 @@ function BuildModalLoader({ modal }: { modal: Extract<RecordModal, { kind: "buil
 function EndpointModalLoader({ modal }: { modal: Extract<RecordModal, { kind: "endpoint" | "new-endpoint" }> }) {
   const code = useLoaded(endpointModalCode)
   return code && <code.EndpointModal modal={modal} />
+}
+
+function SessionModalLoader({ modal }: { modal: Extract<RecordModal, { kind: "session" }> }) {
+  const code = useLoaded(sessionModalCode)
+  return code && <code.SessionModal modal={modal} />
 }

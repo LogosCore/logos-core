@@ -27,6 +27,17 @@ describe("recordModalOf", () => {
     expect(withRecordModal(params("build=b-1&buildTab=json"), { kind: "endpoint", id: "e-1" }).toString()).toBe("endpoint=e-1")
   })
 
+  it("reads a session and its tab", () => {
+    expect(recordModalOf(params("session=s-1"))).toEqual({ kind: "session", id: "s-1" })
+    expect(recordModalOf(params("session=s-1&sessionTab=json"))).toEqual({ kind: "session", id: "s-1", tab: "json" })
+    expect(recordModalOf(params("session=s-1&sessionTab=pipeline"))).toEqual({ kind: "session", id: "s-1" })
+    expect(withRecordModal(params("view=archived"), { kind: "session", id: "s-1", tab: "json" }).toString()).toBe(
+      "view=archived&session=s-1&sessionTab=json",
+    )
+    // A build opened from it takes its place.
+    expect(withRecordModal(params("session=s-1&sessionTab=json"), { kind: "build", id: "b-1" }).toString()).toBe("build=b-1")
+  })
+
   it("is none without a modal key, or with an empty one", () => {
     expect(recordModalOf(params(""))).toBeNull()
     expect(recordModalOf(params("tab=hosts&build="))).toBeNull()

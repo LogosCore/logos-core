@@ -172,6 +172,10 @@ export function applyMinionSessionEvent(
     scheduleRefresh(queryClient, minionSessionKeys.lists())
     return
   }
+  // The session's own query (its Details), where loaded.
+  if (queryClient.getQueryData(minionSessionKeys.detail(session.id))) {
+    queryClient.setQueryData(minionSessionKeys.detail(session.id), { minionSession: session })
+  }
   for (const [key, data] of queryClient.getQueriesData<ListData>({ queryKey: minionSessionKeys.lists() })) {
     if (!data) continue
     const params = key[key.length - 1] as MinionSessionListParams

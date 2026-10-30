@@ -5,11 +5,12 @@ import { preloadable } from "@/lib/preloadable"
 // first modal opened shows at once, or on opening one before that.
 export const buildModalCode = preloadable(() => import("@/components/builds/build-modal"))
 export const endpointModalCode = preloadable(() => import("@/components/endpoints/endpoint-modal"))
+export const sessionModalCode = preloadable(() => import("@/components/minion-sessions/session-modal"))
 // The new-build form, on its own: most of the build modal's code, and a
 // build's details do not use it.
 export const buildEditorCode = preloadable(() => import("@/components/builds/build-editor"))
 
 /** Fetches all of it. A failure stays quiet here; opening a modal reports it. */
 export function preloadRecordModals() {
-  for (const code of [buildModalCode, endpointModalCode, buildEditorCode]) code.load().catch(() => {})
+  for (const code of [buildModalCode, endpointModalCode, buildEditorCode, sessionModalCode]) code.load().catch(() => {})
 }

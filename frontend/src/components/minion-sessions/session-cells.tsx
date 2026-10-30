@@ -10,7 +10,7 @@ import { ListCell } from "./list-cell"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
-import { formatAgo, formatAgoExact, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
+import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it.
@@ -60,16 +60,6 @@ function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late" | "
   return `${label}: ${[every, when].filter(Boolean).join(", ")}`
 }
 
-/** Milliseconds as the schedule says them: "800ms", "60s", "5m", "1h 30m". */
-function formatInterval(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  const s = Math.round(ms / 1000)
-  if (s < 120) return `${s}s`
-  const m = Math.round(s / 60)
-  if (m < 120) return `${m}m`
-  const h = Math.floor(m / 60)
-  return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
-}
 
 /** When an external address was last seen, and how many messages came from it. */
 function PeerSeen({ lastSeen, count, now }: { lastSeen: string; count: number; now: number }) {

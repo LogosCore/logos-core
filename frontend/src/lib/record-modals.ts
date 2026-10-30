@@ -7,6 +7,7 @@
 //                                              one, persisting a session
 //   ?endpoint=<id>                             an endpoint (its editor)
 //   ?newEndpoint=<channel>[&endpointFrom=<id>] a new endpoint, from another
+//   ?session=<id>[&sessionTab=<tab>]           a minion session
 //
 // The rest of the query belongs to the page underneath and is kept.
 
@@ -15,12 +16,18 @@ export type BuildTab = "overview" | "json" | "pipeline"
 
 const BUILD_TABS: readonly BuildTab[] = ["overview", "json", "pipeline"]
 
+/** A session modal's tabs (?sessionTab=); without one, its overview. */
+export type SessionTab = "overview" | "json"
+
+const SESSION_TABS: readonly SessionTab[] = ["overview", "json"]
+
 /** The modal the URL opens. */
 export type RecordModal =
   | { kind: "build"; id: string; tab?: BuildTab }
   | { kind: "new-build"; factory: string; from: string | null; session?: string | null }
   | { kind: "endpoint"; id: string }
   | { kind: "new-endpoint"; channel: string; from: string | null }
+  | { kind: "session"; id: string; tab?: SessionTab }
 
 const BUILD = "build"
 const BUILD_TAB = "buildTab"
@@ -30,9 +37,22 @@ const BUILD_SESSION = "buildSession"
 const ENDPOINT = "endpoint"
 const NEW_ENDPOINT = "newEndpoint"
 const ENDPOINT_FROM = "endpointFrom"
+const SESSION = "session"
+const SESSION_TAB = "sessionTab"
 
 /** Every query key the record modals use. */
-export const RECORD_MODAL_KEYS = [BUILD, BUILD_TAB, NEW_BUILD, BUILD_FROM, BUILD_SESSION, ENDPOINT, NEW_ENDPOINT, ENDPOINT_FROM]
+export const RECORD_MODAL_KEYS = [
+  BUILD,
+  BUILD_TAB,
+  NEW_BUILD,
+  BUILD_FROM,
+  BUILD_SESSION,
+  ENDPOINT,
+  NEW_ENDPOINT,
+  ENDPOINT_FROM,
+  SESSION,
+  SESSION_TAB,
+]
 
 /** The modal params name, or null; with several, the first of the order above. */
 export function recordModalOf(params: URLSearchParams): RecordModal | null {
@@ -51,6 +71,11 @@ export function recordModalOf(params: URLSearchParams): RecordModal | null {
   if (endpoint) return { kind: "endpoint", id: endpoint }
   const channel = get(NEW_ENDPOINT)
   if (channel) return { kind: "new-endpoint", channel, from: get(ENDPOINT_FROM) }
+  const session = get(SESSION)
+  if (session) {
+    const tab = SESSION_TABS.find((t) => t === get(SESSION_TAB))
+    return tab ? { kind: "session", id: session, tab } : { kind: "session", id: session }
+  }
   return null
 }
 
@@ -74,6 +99,10 @@ export function withRecordModal(params: URLSearchParams, modal: RecordModal | nu
     case "new-endpoint":
       next.set(NEW_ENDPOINT, modal.channel)
       if (modal.from) next.set(ENDPOINT_FROM, modal.from)
+      break
+    case "session":
+      next.set(SESSION, modal.id)
+      if (modal.tab) next.set(SESSION_TAB, modal.tab)
       break
   }
   return next

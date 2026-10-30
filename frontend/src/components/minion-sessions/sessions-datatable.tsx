@@ -27,6 +27,7 @@ import {
   EyeOffIcon,
   FilterIcon,
   FilterXIcon,
+  InfoIcon,
   CopyIcon,
   ListRestartIcon,
   ListChecksIcon,
@@ -827,6 +828,11 @@ function SessionMenu({
       : undefined
   return (
     <>
+      <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
+        <InfoIcon />
+        Details
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       {/* Any member selects: marking many is theirs too (archiving, in the
           bar, stays an operator's). */}
       <ContextMenuItem onClick={onSelect}>
