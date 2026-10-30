@@ -4,17 +4,30 @@ import type { WorkPaneTabs } from "@/components/work-pane/work-pane-tabs"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { useFactoryIcons } from "@/graphql/hooks/builds"
-import { useMinionSession } from "@/graphql/hooks/minion-sessions"
+import { useMinionSession, useMinionSessions } from "@/graphql/hooks/minion-sessions"
+import { markColorVars, markRowClass } from "./session-mark-colors"
+import { SessionFire } from "./session-fire"
 
 // The lower half of the Sessions page: the sessions an operator works with,
 // a tab each ("Interact" in a session's menu opens one). What a tab will
 // hold, a session's commands and their output, is not built yet.
 
 export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; onTabsChange: (next: WorkPaneTabs) => void }) {
+  const sessions = useMinionSessions(tabs.ids)
   return (
     <WorkPane
       label="Sessions being worked with"
-      tabs={tabs.ids.map((id) => ({ id, label: <SessionTabLabel id={id} /> }))}
+      tabs={tabs.ids.map((id, i) => {
+        // A tab looks as its session's row: the caller's mark, color or style.
+        const color = sessions[i]?.mark?.color
+        return {
+          id,
+          label: <SessionTabLabel id={id} />,
+          className: markRowClass(color),
+          style: markColorVars(color),
+          backdrop: color === "on-fire" ? <SessionFire /> : undefined,
+        }
+      })}
       state={tabs}
       onChange={onTabsChange}
       panel={(id) => <SessionPanel id={id} />}

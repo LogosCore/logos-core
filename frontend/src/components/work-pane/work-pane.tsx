@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
 import { XIcon } from "lucide-react"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable"
@@ -31,6 +31,12 @@ export interface WorkPaneTab {
   label: ReactNode
   /** The tab's tooltip, its whole name. */
   title?: string
+  /** The owner's look for the tab (a session's mark): classes and style on
+   *  it, and what is drawn behind its label. Its label is a [data-cell], as a
+   *  marked row's cells are (session-mark-styles.css). */
+  className?: string
+  style?: CSSProperties
+  backdrop?: ReactNode
 }
 
 export function WorkPane({
@@ -161,6 +167,7 @@ function Tab({
               aria-controls={panelId(tab.id)}
               tabIndex={active ? 0 : -1}
               title={tab.title}
+              style={tab.style}
               onClick={onActivate}
               // A middle click closes it, as in a browser (and does not scroll).
               onMouseDown={(e) => {
@@ -173,11 +180,15 @@ function Tab({
                 "group/tab flex h-9 max-w-56 cursor-pointer items-center gap-2 border-r border-b-2 border-b-transparent pr-1.5 pl-3 text-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                 active ? "border-b-foreground bg-card text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 isDragging && "bg-muted shadow-sm",
+                tab.className,
               )}
             />
           }
         >
-          <span className="flex min-w-0 items-center gap-1.5 truncate">{tab.label}</span>
+          {tab.backdrop}
+          <span data-cell className="flex min-w-0 items-center gap-1.5 truncate">
+            {tab.label}
+          </span>
           <button
             type="button"
             aria-label="Close the tab"

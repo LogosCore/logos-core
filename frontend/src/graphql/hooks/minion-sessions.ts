@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
   useInfiniteQuery,
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
   type InfiniteData,
@@ -231,13 +232,22 @@ export function useSetMinionSessionAddress() {
   })
 }
 
+const sessionQuery = (id: string) => ({
+  queryKey: minionSessionKeys.detail(id),
+  queryFn: () => graphqlClient(MinionSessionDocument, { id }),
+  enabled: id !== "",
+})
+
 /** One session (closed ones too). */
 export function useMinionSession(id: string) {
-  return useQuery({
-    queryKey: minionSessionKeys.detail(id),
-    queryFn: () => graphqlClient(MinionSessionDocument, { id }),
-    enabled: id !== "",
-  })
+  return useQuery(sessionQuery(id))
+}
+
+/** Several sessions, each its own query (shared with useMinionSession): undefined while loading, null when gone. */
+export function useMinionSessions(ids: readonly string[]) {
+  return useQueries({ queries: ids.map(sessionQuery) }).map((q) =>
+    q.isLoading ? undefined : (q.data?.minionSession ?? null),
+  )
 }
 
 /** Archives a session or restores it, for the whole operation. */
