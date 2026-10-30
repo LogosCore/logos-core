@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { DownloadIcon, ExternalLinkIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -120,6 +120,14 @@ export function BuildsTable({
                     <>
                       <span className="truncate font-mono font-medium">{b.moduleName}</span>
                       <span className="truncate text-muted-foreground">&nbsp;· {b.target}</span>
+                      {b.persistedSession && (
+                        <span
+                          className="ml-1.5 shrink-0 self-center text-muted-foreground"
+                          title="Persists a session: its minions come back to it when they restart"
+                        >
+                          <PinIcon className="size-3" aria-label="Persists a session" />
+                        </span>
+                      )}
                     </>
                   }
                   subtitle={<span className="font-mono">{b.id}</span>}
