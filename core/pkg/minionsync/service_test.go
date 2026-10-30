@@ -105,6 +105,30 @@ func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.Minion
 	return nil
 }
 
+func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].Persisted = true
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.MinionSessionClaim) error {
+	for i := range f.rows {
+		r := &f.rows[i]
+		if r.SessionID != id || r.ClosedAt != nil {
+			continue
+		}
+		r.ReplacedKeys = append([]models.MinionSessionReplacedKeys{{Crypto: r.Crypto, At: c.At}}, r.ReplacedKeys...)
+		r.Restarts = append([]models.MinionSessionRestart{{At: c.At, PID: c.Hello.PID, Host: c.Hello.Host, BuildID: c.BuildID}}, r.Restarts...)
+		r.RestartCount++
+		r.Crypto, r.Hello, r.BuildID, r.Address, r.AddressPicked, r.Persisted = c.Crypto, c.Hello, c.BuildID, c.Address, c.AddressPicked, true
+		return nil
+	}
+	return qmgo.ErrNoSuchDocuments
+}
+
 // fakeBus keeps what is published.
 type fakeBus struct {
 	eventbus.NopEventBus
@@ -525,6 +549,97 @@ func TestClosedSession(t *testing.T) {
 	closed := time.Now()
 	r.sessions.rows[0].CreatedAt, r.sessions.rows[0].ClosedAt = time.Now(), &closed
 	closedErr("closed")
+}
+
+// persistedBuild is a second build of the rig's operation, built to persist
+// session sid, with keys of its own.
+func (r *rig) persistedBuild(t *testing.T, sid uuid.UUID) (*models.Build, protocol.AES256CBCHMACSHA256Material) {
+	t.Helper()
+	keys := protocol.AES256CBCHMACSHA256Material{EncKey: make([]byte, 32), MACKey: make([]byte, 32)}
+	_, _ = rand.Read(keys.EncKey)
+	_, _ = rand.Read(keys.MACKey)
+	material, _ := json.Marshal(keys)
+	b := &models.Build{BuildID: uuid.New(), OperationID: r.build.OperationID, ModuleName: "bob", Target: "linux-elf",
+		Platform: "linux/amd64", PersistedSessionID: &sid,
+		Crypto: &protocol.BuildCrypto{Suite: protocol.CryptoAES256CBCHMACSHA256, Material: material}}
+	r.builds[b.BuildID] = b
+	return b, keys
+}
+
+func claimHello(host string, sid uuid.UUID) protocol.HelloItem {
+	h := hello(host)
+	h.PID, h.SID = 777, sid[:]
+	return h
+}
+
+// A build that persists a session gets it back when its minion claims it;
+// the process that held it is told session_replaced, with its own keys.
+func TestClaimPersistedSession(t *testing.T) {
+	r := newRig(t)
+	reply, _ := r.send(t, protocol.NewMessageID(), hello("web01"))
+	sid := sessionID(t, r.open(t, reply))
+	b2, keys2 := r.persistedBuild(t, sid)
+
+	reply, err := r.sendUnder(t, b2.BuildID, keys2, protocol.NewMessageID(), claimHello("web01-rebooted", sid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionID(t, r.openUnder(t, b2.BuildID, keys2, reply)); got != sid {
+		t.Fatalf("claimed %s, got %s", sid, got)
+	}
+	s := r.sessions.rows[0]
+	if len(r.sessions.rows) != 1 || s.BuildID != b2.BuildID || s.Hello.Host != "web01-rebooted" || s.RestartCount != 1 ||
+		len(s.Restarts) != 1 || s.Restarts[0].PID != 777 || !s.Persisted || len(s.ReplacedKeys) != 1 {
+		t.Fatalf("claimed session %+v", s)
+	}
+
+	// The claimer goes on under the session with its keys.
+	if reply, err := r.sendUnder(t, sid, keys2, protocol.NewMessageID()); err != nil || reply != nil {
+		t.Fatalf("claimer's check-in: %x %v", reply, err)
+	}
+	// The process that held it, with the session's old keys: told, sealed
+	// with those, and not checked in.
+	seen := r.sessions.rows[0].LastSeenAt
+	reply, err = r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var e protocol.ErrItem
+	msg := r.openUnder(t, sid, r.keys, reply)
+	if len(msg.Items) != 1 || protocol.UnmarshalCBOR(msg.Items[0], &e) != nil || e.Code != protocol.ErrItemSessionReplaced {
+		t.Fatalf("old holder: %+v", msg)
+	}
+	if r.sessions.rows[0].LastSeenAt != seen {
+		t.Fatal("a replaced holder checked in")
+	}
+}
+
+// A claim not honoured opens a new session, as a hello without one does.
+func TestClaimNotHonoured(t *testing.T) {
+	r := newRig(t)
+	reply, _ := r.send(t, protocol.NewMessageID(), hello("web01"))
+	sid := sessionID(t, r.open(t, reply))
+
+	// The rig's own build does not persist the session.
+	reply, err := r.send(t, protocol.NewMessageID(), claimHello("web02", sid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionID(t, r.open(t, reply)); got == sid || len(r.sessions.rows) != 2 {
+		t.Fatalf("a build that does not persist it got %s (%d sessions)", got, len(r.sessions.rows))
+	}
+
+	// A closed session is not given back.
+	b2, keys2 := r.persistedBuild(t, sid)
+	closed := time.Now()
+	r.sessions.rows[0].ClosedAt = &closed
+	reply, err = r.sendUnder(t, b2.BuildID, keys2, protocol.NewMessageID(), claimHello("web01", sid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionID(t, r.openUnder(t, b2.BuildID, keys2, reply)); got == sid || len(r.sessions.rows) != 3 {
+		t.Fatalf("a closed session was claimed: %s", got)
+	}
 }
 
 // A deleted build's minions open no new sessions, staged or not.

@@ -37,6 +37,8 @@ export type SessionColumnId =
   | "buildDescription"
   | "buildId"
   | "staged"
+  | "persisted"
+  | "restarts"
 
 export interface SessionColumnDef {
   id: SessionColumnId
@@ -90,6 +92,8 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "buildDescription", label: "Build description", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.buildDescription },
   { id: "buildId", label: "Build id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.buildId },
   { id: "sessionId", label: "Session id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.id },
+  { id: "persisted", label: "Persisted", kind: "bool", sortable: true, initialDirection: "DESC", width: fr(0.6), value: (s) => s.persisted },
+  { id: "restarts", label: "Restarts", kind: "number", sortable: true, initialDirection: "DESC", width: fr(0.6), value: (s) => s.restartCount },
   { id: "staged", label: "Staged", kind: "bool", sortable: true, initialDirection: "DESC", width: fr(0.5), value: (s) => s.staged },
 ]
 
@@ -288,6 +292,7 @@ export function describeFilter(f: SessionFilter): string {
 /** How an enum or bool value reads: platforms named, staged as yes / no. */
 export function enumLabel(column: SessionColumnId, value: string): string {
   if (column === "staged") return value === "true" ? "staged" : "not staged"
+  if (column === "persisted") return value === "true" ? "persisted" : "not persisted"
   if (column === "os") return platformLabel(`${value}/any`).replace(" (any arch)", "")
   if (column === "platform") return platformLabel(value)
   return value

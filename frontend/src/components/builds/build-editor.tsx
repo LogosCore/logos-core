@@ -31,6 +31,7 @@ import { whenIdle } from "@/lib/preloadable"
 import { useEditorModeStore } from "@/stores/editor-mode"
 import { useChannelIcons, useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useBuild, useBuildFiles, useCreateBuild, useFactoryKinds, useInvalidateBuildFiles } from "@/graphql/hooks/builds"
+import { useMinionSession } from "@/graphql/hooks/minion-sessions"
 import { uploadBuildFile } from "@/lib/build-file-upload"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
@@ -81,7 +82,16 @@ import { ModuleIcon } from "@/components/modules/module-icon"
  * A new build in the scoped operation (the build modal, ?newBuild=<factory>);
  * with from, filled in from that earlier build ("Build again").
  */
-export function BuildEditor({ factory, from: fromId }: { factory: string; from: string | null }) {
+export function BuildEditor({
+  factory,
+  from: fromId,
+  session,
+}: {
+  factory: string
+  from: string | null
+  /** The session the build persists (Build with persisted session); null for none. */
+  session: string | null
+}) {
   const scopedOperation = useScopedOperation()
   const fromQuery = useBuild(fromId ?? "")
 
@@ -91,7 +101,11 @@ export function BuildEditor({ factory, from: fromId }: { factory: string; from: 
   // Empty while loading, as the tables are.
   if (fromQuery.isLoading) return null
   const from = fromQuery.data?.build ?? null
-  return <EditorLoader operationId={scopedOperation.id} kindName={factory} from={from} />
+  // Build again from a build that persists a session persists it too.
+  const persistedSession = session ?? from?.persistedSession ?? null
+  return (
+    <EditorLoader operationId={scopedOperation.id} kindName={factory} from={from} persistedSession={persistedSession} />
+  )
 }
 
 /** Loads what the form needs: the factory kind, the channels, the files. */
@@ -99,11 +113,13 @@ function EditorLoader({
   operationId,
   kindName,
   from,
+  persistedSession,
 }: {
   operationId: string
   kindName: string
   /** The earlier build the form starts from, if any. */
   from: BuildRecordLike | null
+  persistedSession: string | null
 }) {
   const kinds = useFactoryKinds()
   const channelKinds = useChannelKinds()
@@ -121,6 +137,7 @@ function EditorLoader({
       source={from && sourceFromBuild(kind, from, channels)}
       channels={channels}
       files={(filesQuery.data?.buildFiles ?? []).map((f) => ({ id: f.id, name: f.name, size: f.size, mediaType: f.mediaType }))}
+      persistedSession={kind.persistedSessions ? persistedSession : null}
     />
   )
 }
@@ -135,12 +152,15 @@ function Editor({
   source,
   channels,
   files,
+  persistedSession,
 }: {
   operationId: string
   kind: FactoryKind
   source: FormSource | null
   channels: ReadonlyMap<string, ChannelKind>
   files: BuildFilesContextValue["files"]
+  /** The session the minion claims when it starts; null for none. */
+  persistedSession: string | null
 }) {
   const { open } = useRecordModals()
   const requestClose = useRequestClose()
@@ -310,6 +330,7 @@ function Editor({
           values: request.values,
           commands: request.commands,
           connections: request.connections,
+          persistedSession,
         },
       })
       toast.success("Build queued")
@@ -320,6 +341,7 @@ function Editor({
       setServerErrors(problems)
       setSaveError(
         problems[""] ??
+          (problems.persistedSession && `The persisted session: ${problems.persistedSession}`) ??
           (Object.keys(problems).length > 0
             ? "Some settings were rejected; see the marked fields."
             : errorMessage(err, "Failed to start the build")),
@@ -428,6 +450,7 @@ function Editor({
               <RecordModalTitle>New build</RecordModalTitle>
               <span className="truncate text-sm text-muted-foreground">
                 <span className="font-mono">{kind.name}</span> · schema v{kind.version} · {kind.instances} running
+                {persistedSession && <PersistedSessionNote id={persistedSession} />}
               </span>
             </div>
           </div>
@@ -698,3 +721,18 @@ const CONNECTIONS = "Connections"
 
 /** A problem's key that is the commands': "commands", "commands[2]". */
 const isCommandsKey = (key: string) => key === "commands" || key.startsWith("commands[")
+
+/** Which session the build persists: its minions come back to it when they restart. */
+function PersistedSessionNote({ id }: { id: string }) {
+  const { data } = useMinionSession(id)
+  const s = data?.minionSession
+  return (
+    <span
+      className="text-foreground"
+      title="Its minions claim this session when they start, so a restarted minion comes back to it instead of opening a new one."
+    >
+      {" "}
+      · persists session {s ? `#${s.number}${s.host ? ` (${s.host})` : ""}` : id.slice(0, 8)}
+    </span>
+  )
+}

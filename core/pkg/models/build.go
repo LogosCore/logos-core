@@ -88,6 +88,10 @@ type Build struct {
 	// when its factory declares a suite. It goes to the factory, into the
 	// artifact, and to the build's JSON tab through GraphQL.
 	Crypto *protocol.BuildCrypto `bson:"crypto,omitempty" json:"-"`
+	// PersistedSessionID is the session the minion claims in its hello
+	// (protocol.BuildRequest.SessionID); nil for a minion that opens new
+	// sessions. One per build.
+	PersistedSessionID *uuid.UUID `bson:"persisted_session_id,omitempty" json:"persisted_session_id,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
 	SearchText string `bson:"search_text" json:"-"`

@@ -90,6 +90,10 @@ func columnFilter(f models.MinionSessionFilter, now time.Time) bson.M {
 		for _, v := range f.Values {
 			if col.Kind == models.SessionColumnBool {
 				values = append(values, v == "true")
+				// A flag stored only when set is false when missing.
+				if v == "false" {
+					values = append(values, nil)
+				}
 			} else {
 				values = append(values, v)
 			}
@@ -113,6 +117,10 @@ func columnFilter(f models.MinionSessionFilter, now time.Time) bson.M {
 			}
 			if f.Max != nil {
 				cond["$lte"] = *f.Max
+			}
+			// A count stored only when set is 0 when missing.
+			if f.Column == "restarts" && (f.Min == nil || *f.Min <= 0) && (f.Max == nil || *f.Max >= 0) {
+				return bson.M{"$or": bson.A{bson.M{field: cond}, bson.M{field: nil}}}
 			}
 		}
 		return bson.M{field: cond}
@@ -177,6 +185,17 @@ func sessionSortValue(s *models.MinionSession, column string) any {
 		return str(s.BuildDescription)
 	case "staged":
 		return s.Staged
+	// Stored only when set: missing (nil) otherwise, as Mongo sorts them.
+	case "persisted":
+		if !s.Persisted {
+			return nil
+		}
+		return true
+	case "restarts":
+		if s.RestartCount == 0 {
+			return nil
+		}
+		return s.RestartCount
 	}
 	return nil
 }

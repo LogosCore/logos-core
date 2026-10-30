@@ -4,6 +4,7 @@ export const BuildSchemaFields = graphql(`
   fragment BuildSchemaFields on BuildSchema {
     version
     crypto
+    persistedSessions
     fields {
       ...ModuleFieldDefFields
     }
@@ -58,6 +59,7 @@ export const BuildFields = graphql(`
   fragment BuildFields on Build {
     id
     operationId
+    persistedSession
     description
     moduleName
     target

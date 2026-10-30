@@ -196,6 +196,13 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 		Description: input.Description, ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
 		Values: values, Commands: input.Commands, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
 	}
+	if input.PersistedSession != nil {
+		sid, err := uuid.Parse(*input.PersistedSession)
+		if err != nil {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid session ID")
+		}
+		in.PersistedSession = &sid
+	}
 	b, err := r.builds.CreateBuild(ctx, op, in)
 	if err != nil {
 		return nil, mapBuildError(ctx, err)
@@ -314,7 +321,8 @@ func mapBuildError(ctx context.Context, err error) error {
 // --- mapping ---
 
 func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
-	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields)}
+	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields),
+		PersistedSessions: s.PersistedSessions}
 	for _, c := range s.Channels {
 		out.Channels = append(out.Channels, &model.BuildChannel{
 			ModuleName: c.ModuleName, Versions: c.Versions, Fields: toBuildFieldModels(c.Fields),
@@ -380,6 +388,10 @@ func toBuildModel(b *models.Build) *model.Build {
 	}
 	if b.Crypto != nil {
 		out.Crypto = b.Crypto
+	}
+	if b.PersistedSessionID != nil {
+		sid := b.PersistedSessionID.String()
+		out.PersistedSession = &sid
 	}
 	if out.Connections == nil {
 		out.Connections = []protocol.BuildConnection{}

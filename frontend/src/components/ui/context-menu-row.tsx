@@ -1,24 +1,30 @@
-import { useState, type ReactNode } from "react"
+import { useState, type CSSProperties, type ReactNode } from "react"
 import { EllipsisIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { dataTableRowClass } from "@/components/ui/virtualized-data-table"
 
 /**
- * A data-table row with a menu. A click (or Enter) calls onOpen; right-clicking
- * anywhere on the row opens the menu at the pointer, and the ⋯ button, given
- * to children to place (usually in the last column), opens the same menu under
- * itself. menu is the ContextMenuItems.
+ * A data-table row with a menu. A click (or Enter) calls onOpen, when there is
+ * one; right-clicking anywhere on the row opens the menu at the pointer, and
+ * the ⋯ button, given to children to place (usually in the last column), opens
+ * the same menu under itself. menu is the ContextMenuItems. A table whose
+ * columns change at run time passes its grid in style instead of gridCols.
  */
 export function ContextMenuRow({
   gridCols,
+  style,
   onOpen,
   menu,
   menuLabel,
+  menuButtonSize = "icon-sm",
   children,
 }: {
   gridCols: string
-  onOpen: () => void
+  /** The ⋯ button's size: icon-xs keeps a one-line row one line. */
+  menuButtonSize?: "icon-xs" | "icon-sm"
+  style?: CSSProperties
+  onOpen?: () => void
   menu: ReactNode
   /** The ⋯ button's accessible name, e.g. "Module actions". */
   menuLabel: string
@@ -32,7 +38,7 @@ export function ContextMenuRow({
   const menuButton = (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size={menuButtonSize}
       aria-label={menuLabel}
       aria-haspopup="menu"
       aria-expanded={open && anchor !== null}
@@ -59,12 +65,13 @@ export function ContextMenuRow({
       <ContextMenuTrigger
         render={
           <div
-            className={`${dataTableRowClass(gridCols)} cursor-pointer`}
-            role="link"
-            tabIndex={0}
+            className={`${dataTableRowClass(gridCols)} ${onOpen ? "cursor-pointer" : ""}`}
+            style={style}
+            role={onOpen ? "link" : undefined}
+            tabIndex={onOpen ? 0 : undefined}
             onClick={onOpen}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onOpen()
+              if (e.key === "Enter") onOpen?.()
             }}
           />
         }

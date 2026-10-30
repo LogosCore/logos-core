@@ -57,8 +57,24 @@ type MinionSession {
   # The factory's own fields.
   x: JSON
   createdAt: String!
+  # A build persists the session: its minions claim it when they start, so
+  # a restarted process comes back here instead of opening a new session.
+  persisted: Boolean!
+  # The processes that claimed the session (restarts), most recent first, at
+  # most 32; restartCount counts them all.
+  restarts: [MinionSessionRestart!]!
+  restartCount: Int!
   # The latest message under the session id; null before the first check-in.
   lastSeenAt: String
+}
+
+# A process that claimed a persisted session.
+type MinionSessionRestart {
+  at: String!
+  pid: Int!
+  host: String
+  # The build it ran: the one that persists the session.
+  buildId: ID!
 }
 
 # One external address a session was seen from.
@@ -109,7 +125,7 @@ enum MinionSessionFilterOp {
 # One column filter. column is a column id: number, sessionId, addrs, peer
 # (the external addresses), host, user (CONTAINS also matches the integrity
 # level), domain, proc, pid, os, arch, version, lastSeen, opened, build,
-# target, platform, buildDescription, buildId, staged.
+# target, platform, buildDescription, buildId, staged, persisted, restarts.
 input MinionSessionFilterInput {
   column: String!
   op: MinionSessionFilterOp!
@@ -192,6 +208,11 @@ extend type Query {
     last: Int
     before: String
   ): MinionSessionConnection!
+    @hasPermission(permission: "operation:member")
+
+  # One session, closed ones too; null when there is none. Needs at least
+  # viewer of its operation.
+  minionSession(id: ID!): MinionSession
     @hasPermission(permission: "operation:member")
 
   # The distinct values an operation's sessions have in a column of a few

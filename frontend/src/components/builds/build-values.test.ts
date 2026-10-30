@@ -35,6 +35,7 @@ function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef 
 const schema: BuildSchemaFieldsFragment = {
   version: 1,
   crypto: null,
+  persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
     field({ key: "kill_date", type: "datetime", order: 2 }),

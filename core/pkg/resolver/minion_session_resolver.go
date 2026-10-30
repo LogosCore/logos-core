@@ -24,6 +24,7 @@ import (
 type IMinionSessionResolver interface {
 	MinionSessions(ctx context.Context, operationID string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
 	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
+	MinionSession(ctx context.Context, id string) (*model.MinionSession, error)
 	// MinionSessionsLayout and SetMinionSessionsLayout are the caller's own
 	// Sessions table layout.
 	MinionSessionsLayout(ctx context.Context) (*model.MinionSessionsLayout, error)
@@ -151,6 +152,24 @@ func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id 
 	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
 		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
 	}))
+	return toMinionSessionModel(s), nil
+}
+
+func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*model.MinionSession, error) {
+	sid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid session ID")
+	}
+	s, err := r.sessions.FindBySessionID(ctx, sid)
+	if repository.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := r.viewer(ctx, s.OperationID.String()); err != nil {
+		return nil, err
+	}
 	return toMinionSessionModel(s), nil
 }
 
@@ -290,7 +309,8 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
 		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
-		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
+		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
+		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X
@@ -303,6 +323,15 @@ func toSessionPeerModels(peers []models.MinionSessionPeer) []*model.MinionSessio
 	for i, p := range peers {
 		out[i] = &model.MinionSessionPeer{Address: p.Address, FirstSeen: p.FirstSeen.UTC().Format(time.RFC3339),
 			LastSeen: p.LastSeen.UTC().Format(time.RFC3339), Count: int(p.Count)}
+	}
+	return out
+}
+
+func toSessionRestartModels(restarts []models.MinionSessionRestart) []*model.MinionSessionRestart {
+	out := make([]*model.MinionSessionRestart, len(restarts))
+	for i, r := range restarts {
+		out[i] = &model.MinionSessionRestart{At: r.At.UTC().Format(time.RFC3339), Pid: int(r.PID), //nolint:gosec // a pid fits
+			Host: strPtr(r.Host), BuildID: r.BuildID.String()}
 	}
 	return out
 }

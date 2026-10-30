@@ -208,6 +208,9 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		SchemaVersion: b.SchemaVersion, Values: b.Values, Commands: b.Commands, Connections: b.Connections.Items,
 		Crypto: b.Crypto, Deadline: deadline, Actor: b.CreatedBy.Protocol(),
 	}
+	if b.PersistedSessionID != nil {
+		req.SessionID = b.PersistedSessionID.String()
+	}
 	if len(b.FileIDs) > 0 {
 		req.Files = make(map[string]protocol.BuildFile, len(b.FileIDs))
 	}

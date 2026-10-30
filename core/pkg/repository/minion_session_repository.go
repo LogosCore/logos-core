@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -46,6 +47,12 @@ type IMinionSessionRepository interface {
 	// Values are the distinct values an operation's sessions have in a
 	// column, sorted; missing values are left out.
 	Values(ctx context.Context, operationID uuid.UUID, column string) ([]string, error)
+	// SetPersisted marks a session persisted: a build names it.
+	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
+	// Claim gives an open session to the process that claimed it: its
+	// keys, build and hello, the previous keys kept as replaced, the restart
+	// recorded. IsNotFound when the session is not open.
+	Claim(ctx context.Context, sessionID uuid.UUID, c MinionSessionClaim) error
 	// CloseByOperationID closes an operation's sessions (a tombstone each)
 	// and forgets its session numbers.
 	CloseByOperationID(ctx context.Context, operationID uuid.UUID, reason string, at time.Time) error
@@ -240,4 +247,51 @@ func (r *minionSessionRepository) CloseByOperationID(ctx context.Context, operat
 	}
 	_, err := r.counters.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
+}
+
+// MinionSessionClaim is what a claim of a persisted session sets.
+type MinionSessionClaim struct {
+	At                                             time.Time
+	BuildID                                        uuid.UUID
+	BuildDescription, ModuleName, Target, Platform string
+	Staged                                         bool
+	Crypto                                         protocol.BuildCrypto
+	Hello                                          models.MinionHello
+	Address                                        string
+	AddressPicked                                  bool
+}
+
+func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": bson.M{"persisted": true}})
+}
+
+// Claim is one update inside Mongo: the session's keys move to the front of
+// replaced_keys (MaxSessionReplacedKeys kept) as the claim's take their
+// place. What the minion sent goes in through $literal, as a client's value
+// must in a pipeline.
+func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID, c MinionSessionClaim) error {
+	lit := func(v any) bson.M { return bson.M{"$literal": v} }
+	prepend := func(field string, item any, limit int) bson.M {
+		return bson.M{"$slice": bson.A{
+			bson.M{"$concatArrays": bson.A{bson.A{item}, bson.M{"$ifNull": bson.A{"$" + field, bson.A{}}}}},
+			limit,
+		}}
+	}
+	restart := models.MinionSessionRestart{At: c.At, PID: c.Hello.PID, Host: c.Hello.Host, BuildID: c.BuildID}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID, "closed_at": nil}, bson.A{bson.M{"$set": bson.M{
+		"replaced_keys":     prepend("replaced_keys", bson.M{"crypto": "$crypto", "at": c.At}, models.MaxSessionReplacedKeys),
+		"restarts":          prepend("restarts", lit(restart), models.MaxSessionRestarts),
+		"restart_count":     bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$restart_count", 0}}, 1}},
+		"crypto":            lit(c.Crypto),
+		"hello":             lit(c.Hello),
+		"address":           lit(c.Address),
+		"address_picked":    c.AddressPicked,
+		"build_id":          lit(c.BuildID),
+		"build_description": lit(c.BuildDescription),
+		"module_name":       lit(c.ModuleName),
+		"target":            lit(c.Target),
+		"platform":          lit(c.Platform),
+		"staged":            c.Staged,
+		"persisted":         true,
+	}}})
 }

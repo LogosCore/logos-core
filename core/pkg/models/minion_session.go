@@ -58,6 +58,17 @@ type MinionSession struct {
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
+	// Persisted is set once a build names the session (Build.PersistedSessionID):
+	// that build's minions claim it when they start.
+	Persisted bool `bson:"persisted,omitempty" json:"persisted,omitempty"`
+	// Restarts are the claims that brought a process into the session, most
+	// recent first, at most MaxSessionRestarts; RestartCount counts them all.
+	Restarts     []MinionSessionRestart `bson:"restarts,omitempty" json:"restarts,omitempty"`
+	RestartCount int64                  `bson:"restart_count,omitempty" json:"restart_count,omitempty"`
+	// ReplacedKeys are the keys earlier holders had, most recent first, at
+	// most MaxSessionReplacedKeys and MinionSessionTombstone old: a message
+	// that opens with one gets session_replaced. Never shown.
+	ReplacedKeys []MinionSessionReplacedKeys `bson:"replaced_keys,omitempty" json:"-"`
 	// ClosedAt is when core closed the session, and CloseReason why
 	// (MinionSessionClosedOperationDeleted); nil while it is open. A session
 	// that expired waiting for its first check-in is closed too, without
@@ -84,6 +95,27 @@ const MinionSessionClosedOperationDeleted = "operation_deleted"
 // expired waiting for its first check-in.
 func (s *MinionSession) Closed(now time.Time) bool {
 	return s.ClosedAt != nil || (s.LastSeenAt == nil && now.Sub(s.CreatedAt) >= MinionSessionCheckInWindow)
+}
+
+// MaxSessionRestarts and MaxSessionReplacedKeys cap a session's lists.
+const (
+	MaxSessionRestarts     = 32
+	MaxSessionReplacedKeys = 4
+)
+
+// MinionSessionRestart is one claim of a persisted session: a process that
+// took it over.
+type MinionSessionRestart struct {
+	At      time.Time `bson:"at" json:"at"`
+	PID     uint64    `bson:"pid" json:"pid"`
+	Host    string    `bson:"host,omitempty" json:"host,omitempty"`
+	BuildID uuid.UUID `bson:"build_id" json:"build_id"`
+}
+
+// MinionSessionReplacedKeys are keys a session had before a claim.
+type MinionSessionReplacedKeys struct {
+	Crypto protocol.BuildCrypto `bson:"crypto"`
+	At     time.Time            `bson:"at"`
 }
 
 // MaxSessionPeers caps MinionSession.Peers.

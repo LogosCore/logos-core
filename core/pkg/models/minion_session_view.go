@@ -81,6 +81,9 @@ var MinionSessionColumns = map[string]MinionSessionColumn{
 	"buildDescription": {Field: "build_description", Kind: SessionColumnText, Sortable: true},
 	"buildId":          {Field: "build_id", Kind: SessionColumnID},
 	"staged":           {Field: "staged", Kind: SessionColumnBool, Sortable: true},
+	// Missing for most sessions: false and 0 (the filters count them so).
+	"persisted": {Field: "persisted", Kind: SessionColumnBool, Sortable: true},
+	"restarts":  {Field: "restart_count", Kind: SessionColumnNumber, Sortable: true},
 }
 
 // Filter operations (GraphQL MinionSessionFilterOp).

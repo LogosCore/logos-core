@@ -66,6 +66,7 @@ type Build struct {
 	Connections            any            `json:"connections"`
 	ConnectionDescriptions []string       `json:"connectionDescriptions"`
 	Crypto                 any            `json:"crypto,omitempty"`
+	PersistedSession       *string        `json:"persistedSession,omitempty"`
 	State                  string         `json:"state"`
 	Instance               *string        `json:"instance,omitempty"`
 	FactoryVersion         *string        `json:"factoryVersion,omitempty"`
@@ -147,13 +148,14 @@ type BuildFile struct {
 }
 
 type BuildInput struct {
-	Description string                  `json:"description"`
-	ModuleName  string                  `json:"moduleName"`
-	Target      string                  `json:"target"`
-	Platform    string                  `json:"platform"`
-	Values      any                     `json:"values"`
-	Commands    []string                `json:"commands,omitempty"`
-	Connections []*BuildConnectionInput `json:"connections"`
+	Description      string                  `json:"description"`
+	ModuleName       string                  `json:"moduleName"`
+	Target           string                  `json:"target"`
+	Platform         string                  `json:"platform"`
+	Values           any                     `json:"values"`
+	Commands         []string                `json:"commands,omitempty"`
+	Connections      []*BuildConnectionInput `json:"connections"`
+	PersistedSession *string                 `json:"persistedSession,omitempty"`
 }
 
 type BuildProblem struct {
@@ -162,12 +164,13 @@ type BuildProblem struct {
 }
 
 type BuildSchema struct {
-	Version  int             `json:"version"`
-	Channels []*BuildChannel `json:"channels"`
-	Crypto   *string         `json:"crypto,omitempty"`
-	Fields   []*ModuleField  `json:"fields"`
-	Targets  []*BuildTarget  `json:"targets"`
-	Commands []*BuildCommand `json:"commands"`
+	Version           int             `json:"version"`
+	Channels          []*BuildChannel `json:"channels"`
+	Crypto            *string         `json:"crypto,omitempty"`
+	Fields            []*ModuleField  `json:"fields"`
+	Targets           []*BuildTarget  `json:"targets"`
+	Commands          []*BuildCommand `json:"commands"`
+	PersistedSessions bool            `json:"persistedSessions"`
 }
 
 type BuildStage struct {
@@ -454,32 +457,35 @@ type Minion struct {
 }
 
 type MinionSession struct {
-	ID               string               `json:"id"`
-	Number           int                  `json:"number"`
-	OperationID      string               `json:"operationId"`
-	BuildID          string               `json:"buildId"`
-	BuildDescription string               `json:"buildDescription"`
-	ModuleName       string               `json:"moduleName"`
-	Target           string               `json:"target"`
-	Platform         string               `json:"platform"`
-	Staged           bool                 `json:"staged"`
-	Pid              int                  `json:"pid"`
-	Os               string               `json:"os"`
-	Arch             string               `json:"arch"`
-	Host             *string              `json:"host,omitempty"`
-	User             *string              `json:"user,omitempty"`
-	Domain           *string              `json:"domain,omitempty"`
-	Proc             *string              `json:"proc,omitempty"`
-	Integrity        *string              `json:"integrity,omitempty"`
-	Addrs            []string             `json:"addrs"`
-	Address          *string              `json:"address,omitempty"`
-	AddressPicked    bool                 `json:"addressPicked"`
-	PeerAddress      *string              `json:"peerAddress,omitempty"`
-	Peers            []*MinionSessionPeer `json:"peers"`
-	Version          *string              `json:"version,omitempty"`
-	X                any                  `json:"x,omitempty"`
-	CreatedAt        string               `json:"createdAt"`
-	LastSeenAt       *string              `json:"lastSeenAt,omitempty"`
+	ID               string                  `json:"id"`
+	Number           int                     `json:"number"`
+	OperationID      string                  `json:"operationId"`
+	BuildID          string                  `json:"buildId"`
+	BuildDescription string                  `json:"buildDescription"`
+	ModuleName       string                  `json:"moduleName"`
+	Target           string                  `json:"target"`
+	Platform         string                  `json:"platform"`
+	Staged           bool                    `json:"staged"`
+	Pid              int                     `json:"pid"`
+	Os               string                  `json:"os"`
+	Arch             string                  `json:"arch"`
+	Host             *string                 `json:"host,omitempty"`
+	User             *string                 `json:"user,omitempty"`
+	Domain           *string                 `json:"domain,omitempty"`
+	Proc             *string                 `json:"proc,omitempty"`
+	Integrity        *string                 `json:"integrity,omitempty"`
+	Addrs            []string                `json:"addrs"`
+	Address          *string                 `json:"address,omitempty"`
+	AddressPicked    bool                    `json:"addressPicked"`
+	PeerAddress      *string                 `json:"peerAddress,omitempty"`
+	Peers            []*MinionSessionPeer    `json:"peers"`
+	Version          *string                 `json:"version,omitempty"`
+	X                any                     `json:"x,omitempty"`
+	CreatedAt        string                  `json:"createdAt"`
+	Persisted        bool                    `json:"persisted"`
+	Restarts         []*MinionSessionRestart `json:"restarts"`
+	RestartCount     int                     `json:"restartCount"`
+	LastSeenAt       *string                 `json:"lastSeenAt,omitempty"`
 }
 
 type MinionSessionConnection struct {
@@ -529,6 +535,13 @@ type MinionSessionPeer struct {
 	FirstSeen string `json:"firstSeen"`
 	LastSeen  string `json:"lastSeen"`
 	Count     int    `json:"count"`
+}
+
+type MinionSessionRestart struct {
+	At      string  `json:"at"`
+	Pid     int     `json:"pid"`
+	Host    *string `json:"host,omitempty"`
+	BuildID string  `json:"buildId"`
 }
 
 type MinionSessionSort struct {

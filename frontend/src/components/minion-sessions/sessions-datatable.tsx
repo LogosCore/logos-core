@@ -25,8 +25,10 @@ import {
   EyeOffIcon,
   FilterIcon,
   FilterXIcon,
+  CopyIcon,
   ListRestartIcon,
   LoaderIcon,
+  PinIcon,
   XIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -51,12 +53,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { Popover, PopoverContent } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
 import { useNow } from "@/hooks/use-now"
 import { cn } from "@/lib/utils"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
+import { useRecordModals } from "@/hooks/use-record-modals"
+import { useFactoryKinds } from "@/graphql/hooks/builds"
+import { factoryKindsByName } from "@/components/builds/build-values"
 import { useSetMinionSessionAddress } from "@/graphql/hooks/minion-sessions"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
@@ -128,6 +135,12 @@ export function SessionsDatatable({
   const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)
   const cells = useRef(new Map<SessionColumnId, HTMLElement>())
   const setAddress = useSetMinionSessionAddress()
+  // Whose minions can claim a persisted session: the factory says.
+  const kindsQuery = useFactoryKinds()
+  const persistable = useMemo(() => {
+    const kinds = factoryKindsByName(kindsQuery.data?.factoryKinds ?? [])
+    return (s: MinionSessionFieldsFragment) => kinds.get(s.moduleName)?.persistedSessions === true
+  }, [kindsQuery.data])
   const matchAddress = useMemo(() => addressMatcher(layout.filters, null), [layout.filters])
   const { mutate: pick } = setAddress
   const ctx = useMemo(
@@ -269,17 +282,24 @@ export function SessionsDatatable({
               className="min-h-0 flex-1"
               components={footer}
               itemContent={(_, s) => (
-                <div
-                  className="grid w-full items-center gap-3 border-b px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                <ContextMenuRow
+                  gridCols=""
                   style={grid}
+                  menuLabel="Session actions"
+                  menuButtonSize="icon-xs"
+                  menu={<SessionMenu session={s} canWrite={canWrite} persistable={persistable(s)} />}
                 >
-                  {columns.map((col) => (
-                    <div key={col.id} className="min-w-0">
-                      <SessionCell id={col.id} session={s} ctx={ctx} />
-                    </div>
-                  ))}
-                  <div />
-                </div>
+                  {(menuButton) => (
+                    <>
+                      {columns.map((col) => (
+                        <div key={col.id} className="min-w-0">
+                          <SessionCell id={col.id} session={s} ctx={ctx} />
+                        </div>
+                      ))}
+                      <div className="justify-self-end">{menuButton}</div>
+                    </>
+                  )}
+                </ContextMenuRow>
               )}
             />
           </div>
@@ -579,5 +599,40 @@ function FilterChips({
         </Button>
       )}
     </div>
+  )
+}
+
+/** A session row's menu: build a minion that comes back to this session, copy its id. */
+function SessionMenu({
+  session: s,
+  canWrite,
+  persistable,
+}: {
+  session: MinionSessionFieldsFragment
+  canWrite: boolean
+  persistable: boolean
+}) {
+  const modals = useRecordModals()
+  const why = !canWrite
+    ? "Needs operator in this operation"
+    : !persistable
+      ? `The ${s.moduleName} factory's minions do not claim persisted sessions`
+      : undefined
+  return (
+    <>
+      <ContextMenuItem
+        disabled={why !== undefined}
+        title={why}
+        onClick={() => modals.open({ kind: "new-build", factory: s.moduleName, from: s.buildId, session: s.id })}
+      >
+        <PinIcon />
+        Build with persisted session
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={() => void copyToClipboard(s.id, "session id")}>
+        <CopyIcon />
+        Copy session id
+      </ContextMenuItem>
+    </>
   )
 }

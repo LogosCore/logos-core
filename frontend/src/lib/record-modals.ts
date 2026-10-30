@@ -2,7 +2,9 @@
 // addressed by the URL's query, so a link to one opens it and Back closes it:
 //
 //   ?build=<id>[&buildTab=<tab>]               a build, on a tab of its own
-//   ?newBuild=<factory>[&buildFrom=<id>]       a new build, from an earlier one
+//   ?newBuild=<factory>[&buildFrom=<id>][&buildSession=<id>]
+//                                              a new build, from an earlier
+//                                              one, persisting a session
 //   ?endpoint=<id>                             an endpoint (its editor)
 //   ?newEndpoint=<channel>[&endpointFrom=<id>] a new endpoint, from another
 //
@@ -16,7 +18,7 @@ const BUILD_TABS: readonly BuildTab[] = ["overview", "json", "pipeline"]
 /** The modal the URL opens. */
 export type RecordModal =
   | { kind: "build"; id: string; tab?: BuildTab }
-  | { kind: "new-build"; factory: string; from: string | null }
+  | { kind: "new-build"; factory: string; from: string | null; session?: string | null }
   | { kind: "endpoint"; id: string }
   | { kind: "new-endpoint"; channel: string; from: string | null }
 
@@ -24,12 +26,13 @@ const BUILD = "build"
 const BUILD_TAB = "buildTab"
 const NEW_BUILD = "newBuild"
 const BUILD_FROM = "buildFrom"
+const BUILD_SESSION = "buildSession"
 const ENDPOINT = "endpoint"
 const NEW_ENDPOINT = "newEndpoint"
 const ENDPOINT_FROM = "endpointFrom"
 
 /** Every query key the record modals use. */
-export const RECORD_MODAL_KEYS = [BUILD, BUILD_TAB, NEW_BUILD, BUILD_FROM, ENDPOINT, NEW_ENDPOINT, ENDPOINT_FROM]
+export const RECORD_MODAL_KEYS = [BUILD, BUILD_TAB, NEW_BUILD, BUILD_FROM, BUILD_SESSION, ENDPOINT, NEW_ENDPOINT, ENDPOINT_FROM]
 
 /** The modal params name, or null; with several, the first of the order above. */
 export function recordModalOf(params: URLSearchParams): RecordModal | null {
@@ -40,7 +43,10 @@ export function recordModalOf(params: URLSearchParams): RecordModal | null {
     return tab ? { kind: "build", id: build, tab } : { kind: "build", id: build }
   }
   const factory = get(NEW_BUILD)
-  if (factory) return { kind: "new-build", factory, from: get(BUILD_FROM) }
+  if (factory) {
+    const session = get(BUILD_SESSION)
+    return session ? { kind: "new-build", factory, from: get(BUILD_FROM), session } : { kind: "new-build", factory, from: get(BUILD_FROM) }
+  }
   const endpoint = get(ENDPOINT)
   if (endpoint) return { kind: "endpoint", id: endpoint }
   const channel = get(NEW_ENDPOINT)
@@ -60,6 +66,7 @@ export function withRecordModal(params: URLSearchParams, modal: RecordModal | nu
     case "new-build":
       next.set(NEW_BUILD, modal.factory)
       if (modal.from) next.set(BUILD_FROM, modal.from)
+      if (modal.session) next.set(BUILD_SESSION, modal.session)
       break
     case "endpoint":
       next.set(ENDPOINT, modal.id)

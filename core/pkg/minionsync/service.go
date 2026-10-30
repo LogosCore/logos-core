@@ -60,6 +60,9 @@ type sender struct {
 	session *models.MinionSession
 	crypto  protocol.BuildCrypto
 	keys    protocol.AES256CBCHMACSHA256Material
+	// replaced: the message opened with keys a claim replaced; keys are
+	// those.
+	replaced bool
 }
 
 // Service handles minion messages.
@@ -92,6 +95,11 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 		return nil, err
 	}
 	plain, err := protocol.OpenFrame(from.keys, sentUnder, protocol.FrameMinionToCore, frame)
+	if err != nil && from.session != nil {
+		// Not the session's keys: maybe an earlier holder's, replaced by a
+		// claim. It is told so.
+		plain, err = s.openReplaced(from, sentUnder, frame)
+	}
 	if err != nil {
 		s.logger.Info("minion message does not open", zap.String("id", id))
 		return nil, ErrUnopened
@@ -116,6 +124,9 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 
 	var items []cbor.RawMessage
 	switch {
+	case from.replaced:
+		s.logger.Info("minion message from a replaced holder", zap.String("session_id", id))
+		items, err = errMessage(protocol.ErrItemSessionReplaced, "another process claimed the session: start over without claiming")
 	case from.session != nil && from.session.Closed(s.now()):
 		// A tombstone: the one thing to tell its minion.
 		s.logger.Info("minion message under a closed session", zap.String("session_id", id))
@@ -210,6 +221,22 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
 	}
+	if from.staging != nil {
+		if err := s.stagings.Delete(ctx, from.staging.TempID); err != nil {
+			if repository.IsNotFound(err) {
+				return errItem(protocol.ErrItemBadMessage, "the temporary id served a hello already", 0)
+			}
+			return nil, fmt.Errorf("remove the staging: %w", err)
+		}
+	}
+	if hello.SID != nil {
+		items, claimed, err := s.claim(ctx, from, peer, hello)
+		if err != nil || claimed {
+			return items, err
+		}
+		// Not honoured: a new session, as without a claim.
+	}
+
 	b, now := from.build, s.now()
 	// Until its first check-in a session is purged after the day's wait and
 	// its tombstone's time.
@@ -224,14 +251,6 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
 	}
-	if from.staging != nil {
-		if err := s.stagings.Delete(ctx, from.staging.TempID); err != nil {
-			if repository.IsNotFound(err) {
-				return errItem(protocol.ErrItemBadMessage, "the temporary id served a hello already", 0)
-			}
-			return nil, fmt.Errorf("remove the staging: %w", err)
-		}
-	}
 	if session.Number, err = s.sessions.NextNumber(ctx, b.OperationID); err != nil {
 		return nil, fmt.Errorf("number the session: %w", err)
 	}
@@ -243,6 +262,60 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 		zap.String("host", hello.Host), zap.Uint64("pid", hello.PID))
 	s.bus.Publish(eventbus.NewMinionSessionCreatedEvent(sessionPayload(session)))
 	return helloResponse(session.SessionID)
+}
+
+// claim gives a persisted session to the process whose hello claims it,
+// when its build names that session and the session is open: the session
+// takes the claim's keys, build and host, the earlier holder's keys are kept
+// to tell it session_replaced, and the restart is recorded. claimed is false
+// for a claim not honoured, which opens a new session instead.
+func (s *Service) claim(ctx context.Context, from *sender, peer string, hello protocol.HelloItem) (items []cbor.RawMessage, claimed bool, err error) {
+	b, now := from.build, s.now()
+	sid := uuid.UUID(hello.SID)
+	refuse := func(why string) ([]cbor.RawMessage, bool, error) {
+		s.logger.Info("minion claim not honoured, a new session instead", zap.String("session_id", sid.String()),
+			zap.String("build_id", b.BuildID.String()), zap.String("why", why))
+		return nil, false, nil
+	}
+	if b.PersistedSessionID == nil || *b.PersistedSessionID != sid {
+		return refuse("the build does not persist this session")
+	}
+	sess, err := s.sessions.FindBySessionID(ctx, sid)
+	switch {
+	case repository.IsNotFound(err):
+		return refuse("no such session")
+	case err != nil:
+		return nil, false, fmt.Errorf("load the claimed session: %w", err)
+	case sess.OperationID != b.OperationID:
+		return refuse("the session is another operation's")
+	case sess.Closed(now):
+		return refuse("the session is closed")
+	}
+	// An operator's pick of address stays while the host still has it.
+	address, picked := models.DefaultAddress(hello.Addrs), false
+	if sess.AddressPicked && slices.Contains(hello.Addrs, sess.Address) {
+		address, picked = sess.Address, true
+	}
+	err = s.sessions.Claim(ctx, sid, repository.MinionSessionClaim{
+		At: now, BuildID: b.BuildID, BuildDescription: b.Description, ModuleName: b.ModuleName, Target: b.Target,
+		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello),
+		Address: address, AddressPicked: picked,
+	})
+	if repository.IsNotFound(err) {
+		return refuse("the session closed meanwhile")
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("claim the session: %w", err)
+	}
+	// The claim's own message is the session's check-in, from where it came.
+	if err := s.sessions.CheckIn(ctx, sid, now, peer); err != nil {
+		return nil, false, fmt.Errorf("check in: %w", err)
+	}
+	s.logger.Info("minion claimed its persisted session", zap.Int64("number", sess.Number), zap.String("session_id", sid.String()),
+		zap.String("build_id", b.BuildID.String()), zap.String("host", hello.Host), zap.Uint64("pid", hello.PID))
+	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(sess)))
+	items, err = helloResponse(sid)
+	return items, err == nil, err
 }
 
 // underSession answers a message sent under a session id. Any message is a
@@ -353,6 +426,25 @@ func (s *Service) sender(ctx context.Context, id uuid.UUID) (*sender, error) {
 		from.crypto = *b.Crypto
 	}
 	return from, from.readKeys()
+}
+
+// openReplaced opens a frame under a session with the keys earlier holders
+// had (not older than a tombstone), and makes those the sender's keys.
+func (s *Service) openReplaced(from *sender, id uuid.UUID, frame []byte) ([]byte, error) {
+	for _, rk := range from.session.ReplacedKeys {
+		if s.now().Sub(rk.At) > models.MinionSessionTombstone || rk.Crypto.Suite != protocol.CryptoAES256CBCHMACSHA256 {
+			continue
+		}
+		var keys protocol.AES256CBCHMACSHA256Material
+		if json.Unmarshal(rk.Crypto.Material, &keys) != nil {
+			continue
+		}
+		if plain, err := protocol.OpenFrame(keys, id, protocol.FrameMinionToCore, frame); err == nil {
+			from.keys, from.replaced = keys, true
+			return plain, nil
+		}
+	}
+	return nil, protocol.ErrFrame
 }
 
 // readKeys reads the sender's key material; a suite core does not implement

@@ -32,7 +32,11 @@ type BuildInput struct {
 	// required ones are added. nil: the target's default ones.
 	Commands    []string
 	Connections []ConnectionInput
-	Actor       models.ModuleActor
+	// PersistedSession is the session the minion claims when it starts:
+	// one of the operation's open sessions, for a factory whose minions
+	// claim persisted sessions. nil: the minion opens new ones.
+	PersistedSession *uuid.UUID
+	Actor            models.ModuleActor
 }
 
 // artifactKey is where a build's artifact is uploaded.
@@ -80,6 +84,14 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	case utf8.RuneCountInString(description) > MaxDescriptionLength:
 		probs.add("description", "longer than %d characters", MaxDescriptionLength)
 	}
+	if in.PersistedSession != nil {
+		if probs == nil {
+			probs = problems{}
+		}
+		if err := s.checkPersistedSession(ctx, op, *schema, *in.PersistedSession, probs); err != nil {
+			return nil, err
+		}
+	}
 	if err := probs.err("the build does not fit the factory's build schema"); err != nil {
 		return nil, err
 	}
@@ -93,6 +105,7 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		State:     models.BuildStateQueued,
 		Deadline:  s.now().Add(s.cfg.Timeout),
 		CreatedBy: in.Actor, CreatedAt: s.now(),
+		PersistedSessionID: in.PersistedSession,
 	}
 	if schema.Crypto != "" {
 		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {
@@ -130,6 +143,11 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	}
 	if err := s.repos.Builds.Insert(ctx, b); err != nil {
 		return nil, fmt.Errorf("store build: %w", err)
+	}
+	if b.PersistedSessionID != nil {
+		if err := s.repos.Sessions.SetPersisted(ctx, *b.PersistedSessionID); err != nil {
+			s.logger.Warn("mark a session persisted", zap.String("session_id", b.PersistedSessionID.String()), zap.Error(err))
+		}
 	}
 	s.logger.Info("build queued", zap.String("build_id", b.BuildID.String()), zap.String("factory", moduleName),
 		zap.String("target", b.Target), zap.String("platform", b.Platform))
@@ -319,6 +337,33 @@ func (s *Service) DeleteOperationData(ctx context.Context, op uuid.UUID) error {
 		if err := del(ctx, op); err != nil {
 			return fmt.Errorf("delete build %s: %w", name, err)
 		}
+	}
+	return nil
+}
+
+// checkPersistedSession adds a problem when a build cannot persist session
+// id: the factory's minions do not claim sessions, or it is not an open
+// session of the operation.
+func (s *Service) checkPersistedSession(ctx context.Context, op uuid.UUID, schema protocol.BuildSchema, id uuid.UUID, probs problems) error {
+	const key = "persistedSession"
+	if !schema.PersistedSessions {
+		probs.add(key, "this factory's minions do not claim persisted sessions")
+		return nil
+	}
+	if s.repos.Sessions == nil {
+		probs.add(key, "no session to persist")
+		return nil
+	}
+	sess, err := s.repos.Sessions.FindBySessionID(ctx, id)
+	switch {
+	case repository.IsNotFound(err):
+		probs.add(key, "no such session")
+	case err != nil:
+		return fmt.Errorf("load the session: %w", err)
+	case sess.OperationID != op:
+		probs.add(key, "no such session")
+	case sess.Closed(s.now()):
+		probs.add(key, "the session is closed")
 	}
 	return nil
 }

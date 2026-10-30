@@ -41,6 +41,9 @@ type BuildSchema {
   # What the minions can do, in the factory's order. A build picks its from
   # its target's.
   commands: [BuildCommand!]!
+  # The minions can claim a persisted session: a build can be made from a
+  # session for them (BuildInput.persistedSession).
+  persistedSessions: Boolean!
 }
 
 # A command a factory's minions can be built with.
@@ -161,6 +164,10 @@ input BuildInput {
   commands: [String!]
   # The connections, in the order the minion tries them.
   connections: [BuildConnectionInput!]!
+  # The session the minion claims when it starts (a persisted session): an
+  # open session of the operation, for a factory with persistedSessions. One
+  # per build.
+  persistedSession: ID
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -237,6 +244,9 @@ type Build {
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON
+  # The session the minion claims when it starts; null for a minion that
+  # opens new sessions.
+  persistedSession: ID
   # QUEUED | BUILDING | SUCCEEDED | FAILED | CANCELLED
   state: String!
   # The factory instance building it.

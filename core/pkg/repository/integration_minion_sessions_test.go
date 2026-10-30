@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -333,5 +334,52 @@ func TestIntegrationMinionSessionTombstones(t *testing.T) {
 	if closed.ClosedAt == nil || closed.CloseReason != models.MinionSessionClosedOperationDeleted || closed.PurgeAt == nil ||
 		!closed.PurgeAt.Equal(now.Add(models.MinionSessionTombstone)) || !closed.Closed(now) {
 		t.Errorf("tombstone %+v", closed)
+	}
+}
+
+// A claim, in one update inside Mongo: the claim's keys in, the old ones
+// kept as replaced, the restart counted, what the minion sent stored as it
+// is (a "$" in it is no field path), and a closed session not claimed.
+func TestIntegrationMinionSessionClaim(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op, sid, b2 := uuid.New(), uuid.New(), uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	k1 := protocol.BuildCrypto{Suite: protocol.CryptoAES256CBCHMACSHA256, Material: []byte(`{"k":1}`)}
+	k2 := protocol.BuildCrypto{Suite: protocol.CryptoAES256CBCHMACSHA256, Material: []byte(`{"k":2}`)}
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: op, Number: 1, CreatedAt: now, LastSeenAt: &now, Crypto: k1}); err != nil {
+		t.Fatal(err)
+	}
+	claim := MinionSessionClaim{At: now, BuildID: b2, ModuleName: "bob", Target: "linux-elf", Platform: "linux/amd64", Crypto: k2,
+		Hello: models.MinionHello{PID: 4242, OS: "linux", Arch: "amd64", Host: "$host"}, Address: "$addr"}
+	for range 2 {
+		if err := repo.Claim(ctx, sid, claim); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := repo.FindBySessionID(ctx, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(s.Crypto.Material) != `{"k":2}` || s.BuildID != b2 || s.Hello.Host != "$host" || s.Address != "$addr" ||
+		!s.Persisted || s.RestartCount != 2 || len(s.Restarts) != 2 || s.Restarts[0].PID != 4242 {
+		t.Fatalf("claimed %+v", s)
+	}
+	if len(s.ReplacedKeys) != 2 || string(s.ReplacedKeys[1].Crypto.Material) != `{"k":1}` {
+		t.Fatalf("replaced keys %+v", s.ReplacedKeys)
+	}
+	for range models.MaxSessionReplacedKeys + 2 {
+		_ = repo.Claim(ctx, sid, claim)
+	}
+	if s, _ = repo.FindBySessionID(ctx, sid); len(s.ReplacedKeys) != models.MaxSessionReplacedKeys {
+		t.Fatalf("%d replaced keys kept", len(s.ReplacedKeys))
+	}
+
+	if err := repo.CloseByOperationID(ctx, op, models.MinionSessionClosedOperationDeleted, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Claim(ctx, sid, claim); !IsNotFound(err) {
+		t.Fatalf("a closed session claimed: %v", err)
 	}
 }

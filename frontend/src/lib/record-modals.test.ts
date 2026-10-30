@@ -53,6 +53,7 @@ describe("withRecordModal", () => {
       { kind: "build", id: "b-1", tab: "overview" },
       { kind: "new-build", factory: "bob", from: null },
       { kind: "new-build", factory: "bob", from: "b-1" },
+      { kind: "new-build", factory: "bob", from: "b-1", session: "s-1" },
       { kind: "endpoint", id: "e-1" },
       { kind: "new-endpoint", channel: "http", from: "e-1" },
     ]

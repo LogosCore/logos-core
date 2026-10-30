@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { PinIcon } from "lucide-react"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
@@ -65,8 +66,17 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
   switch (id) {
     case "number":
       return (
-        <div className="truncate font-mono font-medium" title={`Session ${s.number}, ${s.id}`}>
-          {s.number}
+        <div
+          className="flex min-w-0 items-center gap-1 font-mono font-medium"
+          title={[
+            `Session ${s.number}, ${s.id}`,
+            s.persisted && `Persisted: its build's minions come back to it when they restart (${s.restartCount} so far)`,
+          ]
+            .filter(Boolean)
+            .join("\n")}
+        >
+          <span className="truncate">{s.number}</span>
+          {s.persisted && <PinIcon className="size-3 shrink-0 text-muted-foreground" />}
         </div>
       )
     case "sessionId":
@@ -155,5 +165,16 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return text(s.buildId, "truncate font-mono text-xs")
     case "staged":
       return <div className="truncate">{s.staged ? "Yes" : muted("No")}</div>
+    case "persisted":
+      return <div className="truncate">{s.persisted ? "Yes" : muted("No")}</div>
+    case "restarts":
+      return (
+        <div
+          className="truncate font-mono"
+          title={s.restarts.map((r) => `${formatAbsolute(r.at)}: pid ${r.pid}${r.host ? ` on ${r.host}` : ""}`).join("\n") || undefined}
+        >
+          {s.restartCount > 0 ? s.restartCount : muted("0")}
+        </div>
+      )
   }
 }

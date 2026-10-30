@@ -24,6 +24,14 @@ export const MinionSessionFields = graphql(`
     addrs
     address
     addressPicked
+    persisted
+    restartCount
+    restarts {
+      at
+      pid
+      host
+      buildId
+    }
     peerAddress
     peers {
       address
@@ -130,6 +138,14 @@ export const SetMinionSessionsLayoutMutation = graphql(`
 export const SetMinionSessionAddressMutation = graphql(`
   mutation SetMinionSessionAddress($id: ID!, $address: String) {
     setMinionSessionAddress(id: $id, address: $address) {
+      ...MinionSessionFields
+    }
+  }
+`)
+
+export const MinionSessionQuery = graphql(`
+  query MinionSession($id: ID!) {
+    minionSession(id: $id) {
       ...MinionSessionFields
     }
   }

@@ -14,6 +14,7 @@ import {
   MinionSessionsDocument,
   MinionSessionChangedDocument,
   MinionSessionValuesDocument,
+  MinionSessionDocument,
   MinionSessionsLayoutDocument,
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
@@ -46,6 +47,7 @@ export const minionSessionKeys = {
   infiniteList: (params: MinionSessionListParams) => [...minionSessionKeys.lists(), params] as const,
   values: (operationId: string, column: string) => [...minionSessionKeys.all, "values", operationId, column] as const,
   layout: () => [...minionSessionKeys.all, "layout"] as const,
+  detail: (id: string) => [...minionSessionKeys.all, "detail", id] as const,
 }
 
 // How often a list with a filter on the clock ("seen within 5m") refetches:
@@ -206,5 +208,14 @@ export function useSetMinionSessionAddress() {
   return useMutation({
     mutationFn: (vars: { id: string; address: string | null }) => graphqlClient(SetMinionSessionAddressDocument, vars),
     onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionAddress),
+  })
+}
+
+/** One session (closed ones too). */
+export function useMinionSession(id: string) {
+  return useQuery({
+    queryKey: minionSessionKeys.detail(id),
+    queryFn: () => graphqlClient(MinionSessionDocument, { id }),
+    enabled: id !== "",
   })
 }

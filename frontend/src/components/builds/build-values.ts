@@ -114,6 +114,8 @@ export interface FactoryKind {
   /** Registered instances declaring this version: a build needs one. */
   instances: number
   crypto?: string | null
+  /** The minions can claim a persisted session (a build made from a session). */
+  persistedSessions?: boolean
   /** Fields every target shares, sorted. */
   fields: FieldDef[]
   /** The factory's connection parameters per channel kind, sorted. */
@@ -144,6 +146,7 @@ export function factoryKindsByName(
       version: k.schema.version,
       instances: k.instances,
       crypto: k.schema.crypto,
+      persistedSessions: k.schema.persistedSessions,
       fields: sorted(k.schema.fields),
       channelFields: new Map(k.schema.channels.map((c) => [c.moduleName, sorted(c.fields)])),
       targets: k.schema.targets.map((t) => ({

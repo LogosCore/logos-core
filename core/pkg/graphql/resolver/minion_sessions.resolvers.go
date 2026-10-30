@@ -26,6 +26,11 @@ func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, 
 	return r.MinionSessionResolver.MinionSessions(ctx, operationID, search, filters, sort, first, after, last, before)
 }
 
+// MinionSession is the resolver for the minionSession field.
+func (r *queryResolver) MinionSession(ctx context.Context, id string) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.MinionSession(ctx, id)
+}
+
 // MinionSessionValues is the resolver for the minionSessionValues field.
 func (r *queryResolver) MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error) {
 	return r.MinionSessionResolver.MinionSessionValues(ctx, operationID, column)

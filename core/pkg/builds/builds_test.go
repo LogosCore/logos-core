@@ -13,7 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
+	"github.com/qiniu/qmgo"
 	"go.uber.org/zap"
 )
 
@@ -75,15 +77,16 @@ func httpSchema() *protocol.ConnectionSchema {
 }
 
 type rig struct {
-	svc     *Service
-	reg     *fakeRegistry
-	chs     *fakeChannels
-	rpc     *fakeCaller
-	store   *fakeStore
-	files   *fakeFiles
-	builds  *fakeBuilds
-	minions *fakeMinions
-	clock   time.Time
+	svc      *Service
+	reg      *fakeRegistry
+	chs      *fakeChannels
+	rpc      *fakeCaller
+	store    *fakeStore
+	files    *fakeFiles
+	builds   *fakeBuilds
+	minions  *fakeMinions
+	sessions *fakeSessions
+	clock    time.Time
 }
 
 func newRig(t *testing.T) *rig {
@@ -102,7 +105,8 @@ func newRig(t *testing.T) *rig {
 		clock:   time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC),
 	}
 	r.reg.setActive(bobInstance("bob-1", 1))
-	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions},
+	r.sessions = &fakeSessions{rows: map[uuid.UUID]*models.MinionSession{}}
+	r.svc = NewService(Repos{Files: r.files, Builds: r.builds, Minions: r.minions, Sessions: r.sessions},
 		r.reg, r.chs, r.rpc, r.store, fakeSigner{}, Config{}, zap.NewNop())
 	r.svc.now = func() time.Time { return r.clock }
 	t.Cleanup(r.svc.Stop)
@@ -969,5 +973,59 @@ func TestBuildByID(t *testing.T) {
 		if _, err := r.svc.Build(context.Background(), id); !errors.Is(err, ErrBuildNotFound) {
 			t.Errorf("%q: %v, want not found", id, err)
 		}
+	}
+}
+
+// fakeSessions holds sessions for persisted-session builds; the rest of the
+// repository is not used here.
+type fakeSessions struct {
+	repository.IMinionSessionRepository
+	rows map[uuid.UUID]*models.MinionSession
+}
+
+func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models.MinionSession, error) {
+	if s, ok := f.rows[id]; ok {
+		return s, nil
+	}
+	return nil, qmgo.ErrNoSuchDocuments
+}
+
+func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {
+	f.rows[id].Persisted = true
+	return nil
+}
+
+// A build may persist an open session of its operation, for a factory whose
+// minions claim one; the factory gets the session id.
+func TestCreateBuildPersistedSession(t *testing.T) {
+	r := newRig(t)
+	sid, other, closed := uuid.New(), uuid.New(), uuid.New()
+	seen := r.clock
+	gone := r.clock
+	r.sessions.rows[sid] = &models.MinionSession{SessionID: sid, OperationID: opID, CreatedAt: r.clock, LastSeenAt: &seen}
+	r.sessions.rows[other] = &models.MinionSession{SessionID: other, OperationID: uuid.New(), CreatedAt: r.clock, LastSeenAt: &seen}
+	r.sessions.rows[closed] = &models.MinionSession{SessionID: closed, OperationID: opID, CreatedAt: r.clock, ClosedAt: &gone}
+	persist := func(id uuid.UUID) func(in *BuildInput) { return func(in *BuildInput) { in.PersistedSession = &id } }
+
+	// BOB's schema in this rig does not declare persisted sessions.
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(persist(sid)))
+	if problemsOf(err)["persistedSession"] == "" {
+		t.Fatalf("a factory without persisted sessions: %v %v", err, problemsOf(err))
+	}
+	r.reg.schemas["bob"].BuildSchema.PersistedSessions = true
+	for name, id := range map[string]uuid.UUID{"unknown": uuid.New(), "another operation's": other, "closed": closed} {
+		_, err := r.svc.CreateBuild(context.Background(), opID, r.input(persist(id)))
+		if problemsOf(err)["persistedSession"] == "" {
+			t.Errorf("%s session: %v %v", name, err, problemsOf(err))
+		}
+	}
+
+	b := r.queue(t, persist(sid))
+	if b.PersistedSessionID == nil || *b.PersistedSessionID != sid || !r.sessions.rows[sid].Persisted {
+		t.Fatalf("build %+v, session persisted=%v", b.PersistedSessionID, r.sessions.rows[sid].Persisted)
+	}
+	req, err := r.svc.request(context.Background(), b, b.Deadline)
+	if err != nil || req.SessionID != sid.String() {
+		t.Fatalf("the factory's request: %q %v", req.SessionID, err)
 	}
 }
