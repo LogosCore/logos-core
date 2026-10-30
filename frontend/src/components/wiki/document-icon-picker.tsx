@@ -104,6 +104,9 @@ interface DocumentIconPickerProps {
     label: string;
     title?: string;
   };
+  /** Leaves out the color swatches, for callers that color the icon by
+   *  something else (a session mark's color). */
+  hideColors?: boolean;
 }
 
 export function DocumentIconPicker({
@@ -117,6 +120,7 @@ export function DocumentIconPicker({
   allowAdaptive = true,
   defaultIconName,
   derivedDefault,
+  hideColors = false,
 }: DocumentIconPickerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const { resolvedTheme } = useTheme();
@@ -219,10 +223,12 @@ export function DocumentIconPicker({
             </Suspense>
           </TabsContent>
           <TabsContent value="icons">
-            <ColorSwatchRow
-              selectedColor={value.color}
-              onPick={handleColorPick}
-            />
+            {!hideColors && (
+              <ColorSwatchRow
+                selectedColor={value.color}
+                onPick={handleColorPick}
+              />
+            )}
             <IconGrid
               selectedName={value.icon}
               previewColor={value.color}

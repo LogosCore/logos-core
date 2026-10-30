@@ -72,3 +72,26 @@ func TestDefaultAddress(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateSessionMark(t *testing.T) {
+	if len(SessionMarkColors) != 36 {
+		t.Fatalf("%d mark colors", len(SessionMarkColors))
+	}
+	for name, c := range map[string]struct {
+		color, icon, emoji string
+		ok                 bool
+	}{
+		"color and icon":   {"teal-medium", "Crosshair", "", true},
+		"brand icon":       {"", "si:linux", "", true},
+		"emoji":            {"red-strong", "", "🎯", true},
+		"nothing":          {"", "", "", true},
+		"unknown color":    {"teal", "", "", false},
+		"bad icon":         {"", "<script>", "", false},
+		"icon and emoji":   {"", "Crosshair", "🎯", false},
+		"a sentence emoji": {"", "", "this is not an emoji", false},
+	} {
+		if got := ValidateSessionMark(c.color, c.icon, c.emoji) == ""; got != c.ok {
+			t.Errorf("%s: valid=%v", name, got)
+		}
+	}
+}

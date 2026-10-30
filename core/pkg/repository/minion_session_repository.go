@@ -57,6 +57,11 @@ type IMinionSessionRepository interface {
 	// many changed.
 	SetArchivedMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, archived bool) (int64, error)
 	SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error)
+	// SessionIDs are the ids of the sessions q lists (not its sort), at most
+	// limit: what a bulk change names by matching.
+	SessionIDs(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, limit int64) ([]uuid.UUID, error)
+	// OwnSessionIDs keeps the ids that are the operation's sessions.
+	OwnSessionIDs(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID) ([]uuid.UUID, error)
 	// SetDescription replaces a session's description; IsNotFound when
 	// there is none.
 	SetDescription(ctx context.Context, sessionID uuid.UUID, description string) error
@@ -363,6 +368,38 @@ func (r *minionSessionRepository) BackfillDescriptions(ctx context.Context) (int
 		return 0, err
 	}
 	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) SessionIDs(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, limit int64) ([]uuid.UUID, error) {
+	var rows []struct {
+		SessionID uuid.UUID `bson:"session_id"`
+	}
+	err := r.coll.Find(ctx, minionSessionFilter(operationID, q, time.Now().UTC())).
+		Select(bson.M{"session_id": 1}).Limit(limit).All(&rows)
+	out := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		out[i] = row.SessionID
+	}
+	return out, err
+}
+
+func (r *minionSessionRepository) OwnSessionIDs(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID) ([]uuid.UUID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	in := make(bson.A, len(ids))
+	for i, id := range ids {
+		in[i] = id
+	}
+	var rows []struct {
+		SessionID uuid.UUID `bson:"session_id"`
+	}
+	err := r.coll.Find(ctx, bson.M{"operation_id": operationID, "session_id": bson.M{"$in": in}}).Select(bson.M{"session_id": 1}).All(&rows)
+	out := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		out[i] = row.SessionID
+	}
+	return out, err
 }
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {

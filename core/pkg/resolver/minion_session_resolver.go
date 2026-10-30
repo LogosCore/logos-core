@@ -33,6 +33,10 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionAddress picks the address a session shows; nil goes
 	// back to core's guess.
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
+	// SetMinionSessionMark and SetMinionSessionsMark mark sessions for the
+	// caller alone.
+	SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error)
+	SetMinionSessionsMark(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) (int, error)
 	// SetMinionSessionDescription replaces a session's description.
 	SetMinionSessionDescription(ctx context.Context, id string, description string) (*model.MinionSession, error)
 	// SetMinionSessionArchived archives a session or restores it.
@@ -51,14 +55,16 @@ type minionSessionResolver struct {
 	userRepo      repository.IUserRepository
 	preferences   repository.IUserPreferencesRepository
 	reservations  repository.IMinionSessionReservationRepository
+	marks         repository.IMinionSessionMarkRepository
 	bus           eventbus.IEventBus
 }
 
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,
 	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
-	reservations repository.IMinionSessionReservationRepository, bus eventbus.IEventBus) IMinionSessionResolver {
+	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
+	bus eventbus.IEventBus) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
-		reservations: reservations, bus: bus}
+		reservations: reservations, marks: marks, bus: bus}
 }
 
 // viewer authorizes a viewer of the operation.
@@ -115,10 +121,13 @@ func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID 
 	if err != nil {
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
+	marks := r.marksFor(ctx, rows)
 	edges, pageInfo := pagination.BuildEdges(rows, args,
 		func(s *models.MinionSession) string { return repository.MinionSessionCursor(s, q.Sort) },
 		func(s *models.MinionSession, cursor string) *model.MinionSessionEdge {
-			return &model.MinionSessionEdge{Node: toMinionSessionModel(s), Cursor: cursor}
+			node := toMinionSessionModel(s)
+			node.Mark = marks[s.SessionID]
+			return &model.MinionSessionEdge{Node: node, Cursor: cursor}
 		})
 	return &model.MinionSessionConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
 }
@@ -166,7 +175,7 @@ func (r *minionSessionResolver) SetMinionSessionDescription(ctx context.Context,
 	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
 		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
 	}))
-	return toMinionSessionModel(s), nil
+	return r.withMark(ctx, s), nil
 }
 
 func (r *minionSessionResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
@@ -181,7 +190,124 @@ func (r *minionSessionResolver) SetMinionSessionArchived(ctx context.Context, id
 	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
 		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
 	}))
-	return toMinionSessionModel(s), nil
+	return r.withMark(ctx, s), nil
+}
+
+// memberSession loads a session for the caller's own change (a mark): any
+// member of its operation, no agent key.
+func (r *minionSessionResolver) memberSession(ctx context.Context, id string) (*models.MinionSession, error) {
+	if gqlctx.AuthFromContext(ctx).Agent != nil {
+		return nil, moduleGQLError(ctx, errCodeForbidden, "forbidden")
+	}
+	sid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid session ID")
+	}
+	s, err := r.sessions.FindBySessionID(ctx, sid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "session not found")
+		}
+		return nil, err
+	}
+	if _, err := r.viewer(ctx, s.OperationID.String()); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// markOf reads a mark input; nil and empty fields mark nothing.
+func markOf(in *model.MinionSessionMarkInput) (color, icon, emoji string) {
+	if in == nil {
+		return "", "", ""
+	}
+	return strings.TrimSpace(deref(in.Color)), strings.TrimSpace(deref(in.Icon)), strings.TrimSpace(deref(in.Emoji))
+}
+
+func (r *minionSessionResolver) SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error) {
+	s, err := r.memberSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	color, icon, emoji := markOf(mark)
+	if why := models.ValidateSessionMark(color, icon, emoji); why != "" {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "mark: "+why)
+	}
+	uid, err := callerUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.marks.SetMany(ctx, uid, s.OperationID, []uuid.UUID{s.SessionID}, color, icon, emoji); err != nil {
+		return nil, fmt.Errorf("mark the session: %w", err)
+	}
+	return r.withMark(ctx, s), nil
+}
+
+// maxMarkMatching caps the sessions one mark by matching reaches.
+const maxMarkMatching = 10_000
+
+func (r *minionSessionResolver) SetMinionSessionsMark(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) (int, error) {
+	if gqlctx.AuthFromContext(ctx).Agent != nil {
+		return 0, moduleGQLError(ctx, errCodeForbidden, "forbidden")
+	}
+	op, err := r.viewer(ctx, operationID)
+	if err != nil {
+		return 0, err
+	}
+	color, icon, emoji := markOf(mark)
+	if why := models.ValidateSessionMark(color, icon, emoji); why != "" {
+		return 0, moduleGQLError(ctx, errCodeBadUserInput, "mark: "+why)
+	}
+	targets, q, err := bulkTargets(ctx, ids, matching)
+	if err != nil {
+		return 0, err
+	}
+	if q != nil {
+		if targets, err = r.sessions.SessionIDs(ctx, op, *q, maxMarkMatching); err != nil {
+			return 0, fmt.Errorf("list the sessions: %w", err)
+		}
+	} else if targets, err = r.sessions.OwnSessionIDs(ctx, op, targets); err != nil {
+		return 0, fmt.Errorf("check the sessions: %w", err)
+	}
+	uid, err := callerUserID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if err := r.marks.SetMany(ctx, uid, op, targets, color, icon, emoji); err != nil {
+		return 0, fmt.Errorf("mark the sessions: %w", err)
+	}
+	return len(targets), nil
+}
+
+// bulkTargets reads what a bulk change names: ids (at most
+// maxBulkSessionIDs), or a list's matching as a query. Exactly one.
+func bulkTargets(ctx context.Context, ids []string, matching *model.MinionSessionMatchInput) ([]uuid.UUID, *repository.MinionSessionQuery, error) {
+	if (ids == nil) == (matching == nil) {
+		return nil, nil, moduleGQLError(ctx, errCodeBadUserInput, "name the sessions by ids or by matching, one of the two")
+	}
+	if matching != nil {
+		q := repository.MinionSessionQuery{Archived: matching.Archived != nil && *matching.Archived,
+			Search: strings.TrimSpace(deref(matching.Search)), Sort: models.DefaultMinionSessionSort}
+		var err error
+		if q.Filters, err = fromSessionFilterInputs(matching.Filters); err != nil {
+			return nil, nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
+		if err := q.Validate(); err != nil {
+			return nil, nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
+		return nil, &q, nil
+	}
+	if len(ids) > maxBulkSessionIDs {
+		return nil, nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("at most %d ids; name more by matching", maxBulkSessionIDs))
+	}
+	out := make([]uuid.UUID, len(ids))
+	for i, id := range ids {
+		var err error
+		if out[i], err = uuid.Parse(id); err != nil {
+			return nil, nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("invalid session ID %q", id))
+		}
+	}
+	return out, nil, nil
 }
 
 // maxBulkSessionIDs caps the ids one bulk change names; more go by filters.
@@ -202,31 +328,15 @@ func (r *minionSessionResolver) SetMinionSessionsArchived(ctx context.Context, o
 	if err := authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleOperator); err != nil {
 		return 0, err
 	}
-	if (ids == nil) == (matching == nil) {
-		return 0, moduleGQLError(ctx, errCodeBadUserInput, "name the sessions by ids or by matching, one of the two")
+	targets, q, err := bulkTargets(ctx, ids, matching)
+	if err != nil {
+		return 0, err
 	}
 	var n int64
-	if matching != nil {
-		q := repository.MinionSessionQuery{Archived: matching.Archived != nil && *matching.Archived,
-			Search: strings.TrimSpace(deref(matching.Search)), Sort: models.DefaultMinionSessionSort}
-		if q.Filters, err = fromSessionFilterInputs(matching.Filters); err != nil {
-			return 0, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
-		}
-		if err := q.Validate(); err != nil {
-			return 0, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
-		}
-		n, err = r.sessions.SetArchivedMatching(ctx, op, q, archived)
+	if q != nil {
+		n, err = r.sessions.SetArchivedMatching(ctx, op, *q, archived)
 	} else {
-		if len(ids) > maxBulkSessionIDs {
-			return 0, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("at most %d ids; name more by matching", maxBulkSessionIDs))
-		}
-		sids := make([]uuid.UUID, len(ids))
-		for i, id := range ids {
-			if sids[i], err = uuid.Parse(id); err != nil {
-				return 0, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("invalid session ID %q", id))
-			}
-		}
-		n, err = r.sessions.SetArchivedMany(ctx, op, sids, archived)
+		n, err = r.sessions.SetArchivedMany(ctx, op, targets, archived)
 	}
 	if err != nil {
 		return 0, fmt.Errorf("archive the sessions: %w", err)
@@ -262,7 +372,7 @@ func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id 
 	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
 		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
 	}))
-	return toMinionSessionModel(s), nil
+	return r.withMark(ctx, s), nil
 }
 
 func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*model.MinionSession, error) {
@@ -280,7 +390,7 @@ func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*
 	if _, err := r.viewer(ctx, s.OperationID.String()); err != nil {
 		return nil, err
 	}
-	return toMinionSessionModel(s), nil
+	return r.withMark(ctx, s), nil
 }
 
 // reservation is a session reserved with a build, not claimed yet, as a
@@ -429,7 +539,37 @@ func (r *minionSessionResolver) Load(ctx context.Context, sessionID string) *mod
 	if err != nil {
 		return nil
 	}
-	return toMinionSessionModel(s)
+	return r.withMark(ctx, s)
+}
+
+// marksFor are the caller's marks on rows, as GraphQL: one query for a page.
+// A failure to read them shows the rows unmarked rather than failing the list.
+func (r *minionSessionResolver) marksFor(ctx context.Context, rows []models.MinionSession) map[uuid.UUID]*model.MinionSessionMark {
+	out := map[uuid.UUID]*model.MinionSessionMark{}
+	uid, err := callerUserID(ctx)
+	if err != nil || r.marks == nil || len(rows) == 0 {
+		return out
+	}
+	ids := make([]uuid.UUID, len(rows))
+	for i := range rows {
+		ids[i] = rows[i].SessionID
+	}
+	marks, err := r.marks.ForSessions(ctx, uid, ids)
+	if err != nil {
+		return out
+	}
+	for id, m := range marks {
+		out[id] = &model.MinionSessionMark{Color: strPtr(m.Color), Icon: strPtr(m.Icon), Emoji: strPtr(m.Emoji)}
+	}
+	return out
+}
+
+// withMark is a session as GraphQL with the caller's mark on it: every
+// session returned carries it, so a client merging it in keeps the mark.
+func (r *minionSessionResolver) withMark(ctx context.Context, s *models.MinionSession) *model.MinionSession {
+	out := toMinionSessionModel(s)
+	out.Mark = r.marksFor(ctx, []models.MinionSession{*s})[s.SessionID]
+	return out
 }
 
 func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {

@@ -486,6 +486,7 @@ type MinionSession struct {
 	X                any                     `json:"x,omitempty"`
 	CreatedAt        string                  `json:"createdAt"`
 	Archived         bool                    `json:"archived"`
+	Mark             *MinionSessionMark      `json:"mark,omitempty"`
 	Persisted        bool                    `json:"persisted"`
 	Restarts         []*MinionSessionRestart `json:"restarts"`
 	RestartCount     int                     `json:"restartCount"`
@@ -536,6 +537,18 @@ type MinionSessionFilterInput struct {
 	Seconds *int                  `json:"seconds,omitempty"`
 	From    *string               `json:"from,omitempty"`
 	To      *string               `json:"to,omitempty"`
+}
+
+type MinionSessionMark struct {
+	Color *string `json:"color,omitempty"`
+	Icon  *string `json:"icon,omitempty"`
+	Emoji *string `json:"emoji,omitempty"`
+}
+
+type MinionSessionMarkInput struct {
+	Color *string `json:"color,omitempty"`
+	Icon  *string `json:"icon,omitempty"`
+	Emoji *string `json:"emoji,omitempty"`
 }
 
 type MinionSessionMatchInput struct {

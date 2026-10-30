@@ -643,3 +643,69 @@ func TestIntegrationMinionSessionDescription(t *testing.T) {
 		t.Fatalf("filter on description: %d", n)
 	}
 }
+
+// Marks are each operator's own; marking again replaces the fields, an
+// empty mark removes it, and a bulk mark marks many alike.
+func TestIntegrationMinionSessionMarks(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	marks := NewMinionSessionMarkRepository(db)
+	sessions := NewMinionSessionRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("mark indexes: %v", err)
+	}
+	op, alice, bob := uuid.New(), uuid.New(), uuid.New()
+	now := time.Now().UTC()
+	ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
+	for i, id := range ids {
+		if err := sessions.Insert(ctx, &models.MinionSession{SessionID: id, OperationID: op, Number: int64(i + 1), CreatedAt: now, LastSeenAt: &now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := marks.SetMany(ctx, alice, op, ids[:1], "teal-medium", "Crosshair", ""); err != nil {
+		t.Fatal(err)
+	}
+	// Again, an emoji instead of the icon: the icon goes.
+	if err := marks.SetMany(ctx, alice, op, ids[:1], "teal-medium", "", "🎯"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := marks.ForSessions(ctx, alice, ids)
+	if m := got[ids[0]]; len(got) != 1 || m.Color != "teal-medium" || m.Icon != "" || m.Emoji != "🎯" {
+		t.Fatalf("alice's marks %+v", got)
+	}
+	if theirs, _ := marks.ForSessions(ctx, bob, ids); len(theirs) != 0 {
+		t.Fatalf("bob sees %+v", theirs)
+	}
+
+	// Bulk, then cleared.
+	if err := marks.SetMany(ctx, bob, op, ids, "red-strong", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if theirs, _ := marks.ForSessions(ctx, bob, ids); len(theirs) != 3 {
+		t.Fatalf("bob's bulk marks %d", len(theirs))
+	}
+	if err := marks.SetMany(ctx, bob, op, ids[1:], "", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if theirs, _ := marks.ForSessions(ctx, bob, ids); len(theirs) != 1 {
+		t.Fatalf("after clearing two: %d", len(theirs))
+	}
+
+	// What a bulk change names: the operation's own ids, or what a list matches.
+	own, _ := sessions.OwnSessionIDs(ctx, op, []uuid.UUID{ids[0], uuid.New()})
+	if len(own) != 1 || own[0] != ids[0] {
+		t.Fatalf("own %v", own)
+	}
+	all, _ := sessions.SessionIDs(ctx, op, MinionSessionQuery{Sort: models.DefaultMinionSessionSort}, 2)
+	if len(all) != 2 {
+		t.Fatalf("matching ids, at most 2: %v", all)
+	}
+
+	if err := marks.DeleteByOperationID(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := marks.ForSessions(ctx, alice, ids); len(left) != 0 {
+		t.Fatal("marks outlived their operation")
+	}
+}

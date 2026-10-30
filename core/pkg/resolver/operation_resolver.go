@@ -66,6 +66,7 @@ type operationResolver struct {
 	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
 	buildCleanup   BuildCleanup                             // needed for cascade delete
 	sessionRepo    repository.IMinionSessionRepository      // needed for cascade delete
+	markRepo       repository.IMinionSessionMarkRepository  // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
 
@@ -142,6 +143,13 @@ func WithBuildCleanup(c BuildCleanup) OperationResolverOption {
 func WithMinionSessionRepo(repo repository.IMinionSessionRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.sessionRepo = repo
+	}
+}
+
+// WithMinionSessionMarkRepo adds the session mark repository for cascade delete.
+func WithMinionSessionMarkRepo(repo repository.IMinionSessionMarkRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.markRepo = repo
 	}
 }
 
@@ -308,6 +316,13 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.sessionRepo != nil {
 		if err := r.sessionRepo.CloseByOperationID(ctx, op.OperationID, models.MinionSessionClosedOperationDeleted, time.Now().UTC()); err != nil {
 			return false, fmt.Errorf("failed to close operation's minion sessions: %w", err)
+		}
+	}
+
+	// Cascade delete: the operators' marks on its sessions
+	if r.markRepo != nil {
+		if err := r.markRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's session marks: %w", err)
 		}
 	}
 

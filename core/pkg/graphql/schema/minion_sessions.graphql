@@ -67,6 +67,9 @@ type MinionSession {
   # Hidden from the operation's sessions, listed with archived: true. A
   # check-in restores it.
   archived: Boolean!
+  # How the caller marked it for themselves; null when they did not. Nobody
+  # else sees it.
+  mark: MinionSessionMark
   # A build persists the session: its minions claim it when they start, so
   # a restarted process comes back here instead of opening a new session.
   persisted: Boolean!
@@ -95,6 +98,22 @@ type MinionSessionRestart {
   host: String
   # The build it ran: the one that persists the session.
   buildId: ID!
+}
+
+# An operator's own mark on a session: a color (one of 36, "<hue>-<strength>":
+# red, orange, amber, yellow, lime, green, teal, cyan, blue, indigo, violet or
+# pink; soft, medium or strong), and an icon (a lucide name, or si:<slug>) or
+# an emoji. Each may be null.
+type MinionSessionMark {
+  color: String
+  icon: String
+  emoji: String
+}
+
+input MinionSessionMarkInput {
+  color: String
+  icon: String
+  emoji: String
 }
 
 # One external address a session was seen from.
@@ -285,6 +304,23 @@ extend type Mutation {
   # Replaces a session's description, at most 500 characters; "" clears it.
   # Needs at least operator; agent API keys are rejected.
   setMinionSessionDescription(id: ID!, description: String!): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Marks a session for the caller alone; null, or a mark with nothing set,
+  # removes theirs. Needs at least viewer; agent API keys are rejected.
+  setMinionSessionMark(id: ID!, mark: MinionSessionMarkInput): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Marks many of an operation's sessions alike, for the caller alone: those
+  # with ids (at most 500), or every one matching (at most 10000). Exactly
+  # one of the two; returns how many. Needs at least viewer; agent API keys
+  # are rejected.
+  setMinionSessionsMark(
+    operationId: ID!
+    ids: [ID!]
+    matching: MinionSessionMatchInput
+    mark: MinionSessionMarkInput
+  ): Int!
     @hasPermission(permission: "operation:member")
 
   # Picks the address a session shows, one of its addrs, for everyone in the

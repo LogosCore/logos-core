@@ -477,6 +477,7 @@ type ComplexityRoot struct {
 		LastSeenAt       func(childComplexity int) int
 		LateAt           func(childComplexity int) int
 		LostAt           func(childComplexity int) int
+		Mark             func(childComplexity int) int
 		ModuleName       func(childComplexity int) int
 		Number           func(childComplexity int) int
 		OperationID      func(childComplexity int) int
@@ -527,6 +528,12 @@ type ComplexityRoot struct {
 		Text    func(childComplexity int) int
 		To      func(childComplexity int) int
 		Values  func(childComplexity int) int
+	}
+
+	MinionSessionMark struct {
+		Color func(childComplexity int) int
+		Emoji func(childComplexity int) int
+		Icon  func(childComplexity int) int
 	}
 
 	MinionSessionPeer struct {
@@ -791,8 +798,10 @@ type ComplexityRoot struct {
 		SetMinionSessionAddress       func(childComplexity int, id string, address *string) int
 		SetMinionSessionArchived      func(childComplexity int, id string, archived bool) int
 		SetMinionSessionDescription   func(childComplexity int, id string, description string) int
+		SetMinionSessionMark          func(childComplexity int, id string, mark *model.MinionSessionMarkInput) int
 		SetMinionSessionsArchived     func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) int
 		SetMinionSessionsLayout       func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
+		SetMinionSessionsMark         func(childComplexity int, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) int
 		SetMyAPIKeyEnabled            func(childComplexity int, enabled bool) int
 		SetTaskAssignees              func(childComplexity int, taskID string, assigneeIds []string) int
 		SetTaskCredentialReferences   func(childComplexity int, taskID string, credentialIds []string) int
@@ -1493,6 +1502,8 @@ type MutationResolver interface {
 	SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error)
 	SetMinionSessionsArchived(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) (int, error)
 	SetMinionSessionDescription(ctx context.Context, id string, description string) (*model.MinionSession, error)
+	SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error)
+	SetMinionSessionsMark(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) (int, error)
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
 	SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
@@ -3491,6 +3502,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.LostAt(childComplexity), true
+	case "MinionSession.mark":
+		if e.ComplexityRoot.MinionSession.Mark == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Mark(childComplexity), true
 	case "MinionSession.moduleName":
 		if e.ComplexityRoot.MinionSession.ModuleName == nil {
 			break
@@ -3723,6 +3740,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSessionFilter.Values(childComplexity), true
+
+	case "MinionSessionMark.color":
+		if e.ComplexityRoot.MinionSessionMark.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionMark.Color(childComplexity), true
+	case "MinionSessionMark.emoji":
+		if e.ComplexityRoot.MinionSessionMark.Emoji == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionMark.Emoji(childComplexity), true
+	case "MinionSessionMark.icon":
+		if e.ComplexityRoot.MinionSessionMark.Icon == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionMark.Icon(childComplexity), true
 
 	case "MinionSessionPeer.address":
 		if e.ComplexityRoot.MinionSessionPeer.Address == nil {
@@ -5238,6 +5274,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMinionSessionDescription(childComplexity, args["id"].(string), args["description"].(string)), true
+	case "Mutation.setMinionSessionMark":
+		if e.ComplexityRoot.Mutation.SetMinionSessionMark == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionSessionMark_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionSessionMark(childComplexity, args["id"].(string), args["mark"].(*model.MinionSessionMarkInput)), true
 	case "Mutation.setMinionSessionsArchived":
 		if e.ComplexityRoot.Mutation.SetMinionSessionsArchived == nil {
 			break
@@ -5260,6 +5307,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetMinionSessionsLayout(childComplexity, args["layout"].(*model.MinionSessionsLayoutInput)), true
+	case "Mutation.setMinionSessionsMark":
+		if e.ComplexityRoot.Mutation.SetMinionSessionsMark == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionSessionsMark_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionSessionsMark(childComplexity, args["operationId"].(string), args["ids"].([]string), args["matching"].(*model.MinionSessionMatchInput), args["mark"].(*model.MinionSessionMarkInput)), true
 	case "Mutation.setMyAPIKeyEnabled":
 		if e.ComplexityRoot.Mutation.SetMyAPIKeyEnabled == nil {
 			break
@@ -8267,6 +8325,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMarkHashCrackedInput,
 		ec.unmarshalInputMinionSessionFilterInput,
+		ec.unmarshalInputMinionSessionMarkInput,
 		ec.unmarshalInputMinionSessionMatchInput,
 		ec.unmarshalInputMinionSessionSortInput,
 		ec.unmarshalInputMinionSessionsLayoutInput,
@@ -10102,6 +10161,9 @@ type MinionSession {
   # Hidden from the operation's sessions, listed with archived: true. A
   # check-in restores it.
   archived: Boolean!
+  # How the caller marked it for themselves; null when they did not. Nobody
+  # else sees it.
+  mark: MinionSessionMark
   # A build persists the session: its minions claim it when they start, so
   # a restarted process comes back here instead of opening a new session.
   persisted: Boolean!
@@ -10130,6 +10192,22 @@ type MinionSessionRestart {
   host: String
   # The build it ran: the one that persists the session.
   buildId: ID!
+}
+
+# An operator's own mark on a session: a color (one of 36, "<hue>-<strength>":
+# red, orange, amber, yellow, lime, green, teal, cyan, blue, indigo, violet or
+# pink; soft, medium or strong), and an icon (a lucide name, or si:<slug>) or
+# an emoji. Each may be null.
+type MinionSessionMark {
+  color: String
+  icon: String
+  emoji: String
+}
+
+input MinionSessionMarkInput {
+  color: String
+  icon: String
+  emoji: String
 }
 
 # One external address a session was seen from.
@@ -10320,6 +10398,23 @@ extend type Mutation {
   # Replaces a session's description, at most 500 characters; "" clears it.
   # Needs at least operator; agent API keys are rejected.
   setMinionSessionDescription(id: ID!, description: String!): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Marks a session for the caller alone; null, or a mark with nothing set,
+  # removes theirs. Needs at least viewer; agent API keys are rejected.
+  setMinionSessionMark(id: ID!, mark: MinionSessionMarkInput): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Marks many of an operation's sessions alike, for the caller alone: those
+  # with ids (at most 500), or every one matching (at most 10000). Exactly
+  # one of the two; returns how many. Needs at least viewer; agent API keys
+  # are rejected.
+  setMinionSessionsMark(
+    operationId: ID!
+    ids: [ID!]
+    matching: MinionSessionMatchInput
+    mark: MinionSessionMarkInput
+  ): Int!
     @hasPermission(permission: "operation:member")
 
   # Picks the address a session shows, one of its addrs, for everyone in the
@@ -13501,6 +13596,22 @@ func (ec *executionContext) field_Mutation_setMinionSessionDescription_args(ctx 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setMinionSessionMark_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "mark", ec.unmarshalOMinionSessionMarkInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMarkInput)
+	if err != nil {
+		return nil, err
+	}
+	args["mark"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setMinionSessionsArchived_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13535,6 +13646,32 @@ func (ec *executionContext) field_Mutation_setMinionSessionsLayout_args(ctx cont
 		return nil, err
 	}
 	args["layout"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_setMinionSessionsMark_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "ids", ec.unmarshalOID2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["ids"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "matching", ec.unmarshalOMinionSessionMatchInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMatchInput)
+	if err != nil {
+		return nil, err
+	}
+	args["matching"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "mark", ec.unmarshalOMinionSessionMarkInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMarkInput)
+	if err != nil {
+		return nil, err
+	}
+	args["mark"] = arg3
 	return args, nil
 }
 
@@ -25525,6 +25662,43 @@ func (ec *executionContext) fieldContext_MinionSession_archived(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_mark(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_mark,
+		func(ctx context.Context) (any, error) {
+			return obj.Mark, nil
+		},
+		nil,
+		ec.marshalOMinionSessionMark2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMark,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_mark(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "color":
+				return ec.fieldContext_MinionSessionMark_color(ctx, field)
+			case "icon":
+				return ec.fieldContext_MinionSessionMark_icon(ctx, field)
+			case "emoji":
+				return ec.fieldContext_MinionSessionMark_emoji(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionMark", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_persisted(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25950,6 +26124,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_createdAt(ctx, field)
 			case "archived":
 				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
 			case "restarts":
@@ -26169,6 +26345,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_createdAt(ctx, field)
 			case "archived":
 				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
 			case "restarts":
@@ -26443,6 +26621,93 @@ func (ec *executionContext) _MinionSessionFilter_to(ctx context.Context, field g
 func (ec *executionContext) fieldContext_MinionSessionFilter_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionMark_color(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionMark_color,
+		func(ctx context.Context) (any, error) {
+			return obj.Color, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionMark_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionMark",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionMark_icon(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionMark_icon,
+		func(ctx context.Context) (any, error) {
+			return obj.Icon, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionMark_icon(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionMark",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionMark_emoji(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionMark) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionMark_emoji,
+		func(ctx context.Context) (any, error) {
+			return obj.Emoji, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionMark_emoji(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionMark",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -34540,6 +34805,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_createdAt(ctx, field)
 			case "archived":
 				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
 			case "restarts":
@@ -34732,6 +34999,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_createdAt(ctx, field)
 			case "archived":
 				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
 			case "restarts":
@@ -34760,6 +35029,200 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_setMinionSessionDescription_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMinionSessionMark(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionSessionMark,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionSessionMark(ctx, fc.Args["id"].(string), fc.Args["mark"].(*model.MinionSessionMarkInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionSession
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionSession
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionSession_state(ctx, field)
+			case "number":
+				return ec.fieldContext_MinionSession_number(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionSession_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionSession_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionSession_buildDescription(ctx, field)
+			case "description":
+				return ec.fieldContext_MinionSession_description(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionSession_moduleName(ctx, field)
+			case "target":
+				return ec.fieldContext_MinionSession_target(ctx, field)
+			case "platform":
+				return ec.fieldContext_MinionSession_platform(ctx, field)
+			case "staged":
+				return ec.fieldContext_MinionSession_staged(ctx, field)
+			case "pid":
+				return ec.fieldContext_MinionSession_pid(ctx, field)
+			case "os":
+				return ec.fieldContext_MinionSession_os(ctx, field)
+			case "arch":
+				return ec.fieldContext_MinionSession_arch(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_MinionSession_user(ctx, field)
+			case "domain":
+				return ec.fieldContext_MinionSession_domain(ctx, field)
+			case "proc":
+				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "integrity":
+				return ec.fieldContext_MinionSession_integrity(ctx, field)
+			case "addrs":
+				return ec.fieldContext_MinionSession_addrs(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionSession_address(ctx, field)
+			case "addressPicked":
+				return ec.fieldContext_MinionSession_addressPicked(ctx, field)
+			case "peerAddress":
+				return ec.fieldContext_MinionSession_peerAddress(ctx, field)
+			case "peers":
+				return ec.fieldContext_MinionSession_peers(ctx, field)
+			case "version":
+				return ec.fieldContext_MinionSession_version(ctx, field)
+			case "x":
+				return ec.fieldContext_MinionSession_x(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionSession_createdAt(ctx, field)
+			case "archived":
+				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
+			case "persisted":
+				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "restarts":
+				return ec.fieldContext_MinionSession_restarts(ctx, field)
+			case "restartCount":
+				return ec.fieldContext_MinionSession_restartCount(ctx, field)
+			case "sleepInterval":
+				return ec.fieldContext_MinionSession_sleepInterval(ctx, field)
+			case "sleepJitter":
+				return ec.fieldContext_MinionSession_sleepJitter(ctx, field)
+			case "lateAt":
+				return ec.fieldContext_MinionSession_lateAt(ctx, field)
+			case "lostAt":
+				return ec.fieldContext_MinionSession_lostAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionSessionMark_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_setMinionSessionsMark(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionSessionsMark,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionSessionsMark(ctx, fc.Args["operationId"].(string), fc.Args["ids"].([]string), fc.Args["matching"].(*model.MinionSessionMatchInput), fc.Args["mark"].(*model.MinionSessionMarkInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal int
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal int
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionSessionsMark(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionSessionsMark_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -34865,6 +35328,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_createdAt(ctx, field)
 			case "archived":
 				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
 			case "restarts":
@@ -42492,6 +42957,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_createdAt(ctx, field)
 			case "archived":
 				return ec.fieldContext_MinionSession_archived(ctx, field)
+			case "mark":
+				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
 			case "restarts":
@@ -58192,6 +58659,50 @@ func (ec *executionContext) unmarshalInputMinionSessionFilterInput(ctx context.C
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputMinionSessionMarkInput(ctx context.Context, obj any) (model.MinionSessionMarkInput, error) {
+	var it model.MinionSessionMarkInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"color", "icon", "emoji"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "color":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("color"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Color = data
+		case "icon":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("icon"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Icon = data
+		case "emoji":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("emoji"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Emoji = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputMinionSessionMatchInput(ctx context.Context, obj any) (model.MinionSessionMatchInput, error) {
 	var it model.MinionSessionMatchInput
 	if obj == nil {
@@ -63620,6 +64131,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "mark":
+			out.Values[i] = ec._MinionSession_mark(ctx, field, obj)
 		case "persisted":
 			out.Values[i] = ec._MinionSession_persisted(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -63847,6 +64360,46 @@ func (ec *executionContext) _MinionSessionFilter(ctx context.Context, sel ast.Se
 			out.Values[i] = ec._MinionSessionFilter_from(ctx, field, obj)
 		case "to":
 			out.Values[i] = ec._MinionSessionFilter_to(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionSessionMarkImplementors = []string{"MinionSessionMark"}
+
+func (ec *executionContext) _MinionSessionMark(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionMark) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionMarkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionMark")
+		case "color":
+			out.Values[i] = ec._MinionSessionMark_color(ctx, field, obj)
+		case "icon":
+			out.Values[i] = ec._MinionSessionMark_icon(ctx, field, obj)
+		case "emoji":
+			out.Values[i] = ec._MinionSessionMark_emoji(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -65743,6 +66296,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setMinionSessionDescription":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setMinionSessionDescription(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setMinionSessionMark":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionSessionMark(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "setMinionSessionsMark":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionSessionsMark(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -77240,6 +77807,21 @@ func (ec *executionContext) unmarshalOMinionSessionFilterInput2ᚕᚖgithubᚗco
 		}
 	}
 	return res, nil
+}
+
+func (ec *executionContext) marshalOMinionSessionMark2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMark(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionMark) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionSessionMark(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionSessionMarkInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMarkInput(ctx context.Context, v any) (*model.MinionSessionMarkInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMinionSessionMarkInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalOMinionSessionMatchInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionMatchInput(ctx context.Context, v any) (*model.MinionSessionMatchInput, error) {

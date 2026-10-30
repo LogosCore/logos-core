@@ -7,6 +7,8 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
+import { DocumentIcon } from "@/components/wiki/document-icon"
+import { MARK_TONE_CLASSES } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
@@ -83,8 +85,14 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
   switch (id) {
     case "number":
       return (
-        <div className="truncate font-mono font-medium" title={`Session ${s.number}, ${s.id}`}>
-          {s.number}
+        <div className="flex min-w-0 items-baseline gap-1.5" title={`Session ${s.number}, ${s.id}`}>
+          <span className="truncate font-mono font-medium">{s.number}</span>
+          {/* The caller's mark, in its color's tone (the row sets it). */}
+          {(s.mark?.icon || s.mark?.emoji) && (
+            <span className={cn("self-center", s.mark.color && MARK_TONE_CLASSES)}>
+              <DocumentIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
+            </span>
+          )}
         </div>
       )
     case "sessionId":

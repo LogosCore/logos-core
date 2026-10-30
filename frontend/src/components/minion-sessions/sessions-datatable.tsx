@@ -33,6 +33,7 @@ import {
   LoaderIcon,
   PencilIcon,
   PinIcon,
+  TagIcon,
   XIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -72,6 +73,8 @@ import {
   useSetMinionSessionAddress,
   useSetMinionSessionArchived,
   useSetMinionSessionsArchived,
+  useSetMinionSessionMark,
+  useSetMinionSessionsMark,
 } from "@/graphql/hooks/minion-sessions"
 import { Checkbox } from "@/components/ui/checkbox"
 import { errorMessage } from "@/components/modules/management/api-errors"
@@ -88,6 +91,8 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
 import { SessionFilterEditor } from "./session-filter-editor"
 import { SessionDescriptionDialog } from "./session-description-dialog"
+import { SessionMarkDialog, type SessionMarkTarget } from "./session-mark-dialog"
+import { MARKED_ROW_CLASSES, markColorVars } from "./session-mark-colors"
 import {
   DEFAULT_SESSIONS_LAYOUT,
   addressMatcher,
@@ -163,6 +168,10 @@ export function SessionsDatatable({
   const [filterTarget, setFilterTarget] = useState<FilterTarget | null>(null)
   // The session whose description is being edited.
   const [describing, setDescribing] = useState<MinionSessionFieldsFragment | null>(null)
+  // What the mark dialog marks: a session, or the selection.
+  const [marking, setMarking] = useState<SessionMarkTarget | null>(null)
+  const { mutateAsync: markOne } = useSetMinionSessionMark()
+  const { mutateAsync: markMany } = useSetMinionSessionsMark()
   // The column a right click landed on; null: the header past the columns.
   const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)
   const cells = useRef(new Map<SessionColumnId, HTMLElement>())
@@ -271,6 +280,22 @@ export function SessionsDatatable({
               total={total}
               filters={layout.filters}
               onSelectAll={() => setSelection({ ...selection, all: true, anchor: null })}
+              onMark={() => {
+                const n = selection.all ? total : picked.length
+                setMarking({
+                  title: `${n} ${n === 1 ? "session" : "sessions"}`,
+                  mark: null,
+                  many: true,
+                  save: async (mark) => {
+                    await markMany({
+                      operationId,
+                      mark,
+                      ...(selection.all ? { matching: { archived, filters: layout.filters } } : { ids: picked }),
+                    })
+                    clearSelection()
+                  },
+                })
+              }}
               onDone={clearSelection}
             />
           ) : null
@@ -370,9 +395,15 @@ export function SessionsDatatable({
               itemContent={(_, s) => (
                 <ContextMenuRow
                   gridCols=""
-                  style={grid}
+                  // The caller's mark tints the row; a picked row is outlined,
+                  // so it shows marked and picked at once.
+                  style={{ ...grid, ...markColorVars(s.mark?.color) }}
                   // While selecting, a drag or shift-click does not select text.
-                  className={cn(selecting && "select-none", pickedSet.has(s.id) && "bg-muted")}
+                  className={cn(
+                    selecting && "select-none",
+                    s.mark?.color && MARKED_ROW_CLASSES,
+                    pickedSet.has(s.id) && "ring-2 ring-primary/60 ring-inset",
+                  )}
                   // While selecting, a click picks the row (shift: a range).
                   onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
                   menuLabel="Session actions"
@@ -384,6 +415,15 @@ export function SessionsDatatable({
                       persistable={persistable(s)}
                       onSelect={() => setSelection(toggleSelected(selection, order, s.id, false))}
                       onEditDescription={() => setDescribing(s)}
+                      onMark={() =>
+                        setMarking({
+                          title: `session #${s.number}`,
+                          mark: s.mark ?? null,
+                          save: async (mark) => {
+                            await markOne({ id: s.id, mark })
+                          },
+                        })
+                      }
                       selected={pickedSet.has(s.id)}
                     />
                   }
@@ -414,6 +454,7 @@ export function SessionsDatatable({
       </div>
 
       <SessionDescriptionDialog session={describing} onClose={() => setDescribing(null)} />
+      <SessionMarkDialog target={marking} onClose={() => setMarking(null)} />
       <Popover open={filterTarget !== null} onOpenChange={(open) => !open && setFilterTarget(null)}>
         <PopoverContent anchor={filterTarget?.anchor} align="start" className="w-72">
           {filterTarget && filterColumn && (
@@ -757,12 +798,15 @@ function SessionMenu({
   onSelect,
   selected,
   onEditDescription,
+  onMark,
 }: {
   session: MinionSessionFieldsFragment
   canWrite: boolean
   persistable: boolean
   /** Opens the description's editor. */
   onEditDescription: () => void
+  /** Opens the caller's mark for the session. */
+  onMark: () => void
   /** Picks the row for bulk actions (or unpicks it). */
   onSelect: () => void
   selected: boolean
@@ -789,6 +833,11 @@ function SessionMenu({
           <ContextMenuSeparator />
         </>
       )}
+      {/* A mark is the caller's own: any member marks. */}
+      <ContextMenuItem onClick={onMark}>
+        <TagIcon />
+        Mark…
+      </ContextMenuItem>
       <ContextMenuItem
         disabled={why !== undefined}
         title={why}
@@ -830,6 +879,7 @@ function SelectionBar({
   total,
   filters,
   onSelectAll,
+  onMark,
   onDone,
 }: {
   operationId: string
@@ -841,6 +891,8 @@ function SelectionBar({
   total: number
   filters: SessionsLayout["filters"]
   onSelectAll: () => void
+  /** Opens the mark for every selected session. */
+  onMark: () => void
   onDone: () => void
 }) {
   const bulk = useSetMinionSessionsArchived()
@@ -900,6 +952,10 @@ function SelectionBar({
             {verb}
           </Button>
         ))}
+      <Button size="xs" variant="outline" disabled={count === 0} onClick={onMark}>
+        <TagIcon />
+        Mark…
+      </Button>
       <Button size="xs" variant="ghost" onClick={onDone} title="Done (Esc)">
         Done
       </Button>

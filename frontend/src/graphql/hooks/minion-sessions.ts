@@ -21,6 +21,10 @@ import {
   SetMinionSessionArchivedDocument,
   SetMinionSessionsArchivedDocument,
   SetMinionSessionDescriptionDocument,
+  SetMinionSessionMarkDocument,
+  SetMinionSessionsMarkDocument,
+  type SetMinionSessionsMarkMutationVariables,
+  type MinionSessionMarkInput,
   type SetMinionSessionsArchivedMutationVariables,
   type MinionSessionFieldsFragment,
   type MinionSessionsLayoutQuery,
@@ -259,5 +263,23 @@ export function useSetMinionSessionDescription() {
   return useMutation({
     mutationFn: (vars: { id: string; description: string }) => graphqlClient(SetMinionSessionDescriptionDocument, vars),
     onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionDescription),
+  })
+}
+
+/** Marks a session for the caller alone (null clears their mark). */
+export function useSetMinionSessionMark() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; mark: MinionSessionMarkInput | null }) => graphqlClient(SetMinionSessionMarkDocument, vars),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionMark),
+  })
+}
+
+/** Marks many sessions alike for the caller: by ids, or all a list matches. */
+export function useSetMinionSessionsMark() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: SetMinionSessionsMarkMutationVariables) => graphqlClient(SetMinionSessionsMarkDocument, vars),
+    onSuccess: () => scheduleRefresh(queryClient, minionSessionKeys.lists()),
   })
 }

@@ -174,6 +174,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithChannelEndpointRepo(a.repos.ChannelEndpoint),
 			resolver.WithBuildCleanup(a.builds),
 			resolver.WithMinionSessionRepo(a.repos.MinionSession),
+			resolver.WithMinionSessionMarkRepo(a.repos.MinionMark),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -201,6 +202,6 @@ func (a *App) buildResolvers() *resolvers {
 		endpoint: resolver.NewChannelEndpointResolver(a.endpoints, a.repos.Operation),
 		// Builds too: operation data, authorized by operation role.
 		builds:         resolver.NewBuildResolver(a.builds, a.repos.Operation),
-		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.eventBus),
+		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.eventBus),
 	}
 }

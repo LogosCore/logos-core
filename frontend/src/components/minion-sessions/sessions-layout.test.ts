@@ -150,6 +150,7 @@ describe("live updates", () => {
     id,
     state: "OPEN",
     archived: false,
+    mark: null,
     number: 1,
     operationId: "op",
     buildId: "b",

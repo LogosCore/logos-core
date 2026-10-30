@@ -26,6 +26,16 @@ func (r *mutationResolver) SetMinionSessionDescription(ctx context.Context, id s
 	return r.MinionSessionResolver.SetMinionSessionDescription(ctx, id, description)
 }
 
+// SetMinionSessionMark is the resolver for the setMinionSessionMark field.
+func (r *mutationResolver) SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.SetMinionSessionMark(ctx, id, mark)
+}
+
+// SetMinionSessionsMark is the resolver for the setMinionSessionsMark field.
+func (r *mutationResolver) SetMinionSessionsMark(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) (int, error) {
+	return r.MinionSessionResolver.SetMinionSessionsMark(ctx, operationID, ids, matching, mark)
+}
+
 // SetMinionSessionAddress is the resolver for the setMinionSessionAddress field.
 func (r *mutationResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionAddress(ctx, id, address)

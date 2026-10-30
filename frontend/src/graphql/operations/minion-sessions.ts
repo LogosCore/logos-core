@@ -7,6 +7,11 @@ export const MinionSessionFields = graphql(`
     id
     state
     archived
+    mark {
+      color
+      icon
+      emoji
+    }
     number
     operationId
     buildId
@@ -184,5 +189,24 @@ export const SetMinionSessionDescriptionMutation = graphql(`
     setMinionSessionDescription(id: $id, description: $description) {
       ...MinionSessionFields
     }
+  }
+`)
+
+export const SetMinionSessionMarkMutation = graphql(`
+  mutation SetMinionSessionMark($id: ID!, $mark: MinionSessionMarkInput) {
+    setMinionSessionMark(id: $id, mark: $mark) {
+      ...MinionSessionFields
+    }
+  }
+`)
+
+export const SetMinionSessionsMarkMutation = graphql(`
+  mutation SetMinionSessionsMark(
+    $operationId: ID!
+    $ids: [ID!]
+    $matching: MinionSessionMatchInput
+    $mark: MinionSessionMarkInput
+  ) {
+    setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)
   }
 `)
