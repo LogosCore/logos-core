@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -65,31 +66,34 @@ export function ListCell({
             }
           />
           <DropdownMenuContent align="start" className="max-h-96 min-w-56 overflow-y-auto">
-            <DropdownMenuLabel>
-              {items.length} {noun}
-            </DropdownMenuLabel>
-            {onPick ? (
-              <DropdownMenuRadioGroup
-                value={picked ?? AUTO}
-                onValueChange={(v) => onPick(v === AUTO ? null : (v as string))}
-              >
-                <DropdownMenuRadioItem value={AUTO}>
-                  <span>Automatic</span>
-                  {autoItem && <span className={cn("truncate text-muted-foreground", mono && "font-mono text-xs")}>{autoItem}</span>}
-                </DropdownMenuRadioItem>
-                {items.map((item) => (
-                  <DropdownMenuRadioItem key={item} value={item}>
-                    <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+            {/* A label must sit in a group, or Base UI throws. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                {items.length} {noun}
+              </DropdownMenuLabel>
+              {onPick ? (
+                <DropdownMenuRadioGroup
+                  value={picked ?? AUTO}
+                  onValueChange={(v) => onPick(v === AUTO ? null : (v as string))}
+                >
+                  <DropdownMenuRadioItem value={AUTO}>
+                    <span>Automatic</span>
+                    {autoItem && <span className={cn("truncate text-muted-foreground", mono && "font-mono text-xs")}>{autoItem}</span>}
                   </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            ) : (
-              items.map((item) => (
-                <DropdownMenuItem key={item} onClick={() => void copyToClipboard(item, item)}>
-                  <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
-                </DropdownMenuItem>
-              ))
-            )}
+                  {items.map((item) => (
+                    <DropdownMenuRadioItem key={item} value={item}>
+                      <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              ) : (
+                items.map((item) => (
+                  <DropdownMenuItem key={item} onClick={() => void copyToClipboard(item, item)}>
+                    <span className={cn("truncate", mono && "font-mono text-xs", item === shown && "font-semibold")}>{item}</span>
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {shown && (
               <DropdownMenuItem onClick={() => void copyToClipboard(shown, shown)}>

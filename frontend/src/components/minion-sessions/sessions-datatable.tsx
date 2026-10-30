@@ -45,6 +45,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -506,17 +507,20 @@ function ColumnsButton({
         }
       />
       <DropdownMenuContent align="end" className="max-h-96 min-w-52 overflow-y-auto">
-        <DropdownMenuLabel>Columns</DropdownMenuLabel>
-        {SESSION_COLUMNS.map((c) => (
-          <DropdownMenuCheckboxItem
-            key={c.id}
-            checked={layout.columns.includes(c.id)}
-            disabled={layout.columns.length === 1 && layout.columns[0] === c.id}
-            onCheckedChange={() => onLayoutChange(toggleColumn(layout, c.id))}
-          >
-            {c.id === "number" ? "Number" : c.label}
-          </DropdownMenuCheckboxItem>
-        ))}
+        {/* A label must sit in a group, or Base UI throws. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Columns</DropdownMenuLabel>
+          {SESSION_COLUMNS.map((c) => (
+            <DropdownMenuCheckboxItem
+              key={c.id}
+              checked={layout.columns.includes(c.id)}
+              disabled={layout.columns.length === 1 && layout.columns[0] === c.id}
+              onCheckedChange={() => onLayoutChange(toggleColumn(layout, c.id))}
+            >
+              {c.id === "number" ? "Number" : c.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={isDefault} onClick={() => onLayoutChange(null)}>
           <ListRestartIcon />
