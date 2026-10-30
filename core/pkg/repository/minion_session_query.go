@@ -68,9 +68,17 @@ func columnFilter(f models.MinionSessionFilter, now time.Time) bson.M {
 	empty := bson.M{"$in": bson.A{nil, "", bson.A{}}}
 	switch f.Op {
 	case models.SessionFilterContains:
-		return bson.M{field: bson.M{"$regex": regexp.QuoteMeta(f.Text), "$options": "i"}}
+		rx := bson.M{"$regex": regexp.QuoteMeta(f.Text), "$options": "i"}
+		if col.AlsoMatch != "" {
+			return bson.M{"$or": bson.A{bson.M{field: rx}, bson.M{col.AlsoMatch: rx}}}
+		}
+		return bson.M{field: rx}
 	case models.SessionFilterNotContains:
-		return bson.M{field: bson.M{"$not": bson.M{"$regex": regexp.QuoteMeta(f.Text), "$options": "i"}}}
+		not := bson.M{"$not": bson.M{"$regex": regexp.QuoteMeta(f.Text), "$options": "i"}}
+		if col.AlsoMatch != "" {
+			return bson.M{field: not, col.AlsoMatch: not}
+		}
+		return bson.M{field: not}
 	case models.SessionFilterEmpty:
 		return bson.M{field: empty}
 	case models.SessionFilterNotEmpty:
@@ -142,8 +150,6 @@ func sessionSortValue(s *models.MinionSession, column string) any {
 		return str(h.User)
 	case "domain":
 		return str(h.Domain)
-	case "integrity":
-		return str(h.Integrity)
 	case "proc":
 		return str(h.Proc)
 	case "pid":

@@ -9938,7 +9938,7 @@ type MinionSessionConnection {
 # it holds:
 #   text (host, user, domain, proc, buildDescription) and the address lists
 #   (addrs, peer: any address the session was seen from): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
-#   a few values (integrity, os, arch, version, build: the factory, target,
+#   a few values (os, arch, version, build: the factory, target,
 #   platform) and staged ("true" / "false"): IN, NOT_IN (values)
 #   numbers (number, pid): RANGE (min, max; either may be left out)
 #   times (lastSeen, opened): WITHIN or OLDER_THAN (seconds before now),
@@ -9960,9 +9960,9 @@ enum MinionSessionFilterOp {
 }
 
 # One column filter. column is a column id: number, sessionId, addrs, peer
-# (the external addresses), host,
-# user, domain, integrity, proc, pid, os, arch, version, lastSeen, opened,
-# build, target, platform, buildDescription, buildId, staged.
+# (the external addresses), host, user (CONTAINS also matches the integrity
+# level), domain, proc, pid, os, arch, version, lastSeen, opened, build,
+# target, platform, buildDescription, buildId, staged.
 input MinionSessionFilterInput {
   column: String!
   op: MinionSessionFilterOp!
@@ -10048,7 +10048,7 @@ extend type Query {
     @hasPermission(permission: "operation:member")
 
   # The distinct values an operation's sessions have in a column of a few
-  # values (integrity, os, arch, version, build, target, platform, staged),
+  # values (os, arch, version, build, target, platform, staged),
   # sorted: what its IN filter offers. Needs at least viewer.
   minionSessionValues(operationId: ID!, column: String!): [String!]!
     @hasPermission(permission: "operation:member")

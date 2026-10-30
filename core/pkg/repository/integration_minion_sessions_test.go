@@ -127,25 +127,26 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 		search  string
 		want    []int64
 	}{
-		"host contains, case aside":        {filters: []models.MinionSessionFilter{{Column: "host", Op: "CONTAINS", Text: "WEB"}}, want: []int64{1, 2, 5}},
-		"host does not contain keeps none": {filters: []models.MinionSessionFilter{{Column: "host", Op: "NOT_CONTAINS", Text: "web"}}, want: []int64{3, 4, 6, 7}},
-		"host empty":                       {filters: []models.MinionSessionFilter{{Column: "host", Op: "EMPTY"}}, want: []int64{3, 6}},
-		"user not empty":                   {filters: []models.MinionSessionFilter{{Column: "user", Op: "NOT_EMPTY"}}, want: []int64{1, 2, 4}},
-		"user with a dot of regex":         {filters: []models.MinionSessionFilter{{Column: "user", Op: "CONTAINS", Text: "\\svc"}}, want: []int64{4}},
-		"address contains":                 {filters: []models.MinionSessionFilter{{Column: "addrs", Op: "CONTAINS", Text: "172.17"}}, want: []int64{2}},
-		"addresses empty":                  {filters: []models.MinionSessionFilter{{Column: "addrs", Op: "EMPTY"}}, want: []int64{3, 4, 5, 6}},
-		"os in":                            {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"windows", "darwin"}}}, want: []int64{3, 4, 6}},
-		"integrity not in keeps none":      {filters: []models.MinionSessionFilter{{Column: "integrity", Op: "NOT_IN", Values: []string{"root"}}}, want: []int64{2, 3, 4, 5, 6, 7}},
-		"staged":                           {filters: []models.MinionSessionFilter{{Column: "staged", Op: "IN", Values: []string{"true"}}}, want: []int64{1, 3, 5}},
-		"pid range":                        {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(5), Max: num(20)}}, want: []int64{1, 2, 3, 4, 7}},
-		"pid at least":                     {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(21)}}, want: []int64{5}},
-		"seen within 5m":                   {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "WITHIN", Seconds: secs(300)}}, want: []int64{1, 4, 7}},
-		"seen over 1h ago":                 {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "OLDER_THAN", Seconds: secs(3600)}}, want: []int64{2, 5}},
-		"never seen":                       {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "NEVER"}}, want: []int64{3, 6}},
-		"seen in a range":                  {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "RANGE", From: ago(4 * time.Hour), To: ago(time.Hour)}}, want: []int64{2}},
-		"session id":                       {filters: []models.MinionSessionFilter{{Column: "sessionId", Op: "EQUALS", Text: rows[3].SessionID.String()}}, want: []int64{4}},
-		"two filters":                      {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"linux"}}, {Column: "host", Op: "CONTAINS", Text: "web"}}, want: []int64{1, 2, 5}},
-		"filter and search":                {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"linux"}}}, search: "mail", want: []int64{7}},
+		"host contains, case aside":                    {filters: []models.MinionSessionFilter{{Column: "host", Op: "CONTAINS", Text: "WEB"}}, want: []int64{1, 2, 5}},
+		"host does not contain keeps none":             {filters: []models.MinionSessionFilter{{Column: "host", Op: "NOT_CONTAINS", Text: "web"}}, want: []int64{3, 4, 6, 7}},
+		"host empty":                                   {filters: []models.MinionSessionFilter{{Column: "host", Op: "EMPTY"}}, want: []int64{3, 6}},
+		"user not empty":                               {filters: []models.MinionSessionFilter{{Column: "user", Op: "NOT_EMPTY"}}, want: []int64{1, 2, 4}},
+		"user with a dot of regex":                     {filters: []models.MinionSessionFilter{{Column: "user", Op: "CONTAINS", Text: "\\svc"}}, want: []int64{4}},
+		"address contains":                             {filters: []models.MinionSessionFilter{{Column: "addrs", Op: "CONTAINS", Text: "172.17"}}, want: []int64{2}},
+		"addresses empty":                              {filters: []models.MinionSessionFilter{{Column: "addrs", Op: "EMPTY"}}, want: []int64{3, 4, 5, 6}},
+		"os in":                                        {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"windows", "darwin"}}}, want: []int64{3, 4, 6}},
+		"user contains the integrity":                  {filters: []models.MinionSessionFilter{{Column: "user", Op: "CONTAINS", Text: "high"}}, want: []int64{4}},
+		"user does not contain root, nor runs as root": {filters: []models.MinionSessionFilter{{Column: "user", Op: "NOT_CONTAINS", Text: "root"}}, want: []int64{2, 3, 4, 5, 6, 7}},
+		"staged":            {filters: []models.MinionSessionFilter{{Column: "staged", Op: "IN", Values: []string{"true"}}}, want: []int64{1, 3, 5}},
+		"pid range":         {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(5), Max: num(20)}}, want: []int64{1, 2, 3, 4, 7}},
+		"pid at least":      {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(21)}}, want: []int64{5}},
+		"seen within 5m":    {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "WITHIN", Seconds: secs(300)}}, want: []int64{1, 4, 7}},
+		"seen over 1h ago":  {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "OLDER_THAN", Seconds: secs(3600)}}, want: []int64{2, 5}},
+		"never seen":        {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "NEVER"}}, want: []int64{3, 6}},
+		"seen in a range":   {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "RANGE", From: ago(4 * time.Hour), To: ago(time.Hour)}}, want: []int64{2}},
+		"session id":        {filters: []models.MinionSessionFilter{{Column: "sessionId", Op: "EQUALS", Text: rows[3].SessionID.String()}}, want: []int64{4}},
+		"two filters":       {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"linux"}}, {Column: "host", Op: "CONTAINS", Text: "web"}}, want: []int64{1, 2, 5}},
+		"filter and search": {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"linux"}}}, search: "mail", want: []int64{7}},
 	} {
 		q := MinionSessionQuery{Search: c.search, Filters: c.filters, Sort: byNumber}
 		if err := q.Validate(); err != nil {
@@ -166,8 +167,8 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 	if err != nil || !slices.Equal(values, []string{"darwin", "linux", "windows"}) {
 		t.Errorf("os values %v %v", values, err)
 	}
-	if values, _ := repo.Values(ctx, op, "integrity"); !slices.Equal(values, []string{"high", "root"}) {
-		t.Errorf("integrity values %v", values)
+	if values, _ := repo.Values(ctx, op, "arch"); !slices.Equal(values, []string{"386", "amd64", "arm64"}) {
+		t.Errorf("arch values %v", values)
 	}
 	if values, _ := repo.Values(ctx, op, "staged"); !slices.Equal(values, []string{"false", "true"}) {
 		t.Errorf("staged values %v", values)

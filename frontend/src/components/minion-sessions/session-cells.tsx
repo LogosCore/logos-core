@@ -100,15 +100,13 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       )
     case "user":
       return (
-        <div className="truncate" title={userOf(s) || undefined}>
+        <div className="truncate" title={[userOf(s), s.integrity && `integrity: ${s.integrity}`].filter(Boolean).join("\n") || undefined}>
           {userOf(s) || none}
           {s.integrity && ELEVATED.has(s.integrity) && <span className="font-medium"> · {s.integrity}</span>}
         </div>
       )
     case "domain":
       return text(s.domain)
-    case "integrity":
-      return text(s.integrity)
     case "proc":
       return (
         <div className="truncate" title={s.proc ?? undefined}>

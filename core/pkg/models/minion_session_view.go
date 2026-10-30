@@ -43,6 +43,9 @@ type MinionSessionColumn struct {
 	// SortField is what the column sorts by when not Field: the addresses
 	// sort by the one the session shows.
 	SortField string
+	// AlsoMatch is another field its text filters read: the user column's
+	// CONTAINS matches the integrity level too.
+	AlsoMatch string
 }
 
 // SortBy is the stored field the column sorts by.
@@ -57,14 +60,14 @@ func (c MinionSessionColumn) SortBy() string {
 // of a session an operator may want to see. The SPA keeps the same ids, with
 // how each renders.
 var MinionSessionColumns = map[string]MinionSessionColumn{
-	"number":           {Field: "number", Kind: SessionColumnNumber, Sortable: true},
-	"sessionId":        {Field: "session_id", Kind: SessionColumnID},
-	"addrs":            {Field: "hello.addrs", Kind: SessionColumnList, Sortable: true, SortField: "address"},
-	"peer":             {Field: "peers.address", Kind: SessionColumnList, Sortable: true, SortField: "peer_address"},
-	"host":             {Field: "hello.host", Kind: SessionColumnText, Sortable: true},
-	"user":             {Field: "hello.user", Kind: SessionColumnText, Sortable: true},
+	"number":    {Field: "number", Kind: SessionColumnNumber, Sortable: true},
+	"sessionId": {Field: "session_id", Kind: SessionColumnID},
+	"addrs":     {Field: "hello.addrs", Kind: SessionColumnList, Sortable: true, SortField: "address"},
+	"peer":      {Field: "peers.address", Kind: SessionColumnList, Sortable: true, SortField: "peer_address"},
+	"host":      {Field: "hello.host", Kind: SessionColumnText, Sortable: true},
+	// The user, with the integrity level it runs at (no column of its own).
+	"user":             {Field: "hello.user", Kind: SessionColumnText, Sortable: true, AlsoMatch: "hello.integrity"},
 	"domain":           {Field: "hello.domain", Kind: SessionColumnText, Sortable: true},
-	"integrity":        {Field: "hello.integrity", Kind: SessionColumnEnum, Sortable: true},
 	"proc":             {Field: "hello.proc", Kind: SessionColumnText, Sortable: true},
 	"pid":              {Field: "hello.pid", Kind: SessionColumnNumber, Sortable: true},
 	"os":               {Field: "hello.os", Kind: SessionColumnEnum, Sortable: true},

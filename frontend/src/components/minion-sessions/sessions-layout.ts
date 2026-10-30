@@ -24,7 +24,6 @@ export type SessionColumnId =
   | "host"
   | "user"
   | "domain"
-  | "integrity"
   | "proc"
   | "pid"
   | "os"
@@ -75,9 +74,9 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
     value: (s) => [s.peerAddress, s.peers.map((p) => p.address)],
   },
   { id: "host", label: "Host", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.2), value: (s) => s.host },
-  { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => s.user },
+  // The user, with the integrity level it runs at: its filter matches either.
+  { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => [s.user, s.integrity] },
   { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.domain },
-  { id: "integrity", label: "Integrity", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.7), value: (s) => s.integrity },
   { id: "proc", label: "Process", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.1), value: (s) => s.proc },
   { id: "pid", label: "PID", kind: "number", sortable: true, initialDirection: "ASC", width: fr(0.5), value: (s) => s.pid },
   { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.os },
