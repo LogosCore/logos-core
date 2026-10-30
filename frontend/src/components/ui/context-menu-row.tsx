@@ -36,8 +36,8 @@ export function ContextMenuRow({
   children: (menuButton: ReactNode) => ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  // The ⋯ button while the menu is open from it; null when it opened at the
-  // pointer.
+  // The ⋯ button the menu last opened from, kept while it closes; null when
+  // it opened at the pointer.
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
 
   const menuButton = (
@@ -64,7 +64,10 @@ export function ContextMenuRow({
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) setAnchor(null)
+        // Only a right click opens it through here: at the pointer. The ⋯
+        // button's anchor is kept while it closes, or the closing menu
+        // jumped to the page's corner for its fade out.
+        if (next) setAnchor(null)
       }}
     >
       <ContextMenuTrigger
