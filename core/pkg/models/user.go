@@ -72,6 +72,9 @@ type User struct {
 	// on read, which is also where operations the operator has since lost
 	// access to drop out, so a stored list never leaks one's name.
 	RecentOperations []uuid.UUID `bson:"recent_operations" json:"-"`
+	// MinionSessionsLayout is how this operator keeps the Sessions table
+	// (columns, sort, filters), one for all operations; nil for the default.
+	MinionSessionsLayout *MinionSessionsLayout `bson:"minion_sessions_layout,omitempty" json:"-"`
 }
 
 // IconUsage is one icon in User.FrequentIcons. Name is what the SPA stores on

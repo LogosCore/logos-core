@@ -57,6 +57,86 @@ type MinionSessionConnection {
   totalCount: Int!
 }
 
+# How a filter narrows its column. Which ones a column takes depends on what
+# it holds:
+#   text (host, user, domain, proc, buildDescription) and the address list
+#   (addrs): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
+#   a few values (integrity, os, arch, version, build: the factory, target,
+#   platform) and staged ("true" / "false"): IN, NOT_IN (values)
+#   numbers (number, pid): RANGE (min, max; either may be left out)
+#   times (lastSeen, opened): WITHIN or OLDER_THAN (seconds before now),
+#   NEVER (no value: lastSeen before the first check-in), RANGE (from, to)
+#   ids (sessionId, buildId): EQUALS (text, a whole UUID)
+# A missing value is empty: NOT_IN and NOT_CONTAINS keep it.
+enum MinionSessionFilterOp {
+  CONTAINS
+  NOT_CONTAINS
+  EMPTY
+  NOT_EMPTY
+  IN
+  NOT_IN
+  RANGE
+  WITHIN
+  OLDER_THAN
+  NEVER
+  EQUALS
+}
+
+# One column filter. column is a column id: number, sessionId, addrs, host,
+# user, domain, integrity, proc, pid, os, arch, version, lastSeen, opened,
+# build, target, platform, buildDescription, buildId, staged.
+input MinionSessionFilterInput {
+  column: String!
+  op: MinionSessionFilterOp!
+  text: String
+  values: [String!]
+  min: Float
+  max: Float
+  seconds: Int
+  # RFC 3339
+  from: String
+  to: String
+}
+
+type MinionSessionFilter {
+  column: String!
+  op: MinionSessionFilterOp!
+  text: String
+  values: [String!]
+  min: Float
+  max: Float
+  seconds: Int
+  from: String
+  to: String
+}
+
+# The order of the list: a column id (all but sessionId, addrs and buildId
+# sort) and a direction. The session's insertion order breaks ties.
+input MinionSessionSortInput {
+  column: String!
+  direction: SortDirection!
+}
+
+type MinionSessionSort {
+  column: String!
+  direction: SortDirection!
+}
+
+# How the caller keeps the Sessions table, one for all operations: the
+# columns shown, in order, the sort and the filters.
+type MinionSessionsLayout {
+  columns: [String!]!
+  # null: newest first.
+  sort: MinionSessionSort
+  filters: [MinionSessionFilter!]!
+}
+
+input MinionSessionsLayoutInput {
+  columns: [String!]!
+  sort: MinionSessionSortInput
+  filters: [MinionSessionFilterInput!]!
+}
+
 type MinionSessionEvent {
   action: EventAction!
   sessionId: ID!
@@ -70,16 +150,36 @@ extend type Query {
   # host, user, domain, process, os, arch, integrity, addresses, version, the
   # build's description, factory, target and platform; a number ("12",
   # "#12") also matches the session numbered so, and a whole UUID a session
-  # or build id. Needs at least viewer.
+  # or build id. filters all hold; sort is newest first when null, and a
+  # cursor is only good for the sort it came with. Needs at least viewer.
   minionSessions(
     operationId: ID!
     search: String
+    filters: [MinionSessionFilterInput!]
+    sort: MinionSessionSortInput
     first: Int = 20
     after: String
     last: Int
     before: String
   ): MinionSessionConnection!
     @hasPermission(permission: "operation:member")
+
+  # The distinct values an operation's sessions have in a column of a few
+  # values (integrity, os, arch, version, build, target, platform, staged),
+  # sorted: what its IN filter offers. Needs at least viewer.
+  minionSessionValues(operationId: ID!, column: String!): [String!]!
+    @hasPermission(permission: "operation:member")
+
+  # The caller's Sessions table layout; null until they change the default.
+  minionSessionsLayout: MinionSessionsLayout
+    @hasPermission(permission: "user:update:own")
+}
+
+extend type Mutation {
+  # Keeps the caller's Sessions table layout, for every operation and every
+  # browser they use; null goes back to the default.
+  setMinionSessionsLayout(layout: MinionSessionsLayoutInput): MinionSessionsLayout
+    @hasPermission(permission: "user:update:own")
 }
 
 extend type Subscription {

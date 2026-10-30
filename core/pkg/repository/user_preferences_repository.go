@@ -34,6 +34,9 @@ type IUserPreferencesRepository interface {
 	// no-op rather than an overwrite. Neither reports whether it wrote.
 	SeedFrequentIcons(ctx context.Context, userID uuid.UUID, icons []models.IconUsage) error
 	SeedRecentOperations(ctx context.Context, userID uuid.UUID, operationIDs []uuid.UUID) error
+	// SetMinionSessionsLayout replaces the operator's Sessions table layout;
+	// nil goes back to the default.
+	SetMinionSessionsLayout(ctx context.Context, userID uuid.UUID, layout *models.MinionSessionsLayout) error
 }
 
 type userPreferencesRepository struct {
@@ -61,6 +64,14 @@ func (r *userPreferencesRepository) SeedFrequentIcons(ctx context.Context, userI
 
 func (r *userPreferencesRepository) SeedRecentOperations(ctx context.Context, userID uuid.UUID, operationIDs []uuid.UUID) error {
 	return r.seed(ctx, userID, "recent_operations", operationIDs)
+}
+
+func (r *userPreferencesRepository) SetMinionSessionsLayout(ctx context.Context, userID uuid.UUID, layout *models.MinionSessionsLayout) error {
+	update := bson.M{"$set": bson.M{"minion_sessions_layout": layout}}
+	if layout == nil {
+		update = bson.M{"$unset": bson.M{"minion_sessions_layout": ""}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"user_id": userID}, update)
 }
 
 func (r *userPreferencesRepository) seed(ctx context.Context, userID uuid.UUID, field string, value any) error {

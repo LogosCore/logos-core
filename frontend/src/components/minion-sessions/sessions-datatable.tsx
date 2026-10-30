@@ -1,0 +1,559 @@
+import { useMemo, useRef, useState, type ReactNode } from "react"
+import { Virtuoso } from "react-virtuoso"
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import {
+  ArrowDownIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ArrowUpIcon,
+  Columns3Icon,
+  EyeOffIcon,
+  FilterIcon,
+  FilterXIcon,
+  ListRestartIcon,
+  LoaderIcon,
+  XIcon,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent } from "@/components/ui/popover"
+import { Skeleton } from "@/components/ui/skeleton"
+import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
+import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
+import { useNow } from "@/hooks/use-now"
+import { cn } from "@/lib/utils"
+import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
+import { SessionCell } from "./session-cells"
+import { SessionFilterEditor } from "./session-filter-editor"
+import {
+  DEFAULT_SESSIONS_LAYOUT,
+  SESSION_COLUMNS,
+  SESSION_COLUMN_BY_ID,
+  cycleSort,
+  describeFilter,
+  filterOf,
+  moveColumn,
+  setFilter,
+  setSort,
+  shiftColumn,
+  toggleColumn,
+  type SessionColumnDef,
+  type SessionColumnId,
+  type SessionsLayout,
+} from "./sessions-layout"
+
+// The Sessions table: the operators' main view. Unlike the app's other
+// tables, its columns are the operator's: any property of a session, in any
+// order (drag a header, or Move left / right), filtered and sorted on any
+// column, all from the header: a click sorts, the funnel filters, and a right
+// click (or the columns button at the end) opens the rest. Core filters and
+// sorts; the layout is saved on the operator (useMinionSessionsLayout).
+
+const SKELETON_ROWS = 5
+const MENU_TRACK = "2.25rem"
+
+/** Where a column's filter editor is open: the column, and the element it hangs from. */
+interface FilterTarget {
+  column: SessionColumnId
+  anchor: HTMLElement
+}
+
+export function SessionsDatatable({
+  operationId,
+  layout,
+  onLayoutChange,
+  sessions,
+  icons,
+  isLoading,
+  isFetchingNextPage,
+  hasNextPage,
+  fetchNextPage,
+  emptyState,
+}: {
+  operationId: string
+  layout: SessionsLayout
+  onLayoutChange: (layout: SessionsLayout | null) => void
+  sessions: MinionSessionFieldsFragment[]
+  icons: ReadonlyMap<string, ModuleIconSvgs>
+  isLoading: boolean
+  isFetchingNextPage: boolean
+  hasNextPage: boolean
+  fetchNextPage: () => void
+  emptyState: ReactNode
+}) {
+  // Ticks the relative times.
+  const now = useNow(15_000)
+  const [filterTarget, setFilterTarget] = useState<FilterTarget | null>(null)
+  // The column a right click landed on; null: the header past the columns.
+  const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)
+  const cells = useRef(new Map<SessionColumnId, HTMLElement>())
+
+  const columns = useMemo(() => layout.columns.map((id) => SESSION_COLUMN_BY_ID.get(id)!), [layout.columns])
+  const template = [...columns.map((c) => c.width), MENU_TRACK].join(" ")
+  const grid = { gridTemplateColumns: template }
+
+  const sensors = useSensors(
+    // A click sorts; only a drag past 6px moves the column.
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (over && active.id !== over.id) {
+      onLayoutChange(moveColumn(layout, active.id as SessionColumnId, over.id as SessionColumnId))
+    }
+  }
+
+  const openFilter = (column: SessionColumnId, anchor?: HTMLElement | null) => {
+    const el = anchor ?? cells.current.get(column)
+    if (el) setFilterTarget({ column, anchor: el })
+  }
+
+  const slowLoad = useDelayedFlag(isLoading, PLACEHOLDER_DELAY_MS)
+  const showEmpty = !isLoading && sessions.length === 0
+  const showList = !isLoading && sessions.length > 0
+
+  const footer = useMemo(
+    () => ({
+      Footer: () => {
+        if (isFetchingNextPage) {
+          return (
+            <div className="flex items-center justify-center py-4">
+              <LoaderIcon className="size-4 animate-spin" />
+            </div>
+          )
+        }
+        if (!hasNextPage && sessions.length > 0) {
+          return (
+            <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
+              No more sessions to load
+            </div>
+          )
+        }
+        return null
+      },
+    }),
+    [isFetchingNextPage, hasNextPage, sessions.length],
+  )
+
+  const filterColumn = filterTarget ? SESSION_COLUMN_BY_ID.get(filterTarget.column)! : null
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <FilterChips
+        layout={layout}
+        onEdit={(column, anchor) => openFilter(column, anchor)}
+        onRemove={(column) => onLayoutChange(setFilter(layout, column, null))}
+        onClearAll={() => onLayoutChange({ ...layout, filters: [] })}
+      />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
+        <ContextMenu>
+          <ContextMenuTrigger
+            // A right click past the cells is about the table, not a column.
+            onContextMenu={(e) => {
+              if (e.target === e.currentTarget) setMenuColumn(null)
+            }}
+            className="shrink-0 border-b bg-muted/50"
+            render={<div />}
+          >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={layout.columns} strategy={horizontalListSortingStrategy}>
+                <div
+                  className="grid gap-3 px-4 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                  style={grid}
+                  onContextMenu={(e) => {
+                    if (e.target === e.currentTarget) setMenuColumn(null)
+                  }}
+                >
+                  {columns.map((col) => (
+                    <HeaderCell
+                      key={col.id}
+                      column={col}
+                      layout={layout}
+                      cellRef={(el) => {
+                        if (el) cells.current.set(col.id, el)
+                        else cells.current.delete(col.id)
+                      }}
+                      onSort={() => onLayoutChange(cycleSort(layout, col.id))}
+                      onFilter={() => openFilter(col.id)}
+                      onContextMenu={() => setMenuColumn(col.id)}
+                    />
+                  ))}
+                  <ColumnsButton layout={layout} onLayoutChange={onLayoutChange} />
+                </div>
+              </SortableContext>
+            </DndContext>
+          </ContextMenuTrigger>
+          <HeaderMenu
+            column={menuColumn}
+            layout={layout}
+            onLayoutChange={onLayoutChange}
+            onFilter={(column) => openFilter(column)}
+          />
+        </ContextMenu>
+
+        {slowLoad && (
+          <div className="space-y-3 p-4 animate-in duration-200 fade-in-0">
+            {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-full" />
+            ))}
+          </div>
+        )}
+        {showEmpty && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
+            {emptyState}
+          </div>
+        )}
+        {showList && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Virtuoso
+              data={sessions}
+              endReached={() => {
+                if (hasNextPage && !isFetchingNextPage) fetchNextPage()
+              }}
+              overscan={200}
+              style={{ height: "100%" }}
+              className="min-h-0 flex-1"
+              components={footer}
+              itemContent={(_, s) => (
+                <div
+                  className="grid w-full items-center gap-3 border-b px-4 py-2 text-left text-sm transition-colors hover:bg-muted/50"
+                  style={grid}
+                >
+                  {columns.map((col) => (
+                    <div key={col.id} className="min-w-0">
+                      <SessionCell id={col.id} session={s} ctx={{ icons, now }} />
+                    </div>
+                  ))}
+                  <div />
+                </div>
+              )}
+            />
+          </div>
+        )}
+      </div>
+
+      <Popover open={filterTarget !== null} onOpenChange={(open) => !open && setFilterTarget(null)}>
+        <PopoverContent anchor={filterTarget?.anchor} align="start" className="w-72">
+          {filterTarget && filterColumn && (
+            <SessionFilterEditor
+              key={filterTarget.column}
+              column={filterColumn}
+              operationId={operationId}
+              initial={filterOf(layout, filterTarget.column)}
+              onApply={(f) => {
+                onLayoutChange(setFilter(layout, filterTarget.column, f))
+                setFilterTarget(null)
+              }}
+              onClear={() => {
+                onLayoutChange(setFilter(layout, filterTarget.column, null))
+                setFilterTarget(null)
+              }}
+            />
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+/**
+ * One header cell: drag it to move the column, click its label to sort, the
+ * funnel to filter (shown on hover, and always while the column is filtered).
+ */
+function HeaderCell({
+  column,
+  layout,
+  cellRef,
+  onSort,
+  onFilter,
+  onContextMenu,
+}: {
+  column: SessionColumnDef
+  layout: SessionsLayout
+  cellRef: (el: HTMLElement | null) => void
+  onSort: () => void
+  onFilter: () => void
+  onContextMenu: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id })
+  const sorted = layout.sort?.column === column.id ? layout.sort.direction : null
+  const filtered = filterOf(layout, column.id) !== undefined
+  return (
+    <div
+      ref={(el) => {
+        setNodeRef(el)
+        cellRef(el)
+      }}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(
+        "group/header -mx-1 flex min-w-0 cursor-grab items-center gap-0.5 rounded px-1 py-0.5 select-none hover:bg-muted active:cursor-grabbing",
+        isDragging && "z-10 bg-muted shadow-sm",
+        (sorted || filtered) && "text-foreground",
+      )}
+      onContextMenu={onContextMenu}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className={cn("flex min-w-0 items-center gap-1 uppercase", column.sortable ? "cursor-pointer" : "cursor-grab")}
+        onClick={column.sortable ? onSort : undefined}
+        title={column.sortable ? `Sort by ${column.label}` : column.label}
+      >
+        <span className="truncate">{column.label}</span>
+        {sorted === "ASC" && <ArrowUpIcon className="size-3 shrink-0" />}
+        {sorted === "DESC" && <ArrowDownIcon className="size-3 shrink-0" />}
+      </button>
+      <button
+        type="button"
+        aria-label={`Filter ${column.label}`}
+        title={filtered ? `Filtered: ${describeFilter(filterOf(layout, column.id)!)}` : `Filter ${column.label}`}
+        className={cn(
+          "ml-auto shrink-0 cursor-pointer rounded p-0.5 hover:bg-background",
+          filtered ? "text-foreground" : "opacity-0 group-hover/header:opacity-60",
+        )}
+        // The funnel opens the filter; it must not start a drag.
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onFilter}
+      >
+        <FilterIcon className={cn("size-3", filtered && "fill-current")} />
+      </button>
+    </div>
+  )
+}
+
+/** The header's right-click menu: about the column clicked, then the table. */
+function HeaderMenu({
+  column,
+  layout,
+  onLayoutChange,
+  onFilter,
+}: {
+  column: SessionColumnId | null
+  layout: SessionsLayout
+  onLayoutChange: (layout: SessionsLayout | null) => void
+  onFilter: (column: SessionColumnId) => void
+}) {
+  const col = column ? SESSION_COLUMN_BY_ID.get(column) : undefined
+  const i = column ? layout.columns.indexOf(column) : -1
+  const sorted = col && layout.sort?.column === col.id ? layout.sort.direction : null
+  const filtered = col ? filterOf(layout, col.id) !== undefined : false
+  return (
+    <ContextMenuContent className="min-w-52">
+      {col && (
+        <>
+          {col.sortable && (
+            <>
+              <ContextMenuItem
+                disabled={sorted === "ASC"}
+                onClick={() => onLayoutChange(setSort(layout, { column: col.id, direction: "ASC" }))}
+              >
+                <ArrowUpIcon />
+                Sort ascending
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={sorted === "DESC"}
+                onClick={() => onLayoutChange(setSort(layout, { column: col.id, direction: "DESC" }))}
+              >
+                <ArrowDownIcon />
+                Sort descending
+              </ContextMenuItem>
+              {sorted && (
+                <ContextMenuItem onClick={() => onLayoutChange(setSort(layout, null))}>
+                  <ListRestartIcon />
+                  Clear sort (newest first)
+                </ContextMenuItem>
+              )}
+              <ContextMenuSeparator />
+            </>
+          )}
+          <ContextMenuItem onClick={() => onFilter(col.id)}>
+            <FilterIcon />
+            {filtered ? "Edit filter…" : "Filter…"}
+          </ContextMenuItem>
+          {filtered && (
+            <ContextMenuItem onClick={() => onLayoutChange(setFilter(layout, col.id, null))}>
+              <FilterXIcon />
+              Clear filter
+            </ContextMenuItem>
+          )}
+          <ContextMenuSeparator />
+          <ContextMenuItem disabled={i <= 0} onClick={() => onLayoutChange(shiftColumn(layout, col.id, -1))}>
+            <ArrowLeftIcon />
+            Move left
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={i < 0 || i >= layout.columns.length - 1}
+            onClick={() => onLayoutChange(shiftColumn(layout, col.id, 1))}
+          >
+            <ArrowRightIcon />
+            Move right
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={layout.columns.length === 1}
+            onClick={() => onLayoutChange(toggleColumn(layout, col.id))}
+          >
+            <EyeOffIcon />
+            Hide column
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <Columns3Icon />
+          Columns
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent className="max-h-96 overflow-y-auto">
+          {SESSION_COLUMNS.map((c) => (
+            <ContextMenuCheckboxItem
+              key={c.id}
+              checked={layout.columns.includes(c.id)}
+              disabled={layout.columns.length === 1 && layout.columns[0] === c.id}
+              onCheckedChange={() => onLayoutChange(toggleColumn(layout, c.id))}
+            >
+              {c.id === "number" ? "Number" : c.label}
+            </ContextMenuCheckboxItem>
+          ))}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      {layout.filters.length > 0 && (
+        <ContextMenuItem onClick={() => onLayoutChange({ ...layout, filters: [] })}>
+          <FilterXIcon />
+          Clear all filters
+        </ContextMenuItem>
+      )}
+      <ContextMenuItem onClick={() => onLayoutChange(null)}>
+        <ListRestartIcon />
+        Reset to default
+      </ContextMenuItem>
+    </ContextMenuContent>
+  )
+}
+
+/** The button at the header's end: which columns show, and the reset. */
+function ColumnsButton({
+  layout,
+  onLayoutChange,
+}: {
+  layout: SessionsLayout
+  onLayoutChange: (layout: SessionsLayout | null) => void
+}) {
+  const isDefault = JSON.stringify(layout) === JSON.stringify(DEFAULT_SESSIONS_LAYOUT)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" size="icon-xs" aria-label="Columns" title="Columns" className="justify-self-end">
+            <Columns3Icon />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="max-h-96 min-w-52 overflow-y-auto">
+        <DropdownMenuLabel>Columns</DropdownMenuLabel>
+        {SESSION_COLUMNS.map((c) => (
+          <DropdownMenuCheckboxItem
+            key={c.id}
+            checked={layout.columns.includes(c.id)}
+            disabled={layout.columns.length === 1 && layout.columns[0] === c.id}
+            onCheckedChange={() => onLayoutChange(toggleColumn(layout, c.id))}
+          >
+            {c.id === "number" ? "Number" : c.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={isDefault} onClick={() => onLayoutChange(null)}>
+          <ListRestartIcon />
+          Reset to default
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The filters in force, above the table: a click edits one, × removes it. */
+function FilterChips({
+  layout,
+  onEdit,
+  onRemove,
+  onClearAll,
+}: {
+  layout: SessionsLayout
+  onEdit: (column: SessionColumnId, anchor: HTMLElement) => void
+  onRemove: (column: SessionColumnId) => void
+  onClearAll: () => void
+}) {
+  if (layout.filters.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {layout.filters.map((f) => {
+        const col = SESSION_COLUMN_BY_ID.get(f.column)!
+        const hidden = !layout.columns.includes(f.column)
+        return (
+          <span
+            key={f.column}
+            className="inline-flex max-w-full items-center rounded-md border bg-card text-xs"
+            title={hidden ? "This column is hidden; its filter still applies" : undefined}
+          >
+            <button
+              type="button"
+              className="flex min-w-0 cursor-pointer items-center gap-1 py-1 pr-1 pl-2 hover:text-foreground"
+              onClick={(e) => onEdit(f.column, e.currentTarget.parentElement as HTMLElement)}
+            >
+              <FilterIcon className="size-3 shrink-0" />
+              <span className={cn("font-medium", hidden && "italic")}>{col.id === "number" ? "Number" : col.label}</span>
+              <span className="truncate text-muted-foreground">{describeFilter(f)}</span>
+            </button>
+            <button
+              type="button"
+              aria-label={`Remove the ${col.label} filter`}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:text-foreground"
+              onClick={() => onRemove(f.column)}
+            >
+              <XIcon className="size-3" />
+            </button>
+          </span>
+        )
+      })}
+      {layout.filters.length > 1 && (
+        <Button variant="ghost" size="xs" onClick={onClearAll}>
+          Clear all
+        </Button>
+      )}
+    </div>
+  )
+}

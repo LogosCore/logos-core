@@ -1,0 +1,213 @@
+package repository
+
+import (
+	"bytes"
+	"cmp"
+	"slices"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/models"
+)
+
+// The Sessions table's sort and filters, against a real server: keyset pages
+// over every sortable column, with missing values (null to Mongo, first going
+// ascending, last going descending) and ties broken by _id, and each filter
+// operation's answer, missing values included.
+func TestIntegrationMinionSessionQueries(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("session indexes: %v", err)
+	}
+
+	op := uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	ago := func(d time.Duration) *time.Time { t := now.Add(-d); return &t }
+	rows := []models.MinionSession{
+		{Hello: models.MinionHello{Host: "web01", User: "root", PID: 10, OS: "linux", Arch: "amd64", Addrs: []string{"10.0.0.5"}, Integrity: "root"}, LastSeenAt: ago(time.Minute), Staged: true},
+		{Hello: models.MinionHello{Host: "web02", User: "www", PID: 20, OS: "linux", Arch: "386", Addrs: []string{"10.0.0.6", "172.17.0.1"}}, LastSeenAt: ago(3 * time.Hour)},
+		{Hello: models.MinionHello{PID: 20, OS: "windows", Arch: "amd64"}, Staged: true}, // no host, never seen
+		{Hello: models.MinionHello{Host: "DB01", User: "CORP\\svc", PID: 5, OS: "windows", Arch: "amd64", Integrity: "high"}, LastSeenAt: ago(time.Minute)},
+		{Hello: models.MinionHello{Host: "web01", PID: 30, OS: "linux", Arch: "amd64"}, LastSeenAt: ago(48 * time.Hour), Staged: true},
+		{Hello: models.MinionHello{PID: 1, OS: "darwin", Arch: "arm64"}}, // no host, never seen
+		{Hello: models.MinionHello{Host: "mail", PID: 7, OS: "linux", Arch: "amd64", Addrs: []string{"192.168.1.9"}}, LastSeenAt: ago(10 * time.Second)},
+	}
+	for i := range rows {
+		r := &rows[i]
+		r.SessionID, r.OperationID, r.BuildID = uuid.New(), op, uuid.New()
+		r.Number, r.ModuleName, r.Target, r.Platform = int64(i+1), "bob", "linux-elf", "linux/amd64"
+		r.CreatedAt = now.Add(time.Duration(i) * time.Second)
+		if err := repo.Insert(ctx, r); err != nil {
+			t.Fatalf("insert: %v", err)
+		}
+	}
+	// Another operation's session is never in the list.
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New(), Number: 1, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	// expected is rows in sort's order: nil first ascending, _id on ties,
+	// the whole order reversed descending.
+	expected := func(sort models.MinionSessionSort) []int64 {
+		got := slices.Clone(rows)
+		slices.SortStableFunc(got, func(a, b models.MinionSession) int {
+			c := compareSortValues(sessionSortValue(&a, sort.Column), sessionSortValue(&b, sort.Column))
+			if c == 0 {
+				c = bytes.Compare(a.Id[:], b.Id[:])
+			}
+			if sort.Desc {
+				return -c
+			}
+			return c
+		})
+		var out []int64
+		for _, s := range got {
+			out = append(out, s.Number)
+		}
+		return out
+	}
+
+	// Page through every sortable column both ways, two rows a page.
+	for column, col := range models.MinionSessionColumns {
+		if !col.Sortable {
+			continue
+		}
+		for _, desc := range []bool{false, true} {
+			sort := models.MinionSessionSort{Column: column, Desc: desc}
+			q := MinionSessionQuery{Sort: sort}
+			var got []int64
+			var all []models.MinionSession
+			var after *MinionSessionKeyset
+			for range 10 {
+				page, err := repo.FindByOperationIDWithCursor(ctx, op, q, after, 2, true)
+				if err != nil {
+					t.Fatalf("%v: %v", sort, err)
+				}
+				if len(page) == 0 {
+					break
+				}
+				for _, s := range page {
+					got = append(got, s.Number)
+				}
+				all = append(all, page...)
+				if after, err = DecodeMinionSessionCursor(MinionSessionCursor(&page[len(page)-1], sort), sort); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if want := expected(sort); !slices.Equal(got, want) {
+				t.Errorf("%s desc=%v: %v, want %v", column, desc, got, want)
+				continue
+			}
+			// Back from the last row: the two before it, in display order.
+			before, _ := DecodeMinionSessionCursor(MinionSessionCursor(&all[len(all)-1], sort), sort)
+			back, err := repo.FindByOperationIDWithCursor(ctx, op, q, before, 2, false)
+			if err != nil || len(back) != 2 || back[0].Number != got[len(got)-3] || back[1].Number != got[len(got)-2] {
+				t.Errorf("%s desc=%v back: %v %v, want %v", column, desc, numbers(back), err, got[len(got)-3:len(got)-1])
+			}
+		}
+	}
+
+	// A cursor of one sort does not page another.
+	c := MinionSessionCursor(&rows[0], models.MinionSessionSort{Column: "host"})
+	if _, err := DecodeMinionSessionCursor(c, models.MinionSessionSort{Column: "host", Desc: true}); err == nil {
+		t.Error("a host-ascending cursor read for host descending")
+	}
+
+	secs := func(n int64) *int64 { return &n }
+	num := func(n float64) *float64 { return &n }
+	byNumber := models.MinionSessionSort{Column: "number"}
+	for name, c := range map[string]struct {
+		filters []models.MinionSessionFilter
+		search  string
+		want    []int64
+	}{
+		"host contains, case aside":        {filters: []models.MinionSessionFilter{{Column: "host", Op: "CONTAINS", Text: "WEB"}}, want: []int64{1, 2, 5}},
+		"host does not contain keeps none": {filters: []models.MinionSessionFilter{{Column: "host", Op: "NOT_CONTAINS", Text: "web"}}, want: []int64{3, 4, 6, 7}},
+		"host empty":                       {filters: []models.MinionSessionFilter{{Column: "host", Op: "EMPTY"}}, want: []int64{3, 6}},
+		"user not empty":                   {filters: []models.MinionSessionFilter{{Column: "user", Op: "NOT_EMPTY"}}, want: []int64{1, 2, 4}},
+		"user with a dot of regex":         {filters: []models.MinionSessionFilter{{Column: "user", Op: "CONTAINS", Text: "\\svc"}}, want: []int64{4}},
+		"address contains":                 {filters: []models.MinionSessionFilter{{Column: "addrs", Op: "CONTAINS", Text: "172.17"}}, want: []int64{2}},
+		"addresses empty":                  {filters: []models.MinionSessionFilter{{Column: "addrs", Op: "EMPTY"}}, want: []int64{3, 4, 5, 6}},
+		"os in":                            {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"windows", "darwin"}}}, want: []int64{3, 4, 6}},
+		"integrity not in keeps none":      {filters: []models.MinionSessionFilter{{Column: "integrity", Op: "NOT_IN", Values: []string{"root"}}}, want: []int64{2, 3, 4, 5, 6, 7}},
+		"staged":                           {filters: []models.MinionSessionFilter{{Column: "staged", Op: "IN", Values: []string{"true"}}}, want: []int64{1, 3, 5}},
+		"pid range":                        {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(5), Max: num(20)}}, want: []int64{1, 2, 3, 4, 7}},
+		"pid at least":                     {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(21)}}, want: []int64{5}},
+		"seen within 5m":                   {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "WITHIN", Seconds: secs(300)}}, want: []int64{1, 4, 7}},
+		"seen over 1h ago":                 {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "OLDER_THAN", Seconds: secs(3600)}}, want: []int64{2, 5}},
+		"never seen":                       {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "NEVER"}}, want: []int64{3, 6}},
+		"seen in a range":                  {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "RANGE", From: ago(4 * time.Hour), To: ago(time.Hour)}}, want: []int64{2}},
+		"session id":                       {filters: []models.MinionSessionFilter{{Column: "sessionId", Op: "EQUALS", Text: rows[3].SessionID.String()}}, want: []int64{4}},
+		"two filters":                      {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"linux"}}, {Column: "host", Op: "CONTAINS", Text: "web"}}, want: []int64{1, 2, 5}},
+		"filter and search":                {filters: []models.MinionSessionFilter{{Column: "os", Op: "IN", Values: []string{"linux"}}}, search: "mail", want: []int64{7}},
+	} {
+		q := MinionSessionQuery{Search: c.search, Filters: c.filters, Sort: byNumber}
+		if err := q.Validate(); err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		page, err := repo.FindByOperationIDWithCursor(ctx, op, q, nil, 50, true)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		n, _ := repo.CountByOperationID(ctx, op, q)
+		if got := numbers(page); !slices.Equal(got, c.want) || n != int64(len(c.want)) {
+			t.Errorf("%s: %v (count %d), want %v", name, got, n, c.want)
+		}
+	}
+
+	values, err := repo.Values(ctx, op, "os")
+	if err != nil || !slices.Equal(values, []string{"darwin", "linux", "windows"}) {
+		t.Errorf("os values %v %v", values, err)
+	}
+	if values, _ := repo.Values(ctx, op, "integrity"); !slices.Equal(values, []string{"high", "root"}) {
+		t.Errorf("integrity values %v", values)
+	}
+	if values, _ := repo.Values(ctx, op, "staged"); !slices.Equal(values, []string{"false", "true"}) {
+		t.Errorf("staged values %v", values)
+	}
+	if _, err := repo.Values(ctx, op, "host"); err == nil {
+		t.Error("values of a text column")
+	}
+}
+
+func numbers(rows []models.MinionSession) []int64 {
+	out := []int64{}
+	for _, s := range rows {
+		out = append(out, s.Number)
+	}
+	return out
+}
+
+// compareSortValues orders sort values as Mongo does for one column: nil
+// first.
+func compareSortValues(a, b any) int {
+	switch {
+	case a == nil && b == nil:
+		return 0
+	case a == nil:
+		return -1
+	case b == nil:
+		return 1
+	}
+	switch a := a.(type) {
+	case string:
+		return cmp.Compare(a, b.(string))
+	case int64:
+		return cmp.Compare(a, b.(int64))
+	case time.Time:
+		return a.Compare(b.(time.Time))
+	case bool:
+		switch {
+		case a == b.(bool):
+			return 0
+		case !a:
+			return -1
+		}
+		return 1
+	}
+	panic("unknown sort value")
+}

@@ -501,6 +501,29 @@ type ComplexityRoot struct {
 		SessionID   func(childComplexity int) int
 	}
 
+	MinionSessionFilter struct {
+		Column  func(childComplexity int) int
+		From    func(childComplexity int) int
+		Max     func(childComplexity int) int
+		Min     func(childComplexity int) int
+		Op      func(childComplexity int) int
+		Seconds func(childComplexity int) int
+		Text    func(childComplexity int) int
+		To      func(childComplexity int) int
+		Values  func(childComplexity int) int
+	}
+
+	MinionSessionSort struct {
+		Column    func(childComplexity int) int
+		Direction func(childComplexity int) int
+	}
+
+	MinionSessionsLayout struct {
+		Columns func(childComplexity int) int
+		Filters func(childComplexity int) int
+		Sort    func(childComplexity int) int
+	}
+
 	Module struct {
 		BlockReason      func(childComplexity int) int
 		BlockedAt        func(childComplexity int) int
@@ -734,6 +757,7 @@ type ComplexityRoot struct {
 		RevokeSession                 func(childComplexity int, id string) int
 		SetAgentKeyEnabled            func(childComplexity int, id string, enabled bool) int
 		SetHiddenIdentities           func(childComplexity int, names []string) int
+		SetMinionSessionsLayout       func(childComplexity int, layout *model.MinionSessionsLayoutInput) int
 		SetMyAPIKeyEnabled            func(childComplexity int, enabled bool) int
 		SetTaskAssignees              func(childComplexity int, taskID string, assigneeIds []string) int
 		SetTaskCredentialReferences   func(childComplexity int, taskID string, credentialIds []string) int
@@ -848,7 +872,9 @@ type ComplexityRoot struct {
 		Host                               func(childComplexity int, id string) int
 		Hosts                              func(childComplexity int, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		Me                                 func(childComplexity int) int
-		MinionSessions                     func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
+		MinionSessionValues                func(childComplexity int, operationID string, column string) int
+		MinionSessions                     func(childComplexity int, operationID string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) int
+		MinionSessionsLayout               func(childComplexity int) int
 		Minions                            func(childComplexity int, operationID string) int
 		Module                             func(childComplexity int, instance string) int
 		ModuleActionInvocations            func(childComplexity int, instance string, limit *int) int
@@ -1428,6 +1454,7 @@ type MutationResolver interface {
 	CreateHost(ctx context.Context, operationID string, input model.CreateHostInput) (*models.Host, error)
 	UpdateHost(ctx context.Context, id string, input model.UpdateHostInput) (*models.Host, error)
 	DeleteHost(ctx context.Context, id string) (bool, error)
+	SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 	BlockModule(ctx context.Context, instance string, reason *string) (*models.Module, error)
@@ -1515,7 +1542,9 @@ type QueryResolver interface {
 	WikiDocumentsReferencingHash(ctx context.Context, hashID string) ([]*models.WikiDocument, error)
 	Host(ctx context.Context, id string) (*models.Host, error)
 	Hosts(ctx context.Context, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.HostConnection, error)
-	MinionSessions(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
+	MinionSessions(ctx context.Context, operationID string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
+	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
+	MinionSessionsLayout(ctx context.Context) (*model.MinionSessionsLayout, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
@@ -3503,6 +3532,93 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionSessionEvent.SessionID(childComplexity), true
 
+	case "MinionSessionFilter.column":
+		if e.ComplexityRoot.MinionSessionFilter.Column == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Column(childComplexity), true
+	case "MinionSessionFilter.from":
+		if e.ComplexityRoot.MinionSessionFilter.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.From(childComplexity), true
+	case "MinionSessionFilter.max":
+		if e.ComplexityRoot.MinionSessionFilter.Max == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Max(childComplexity), true
+	case "MinionSessionFilter.min":
+		if e.ComplexityRoot.MinionSessionFilter.Min == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Min(childComplexity), true
+	case "MinionSessionFilter.op":
+		if e.ComplexityRoot.MinionSessionFilter.Op == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Op(childComplexity), true
+	case "MinionSessionFilter.seconds":
+		if e.ComplexityRoot.MinionSessionFilter.Seconds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Seconds(childComplexity), true
+	case "MinionSessionFilter.text":
+		if e.ComplexityRoot.MinionSessionFilter.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Text(childComplexity), true
+	case "MinionSessionFilter.to":
+		if e.ComplexityRoot.MinionSessionFilter.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.To(childComplexity), true
+	case "MinionSessionFilter.values":
+		if e.ComplexityRoot.MinionSessionFilter.Values == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionFilter.Values(childComplexity), true
+
+	case "MinionSessionSort.column":
+		if e.ComplexityRoot.MinionSessionSort.Column == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionSort.Column(childComplexity), true
+	case "MinionSessionSort.direction":
+		if e.ComplexityRoot.MinionSessionSort.Direction == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionSort.Direction(childComplexity), true
+
+	case "MinionSessionsLayout.columns":
+		if e.ComplexityRoot.MinionSessionsLayout.Columns == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.Columns(childComplexity), true
+	case "MinionSessionsLayout.filters":
+		if e.ComplexityRoot.MinionSessionsLayout.Filters == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.Filters(childComplexity), true
+	case "MinionSessionsLayout.sort":
+		if e.ComplexityRoot.MinionSessionsLayout.Sort == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.Sort(childComplexity), true
+
 	case "Module.blockReason":
 		if e.ComplexityRoot.Module.BlockReason == nil {
 			break
@@ -4896,6 +5012,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetHiddenIdentities(childComplexity, args["names"].([]string)), true
+	case "Mutation.setMinionSessionsLayout":
+		if e.ComplexityRoot.Mutation.SetMinionSessionsLayout == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_setMinionSessionsLayout_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SetMinionSessionsLayout(childComplexity, args["layout"].(*model.MinionSessionsLayoutInput)), true
 	case "Mutation.setMyAPIKeyEnabled":
 		if e.ComplexityRoot.Mutation.SetMyAPIKeyEnabled == nil {
 			break
@@ -5611,6 +5738,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Me(childComplexity), true
+	case "Query.minionSessionValues":
+		if e.ComplexityRoot.Query.MinionSessionValues == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionSessionValues_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionSessionValues(childComplexity, args["operationId"].(string), args["column"].(string)), true
 	case "Query.minionSessions":
 		if e.ComplexityRoot.Query.MinionSessions == nil {
 			break
@@ -5621,7 +5759,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MinionSessions(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.MinionSessions(childComplexity, args["operationId"].(string), args["search"].(*string), args["filters"].([]*model.MinionSessionFilterInput), args["sort"].(*model.MinionSessionSortInput), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+	case "Query.minionSessionsLayout":
+		if e.ComplexityRoot.Query.MinionSessionsLayout == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MinionSessionsLayout(childComplexity), true
 	case "Query.minions":
 		if e.ComplexityRoot.Query.Minions == nil {
 			break
@@ -7874,6 +8018,9 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputImportLocalPreferencesInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMarkHashCrackedInput,
+		ec.unmarshalInputMinionSessionFilterInput,
+		ec.unmarshalInputMinionSessionSortInput,
+		ec.unmarshalInputMinionSessionsLayoutInput,
 		ec.unmarshalInputModuleConfigValueInput,
 		ec.unmarshalInputNetworkInterfaceInput,
 		ec.unmarshalInputOperatorFocusInput,
@@ -9683,6 +9830,86 @@ type MinionSessionConnection {
   totalCount: Int!
 }
 
+# How a filter narrows its column. Which ones a column takes depends on what
+# it holds:
+#   text (host, user, domain, proc, buildDescription) and the address list
+#   (addrs): CONTAINS, NOT_CONTAINS (text, case aside), EMPTY, NOT_EMPTY
+#   a few values (integrity, os, arch, version, build: the factory, target,
+#   platform) and staged ("true" / "false"): IN, NOT_IN (values)
+#   numbers (number, pid): RANGE (min, max; either may be left out)
+#   times (lastSeen, opened): WITHIN or OLDER_THAN (seconds before now),
+#   NEVER (no value: lastSeen before the first check-in), RANGE (from, to)
+#   ids (sessionId, buildId): EQUALS (text, a whole UUID)
+# A missing value is empty: NOT_IN and NOT_CONTAINS keep it.
+enum MinionSessionFilterOp {
+  CONTAINS
+  NOT_CONTAINS
+  EMPTY
+  NOT_EMPTY
+  IN
+  NOT_IN
+  RANGE
+  WITHIN
+  OLDER_THAN
+  NEVER
+  EQUALS
+}
+
+# One column filter. column is a column id: number, sessionId, addrs, host,
+# user, domain, integrity, proc, pid, os, arch, version, lastSeen, opened,
+# build, target, platform, buildDescription, buildId, staged.
+input MinionSessionFilterInput {
+  column: String!
+  op: MinionSessionFilterOp!
+  text: String
+  values: [String!]
+  min: Float
+  max: Float
+  seconds: Int
+  # RFC 3339
+  from: String
+  to: String
+}
+
+type MinionSessionFilter {
+  column: String!
+  op: MinionSessionFilterOp!
+  text: String
+  values: [String!]
+  min: Float
+  max: Float
+  seconds: Int
+  from: String
+  to: String
+}
+
+# The order of the list: a column id (all but sessionId, addrs and buildId
+# sort) and a direction. The session's insertion order breaks ties.
+input MinionSessionSortInput {
+  column: String!
+  direction: SortDirection!
+}
+
+type MinionSessionSort {
+  column: String!
+  direction: SortDirection!
+}
+
+# How the caller keeps the Sessions table, one for all operations: the
+# columns shown, in order, the sort and the filters.
+type MinionSessionsLayout {
+  columns: [String!]!
+  # null: newest first.
+  sort: MinionSessionSort
+  filters: [MinionSessionFilter!]!
+}
+
+input MinionSessionsLayoutInput {
+  columns: [String!]!
+  sort: MinionSessionSortInput
+  filters: [MinionSessionFilterInput!]!
+}
+
 type MinionSessionEvent {
   action: EventAction!
   sessionId: ID!
@@ -9696,16 +9923,36 @@ extend type Query {
   # host, user, domain, process, os, arch, integrity, addresses, version, the
   # build's description, factory, target and platform; a number ("12",
   # "#12") also matches the session numbered so, and a whole UUID a session
-  # or build id. Needs at least viewer.
+  # or build id. filters all hold; sort is newest first when null, and a
+  # cursor is only good for the sort it came with. Needs at least viewer.
   minionSessions(
     operationId: ID!
     search: String
+    filters: [MinionSessionFilterInput!]
+    sort: MinionSessionSortInput
     first: Int = 20
     after: String
     last: Int
     before: String
   ): MinionSessionConnection!
     @hasPermission(permission: "operation:member")
+
+  # The distinct values an operation's sessions have in a column of a few
+  # values (integrity, os, arch, version, build, target, platform, staged),
+  # sorted: what its IN filter offers. Needs at least viewer.
+  minionSessionValues(operationId: ID!, column: String!): [String!]!
+    @hasPermission(permission: "operation:member")
+
+  # The caller's Sessions table layout; null until they change the default.
+  minionSessionsLayout: MinionSessionsLayout
+    @hasPermission(permission: "user:update:own")
+}
+
+extend type Mutation {
+  # Keeps the caller's Sessions table layout, for every operation and every
+  # browser they use; null goes back to the default.
+  setMinionSessionsLayout(layout: MinionSessionsLayoutInput): MinionSessionsLayout
+    @hasPermission(permission: "user:update:own")
 }
 
 extend type Subscription {
@@ -12827,6 +13074,17 @@ func (ec *executionContext) field_Mutation_setHiddenIdentities_args(ctx context.
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_setMinionSessionsLayout_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "layout", ec.unmarshalOMinionSessionsLayoutInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionsLayoutInput)
+	if err != nil {
+		return nil, err
+	}
+	args["layout"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setMyAPIKeyEnabled_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13598,6 +13856,22 @@ func (ec *executionContext) field_Query_hosts_args(ctx context.Context, rawArgs 
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_minionSessionValues_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "column", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["column"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_minionSessions_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13611,26 +13885,36 @@ func (ec *executionContext) field_Query_minionSessions_args(ctx context.Context,
 		return nil, err
 	}
 	args["search"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "filters", ec.unmarshalOMinionSessionFilterInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInputᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["first"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	args["filters"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOMinionSessionSortInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionSortInput)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	args["sort"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["last"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	args["first"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["before"] = arg5
+	args["after"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg7
 	return args, nil
 }
 
@@ -24895,6 +25179,438 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSessionFilter_column(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_column,
+		func(ctx context.Context) (any, error) {
+			return obj.Column, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_column(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_op(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_op,
+		func(ctx context.Context) (any, error) {
+			return obj.Op, nil
+		},
+		nil,
+		ec.marshalNMinionSessionFilterOp2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterOp,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_op(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type MinionSessionFilterOp does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_text(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_text,
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_values(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_values,
+		func(ctx context.Context) (any, error) {
+			return obj.Values, nil
+		},
+		nil,
+		ec.marshalOString2ᚕstringᚄ,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_values(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_min(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_min,
+		func(ctx context.Context) (any, error) {
+			return obj.Min, nil
+		},
+		nil,
+		ec.marshalOFloat2ᚖfloat64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_min(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_max(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_max,
+		func(ctx context.Context) (any, error) {
+			return obj.Max, nil
+		},
+		nil,
+		ec.marshalOFloat2ᚖfloat64,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_max(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_seconds(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_seconds,
+		func(ctx context.Context) (any, error) {
+			return obj.Seconds, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_seconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_from(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_from,
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionFilter_to(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionFilter) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionFilter_to,
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionFilter_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionFilter",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionSort_column(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionSort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionSort_column,
+		func(ctx context.Context) (any, error) {
+			return obj.Column, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionSort_column(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionSort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionSort_direction(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionSort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionSort_direction,
+		func(ctx context.Context) (any, error) {
+			return obj.Direction, nil
+		},
+		nil,
+		ec.marshalNSortDirection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionSort_direction(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionSort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type SortDirection does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionsLayout_columns(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_columns,
+		func(ctx context.Context) (any, error) {
+			return obj.Columns, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_columns(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionsLayout_sort(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_sort,
+		func(ctx context.Context) (any, error) {
+			return obj.Sort, nil
+		},
+		nil,
+		ec.marshalOMinionSessionSort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionSort,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_sort(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "column":
+				return ec.fieldContext_MinionSessionSort_column(ctx, field)
+			case "direction":
+				return ec.fieldContext_MinionSessionSort_direction(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionSort", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionsLayout_filters(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_filters,
+		func(ctx context.Context) (any, error) {
+			return obj.Filters, nil
+		},
+		nil,
+		ec.marshalNMinionSessionFilter2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_filters(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "column":
+				return ec.fieldContext_MinionSessionFilter_column(ctx, field)
+			case "op":
+				return ec.fieldContext_MinionSessionFilter_op(ctx, field)
+			case "text":
+				return ec.fieldContext_MinionSessionFilter_text(ctx, field)
+			case "values":
+				return ec.fieldContext_MinionSessionFilter_values(ctx, field)
+			case "min":
+				return ec.fieldContext_MinionSessionFilter_min(ctx, field)
+			case "max":
+				return ec.fieldContext_MinionSessionFilter_max(ctx, field)
+			case "seconds":
+				return ec.fieldContext_MinionSessionFilter_seconds(ctx, field)
+			case "from":
+				return ec.fieldContext_MinionSessionFilter_from(ctx, field)
+			case "to":
+				return ec.fieldContext_MinionSessionFilter_to(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionFilter", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Module_instance(ctx context.Context, field graphql.CollectedField, obj *models.Module) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32443,6 +33159,73 @@ func (ec *executionContext) fieldContext_Mutation_deleteHost(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_setMinionSessionsLayout(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_setMinionSessionsLayout,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SetMinionSessionsLayout(ctx, fc.Args["layout"].(*model.MinionSessionsLayoutInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *model.MinionSessionsLayout
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionSessionsLayout
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOMinionSessionsLayout2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionsLayout,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_setMinionSessionsLayout(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "columns":
+				return ec.fieldContext_MinionSessionsLayout_columns(ctx, field)
+			case "sort":
+				return ec.fieldContext_MinionSessionsLayout_sort(ctx, field)
+			case "filters":
+				return ec.fieldContext_MinionSessionsLayout_filters(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_setMinionSessionsLayout_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_updateModuleConfig(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -39807,7 +40590,7 @@ func (ec *executionContext) _Query_minionSessions(ctx context.Context, field gra
 		ec.fieldContext_Query_minionSessions,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MinionSessions(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().MinionSessions(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["filters"].([]*model.MinionSessionFilterInput), fc.Args["sort"].(*model.MinionSessionSortInput), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -39862,6 +40645,120 @@ func (ec *executionContext) fieldContext_Query_minionSessions(ctx context.Contex
 	if fc.Args, err = ec.field_Query_minionSessions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_minionSessionValues(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionSessionValues,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionSessionValues(ctx, fc.Args["operationId"].(string), fc.Args["column"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal []string
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal []string
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionSessionValues(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionSessionValues_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_minionSessionsLayout(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionSessionsLayout,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MinionSessionsLayout(ctx)
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "user:update:own")
+				if err != nil {
+					var zeroVal *model.MinionSessionsLayout
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionSessionsLayout
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalOMinionSessionsLayout2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionsLayout,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionSessionsLayout(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "columns":
+				return ec.fieldContext_MinionSessionsLayout_columns(ctx, field)
+			case "sort":
+				return ec.fieldContext_MinionSessionsLayout_sort(ctx, field)
+			case "filters":
+				return ec.fieldContext_MinionSessionsLayout_filters(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
+		},
 	}
 	return fc, nil
 }
@@ -55316,6 +56213,173 @@ func (ec *executionContext) unmarshalInputMarkHashCrackedInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputMinionSessionFilterInput(ctx context.Context, obj any) (model.MinionSessionFilterInput, error) {
+	var it model.MinionSessionFilterInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"column", "op", "text", "values", "min", "max", "seconds", "from", "to"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "column":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("column"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Column = data
+		case "op":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("op"))
+			data, err := ec.unmarshalNMinionSessionFilterOp2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterOp(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Op = data
+		case "text":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Text = data
+		case "values":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("values"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Values = data
+		case "min":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("min"))
+			data, err := ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Min = data
+		case "max":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("max"))
+			data, err := ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Max = data
+		case "seconds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("seconds"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Seconds = data
+		case "from":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("from"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.From = data
+		case "to":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("to"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.To = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputMinionSessionSortInput(ctx context.Context, obj any) (model.MinionSessionSortInput, error) {
+	var it model.MinionSessionSortInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"column", "direction"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "column":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("column"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Column = data
+		case "direction":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("direction"))
+			data, err := ec.unmarshalNSortDirection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Direction = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.Context, obj any) (model.MinionSessionsLayoutInput, error) {
+	var it model.MinionSessionsLayoutInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"columns", "sort", "filters"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "columns":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("columns"))
+			data, err := ec.unmarshalNString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Columns = data
+		case "sort":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("sort"))
+			data, err := ec.unmarshalOMinionSessionSortInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionSortInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Sort = data
+		case "filters":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filters"))
+			data, err := ec.unmarshalNMinionSessionFilterInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Filters = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputModuleConfigValueInput(ctx context.Context, obj any) (model.ModuleConfigValueInput, error) {
 	var it model.ModuleConfigValueInput
 	if obj == nil {
@@ -60745,6 +61809,154 @@ func (ec *executionContext) _MinionSessionEvent(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var minionSessionFilterImplementors = []string{"MinionSessionFilter"}
+
+func (ec *executionContext) _MinionSessionFilter(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionFilter) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionFilterImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionFilter")
+		case "column":
+			out.Values[i] = ec._MinionSessionFilter_column(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "op":
+			out.Values[i] = ec._MinionSessionFilter_op(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._MinionSessionFilter_text(ctx, field, obj)
+		case "values":
+			out.Values[i] = ec._MinionSessionFilter_values(ctx, field, obj)
+		case "min":
+			out.Values[i] = ec._MinionSessionFilter_min(ctx, field, obj)
+		case "max":
+			out.Values[i] = ec._MinionSessionFilter_max(ctx, field, obj)
+		case "seconds":
+			out.Values[i] = ec._MinionSessionFilter_seconds(ctx, field, obj)
+		case "from":
+			out.Values[i] = ec._MinionSessionFilter_from(ctx, field, obj)
+		case "to":
+			out.Values[i] = ec._MinionSessionFilter_to(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionSessionSortImplementors = []string{"MinionSessionSort"}
+
+func (ec *executionContext) _MinionSessionSort(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionSort) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionSortImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionSort")
+		case "column":
+			out.Values[i] = ec._MinionSessionSort_column(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "direction":
+			out.Values[i] = ec._MinionSessionSort_direction(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionSessionsLayoutImplementors = []string{"MinionSessionsLayout"}
+
+func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionsLayout) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionsLayoutImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionsLayout")
+		case "columns":
+			out.Values[i] = ec._MinionSessionsLayout_columns(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sort":
+			out.Values[i] = ec._MinionSessionsLayout_sort(ctx, field, obj)
+		case "filters":
+			out.Values[i] = ec._MinionSessionsLayout_filters(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var moduleImplementors = []string{"Module"}
 
 func (ec *executionContext) _Module(ctx context.Context, sel ast.SelectionSet, obj *models.Module) graphql.Marshaler {
@@ -62404,6 +63616,10 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setMinionSessionsLayout":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_setMinionSessionsLayout(ctx, field)
+			})
 		case "updateModuleConfig":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateModuleConfig(ctx, field)
@@ -64109,6 +65325,47 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionSessionValues":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionSessionValues(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionSessionsLayout":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionSessionsLayout(ctx, field)
 				return res
 			}
 
@@ -71380,6 +72637,62 @@ func (ec *executionContext) marshalNMinionSessionEvent2ᚖgithubᚗcomᚋlogosco
 	return ec._MinionSessionEvent(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionSessionFilter2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionSessionFilter) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionSessionFilter2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilter(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionSessionFilter2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilter(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionFilter) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionSessionFilter(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNMinionSessionFilterInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInputᚄ(ctx context.Context, v any) ([]*model.MinionSessionFilterInput, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.MinionSessionFilterInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNMinionSessionFilterInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNMinionSessionFilterInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInput(ctx context.Context, v any) (*model.MinionSessionFilterInput, error) {
+	res, err := ec.unmarshalInputMinionSessionFilterInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNMinionSessionFilterOp2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterOp(ctx context.Context, v any) (model.MinionSessionFilterOp, error) {
+	var res model.MinionSessionFilterOp
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNMinionSessionFilterOp2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterOp(ctx context.Context, sel ast.SelectionSet, v model.MinionSessionFilterOp) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNModule2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v models.Module) graphql.Marshaler {
 	return ec._Module(ctx, sel, &v)
 }
@@ -72178,6 +73491,16 @@ func (ec *executionContext) marshalNSkillVersion2ᚖgithubᚗcomᚋlogoscoreᚋl
 		return graphql.Null
 	}
 	return ec._SkillVersion(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNSortDirection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection(ctx context.Context, v any) (model.SortDirection, error) {
+	var res model.SortDirection
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNSortDirection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection(ctx context.Context, sel ast.SelectionSet, v model.SortDirection) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
@@ -73686,6 +75009,54 @@ func (ec *executionContext) marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋ
 		return graphql.Null
 	}
 	return ec._MinionSession(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionSessionFilterInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInputᚄ(ctx context.Context, v any) ([]*model.MinionSessionFilterInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.MinionSessionFilterInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNMinionSessionFilterInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOMinionSessionSort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionSort(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionSort) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionSessionSort(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionSessionSortInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionSortInput(ctx context.Context, v any) (*model.MinionSessionSortInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMinionSessionSortInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMinionSessionsLayout2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionsLayout(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionsLayout) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionSessionsLayout(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionSessionsLayoutInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionsLayoutInput(ctx context.Context, v any) (*model.MinionSessionsLayoutInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMinionSessionsLayoutInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v *models.Module) graphql.Marshaler {

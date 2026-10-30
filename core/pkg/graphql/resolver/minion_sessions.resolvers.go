@@ -11,9 +11,24 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
 
+// SetMinionSessionsLayout is the resolver for the setMinionSessionsLayout field.
+func (r *mutationResolver) SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error) {
+	return r.MinionSessionResolver.SetMinionSessionsLayout(ctx, layout)
+}
+
 // MinionSessions is the resolver for the minionSessions field.
-func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
-	return r.MinionSessionResolver.MinionSessions(ctx, operationID, search, first, after, last, before)
+func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
+	return r.MinionSessionResolver.MinionSessions(ctx, operationID, search, filters, sort, first, after, last, before)
+}
+
+// MinionSessionValues is the resolver for the minionSessionValues field.
+func (r *queryResolver) MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error) {
+	return r.MinionSessionResolver.MinionSessionValues(ctx, operationID, column)
+}
+
+// MinionSessionsLayout is the resolver for the minionSessionsLayout field.
+func (r *queryResolver) MinionSessionsLayout(ctx context.Context) (*model.MinionSessionsLayout, error) {
+	return r.MinionSessionResolver.MinionSessionsLayout(ctx)
 }
 
 // MinionSessionChanged is the resolver for the minionSessionChanged field.

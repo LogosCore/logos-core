@@ -2,15 +2,14 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
-	"github.com/logoscore/logos-core/core/pkg/pagination"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -39,8 +38,13 @@ type IMinionSessionRepository interface {
 	CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time) error
 	// SetHello replaces what the session's hello said (a rehello).
 	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello) error
-	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionSession, error)
-	CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	// FindByOperationIDWithCursor is a page of an operation's sessions as q
+	// asks, from after (nil: the start); forward false pages back.
+	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, after *MinionSessionKeyset, limit int64, forward bool) ([]models.MinionSession, error)
+	CountByOperationID(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery) (int64, error)
+	// Values are the distinct values an operation's sessions have in a
+	// column, sorted; missing values are left out.
+	Values(ctx context.Context, operationID uuid.UUID, column string) ([]string, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
 }
 
@@ -100,14 +104,6 @@ func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.U
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": bson.M{"hello": hello}})
 }
 
-// minionSessionListSort orders the sessions list: newest first.
-var minionSessionListSort = pagination.SortKey{Field: "created_at"}
-
-// MinionSessionCursor is a session's position in the sessions list.
-func MinionSessionCursor(s *models.MinionSession) string {
-	return pagination.EncodeCursor(s.CreatedAt, s.Id)
-}
-
 // minionSessionListFilter is an operation's sessions, searched (searchPattern)
 // over what the Sessions page shows: the host and process, the build and its
 // factory, and the ids. A number ("12", "#12") also matches the session
@@ -125,7 +121,7 @@ func minionSessionListFilter(operationID uuid.UUID, search string) bson.M {
 	} {
 		or = append(or, bson.M{field: rx})
 	}
-	if n, err := strconv.ParseInt(strings.TrimPrefix(search, "#"), 10, 64); err == nil && n > 0 {
+	if n, ok := ParseSessionSearchNumber(search); ok {
 		or = append(or, bson.M{"number": n})
 	}
 	// Ids are binary UUIDs: matched whole, as typed.
@@ -136,23 +132,50 @@ func minionSessionListFilter(operationID uuid.UUID, search string) bson.M {
 	return q
 }
 
-func (r *minionSessionRepository) FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionSession, error) {
-	if err := minionSessionListSort.ValidateCursor(cursor); err != nil {
-		return nil, err
+func (r *minionSessionRepository) FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, after *MinionSessionKeyset, limit int64, forward bool) ([]models.MinionSession, error) {
+	filter := minionSessionFilter(operationID, q, time.Now().UTC())
+	if after != nil {
+		ascending := !q.Sort.Desc == forward
+		filter = bson.M{"$and": bson.A{filter, keysetFilter(models.MinionSessionColumns[q.Sort.Column].Field, after, ascending)}}
 	}
 	out := []models.MinionSession{}
-	err := r.coll.Find(ctx, pagination.ApplyCursorFilterKey(minionSessionListFilter(operationID, search), cursor, forward, minionSessionListSort)).
-		Sort(pagination.SortFieldsKey(forward, minionSessionListSort)...).
-		Limit(limit).
-		All(&out)
+	err := r.coll.Find(ctx, filter).Sort(sortFields(q.Sort, forward)...).Limit(limit).All(&out)
 	if !forward {
 		slices.Reverse(out)
 	}
 	return out, err
 }
 
-func (r *minionSessionRepository) CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error) {
-	return r.coll.Count(ctx, minionSessionListFilter(operationID, search))
+func (r *minionSessionRepository) CountByOperationID(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery) (int64, error) {
+	return r.coll.Count(ctx, minionSessionFilter(operationID, q, time.Now().UTC()))
+}
+
+func (r *minionSessionRepository) Values(ctx context.Context, operationID uuid.UUID, column string) ([]string, error) {
+	col, ok := models.MinionSessionColumns[column]
+	if !ok || (col.Kind != models.SessionColumnEnum && col.Kind != models.SessionColumnBool) {
+		return nil, fmt.Errorf("%s has no list of values", column)
+	}
+	raw, err := r.coll.RawCollection()
+	if err != nil {
+		return nil, err
+	}
+	found, err := raw.Distinct(ctx, col.Field, bson.M{"operation_id": operationID})
+	if err != nil {
+		return nil, err
+	}
+	out := []string{}
+	for _, v := range found {
+		switch v := v.(type) {
+		case string:
+			if v != "" {
+				out = append(out, v)
+			}
+		case bool:
+			out = append(out, strconv.FormatBool(v))
+		}
+	}
+	slices.Sort(out)
+	return out, nil
 }
 
 func (r *minionSessionRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {

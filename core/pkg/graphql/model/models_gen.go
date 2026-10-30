@@ -496,6 +496,52 @@ type MinionSessionEvent struct {
 	Session     *MinionSession `json:"session,omitempty"`
 }
 
+type MinionSessionFilter struct {
+	Column  string                `json:"column"`
+	Op      MinionSessionFilterOp `json:"op"`
+	Text    *string               `json:"text,omitempty"`
+	Values  []string              `json:"values,omitempty"`
+	Min     *float64              `json:"min,omitempty"`
+	Max     *float64              `json:"max,omitempty"`
+	Seconds *int                  `json:"seconds,omitempty"`
+	From    *string               `json:"from,omitempty"`
+	To      *string               `json:"to,omitempty"`
+}
+
+type MinionSessionFilterInput struct {
+	Column  string                `json:"column"`
+	Op      MinionSessionFilterOp `json:"op"`
+	Text    *string               `json:"text,omitempty"`
+	Values  []string              `json:"values,omitempty"`
+	Min     *float64              `json:"min,omitempty"`
+	Max     *float64              `json:"max,omitempty"`
+	Seconds *int                  `json:"seconds,omitempty"`
+	From    *string               `json:"from,omitempty"`
+	To      *string               `json:"to,omitempty"`
+}
+
+type MinionSessionSort struct {
+	Column    string        `json:"column"`
+	Direction SortDirection `json:"direction"`
+}
+
+type MinionSessionSortInput struct {
+	Column    string        `json:"column"`
+	Direction SortDirection `json:"direction"`
+}
+
+type MinionSessionsLayout struct {
+	Columns []string               `json:"columns"`
+	Sort    *MinionSessionSort     `json:"sort,omitempty"`
+	Filters []*MinionSessionFilter `json:"filters"`
+}
+
+type MinionSessionsLayoutInput struct {
+	Columns []string                    `json:"columns"`
+	Sort    *MinionSessionSortInput     `json:"sort,omitempty"`
+	Filters []*MinionSessionFilterInput `json:"filters"`
+}
+
 type ModuleAction struct {
 	Name              string         `json:"name"`
 	Label             string         `json:"label"`
@@ -1324,6 +1370,79 @@ func (e *HostSortField) UnmarshalJSON(b []byte) error {
 }
 
 func (e HostSortField) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type MinionSessionFilterOp string
+
+const (
+	MinionSessionFilterOpContains    MinionSessionFilterOp = "CONTAINS"
+	MinionSessionFilterOpNotContains MinionSessionFilterOp = "NOT_CONTAINS"
+	MinionSessionFilterOpEmpty       MinionSessionFilterOp = "EMPTY"
+	MinionSessionFilterOpNotEmpty    MinionSessionFilterOp = "NOT_EMPTY"
+	MinionSessionFilterOpIn          MinionSessionFilterOp = "IN"
+	MinionSessionFilterOpNotIn       MinionSessionFilterOp = "NOT_IN"
+	MinionSessionFilterOpRange       MinionSessionFilterOp = "RANGE"
+	MinionSessionFilterOpWithin      MinionSessionFilterOp = "WITHIN"
+	MinionSessionFilterOpOlderThan   MinionSessionFilterOp = "OLDER_THAN"
+	MinionSessionFilterOpNever       MinionSessionFilterOp = "NEVER"
+	MinionSessionFilterOpEquals      MinionSessionFilterOp = "EQUALS"
+)
+
+var AllMinionSessionFilterOp = []MinionSessionFilterOp{
+	MinionSessionFilterOpContains,
+	MinionSessionFilterOpNotContains,
+	MinionSessionFilterOpEmpty,
+	MinionSessionFilterOpNotEmpty,
+	MinionSessionFilterOpIn,
+	MinionSessionFilterOpNotIn,
+	MinionSessionFilterOpRange,
+	MinionSessionFilterOpWithin,
+	MinionSessionFilterOpOlderThan,
+	MinionSessionFilterOpNever,
+	MinionSessionFilterOpEquals,
+}
+
+func (e MinionSessionFilterOp) IsValid() bool {
+	switch e {
+	case MinionSessionFilterOpContains, MinionSessionFilterOpNotContains, MinionSessionFilterOpEmpty, MinionSessionFilterOpNotEmpty, MinionSessionFilterOpIn, MinionSessionFilterOpNotIn, MinionSessionFilterOpRange, MinionSessionFilterOpWithin, MinionSessionFilterOpOlderThan, MinionSessionFilterOpNever, MinionSessionFilterOpEquals:
+		return true
+	}
+	return false
+}
+
+func (e MinionSessionFilterOp) String() string {
+	return string(e)
+}
+
+func (e *MinionSessionFilterOp) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = MinionSessionFilterOp(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid MinionSessionFilterOp", str)
+	}
+	return nil
+}
+
+func (e MinionSessionFilterOp) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *MinionSessionFilterOp) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e MinionSessionFilterOp) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

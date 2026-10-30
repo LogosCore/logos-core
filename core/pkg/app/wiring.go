@@ -201,6 +201,6 @@ func (a *App) buildResolvers() *resolvers {
 		endpoint: resolver.NewChannelEndpointResolver(a.endpoints, a.repos.Operation),
 		// Builds too: operation data, authorized by operation role.
 		builds:         resolver.NewBuildResolver(a.builds, a.repos.Operation),
-		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation),
+		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences),
 	}
 }

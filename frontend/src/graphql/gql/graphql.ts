@@ -668,6 +668,65 @@ export type MinionSessionEvent = {
   sessionId: Scalars['ID']['output'];
 };
 
+export type MinionSessionFilter = {
+  column: Scalars['String']['output'];
+  from?: Maybe<Scalars['String']['output']>;
+  max?: Maybe<Scalars['Float']['output']>;
+  min?: Maybe<Scalars['Float']['output']>;
+  op: MinionSessionFilterOp;
+  seconds?: Maybe<Scalars['Int']['output']>;
+  text?: Maybe<Scalars['String']['output']>;
+  to?: Maybe<Scalars['String']['output']>;
+  values?: Maybe<Array<Scalars['String']['output']>>;
+};
+
+export type MinionSessionFilterInput = {
+  column: Scalars['String']['input'];
+  from?: InputMaybe<Scalars['String']['input']>;
+  max?: InputMaybe<Scalars['Float']['input']>;
+  min?: InputMaybe<Scalars['Float']['input']>;
+  op: MinionSessionFilterOp;
+  seconds?: InputMaybe<Scalars['Int']['input']>;
+  text?: InputMaybe<Scalars['String']['input']>;
+  to?: InputMaybe<Scalars['String']['input']>;
+  values?: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+export type MinionSessionFilterOp =
+  | 'CONTAINS'
+  | 'EMPTY'
+  | 'EQUALS'
+  | 'IN'
+  | 'NEVER'
+  | 'NOT_CONTAINS'
+  | 'NOT_EMPTY'
+  | 'NOT_IN'
+  | 'OLDER_THAN'
+  | 'RANGE'
+  | 'WITHIN';
+
+export type MinionSessionSort = {
+  column: Scalars['String']['output'];
+  direction: SortDirection;
+};
+
+export type MinionSessionSortInput = {
+  column: Scalars['String']['input'];
+  direction: SortDirection;
+};
+
+export type MinionSessionsLayout = {
+  columns: Array<Scalars['String']['output']>;
+  filters: Array<MinionSessionFilter>;
+  sort?: Maybe<MinionSessionSort>;
+};
+
+export type MinionSessionsLayoutInput = {
+  columns: Array<Scalars['String']['input']>;
+  filters: Array<MinionSessionFilterInput>;
+  sort?: InputMaybe<MinionSessionSortInput>;
+};
+
 export type Module = {
   blockReason: Scalars['String']['output'];
   blockedAt?: Maybe<Scalars['String']['output']>;
@@ -938,6 +997,7 @@ export type Mutation = {
   revokeSession: Scalars['Boolean']['output'];
   setAgentKeyEnabled: AgentKey;
   setHiddenIdentities: User;
+  setMinionSessionsLayout?: Maybe<MinionSessionsLayout>;
   setMyAPIKeyEnabled: ApiKey;
   setTaskAssignees: Task;
   setTaskCredentialReferences: Task;
@@ -1286,6 +1346,11 @@ export type MutationSetHiddenIdentitiesArgs = {
 };
 
 
+export type MutationSetMinionSessionsLayoutArgs = {
+  layout?: InputMaybe<MinionSessionsLayoutInput>;
+};
+
+
 export type MutationSetMyApiKeyEnabledArgs = {
   enabled: Scalars['Boolean']['input'];
 };
@@ -1555,7 +1620,9 @@ export type Query = {
   host: Host;
   hosts: HostConnection;
   me: User;
+  minionSessionValues: Array<Scalars['String']['output']>;
   minionSessions: MinionSessionConnection;
+  minionSessionsLayout?: Maybe<MinionSessionsLayout>;
   minions: Array<Minion>;
   module?: Maybe<Module>;
   moduleActionInvocations: Array<ModuleActionInvocation>;
@@ -1731,13 +1798,21 @@ export type QueryHostsArgs = {
 };
 
 
+export type QueryMinionSessionValuesArgs = {
+  column: Scalars['String']['input'];
+  operationId: Scalars['ID']['input'];
+};
+
+
 export type QueryMinionSessionsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
+  filters?: InputMaybe<Array<MinionSessionFilterInput>>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   operationId: Scalars['ID']['input'];
   search?: InputMaybe<Scalars['String']['input']>;
+  sort?: InputMaybe<MinionSessionSortInput>;
 };
 
 
@@ -3271,6 +3346,8 @@ export type MinionSessionFieldsFragment = { id: string, number: number, operatio
 export type MinionSessionsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
   search?: InputMaybe<Scalars['String']['input']>;
+  filters?: InputMaybe<Array<MinionSessionFilterInput> | MinionSessionFilterInput>;
+  sort?: InputMaybe<MinionSessionSortInput>;
   first?: InputMaybe<Scalars['Int']['input']>;
   after?: InputMaybe<Scalars['String']['input']>;
 }>;
@@ -3284,6 +3361,28 @@ export type MinionSessionChangedSubscriptionVariables = Exact<{
 
 
 export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null } | null } };
+
+export type MinionSessionValuesQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+  column: Scalars['String']['input'];
+}>;
+
+
+export type MinionSessionValuesQuery = { minionSessionValues: Array<string> };
+
+export type MinionSessionsLayoutFieldsFragment = { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> };
+
+export type MinionSessionsLayoutQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type MinionSessionsLayoutQuery = { minionSessionsLayout?: { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
+
+export type SetMinionSessionsLayoutMutationVariables = Exact<{
+  layout?: InputMaybe<MinionSessionsLayoutInput>;
+}>;
+
+
+export type SetMinionSessionsLayoutMutation = { setMinionSessionsLayout?: { columns: Array<string>, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -4584,6 +4683,26 @@ export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
   lastSeenAt
 }
     `, {"fragmentName":"MinionSessionFields"}) as unknown as TypedDocumentString<MinionSessionFieldsFragment, unknown>;
+export const MinionSessionsLayoutFieldsFragmentDoc = new TypedDocumentString(`
+    fragment MinionSessionsLayoutFields on MinionSessionsLayout {
+  columns
+  sort {
+    column
+    direction
+  }
+  filters {
+    column
+    op
+    text
+    values
+    min
+    max
+    seconds
+    from
+    to
+  }
+}
+    `, {"fragmentName":"MinionSessionsLayoutFields"}) as unknown as TypedDocumentString<MinionSessionsLayoutFieldsFragment, unknown>;
 export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
     fragment ModuleFields on Module {
   instance
@@ -7135,10 +7254,12 @@ export const HostChangedDocument = new TypedDocumentString(`
   updatedAt
 }`) as unknown as TypedDocumentString<HostChangedSubscription, HostChangedSubscriptionVariables>;
 export const MinionSessionsDocument = new TypedDocumentString(`
-    query MinionSessions($operationId: ID!, $search: String, $first: Int, $after: String) {
+    query MinionSessions($operationId: ID!, $search: String, $filters: [MinionSessionFilterInput!], $sort: MinionSessionSortInput, $first: Int, $after: String) {
   minionSessions(
     operationId: $operationId
     search: $search
+    filters: $filters
+    sort: $sort
     first: $first
     after: $after
   ) {
@@ -7214,6 +7335,59 @@ export const MinionSessionChangedDocument = new TypedDocumentString(`
   createdAt
   lastSeenAt
 }`) as unknown as TypedDocumentString<MinionSessionChangedSubscription, MinionSessionChangedSubscriptionVariables>;
+export const MinionSessionValuesDocument = new TypedDocumentString(`
+    query MinionSessionValues($operationId: ID!, $column: String!) {
+  minionSessionValues(operationId: $operationId, column: $column)
+}
+    `) as unknown as TypedDocumentString<MinionSessionValuesQuery, MinionSessionValuesQueryVariables>;
+export const MinionSessionsLayoutDocument = new TypedDocumentString(`
+    query MinionSessionsLayout {
+  minionSessionsLayout {
+    ...MinionSessionsLayoutFields
+  }
+}
+    fragment MinionSessionsLayoutFields on MinionSessionsLayout {
+  columns
+  sort {
+    column
+    direction
+  }
+  filters {
+    column
+    op
+    text
+    values
+    min
+    max
+    seconds
+    from
+    to
+  }
+}`) as unknown as TypedDocumentString<MinionSessionsLayoutQuery, MinionSessionsLayoutQueryVariables>;
+export const SetMinionSessionsLayoutDocument = new TypedDocumentString(`
+    mutation SetMinionSessionsLayout($layout: MinionSessionsLayoutInput) {
+  setMinionSessionsLayout(layout: $layout) {
+    ...MinionSessionsLayoutFields
+  }
+}
+    fragment MinionSessionsLayoutFields on MinionSessionsLayout {
+  columns
+  sort {
+    column
+    direction
+  }
+  filters {
+    column
+    op
+    text
+    values
+    min
+    max
+    seconds
+    from
+    to
+  }
+}`) as unknown as TypedDocumentString<SetMinionSessionsLayoutMutation, SetMinionSessionsLayoutMutationVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {
   modules(

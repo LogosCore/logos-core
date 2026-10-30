@@ -30,8 +30,22 @@ export const MinionSessionFields = graphql(`
 `)
 
 export const MinionSessionsQuery = graphql(`
-  query MinionSessions($operationId: ID!, $search: String, $first: Int, $after: String) {
-    minionSessions(operationId: $operationId, search: $search, first: $first, after: $after) {
+  query MinionSessions(
+    $operationId: ID!
+    $search: String
+    $filters: [MinionSessionFilterInput!]
+    $sort: MinionSessionSortInput
+    $first: Int
+    $after: String
+  ) {
+    minionSessions(
+      operationId: $operationId
+      search: $search
+      filters: $filters
+      sort: $sort
+      first: $first
+      after: $after
+    ) {
       edges {
         node {
           ...MinionSessionFields
@@ -56,6 +70,49 @@ export const MinionSessionChangedSubscription = graphql(`
       session {
         ...MinionSessionFields
       }
+    }
+  }
+`)
+
+export const MinionSessionValuesQuery = graphql(`
+  query MinionSessionValues($operationId: ID!, $column: String!) {
+    minionSessionValues(operationId: $operationId, column: $column)
+  }
+`)
+
+export const MinionSessionsLayoutFields = graphql(`
+  fragment MinionSessionsLayoutFields on MinionSessionsLayout {
+    columns
+    sort {
+      column
+      direction
+    }
+    filters {
+      column
+      op
+      text
+      values
+      min
+      max
+      seconds
+      from
+      to
+    }
+  }
+`)
+
+export const MinionSessionsLayoutQuery = graphql(`
+  query MinionSessionsLayout {
+    minionSessionsLayout {
+      ...MinionSessionsLayoutFields
+    }
+  }
+`)
+
+export const SetMinionSessionsLayoutMutation = graphql(`
+  mutation SetMinionSessionsLayout($layout: MinionSessionsLayoutInput) {
+    setMinionSessionsLayout(layout: $layout) {
+      ...MinionSessionsLayoutFields
     }
   }
 `)

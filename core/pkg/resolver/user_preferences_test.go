@@ -23,6 +23,9 @@ type fakePrefsRepo struct {
 	seedCalled bool
 }
 
+func (f *fakePrefsRepo) SetMinionSessionsLayout(context.Context, uuid.UUID, *models.MinionSessionsLayout) error {
+	return nil
+}
 func (f *fakePrefsRepo) RecordIconUse(_ context.Context, _ uuid.UUID, name string, _ time.Time) error {
 	f.icons = append(f.icons, name)
 	return nil

@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
-	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	"go.uber.org/zap"
@@ -56,7 +56,10 @@ func (f *fakeStagings) Delete(_ context.Context, id uuid.UUID) error {
 	return qmgo.ErrNoSuchDocuments
 }
 
+// fakeSessions keeps sessions in memory; the list methods are not used here
+// (the embedded nil interface panics if they are).
 type fakeSessions struct {
+	repository.IMinionSessionRepository
 	rows []models.MinionSession
 	seq  int64
 }
@@ -98,16 +101,6 @@ func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.Minion
 	}
 	return nil
 }
-
-func (f *fakeSessions) FindByOperationIDWithCursor(context.Context, uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.MinionSession, error) {
-	return f.rows, nil
-}
-
-func (f *fakeSessions) CountByOperationID(context.Context, uuid.UUID, string) (int64, error) {
-	return int64(len(f.rows)), nil
-}
-
-func (f *fakeSessions) DeleteByOperationID(context.Context, uuid.UUID) error { return nil }
 
 // fakeBus keeps what is published.
 type fakeBus struct {
