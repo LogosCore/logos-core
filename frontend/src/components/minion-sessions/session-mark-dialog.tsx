@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import { CheckIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -115,9 +115,18 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
               aria-label={st.label}
               title={st.label}
               onClick={() => setColor(color === st.id ? "" : st.id)}
-              style={{ ...st.swatch, gridColumn: i + 1, gridRow: SESSION_MARK_STRENGTHS.length + 1 }}
+              style={
+                {
+                  "--sw": st.swatch.light,
+                  "--sw-dark": st.swatch.dark,
+                  "--sw-fg": st.swatch.fg,
+                  "--sw-fg-dark": st.swatch.fgDark,
+                  gridColumn: i + 1,
+                  gridRow: SESSION_MARK_STRENGTHS.length + 1,
+                } as CSSProperties
+              }
               className={cn(
-                "flex aspect-square items-center justify-center rounded-md border border-foreground/10 outline-none hover:brightness-125 focus-visible:ring-2 focus-visible:ring-ring",
+                "flex aspect-square items-center justify-center rounded-md border border-foreground/10 bg-(image:--sw) text-(color:--sw-fg) outline-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring dark:bg-(image:--sw-dark) dark:text-(color:--sw-fg-dark) dark:hover:brightness-125",
                 color === st.id && "ring-2 ring-foreground/70",
               )}
             >

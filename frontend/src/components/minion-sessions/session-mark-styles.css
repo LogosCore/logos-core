@@ -1,9 +1,9 @@
 /*
  * The special looks a session mark gives a row in place of a color
  * (SESSION_MARK_STYLES in session-mark-colors.ts; core's SessionMarkStyles).
- * Most bring their own background, so they look alike in either theme; the
- * ink ones (Rainbow, On Fire, Gold) keep the table's and pick their colors
- * per theme.
+ * Every style keeps the table's background, at most faintly tinted, and has
+ * its own colors in either theme (.dark): a style that brought a dark
+ * background of its own read as a black bar in the light theme.
  *
  * Two kinds of text:
  *   .mark-fx-solid  every text in the row takes the style's color;
@@ -12,9 +12,7 @@
  *                   the text is transparent and icons take --fx-icon. Per
  *                   cell, not per row: a row's clip does not reach its
  *                   cells' text, and the gradient covered the whole row.
- * Last seen keeps saying live, late or lost under both: in colors that read
- * on a style's dark background, or the table's own where the style keeps the
- * table's background (the ink ones). Ghost touches neither.
+ * Last seen keeps the table's own live/late/lost colors under every style.
  *
  * Plain (unlayered) CSS on purpose: it wins over the row's utilities (its
  * hover background) without !important, and leaves the picked row's ring
@@ -27,7 +25,8 @@
   background-image: var(--fx-wash, none);
 }
 .mark-fx:hover {
-  background-color: var(--fx-bg-hover, var(--fx-bg, transparent));
+  background-color: var(--fx-bg-hover, color-mix(in oklab, var(--muted) 50%, transparent));
+  background-image: var(--fx-wash-hover, var(--fx-wash, none));
 }
 
 .mark-fx-solid,
@@ -55,31 +54,24 @@
   color: var(--fx-icon);
 }
 
-:is(.mark-fx-solid, .mark-fx-ink) [data-seen="live"],
-:is(.mark-fx-solid, .mark-fx-ink) [data-seen="live"] * {
-  color: #4ade80;
-}
-:is(.mark-fx-solid, .mark-fx-ink) [data-seen="late"],
-:is(.mark-fx-solid, .mark-fx-ink) [data-seen="late"] * {
-  color: #facc15;
-}
-:is(.mark-fx-solid, .mark-fx-ink) [data-seen="lost"],
-:is(.mark-fx-solid, .mark-fx-ink) [data-seen="lost"] * {
-  color: #f87171;
+.mark-fx [data-seen],
+.mark-fx [data-seen] * {
+  color: revert-layer;
 }
 
-/* Haxor: a terminal. Acid green on black, a glow. */
+/* Haxor: a terminal. Terminal font, green text: deep green on white,
+ * acid green with a glow on dark, the row faintly green. */
 .mark-fx-haxor {
-  --fx-bg: #070b07;
-  --fx-bg-hover: #0d160d;
-  --fx-fg: #39ff14;
+  --fx-bg: oklch(0.975 0.02 145);
+  --fx-bg-hover: oklch(0.95 0.035 145);
+  --fx-fg: oklch(0.5 0.15 145);
   font-family: var(--font-mono);
-  text-shadow: 0 0 4px rgb(57 255 20 / 0.55);
 }
-.mark-fx-haxor [data-seen="live"],
-.mark-fx-haxor [data-seen="live"] * {
-  /* Live is the style's own green already. */
-  color: #39ff14;
+.dark .mark-fx-haxor {
+  --fx-bg: oklch(0.22 0.035 145);
+  --fx-bg-hover: oklch(0.26 0.045 145);
+  --fx-fg: #39ff14;
+  text-shadow: 0 0 4px rgb(57 255 20 / 0.5);
 }
 
 /* Rainbow: every letter its own hue, the whole spectrum every dozen
@@ -191,50 +183,68 @@
   }
 }
 
-/* Amber CRT: an old amber monitor, phosphor glow and scanlines. */
+/* Amber CRT: an old amber monitor. Retro mono font, amber text, faint
+ * scanlines; dark amber on a warm tint on white, glowing amber on dark. */
 .mark-fx-amber-crt {
-  --fx-bg: #160e02;
-  --fx-bg-hover: #221603;
-  --fx-fg: #ffb000;
+  --fx-bg: oklch(0.975 0.022 75);
+  --fx-bg-hover: oklch(0.95 0.035 75);
+  --fx-fg: oklch(0.55 0.13 65);
+  --fx-scan: rgb(120 80 0 / 0.07);
   font-family: "Space Mono", var(--font-mono);
-  text-shadow: 0 0 5px rgb(255 176 0 / 0.5);
+}
+.dark .mark-fx-amber-crt {
+  --fx-bg: oklch(0.21 0.03 75);
+  --fx-bg-hover: oklch(0.25 0.04 75);
+  --fx-fg: #ffb000;
+  --fx-scan: rgb(0 0 0 / 0.25);
+  text-shadow: 0 0 5px rgb(255 176 0 / 0.45);
 }
 .mark-fx-amber-crt::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgb(0 0 0 / 0.28) 0 1px, transparent 1px 3px);
+  background: repeating-linear-gradient(0deg, var(--fx-scan) 0 1px, transparent 1px 3px);
 }
 
-/* Synthwave: a purple-to-pink sunset, neon pink text with a cyan glow. */
+/* Synthwave: a sunset. Neon pink text with a cyan glow, the row tinted pink
+ * to violet; softly on white, deeper on dark. */
 .mark-fx-synthwave {
-  --fx-bg: #2a0d52;
-  --fx-wash: linear-gradient(90deg, #2a0d52, #5a1670 55%, #9c1c63);
-  --fx-fg: #ffa6ea;
-  text-shadow: 0 0 6px rgb(1 205 254 / 0.75);
+  --fx-wash: linear-gradient(90deg, oklch(0.97 0.025 340), oklch(0.965 0.03 300));
+  --fx-wash-hover: linear-gradient(90deg, oklch(0.945 0.04 340), oklch(0.94 0.045 300));
+  --fx-fg: oklch(0.52 0.2 345);
+  text-shadow: 0 0 4px rgb(1 205 254 / 0.4);
 }
-.mark-fx-synthwave:hover {
-  --fx-wash: linear-gradient(90deg, #35116a, #6a1b84 55%, #b02270);
+.dark .mark-fx-synthwave {
+  --fx-wash: linear-gradient(90deg, oklch(0.24 0.06 300), oklch(0.27 0.07 340));
+  --fx-wash-hover: linear-gradient(90deg, oklch(0.28 0.07 300), oklch(0.31 0.08 340));
+  --fx-fg: #ff9de6;
+  text-shadow: 0 0 6px rgb(1 205 254 / 0.7);
 }
 
-/* Glitch: the text split into red and cyan, jumping now and then. */
+/* Glitch: the text split into red and cyan, jumping now and then. Ink-dark
+ * text on white, near-white on dark; the table's background. */
 .mark-fx-glitch {
-  --fx-bg: #0b0b10;
-  --fx-bg-hover: #13131b;
-  --fx-fg: #ecebf5;
-  text-shadow: -1px 0 rgb(255 0 60 / 0.8), 1px 0 rgb(0 240 255 / 0.8);
+  --fx-fg: #18181b;
+  --fx-red: rgb(255 0 60 / 0.55);
+  --fx-cyan: rgb(0 180 220 / 0.6);
+  text-shadow: -1px 0 var(--fx-red), 1px 0 var(--fx-cyan);
   animation: mark-fx-glitch 4s steps(1) infinite;
+}
+.dark .mark-fx-glitch {
+  --fx-fg: #ecebf5;
+  --fx-red: rgb(255 0 60 / 0.8);
+  --fx-cyan: rgb(0 240 255 / 0.8);
 }
 @keyframes mark-fx-glitch {
   90% {
-    text-shadow: -3px 0 rgb(255 0 60 / 0.9), 3px 0 rgb(0 240 255 / 0.9);
+    text-shadow: -3px 0 var(--fx-red), 3px 0 var(--fx-cyan);
   }
   93% {
-    text-shadow: 2px 1px rgb(255 0 60 / 0.9), -2px -1px rgb(0 240 255 / 0.9);
+    text-shadow: 2px 1px var(--fx-red), -2px -1px var(--fx-cyan);
   }
   96% {
-    text-shadow: -1px 0 rgb(255 0 60 / 0.8), 1px 0 rgb(0 240 255 / 0.8);
+    text-shadow: -1px 0 var(--fx-red), 1px 0 var(--fx-cyan);
   }
 }
 
@@ -420,19 +430,11 @@
   }
 }
 
-/* The ink styles above sit on the table's own background: bolder text to
- * carry the color (over the cells' own weights), the table's hover, and Last
- * seen in the table's own live/late/lost colors. */
-:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) {
-  --fx-bg-hover: color-mix(in oklab, var(--muted) 50%, transparent);
-}
+/* The ink styles above: bolder text to carry the color (over the cells' own
+ * weights). */
 :is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold),
 :is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) * {
   font-weight: 600;
-}
-:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) [data-seen],
-:is(.mark-fx-rainbow, .mark-fx-on-fire, .mark-fx-gold) [data-seen] * {
-  color: revert-layer;
 }
 
 /* Ghost: faded and blurred, back in focus on hover. For the dead. */

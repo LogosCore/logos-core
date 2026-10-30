@@ -5,7 +5,6 @@
 // theme, low), so a marked row reads as marked without turning the table
 // into a quilt, and the app's neutral look holds.
 
-import type { CSSProperties } from "react"
 import type { LucideIcon } from "lucide-react"
 import { CrownIcon, FlameIcon, GhostIcon, MonitorIcon, RainbowIcon, SquareTerminalIcon, SunsetIcon, ZapIcon } from "lucide-react"
 import "./session-mark-styles.css"
@@ -105,52 +104,108 @@ export interface SessionMarkStyle {
   id: string
   label: string
   text: "solid" | "ink" | "none"
-  /** The swatch: its own background and icon, in the style's colors. */
-  swatch: CSSProperties
+  /** The swatch, a square in the style's colors with its icon, per theme
+   *  (backgrounds as images: some are gradients). */
+  swatch: { light: string; dark: string; fg: string; fgDark: string }
   Icon: LucideIcon
 }
 
 export const SESSION_MARK_STYLES: readonly SessionMarkStyle[] = [
-  { id: "haxor", label: "Haxor", text: "solid", Icon: SquareTerminalIcon, swatch: { background: "#070b07", color: "#39ff14" } },
+  {
+    id: "haxor",
+    label: "Haxor",
+    text: "solid",
+    Icon: SquareTerminalIcon,
+    swatch: {
+      light: "linear-gradient(oklch(0.95 0.04 145), oklch(0.95 0.04 145))",
+      dark: "linear-gradient(#070b07, #070b07)",
+      fg: "oklch(0.5 0.15 145)",
+      fgDark: "#39ff14",
+    },
+  },
   {
     id: "rainbow",
     label: "Rainbow",
     text: "ink",
     Icon: RainbowIcon,
     swatch: {
-      background: "conic-gradient(from 90deg, #ff4d4d, #ff9f1a, #ffe14d, #4dff88, #4dd2ff, #8f6bff, #ff4dd2, #ff4d4d)",
-      color: "#fff",
+      light: "conic-gradient(from 90deg, #ff4d4d, #ff9f1a, #ffe14d, #4dff88, #4dd2ff, #8f6bff, #ff4dd2, #ff4d4d)",
+      dark: "conic-gradient(from 90deg, #ff4d4d, #ff9f1a, #ffe14d, #4dff88, #4dd2ff, #8f6bff, #ff4dd2, #ff4d4d)",
+      fg: "#ffffff",
+      fgDark: "#ffffff",
     },
   },
-  { id: "amber-crt", label: "Amber CRT", text: "solid", Icon: MonitorIcon, swatch: { background: "#160e02", color: "#ffb000" } },
+  {
+    id: "amber-crt",
+    label: "Amber CRT",
+    text: "solid",
+    Icon: MonitorIcon,
+    swatch: {
+      light: "linear-gradient(oklch(0.95 0.04 75), oklch(0.95 0.04 75))",
+      dark: "linear-gradient(#160e02, #160e02)",
+      fg: "oklch(0.55 0.13 65)",
+      fgDark: "#ffb000",
+    },
+  },
   {
     id: "synthwave",
     label: "Synthwave",
     text: "solid",
     Icon: SunsetIcon,
-    swatch: { background: "linear-gradient(135deg, #2a0d52, #9c1c63)", color: "#ffa6ea" },
+    swatch: {
+      light: "linear-gradient(135deg, oklch(0.94 0.045 340), oklch(0.93 0.05 300))",
+      dark: "linear-gradient(135deg, #2a0d52, #9c1c63)",
+      fg: "oklch(0.52 0.2 345)",
+      fgDark: "#ffa6ea",
+    },
   },
-  { id: "glitch", label: "Glitch", text: "solid", Icon: ZapIcon, swatch: { background: "#0b0b10", color: "#00f0ff" } },
+  {
+    id: "glitch",
+    label: "Glitch",
+    text: "solid",
+    Icon: ZapIcon,
+    swatch: {
+      light: "linear-gradient(oklch(0.96 0 0), oklch(0.96 0 0))",
+      dark: "linear-gradient(#0b0b10, #0b0b10)",
+      fg: "oklch(0.55 0.12 215)",
+      fgDark: "#00f0ff",
+    },
+  },
   {
     id: "on-fire",
     label: "On Fire",
     text: "ink",
     Icon: FlameIcon,
-    swatch: { background: "linear-gradient(180deg, #2c0b03, #1a0703)", color: "#ff7a00" },
+    swatch: {
+      light: "linear-gradient(oklch(0.95 0.04 50), oklch(0.95 0.04 50))",
+      dark: "linear-gradient(180deg, #2c0b03, #1a0703)",
+      fg: "#e04800",
+      fgDark: "#ff7a00",
+    },
   },
   {
     id: "gold",
     label: "Gold",
     text: "ink",
     Icon: CrownIcon,
-    swatch: { background: "linear-gradient(135deg, #15110a, #2b220f)", color: "#ffd700" },
+    swatch: {
+      light: "linear-gradient(oklch(0.95 0.045 90), oklch(0.95 0.045 90))",
+      dark: "linear-gradient(135deg, #15110a, #2b220f)",
+      fg: "#a9800f",
+      fgDark: "#ffd700",
+    },
   },
   {
     id: "ghost",
     label: "Ghost",
     text: "none",
     Icon: GhostIcon,
-    swatch: { background: "linear-gradient(135deg, #e5e7eb, #9ca3af)", color: "#ffffff" },
+    swatch: {
+      light: "linear-gradient(135deg, #e5e7eb, #9ca3af)",
+      dark: "linear-gradient(135deg, #52525b, #27272a)",
+      fg: "#ffffff",
+      fgDark: "#d4d4d8",
+    },
   },
 ]
 
