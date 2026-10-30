@@ -410,10 +410,24 @@ func TestUnderSession(t *testing.T) {
 		t.Fatalf("after check-in %+v", s)
 	}
 
+	// get_tasks: taken, and no task waits, so nothing to say; max 0 is
+	// refused.
+	if reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 1}); err != nil || reply != nil {
+		t.Fatalf("get_tasks: %x %v", reply, err)
+	}
+	reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bad protocol.ErrItem
+	if msg := r.openUnder(t, sid, keys, reply); len(msg.Items) != 1 || protocol.UnmarshalCBOR(msg.Items[0], &bad) != nil || bad.Code != protocol.ErrItemBadMessage {
+		t.Fatalf("get_tasks max 0: %+v", msg)
+	}
+
 	// A rehello: new details, the same session id; an item not built yet
 	// gets unknown_item.
-	reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), hello("web01-renamed"),
-		map[string]any{"t": "get_tasks", "max": 1})
+	reply, err = r.sendUnder(t, sid, keys, protocol.NewMessageID(), hello("web01-renamed"),
+		map[string]any{"t": "result", "task": 1, "seq": 0})
 	if err != nil {
 		t.Fatal(err)
 	}

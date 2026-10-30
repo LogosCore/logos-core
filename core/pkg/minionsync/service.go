@@ -6,8 +6,9 @@
 // encrypted to that key. The minion's hello, under the temporary id and
 // sealed with those keys, opens a session with them (a hello straight under
 // the build id opens one with the build's own keys), and every message after
-// is sent under the session id. Under a session core records the check-in
-// and takes a hello again (a rehello); task items are not built yet.
+// is sent under the session id. Under a session core records the check-in,
+// takes a hello again (a rehello) and get_tasks (no tasks wait yet); the
+// other task items are not built yet.
 package minionsync
 
 import (
@@ -228,7 +229,8 @@ func (s *Service) openSession(ctx context.Context, from *sender, raw cbor.RawMes
 
 // underSession answers a message sent under a session id. Any message is a
 // check-in; a hello replaces what the session recorded (a rehello) and gets
-// the same session id back. Other items are not built yet.
+// the same session id back; a get_tasks is taken (no tasks wait yet). Other
+// items are not built yet.
 func (s *Service) underSession(ctx context.Context, session *models.MinionSession, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
 	if err := s.sessions.CheckIn(ctx, session.SessionID, s.now()); err != nil {
 		return nil, fmt.Errorf("check in: %w", err)
@@ -249,6 +251,15 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			s.logger.Info("minion rehello", zap.String("session_id", session.SessionID.String()))
 			out, err = helloResponse(session.SessionID)
+		case protocol.ItemGetTasks:
+			// The minion takes tasks. None are built yet, so none wait:
+			// nothing to answer.
+			var get protocol.GetTasksItem
+			if protocol.UnmarshalCBOR(raw, &get) != nil {
+				out, err = errItem(protocol.ErrItemBadMessage, "the get_tasks does not read", i)
+			} else if vErr := get.Validate(); vErr != nil {
+				out, err = errItem(protocol.ErrItemBadMessage, vErr.Error(), i)
+			}
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
 		}
