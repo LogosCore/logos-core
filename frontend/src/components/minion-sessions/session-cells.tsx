@@ -134,11 +134,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "domain":
       return text(s.domain)
     case "proc":
-      return (
-        <div className="truncate" title={s.proc ?? undefined}>
-          {s.proc || muted("pid")} {s.pid}
-        </div>
-      )
+      // The name alone: the PID has a column of its own.
+      return text(s.proc)
     case "pid":
       return <div className="truncate font-mono">{s.pid}</div>
     case "os":
