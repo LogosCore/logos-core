@@ -435,7 +435,8 @@ export function SessionsDatatable({
                       {selecting && (
                         <Checkbox
                           aria-label={`Select session ${s.number}`}
-                          className="pointer-events-none self-center"
+                          // Opaque: on a tinted or styled row its light border alone vanished.
+                          className="pointer-events-none self-center bg-background"
                           checked={pickedSet.has(s.id)}
                           tabIndex={-1}
                         />

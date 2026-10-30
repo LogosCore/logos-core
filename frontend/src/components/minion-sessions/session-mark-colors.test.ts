@@ -21,8 +21,7 @@ describe("session mark colors and styles", () => {
     expect(markRowClass("teal-medium")).toContain("bg-(color:--mark-row)")
     expect(markRowClass("rainbow")).toBe("mark-fx mark-fx-rainbow mark-fx-ink")
     expect(markRowClass("ghost")).toBe("mark-fx mark-fx-ghost")
-    // A terminal is dark in either theme: its row is a dark-theme island.
-    expect(markRowClass("haxor")).toBe("mark-fx mark-fx-haxor mark-fx-solid dark")
+    expect(markRowClass("haxor")).toBe("mark-fx mark-fx-haxor mark-fx-solid")
     expect(markRowClass("disco")).toBeUndefined()
     expect(markRowClass(null)).toBeUndefined()
   })
