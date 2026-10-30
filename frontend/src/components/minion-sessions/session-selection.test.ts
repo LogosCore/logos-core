@@ -16,8 +16,18 @@ describe("session selection", () => {
     expect(selectedIds(s, order)).toEqual(["a", "b", "c", "d", "e"])
   })
 
-  test("a shift-click with nothing clicked before toggles the row alone", () => {
+  test("a shift-click with nothing picked toggles the row alone", () => {
     expect(selectedIds(toggleSelected(emptySelection("x"), order, "c", true), order)).toEqual(["c"])
+  })
+
+  test("a shift-click with rows picked but none clicked ranges from the nearest picked", () => {
+    // The header checkbox picks rows without a last click.
+    let s = selectLoaded(emptySelection("x"), ["a", "b"], true)
+    s = toggleSelected(s, order, "e", true)
+    expect(selectedIds(s, order)).toEqual(order)
+    // The last clicked row left the list.
+    s = { ...emptySelection("x"), ids: ["d"], anchor: "gone" }
+    expect(selectedIds(toggleSelected(s, order, "b", true), order)).toEqual(["b", "c", "d"])
   })
 
   test("all matching takes every loaded row; a click then goes back to picked rows", () => {
