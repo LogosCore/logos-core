@@ -468,6 +468,16 @@
   filter: none;
 }
 
+/* The selection checkbox is the table's, not the style's: its tick is drawn
+ * in the text color, which the styles take over (transparent under the ink
+ * ones), and a checked box showed empty. Last in the file, so it wins over
+ * the rules above of the same weight. */
+.mark-fx [data-slot="checkbox"],
+.mark-fx [data-slot="checkbox"] * {
+  color: revert-layer;
+  text-shadow: none;
+}
+
 /* Held still rather than stopped: a paused animation keeps its delay's
  * frame, so a rainbow's columns keep their different hues. */
 @media (prefers-reduced-motion: reduce) {
