@@ -45,14 +45,16 @@
 .mark-fx-ink * {
   color: transparent;
 }
-/* Icons are no text to show the gradient through: the build's module icon
- * (a mask painted in the text color) and the mark's icon or emoji went
- * invisible with the text. They take the style's icon color, and their own
- * layer, out of the cell's text clip. */
+/* Icons are no text to show the gradient through, and went invisible with
+ * the text: the build's module icon (a mask painted in the text color), the
+ * mark's icon or emoji, the row's ⋯ button. They take the style's icon
+ * color, and so does what is inside them: an svg's lines are drawn in their
+ * own color, which the rule above made transparent, not the svg's. */
 .mark-fx-ink :is(svg, [data-module-icon], [data-mark-icon]) {
-  position: relative;
-  z-index: 0;
   color: var(--fx-icon);
+}
+.mark-fx-ink :is(svg, [data-module-icon], [data-mark-icon]) * {
+  color: inherit;
 }
 
 .mark-fx [data-seen],
