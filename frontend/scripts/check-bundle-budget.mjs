@@ -30,8 +30,13 @@ import zlib from "node:zlib"
 // Raw was raised from 1 050 KB when the app moved to React Router's data
 // router, which useBlocker needs (an open build or endpoint form asks before
 // Back drops its changes): +54 KB raw / +16 KB served, to 1 056 / 293.
+// Served was raised from 300 KB with minion tasks (the Sessions console), at
+// 1 087 / 300.3: growth by features, not a stray import. graphql-client.js
+// carries every generated GraphQL document (the client preset's one map, on
+// first paint by design: +2.7 KB raw for six task operations), and the CSS
+// the new Tailwind classes (+1 KB).
 const BUDGET_RAW_KB = 1_100
-const BUDGET_SERVED_KB = 300
+const BUDGET_SERVED_KB = 305
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
 const indexHtml = path.join(dist, "index.html")

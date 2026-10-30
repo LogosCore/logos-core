@@ -7,10 +7,11 @@ import { useFactoryIcons } from "@/graphql/hooks/builds"
 import { useMinionSession, useMinionSessions } from "@/graphql/hooks/minion-sessions"
 import { markColorVars, markRowClass } from "./session-mark-colors"
 import { SessionFire } from "./session-fire"
+import { SessionConsole } from "./session-console"
 
 // The lower half of the Sessions page: the sessions an operator works with,
-// a tab each ("Interact" in a session's menu opens one). What a tab will
-// hold, a session's commands and their output, is not built yet.
+// a tab each ("Interact" in a session's menu opens one), each a console of
+// the tasks given its minion (session-console.tsx).
 
 export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; onTabsChange: (next: WorkPaneTabs) => void }) {
   const sessions = useMinionSessions(tabs.ids)
@@ -59,12 +60,5 @@ function SessionTabLabel({ id }: { id: string }) {
 }
 
 function SessionPanel({ id }: { id: string }) {
-  const { data } = useMinionSession(id)
-  const s = data?.minionSession
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
-      <SquareTerminalIcon className="size-6 opacity-50" />
-      <p className="text-sm">{s ? `Working with session ${s.number} comes here.` : "This session does not exist any more."}</p>
-    </div>
-  )
+  return <SessionConsole sessionId={id} />
 }

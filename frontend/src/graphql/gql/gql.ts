@@ -114,6 +114,12 @@ type Documents = {
     "\n  mutation SetMinionSessionDescription($id: ID!, $description: String!) {\n    setMinionSessionDescription(id: $id, description: $description) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionDescriptionDocument,
     "\n  mutation SetMinionSessionMark($id: ID!, $mark: MinionSessionMarkInput) {\n    setMinionSessionMark(id: $id, mark: $mark) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionMarkDocument,
     "\n  mutation SetMinionSessionsMark(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $mark: MinionSessionMarkInput\n  ) {\n    setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)\n  }\n": typeof types.SetMinionSessionsMarkDocument,
+    "\n  fragment MinionTaskFields on MinionTask {\n    id\n    sessionId\n    operationId\n    command\n    args\n    issuedBy\n    issuedByName\n    state\n    queuedAt\n    sentAt\n    sendCount\n    ackedAt\n    startedAt\n    doneAt\n    cancelRequestedAt\n    ok\n    exit\n    err\n    output\n    outputSize\n    outputUtf8\n    outputTruncated\n    data\n  }\n": typeof types.MinionTaskFieldsFragmentDoc,
+    "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n": typeof types.MinionTasksDocument,
+    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": typeof types.MinionSessionCommandsDocument,
+    "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.QueueMinionTaskDocument,
+    "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.CancelMinionTaskDocument,
+    "\n  subscription MinionTaskChanged($sessionId: ID!) {\n    minionTaskChanged(sessionId: $sessionId) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.MinionTaskChangedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    iconLight\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": typeof types.ModuleFieldsFragmentDoc,
     "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": typeof types.BlockModuleDocument,
@@ -346,6 +352,12 @@ const documents: Documents = {
     "\n  mutation SetMinionSessionDescription($id: ID!, $description: String!) {\n    setMinionSessionDescription(id: $id, description: $description) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionDescriptionDocument,
     "\n  mutation SetMinionSessionMark($id: ID!, $mark: MinionSessionMarkInput) {\n    setMinionSessionMark(id: $id, mark: $mark) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionMarkDocument,
     "\n  mutation SetMinionSessionsMark(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $mark: MinionSessionMarkInput\n  ) {\n    setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)\n  }\n": types.SetMinionSessionsMarkDocument,
+    "\n  fragment MinionTaskFields on MinionTask {\n    id\n    sessionId\n    operationId\n    command\n    args\n    issuedBy\n    issuedByName\n    state\n    queuedAt\n    sentAt\n    sendCount\n    ackedAt\n    startedAt\n    doneAt\n    cancelRequestedAt\n    ok\n    exit\n    err\n    output\n    outputSize\n    outputUtf8\n    outputTruncated\n    data\n  }\n": types.MinionTaskFieldsFragmentDoc,
+    "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n": types.MinionTasksDocument,
+    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": types.MinionSessionCommandsDocument,
+    "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n": types.QueueMinionTaskDocument,
+    "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": types.CancelMinionTaskDocument,
+    "\n  subscription MinionTaskChanged($sessionId: ID!) {\n    minionTaskChanged(sessionId: $sessionId) {\n      ...MinionTaskFields\n    }\n  }\n": types.MinionTaskChangedDocument,
     "\n  fragment ModuleFields on Module {\n    instance\n    type\n    name\n    version\n    description\n    icon\n    iconLight\n    status\n    lastStatus\n    registeredAt\n    lastHeartbeatAt\n    deregisteredAt\n    deregisterReason\n    declaredDeadAt\n    blockedAt\n    blockedBy {\n      type\n      id\n      name\n    }\n    blockReason\n  }\n": types.ModuleFieldsFragmentDoc,
     "\n  query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {\n    modules(search: $search, status: $status, type: $type, first: $first, after: $after) {\n      edges {\n        node {\n          ...ModuleFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.ModulesDocument,
     "\n  mutation BlockModule($instance: ID!, $reason: String) {\n    blockModule(instance: $instance, reason: $reason) {\n      ...ModuleFields\n    }\n  }\n": types.BlockModuleDocument,
@@ -875,6 +887,30 @@ export function graphql(source: "\n  mutation SetMinionSessionMark($id: ID!, $ma
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation SetMinionSessionsMark(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $mark: MinionSessionMarkInput\n  ) {\n    setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)\n  }\n"): typeof import('./graphql').SetMinionSessionsMarkDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment MinionTaskFields on MinionTask {\n    id\n    sessionId\n    operationId\n    command\n    args\n    issuedBy\n    issuedByName\n    state\n    queuedAt\n    sentAt\n    sendCount\n    ackedAt\n    startedAt\n    doneAt\n    cancelRequestedAt\n    ok\n    exit\n    err\n    output\n    outputSize\n    outputUtf8\n    outputTruncated\n    data\n  }\n"): typeof import('./graphql').MinionTaskFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n"): typeof import('./graphql').MinionTasksDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionCommandsDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n"): typeof import('./graphql').QueueMinionTaskDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n"): typeof import('./graphql').CancelMinionTaskDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  subscription MinionTaskChanged($sessionId: ID!) {\n    minionTaskChanged(sessionId: $sessionId) {\n      ...MinionTaskFields\n    }\n  }\n"): typeof import('./graphql').MinionTaskChangedDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
