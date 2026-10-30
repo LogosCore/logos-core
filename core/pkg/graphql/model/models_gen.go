@@ -487,6 +487,9 @@ type MinionSession struct {
 	Persisted        bool                    `json:"persisted"`
 	Restarts         []*MinionSessionRestart `json:"restarts"`
 	RestartCount     int                     `json:"restartCount"`
+	SleepInterval    *int                    `json:"sleepInterval,omitempty"`
+	SleepJitter      *int                    `json:"sleepJitter,omitempty"`
+	LateAt           *string                 `json:"lateAt,omitempty"`
 	LastSeenAt       *string                 `json:"lastSeenAt,omitempty"`
 }
 
@@ -1417,6 +1420,8 @@ const (
 	MinionSessionFilterOpOlderThan   MinionSessionFilterOp = "OLDER_THAN"
 	MinionSessionFilterOpNever       MinionSessionFilterOp = "NEVER"
 	MinionSessionFilterOpEquals      MinionSessionFilterOp = "EQUALS"
+	MinionSessionFilterOpLive        MinionSessionFilterOp = "LIVE"
+	MinionSessionFilterOpLate        MinionSessionFilterOp = "LATE"
 )
 
 var AllMinionSessionFilterOp = []MinionSessionFilterOp{
@@ -1431,11 +1436,13 @@ var AllMinionSessionFilterOp = []MinionSessionFilterOp{
 	MinionSessionFilterOpOlderThan,
 	MinionSessionFilterOpNever,
 	MinionSessionFilterOpEquals,
+	MinionSessionFilterOpLive,
+	MinionSessionFilterOpLate,
 }
 
 func (e MinionSessionFilterOp) IsValid() bool {
 	switch e {
-	case MinionSessionFilterOpContains, MinionSessionFilterOpNotContains, MinionSessionFilterOpEmpty, MinionSessionFilterOpNotEmpty, MinionSessionFilterOpIn, MinionSessionFilterOpNotIn, MinionSessionFilterOpRange, MinionSessionFilterOpWithin, MinionSessionFilterOpOlderThan, MinionSessionFilterOpNever, MinionSessionFilterOpEquals:
+	case MinionSessionFilterOpContains, MinionSessionFilterOpNotContains, MinionSessionFilterOpEmpty, MinionSessionFilterOpNotEmpty, MinionSessionFilterOpIn, MinionSessionFilterOpNotIn, MinionSessionFilterOpRange, MinionSessionFilterOpWithin, MinionSessionFilterOpOlderThan, MinionSessionFilterOpNever, MinionSessionFilterOpEquals, MinionSessionFilterOpLive, MinionSessionFilterOpLate:
 		return true
 	}
 	return false

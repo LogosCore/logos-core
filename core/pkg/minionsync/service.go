@@ -259,6 +259,11 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
 	}
+	if hello.Sleep != nil {
+		session.Sleep = models.SleepFrom(*hello.Sleep)
+		late := session.Sleep.LateAtFrom(now)
+		session.LateAt = &late
+	}
 	var err error
 	if session.Number, err = s.sessions.NextNumber(ctx, b.OperationID); err != nil {
 		return nil, fmt.Errorf("number the session: %w", err)
@@ -310,7 +315,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	err = s.sessions.Claim(ctx, sid, repository.MinionSessionClaim{
 		At: now, BuildID: b.BuildID, BuildDescription: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello),
-		Address: address, AddressPicked: picked,
+		Address: address, AddressPicked: picked, Sleep: sleepOf(hello),
 	})
 	if repository.IsNotFound(err) {
 		return refuse("the session closed meanwhile")
@@ -319,7 +324,7 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 		return nil, false, fmt.Errorf("claim the session: %w", err)
 	}
 	// The claim's own message is the session's check-in, from where it came.
-	if err := s.sessions.CheckIn(ctx, sid, now, peer); err != nil {
+	if err := s.sessions.CheckIn(ctx, sid, checkIn(now, peer, sleepOf(hello), sleepOf(hello))); err != nil {
 		return nil, false, fmt.Errorf("check in: %w", err)
 	}
 	s.logger.Info("minion claimed its persisted session", zap.Int64("number", sess.Number), zap.String("session_id", sid.String()),
@@ -361,7 +366,26 @@ func (s *Service) claimReserved(ctx context.Context, from *sender, peer string, 
 // the same session id back; a get_tasks is taken (no tasks wait yet). Other
 // items are not built yet.
 func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
-	if err := s.sessions.CheckIn(ctx, session.SessionID, s.now(), peer); err != nil {
+	// A schedule the message says (a sleep_update, or a rehello's) takes
+	// effect with this check-in: the last one that reads.
+	var said *models.MinionSessionSleep
+	for _, raw := range msg.Items {
+		switch protocol.ItemType(raw) {
+		case protocol.ItemSleepUpdate:
+			if u, err := readSleepUpdate(raw); err == nil {
+				said = models.SleepFrom(u.Sleep())
+			}
+		case protocol.ItemHello:
+			if h, err := readHello(raw); err == nil && h.Sleep != nil {
+				said = models.SleepFrom(*h.Sleep)
+			}
+		}
+	}
+	schedule := said
+	if schedule == nil {
+		schedule = session.Sleep
+	}
+	if err := s.sessions.CheckIn(ctx, session.SessionID, checkIn(s.now(), peer, said, schedule)); err != nil {
 		return nil, fmt.Errorf("check in: %w", err)
 	}
 	var items []cbor.RawMessage
@@ -385,6 +409,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			s.logger.Info("minion rehello", zap.String("session_id", session.SessionID.String()))
 			out, err = helloResponse(session.SessionID)
+		case protocol.ItemSleepUpdate:
+			// Taken with the check-in above; nothing to answer.
+			if _, rErr := readSleepUpdate(raw); rErr != nil {
+				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
+			}
 		case protocol.ItemGetTasks:
 			// The minion takes tasks. None are built yet, so none wait:
 			// nothing to answer.
@@ -404,6 +433,35 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	}
 	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
 	return items, nil
+}
+
+// readSleepUpdate reads and checks a sleep_update.
+func readSleepUpdate(raw cbor.RawMessage) (protocol.SleepUpdateItem, error) {
+	var u protocol.SleepUpdateItem
+	if err := protocol.UnmarshalCBOR(raw, &u); err != nil {
+		return u, errors.New("the sleep_update does not read")
+	}
+	return u, u.Sleep().Validate()
+}
+
+// sleepOf is the schedule a hello says; nil for none.
+func sleepOf(h protocol.HelloItem) *models.MinionSessionSleep {
+	if h.Sleep == nil {
+		return nil
+	}
+	return models.SleepFrom(*h.Sleep)
+}
+
+// checkIn is a check-in at now from peer: said is a schedule the message
+// says (nil for none), schedule the one in force, from which the session
+// turns late.
+func checkIn(now time.Time, peer string, said, schedule *models.MinionSessionSleep) repository.MinionSessionCheckIn {
+	c := repository.MinionSessionCheckIn{At: now, Peer: peer, Sleep: said}
+	if schedule != nil {
+		late := schedule.LateAtFrom(now)
+		c.LateAt = &late
+	}
+	return c
 }
 
 // readHello reads and checks a hello.

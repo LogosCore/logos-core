@@ -334,10 +334,15 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
 		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked,
 		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
-		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
+		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
+		LateAt: timePtr(s.LateAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X
+	}
+	if s.Sleep != nil {
+		interval, jitter := int(s.Sleep.Interval), int(s.Sleep.Jitter)
+		out.SleepInterval, out.SleepJitter = &interval, &jitter
 	}
 	return out
 }

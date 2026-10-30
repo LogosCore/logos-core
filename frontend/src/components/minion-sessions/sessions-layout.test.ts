@@ -7,6 +7,8 @@ import {
   DEFAULT_SESSIONS_LAYOUT,
   SESSION_COLUMN_BY_ID,
   addressMatcher,
+  isClockFilter,
+  lateness,
   shownAddress,
   cycleSort,
   describeFilter,
@@ -89,6 +91,19 @@ describe("layout", () => {
   })
 })
 
+describe("lateness", () => {
+  test("on time before late_at, late after, unknown without a schedule", () => {
+    const at = Date.parse("2026-10-30T10:00:00Z")
+    expect(lateness({ lateAt: "2026-10-30T10:00:00Z" }, at - 1)).toBe("live")
+    expect(lateness({ lateAt: "2026-10-30T10:00:00Z" }, at)).toBe("late")
+    expect(lateness({ lateAt: null }, at)).toBeNull()
+  })
+  test("live and late filters read and refresh with the clock", () => {
+    expect(describeFilter({ column: "lastSeen", op: "LATE" })).toBe("late")
+    expect(isClockFilter({ column: "lastSeen", op: "LIVE" })).toBe(true)
+  })
+})
+
 describe("the shown address", () => {
   const row = { addrs: ["172.17.0.1", "10.0.0.5", "192.168.1.9"], address: "10.0.0.5", addressPicked: false }
   test("core's guess, unless a filter or the search matched another, unless someone picked one", () => {
@@ -130,6 +145,9 @@ describe("live updates", () => {
     addressPicked: false,
     peerAddress: null,
     peers: [],
+    sleepInterval: null,
+    sleepJitter: null,
+    lateAt: null,
     persisted: false,
     restartCount: 0,
     restarts: [],

@@ -55,6 +55,12 @@ type MinionSession struct {
 	// channels had none.
 	PeerAddress string              `bson:"peer_address,omitempty" json:"peer_address,omitempty"`
 	Peers       []MinionSessionPeer `bson:"peers,omitempty" json:"peers,omitempty"`
+	// Sleep is the check-in schedule the minion last said (its hello's, or
+	// a sleep_update); nil when it never did. LateAt is when the session
+	// turns late: its next check-in overdue by that schedule (LateAtFrom);
+	// nil without a schedule.
+	Sleep  *MinionSessionSleep `bson:"sleep,omitempty" json:"sleep,omitempty"`
+	LateAt *time.Time          `bson:"late_at,omitempty" json:"late_at,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
@@ -116,6 +122,29 @@ type MinionSessionRestart struct {
 type MinionSessionReplacedKeys struct {
 	Crypto protocol.BuildCrypto `bson:"crypto"`
 	At     time.Time            `bson:"at"`
+}
+
+// MinionSessionSleep is a minion's check-in schedule: Interval milliseconds
+// between check-ins, spread by Jitter percent of it either way.
+type MinionSessionSleep struct {
+	Interval int64 `bson:"interval" json:"interval"`
+	Jitter   int64 `bson:"jitter" json:"jitter"`
+}
+
+// SessionLateGrace is the slack a check-in gets past its schedule before
+// the session is late: slow networks, a busy host.
+const SessionLateGrace = 30 * time.Second
+
+// SleepFrom keeps a schedule a minion said.
+func SleepFrom(s protocol.Sleep) *MinionSessionSleep {
+	return &MinionSessionSleep{Interval: int64(s.Interval), Jitter: int64(s.Jitter)} //nolint:gosec // validated small
+}
+
+// LateAtFrom is when a session that checked in at base turns late: the
+// interval stretched by its jitter, and the grace.
+func (s MinionSessionSleep) LateAtFrom(base time.Time) time.Time {
+	period := time.Duration(s.Interval) * time.Millisecond
+	return base.Add(period + period*time.Duration(s.Jitter)/100 + SessionLateGrace)
 }
 
 // MaxSessionPeers caps MinionSession.Peers.

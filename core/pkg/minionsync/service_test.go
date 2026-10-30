@@ -84,13 +84,22 @@ func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models
 	return nil, qmgo.ErrNoSuchDocuments
 }
 
-func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, at time.Time, peer string) error {
+func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, c repository.MinionSessionCheckIn) error {
 	for i := range f.rows {
-		if f.rows[i].SessionID == id {
-			f.rows[i].LastSeenAt, f.rows[i].PurgeAt = &at, nil
-			if peer != "" {
-				f.rows[i].PeerAddress = peer
-			}
+		r := &f.rows[i]
+		if r.SessionID != id {
+			continue
+		}
+		at := c.At
+		r.LastSeenAt, r.PurgeAt = &at, nil
+		if c.Peer != "" {
+			r.PeerAddress = c.Peer
+		}
+		if c.Sleep != nil {
+			r.Sleep = c.Sleep
+		}
+		if c.LateAt != nil {
+			r.LateAt = c.LateAt
 		}
 	}
 	return nil
@@ -124,6 +133,7 @@ func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.Minio
 		r.Restarts = append([]models.MinionSessionRestart{{At: c.At, PID: c.Hello.PID, Host: c.Hello.Host, BuildID: c.BuildID}}, r.Restarts...)
 		r.RestartCount++
 		r.Crypto, r.Hello, r.BuildID, r.Address, r.AddressPicked, r.Persisted = c.Crypto, c.Hello, c.BuildID, c.Address, c.AddressPicked, true
+		r.Sleep, r.LateAt = c.Sleep, nil
 		return nil
 	}
 	return qmgo.ErrNoSuchDocuments
@@ -691,6 +701,60 @@ func TestClaimNotHonoured(t *testing.T) {
 	}
 	if got := sessionID(t, r.openUnder(t, b2.BuildID, keys2, reply)); got == sid || len(r.sessions.rows) != 3 {
 		t.Fatalf("a closed session was claimed: %s", got)
+	}
+}
+
+// A session turns late by the schedule its minion says: in its hello, then
+// in a sleep_update; core recomputes when the session is due on each
+// check-in. Without a schedule there is none.
+func TestSessionSchedule(t *testing.T) {
+	r := newRig(t)
+	h := hello("web01")
+	h.Sleep = &protocol.Sleep{Interval: 60_000, Jitter: 20}
+	reply, _ := r.send(t, protocol.NewMessageID(), h)
+	sid := sessionID(t, r.open(t, reply))
+	s := r.sessions.rows[0]
+	// 60 s, plus 20 %, plus the grace.
+	if s.Sleep == nil || s.LateAt == nil || s.LateAt.Sub(s.CreatedAt) != 72*time.Second+models.SessionLateGrace {
+		t.Fatalf("at hello: %+v late at %v", s.Sleep, s.LateAt)
+	}
+
+	// A plain check-in pushes it on by the same schedule.
+	before := *r.sessions.rows[0].LateAt
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID()); err != nil {
+		t.Fatal(err)
+	}
+	if !r.sessions.rows[0].LateAt.After(before) && !r.sessions.rows[0].LateAt.Equal(before) {
+		t.Fatal("a check-in did not move late_at")
+	}
+
+	// A sleep_update: an hour now.
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.SleepUpdateItem{T: protocol.ItemSleepUpdate, Interval: 3_600_000}); err != nil {
+		t.Fatal(err)
+	}
+	s = r.sessions.rows[0]
+	if s.Sleep.Interval != 3_600_000 || s.LateAt.Sub(*s.LastSeenAt) != time.Hour+models.SessionLateGrace {
+		t.Fatalf("after the update: %+v, late %v after the check-in", s.Sleep, s.LateAt.Sub(*s.LastSeenAt))
+	}
+
+	// A bad one is refused, and changes nothing.
+	reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.SleepUpdateItem{T: protocol.ItemSleepUpdate, Interval: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var e protocol.ErrItem
+	if msg := r.openUnder(t, sid, r.keys, reply); len(msg.Items) != 1 || protocol.UnmarshalCBOR(msg.Items[0], &e) != nil || e.Code != protocol.ErrItemBadMessage {
+		t.Fatalf("bad update: %+v", msg)
+	}
+	if r.sessions.rows[0].Sleep.Interval != 3_600_000 {
+		t.Fatal("a bad update was taken")
+	}
+
+	// No schedule, no late_at.
+	reply, _ = r.send(t, protocol.NewMessageID(), hello("web02"))
+	sessionID(t, r.open(t, reply))
+	if s := r.sessions.rows[1]; s.Sleep != nil || s.LateAt != nil {
+		t.Fatalf("without a schedule: %+v %v", s.Sleep, s.LateAt)
 	}
 }
 

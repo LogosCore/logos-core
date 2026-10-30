@@ -39,6 +39,8 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 		{Hello: models.MinionHello{PID: 1, OS: "darwin", Arch: "arm64"}}, // no host, never seen
 		{Hello: models.MinionHello{Host: "mail", PID: 7, OS: "linux", Arch: "amd64", Addrs: []string{"192.168.1.9"}}, LastSeenAt: ago(10 * time.Second)},
 	}
+	soon, past := now.Add(time.Minute), now.Add(-time.Minute)
+	rows[0].LateAt, rows[1].LateAt = &soon, &past
 	for i := range rows {
 		r := &rows[i]
 		r.SessionID, r.OperationID, r.BuildID = uuid.New(), op, uuid.New()
@@ -143,6 +145,8 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 		"pid at least":      {filters: []models.MinionSessionFilter{{Column: "pid", Op: "RANGE", Min: num(21)}}, want: []int64{5}},
 		"seen within 5m":    {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "WITHIN", Seconds: secs(300)}}, want: []int64{1, 4, 7}},
 		"seen over 1h ago":  {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "OLDER_THAN", Seconds: secs(3600)}}, want: []int64{2, 5}},
+		"live":              {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "LIVE"}}, want: []int64{1}},
+		"late":              {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "LATE"}}, want: []int64{2}},
 		"never seen":        {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "NEVER"}}, want: []int64{3, 6}},
 		"seen in a range":   {filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: "RANGE", From: ago(4 * time.Hour), To: ago(time.Hour)}}, want: []int64{2}},
 		"session id":        {filters: []models.MinionSessionFilter{{Column: "sessionId", Op: "EQUALS", Text: rows[3].SessionID.String()}}, want: []int64{4}},
@@ -231,7 +235,7 @@ func TestIntegrationMinionSessionPeers(t *testing.T) {
 	}
 	at := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
 	for i, peer := range []string{"203.0.113.7", "203.0.113.7", "198.51.100.2", ""} {
-		if err := repo.CheckIn(ctx, sid, at(i+1), peer); err != nil {
+		if err := repo.CheckIn(ctx, sid, MinionSessionCheckIn{At: at(i + 1), Peer: peer}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -253,7 +257,7 @@ func TestIntegrationMinionSessionPeers(t *testing.T) {
 
 	// Capped, the oldest dropped.
 	for i := range models.MaxSessionPeers + 1 {
-		if err := repo.CheckIn(ctx, sid, at(10+i), fmt.Sprintf("10.9.0.%d", i)); err != nil {
+		if err := repo.CheckIn(ctx, sid, MinionSessionCheckIn{At: at(10 + i), Peer: fmt.Sprintf("10.9.0.%d", i)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -424,5 +428,37 @@ func TestIntegrationMinionSessionReservations(t *testing.T) {
 	}
 	if _, err := repo.FindBySessionID(ctx, ids[2]); !IsNotFound(err) {
 		t.Fatal("the operation's reservation stayed")
+	}
+}
+
+// A check-in stores a schedule and late_at, with a peer address (the
+// pipeline) or without; a claim whose hello says none drops them.
+func TestIntegrationMinionSessionSchedule(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	op, sid := uuid.New(), uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	if err := repo.Insert(ctx, &models.MinionSession{SessionID: sid, OperationID: op, Number: 1, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	sleep := &models.MinionSessionSleep{Interval: 60_000, Jitter: 20}
+	for _, peer := range []string{"203.0.113.7", ""} {
+		late := sleep.LateAtFrom(now)
+		if err := repo.CheckIn(ctx, sid, MinionSessionCheckIn{At: now, Peer: peer, Sleep: sleep, LateAt: &late}); err != nil {
+			t.Fatal(err)
+		}
+		s, _ := repo.FindBySessionID(ctx, sid)
+		if s.Sleep == nil || *s.Sleep != *sleep || s.LateAt == nil || !s.LateAt.Equal(late) {
+			t.Fatalf("peer %q: %+v late %v", peer, s.Sleep, s.LateAt)
+		}
+		sleep = &models.MinionSessionSleep{Interval: 3_600_000}
+	}
+
+	if err := repo.Claim(ctx, sid, MinionSessionClaim{At: now, BuildID: uuid.New()}); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := repo.FindBySessionID(ctx, sid); s.Sleep != nil || s.LateAt != nil {
+		t.Fatalf("after a claim without one: %+v %v", s.Sleep, s.LateAt)
 	}
 }

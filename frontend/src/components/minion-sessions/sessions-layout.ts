@@ -84,7 +84,7 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.os },
   { id: "arch", label: "Arch", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.6), value: (s) => s.arch },
   { id: "version", label: "Minion version", kind: "enum", sortable: true, initialDirection: "DESC", width: fr(0.7), value: (s) => s.version },
-  { id: "lastSeen", label: "Last seen", kind: "time", sortable: true, initialDirection: "DESC", width: fr(0.9), value: (s) => s.lastSeenAt },
+  { id: "lastSeen", label: "Last seen", kind: "time", sortable: true, initialDirection: "DESC", width: fr(0.9), value: (s) => [s.lastSeenAt, s.lateAt] },
   { id: "opened", label: "Opened", kind: "time", sortable: true, initialDirection: "DESC", width: fr(0.9), value: (s) => s.createdAt },
   { id: "build", label: "Build", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.moduleName },
   { id: "target", label: "Target", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.8), value: (s) => s.target },
@@ -236,7 +236,7 @@ export const FILTER_OPS: Record<SessionColumnKind, MinionSessionFilterOp[]> = {
   enum: ["IN", "NOT_IN"],
   bool: ["IN", "NOT_IN"],
   number: ["RANGE"],
-  time: ["WITHIN", "OLDER_THAN", "NEVER", "RANGE"],
+  time: ["WITHIN", "OLDER_THAN", "NEVER", "RANGE", "LIVE", "LATE"],
   id: ["EQUALS"],
 }
 
@@ -277,6 +277,10 @@ export function describeFilter(f: SessionFilter): string {
       return `over ${formatSeconds(f.seconds ?? 0)} ago`
     case "NEVER":
       return col?.id === "lastSeen" ? "never (no check-in yet)" : "never"
+    case "LIVE":
+      return "on time"
+    case "LATE":
+      return "late"
     case "RANGE":
       if (col?.kind === "time") {
         const at = (t: string) => new Date(t).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
@@ -300,7 +304,13 @@ export function enumLabel(column: SessionColumnId, value: string): string {
 
 /** Whether a filter changes with the clock (so the list goes stale without events). */
 export function isClockFilter(f: SessionFilter): boolean {
-  return f.op === "WITHIN" || f.op === "OLDER_THAN"
+  return f.op === "WITHIN" || f.op === "OLDER_THAN" || f.op === "LIVE" || f.op === "LATE"
+}
+
+/** Where a session stands by its schedule: on time, late, or unknown (it never said one). */
+export function lateness(s: Pick<MinionSessionFieldsFragment, "lateAt">, now: number): "live" | "late" | null {
+  if (!s.lateAt) return null
+  return now < Date.parse(s.lateAt) ? "live" : "late"
 }
 
 /**

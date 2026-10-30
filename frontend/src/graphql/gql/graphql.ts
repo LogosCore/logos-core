@@ -642,6 +642,7 @@ export type MinionSession = {
   id: Scalars['ID']['output'];
   integrity?: Maybe<Scalars['String']['output']>;
   lastSeenAt?: Maybe<Scalars['String']['output']>;
+  lateAt?: Maybe<Scalars['String']['output']>;
   moduleName: Scalars['String']['output'];
   number: Scalars['Int']['output'];
   operationId: Scalars['ID']['output'];
@@ -654,6 +655,8 @@ export type MinionSession = {
   proc?: Maybe<Scalars['String']['output']>;
   restartCount: Scalars['Int']['output'];
   restarts: Array<MinionSessionRestart>;
+  sleepInterval?: Maybe<Scalars['Int']['output']>;
+  sleepJitter?: Maybe<Scalars['Int']['output']>;
   staged: Scalars['Boolean']['output'];
   state: Scalars['String']['output'];
   target: Scalars['String']['output'];
@@ -709,6 +712,8 @@ export type MinionSessionFilterOp =
   | 'EMPTY'
   | 'EQUALS'
   | 'IN'
+  | 'LATE'
+  | 'LIVE'
   | 'NEVER'
   | 'NOT_CONTAINS'
   | 'NOT_EMPTY'
@@ -3382,7 +3387,7 @@ export type HostChangedSubscriptionVariables = Exact<{
 
 export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
 
-export type MinionSessionFieldsFragment = { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> };
+export type MinionSessionFieldsFragment = { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> };
 
 export type MinionSessionsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3394,14 +3399,14 @@ export type MinionSessionsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MinionSessionChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null } };
+export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null } };
 
 export type MinionSessionValuesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3431,14 +3436,14 @@ export type SetMinionSessionAddressMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
+export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
 
 export type MinionSessionQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionQuery = { minionSession?: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null };
+export type MinionSessionQuery = { minionSession?: { id: string, state: string, number: number, operationId: string, buildId: string, buildDescription: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -4737,6 +4742,9 @@ export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
   addrs
   address
   addressPicked
+  sleepInterval
+  sleepJitter
+  lateAt
   persisted
   restartCount
   restarts {
@@ -7382,6 +7390,9 @@ export const MinionSessionsDocument = new TypedDocumentString(`
   addrs
   address
   addressPicked
+  sleepInterval
+  sleepJitter
+  lateAt
   persisted
   restartCount
   restarts {
@@ -7435,6 +7446,9 @@ export const MinionSessionChangedDocument = new TypedDocumentString(`
   addrs
   address
   addressPicked
+  sleepInterval
+  sleepJitter
+  lateAt
   persisted
   restartCount
   restarts {
@@ -7538,6 +7552,9 @@ export const SetMinionSessionAddressDocument = new TypedDocumentString(`
   addrs
   address
   addressPicked
+  sleepInterval
+  sleepJitter
+  lateAt
   persisted
   restartCount
   restarts {
@@ -7586,6 +7603,9 @@ export const MinionSessionDocument = new TypedDocumentString(`
   addrs
   address
   addressPicked
+  sleepInterval
+  sleepJitter
+  lateAt
   persisted
   restartCount
   restarts {

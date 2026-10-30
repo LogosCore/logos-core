@@ -130,6 +130,10 @@ func columnFilter(f models.MinionSessionFilter, now time.Time) bson.M {
 		return bson.M{field: bson.M{"$lt": now.Add(-time.Duration(*f.Seconds) * time.Second)}}
 	case models.SessionFilterNever:
 		return bson.M{field: nil}
+	case models.SessionFilterLive:
+		return bson.M{"late_at": bson.M{"$gt": now}}
+	case models.SessionFilterLate:
+		return bson.M{"late_at": bson.M{"$lte": now}}
 	}
 	// Validate refuses anything else.
 	return bson.M{"_id": nil}

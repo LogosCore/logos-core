@@ -30,10 +30,11 @@ type IMinionSessionRepository interface {
 	Insert(ctx context.Context, s *models.MinionSession) error
 	// FindBySessionID returns one session; IsNotFound on a miss.
 	FindBySessionID(ctx context.Context, sessionID uuid.UUID) (*models.MinionSession, error)
-	// CheckIn records a message under the session id: the time, the end of
-	// the wait for the first check-in, and where it came from (peer, an IP
-	// address; "" for unknown) in the session's external addresses.
-	CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time, peer string) error
+	// CheckIn records a message under the session id (MinionSessionCheckIn):
+	// the time, the end of the wait for the first check-in, where it came
+	// from in the session's external addresses, and when the session turns
+	// late.
+	CheckIn(ctx context.Context, sessionID uuid.UUID, c MinionSessionCheckIn) error
 	// SetHello replaces what the session's hello said (a rehello), with the
 	// address the session shows now.
 	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error
@@ -65,6 +66,7 @@ func NewMinionSessionRepository(db database.Database) IMinionSessionRepository {
 		{Key: []string{"session_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "number"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "-created_at", "-_id"}},
+		{Key: []string{"operation_id", "late_at"}},
 		// A session without purge_at (checked in, open) stays.
 		{Key: []string{"purge_at"}, IndexOptions: new(options.IndexOptions).SetExpireAfterSeconds(0)},
 	})
@@ -105,51 +107,71 @@ func (r *minionSessionRepository) FindBySessionID(ctx context.Context, sessionID
 	return &s, nil
 }
 
-func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, at time.Time, peer string) error {
-	if peer == "" {
-		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
-			bson.M{"$set": bson.M{"last_seen_at": at}, "$unset": bson.M{"purge_at": ""}})
-	}
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(at, peer))
+// MinionSessionCheckIn is what a check-in records.
+type MinionSessionCheckIn struct {
+	At time.Time
+	// Peer is the IP address it came from; "" for unknown.
+	Peer string
+	// Sleep is a schedule the message said (a sleep_update, a rehello); nil
+	// leaves the session's. LateAt is when the session turns late from now;
+	// nil leaves it (no schedule known).
+	Sleep  *models.MinionSessionSleep
+	LateAt *time.Time
 }
 
-// checkInPipeline is CheckIn's update with a peer address, in one write:
+func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, c MinionSessionCheckIn) error {
+	set := bson.M{"last_seen_at": c.At}
+	if c.Sleep != nil {
+		set["sleep"] = c.Sleep
+	}
+	if c.LateAt != nil {
+		set["late_at"] = *c.LateAt
+	}
+	if c.Peer == "" {
+		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": set, "$unset": bson.M{"purge_at": ""}})
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(c.At, c.Peer, set))
+}
+
+// checkInPipeline is CheckIn's update with a peer address, in one write,
+// with the check-in's other fields (set):
 //
 //	old   = the peers entry for peer, if any
 //	peers = slice(sort(peers without it + {peer, old.first_seen ?? at, at,
 //	        old.count+1}, by last_seen desc), MaxSessionPeers)
 //
 // The address goes in through $literal, as a client's value must.
-func checkInPipeline(at time.Time, peer string) bson.A {
+func checkInPipeline(at time.Time, peer string, set bson.M) bson.A {
 	lit := bson.M{"$literal": peer}
 	byAddress := func(op string) bson.M {
 		return bson.M{"$filter": bson.M{"input": "$$cur", "cond": bson.M{op: bson.A{"$$this.address", lit}}}}
 	}
-	return bson.A{
-		bson.M{"$set": bson.M{
-			"last_seen_at": at,
-			"peer_address": lit,
-			"peers": bson.M{"$let": bson.M{
-				"vars": bson.M{"cur": bson.M{"$ifNull": bson.A{"$peers", bson.A{}}}},
-				"in": bson.M{"$let": bson.M{
-					"vars": bson.M{"old": bson.M{"$first": byAddress("$eq")}, "rest": byAddress("$ne")},
-					"in": bson.M{"$slice": bson.A{
-						bson.M{"$sortArray": bson.M{
-							"input": bson.M{"$concatArrays": bson.A{"$$rest", bson.A{bson.M{
-								"address":    lit,
-								"first_seen": bson.M{"$ifNull": bson.A{"$$old.first_seen", at}},
-								"last_seen":  at,
-								"count":      bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$$old.count", 0}}, 1}},
-							}}}},
-							"sortBy": bson.M{"last_seen": -1},
-						}},
-						models.MaxSessionPeers,
+	stage := bson.M{
+		"peer_address": lit,
+		"peers": bson.M{"$let": bson.M{
+			"vars": bson.M{"cur": bson.M{"$ifNull": bson.A{"$peers", bson.A{}}}},
+			"in": bson.M{"$let": bson.M{
+				"vars": bson.M{"old": bson.M{"$first": byAddress("$eq")}, "rest": byAddress("$ne")},
+				"in": bson.M{"$slice": bson.A{
+					bson.M{"$sortArray": bson.M{
+						"input": bson.M{"$concatArrays": bson.A{"$$rest", bson.A{bson.M{
+							"address":    lit,
+							"first_seen": bson.M{"$ifNull": bson.A{"$$old.first_seen", at}},
+							"last_seen":  at,
+							"count":      bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$$old.count", 0}}, 1}},
+						}}}},
+						"sortBy": bson.M{"last_seen": -1},
 					}},
+					models.MaxSessionPeers,
 				}},
 			}},
 		}},
-		bson.M{"$unset": "purge_at"},
 	}
+	// The check-in's own fields: values, not field paths.
+	for k, v := range set {
+		stage[k] = bson.M{"$literal": v}
+	}
+	return bson.A{bson.M{"$set": stage}, bson.M{"$unset": "purge_at"}}
 }
 
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
@@ -259,6 +281,9 @@ type MinionSessionClaim struct {
 	Hello                                          models.MinionHello
 	Address                                        string
 	AddressPicked                                  bool
+	// Sleep is the schedule the claim's hello says; nil drops the earlier
+	// process's (and its late_at) until the new one says one.
+	Sleep *models.MinionSessionSleep
 }
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {
@@ -293,5 +318,16 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 		"platform":          lit(c.Platform),
 		"staged":            c.Staged,
 		"persisted":         true,
+		"sleep":             sleepOrRemove(c.Sleep),
+		"late_at":           "$$REMOVE", // set again by the claim's check-in
 	}}})
+}
+
+// sleepOrRemove is a schedule for a pipeline $set, or the removal of the
+// field for none.
+func sleepOrRemove(s *models.MinionSessionSleep) any {
+	if s == nil {
+		return "$$REMOVE"
+	}
+	return bson.M{"$literal": s}
 }

@@ -68,6 +68,14 @@ type MinionSession {
   # most 32; restartCount counts them all.
   restarts: [MinionSessionRestart!]!
   restartCount: Int!
+  # The check-in schedule the minion last said (its hello's, or a
+  # sleep_update): milliseconds between check-ins, and the jitter in percent.
+  # null when it never said one.
+  sleepInterval: Int
+  sleepJitter: Int
+  # When the session turns late: its next check-in overdue by that schedule,
+  # with a 30 s grace. null without a schedule.
+  lateAt: String
   # The latest message under the session id; null before the first check-in.
   lastSeenAt: String
 }
@@ -109,7 +117,9 @@ type MinionSessionConnection {
 #   platform) and staged ("true" / "false"): IN, NOT_IN (values)
 #   numbers (number, pid): RANGE (min, max; either may be left out)
 #   times (lastSeen, opened): WITHIN or OLDER_THAN (seconds before now),
-#   NEVER (no value: lastSeen before the first check-in), RANGE (from, to)
+#   NEVER (no value: lastSeen before the first check-in), RANGE (from, to);
+#   lastSeen also LIVE (on time by its schedule) and LATE (a check-in
+#   overdue): a session whose minion never said its schedule is neither
 #   ids (sessionId, buildId): EQUALS (text, a whole UUID)
 # A missing value is empty: NOT_IN and NOT_CONTAINS keep it.
 enum MinionSessionFilterOp {
@@ -124,6 +134,8 @@ enum MinionSessionFilterOp {
   OLDER_THAN
   NEVER
   EQUALS
+  LIVE
+  LATE
 }
 
 # One column filter. column is a column id: number, sessionId, addrs, peer

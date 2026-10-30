@@ -25,6 +25,9 @@ export const MinionSessionFields = graphql(`
     addrs
     address
     addressPicked
+    sleepInterval
+    sleepJitter
+    lateAt
     persisted
     restartCount
     restarts {

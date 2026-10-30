@@ -24,6 +24,8 @@ func TestMinionSessionFilterValidate(t *testing.T) {
 		"within":              {MinionSessionFilter{Column: "lastSeen", Op: "WITHIN", Seconds: &secs}, true},
 		"within 0":            {MinionSessionFilter{Column: "lastSeen", Op: "WITHIN", Seconds: &zero}, false},
 		"never":               {MinionSessionFilter{Column: "lastSeen", Op: "NEVER"}, true},
+		"late":                {MinionSessionFilter{Column: "lastSeen", Op: "LATE"}, true},
+		"late of opened":      {MinionSessionFilter{Column: "opened", Op: "LATE"}, false},
 		"id equals":           {MinionSessionFilter{Column: "buildId", Op: "EQUALS", Text: uuid.NewString()}, true},
 		"id equals not an id": {MinionSessionFilter{Column: "buildId", Op: "EQUALS", Text: "abc"}, false},
 		"unknown column":      {MinionSessionFilter{Column: "nope", Op: "EMPTY"}, false},

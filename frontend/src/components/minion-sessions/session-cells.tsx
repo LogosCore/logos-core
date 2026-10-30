@@ -7,7 +7,8 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute, relativeTime } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
-import { shownAddress, type SessionColumnId } from "./sessions-layout"
+import { cn } from "@/lib/utils"
+import { lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
 // hover where a cell may cut it.
@@ -50,6 +51,25 @@ function Ago({ at, now }: { at: string; now: number }) {
   const diff = now - Date.parse(at)
   if (diff >= DAY) return <FormattedDateTimeText date={at} />
   return <>{diff < HOUR ? relativeTime(at, new Date(now)) : `${Math.floor(diff / HOUR)}h ago`}</>
+}
+
+/** The schedule and where the session stands by it: "Late: every 60s ± 20%, due 3m ago". */
+function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late", now: number): string {
+  const every = s.sleepInterval != null ? `every ${formatInterval(s.sleepInterval)}${s.sleepJitter ? ` ± ${s.sleepJitter}%` : ""}` : ""
+  const due = Date.parse(s.lateAt!) - now
+  const when = due > 0 ? `late in ${formatInterval(due)}` : `due ${formatInterval(-due)} ago`
+  return `${state === "live" ? "On time" : "Late"}: ${[every, when].filter(Boolean).join(", ")}`
+}
+
+/** Milliseconds as the schedule says them: "800ms", "60s", "5m", "1h 30m". */
+function formatInterval(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const s = Math.round(ms / 1000)
+  if (s < 120) return `${s}s`
+  const m = Math.round(s / 60)
+  if (m < 120) return `${m}m`
+  const h = Math.floor(m / 60)
+  return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
 }
 
 /** When an external address was last seen, and how many messages came from it. */
@@ -122,17 +142,30 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return text(s.arch, "truncate font-mono")
     case "version":
       return text(s.version, "truncate font-mono")
-    case "lastSeen":
+    case "lastSeen": {
+      // Green while on time by its schedule, yellow once late; plain when
+      // the minion never said its schedule.
+      const state = lateness(s, ctx.now)
       return (
         <div
-          className="truncate text-muted-foreground"
-          title={[s.lastSeenAt && `Last seen ${formatAbsolute(s.lastSeenAt)}`, `Opened ${formatAbsolute(s.createdAt)}`]
+          className={cn(
+            "truncate",
+            state === "live" && "text-emerald-600 dark:text-emerald-400",
+            state === "late" && "text-amber-600 dark:text-amber-400",
+            state === null && "text-muted-foreground",
+          )}
+          title={[
+            state && scheduleNote(s, state, ctx.now),
+            s.lastSeenAt && `Last seen ${formatAbsolute(s.lastSeenAt)}`,
+            `Opened ${formatAbsolute(s.createdAt)}`,
+          ]
             .filter(Boolean)
             .join("\n")}
         >
           {s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
         </div>
       )
+    }
     case "opened":
       return (
         <div className="truncate text-muted-foreground" title={`Opened ${formatAbsolute(s.createdAt)}`}>
