@@ -249,13 +249,31 @@
 }
 
 /* On Fire: flame text, red at the foot to yellow at the tips, flickering
- * out of step from column to column. Deeper flames on white, brighter ones
- * on dark. */
+ * out of step from column to column, over a pixel fire (SessionFire).
+ * Deeper flames on white, brighter ones on dark. */
 .mark-fx-on-fire {
   --fx-icon: #e65c00;
   --fx-ink: linear-gradient(0deg, #b91c00 0%, #e04800 30%, #f07800 55%, #d99000 75%, #e04800 100%);
   --fx-ink-size: 100% 300%;
   --fx-ink-animation: mark-fx-flicker 1.6s ease-in-out infinite alternate;
+  /* The fire goes under the cells, but not under the row's background. */
+  isolation: isolate;
+}
+/* The pixel fire: the canvas fills the row behind the text, its few pixels
+ * scaled up crisp. Faint enough for the text to read over it. */
+.mark-fx-fire {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  opacity: 0.35;
+}
+.dark .mark-fx-fire {
+  opacity: 0.45;
 }
 .dark .mark-fx-on-fire {
   --fx-icon: #ff8a00;

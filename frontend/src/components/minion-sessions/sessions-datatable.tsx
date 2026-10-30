@@ -89,6 +89,7 @@ import {
 } from "./session-selection"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
+import { SessionFire } from "./session-fire"
 import { SessionFilterEditor } from "./session-filter-editor"
 import { SessionDescriptionDialog } from "./session-description-dialog"
 import { SessionMarkDialog, type SessionMarkTarget } from "./session-mark-dialog"
@@ -444,6 +445,8 @@ export function SessionsDatatable({
                         </div>
                       ))}
                       <div className="justify-self-end">{menuButton}</div>
+                      {/* Positioned behind the cells, it takes no place in the grid. */}
+                      {s.mark?.color === "on-fire" && <SessionFire />}
                     </>
                   )}
                 </ContextMenuRow>
