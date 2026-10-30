@@ -221,14 +221,3 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       )
   }
 }
-
-/** The fire burning along an On Fire row (session-mark-styles.css: .mark-fx-fire). */
-export function SessionFire() {
-  return (
-    <div aria-hidden className="mark-fx-fire">
-      {Array.from({ length: 40 }, (_, i) => (
-        <span key={i} />
-      ))}
-    </div>
-  )
-}
