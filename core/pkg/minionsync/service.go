@@ -251,6 +251,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	purge := now.Add(models.MinionSessionCheckInWindow + models.MinionSessionTombstone)
 	session := &models.MinionSession{
 		SessionID: id, OperationID: b.OperationID, BuildID: b.BuildID, BuildDescription: b.Description, Persisted: persisted,
+		Description: b.Description, DescriptionSet: true,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.Addrs),
 		CreatedAt: now, PurgeAt: &purge,

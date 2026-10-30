@@ -31,6 +31,7 @@ import {
   ListRestartIcon,
   ListChecksIcon,
   LoaderIcon,
+  PencilIcon,
   PinIcon,
   XIcon,
 } from "lucide-react"
@@ -86,6 +87,7 @@ import {
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { SessionCell } from "./session-cells"
 import { SessionFilterEditor } from "./session-filter-editor"
+import { SessionDescriptionDialog } from "./session-description-dialog"
 import {
   DEFAULT_SESSIONS_LAYOUT,
   addressMatcher,
@@ -159,6 +161,8 @@ export function SessionsDatatable({
   // minion's seconds, and turns late on time.
   const now = useNow(1_000)
   const [filterTarget, setFilterTarget] = useState<FilterTarget | null>(null)
+  // The session whose description is being edited.
+  const [describing, setDescribing] = useState<MinionSessionFieldsFragment | null>(null)
   // The column a right click landed on; null: the header past the columns.
   const [menuColumn, setMenuColumn] = useState<SessionColumnId | null>(null)
   const cells = useRef(new Map<SessionColumnId, HTMLElement>())
@@ -379,6 +383,7 @@ export function SessionsDatatable({
                       canWrite={canWrite}
                       persistable={persistable(s)}
                       onSelect={() => setSelection(toggleSelected(selection, order, s.id, false))}
+                      onEditDescription={() => setDescribing(s)}
                       selected={pickedSet.has(s.id)}
                     />
                   }
@@ -408,6 +413,7 @@ export function SessionsDatatable({
         )}
       </div>
 
+      <SessionDescriptionDialog session={describing} onClose={() => setDescribing(null)} />
       <Popover open={filterTarget !== null} onOpenChange={(open) => !open && setFilterTarget(null)}>
         <PopoverContent anchor={filterTarget?.anchor} align="start" className="w-72">
           {filterTarget && filterColumn && (
@@ -750,10 +756,13 @@ function SessionMenu({
   persistable,
   onSelect,
   selected,
+  onEditDescription,
 }: {
   session: MinionSessionFieldsFragment
   canWrite: boolean
   persistable: boolean
+  /** Opens the description's editor. */
+  onEditDescription: () => void
   /** Picks the row for bulk actions (or unpicks it). */
   onSelect: () => void
   selected: boolean
@@ -772,6 +781,10 @@ function SessionMenu({
           <ContextMenuItem onClick={onSelect}>
             <ListChecksIcon />
             {selected ? "Unselect" : "Select"}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={onEditDescription}>
+            <PencilIcon />
+            Edit description…
           </ContextMenuItem>
           <ContextMenuSeparator />
         </>

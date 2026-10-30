@@ -57,6 +57,12 @@ type IMinionSessionRepository interface {
 	// many changed.
 	SetArchivedMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, archived bool) (int64, error)
 	SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error)
+	// SetDescription replaces a session's description; IsNotFound when
+	// there is none.
+	SetDescription(ctx context.Context, sessionID uuid.UUID, description string) error
+	// BackfillDescriptions gives sessions from before they had a
+	// description their build's.
+	BackfillDescriptions(ctx context.Context) (int64, error)
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
 	// Claim gives an open session to the process that claimed it: its
@@ -217,7 +223,7 @@ func minionSessionListFilter(operationID uuid.UUID, search string) bson.M {
 	or := bson.A{}
 	for _, field := range []string{
 		"hello.host", "hello.user", "hello.domain", "hello.proc", "hello.os", "hello.arch", "hello.integrity",
-		"hello.addrs", "hello.version", "build_description", "module_name", "target", "platform", "peers.address",
+		"hello.addrs", "hello.version", "description", "build_description", "module_name", "target", "platform", "peers.address",
 	} {
 		or = append(or, bson.M{field: rx})
 	}
@@ -332,6 +338,27 @@ func (r *minionSessionRepository) SetArchivedMany(ctx context.Context, operation
 
 func (r *minionSessionRepository) SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error) {
 	res, err := r.coll.UpdateAll(ctx, minionSessionFilter(operationID, q, time.Now().UTC()), archiveUpdate(archived))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) SetDescription(ctx context.Context, sessionID uuid.UUID, description string) error {
+	update := bson.M{"$set": bson.M{"description": description, "description_set": true}}
+	if description == "" {
+		update = bson.M{"$set": bson.M{"description_set": true}, "$unset": bson.M{"description": ""}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
+}
+
+// BackfillDescriptions is one update inside Mongo: description from
+// build_description, for sessions that never had one given
+// (description_set): an operator's, even cleared, stays. Idempotent.
+func (r *minionSessionRepository) BackfillDescriptions(ctx context.Context) (int64, error) {
+	res, err := r.coll.UpdateAll(ctx,
+		bson.M{"description_set": bson.M{"$exists": false}, "build_description": bson.M{"$nin": bson.A{nil, ""}}},
+		bson.A{bson.M{"$set": bson.M{"description": "$build_description", "description_set": true}}})
 	if err != nil {
 		return 0, err
 	}

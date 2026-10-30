@@ -464,6 +464,7 @@ type MinionSession struct {
 	OperationID      string                  `json:"operationId"`
 	BuildID          string                  `json:"buildId"`
 	BuildDescription string                  `json:"buildDescription"`
+	Description      string                  `json:"description"`
 	ModuleName       string                  `json:"moduleName"`
 	Target           string                  `json:"target"`
 	Platform         string                  `json:"platform"`

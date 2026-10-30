@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
@@ -32,6 +33,8 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionAddress picks the address a session shows; nil goes
 	// back to core's guess.
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
+	// SetMinionSessionDescription replaces a session's description.
+	SetMinionSessionDescription(ctx context.Context, id string, description string) (*model.MinionSession, error)
 	// SetMinionSessionArchived archives a session or restores it.
 	SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error)
 	// SetMinionSessionsArchived archives or restores many: by ids, or every
@@ -145,6 +148,25 @@ func (r *minionSessionResolver) operatorSession(ctx context.Context, id string) 
 		return nil, err
 	}
 	return s, nil
+}
+
+func (r *minionSessionResolver) SetMinionSessionDescription(ctx context.Context, id string, description string) (*model.MinionSession, error) {
+	s, err := r.operatorSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	description = strings.TrimSpace(description)
+	if utf8.RuneCountInString(description) > models.MaxSessionDescription {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("a description is at most %d characters", models.MaxSessionDescription))
+	}
+	if err := r.sessions.SetDescription(ctx, s.SessionID, description); err != nil {
+		return nil, fmt.Errorf("set the description: %w", err)
+	}
+	s.Description = description
+	r.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(eventbus.MinionSessionEventPayload{
+		SessionID: s.SessionID.String(), OperationID: s.OperationID.String(),
+	}))
+	return toMinionSessionModel(s), nil
 }
 
 func (r *minionSessionResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
@@ -414,7 +436,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	h := s.Hello
 	out := &model.MinionSession{
 		ID: s.SessionID.String(), State: sessionState(s), Archived: s.Archived, Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
-		BuildDescription: s.BuildDescription, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
+		BuildDescription: s.BuildDescription, Description: s.Description, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),
 		Version: strPtr(h.Version), Address: strPtr(s.Address), AddressPicked: s.AddressPicked,

@@ -79,6 +79,7 @@ var MinionSessionColumns = map[string]MinionSessionColumn{
 	"target":           {Field: "target", Kind: SessionColumnEnum, Sortable: true},
 	"platform":         {Field: "platform", Kind: SessionColumnEnum, Sortable: true},
 	"buildDescription": {Field: "build_description", Kind: SessionColumnText, Sortable: true},
+	"description":      {Field: "description", Kind: SessionColumnText, Sortable: true},
 	"buildId":          {Field: "build_id", Kind: SessionColumnID},
 	"staged":           {Field: "staged", Kind: SessionColumnBool, Sortable: true},
 	// Missing for most sessions: false and 0 (the filters count them so).

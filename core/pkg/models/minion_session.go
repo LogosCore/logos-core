@@ -31,9 +31,16 @@ type MinionSession struct {
 	// The build's, copied when the session opens: the build may be deleted
 	// while its minions run.
 	BuildDescription string `bson:"build_description,omitempty" json:"build_description,omitempty"`
-	ModuleName       string `bson:"module_name" json:"module_name"`
-	Target           string `bson:"target" json:"target"`
-	Platform         string `bson:"platform" json:"platform"`
+	// Description is what the session is for, the operators' note: its
+	// build's description when it opens, then theirs to edit
+	// (MaxSessionDescription). A claim keeps it.
+	Description string `bson:"description,omitempty" json:"description,omitempty"`
+	// DescriptionSet marks a description given (at opening, by an
+	// operator, cleared included): the backfill leaves those alone.
+	DescriptionSet bool   `bson:"description_set,omitempty" json:"-"`
+	ModuleName     string `bson:"module_name" json:"module_name"`
+	Target         string `bson:"target" json:"target"`
+	Platform       string `bson:"platform" json:"platform"`
 	// Staged is true for a session opened under a temporary id, false for a
 	// hello straight under the build id.
 	Staged bool `bson:"staged" json:"staged"`
@@ -108,6 +115,10 @@ const MinionSessionClosedOperationDeleted = "operation_deleted"
 func (s *MinionSession) Closed(now time.Time) bool {
 	return s.ClosedAt != nil || (s.LastSeenAt == nil && now.Sub(s.CreatedAt) >= MinionSessionCheckInWindow)
 }
+
+// MaxSessionDescription caps a session's description, in characters, as a
+// build's is.
+const MaxSessionDescription = 500
 
 // MaxSessionRestarts and MaxSessionReplacedKeys cap a session's lists.
 const (

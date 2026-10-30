@@ -21,6 +21,11 @@ func (r *mutationResolver) SetMinionSessionsArchived(ctx context.Context, operat
 	return r.MinionSessionResolver.SetMinionSessionsArchived(ctx, operationID, ids, matching, archived)
 }
 
+// SetMinionSessionDescription is the resolver for the setMinionSessionDescription field.
+func (r *mutationResolver) SetMinionSessionDescription(ctx context.Context, id string, description string) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.SetMinionSessionDescription(ctx, id, description)
+}
+
 // SetMinionSessionAddress is the resolver for the setMinionSessionAddress field.
 func (r *mutationResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionAddress(ctx, id, address)

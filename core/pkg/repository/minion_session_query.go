@@ -198,6 +198,8 @@ func sessionSortValue(s *models.MinionSession, column string) any {
 		return s.Platform
 	case "buildDescription":
 		return str(s.BuildDescription)
+	case "description":
+		return str(s.Description)
 	case "staged":
 		return s.Staged
 	// Stored only when set: missing (nil) otherwise, as Mongo sorts them.

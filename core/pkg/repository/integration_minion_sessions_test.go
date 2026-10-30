@@ -600,3 +600,46 @@ func TestIntegrationMinionSessionArchiveMany(t *testing.T) {
 		t.Fatalf("after restoring: %v", got)
 	}
 }
+
+// A session's description: an operator's replaces it, clearing included, and
+// the backfill fills only sessions that never had one given.
+func TestIntegrationMinionSessionDescription(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionSessionRepository(db)
+	now := time.Now().UTC()
+	op := uuid.New()
+	old, cleared, fresh := uuid.New(), uuid.New(), uuid.New()
+	for i, s := range []*models.MinionSession{
+		{SessionID: old, BuildDescription: "from the build"},
+		{SessionID: cleared, BuildDescription: "from the build"},
+		{SessionID: fresh, BuildDescription: "from the build", Description: "kept", DescriptionSet: true},
+	} {
+		s.OperationID, s.Number, s.CreatedAt = op, int64(i+1), now
+		if err := repo.Insert(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.SetDescription(ctx, cleared, ""); err != nil {
+		t.Fatal(err)
+	}
+	n, err := repo.BackfillDescriptions(ctx)
+	if err != nil || n != 1 {
+		t.Fatalf("backfilled %d: %v", n, err)
+	}
+	for id, want := range map[uuid.UUID]string{old: "from the build", cleared: "", fresh: "kept"} {
+		if s, _ := repo.FindBySessionID(ctx, id); s.Description != want {
+			t.Errorf("%s: %q, want %q", id, s.Description, want)
+		}
+	}
+	if err := repo.SetDescription(ctx, old, "the DC's backup box"); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := repo.FindBySessionID(ctx, old); s.Description != "the DC's backup box" {
+		t.Fatalf("edited: %q", s.Description)
+	}
+	q := MinionSessionQuery{Filters: []models.MinionSessionFilter{{Column: "description", Op: "CONTAINS", Text: "backup"}}, Sort: models.DefaultMinionSessionSort}
+	if n, _ := repo.CountByOperationID(ctx, op, q); n != 1 {
+		t.Fatalf("filter on description: %d", n)
+	}
+}

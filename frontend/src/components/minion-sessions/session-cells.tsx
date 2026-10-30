@@ -192,6 +192,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return <div className="truncate">{platformLabel(s.platform)}</div>
     case "buildDescription":
       return text(s.buildDescription)
+    case "description":
+      return text(s.description)
     case "buildId":
       return text(s.buildId, "truncate font-mono text-xs")
     case "staged":

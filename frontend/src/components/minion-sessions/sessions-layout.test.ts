@@ -154,6 +154,7 @@ describe("live updates", () => {
     operationId: "op",
     buildId: "b",
     buildDescription: "",
+    description: "",
     moduleName: "bob",
     target: "linux-elf",
     platform: "linux/amd64",

@@ -35,6 +35,7 @@ export type SessionColumnId =
   | "target"
   | "platform"
   | "buildDescription"
+  | "description"
   | "buildId"
   | "staged"
   | "persisted"
@@ -89,6 +90,7 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "build", label: "Build", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.moduleName },
   { id: "target", label: "Target", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.8), value: (s) => s.target },
   { id: "platform", label: "Build platform", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.platform },
+  { id: "description", label: "Description", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.description },
   { id: "buildDescription", label: "Build description", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.buildDescription },
   { id: "buildId", label: "Build id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.buildId },
   { id: "sessionId", label: "Session id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.id },
@@ -119,7 +121,7 @@ export interface SessionsLayout {
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
-  columns: ["number", "addrs", "peer", "host", "user", "proc", "os", "lastSeen", "build"],
+  columns: ["number", "addrs", "peer", "host", "user", "proc", "os", "lastSeen", "description", "build"],
   sort: null,
   filters: [],
   split: null,

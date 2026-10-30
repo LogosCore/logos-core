@@ -23,6 +23,9 @@ type MinionSession {
   buildId: ID!
   # The build's description when the session opened.
   buildDescription: String!
+  # What the session is for, the operators' note: the build's description
+  # when it opened, then theirs to edit (setMinionSessionDescription).
+  description: String!
   # The factory kind, target and platform of the build.
   moduleName: String!
   target: String!
@@ -148,7 +151,8 @@ enum MinionSessionFilterOp {
 # One column filter. column is a column id: number, sessionId, addrs, peer
 # (the external addresses), host, user (CONTAINS also matches the integrity
 # level), domain, proc, pid, os, arch, version, lastSeen, opened, build,
-# target, platform, buildDescription, buildId, staged, persisted, restarts.
+# target, platform, buildDescription, description, buildId, staged,
+# persisted, restarts.
 input MinionSessionFilterInput {
   column: String!
   op: MinionSessionFilterOp!
@@ -276,6 +280,11 @@ extend type Mutation {
     matching: MinionSessionMatchInput
     archived: Boolean!
   ): Int!
+    @hasPermission(permission: "operation:member")
+
+  # Replaces a session's description, at most 500 characters; "" clears it.
+  # Needs at least operator; agent API keys are rejected.
+  setMinionSessionDescription(id: ID!, description: String!): MinionSession!
     @hasPermission(permission: "operation:member")
 
   # Picks the address a session shows, one of its addrs, for everyone in the

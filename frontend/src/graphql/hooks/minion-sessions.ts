@@ -20,6 +20,7 @@ import {
   SetMinionSessionAddressDocument,
   SetMinionSessionArchivedDocument,
   SetMinionSessionsArchivedDocument,
+  SetMinionSessionDescriptionDocument,
   type SetMinionSessionsArchivedMutationVariables,
   type MinionSessionFieldsFragment,
   type MinionSessionsLayoutQuery,
@@ -148,7 +149,7 @@ export function useMinionSessionsLayout() {
 type ListData = InfiniteData<MinionSessionsQuery>
 
 // The columns the app's search reads (core's minionSessionListFilter).
-const SEARCHED = ["peer", "host", "user", "domain", "proc", "os", "arch", "addrs", "version", "buildDescription", "build", "target", "platform"] as const
+const SEARCHED = ["peer", "host", "user", "domain", "proc", "os", "arch", "addrs", "version", "description", "buildDescription", "build", "target", "platform"] as const
 
 /**
  * Folds one session change into every cached list. A new session refetches
@@ -249,5 +250,14 @@ export function useSetMinionSessionsArchived() {
   return useMutation({
     mutationFn: (vars: SetMinionSessionsArchivedMutationVariables) => graphqlClient(SetMinionSessionsArchivedDocument, vars),
     onSuccess: () => scheduleRefresh(queryClient, minionSessionKeys.lists()),
+  })
+}
+
+/** Replaces a session's description, for the whole operation. */
+export function useSetMinionSessionDescription() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; description: string }) => graphqlClient(SetMinionSessionDescriptionDocument, vars),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionDescription),
   })
 }

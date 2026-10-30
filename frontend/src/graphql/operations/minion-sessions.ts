@@ -11,6 +11,7 @@ export const MinionSessionFields = graphql(`
     operationId
     buildId
     buildDescription
+    description
     moduleName
     target
     platform
@@ -175,5 +176,13 @@ export const SetMinionSessionsArchivedMutation = graphql(`
     $archived: Boolean!
   ) {
     setMinionSessionsArchived(operationId: $operationId, ids: $ids, matching: $matching, archived: $archived)
+  }
+`)
+
+export const SetMinionSessionDescriptionMutation = graphql(`
+  mutation SetMinionSessionDescription($id: ID!, $description: String!) {
+    setMinionSessionDescription(id: $id, description: $description) {
+      ...MinionSessionFields
+    }
   }
 `)

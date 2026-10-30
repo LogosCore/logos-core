@@ -218,7 +218,8 @@ func newRig(t *testing.T) *rig {
 	_, _ = rand.Read(keys.MACKey)
 	material, _ := json.Marshal(keys)
 	b := &models.Build{BuildID: uuid.New(), OperationID: uuid.New(), ModuleName: "bob", Target: "linux-elf", Platform: "linux/amd64",
-		Crypto: &protocol.BuildCrypto{Suite: protocol.CryptoAES256CBCHMACSHA256, Material: material}}
+		Description: "EU front dry run",
+		Crypto:      &protocol.BuildCrypto{Suite: protocol.CryptoAES256CBCHMACSHA256, Material: material}}
 	priv, err := rsa.GenerateKey(rand.Reader, protocol.StageKeySize)
 	if err != nil {
 		t.Fatal(err)
@@ -421,7 +422,7 @@ func TestHelloUnderTemporaryID(t *testing.T) {
 	var stored protocol.AES256CBCHMACSHA256Material
 	_ = json.Unmarshal(s.Crypto.Material, &stored)
 	if s.SessionID != sid || s.Number != 1 || !s.Staged || s.BuildID != r.build.BuildID || s.OperationID != r.build.OperationID ||
-		s.Target != "linux-elf" || s.Hello.Host != "web01" || s.Hello.PID != 4242 || s.PurgeAt == nil ||
+		s.Target != "linux-elf" || s.Description != "EU front dry run" || !s.DescriptionSet || s.Hello.Host != "web01" || s.Hello.PID != 4242 || s.PurgeAt == nil ||
 		!bytes.Equal(stored.EncKey, keys.EncKey) {
 		t.Fatalf("session %+v", s)
 	}
