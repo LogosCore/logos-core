@@ -313,9 +313,9 @@ extend type Mutation {
     @hasPermission(permission: "operation:member")
 
   # Marks many of an operation's sessions alike, for the caller alone: those
-  # with ids (at most 500), or every one matching (at most 10000). Exactly
-  # one of the two; returns how many. Needs at least viewer; agent API keys
-  # are rejected.
+  # with ids (at most 500), or every one matching (more than 10000 is
+  # refused, not marked in part). Exactly one of the two; returns how many.
+  # Needs at least viewer; agent API keys are rejected.
   setMinionSessionsMark(
     operationId: ID!
     ids: [ID!]

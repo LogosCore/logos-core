@@ -51,28 +51,49 @@ function ramp(count: number, stops: readonly (readonly [number, Rgba])[]): Rgba[
   })
 }
 
-interface Burning {
+// One fire for every On Fire row on screen, not one each: a simulation
+// costs about half a millisecond a frame at a row's width, so a screenful of
+// burning rows took a third of a core. The fire is SPREAD columns wider than
+// the widest row, and each row shows its own window of it, from an offset of
+// its own, so the rows do not burn in step.
+const SPREAD = 512
+
+interface Shared {
   fire: Fire
   image: ImageData
+  /** The fire painted, once a frame, for the rows to copy their windows of. */
+  screen: HTMLCanvasElement
+  /** Whether it was last painted in the dark palette; null: not yet. */
+  dark: boolean | null
 }
 
-const state = new WeakMap<HTMLCanvasElement, Burning>()
+let shared: Shared | null = null
+const fires = new Set<HTMLCanvasElement>()
+const offsets = new WeakMap<HTMLCanvasElement, number>()
+let timer: ReturnType<typeof setInterval> | null = null
 
-function draw(canvas: HTMLCanvasElement) {
-  const ctx = canvas.getContext("2d")
-  const width = canvas.width
-  if (!ctx || width === 0) return
-  let burning = state.get(canvas)
-  if (!burning || burning.fire.width !== width) {
-    // Lit already burning, here and when the row's width changes.
-    burning = { fire: newFire(width), image: ctx.createImageData(width, ROWS) }
-    state.set(canvas, burning)
-  } else {
-    burnFrame(burning.fire)
+/** The shared fire, wide enough for every row on screen; null without one. */
+function sharedFire(): Shared | null {
+  let widest = 0
+  for (const canvas of fires) widest = Math.max(widest, canvas.width)
+  if (widest === 0) return null
+  if (!shared || shared.fire.width < widest + SPREAD) {
+    const width = widest + SPREAD
+    const screen = document.createElement("canvas")
+    screen.width = width
+    screen.height = ROWS
+    // Lit already burning, here and when a row grows past it.
+    shared = { fire: newFire(width), image: new ImageData(width, ROWS), screen, dark: null }
   }
-  const colors = canvas.closest(".dark") ? DARK : LIGHT
-  const { heat } = burning.fire
-  const px = burning.image.data
+  return shared
+}
+
+/** Paints the fire's heats in the rows' theme, onto its screen. */
+function paint(s: Shared) {
+  const dark = !!fires.values().next().value?.closest(".dark")
+  const colors = dark ? DARK : LIGHT
+  const { heat, width } = s.fire
+  const px = s.image.data
   for (let p = 0; p < width * ROWS; p++) {
     const h = heat[p]
     const o = p * 4
@@ -86,26 +107,49 @@ function draw(canvas: HTMLCanvasElement) {
     px[o + 2] = c[2]
     px[o + 3] = c[3]
   }
-  ctx.putImageData(burning.image, 0, 0)
+  s.screen.getContext("2d")?.putImageData(s.image, 0, 0)
+  s.dark = dark
 }
 
-// One timer for every fire on screen, not one per row.
-const fires = new Set<HTMLCanvasElement>()
-let timer: ReturnType<typeof setInterval> | null = null
+/** A row's window of the fire. */
+function show(canvas: HTMLCanvasElement, s: Shared) {
+  const ctx = canvas.getContext("2d")
+  if (!ctx || canvas.width === 0) return
+  ctx.clearRect(0, 0, canvas.width, ROWS)
+  ctx.drawImage(s.screen, offsets.get(canvas) ?? 0, 0, canvas.width, ROWS, 0, 0, canvas.width, ROWS)
+}
+
+/** A frame on: the fire burns, is painted, and every row shows its window. */
+function tick() {
+  const s = sharedFire()
+  if (!s) return
+  burnFrame(s.fire)
+  paint(s)
+  fires.forEach((canvas) => show(canvas, s))
+}
+
+/** Shows the fire as it stands, with no frame on: a row came or resized. */
+function refresh() {
+  const s = sharedFire()
+  if (!s) return
+  if (s.dark === null) paint(s)
+  fires.forEach((canvas) => show(canvas, s))
+}
 
 function burn(canvas: HTMLCanvasElement) {
+  offsets.set(canvas, Math.floor(Math.random() * SPREAD))
   fires.add(canvas)
-  draw(canvas)
-  // Under reduced motion a fire is drawn once and holds still.
+  refresh()
+  // Under reduced motion the fire is shown as it stands and holds still.
   if (timer === null && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    timer = setInterval(() => fires.forEach(draw), 1000 / FPS)
+    timer = setInterval(tick, 1000 / FPS)
   }
   return () => {
     fires.delete(canvas)
-    if (fires.size === 0 && timer !== null) {
-      clearInterval(timer)
-      timer = null
-    }
+    if (fires.size > 0) return
+    if (timer !== null) clearInterval(timer)
+    timer = null
+    shared = null
   }
 }
 
@@ -122,7 +166,7 @@ export function SessionFire() {
       const width = Math.ceil(clientWidth / (clientHeight / ROWS))
       if (canvas.width !== width) {
         canvas.width = width
-        draw(canvas)
+        refresh()
       }
     }
     fit()

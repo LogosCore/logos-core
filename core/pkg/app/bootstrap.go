@@ -437,6 +437,15 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 			l.Info(name+" backfill complete", zap.Int64("rows", n))
 		}
 	}
+
+	// Not a backfill, a sweep: session marks outlive what they mark, as a
+	// closed session leaves by its TTL, unheard, and deleting a user
+	// cascades nothing. Few and small, so once a boot is enough.
+	if n, err := repos.MinionMark.RemoveOrphans(ctx); err != nil {
+		l.Warn("orphaned session marks sweep failed", zap.Error(err))
+	} else if n > 0 {
+		l.Info("orphaned session marks removed", zap.Int64("rows", n))
+	}
 }
 
 // newBuildService stands up minion builds: the build bucket, the signer for

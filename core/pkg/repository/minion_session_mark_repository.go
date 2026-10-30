@@ -9,6 +9,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -24,6 +25,9 @@ type IMinionSessionMarkRepository interface {
 	// ForSessions returns the operator's marks on these sessions, by session.
 	ForSessions(ctx context.Context, userID uuid.UUID, sessionIDs []uuid.UUID) (map[uuid.UUID]models.MinionSessionMark, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
+	// RemoveOrphans removes the marks whose session or operator is gone, and
+	// says how many.
+	RemoveOrphans(ctx context.Context) (int64, error)
 }
 
 type minionSessionMarkRepository struct{ coll database.Collection }
@@ -99,4 +103,39 @@ func (r *minionSessionMarkRepository) ForSessions(ctx context.Context, userID uu
 func (r *minionSessionMarkRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
+}
+
+// RemoveOrphans removes the marks whose session is gone (a closed session
+// leaves by its TTL, which nothing hears) or whose operator is (deleting a
+// user cascades nothing). Marks are only read for sessions on screen, so an
+// orphan shows nowhere; unswept, they would only pile up.
+func (r *minionSessionMarkRepository) RemoveOrphans(ctx context.Context) (int64, error) {
+	exists := func(from, field string) bson.M {
+		return bson.M{"$lookup": bson.M{"from": from, "localField": field, "foreignField": field, "as": from,
+			"pipeline": bson.A{bson.M{"$project": bson.M{"_id": 1}}, bson.M{"$limit": 1}}}}
+	}
+	var gone []struct {
+		ID primitive.ObjectID `bson:"_id"`
+	}
+	err := r.coll.Aggregate(ctx, bson.A{
+		exists(minionSessionCollection, "session_id"),
+		exists(userCollection, "user_id"),
+		bson.M{"$match": bson.M{"$or": bson.A{
+			bson.M{minionSessionCollection: bson.M{"$size": 0}},
+			bson.M{userCollection: bson.M{"$size": 0}},
+		}}},
+		bson.M{"$project": bson.M{"_id": 1}},
+	}).All(&gone)
+	if err != nil || len(gone) == 0 {
+		return 0, err
+	}
+	ids := make(bson.A, len(gone))
+	for i, g := range gone {
+		ids[i] = g.ID
+	}
+	res, err := r.coll.RemoveAll(ctx, bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return 0, err
+	}
+	return res.DeletedCount, nil
 }

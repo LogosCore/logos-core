@@ -708,4 +708,29 @@ func TestIntegrationMinionSessionMarks(t *testing.T) {
 	if left, _ := marks.ForSessions(ctx, alice, ids); len(left) != 0 {
 		t.Fatal("marks outlived their operation")
 	}
+
+	// Orphans: a mark on a session gone (purged by its TTL), and one by an
+	// operator gone (bob has no user row here); alice's on a live session
+	// stays.
+	if _, err := db.Collection(userCollection).InsertOne(ctx, bson.M{"user_id": alice}); err != nil {
+		t.Fatal(err)
+	}
+	gone := uuid.New()
+	for _, m := range []struct {
+		user    uuid.UUID
+		session uuid.UUID
+	}{{alice, ids[0]}, {alice, gone}, {bob, ids[0]}} {
+		if err := marks.SetMany(ctx, m.user, op, []uuid.UUID{m.session}, "red-soft", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := marks.RemoveOrphans(ctx); err != nil || n != 2 {
+		t.Fatalf("orphans removed: %d, %v", n, err)
+	}
+	if left, _ := marks.ForSessions(ctx, alice, []uuid.UUID{ids[0], gone}); len(left) != 1 || left[ids[0]].Color != "red-soft" {
+		t.Fatalf("alice's marks after the sweep: %+v", left)
+	}
+	if n, _ := marks.RemoveOrphans(ctx); n != 0 {
+		t.Fatalf("a second sweep removed %d", n)
+	}
 }

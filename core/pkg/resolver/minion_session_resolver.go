@@ -243,7 +243,9 @@ func (r *minionSessionResolver) SetMinionSessionMark(ctx context.Context, id str
 	return r.withMark(ctx, s), nil
 }
 
-// maxMarkMatching caps the sessions one mark by matching reaches.
+// maxMarkMatching caps the sessions one mark by matching reaches: more are
+// refused, not marked in part (marks live apart from the sessions, so a mark
+// by matching writes one per session).
 const maxMarkMatching = 10_000
 
 func (r *minionSessionResolver) SetMinionSessionsMark(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, mark *model.MinionSessionMarkInput) (int, error) {
@@ -263,8 +265,12 @@ func (r *minionSessionResolver) SetMinionSessionsMark(ctx context.Context, opera
 		return 0, err
 	}
 	if q != nil {
-		if targets, err = r.sessions.SessionIDs(ctx, op, *q, maxMarkMatching); err != nil {
+		if targets, err = r.sessions.SessionIDs(ctx, op, *q, maxMarkMatching+1); err != nil {
 			return 0, fmt.Errorf("list the sessions: %w", err)
+		}
+		if len(targets) > maxMarkMatching {
+			return 0, moduleGQLError(ctx, errCodeBadUserInput,
+				fmt.Sprintf("more than %d sessions match: narrow the filters to mark them", maxMarkMatching))
 		}
 	} else if targets, err = r.sessions.OwnSessionIDs(ctx, op, targets); err != nil {
 		return 0, fmt.Errorf("check the sessions: %w", err)

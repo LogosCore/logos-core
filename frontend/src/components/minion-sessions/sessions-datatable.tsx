@@ -288,11 +288,12 @@ export function SessionsDatatable({
                   mark: null,
                   many: true,
                   save: async (mark) => {
-                    await markMany({
+                    const { setMinionSessionsMark: marked } = await markMany({
                       operationId,
                       mark,
                       ...(selection.all ? { matching: { archived, filters: layout.filters } } : { ids: picked }),
                     })
+                    toast.success(`${mark ? "Marked" : "Cleared the marks of"} ${marked} ${marked === 1 ? "session" : "sessions"}`)
                     clearSelection()
                   },
                 })
@@ -826,19 +827,19 @@ function SessionMenu({
       : undefined
   return (
     <>
+      {/* Any member selects: marking many is theirs too (archiving, in the
+          bar, stays an operator's). */}
+      <ContextMenuItem onClick={onSelect}>
+        <ListChecksIcon />
+        {selected ? "Unselect" : "Select"}
+      </ContextMenuItem>
       {canWrite && (
-        <>
-          <ContextMenuItem onClick={onSelect}>
-            <ListChecksIcon />
-            {selected ? "Unselect" : "Select"}
-          </ContextMenuItem>
-          <ContextMenuItem onClick={onEditDescription}>
-            <PencilIcon />
-            Edit description…
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-        </>
+        <ContextMenuItem onClick={onEditDescription}>
+          <PencilIcon />
+          Edit description…
+        </ContextMenuItem>
       )}
+      <ContextMenuSeparator />
       {/* A mark is the caller's own: any member marks. */}
       <ContextMenuItem onClick={onMark}>
         <TagIcon />

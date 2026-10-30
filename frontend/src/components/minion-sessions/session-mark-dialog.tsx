@@ -180,7 +180,7 @@ function Editor({ target, onClose }: { target: SessionMarkTarget; onClose: () =>
       <DialogFooter>
         {hadMark && (
           <Button type="button" variant="ghost" className="sm:mr-auto" disabled={pending} onClick={() => void submit(null)}>
-            Clear mark
+            {target.many ? "Clear marks" : "Clear mark"}
           </Button>
         )}
         <Button type="button" variant="outline" onClick={onClose}>
