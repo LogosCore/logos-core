@@ -367,7 +367,8 @@ export function SessionsDatatable({
                 <ContextMenuRow
                   gridCols=""
                   style={grid}
-                  className={cn(pickedSet.has(s.id) && "bg-muted")}
+                  // While selecting, a drag or shift-click does not select text.
+                  className={cn(selecting && "select-none", pickedSet.has(s.id) && "bg-muted")}
                   // While selecting, a click picks the row (shift: a range).
                   onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
                   menuLabel="Session actions"

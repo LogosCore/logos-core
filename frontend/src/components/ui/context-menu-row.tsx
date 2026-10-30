@@ -75,6 +75,11 @@ export function ContextMenuRow({
             role={onOpen ? "link" : undefined}
             tabIndex={onOpen ? 0 : undefined}
             onClick={onOpen}
+            // Shift-click is the row's (a range, where the row has one), not
+            // the browser's: it would select every word in between.
+            onMouseDown={(e) => {
+              if (onOpen && e.shiftKey) e.preventDefault()
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") onOpen?.(e)
             }}
