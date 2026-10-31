@@ -2,6 +2,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "./index.css"
 import App from "./App.tsx"
+import { warmFontsWhenIdle } from "./lib/font-warmup"
 
 // Point Excalidraw at fonts served from our own origin.
 //
@@ -28,3 +29,7 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 )
+
+// The Cyrillic and full-width fonts, ahead of the first text that needs
+// them: fetched then, they made the whole page blink (lib/font-warmup.ts).
+warmFontsWhenIdle()
