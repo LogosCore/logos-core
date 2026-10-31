@@ -111,7 +111,8 @@ export function CommandBar({
     // without it, opens there.
     const lt = lineTexts(text, commands)
     const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
-    const file = c?.fields.find((f) => f.type === "file" || f.type === "stream")
+    // (A stream needs none: uploaded with curl, the path names it.)
+    const file = c?.fields.find((f) => f.type === "file")
     if (file && !lt.texts.has(file.key)) {
       openForm()
       return
@@ -343,7 +344,7 @@ export function CommandBar({
             const data = await queue.mutateAsync({ sessionId, command: formCommand.id, args: Object.keys(values).length > 0 ? values : null })
             // A stream picked here goes now, as the task waits for it.
             for (const d of Object.values(drafts)) {
-              if (d.kind === "stream" && !d.curl && d.file) startStreamUpload(data.queueMinionTask.id, d.file)
+              if (d.kind === "stream" && d.file) startStreamUpload(data.queueMinionTask.id, d.file)
             }
             onQueued?.(data.queueMinionTask)
             setLine("")

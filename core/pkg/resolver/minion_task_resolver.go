@@ -282,6 +282,14 @@ func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSess
 	}
 	p := params[i]
 	id, ok := wire[p.Key].(string)
+	if p.Type == protocol.FieldStream && !ok {
+		// A stream without a name (uploaded with curl, which says none):
+		// the path's last part.
+		if id, ok = streamNameOf(wire); !ok {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput,
+				p.Key+": no file picked, so the path names the file: end it with the file's name")
+		}
+	}
 	if !ok {
 		return nil, nil
 	}
@@ -310,6 +318,18 @@ func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSess
 	xfer := uuid.New()
 	wire[p.Key] = protocol.FileOffer{Xfer: xfer[:], Name: f.Name, Size: uint64(f.Total), SHA256: f.SHA256}
 	return &models.MinionTaskUpload{FileID: f.FileID, Name: f.Name, Size: f.Total, SHA256: f.SHA256, Xfer: xfer[:]}, nil
+}
+
+// streamNameOf is the name a stream without one takes: the last part of
+// the task's path arg, by either separator (the host may be either kind);
+// false for none, or a path that ends in a separator.
+func streamNameOf(wire map[string]any) (string, bool) {
+	path, _ := wire["path"].(string)
+	name := path[strings.LastIndexAny(path, `/\`)+1:]
+	if name == "" || name == "." || name == ".." || len(name) > 255 {
+		return "", false
+	}
+	return name, true
 }
 
 // answerHelp keeps a help task, answered: it goes in as already started,

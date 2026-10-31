@@ -177,9 +177,10 @@ export type Draft =
   // file: a build file's id; null when not set.
   | { kind: "file"; id: string | null }
   // stream: a file streamed to a minion as it is uploaded (a command's
-  // param): picked in this browser (sent once the task is queued), or
-  // named, for curl; the value is its name.
-  | { kind: "stream"; file: File | null; curl: boolean; name: string }
+  // param): picked in this browser (sent once the task is queued); the value
+  // is its name. None picked: uploaded with curl, and core names it by the
+  // path (name: one typed on a command line).
+  | { kind: "stream"; file: File | null; name: string }
 
 /** One row of a string_map control. */
 export interface MapEntry {
@@ -232,7 +233,7 @@ export function initialDraft(
     return { kind: "file", id: typeof value === "string" && value !== "" ? value : null }
   }
   if (type === "stream") {
-    return { kind: "stream", file: null, curl: false, name: typeof value === "string" ? value : "" }
+    return { kind: "stream", file: null, name: typeof value === "string" ? value : "" }
   }
   if (type === "datetime") {
     return { kind: "text", text: typeof value === "string" ? rfc3339ToLocalInput(value) : "" }
@@ -282,7 +283,7 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
     case "file":
       return { ok: true, value: draft.id }
     case "stream": {
-      const name = draft.curl ? draft.name.trim() : (draft.file?.name ?? "")
+      const name = draft.file?.name ?? draft.name.trim()
       return { ok: true, value: name === "" ? null : name }
     }
     case "list": {

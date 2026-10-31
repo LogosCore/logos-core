@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 import type { ConsoleCommand } from "./command-bar"
 import { StreamFieldControl } from "./stream-field-control"
 import { TaskFilesProvider } from "./task-files"
@@ -67,24 +68,31 @@ function UploadForm({
   const field = command.fields.find((f) => f.type === "file" || f.type === "stream")
   const streams = field?.type === "stream"
   const [file, setFile] = useState<Extract<Draft, { kind: "file" }>>({ kind: "file", id: null })
-  const [stream, setStream] = useState<Extract<Draft, { kind: "stream" }>>({ kind: "stream", file: null, curl: false, name: "" })
-  const chosenName = streams ? (stream.curl ? stream.name.trim() : (stream.file?.name ?? "")) : (files?.files.find((f) => f.id === file.id)?.name ?? "")
+  const [stream, setStream] = useState<Extract<Draft, { kind: "stream" }>>({ kind: "stream", file: null, name: "" })
+  const chosenName = streams ? (stream.file?.name ?? "") : (files?.files.find((f) => f.id === file.id)?.name ?? "")
   // The path as typed; until it is, the folder and the picked file's name.
   const [typed, setTyped] = useState<string | null>(null)
   const path = typed ?? (chosenName ? joinPath(target, chosenName) : target.folder)
+  // A stream with no file picked goes with curl, and its path names it: not
+  // the folder, nor one ending in a separator.
+  const curl = streams && !stream.file
+  const named = !curl || (path.trim() !== target.folder && !/[/\\]$/.test(path.trim()))
+  const ready = (streams || chosenName !== "") && named
   const [overwrite, setOverwrite] = useState(false)
   const [pending, setPending] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const there = (target.names ?? []).some((n) => joinPath(target, n) === path.trim())
 
   const submit = async () => {
-    if (!field || !chosenName || path.trim() === "" || pending) return
+    if (!field || !ready || path.trim() === "" || pending) return
     setPending(true)
     setFailure(null)
     try {
       await onSubmit(
-        { [field.key]: streams ? chosenName : file.id, path: path.trim(), overwrite },
-        streams && !stream.curl && stream.file ? stream.file : undefined,
+        streams
+          ? { ...(stream.file ? { [field.key]: stream.file.name } : {}), path: path.trim(), overwrite }
+          : { [field.key]: file.id, path: path.trim(), overwrite },
+        stream.file ?? undefined,
       )
       onClose()
     } catch (err) {
@@ -135,7 +143,9 @@ function UploadForm({
           disabled={pending}
           onChange={(e) => setTyped(e.target.value)}
         />
-        <span className="text-xs text-muted-foreground">A folder takes the file under its own name.</span>
+        <span className={cn("text-xs", named ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400")}>
+          {curl ? "No file picked: it goes with curl, so the path names the file. Add its name." : "A folder takes the file under its own name."}
+        </span>
       </div>
       <label className="flex items-center gap-2 text-sm">
         <Checkbox checked={overwrite} disabled={pending} onCheckedChange={(on) => setOverwrite(on === true)} />
@@ -151,7 +161,7 @@ function UploadForm({
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={pending || !chosenName || path.trim() === ""}>
+        <Button type="submit" disabled={pending || !ready || path.trim() === ""}>
           {pending ? <Loader2Icon className="animate-spin" /> : <UploadIcon />}
           Upload
         </Button>

@@ -7,16 +7,18 @@ const field = { key: "stream", type: "stream", label: "File", required: true } a
 describe("a stream param", () => {
   it("is the picked file's name, or the name typed for curl", () => {
     const d = initialDraft(field, null)
-    expect(d).toEqual({ kind: "stream", file: null, curl: false, name: "" })
+    expect(d).toEqual({ kind: "stream", file: null, name: "" })
     const picked = { ...d, file: new File(["abc"], "tool.exe") } as typeof d
     expect(checkDraft(field, picked)).toEqual({ ok: true, value: "tool.exe" })
-    expect(checkDraft(field, { kind: "stream", file: null, curl: true, name: " big.iso " })).toEqual({ ok: true, value: "big.iso" })
+    expect(checkDraft(field, { kind: "stream", file: null, name: " big.iso " })).toEqual({ ok: true, value: "big.iso" })
+    // None picked, none named: no value; core names it by the path.
+    expect(checkDraft({ ...field, required: false }, { kind: "stream", file: null, name: "" })).toEqual({ ok: true, value: null })
   })
   it("is a name without a path", () => {
-    const r = checkDraft(field, { kind: "stream", file: null, curl: true, name: "../x" })
+    const r = checkDraft(field, { kind: "stream", file: null, name: "../x" })
     expect(r.ok).toBe(false)
   })
   it("typed on a line, is for curl", () => {
-    expect(draftFromText(field, "big.iso")).toEqual({ kind: "stream", file: null, curl: true, name: "big.iso" })
+    expect(draftFromText(field, "big.iso")).toEqual({ kind: "stream", file: null, name: "big.iso" })
   })
 })
