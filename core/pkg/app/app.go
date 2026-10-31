@@ -23,6 +23,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/logger"
 	"github.com/logoscore/logos-core/core/pkg/mcp"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
+	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
@@ -80,6 +81,7 @@ type Repositories struct {
 	MinionReservation  repository.IMinionSessionReservationRepository
 	MinionMark         repository.IMinionSessionMarkRepository
 	MinionTask         repository.IMinionTaskRepository
+	MinionFile         repository.IMinionFileRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
@@ -143,6 +145,8 @@ type App struct {
 	// builds runs minion builds: build files, builds offered to factory
 	// instances, and the minions they create.
 	builds *builds.Service
+	// minionFiles keeps the files minions send (download_file tasks).
+	minionFiles *minionfiles.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -212,6 +216,10 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	minionFiles, err := newMinionFileService(ctx, e, l, repos, bus)
+	if err != nil {
+		return nil, err
+	}
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
@@ -266,6 +274,7 @@ func NewApp() (*App, error) {
 		moduleLogs:      moduleLogs,
 		endpoints:       endpoints,
 		builds:          buildSvc,
+		minionFiles:     minionFiles,
 	}, nil
 }
 
@@ -363,6 +372,7 @@ func (a *App) startLifecycle() {
 		a.reaper.Start()
 	}
 	a.builds.Start()
+	a.minionFiles.Start()
 }
 
 // stopLifecycle tears down the reaper, RPC server, and broker connection. All
@@ -377,6 +387,9 @@ func (a *App) stopLifecycle() {
 	// Build offers and cancels use the RPC client too.
 	if a.builds != nil {
 		a.builds.Stop()
+	}
+	if a.minionFiles != nil {
+		a.minionFiles.Stop()
 	}
 	// Pushes in flight use the RPC client: cancel and drain them first.
 	if a.moduleMgmt != nil {

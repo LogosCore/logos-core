@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"sort"
@@ -37,6 +38,8 @@ type IMinionTaskResolver interface {
 	// Document is the task's stored document as JSON, for debugging
 	// (minion_task_document.go).
 	Document(ctx context.Context, taskID string) (string, error)
+	// File is a file_download task's file, as far as it came; nil for none.
+	File(ctx context.Context, taskID string) (*model.MinionFile, error)
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -63,12 +66,19 @@ type minionTaskResolver struct {
 	users         repository.IUserRepository
 	operationRepo repository.IOperationRepository
 	bus           eventbus.IEventBus
+	files         TaskFiles
+}
+
+// TaskFiles finds a task's file (minionfiles.Service).
+type TaskFiles interface {
+	File(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
 }
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
-	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus) IMinionTaskResolver {
+	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
+	files TaskFiles) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
-		operationRepo: operationRepo, bus: bus}
+		operationRepo: operationRepo, bus: bus, files: files}
 }
 
 const (
@@ -367,6 +377,27 @@ func (r *minionTaskResolver) Document(ctx context.Context, taskID string) (strin
 		return "", fmt.Errorf("load the task: %w", err)
 	}
 	return documentJSON(d)
+}
+
+func (r *minionTaskResolver) File(ctx context.Context, taskID string) (*model.MinionFile, error) {
+	if r.files == nil {
+		return nil, nil
+	}
+	tid, err := uuid.Parse(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid task ID")
+	}
+	f, err := r.files.File(ctx, tid)
+	if err != nil || f == nil {
+		return nil, err
+	}
+	out := &model.MinionFile{ID: f.FileID.String(), Name: f.Name, Size: int(f.Total), Received: int(f.Received),
+		State: f.State, Err: strPtr(f.Err), CreatedAt: f.CreateAt.UTC().Format(time.RFC3339Nano), DoneAt: taskTime(f.DoneAt)}
+	if len(f.SHA256) > 0 {
+		h := hex.EncodeToString(f.SHA256)
+		out.Sha256 = &h
+	}
+	return out, nil
 }
 
 func (r *minionTaskResolver) Load(ctx context.Context, taskID string) *model.MinionTask {

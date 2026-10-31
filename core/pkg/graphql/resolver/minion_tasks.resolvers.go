@@ -13,6 +13,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
 // Output is the resolver for the output field.
@@ -36,6 +37,15 @@ func (r *minionTaskResolver) OutputUtf8(ctx context.Context, obj *model.MinionTa
 // Data is the resolver for the data field.
 func (r *minionTaskResolver) Data(ctx context.Context, obj *model.MinionTask) (any, error) {
 	return r.MinionTaskResolver.Data(ctx, obj.ID)
+}
+
+// File is the resolver for the file field.
+func (r *minionTaskResolver) File(ctx context.Context, obj *model.MinionTask) (*model.MinionFile, error) {
+	// Only a file_download task has one: no read for the others.
+	if obj.Result == nil || *obj.Result != protocol.ResultFileDownload {
+		return nil, nil
+	}
+	return r.MinionTaskResolver.File(ctx, obj.ID)
 }
 
 // Document is the resolver for the document field.

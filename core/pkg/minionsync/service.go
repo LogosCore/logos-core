@@ -75,7 +75,10 @@ type Service struct {
 	// opens.
 	reservations repository.IMinionSessionReservationRepository
 	// tasks are what operators queue for sessions (tasks.go); nil takes none.
-	tasks  repository.IMinionTaskRepository
+	tasks repository.IMinionTaskRepository
+	// files takes the chunks of files minions send (files.go); nil takes
+	// none.
+	files  Files
 	cache  cache.Cache
 	bus    eventbus.IEventBus
 	logger *zap.Logger
@@ -438,6 +441,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				break
 			}
 			out, err = s.takeAck(ctx, session, raw, i)
+		case protocol.ItemChunk:
+			if s.files == nil {
+				out, err = errItem(protocol.ErrItemUnknownItem, "no files are taken", i)
+				break
+			}
+			out, err = s.takeChunk(ctx, session, raw, i)
 		case protocol.ItemResult:
 			if s.tasks == nil {
 				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)

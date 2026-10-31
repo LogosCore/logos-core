@@ -68,6 +68,7 @@ type operationResolver struct {
 	sessionRepo    repository.IMinionSessionRepository      // needed for cascade delete
 	markRepo       repository.IMinionSessionMarkRepository  // needed for cascade delete
 	minionTaskRepo repository.IMinionTaskRepository         // needed for cascade delete
+	minionFiles    MinionFileCleanup                        // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
 
@@ -151,6 +152,19 @@ func WithMinionSessionRepo(repo repository.IMinionSessionRepository) OperationRe
 func WithMinionSessionMarkRepo(repo repository.IMinionSessionMarkRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.markRepo = repo
+	}
+}
+
+// MinionFileCleanup drops an operation's minion files, bytes and all
+// (minionfiles.Service).
+type MinionFileCleanup interface {
+	DeleteByOperation(ctx context.Context, operationID uuid.UUID) error
+}
+
+// WithMinionFiles adds the minion files for cascade delete.
+func WithMinionFiles(files MinionFileCleanup) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.minionFiles = files
 	}
 }
 
@@ -336,6 +350,11 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.minionTaskRepo != nil {
 		if err := r.minionTaskRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's minion tasks: %w", err)
+		}
+	}
+	if r.minionFiles != nil {
+		if err := r.minionFiles.DeleteByOperation(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's minion files: %w", err)
 		}
 	}
 

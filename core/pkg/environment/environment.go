@@ -96,6 +96,11 @@ type EnvironmentSettings struct {
 	BuildFileMaxSize     int64 // bytes; cap on one uploaded build file
 	BuildArtifactMaxSize int64 // bytes; the max_size factories are given
 
+	// Minion files (contracts/minion-messages.md, File transfers): the files
+	// minions send core, in a bucket of their own.
+	MinionFileBucket  string
+	MinionFileMaxSize int64 // bytes; the largest file a minion may send
+
 	// ChannelSyncMaxSize caps one minion message a channel relays: the sync
 	// request's body, the ciphertext.
 	ChannelSyncMaxSize int64
@@ -190,6 +195,8 @@ func init() {
 	viper.SetDefault("BUILD_BUCKET", "logos-builds")
 	viper.SetDefault("BUILD_TIMEOUT", "30m")
 	viper.SetDefault("BUILD_FILE_MAX_SIZE", int64(64<<20))
+	viper.SetDefault("MINION_FILE_BUCKET", "minion-files")
+	viper.SetDefault("MINION_FILE_MAX_SIZE", int64(2<<30))
 	viper.SetDefault("BUILD_ARTIFACT_MAX_SIZE", int64(256<<20))
 	viper.SetDefault("CHANNEL_SYNC_MAX_SIZE", int64(16<<20))
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
@@ -295,6 +302,8 @@ func init() {
 		BuildStorageEndpoint: firstNonEmpty(viper.GetString("BUILD_STORAGE_ENDPOINT"), viper.GetString("SEAWEEDFS_S3_ENDPOINT")),
 		BuildTimeout:         parseDurationOrFatal("BUILD_TIMEOUT", viper.GetString("BUILD_TIMEOUT")),
 		BuildFileMaxSize:     sizeUpTo("BUILD_FILE_MAX_SIZE", viper.GetInt64("BUILD_FILE_MAX_SIZE"), 1<<30),
+		MinionFileBucket:     viper.GetString("MINION_FILE_BUCKET"),
+		MinionFileMaxSize:    sizeUpTo("MINION_FILE_MAX_SIZE", viper.GetInt64("MINION_FILE_MAX_SIZE"), 64<<30),
 		BuildArtifactMaxSize: sizeUpTo("BUILD_ARTIFACT_MAX_SIZE", viper.GetInt64("BUILD_ARTIFACT_MAX_SIZE"), 1<<30),
 
 		ChannelSyncMaxSize: sizeUpTo("CHANNEL_SYNC_MAX_SIZE", viper.GetInt64("CHANNEL_SYNC_MAX_SIZE"), 1<<30),

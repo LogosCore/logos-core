@@ -17,6 +17,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/events"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
+	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/skills"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -89,6 +90,7 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		MinionReservation:  repository.NewMinionSessionReservationRepository(db),
 		MinionMark:         repository.NewMinionSessionMarkRepository(db),
 		MinionTask:         repository.NewMinionTaskRepository(db),
+		MinionFile:         repository.NewMinionFileRepository(db),
 	}
 
 	// Every repository above declared its indexes as it was built. A failed
@@ -480,4 +482,23 @@ func newBuildService(ctx context.Context, e *environment.EnvironmentSettings, l 
 		builds.Config{Timeout: e.BuildTimeout, FileMaxSize: e.BuildFileMaxSize, ArtifactMaxSize: e.BuildArtifactMaxSize},
 		l.Named("builds"),
 	), nil
+}
+
+// newMinionFileService stands up the files minions send: their bucket and
+// the service that takes their chunks. A store that cannot be reached is
+// fatal, as for the build store.
+func newMinionFileService(ctx context.Context, e *environment.EnvironmentSettings, l *zap.Logger, repos *Repositories,
+	bus eventbus.IEventBus) (*minionfiles.Service, error) {
+	store, err := blob.NewS3Store(ctx, blob.S3Config{
+		Endpoint:  e.SeaweedFSS3Endpoint,
+		AccessKey: e.SeaweedFSS3AccessKey,
+		SecretKey: e.SeaweedFSS3SecretKey,
+		Bucket:    e.MinionFileBucket,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize the minion file store: %w", err)
+	}
+	return minionfiles.NewService(repos.MinionFile, repos.MinionTask, store, bus,
+		minionfiles.Config{MaxSize: e.MinionFileMaxSize, IdleAfter: 24 * time.Hour, SweepEvery: time.Hour},
+		l), nil
 }

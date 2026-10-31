@@ -541,3 +541,6 @@ models:
       # The stored document, read only when the console's JSON tab asks.
       document:
         resolver: true
+      # Read when asked, for a file_download task.
+      file:
+        resolver: true

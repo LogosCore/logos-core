@@ -1,9 +1,12 @@
 package controller
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,12 +22,82 @@ import (
 // (minion_tasks.graphql), where the output is text and the data JSON.
 type MinionTaskController struct {
 	tasks  repository.IMinionTaskRepository
+	files  MinionFiles
 	opRepo repository.IOperationRepository
 	logger *zap.Logger
 }
 
-func NewMinionTaskController(tasks repository.IMinionTaskRepository, opRepo repository.IOperationRepository, logger *zap.Logger) *MinionTaskController {
-	return &MinionTaskController{tasks: tasks, opRepo: opRepo, logger: logger}
+// MinionFiles opens the files minions sent (minionfiles.Service).
+type MinionFiles interface {
+	Open(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, *models.MinionFile, error)
+}
+
+func NewMinionTaskController(tasks repository.IMinionTaskRepository, files MinionFiles, opRepo repository.IOperationRepository, logger *zap.Logger) *MinionTaskController {
+	return &MinionTaskController{tasks: tasks, files: files, opRepo: opRepo, logger: logger}
+}
+
+// DownloadFile handles GET /api/v1/minion-files/{id}.
+//
+// A file a minion sent core, as it came: for anyone who can see its
+// operation, as a task's output, and always an attachment, never rendered.
+//
+//	@Summary		Download a file a minion sent
+//	@Tags			Minion tasks
+//	@Produce		application/octet-stream
+//	@Security		BearerAuth
+//	@Param			id	path	string	true	"File ID"
+//	@Router			/minion-files/{id} [get]
+func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("file not found"))
+		return
+	}
+	body, f, err := mc.files.Open(c.Request.Context(), id)
+	if f == nil {
+		if err != nil && !repository.IsNotFound(err) {
+			mc.logger.Error("Failed to load a minion file", zap.String("file_id", id.String()), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+			return
+		}
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("file not found"))
+		return
+	}
+	if !callerHasOperationRole(c, mc.opRepo, f.OperationID, models.OperationRoleViewer) {
+		if body != nil {
+			_ = body.Close()
+		}
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("file not found"))
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusConflict, responses.NewErrorResponse("%s", err.Error()))
+		return
+	}
+	defer body.Close()
+	name := unsafeFilename.ReplaceAllString(baseName(f.Name), "_")
+	if name == "" || name == "_" {
+		name = "file-" + id.String()[:8]
+	}
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Disposition", contentDispositionFor(name, "application/octet-stream", false))
+	c.Header("Content-Length", strconv.FormatInt(f.Total, 10))
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
+	c.Status(http.StatusOK)
+	if _, err := io.Copy(c.Writer, body); err != nil {
+		mc.logger.Debug("Minion file download aborted", zap.Error(err))
+	}
+}
+
+// baseName is a path's last part, by either separator: the minion's host
+// may be either kind.
+func baseName(p string) string {
+	if i := strings.LastIndexAny(p, `/\`); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 var unsafeFilename = regexp.MustCompile(`[^A-Za-z0-9._-]+`)

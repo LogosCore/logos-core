@@ -465,6 +465,32 @@
                 }
             }
         },
+        "/minion-files/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Download a file a minion sent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "File ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/minion-tasks/{id}/data": {
             "get": {
                 "security": [

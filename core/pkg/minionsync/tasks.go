@@ -91,6 +91,8 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		if res.Done {
 			s.logger.Info("minion task done", zap.String("task_id", id.String()), zap.String("state", task.State),
 				zap.String("session_id", session.SessionID.String()))
+			// A file still coming for it stops with it.
+			s.endFile(ctx, task)
 		}
 	}
 	return nil, nil
