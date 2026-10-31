@@ -675,6 +675,38 @@ paths:
       summary: Download a file a minion streams
       tags:
       - Minion tasks
+    head:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Where a stream's upload is
+      tags:
+      - Minion tasks
+    put:
+      consumes:
+      - application/octet-stream
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 'bytes N-M/total: a part'
+        in: header
+        name: Content-Range
+        type: string
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Upload a file streamed to a minion
+      tags:
+      - Minion tasks
   /minion-tasks/{id}/data:
     get:
       parameters:

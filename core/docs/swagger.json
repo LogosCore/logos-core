@@ -600,6 +600,57 @@
                     }
                 ],
                 "responses": {}
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Upload a file streamed to a minion",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "bytes N-M/total: a part",
+                        "name": "Content-Range",
+                        "in": "header"
+                    }
+                ],
+                "responses": {}
+            },
+            "head": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Where a stream's upload is",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
             }
         },
         "/minion-tasks/{id}/data": {

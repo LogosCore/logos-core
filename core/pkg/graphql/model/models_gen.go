@@ -688,14 +688,21 @@ type MinionTaskStream struct {
 }
 
 type MinionTaskUpload struct {
-	FileID     string  `json:"fileId"`
-	Name       string  `json:"name"`
-	Size       int     `json:"size"`
-	Sha256     string  `json:"sha256"`
-	Acked      int     `json:"acked"`
-	State      string  `json:"state"`
-	FirstAckAt *string `json:"firstAckAt,omitempty"`
-	LastAckAt  *string `json:"lastAckAt,omitempty"`
+	FileID        string  `json:"fileId"`
+	Name          string  `json:"name"`
+	Size          int     `json:"size"`
+	Sha256        string  `json:"sha256"`
+	Acked         int     `json:"acked"`
+	State         string  `json:"state"`
+	FirstAckAt    *string `json:"firstAckAt,omitempty"`
+	LastAckAt     *string `json:"lastAckAt,omitempty"`
+	Stream        bool    `json:"stream"`
+	Sized         bool    `json:"sized"`
+	Received      int     `json:"received"`
+	UploaderState *string `json:"uploaderState,omitempty"`
+	From          int     `json:"from"`
+	AttachedAt    *string `json:"attachedAt,omitempty"`
+	UploaderAt    *string `json:"uploaderAt,omitempty"`
 }
 
 type ModuleAction struct {

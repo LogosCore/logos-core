@@ -276,7 +276,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 // max_size; the upload it records. Nil for a command without a file param,
 // or a task not given one.
 func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec, wire map[string]any) (*models.MinionTaskUpload, error) {
-	i := slices.IndexFunc(params, func(p protocol.FieldSpec) bool { return p.Type == protocol.FieldFile })
+	i := slices.IndexFunc(params, func(p protocol.FieldSpec) bool { return p.Type == protocol.FieldFile || p.Type == protocol.FieldStream })
 	if i < 0 {
 		return nil, nil
 	}
@@ -284,6 +284,14 @@ func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSess
 	id, ok := wire[p.Key].(string)
 	if !ok {
 		return nil, nil
+	}
+	if p.Type == protocol.FieldStream {
+		// A stream: the file comes as its uploader sends it; its value is
+		// the file's name.
+		xfer := uuid.New()
+		now := time.Now().UTC()
+		wire[p.Key] = protocol.FileOffer{Xfer: xfer[:], Name: id, Stream: true}
+		return &models.MinionTaskUpload{Name: id, Xfer: xfer[:], Stream: true, IdleSince: &now}, nil
 	}
 	if r.files == nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, p.Key+": core keeps no task files")
@@ -529,10 +537,17 @@ func (r *minionTaskResolver) MinionStreamLink(ctx context.Context, taskID string
 		}
 		return nil, err
 	}
-	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleViewer); err != nil {
+	// Downloading a stream takes a viewer, as any download; uploading one
+	// puts a file on the host, an operator's.
+	role := models.OperationRoleViewer
+	if t.Upload != nil && t.Upload.Stream {
+		role = models.OperationRoleOperator
+	}
+	if _, err := r.session(ctx, t.SessionID.String(), role); err != nil {
 		return nil, err
 	}
-	if t.Result != protocol.ResultFileStream || t.Finished() {
+	streams := t.Result == protocol.ResultFileStream || (t.Upload != nil && t.Upload.Stream)
+	if !streams || t.Finished() {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the task streams nothing now")
 	}
 	path, exp := r.streams.Link(tid)
@@ -618,7 +633,16 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 	if up := t.Upload; up != nil {
 		m.Upload = &model.MinionTaskUpload{FileID: up.FileID.String(), Name: up.Name, Size: int(up.Size),
 			Sha256: hex.EncodeToString(up.SHA256), Acked: int(up.Acked), State: uploadState(t),
-			FirstAckAt: taskTime(up.FirstAckAt), LastAckAt: taskTime(up.LastAckAt)}
+			FirstAckAt: taskTime(up.FirstAckAt), LastAckAt: taskTime(up.LastAckAt),
+			Stream: up.Stream, Sized: up.Sized || !up.Stream, Received: int(up.Received), From: int(up.From),
+			AttachedAt: taskTime(up.AttachedAt), UploaderAt: taskTime(up.UploaderAt)}
+		if up.Stream {
+			st := r.uploaderState(t)
+			m.Upload.UploaderState = &st
+		}
+		if up.Stream && up.FileID == uuid.Nil {
+			m.Upload.FileID = ""
+		}
 	}
 	return m, nil
 }
@@ -661,10 +685,31 @@ func uploadState(t *models.MinionTask) string {
 		return "FAILED"
 	case up.FirstAckAt == nil:
 		return "WAITING"
-	case up.Acked < up.Size:
+	case up.Acked < up.Size || (up.Stream && !up.Sized):
 		return "SENDING"
 	}
 	return "SENT"
+}
+
+// uploaderState is where a stream's uploader stands
+// (MinionTaskUpload.uploaderState).
+func (r *minionTaskResolver) uploaderState(t *models.MinionTask) string {
+	up := t.Upload
+	gone := 30 * time.Second
+	if r.streams != nil {
+		gone = r.streams.ReaderGone()
+	}
+	switch {
+	case up.Sized && up.Received >= up.Size:
+		return "DONE"
+	case t.Finished():
+		return "STOPPED"
+	case up.Uploader != "" && up.UploaderAt != nil && up.UploaderAt.After(time.Now().Add(-gone)):
+		return "UPLOADING"
+	case up.Received > 0:
+		return "PAUSED"
+	}
+	return "WAITING"
 }
 
 func taskTime(t *time.Time) *string {

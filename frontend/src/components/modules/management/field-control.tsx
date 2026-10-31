@@ -12,6 +12,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
+import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
 import { move } from "@/components/builds/build-values"
 import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
 import { UserAgentGenerator } from "./user-agent-generator"
@@ -119,6 +120,9 @@ export function FieldControl({
           defaultValue={defaultValue}
         />
       )
+
+    case "stream":
+      return <StreamFieldControl id={id} draft={draft} onChange={onChange} disabled={disabled} invalid={invalid} />
 
     case "file":
       return (

@@ -658,14 +658,21 @@ type ComplexityRoot struct {
 	}
 
 	MinionTaskUpload struct {
-		Acked      func(childComplexity int) int
-		FileID     func(childComplexity int) int
-		FirstAckAt func(childComplexity int) int
-		LastAckAt  func(childComplexity int) int
-		Name       func(childComplexity int) int
-		Sha256     func(childComplexity int) int
-		Size       func(childComplexity int) int
-		State      func(childComplexity int) int
+		Acked         func(childComplexity int) int
+		AttachedAt    func(childComplexity int) int
+		FileID        func(childComplexity int) int
+		FirstAckAt    func(childComplexity int) int
+		From          func(childComplexity int) int
+		LastAckAt     func(childComplexity int) int
+		Name          func(childComplexity int) int
+		Received      func(childComplexity int) int
+		Sha256        func(childComplexity int) int
+		Size          func(childComplexity int) int
+		Sized         func(childComplexity int) int
+		State         func(childComplexity int) int
+		Stream        func(childComplexity int) int
+		UploaderAt    func(childComplexity int) int
+		UploaderState func(childComplexity int) int
 	}
 
 	Module struct {
@@ -4437,6 +4444,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTaskUpload.Acked(childComplexity), true
+	case "MinionTaskUpload.attachedAt":
+		if e.ComplexityRoot.MinionTaskUpload.AttachedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.AttachedAt(childComplexity), true
 	case "MinionTaskUpload.fileId":
 		if e.ComplexityRoot.MinionTaskUpload.FileID == nil {
 			break
@@ -4449,6 +4462,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTaskUpload.FirstAckAt(childComplexity), true
+	case "MinionTaskUpload.from":
+		if e.ComplexityRoot.MinionTaskUpload.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.From(childComplexity), true
 	case "MinionTaskUpload.lastAckAt":
 		if e.ComplexityRoot.MinionTaskUpload.LastAckAt == nil {
 			break
@@ -4461,6 +4480,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTaskUpload.Name(childComplexity), true
+	case "MinionTaskUpload.received":
+		if e.ComplexityRoot.MinionTaskUpload.Received == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.Received(childComplexity), true
 	case "MinionTaskUpload.sha256":
 		if e.ComplexityRoot.MinionTaskUpload.Sha256 == nil {
 			break
@@ -4473,12 +4498,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTaskUpload.Size(childComplexity), true
+	case "MinionTaskUpload.sized":
+		if e.ComplexityRoot.MinionTaskUpload.Sized == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.Sized(childComplexity), true
 	case "MinionTaskUpload.state":
 		if e.ComplexityRoot.MinionTaskUpload.State == nil {
 			break
 		}
 
 		return e.ComplexityRoot.MinionTaskUpload.State(childComplexity), true
+	case "MinionTaskUpload.stream":
+		if e.ComplexityRoot.MinionTaskUpload.Stream == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.Stream(childComplexity), true
+	case "MinionTaskUpload.uploaderAt":
+		if e.ComplexityRoot.MinionTaskUpload.UploaderAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.UploaderAt(childComplexity), true
+	case "MinionTaskUpload.uploaderState":
+		if e.ComplexityRoot.MinionTaskUpload.UploaderState == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskUpload.UploaderState(childComplexity), true
 
 	case "Module.blockReason":
 		if e.ComplexityRoot.Module.BlockReason == nil {
@@ -11319,6 +11368,20 @@ type MinionTaskUpload {
   # The minion's first ask for a chunk, and its last.
   firstAckAt: String
   lastAckAt: String
+  # A stream (upload_stream): the file comes as its uploader sends it
+  # (PUT /api/v1/minion-streams/{task}); fileId is empty. sized: its size
+  # is known (it is, for a task file); received: how much core took from
+  # the uploader. uploaderState: WAITING (for an uploader), UPLOADING,
+  # PAUSED (its uploader went away), DONE (core has it all), STOPPED; null
+  # for a task file. from, attachedAt and uploaderAt: where and when the
+  # uploader now took the stream, and when it last sent.
+  stream: Boolean!
+  sized: Boolean!
+  received: Int!
+  uploaderState: String
+  from: Int!
+  attachedAt: String
+  uploaderAt: String
 }
 
 # A file a minion streams (docs: contracts/minion-messages.md, Streaming
@@ -30068,6 +30131,20 @@ func (ec *executionContext) fieldContext_MinionTask_upload(_ context.Context, fi
 				return ec.fieldContext_MinionTaskUpload_firstAckAt(ctx, field)
 			case "lastAckAt":
 				return ec.fieldContext_MinionTaskUpload_lastAckAt(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTaskUpload_stream(ctx, field)
+			case "sized":
+				return ec.fieldContext_MinionTaskUpload_sized(ctx, field)
+			case "received":
+				return ec.fieldContext_MinionTaskUpload_received(ctx, field)
+			case "uploaderState":
+				return ec.fieldContext_MinionTaskUpload_uploaderState(ctx, field)
+			case "from":
+				return ec.fieldContext_MinionTaskUpload_from(ctx, field)
+			case "attachedAt":
+				return ec.fieldContext_MinionTaskUpload_attachedAt(ctx, field)
+			case "uploaderAt":
+				return ec.fieldContext_MinionTaskUpload_uploaderAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionTaskUpload", field.Name)
 		},
@@ -30793,6 +30870,209 @@ func (ec *executionContext) _MinionTaskUpload_lastAckAt(ctx context.Context, fie
 }
 
 func (ec *executionContext) fieldContext_MinionTaskUpload_lastAckAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_stream(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_stream,
+		func(ctx context.Context) (any, error) {
+			return obj.Stream, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_stream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_sized(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_sized,
+		func(ctx context.Context) (any, error) {
+			return obj.Sized, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_sized(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_received(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_received,
+		func(ctx context.Context) (any, error) {
+			return obj.Received, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_received(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_uploaderState(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_uploaderState,
+		func(ctx context.Context) (any, error) {
+			return obj.UploaderState, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_uploaderState(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_from(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_from,
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_attachedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_attachedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.AttachedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_attachedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskUpload_uploaderAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskUpload) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskUpload_uploaderAt,
+		func(ctx context.Context) (any, error) {
+			return obj.UploaderAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskUpload_uploaderAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTaskUpload",
 		Field:      field,
@@ -69908,6 +70188,32 @@ func (ec *executionContext) _MinionTaskUpload(ctx context.Context, sel ast.Selec
 			out.Values[i] = ec._MinionTaskUpload_firstAckAt(ctx, field, obj)
 		case "lastAckAt":
 			out.Values[i] = ec._MinionTaskUpload_lastAckAt(ctx, field, obj)
+		case "stream":
+			out.Values[i] = ec._MinionTaskUpload_stream(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sized":
+			out.Values[i] = ec._MinionTaskUpload_sized(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "received":
+			out.Values[i] = ec._MinionTaskUpload_received(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploaderState":
+			out.Values[i] = ec._MinionTaskUpload_uploaderState(ctx, field, obj)
+		case "from":
+			out.Values[i] = ec._MinionTaskUpload_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attachedAt":
+			out.Values[i] = ec._MinionTaskUpload_attachedAt(ctx, field, obj)
+		case "uploaderAt":
+			out.Values[i] = ec._MinionTaskUpload_uploaderAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

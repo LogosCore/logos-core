@@ -53,6 +53,13 @@ export const MinionTaskFields = graphql(`
       state
       firstAckAt
       lastAckAt
+      stream
+      sized
+      received
+      uploaderState
+      from
+      attachedAt
+      uploaderAt
     }
     stream {
       name

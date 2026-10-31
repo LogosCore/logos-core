@@ -20,6 +20,8 @@ import (
 type Streams interface {
 	TakeChunk(ctx context.Context, session *models.MinionSession, c protocol.ChunkItem) (minionstreams.Reply, bool, error)
 	Acks(ctx context.Context, session *models.MinionSession, answered map[string]bool) ([]protocol.AckItem, error)
+	// Pull answers a minion asking for a stream's chunk (uploads.go).
+	Pull(ctx context.Context, t *models.MinionTask, next int64, room int) (*protocol.ChunkItem, *protocol.AckItem, error)
 }
 
 // WithStreams gives the service the streams. Without it, a stream's chunks

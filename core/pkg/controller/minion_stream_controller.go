@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -22,6 +23,8 @@ type MinionStreams interface {
 	Stream(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
 	Read(ctx context.Context, taskID uuid.UUID, from, end int64, write func([]byte) error) (int64, error)
 	Verify(taskID uuid.UUID, exp, sig string) bool
+	Upstream(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
+	Write(ctx context.Context, taskID uuid.UUID, start, total int64, body io.Reader) (int64, error)
 }
 
 // MinionStreamController serves the files minions stream: to a browser or
@@ -172,4 +175,127 @@ func (sc *MinionStreamController) Download(c *gin.Context) {
 		// resumes, or not.
 		sc.logger.Info("minion stream download cut", zap.String("task_id", id.String()), zap.Int64("at", got), zap.Int64("end", end), zap.Error(err))
 	}
+}
+
+var partRange = regexp.MustCompile(`^bytes (\d+)-(\d+)/(\d+|\*)$`)
+
+// upstream is the stream_upload task a request names, for a caller with a
+// signed link or an operator of its operation; ok false when it answered.
+func (sc *MinionStreamController) upstream(c *gin.Context) (*models.MinionTask, bool) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("stream not found"))
+		return nil, false
+	}
+	signed := Signed(c)
+	if signed && !sc.streams.Verify(id, c.Query("exp"), c.Query("sig")) {
+		c.JSON(http.StatusForbidden, responses.NewErrorResponse("the link is not valid, or has expired"))
+		return nil, false
+	}
+	t, err := sc.streams.Upstream(c.Request.Context(), id)
+	if t == nil {
+		if err != nil && !repository.IsNotFound(err) {
+			sc.logger.Error("Failed to load a stream", zap.String("task_id", id.String()), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+			return nil, false
+		}
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("stream not found"))
+		return nil, false
+	}
+	if !signed && !callerHasOperationRole(c, sc.opRepo, t.OperationID, models.OperationRoleOperator) {
+		c.JSON(http.StatusNotFound, responses.NewErrorResponse("stream not found"))
+		return nil, false
+	}
+	if errors.Is(err, minionstreams.ErrGone) {
+		c.JSON(http.StatusGone, responses.NewErrorResponse("the stream is over: its task ended"))
+		return nil, false
+	}
+	return t, true
+}
+
+// offsetHeaders say where a stream is, and its size once known.
+func offsetHeaders(c *gin.Context, at int64, t *models.MinionTask) {
+	c.Header("Upload-Offset", strconv.FormatInt(at, 10))
+	if t.Upload.Sized {
+		c.Header("Upload-Length", strconv.FormatInt(t.Upload.Size, 10))
+	}
+	c.Header("Cache-Control", "no-store")
+}
+
+// Offset handles HEAD /api/v1/minion-streams/{task}: where an
+// upload_stream task's stream is (Upload-Offset), and its size once known
+// (Upload-Length): where a resumed upload goes on from.
+//
+//	@Summary		Where a stream's upload is
+//	@Tags			Minion tasks
+//	@Security		BearerAuth
+//	@Param			id	path	string	true	"Task ID"
+//	@Router			/minion-streams/{id} [head]
+func (sc *MinionStreamController) Offset(c *gin.Context) {
+	t, ok := sc.upstream(c)
+	if !ok {
+		return
+	}
+	offsetHeaders(c, t.Upload.Received, t)
+	c.Status(http.StatusOK)
+}
+
+// Upload handles PUT /api/v1/minion-streams/{task}.
+//
+// The file of an upload_stream task, streamed to its minion as it comes
+// (docs: contracts/task-results-and-actions.md, Uploading a stream): the
+// whole (from 0, Content-Length its size), or a part (Content-Range:
+// bytes N-M/total), only from where the stream is (409 and Upload-Offset
+// otherwise). Core reads the body as the minion takes it. 204 with
+// Upload-Offset when the body is all taken.
+//
+//	@Summary		Upload a file streamed to a minion
+//	@Tags			Minion tasks
+//	@Accept			application/octet-stream
+//	@Security		BearerAuth
+//	@Param			id				path	string	true	"Task ID"
+//	@Param			Content-Range	header	string	false	"bytes N-M/total: a part"
+//	@Router			/minion-streams/{id} [put]
+func (sc *MinionStreamController) Upload(c *gin.Context) {
+	t, ok := sc.upstream(c)
+	if !ok {
+		return
+	}
+	start, total := int64(0), c.Request.ContentLength
+	if r := c.GetHeader("Content-Range"); r != "" {
+		m := partRange.FindStringSubmatch(r)
+		if m == nil {
+			c.JSON(http.StatusBadRequest, responses.NewErrorResponse("Content-Range is bytes N-M/total"))
+			return
+		}
+		start, _ = strconv.ParseInt(m[1], 10, 64)
+		total = -1
+		if m[3] != "*" {
+			total, _ = strconv.ParseInt(m[3], 10, 64)
+		}
+	}
+	at, err := sc.streams.Write(c.Request.Context(), t.TaskID, start, total, c.Request.Body)
+	var off *minionstreams.OffsetError
+	switch {
+	case errors.As(err, &off):
+		offsetHeaders(c, off.At, t)
+		c.JSON(http.StatusConflict, responses.NewErrorResponse("the stream is at %d: go on from there", off.At))
+		return
+	case errors.Is(err, minionstreams.ErrNoSize):
+		c.JSON(http.StatusLengthRequired, responses.NewErrorResponse("%s", err.Error()))
+		return
+	case errors.Is(err, minionstreams.ErrSize):
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("%s", err.Error()))
+		return
+	case errors.Is(err, minionstreams.ErrGone):
+		c.JSON(http.StatusGone, responses.NewErrorResponse("the stream is over: its task ended"))
+		return
+	case err != nil:
+		sc.logger.Info("minion stream upload cut", zap.String("task_id", t.TaskID.String()), zap.Int64("at", at), zap.Error(err))
+		offsetHeaders(c, at, t)
+		c.JSON(http.StatusInternalServerError, responses.NewErrorResponse("the upload stopped at %d", at))
+		return
+	}
+	offsetHeaders(c, at, t)
+	c.Status(http.StatusNoContent)
 }

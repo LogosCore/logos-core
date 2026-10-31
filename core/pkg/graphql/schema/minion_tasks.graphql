@@ -126,6 +126,20 @@ type MinionTaskUpload {
   # The minion's first ask for a chunk, and its last.
   firstAckAt: String
   lastAckAt: String
+  # A stream (upload_stream): the file comes as its uploader sends it
+  # (PUT /api/v1/minion-streams/{task}); fileId is empty. sized: its size
+  # is known (it is, for a task file); received: how much core took from
+  # the uploader. uploaderState: WAITING (for an uploader), UPLOADING,
+  # PAUSED (its uploader went away), DONE (core has it all), STOPPED; null
+  # for a task file. from, attachedAt and uploaderAt: where and when the
+  # uploader now took the stream, and when it last sent.
+  stream: Boolean!
+  sized: Boolean!
+  received: Int!
+  uploaderState: String
+  from: Int!
+  attachedAt: String
+  uploaderAt: String
 }
 
 # A file a minion streams (docs: contracts/minion-messages.md, Streaming

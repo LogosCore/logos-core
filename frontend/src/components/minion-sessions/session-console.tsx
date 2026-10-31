@@ -13,6 +13,7 @@ import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
 import { UploadDialog } from "./upload-dialog"
+import { startStreamUpload } from "@/lib/stream-upload"
 import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
 import type { Task } from "./task-actions"
@@ -169,7 +170,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 onDownloadFile={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
                 downloadCommands={commandsFor(commands, "download_file")}
                 onUploadHere={writable ? (target, commandId) => setUploadTo({ target, commandId }) : undefined}
-                uploadCommands={commandsFor(commands, "upload_file")}
+                uploadCommands={[...commandsFor(commands, "upload_file"), ...commandsFor(commands, "upload_stream")]}
                 onStreamFile={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
                 streamCommands={commandsFor(commands, "stream_file")}
                 findSignal={findSignal}
@@ -190,9 +191,10 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         command={uploadCommand}
         operationId={session?.operationId ?? ""}
         onOpenChange={(open) => !open && setUploadTo(null)}
-        onSubmit={async (args) => {
+        onSubmit={async (args, stream) => {
           if (!uploadCommand) return
-          await queue.mutateAsync({ sessionId, command: uploadCommand.id, args })
+          const data = await queue.mutateAsync({ sessionId, command: uploadCommand.id, args })
+          if (stream) startStreamUpload(data.queueMinionTask.id, stream)
           follow()
         }}
       />

@@ -450,6 +450,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			out, p, err = s.takeAck(ctx, session, raw, i)
 			if p != nil {
 				pulls = append(pulls, *p)
+				// Its answer is a chunk, or a stream's ack: no other ack.
+				answered[string(p.xfer)] = true
 			}
 		case protocol.ItemChunk:
 			out, err = s.takeChunk(ctx, session, raw, i, answered)

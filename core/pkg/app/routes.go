@@ -49,21 +49,25 @@ func (a *App) mountPublicRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.POST("/login/refresh", middleware.CSRF(a.authCfg.csrfEnabled), c.auth.Refresh)
 
 	// A minion's stream: with a signed link, for anyone holding it (curl);
-	// without one, through AuthN as any download (the browser's session).
-	authn := middleware.AuthN(a.authProvider, a.repos.APIKey, a.repos.AgentKey, a.repos.User, a.cache)
-	human := middleware.RequireHuman()
-	streamAuth := func(c *gin.Context) {
-		if controller.Signed(c) {
-			c.Next()
-			return
+	// without one, through AuthN, CSRF and RequireHuman as any request (the
+	// browser's session).
+	unlessSigned := func(mw gin.HandlerFunc) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if controller.Signed(c) {
+				c.Next()
+				return
+			}
+			mw(c)
 		}
-		authn(c)
-		if c.IsAborted() {
-			return
-		}
-		human(c)
 	}
-	v1.GET("/minion-streams/:id", streamAuth, c.stream.Download)
+	streamAuth := []gin.HandlerFunc{
+		unlessSigned(middleware.AuthN(a.authProvider, a.repos.APIKey, a.repos.AgentKey, a.repos.User, a.cache)),
+		unlessSigned(middleware.CSRF(a.authCfg.csrfEnabled)),
+		unlessSigned(middleware.RequireHuman()),
+	}
+	v1.GET("/minion-streams/:id", append(streamAuth, c.stream.Download)...)
+	v1.PUT("/minion-streams/:id", append(streamAuth, c.stream.Upload)...)
+	v1.HEAD("/minion-streams/:id", append(streamAuth, c.stream.Offset)...)
 
 	// Internal webhook endpoint: not behind AuthN, behind HMAC validation.
 	internal := v1.Group("/internal")

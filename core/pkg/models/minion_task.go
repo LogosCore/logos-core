@@ -132,6 +132,24 @@ type MinionTaskUpload struct {
 	// FirstAckAt is the minion's first ask for a chunk; LastAckAt its last.
 	FirstAckAt *time.Time `bson:"first_ack_at,omitempty" json:"first_ack_at,omitempty"`
 	LastAckAt  *time.Time `bson:"last_ack_at,omitempty" json:"last_ack_at,omitempty"`
+
+	// A stream (docs: contracts/minion-messages.md, Streaming a file to a
+	// minion): no task file; the file comes as its uploader sends it, the
+	// size once it says it (Sized), the SHA-256 once all of it came.
+	Stream bool `bson:"stream,omitempty" json:"stream,omitempty"`
+	Sized  bool `bson:"sized,omitempty" json:"sized,omitempty"`
+	// Received is how much core took from the uploader: the chunks from
+	// Acked to it wait in the buffer for the minion. HashState is the
+	// SHA-256 of those bytes so far (encoding.BinaryMarshaler's).
+	Received  int64  `bson:"received" json:"received"`
+	HashState []byte `bson:"hash_state,omitempty" json:"-"`
+	// The uploader now, as a stream's downloader (MinionTaskStream).
+	Gen        int64      `bson:"gen,omitempty" json:"gen,omitempty"`
+	Uploader   string     `bson:"uploader,omitempty" json:"uploader,omitempty"`
+	UploaderAt *time.Time `bson:"uploader_at,omitempty" json:"uploader_at,omitempty"`
+	From       int64      `bson:"from,omitempty" json:"from,omitempty"`
+	AttachedAt *time.Time `bson:"attached_at,omitempty" json:"attached_at,omitempty"`
+	IdleSince  *time.Time `bson:"idle_since,omitempty" json:"idle_since,omitempty"`
 }
 
 // MissingParts is how many parts before the done part never came: parts

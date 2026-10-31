@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { ConsoleCommand } from "./command-bar"
+import { StreamFieldControl } from "./stream-field-control"
 import { TaskFilesProvider } from "./task-files"
 import { joinPath, type UploadTarget } from "./upload-target"
 
@@ -33,8 +34,9 @@ export function UploadDialog({
   command: ConsoleCommand | undefined
   operationId: string
   onOpenChange: (open: boolean) => void
-  /** Runs the command with the action's params. */
-  onSubmit: (args: { file: string; path: string; overwrite: boolean }) => Promise<unknown>
+  /** Runs the command with the action's params; stream, a file picked to
+   *  stream once the task is queued. */
+  onSubmit: (args: Record<string, unknown>, stream?: File) => Promise<unknown>
 }) {
   return (
     <Dialog open={target !== null && command !== undefined} onOpenChange={onOpenChange}>
@@ -58,26 +60,32 @@ function UploadForm({
   target: UploadTarget
   command: ConsoleCommand
   onClose: () => void
-  onSubmit: (args: { file: string; path: string; overwrite: boolean }) => Promise<unknown>
+  onSubmit: (args: Record<string, unknown>, stream?: File) => Promise<unknown>
 }) {
   const files = useContext(BuildFilesContext)
-  const field = command.fields.find((f) => f.type === "file")
+  // A task file (upload_file), or a stream (upload_stream).
+  const field = command.fields.find((f) => f.type === "file" || f.type === "stream")
+  const streams = field?.type === "stream"
   const [file, setFile] = useState<Extract<Draft, { kind: "file" }>>({ kind: "file", id: null })
+  const [stream, setStream] = useState<Extract<Draft, { kind: "stream" }>>({ kind: "stream", file: null, curl: false, name: "" })
+  const chosenName = streams ? (stream.curl ? stream.name.trim() : (stream.file?.name ?? "")) : (files?.files.find((f) => f.id === file.id)?.name ?? "")
   // The path as typed; until it is, the folder and the picked file's name.
   const [typed, setTyped] = useState<string | null>(null)
-  const chosen = files?.files.find((f) => f.id === file.id)
-  const path = typed ?? (chosen ? joinPath(target, chosen.name) : target.folder)
+  const path = typed ?? (chosenName ? joinPath(target, chosenName) : target.folder)
   const [overwrite, setOverwrite] = useState(false)
   const [pending, setPending] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const there = (target.names ?? []).some((n) => joinPath(target, n) === path.trim())
 
   const submit = async () => {
-    if (!file.id || path.trim() === "" || pending) return
+    if (!field || !chosenName || path.trim() === "" || pending) return
     setPending(true)
     setFailure(null)
     try {
-      await onSubmit({ file: file.id, path: path.trim(), overwrite })
+      await onSubmit(
+        { [field.key]: streams ? chosenName : file.id, path: path.trim(), overwrite },
+        streams && !stream.curl && stream.file ? stream.file : undefined,
+      )
       onClose()
     } catch (err) {
       setFailure(errorMessage(err, "Could not upload it"))
@@ -96,20 +104,24 @@ function UploadForm({
       <DialogHeader>
         <DialogTitle>Upload here</DialogTitle>
         <DialogDescription>
-          A file from your computer, to <span className="font-mono break-all">{target.folder}</span>, with{" "}
-          <span className="font-mono">{command.id}</span>.
+          {streams ? "A file of any size, streamed" : "A file from your computer"}, to{" "}
+          <span className="font-mono break-all">{target.folder}</span>, with <span className="font-mono">{command.id}</span>.
         </DialogDescription>
       </DialogHeader>
       {field ? (
         <div className="flex flex-col gap-2">
           <Label htmlFor="upload-file">File</Label>
-          <BuildFileControl
-            id="upload-file"
-            field={field}
-            draft={file}
-            disabled={pending}
-            onChange={(d) => d.kind === "file" && setFile(d)}
-          />
+          {streams ? (
+            <StreamFieldControl id="upload-file" draft={stream} disabled={pending} onChange={(d) => d.kind === "stream" && setStream(d)} />
+          ) : (
+            <BuildFileControl
+              id="upload-file"
+              field={field}
+              draft={file}
+              disabled={pending}
+              onChange={(d) => d.kind === "file" && setFile(d)}
+            />
+          )}
         </div>
       ) : (
         <p className="text-sm text-destructive">{command.id} takes no file.</p>
@@ -139,7 +151,7 @@ function UploadForm({
         <Button type="button" variant="outline" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={pending || !file.id || path.trim() === ""}>
+        <Button type="submit" disabled={pending || !chosenName || path.trim() === ""}>
           {pending ? <Loader2Icon className="animate-spin" /> : <UploadIcon />}
           Upload
         </Button>

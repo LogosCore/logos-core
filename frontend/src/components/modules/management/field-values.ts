@@ -42,6 +42,7 @@ export type FieldType =
   | "datetime"
   | "enum_list"
   | "file"
+  | "stream"
 
 // ---------------------------------------------------------------------------
 // Bytes
@@ -175,6 +176,10 @@ export type Draft =
   | { kind: "set"; values: string[] }
   // file: a build file's id; null when not set.
   | { kind: "file"; id: string | null }
+  // stream: a file streamed to a minion as it is uploaded (a command's
+  // param): picked in this browser (sent once the task is queued), or
+  // named, for curl; the value is its name.
+  | { kind: "stream"; file: File | null; curl: boolean; name: string }
 
 /** One row of a string_map control. */
 export interface MapEntry {
@@ -226,6 +231,9 @@ export function initialDraft(
   if (type === "file") {
     return { kind: "file", id: typeof value === "string" && value !== "" ? value : null }
   }
+  if (type === "stream") {
+    return { kind: "stream", file: null, curl: false, name: typeof value === "string" ? value : "" }
+  }
   if (type === "datetime") {
     return { kind: "text", text: typeof value === "string" ? rfc3339ToLocalInput(value) : "" }
   }
@@ -273,6 +281,10 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
     }
     case "file":
       return { ok: true, value: draft.id }
+    case "stream": {
+      const name = draft.curl ? draft.name.trim() : (draft.file?.name ?? "")
+      return { ok: true, value: name === "" ? null : name }
+    }
     case "list": {
       const items = draft.items.map((i) => i.trim()).filter((i) => i !== "")
       return { ok: true, value: items.length === 0 ? null : items }
@@ -416,6 +428,9 @@ export function validateValue(
     }
     case "file":
       return typeof value === "string" && value !== "" ? null : "Must be a file"
+    case "stream":
+      if (typeof value !== "string" || value === "") return "Must be a file"
+      return /[/\\\0]/.test(value) || new TextEncoder().encode(value).length > 255 ? "A file name, without a path" : null
     case "string_list": {
       if (!Array.isArray(value)) return "Must be a list"
       if (field.maxItems != null && value.length > field.maxItems) return `At most ${field.maxItems} items`

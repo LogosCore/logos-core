@@ -36,17 +36,6 @@ const minChunk = 4 << 10
 
 // serveUploads answers the pulls with chunks, in the room items leave.
 func (s *Service) serveUploads(ctx context.Context, session *models.MinionSession, pulls []pull, items []cbor.RawMessage) ([]cbor.RawMessage, error) {
-	if s.files == nil {
-		var out []cbor.RawMessage
-		for _, p := range pulls {
-			e, err := errItem(protocol.ErrItemUnknownItem, "no files are sent", p.i)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, e...)
-		}
-		return out, nil
-	}
 	used := 0
 	for _, it := range items {
 		used += len(it) + 8
@@ -84,8 +73,14 @@ func (s *Service) serveUpload(ctx context.Context, session *models.MinionSession
 		}
 		return errItem(protocol.ErrItemUnknownTask, "the transfer's task ended", p.i)
 	}
-	if p.next > uint64(up.Size) {
+	if (!up.Stream || up.Sized) && p.next > uint64(up.Size) {
 		return errItem(protocol.ErrItemBadMessage, fmt.Sprintf("next is past the file's %d bytes", up.Size), p.i)
+	}
+	if up.Stream && p.next > uint64(up.Received) {
+		return errItem(protocol.ErrItemBadMessage, fmt.Sprintf("next is past the %d bytes core sent", up.Received), p.i)
+	}
+	if (up.Stream && s.streams == nil) || (!up.Stream && s.files == nil) {
+		return errItem(protocol.ErrItemUnknownItem, "no files are sent", p.i)
 	}
 	next := int64(p.next)
 	if next != up.Acked || up.FirstAckAt == nil {
@@ -94,6 +89,26 @@ func (s *Service) serveUpload(ctx context.Context, session *models.MinionSession
 			return nil, fmt.Errorf("record the upload's progress: %w", err)
 		}
 		s.publishTask(after)
+	}
+	if up.Stream {
+		// From the uploader's buffer: the chunk, or hold (minionstreams).
+		c, a, err := s.streams.Pull(ctx, t, next, room)
+		if err != nil {
+			return nil, fmt.Errorf("a stream's chunk: %w", err)
+		}
+		var item []byte
+		switch {
+		case c != nil:
+			item, err = protocol.MarshalCBOR(*c)
+		case a != nil:
+			item, err = protocol.MarshalCBOR(*a)
+		default:
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return []cbor.RawMessage{item}, nil
 	}
 	n := min(protocol.MaxChunkData, room, int(up.Size-next))
 	if next == up.Size || n < min(minChunk, int(up.Size-next)) {

@@ -119,8 +119,22 @@ type IMinionTaskRepository interface {
 	// ActiveStreams are a session's streams whose tasks have not ended.
 	ActiveStreams(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error)
 	// IdleStreams are streams whose tasks have not ended with no
-	// downloader since before (or one that stopped saying it is there).
+	// downloader (or uploader) since before, or one that stopped saying it
+	// is there.
 	IdleStreams(ctx context.Context, before time.Time) ([]models.MinionTask, error)
+
+	// Streams core sends a minion (minionstreams, upstream.go).
+	// UploadAttach gives the stream to an uploader: a new generation.
+	UploadAttach(ctx context.Context, taskID uuid.UUID, uploader string, at time.Time) (*models.MinionTask, error)
+	// UploadSize records the size the uploader says, once.
+	UploadSize(ctx context.Context, taskID uuid.UUID, size int64) (*models.MinionTask, error)
+	// UploadReceived moves received past n bytes taken from generation
+	// gen's uploader at off, with the hash's state after them (and the
+	// whole's SHA-256 when they are the last); false when off is not where
+	// the stream is, or another uploader took it.
+	UploadReceived(ctx context.Context, taskID uuid.UUID, gen, off, n int64, hashState, sha256 []byte, at time.Time) (bool, error)
+	// UploadDetach lets go of generation gen's uploader.
+	UploadDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error
 }
 
 type minionTaskRepository struct {
@@ -544,16 +558,73 @@ func (r *minionTaskRepository) StreamTook(ctx context.Context, taskID uuid.UUID,
 
 func (r *minionTaskRepository) ActiveStreams(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error) {
 	var out []models.MinionTask
-	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "stream": bson.M{"$exists": true}, "state": bson.M{"$in": openStates}}).All(&out)
+	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "state": bson.M{"$in": openStates},
+		"$or": bson.A{bson.M{"stream": bson.M{"$exists": true}}, bson.M{"upload.stream": true}}}).All(&out)
 	return out, err
 }
 
 func (r *minionTaskRepository) IdleStreams(ctx context.Context, before time.Time) ([]models.MinionTask, error) {
 	var out []models.MinionTask
-	err := r.tasks.Find(ctx, bson.M{"stream": bson.M{"$exists": true}, "state": bson.M{"$in": openStates},
+	err := r.tasks.Find(ctx, bson.M{"state": bson.M{"$in": openStates},
 		"$or": bson.A{
-			bson.M{"stream.idle_since": bson.M{"$lt": before}},
-			bson.M{"stream.reader": bson.M{"$ne": ""}, "stream.reader_at": bson.M{"$lt": before}},
+			bson.M{"stream": bson.M{"$exists": true}, "stream.idle_since": bson.M{"$lt": before}},
+			bson.M{"stream": bson.M{"$exists": true}, "stream.reader": bson.M{"$ne": ""}, "stream.reader_at": bson.M{"$lt": before}},
+			bson.M{"upload.stream": true, "upload.idle_since": bson.M{"$lt": before}},
+			bson.M{"upload.stream": true, "upload.uploader": bson.M{"$nin": bson.A{"", nil}}, "upload.uploader_at": bson.M{"$lt": before}},
 		}}).All(&out)
 	return out, err
+}
+
+func (r *minionTaskRepository) UploadAttach(ctx context.Context, taskID uuid.UUID, uploader string, at time.Time) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "upload.stream": true}).Apply(qmgo.Change{
+		Update: []bson.M{{"$set": bson.M{
+			"upload.uploader": uploader, "upload.uploader_at": at, "upload.attached_at": at,
+			"upload.from":       bson.M{"$ifNull": bson.A{"$upload.received", 0}},
+			"upload.gen":        bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$upload.gen", 0}}, 1}},
+			"upload.idle_since": "$$REMOVE",
+			"rev":               bson.M{"$add": bson.A{"$rev", 1}},
+		}}},
+		ReturnNew: true,
+	}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) UploadSize(ctx context.Context, taskID uuid.UUID, size int64) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "upload.stream": true, "upload.sized": bson.M{"$ne": true}}).Apply(qmgo.Change{
+		Update: bson.M{"$set": bson.M{"upload.size": size, "upload.sized": true}, "$inc": bumpRev}, ReturnNew: true,
+	}, &after)
+	if IsNotFound(err) {
+		return r.FindByTaskID(ctx, taskID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) UploadReceived(ctx context.Context, taskID uuid.UUID, gen, off, n int64, hashState, sum []byte, at time.Time) (bool, error) {
+	set := bson.M{"upload.hash_state": hashState, "upload.uploader_at": at}
+	if sum != nil {
+		set["upload.sha256"] = sum
+	}
+	err := r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID, "upload.gen": gen, "upload.received": off},
+		bson.M{"$set": set, "$inc": bson.M{"upload.received": n, "rev": 1}})
+	if IsNotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *minionTaskRepository) UploadDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error {
+	err := r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID, "upload.gen": gen},
+		bson.M{"$set": bson.M{"upload.uploader": "", "upload.idle_since": at}, "$inc": bumpRev})
+	if IsNotFound(err) {
+		return nil
+	}
+	return err
 }

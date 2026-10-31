@@ -379,3 +379,60 @@ func TestIntegrationMinionStreams(t *testing.T) {
 		t.Fatalf("active %d, idle %d", len(active), len(idle))
 	}
 }
+
+// A stream core sends: an uploader takes it (a new generation, from where
+// it is), the size is said once, bytes are taken only from where it is and
+// for the generation now, and an uploader gone is idle.
+func TestIntegrationMinionUploadStreams(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("task indexes: %v", err)
+	}
+	session := uuid.New()
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	task := &models.MinionTask{TaskID: uuid.New(), OperationID: uuid.New(), SessionID: session, Command: "stream_upload",
+		Result: protocol.ResultFileUpload, State: models.MinionTaskSent, QueuedAt: t0,
+		Upload: &models.MinionTaskUpload{Name: "big.iso", Xfer: []byte("0123456789abcdef"), Stream: true, IdleSince: &t0}}
+	if err := repo.Insert(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	a, err := repo.UploadAttach(ctx, task.TaskID, "u1", t0)
+	if err != nil || a.Upload.Gen != 1 || a.Upload.Uploader != "u1" || a.Upload.IdleSince != nil || a.Upload.From != 0 {
+		t.Fatalf("attach: %+v %v", a.Upload, err)
+	}
+	s1, _ := repo.UploadSize(ctx, task.TaskID, 100)
+	s2, _ := repo.UploadSize(ctx, task.TaskID, 5)
+	if !s1.Upload.Sized || s2.Upload.Size != 100 {
+		t.Fatalf("size: %+v", s2.Upload)
+	}
+	if ok, _ := repo.UploadReceived(ctx, task.TaskID, 1, 10, 5, []byte{1}, nil, t0); ok {
+		t.Fatal("took bytes from elsewhere")
+	}
+	if ok, err := repo.UploadReceived(ctx, task.TaskID, 1, 0, 40, []byte{1}, nil, t0); !ok || err != nil {
+		t.Fatalf("did not take bytes from 0: %v", err)
+	}
+	b, _ := repo.UploadAttach(ctx, task.TaskID, "u2", t0)
+	if b.Upload.Gen != 2 || b.Upload.From != 40 {
+		t.Fatalf("second: %+v", b.Upload)
+	}
+	if ok, _ := repo.UploadReceived(ctx, task.TaskID, 1, 40, 5, nil, nil, t0); ok {
+		t.Fatal("the first uploader still counts")
+	}
+	if ok, _ := repo.UploadReceived(ctx, task.TaskID, 2, 40, 60, []byte{2}, []byte{9}, t0); !ok {
+		t.Fatal("the second uploader's bytes")
+	}
+	if err := repo.UploadDetach(ctx, task.TaskID, 2, t0); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := repo.FindByTaskID(ctx, task.TaskID)
+	if got.Upload.Received != 100 || len(got.Upload.SHA256) != 1 || got.Upload.Uploader != "" {
+		t.Fatalf("after: %+v", got.Upload)
+	}
+	active, _ := repo.ActiveStreams(ctx, session)
+	idle, _ := repo.IdleStreams(ctx, t0.Add(time.Second))
+	if len(active) != 1 || len(idle) != 1 {
+		t.Fatalf("active %d, idle %d", len(active), len(idle))
+	}
+}

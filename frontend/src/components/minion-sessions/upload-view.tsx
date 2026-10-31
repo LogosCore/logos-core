@@ -8,6 +8,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
+import { StreamUploader } from "./stream-uploader"
 
 // A file_upload task's file going to its minion (docs:
 // contracts/task-results-and-actions.md, file_upload), laid out as a kept
@@ -50,9 +51,14 @@ function duration(secs: number): string {
 
 export function UploadView({ task: t, data }: { task: Task; data: Record<string, unknown> | null }) {
   const up = t.upload!
-  const state = STATE[up.state] ?? { label: up.state.toLowerCase(), className: "text-muted-foreground" }
+  // A stream the minion asks for while core has none of it waits for its
+  // file, not the minion.
+  const waitingFile = up.stream && up.state === "SENDING" && up.received <= up.acked
+  const state = waitingFile
+    ? { label: "Waiting for the file", className: "text-muted-foreground" }
+    : (STATE[up.state] ?? { label: up.state.toLowerCase(), className: "text-muted-foreground" })
   const going = up.state === "WAITING" || up.state === "SENDING" || up.state === "SENT"
-  const pct = up.size > 0 ? Math.min(100, Math.floor((up.acked / up.size) * 100)) : 100
+  const pct = !up.sized ? 0 : up.size > 0 ? Math.min(100, Math.floor((up.acked / up.size) * 100)) : 100
   const Icon = up.state === "DONE" ? CheckIcon : up.state === "FAILED" || up.state === "CANCELLED" ? XIcon : LoaderIcon
   const bps = rate(up)
   const dest = destination(t, data)
@@ -72,8 +78,9 @@ export function UploadView({ task: t, data }: { task: Task; data: Record<string,
               <div className="flex min-w-0 flex-col gap-0.5">
                 <h3 className="font-mono text-base font-medium break-all">{up.name}</h3>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {formatBytes(up.size)}
+                  {up.sized ? formatBytes(up.size) : "size not known yet"}
                   {typeName && <> · {typeName}</>}
+                  {up.stream && <> · streamed</>}
                 </p>
               </div>
             </div>
@@ -105,6 +112,7 @@ export function UploadView({ task: t, data }: { task: Task; data: Record<string,
               )}
               {problem && <p className="text-xs text-red-600 dark:text-red-400">{problem}</p>}
             </div>
+            {up.stream && <StreamUploader task={t} upload={up} />}
           </div>
 
           <InfoCard labelWidth="w-24">
@@ -112,18 +120,26 @@ export function UploadView({ task: t, data }: { task: Task; data: Record<string,
               <span className="font-mono text-xs break-all">{up.name}</span>
             </LabelRow>
             <LabelRow label="Size">
-              <span className="tabular-nums">{up.size.toLocaleString("en-US")} bytes</span>
+              {up.sized ? (
+                <span className="tabular-nums">{up.size.toLocaleString("en-US")} bytes</span>
+              ) : (
+                <span className="text-muted-foreground">said by its uploader</span>
+              )}
             </LabelRow>
             <LabelRow label="SHA-256">
-              <span className="flex min-w-0 items-center gap-1">
-                <code className="min-w-0 flex-1 truncate font-mono text-xs" title={up.sha256}>
-                  {up.sha256}
-                </code>
-                <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
-                  onClick={() => void copyToClipboard(up.sha256, "SHA-256")}>
-                  <CopyIcon />
-                </Button>
-              </span>
+              {!up.sha256 ? (
+                <span className="text-muted-foreground">once core has all of it</span>
+              ) : (
+                <span className="flex min-w-0 items-center gap-1">
+                  <code className="min-w-0 flex-1 truncate font-mono text-xs" title={up.sha256}>
+                    {up.sha256}
+                  </code>
+                  <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
+                    onClick={() => void copyToClipboard(up.sha256, "SHA-256")}>
+                    <CopyIcon />
+                  </Button>
+                </span>
+              )}
             </LabelRow>
             <LabelRow label="To">
               {dest ? <span className="font-mono text-xs break-all">{dest}</span> : <span className="text-muted-foreground">the minion says</span>}

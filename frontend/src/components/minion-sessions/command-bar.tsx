@@ -11,6 +11,7 @@ import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { cn } from "@/lib/utils"
 import { BrowseButton } from "./browse-button"
 import { TaskFilesProvider } from "./task-files"
+import { startStreamUpload } from "@/lib/stream-upload"
 import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type CommandDef } from "./command-line"
 
 // The console's command line: a command of the session's build typed as a
@@ -110,7 +111,7 @@ export function CommandBar({
     // without it, opens there.
     const lt = lineTexts(text, commands)
     const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
-    const file = c?.fields.find((f) => f.type === "file")
+    const file = c?.fields.find((f) => f.type === "file" || f.type === "stream")
     if (file && !lt.texts.has(file.key)) {
       openForm()
       return
@@ -337,9 +338,13 @@ export function CommandBar({
               </p>
             )
           }
-          onSubmit={async (values) => {
+          onSubmit={async (values, drafts) => {
             if (!formCommand) throw new Error("Pick a command first.")
             const data = await queue.mutateAsync({ sessionId, command: formCommand.id, args: Object.keys(values).length > 0 ? values : null })
+            // A stream picked here goes now, as the task waits for it.
+            for (const d of Object.values(drafts)) {
+              if (d.kind === "stream" && !d.curl && d.file) startStreamUpload(data.queueMinionTask.id, d.file)
+            }
             onQueued?.(data.queueMinionTask)
             setLine("")
             setBack(null)

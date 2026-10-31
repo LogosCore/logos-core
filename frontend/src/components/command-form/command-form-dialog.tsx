@@ -31,9 +31,10 @@ export interface CommandFormDialogProps {
   after?: (values: Record<string, unknown> | null) => ReactNode
   submitLabel?: string
   destructive?: boolean
-  /** Runs it. The dialog closes when it resolves, and shows why when it
-   *  throws. */
-  onSubmit: (values: Record<string, unknown>) => Promise<unknown> | void
+  /** Runs it, given the values and the drafts they came from (a stream's
+   *  picked file is there). The dialog closes when it resolves, and shows
+   *  why when it throws. */
+  onSubmit: (values: Record<string, unknown>, drafts: Record<string, Draft>) => Promise<unknown> | void
   /** For the fields' ids. */
   idPrefix: string
   /** A new key starts the form over (another command picked). */
@@ -83,7 +84,7 @@ function CommandForm({
     setPending(true)
     setFailure(null)
     try {
-      await onSubmit(values)
+      await onSubmit(values, drafts)
       onOpenChange(false)
     } catch (err) {
       setFailure(errorMessage(err, "Could not run it"))

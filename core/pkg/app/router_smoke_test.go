@@ -66,6 +66,7 @@ func TestRouteTable(t *testing.T) {
 		"GET /api/v1/wiki/transfer/jobs/:id",
 		"GET /api/v1/wiki/transfer/jobs/:id/download",
 		"GET /swagger/*any",
+		"HEAD /api/v1/minion-streams/:id",
 		"OPTIONS /api/v1/mcp",
 		"POST /api/channel/sync",
 		"POST /api/v1/build-files",
@@ -86,6 +87,7 @@ func TestRouteTable(t *testing.T) {
 		"POST /api/v1/wiki/images",
 		"POST /api/v1/wiki/transfer/exports",
 		"POST /api/v1/wiki/transfer/imports",
+		"PUT /api/v1/minion-streams/:id",
 	}
 	got := routeTable(t)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
@@ -119,6 +121,8 @@ func TestRouteAuthTiers(t *testing.T) {
 		"GET /api/v1/mcp/skills/download":             401,
 		"GET /api/v1/minion-files/:id":                401,
 		"GET /api/v1/minion-streams/:id":              401,
+		"HEAD /api/v1/minion-streams/:id":             401,
+		"PUT /api/v1/minion-streams/:id":              401,
 		"GET /api/v1/minion-tasks/:id/data":           401,
 		"GET /api/v1/minion-tasks/:id/output":         401,
 		"GET /api/v1/skills/:name/download":           401,

@@ -57,6 +57,10 @@ func (m *memTasks) get() models.MinionTask {
 		st := *c.Stream
 		c.Stream = &st
 	}
+	if c.Upload != nil {
+		up := *c.Upload
+		c.Upload = &up
+	}
 	return c
 }
 
@@ -359,4 +363,50 @@ func TestStreamLastChunkCounts(t *testing.T) {
 	if len(acks) != 1 || acks[0].Hold || *acks[0].Next != uint64(len(body)) {
 		t.Fatalf("the end: %+v", acks)
 	}
+}
+
+func (m *memTasks) UploadAttach(_ context.Context, _ uuid.UUID, uploader string, at time.Time) (*models.MinionTask, error) {
+	m.mu.Lock()
+	u := m.t.Upload
+	u.Gen++
+	u.Uploader, u.UploaderAt, u.AttachedAt, u.From, u.IdleSince = uploader, &at, &at, u.Received, nil
+	m.mu.Unlock()
+	t := m.get()
+	return &t, nil
+}
+
+func (m *memTasks) UploadSize(_ context.Context, _ uuid.UUID, size int64) (*models.MinionTask, error) {
+	m.mu.Lock()
+	if !m.t.Upload.Sized {
+		m.t.Upload.Size, m.t.Upload.Sized = size, true
+	}
+	m.mu.Unlock()
+	t := m.get()
+	return &t, nil
+}
+
+func (m *memTasks) UploadReceived(ctx context.Context, _ uuid.UUID, gen, off, n int64, state, sum []byte, at time.Time) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u := m.t.Upload
+	if u.Gen != gen || u.Received != off {
+		return false, nil
+	}
+	u.Received, u.HashState, u.UploaderAt = off+n, state, &at
+	if sum != nil {
+		u.SHA256 = sum
+	}
+	return true, nil
+}
+
+func (m *memTasks) UploadDetach(_ context.Context, _ uuid.UUID, gen int64, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.t.Upload.Gen == gen {
+		m.t.Upload.Uploader, m.t.Upload.IdleSince = "", &at
+	}
+	return nil
 }

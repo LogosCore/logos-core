@@ -49,6 +49,12 @@ type Tasks interface {
 	ActiveStreams(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error)
 	IdleStreams(ctx context.Context, before time.Time) ([]models.MinionTask, error)
 	RequestCancel(ctx context.Context, taskID uuid.UUID, at time.Time) (*models.MinionTask, error)
+
+	// Streams core sends a minion (upstream.go).
+	UploadAttach(ctx context.Context, taskID uuid.UUID, uploader string, at time.Time) (*models.MinionTask, error)
+	UploadSize(ctx context.Context, taskID uuid.UUID, size int64) (*models.MinionTask, error)
+	UploadReceived(ctx context.Context, taskID uuid.UUID, gen, off, n int64, hashState, sha256 []byte, at time.Time) (bool, error)
+	UploadDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error
 }
 
 type Config struct {
@@ -191,10 +197,12 @@ func (s *Service) Acks(ctx context.Context, session *models.MinionSession, answe
 	}
 	var out []protocol.AckItem
 	for _, t := range tasks {
-		if answered[string(t.Stream.Xfer)] {
-			continue
+		switch {
+		case t.Stream != nil && !answered[string(t.Stream.Xfer)]:
+			out = append(out, s.ack(t.Stream))
+		case t.Upload != nil && t.Upload.Stream && !answered[string(t.Upload.Xfer)]:
+			out = append(out, s.upAck(t.Upload, t.Upload.Acked))
 		}
-		out = append(out, s.ack(t.Stream))
 	}
 	return out, nil
 }

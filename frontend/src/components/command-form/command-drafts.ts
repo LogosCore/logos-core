@@ -38,6 +38,11 @@ export function draftFromText(field: FieldDef, text: string): Draft {
       }
     case "bytes":
       return { kind: "bytes", text, unit: "B" }
+    case "file":
+      return { kind: "file", id: text === "" ? null : text }
+    case "stream":
+      // Named on a line: uploaded with curl, or picked in the task's view.
+      return { kind: "stream", file: null, curl: true, name: text }
     case "datetime":
       // The form's field takes local time; text that is no time stays as typed.
       return { kind: "text", text: Number.isNaN(Date.parse(text)) ? text : rfc3339ToLocalInput(text) }
