@@ -5,6 +5,7 @@ import {
   CancelMinionTaskDocument,
   MinionSessionCommandsDocument,
   MinionTaskChangedDocument,
+  MinionTaskDocumentDocument,
   MinionTaskOutputDocument,
   MinionTasksDocument,
   QueueMinionTaskDocument,
@@ -21,6 +22,7 @@ export const minionTaskKeys = {
   session: (sessionId: string) => [...minionTaskKeys.all, "session", sessionId] as const,
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
   output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
+  document: (id: string) => [...minionTaskKeys.all, "document", id] as const,
 }
 
 const PAGE = 50
@@ -52,6 +54,20 @@ export function useMinionTaskOutput(id: string | null, version: string, finished
     // Up to 4 MiB each: the reads of a growing output go soon, its last one
     // (the task ended) stays as long as any other query.
     gcTime: finished ? 5 * 60_000 : 10_000,
+  })
+}
+
+/**
+ * A task's stored document as JSON (the console's JSON tab), read while
+ * enabled and again whenever version changes.
+ */
+export function useMinionTaskDocument(id: string, version: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...minionTaskKeys.document(id), version],
+    queryFn: () => graphqlClient(MinionTaskDocumentDocument, { id }),
+    enabled,
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === id ? prev : undefined),
+    gcTime: 30_000,
   })
 }
 

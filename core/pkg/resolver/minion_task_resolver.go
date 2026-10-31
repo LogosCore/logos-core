@@ -33,6 +33,9 @@ type IMinionTaskResolver interface {
 	// task's), the parent query having checked the caller.
 	Output(ctx context.Context, taskID string) ([]byte, error)
 	Data(ctx context.Context, taskID string) (map[string]any, error)
+	// Document is the task's stored document as JSON, for debugging
+	// (minion_task_document.go).
+	Document(ctx context.Context, taskID string) (string, error)
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -338,6 +341,18 @@ func (r *minionTaskResolver) Data(ctx context.Context, taskID string) (map[strin
 		return nil, err
 	}
 	return models.MergeMinionTaskData(parts), nil
+}
+
+func (r *minionTaskResolver) Document(ctx context.Context, taskID string) (string, error) {
+	tid, err := uuid.Parse(taskID)
+	if err != nil {
+		return "", fmt.Errorf("invalid task ID")
+	}
+	d, err := r.tasks.Document(ctx, tid)
+	if err != nil {
+		return "", fmt.Errorf("load the task: %w", err)
+	}
+	return documentJSON(d)
 }
 
 func (r *minionTaskResolver) Load(ctx context.Context, taskID string) *model.MinionTask {

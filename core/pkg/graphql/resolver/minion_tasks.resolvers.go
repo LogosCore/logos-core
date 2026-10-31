@@ -42,6 +42,11 @@ func (r *minionTaskResolver) Data(ctx context.Context, obj *model.MinionTask) (a
 	return data, nil
 }
 
+// Document is the resolver for the document field.
+func (r *minionTaskResolver) Document(ctx context.Context, obj *model.MinionTask) (string, error) {
+	return r.MinionTaskResolver.Document(ctx, obj.ID)
+}
+
 // QueueMinionTask is the resolver for the queueMinionTask field.
 func (r *mutationResolver) QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error) {
 	return r.MinionTaskResolver.QueueMinionTask(ctx, sessionID, command, args)

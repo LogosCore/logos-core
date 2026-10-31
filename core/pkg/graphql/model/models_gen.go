@@ -622,6 +622,7 @@ type MinionTask struct {
 	OutputTruncated   bool    `json:"outputTruncated"`
 	Parts             int     `json:"parts"`
 	Data              any     `json:"data,omitempty"`
+	Document          string  `json:"document"`
 }
 
 type MinionTaskPage struct {

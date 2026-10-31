@@ -52,6 +52,16 @@ export const MinionTasksQuery = graphql(`
   }
 `)
 
+// The task as core keeps it, for the console's JSON tab (debugging).
+export const MinionTaskDocumentQuery = graphql(`
+  query MinionTaskDocument($id: ID!) {
+    minionTask(id: $id) {
+      id
+      document
+    }
+  }
+`)
+
 export const MinionSessionCommandsQuery = graphql(`
   query MinionSessionCommands($sessionId: ID!) {
     minionSessionCommands(sessionId: $sessionId) {

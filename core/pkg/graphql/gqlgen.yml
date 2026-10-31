@@ -538,3 +538,6 @@ models:
         resolver: true
       data:
         resolver: true
+      # The stored document, read only when the console's JSON tab asks.
+      document:
+        resolver: true

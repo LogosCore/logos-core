@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import {
+  BracesIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   CopyIcon,
@@ -14,7 +15,8 @@ import {
   XIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useMinionTaskOutput } from "@/graphql/hooks/minion-tasks"
+import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
+import { useMinionTaskDocument, useMinionTaskOutput } from "@/graphql/hooks/minion-tasks"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
@@ -27,27 +29,34 @@ import { formatDateTime } from "@/lib/date-format"
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
 // and what came back: the output as text, read again as more comes (Ctrl+F
 // finds in it), and any data the command gave (an ls as a table, the rest
-// as JSON). The raw bytes download as they came.
+// as JSON, or all of it as raw JSON). The raw bytes download as they came.
+// The JSON tab shows the task as core keeps it, for debugging.
 
 const API_URL = import.meta.env.VITE_API_URL as string
 
+// The viewer's toggles, kept in this browser: whether output lines wrap,
+// whether data shows as raw JSON.
 const WRAP_KEY = "logos.console.wrap"
+const RAW_DATA_KEY = "logos.console.rawData"
 
-function readWrap(): boolean {
+function readFlag(key: string, fallback: boolean): boolean {
   try {
-    return localStorage.getItem(WRAP_KEY) !== "off"
+    const v = localStorage.getItem(key)
+    return v === null ? fallback : v === "on"
   } catch {
-    return true
+    return fallback
   }
 }
 
-function saveWrap(wrap: boolean) {
+function saveFlag(key: string, on: boolean) {
   try {
-    localStorage.setItem(WRAP_KEY, wrap ? "on" : "off")
+    localStorage.setItem(key, on ? "on" : "off")
   } catch {
     // Kept for the page only.
   }
 }
+
+const noChange = () => {}
 
 export function TaskDetail({
   task: t,
@@ -75,10 +84,26 @@ export function TaskDetail({
   // than on an empty Output first.
   const hasData = detail ? data !== null : t.outputSize === 0 && t.parts > 0
 
-  const [tab, setTab] = useState<"output" | "data" | null>(null)
+  const [tab, setTab] = useState<"output" | "data" | "json" | null>(null)
   // Data alone shows as data; with output, the output first.
-  const shown = tab === "data" && hasData ? "data" : tab === "output" || !hasData || t.outputSize > 0 ? "output" : "data"
-  const [wrap, setWrap] = useState(readWrap)
+  const shown =
+    tab === "json"
+      ? "json"
+      : tab === "data" && hasData
+        ? "data"
+        : tab === "output" || !hasData || t.outputSize > 0
+          ? "output"
+          : "data"
+  const [wrap, setWrap] = useState(() => readFlag(WRAP_KEY, true))
+  const [rawData, setRawData] = useState(() => readFlag(RAW_DATA_KEY, false))
+  // The stored task, read while its tab is open, again as it changes.
+  const documentQ = useMinionTaskDocument(
+    t.id,
+    [t.state, t.parts, t.sendCount, t.ackedAt, t.cancelRequestedAt].join(":"),
+    shown === "json",
+  )
+  // The editor's code, ahead of the JSON tab or raw data being opened.
+  useEffect(() => preloadJsonEditor(), [])
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -94,6 +119,9 @@ export function TaskDetail({
               Data
             </TabButton>
           )}
+          <TabButton active={shown === "json"} onClick={() => setTab("json")} title="The task as core keeps it: for debugging">
+            JSON
+          </TabButton>
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 border-l pl-2">
           <StateLabel t={t} />
@@ -106,10 +134,20 @@ export function TaskDetail({
           {shown === "output" && (
             <Button variant={wrap ? "secondary" : "ghost"} size="icon-xs" title={wrap ? "Lines wrap" : "Lines do not wrap"} aria-label="Wrap lines" aria-pressed={wrap}
               onClick={() => {
-                saveWrap(!wrap)
+                saveFlag(WRAP_KEY, !wrap)
                 setWrap(!wrap)
               }}>
               <WrapTextIcon />
+            </Button>
+          )}
+          {shown === "data" && (
+            <Button variant={rawData ? "secondary" : "ghost"} size="icon-xs" title={rawData ? "Raw JSON: show it rendered" : "Rendered: show the raw JSON"}
+              aria-label="Show the data as raw JSON" aria-pressed={rawData}
+              onClick={() => {
+                saveFlag(RAW_DATA_KEY, !rawData)
+                setRawData(!rawData)
+              }}>
+              <BracesIcon />
             </Button>
           )}
           <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
@@ -148,17 +186,42 @@ export function TaskDetail({
             t.outputTruncated ? "Cut at 4 MiB: the rest was dropped." : null,
           ]}
         />
+      ) : shown === "data" ? (
+        rawData ? (
+          data && (
+            <LazyJsonEditor
+              value={JSON.stringify(data, null, 2)}
+              onChange={noChange}
+              readOnly
+              fileName={`${t.command}-${t.id.slice(0, 8)}.data.json`}
+              aria-label="The task's data as JSON"
+              className="min-h-0 flex-1"
+            />
+          )
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto p-2">{data && <DataView data={data} />}</div>
+        )
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-2">{data && <DataView data={data} />}</div>
+        documentQ.data?.minionTask && (
+          <LazyJsonEditor
+            value={documentQ.data.minionTask.document}
+            onChange={noChange}
+            readOnly
+            fileName={`${t.command}-${t.id.slice(0, 8)}.task.json`}
+            aria-label="The task as core keeps it"
+            className="min-h-0 flex-1"
+          />
+        )
       )}
     </div>
   )
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabButton({ active, onClick, title, children }: { active: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
     <button
       type="button"
+      title={title}
       onClick={onClick}
       aria-pressed={active}
       className={cn(

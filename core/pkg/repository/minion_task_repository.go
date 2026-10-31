@@ -43,6 +43,9 @@ type MinionTaskCursor struct {
 type IMinionTaskRepository interface {
 	Insert(ctx context.Context, t *models.MinionTask) error
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
+	// Document is a task's document as stored, in its key order: for
+	// debugging. IsNotFound for an unknown task.
+	Document(ctx context.Context, taskID uuid.UUID) (bson.D, error)
 	// ForDelivery returns what a minion's get_tasks gets, at most limit:
 	// tasks sent before and not yet acked first, then queued ones, oldest
 	// first; none an operator asked to cancel.
@@ -101,6 +104,14 @@ func (r *minionTaskRepository) FindByTaskID(ctx context.Context, taskID uuid.UUI
 		return nil, err
 	}
 	return &t, nil
+}
+
+func (r *minionTaskRepository) Document(ctx context.Context, taskID uuid.UUID) (bson.D, error) {
+	var d bson.D
+	if err := r.tasks.Find(ctx, bson.M{"task_id": taskID}).One(&d); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 func (r *minionTaskRepository) ForDelivery(ctx context.Context, sessionID uuid.UUID, limit int) ([]models.MinionTask, error) {

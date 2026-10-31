@@ -791,6 +791,7 @@ export type MinionTask = {
   cancelRequestedAt?: Maybe<Scalars['String']['output']>;
   command: Scalars['String']['output'];
   data?: Maybe<Scalars['JSON']['output']>;
+  document: Scalars['String']['output'];
   doneAt?: Maybe<Scalars['String']['output']>;
   err?: Maybe<Scalars['String']['output']>;
   exit?: Maybe<Scalars['Int']['output']>;
@@ -3644,6 +3645,13 @@ export type MinionTasksQueryVariables = Exact<{
 
 
 export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number }> } };
+
+export type MinionTaskDocumentQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type MinionTaskDocumentQuery = { minionTask?: { id: string, document: string } | null };
 
 export type MinionSessionCommandsQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -8164,6 +8172,14 @@ export const MinionTasksDocument = new TypedDocumentString(`
   outputTruncated
   parts
 }`) as unknown as TypedDocumentString<MinionTasksQuery, MinionTasksQueryVariables>;
+export const MinionTaskDocumentDocument = new TypedDocumentString(`
+    query MinionTaskDocument($id: ID!) {
+  minionTask(id: $id) {
+    id
+    document
+  }
+}
+    `) as unknown as TypedDocumentString<MinionTaskDocumentQuery, MinionTaskDocumentQueryVariables>;
 export const MinionSessionCommandsDocument = new TypedDocumentString(`
     query MinionSessionCommands($sessionId: ID!) {
   minionSessionCommands(sessionId: $sessionId) {
