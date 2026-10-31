@@ -92,7 +92,17 @@ func (s *Service) Write(ctx context.Context, taskID uuid.UUID, start, total int6
 	// What the stream records does not hang on the uploader's connection.
 	wctx := context.WithoutCancel(ctx)
 	pos := u.Received
+	// A part that ends as it should (its body all taken) keeps its
+	// uploader: the next part comes in a moment, and an uploader that
+	// sends none counts gone after ReaderGone. One cut short lets go now.
+	clean := false
 	defer func() {
+		if clean {
+			if after, err := up.FindByTaskID(wctx, taskID); err == nil {
+				s.publish(after)
+			}
+			return
+		}
 		_ = up.UploadDetach(wctx, taskID, gen, s.now())
 		if after, err := up.FindByTaskID(wctx, taskID); err == nil {
 			s.publish(after)
@@ -153,6 +163,7 @@ func (s *Service) Write(ctx context.Context, taskID uuid.UUID, start, total int6
 		}
 		if errors.Is(rerr, io.EOF) || errors.Is(rerr, io.ErrUnexpectedEOF) {
 			// This part is over; the uploader may send the next.
+			clean = true
 			return pos, nil
 		}
 		if rerr != nil {
@@ -163,6 +174,7 @@ func (s *Service) Write(ctx context.Context, taskID uuid.UUID, start, total int6
 	if n, _ := body.Read(buf[:1]); n > 0 {
 		return pos, ErrSize
 	}
+	clean = true
 	return pos, nil
 }
 

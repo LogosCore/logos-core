@@ -51,12 +51,16 @@ function duration(secs: number): string {
 
 export function UploadView({ task: t, data }: { task: Task; data: Record<string, unknown> | null }) {
   const up = t.upload!
-  // A stream the minion asks for while core has none of it waits for its
-  // file, not the minion.
-  const waitingFile = up.stream && up.state === "SENDING" && up.received <= up.acked
-  const state = waitingFile
-    ? { label: "Waiting for the file", className: "text-muted-foreground" }
-    : (STATE[up.state] ?? { label: up.state.toLowerCase(), className: "text-muted-foreground" })
+  // A stream goes as its uploader sends it: before one came it waits for
+  // the file, and after it went away it is paused. While one sends, the
+  // minion catching up with it (all core has, taken) is just sending: the
+  // upload is the slower side.
+  const uploaderOff = up.stream && up.state === "SENDING" && up.uploaderState !== "UPLOADING" && up.uploaderState !== "DONE"
+  const state = !uploaderOff
+    ? (STATE[up.state] ?? { label: up.state.toLowerCase(), className: "text-muted-foreground" })
+    : up.uploaderState === "PAUSED"
+      ? { label: "Paused: its uploader went away", className: "text-amber-600 dark:text-amber-400" }
+      : { label: "Waiting for the file", className: "text-muted-foreground" }
   const going = up.state === "WAITING" || up.state === "SENDING" || up.state === "SENT"
   const pct = !up.sized ? 0 : up.size > 0 ? Math.min(100, Math.floor((up.acked / up.size) * 100)) : 100
   const Icon = up.state === "DONE" ? CheckIcon : up.state === "FAILED" || up.state === "CANCELLED" ? XIcon : LoaderIcon

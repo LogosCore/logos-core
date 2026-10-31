@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"testing/iotest"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -108,5 +109,24 @@ func TestUpstreamNoSize(t *testing.T) {
 	s, tasks, _ := setupUp(t, 10)
 	if _, err := s.Write(context.Background(), tasks.t.TaskID, 0, -1, bytes.NewReader(nil)); !errors.Is(err, ErrNoSize) {
 		t.Fatalf("%v", err)
+	}
+}
+
+// A part that ends as it should keeps its uploader (the next comes in a
+// moment); one cut short lets go of it.
+func TestUpstreamPartKeepsUploader(t *testing.T) {
+	s, tasks, body := setupUp(t, 2*protocol.MaxChunkData)
+	go pullAll(t, s, tasks, len(body))
+	if _, err := s.Write(context.Background(), tasks.t.TaskID, 0, int64(len(body)), io.LimitReader(bytes.NewReader(body), 100)); err != nil {
+		t.Fatal(err)
+	}
+	if u := tasks.get().Upload; u.Uploader == "" || u.IdleSince != nil {
+		t.Fatalf("after a part: uploader %q, idle since %v", u.Uploader, u.IdleSince)
+	}
+	// The connection drops: reading the body fails.
+	cut := io.MultiReader(bytes.NewReader(body[100:200]), iotest.ErrReader(io.ErrClosedPipe))
+	_, _ = s.Write(context.Background(), tasks.t.TaskID, 100, -1, cut)
+	if u := tasks.get().Upload; u.Uploader != "" {
+		t.Fatalf("cut short: uploader %q still", u.Uploader)
 	}
 }
