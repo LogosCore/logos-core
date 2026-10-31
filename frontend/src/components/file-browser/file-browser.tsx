@@ -51,6 +51,7 @@ import { crumbs } from "@/components/minion-sessions/dir-listing"
 import { DeleteDialog, type DeleteTarget } from "@/components/minion-sessions/delete-dialog"
 import { UploadDialog } from "@/components/minion-sessions/upload-dialog"
 import type { UploadTarget } from "@/components/minion-sessions/upload-target"
+import { UploadHereButton } from "@/components/minion-sessions/upload-here-button"
 import { useWorkspaceActions } from "@/components/minion-sessions/workspace-tabs"
 import { DownloadedFileDialog } from "./downloaded-file-dialog"
 import { FolderTree } from "./file-browser-tree"
@@ -335,7 +336,6 @@ function FolderView({
   const arriving = path ? running.filter((f) => f.action.startsWith("upload") && parentOf(f.path) !== null && samePath(parentOf(f.path)!, path)) : []
   const sort = { field: filter.sort, direction: filter.desc ? "DESC" : "ASC" } as const
   const names = entries.map((e) => e.name)
-  const uploadHere = path && actions.uploadCommands.length > 0 ? actions.uploadCommands[0] : undefined
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -402,17 +402,7 @@ function FolderView({
           className="relative w-36"
           inputClassName={cn("h-6 pl-8 text-xs", search && "pr-7")}
         />
-        {uploadHere && path && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Upload here"
-            title={`Upload a file to ${path} (${uploadHere.id})`}
-            onClick={() => actions.upload(path, uploadHere.id, names)}
-          >
-            <UploadIcon />
-          </Button>
-        )}
+        {path && <UploadHereButton folder={path} commands={actions.uploadCommands} onRun={(id) => actions.upload(path, id, names)} />}
         <Button
           variant="ghost"
           size="icon-xs"

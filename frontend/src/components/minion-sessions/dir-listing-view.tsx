@@ -22,6 +22,7 @@ import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import { childPath, crumbs, sortEntries, type DirEntry, type DirListing } from "./dir-listing"
 import { ActionItem, type MenuCommand } from "./action-menu"
+import { UploadHereButton } from "./upload-here-button"
 import type { UploadTarget } from "./upload-target"
 import type { DeleteTarget } from "./delete-dialog"
 
@@ -128,18 +129,12 @@ export function DirListingView({
             <FolderTreeIcon />
           </Button>
         )}
-        {uploads && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            title={`Upload a file to ${listing.path} (${uploadCommands[0].id})`}
-            aria-label="Upload here"
-            onClick={() =>
-              onUploadHere!({ folder: listing.path, sep: listing.sep, names: listing.entries.map((e) => e.name) }, uploadCommands[0].id)
-            }
-          >
-            <UploadIcon />
-          </Button>
+        {onUploadHere && (
+          <UploadHereButton
+            folder={listing.path}
+            commands={uploadCommands}
+            onRun={(id) => onUploadHere({ folder: listing.path, sep: listing.sep, names: listing.entries.map((e) => e.name) }, id)}
+          />
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
