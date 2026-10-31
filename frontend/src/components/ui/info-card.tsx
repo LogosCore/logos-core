@@ -13,29 +13,35 @@ export function InfoCard({
   title,
   note,
   actions,
+  labelWidth = "w-40",
   children,
 }: {
-  title: ReactNode
+  /** Without a title or actions, the card has no header: the table alone. */
+  title?: ReactNode
   /** Beside the title, muted: a count, a version. */
   note?: ReactNode
   /** At the header's end: buttons. */
   actions?: ReactNode
+  /** The first column's width class: the same in cards laid out together. */
+  labelWidth?: string
   children: ReactNode
 }) {
   return (
     <section className="min-w-0 rounded-xl border bg-card">
-      <div className="flex min-h-10 items-center gap-2 border-b px-4 py-2">
-        <h3 className="flex min-w-0 items-baseline gap-2 text-sm font-semibold">
-          {title}
-          {note !== undefined && <span className="text-xs font-normal text-muted-foreground tabular-nums">{note}</span>}
-        </h3>
-        {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
-      </div>
+      {(title !== undefined || actions) && (
+        <div className="flex min-h-10 items-center gap-2 border-b px-4 py-2">
+          <h3 className="flex min-w-0 items-baseline gap-2 text-sm font-semibold">
+            {title}
+            {note !== undefined && <span className="text-xs font-normal text-muted-foreground tabular-nums">{note}</span>}
+          </h3>
+          {actions && <div className="ml-auto flex items-center gap-1">{actions}</div>}
+        </div>
+      )}
       {/* Fixed widths, set here: a first row across both columns must not
           make them halves. */}
       <table className="w-full table-fixed text-sm">
         <colgroup>
-          <col className="w-40" />
+          <col className={labelWidth} />
           <col />
         </colgroup>
         <TableBody>{children}</TableBody>

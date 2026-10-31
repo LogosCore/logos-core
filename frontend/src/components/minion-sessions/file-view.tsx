@@ -3,6 +3,7 @@ import { CheckIcon, CopyIcon, DownloadIcon, LoaderIcon, XIcon } from "lucide-rea
 import { FilePreviewPane } from "@/components/file-preview/file-preview-pane"
 import { FileTypeIcon } from "@/components/file-preview/file-type-icon"
 import { canonicalContentType, filePreviewKind, panelPreviews } from "@/components/file-preview/kind"
+import { fileTypeName } from "@/components/file-preview/type-name"
 import { Button } from "@/components/ui/button"
 import { InfoCard, LabelRow } from "@/components/ui/info-card"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
@@ -117,56 +118,62 @@ export function FileView({ file: f }: { file: File }) {
   )
 }
 
-// What the file is and where it stands, in the middle of the pane: its
-// kind's icon, name and size, the download once kept (or how much came, or
-// why it ended), and its details under that.
+// What the file is and where it stands, in the middle of the pane, in two
+// columns where it is wide: its kind's icon, name, size and kind in words,
+// the download once kept (or how much came, or why it ended); its details
+// beside them. One column, the details under, where it is narrow.
 function FileOverview({ file: f, name, contentType, url }: { file: File; name: string; contentType: string | null; url: string }) {
   const state = STATE[f.state] ?? { label: f.state.toLowerCase(), className: "text-muted-foreground" }
   const coming = f.state === "RECEIVING" || f.state === "JOINING"
   const pct = f.size > 0 ? Math.min(100, Math.round((f.received / f.size) * 100)) : 100
   const Icon = f.state === "COMPLETE" ? CheckIcon : f.state === "FAILED" || f.state === "CANCELLED" ? XIcon : LoaderIcon
+  const typeName = fileTypeName(contentType ?? "", name)
   return (
     // m-auto centres it both ways, and lets it scroll from its top when the
-    // pane is the shorter.
-    <div className="m-auto flex w-full max-w-xl flex-col items-center gap-5 px-4 py-8">
-      <div className="flex size-16 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-        <FileTypeIcon contentType={contentType ?? ""} filename={name} size={30} />
-      </div>
-      <div className="flex max-w-full flex-col items-center gap-1 text-center">
-        <h3 className="font-mono text-base font-medium break-all">{name}</h3>
-        <p className="text-xs text-muted-foreground tabular-nums">
-          {formatBytes(f.size)}
-          {contentType && <> · {contentType}</>}
-        </p>
-      </div>
-
-      {f.state === "COMPLETE" ? (
-        <Button render={<a href={url} download />}>
-          <DownloadIcon />
-          Download
-        </Button>
-      ) : (
-        <div className="flex w-full max-w-sm flex-col items-center gap-2">
-          <div className={cn("inline-flex items-center gap-1.5 text-sm", state.className)}>
-            <Icon className={cn("size-4", coming && "animate-spin")} />
-            {state.label}
-            {coming && (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {formatBytes(f.received)} of {formatBytes(f.size)} ({pct}%)
-              </span>
-            )}
+    // pane is the shorter. Columns follow the pane's width, not the window's.
+    <div className="@container m-auto w-full max-w-5xl px-6 py-6">
+      <div className="grid items-center gap-6 @2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @2xl:gap-10">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <FileTypeIcon contentType={contentType ?? ""} filename={name} size={26} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <h3 className="font-mono text-base font-medium break-all">{name}</h3>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {formatBytes(f.size)}
+                {typeName && <> · {typeName}</>}
+              </p>
+            </div>
           </div>
-          {coming && (
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-              <div className="h-full bg-sky-500 transition-[width]" style={{ width: `${pct}%` }} />
+
+          {f.state === "COMPLETE" ? (
+            <Button className="self-start" render={<a href={url} download />}>
+              <DownloadIcon />
+              Download
+            </Button>
+          ) : (
+            <div className="flex w-full max-w-sm flex-col gap-2">
+              <div className={cn("inline-flex items-center gap-1.5 text-sm", state.className)}>
+                <Icon className={cn("size-4", coming && "animate-spin")} />
+                {state.label}
+                {coming && (
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {formatBytes(f.received)} of {formatBytes(f.size)} ({pct}%)
+                  </span>
+                )}
+              </div>
+              {coming && (
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="h-full bg-sky-500 transition-[width]" style={{ width: `${pct}%` }} />
+                </div>
+              )}
+              {f.err && <p className="text-xs text-red-600 dark:text-red-400">{f.err}</p>}
             </div>
           )}
-          {f.err && <p className="text-center text-xs text-red-600 dark:text-red-400">{f.err}</p>}
         </div>
-      )}
 
-      <div className="w-full">
-        <InfoCard title="Details">
+        <InfoCard labelWidth="w-24">
           <LabelRow label="Path">
             <span className="font-mono text-xs break-all">{f.name}</span>
           </LabelRow>
@@ -174,12 +181,20 @@ function FileOverview({ file: f, name, contentType, url }: { file: File; name: s
             <span className="tabular-nums">{f.size.toLocaleString("en-US")} bytes</span>
           </LabelRow>
           <LabelRow label="Type">
-            {contentType ?? <span className="text-muted-foreground">{f.state === "COMPLETE" ? "not detected" : "known once kept"}</span>}
+            {contentType ? (
+              <span className="block truncate" title={contentType}>
+                {contentType}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">{f.state === "COMPLETE" ? "not detected" : "known once kept"}</span>
+            )}
           </LabelRow>
           <LabelRow label="SHA-256">
             {f.sha256 ? (
-              <span className="flex items-start gap-1">
-                <code className="min-w-0 flex-1 font-mono text-xs break-all">{f.sha256}</code>
+              <span className="flex min-w-0 items-center gap-1">
+                <code className="min-w-0 flex-1 truncate font-mono text-xs" title={f.sha256}>
+                  {f.sha256}
+                </code>
                 <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
                   onClick={() => void copyToClipboard(f.sha256!, "SHA-256")}>
                   <CopyIcon />
