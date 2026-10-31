@@ -78,61 +78,58 @@ export function TaskDetail({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-col gap-1 border-b px-3 py-2">
-        {/* The command itself is the list's picked row. */}
-        <div className="flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-            <StateLabel t={t} />
-            <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
-              by {t.issuedByName ?? "someone gone"}
-            </span>
-            <TaskTimes t={t} />
-          </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
-              onClick={() => void actions.copyOutput(detail ? output : undefined)}>
-              <CopyIcon />
-            </Button>
-            <Button variant="ghost" size="icon-xs" title="Download the output as it came, bytes and all" aria-label="Download the raw output"
-              disabled={!actions.hasOutput}
-              render={actions.hasOutput ? <a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/output`} download /> : undefined}>
-              <DownloadIcon />
-            </Button>
-            {actions.canRunAgain && (
-              <Button variant="ghost" size="icon-xs" title="Run it again" aria-label="Run the task again" disabled={actions.runningAgain} onClick={actions.runAgain}>
-                <RotateCcwIcon />
-              </Button>
-            )}
-            {actions.canStop && (
-              <Button variant="ghost" size="icon-xs" title="Stop it" aria-label="Stop the task" disabled={actions.stopping} onClick={actions.stop}>
-                <SquareIcon />
-              </Button>
-            )}
-          </div>
-        </div>
-        {t.err && <div className="font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
-      </div>
-
-      <div className="flex items-center gap-1 border-b px-2 py-1">
-        <TabButton active={shown === "output"} onClick={() => setTab("output")}>
-          Output
-        </TabButton>
-        {data && (
-          <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-            Data
+      {/* One line: the tabs, where it stands, what can be done. The command
+          itself is the list's picked row. */}
+      <div className="flex items-center gap-2 border-b px-2 py-1">
+        <div className="flex shrink-0 items-center gap-1">
+          <TabButton active={shown === "output"} onClick={() => setTab("output")}>
+            Output
           </TabButton>
-        )}
-        <span className="flex-1" />
-        {shown === "output" && (
-          <Button variant={wrap ? "secondary" : "ghost"} size="icon-xs" title={wrap ? "Lines wrap" : "Lines do not wrap"} aria-label="Wrap lines" aria-pressed={wrap}
-            onClick={() => {
-              saveWrap(!wrap)
-              setWrap(!wrap)
-            }}>
-            <WrapTextIcon />
+          {data && (
+            <TabButton active={shown === "data"} onClick={() => setTab("data")}>
+              Data
+            </TabButton>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 border-l pl-2">
+          <StateLabel t={t} />
+          <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
+            by {t.issuedByName ?? "someone gone"}
+          </span>
+          <TaskTimes t={t} />
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {shown === "output" && (
+            <Button variant={wrap ? "secondary" : "ghost"} size="icon-xs" title={wrap ? "Lines wrap" : "Lines do not wrap"} aria-label="Wrap lines" aria-pressed={wrap}
+              onClick={() => {
+                saveWrap(!wrap)
+                setWrap(!wrap)
+              }}>
+              <WrapTextIcon />
+            </Button>
+          )}
+          <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
+            onClick={() => void actions.copyOutput(detail ? output : undefined)}>
+            <CopyIcon />
           </Button>
-        )}
+          <Button variant="ghost" size="icon-xs" title="Download the output as it came, bytes and all" aria-label="Download the raw output"
+            disabled={!actions.hasOutput}
+            render={actions.hasOutput ? <a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/output`} download /> : undefined}>
+            <DownloadIcon />
+          </Button>
+          {actions.canRunAgain && (
+            <Button variant="ghost" size="icon-xs" title="Run it again" aria-label="Run the task again" disabled={actions.runningAgain} onClick={actions.runAgain}>
+              <RotateCcwIcon />
+            </Button>
+          )}
+          {actions.canStop && (
+            <Button variant="ghost" size="icon-xs" title="Stop it" aria-label="Stop the task" disabled={actions.stopping} onClick={actions.stop}>
+              <SquareIcon />
+            </Button>
+          )}
+        </div>
       </div>
+      {t.err && <div className="border-b px-3 py-1 font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
 
       {shown === "output" ? (
         <OutputView
