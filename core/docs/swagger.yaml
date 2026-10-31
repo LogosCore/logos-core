@@ -583,6 +583,10 @@ paths:
         name: id
         required: true
         type: string
+      - description: Inline, for a type the browser shows safely
+        in: query
+        name: preview
+        type: boolean
       produces:
       - application/octet-stream
       responses: {}

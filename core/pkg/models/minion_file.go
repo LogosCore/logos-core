@@ -30,8 +30,11 @@ type MinionFile struct {
 	Received int64 `bson:"received" json:"received"`
 	// SHA256 is the whole's, as the last chunk said it.
 	SHA256 []byte `bson:"sha256,omitempty" json:"sha256,omitempty"`
-	State  string `bson:"state" json:"state"`
-	Err    string `bson:"err,omitempty" json:"err,omitempty"`
+	// ContentType is what its first bytes say it is (mimetype), set when it
+	// is kept; empty before.
+	ContentType string `bson:"content_type,omitempty" json:"content_type,omitempty"`
+	State       string `bson:"state" json:"state"`
+	Err         string `bson:"err,omitempty" json:"err,omitempty"`
 	// LastChunkAt is when a chunk last came: a transfer idle for long is
 	// given up.
 	LastChunkAt time.Time  `bson:"last_chunk_at" json:"last_chunk_at"`

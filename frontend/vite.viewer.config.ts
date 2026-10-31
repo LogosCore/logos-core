@@ -85,7 +85,7 @@ export default defineConfig({
       },
       // TIFF and HEIC decoders; see src/viewer/viewer-image-decode.ts.
       {
-        find: /^@\/components\/wiki\/wiki-image-decode$/,
+        find: /^@\/components\/file-preview\/image-decode$/,
         replacement: path.resolve(__dirname, "src/viewer/viewer-image-decode.ts"),
       },
       {

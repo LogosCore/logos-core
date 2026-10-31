@@ -467,15 +467,29 @@ type ComplexityRoot struct {
 	}
 
 	MinionFile struct {
-		CreatedAt func(childComplexity int) int
-		DoneAt    func(childComplexity int) int
-		Err       func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Name      func(childComplexity int) int
-		Received  func(childComplexity int) int
-		Sha256    func(childComplexity int) int
-		Size      func(childComplexity int) int
-		State     func(childComplexity int) int
+		ContentType func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		DoneAt      func(childComplexity int) int
+		Err         func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Received    func(childComplexity int) int
+		Sha256      func(childComplexity int) int
+		Size        func(childComplexity int) int
+		State       func(childComplexity int) int
+	}
+
+	MinionFileString struct {
+		Encoding func(childComplexity int) int
+		Length   func(childComplexity int) int
+		Offset   func(childComplexity int) int
+		Text     func(childComplexity int) int
+	}
+
+	MinionFileStringPage struct {
+		Done    func(childComplexity int) int
+		Next    func(childComplexity int) int
+		Strings func(childComplexity int) int
 	}
 
 	MinionSession struct {
@@ -979,6 +993,7 @@ type ComplexityRoot struct {
 		Host                               func(childComplexity int, id string) int
 		Hosts                              func(childComplexity int, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		Me                                 func(childComplexity int) int
+		MinionFileStrings                  func(childComplexity int, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) int
 		MinionSession                      func(childComplexity int, id string) int
 		MinionSessionCommands              func(childComplexity int, sessionID string) int
 		MinionSessionValues                func(childComplexity int, operationID string, column string) int
@@ -1683,6 +1698,7 @@ type QueryResolver interface {
 	MinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
+	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
@@ -3524,6 +3540,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Minion.Target(childComplexity), true
 
+	case "MinionFile.contentType":
+		if e.ComplexityRoot.MinionFile.ContentType == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFile.ContentType(childComplexity), true
 	case "MinionFile.createdAt":
 		if e.ComplexityRoot.MinionFile.CreatedAt == nil {
 			break
@@ -3578,6 +3600,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionFile.State(childComplexity), true
+
+	case "MinionFileString.encoding":
+		if e.ComplexityRoot.MinionFileString.Encoding == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileString.Encoding(childComplexity), true
+	case "MinionFileString.length":
+		if e.ComplexityRoot.MinionFileString.Length == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileString.Length(childComplexity), true
+	case "MinionFileString.offset":
+		if e.ComplexityRoot.MinionFileString.Offset == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileString.Offset(childComplexity), true
+	case "MinionFileString.text":
+		if e.ComplexityRoot.MinionFileString.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileString.Text(childComplexity), true
+
+	case "MinionFileStringPage.done":
+		if e.ComplexityRoot.MinionFileStringPage.Done == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileStringPage.Done(childComplexity), true
+	case "MinionFileStringPage.next":
+		if e.ComplexityRoot.MinionFileStringPage.Next == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileStringPage.Next(childComplexity), true
+	case "MinionFileStringPage.strings":
+		if e.ComplexityRoot.MinionFileStringPage.Strings == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionFileStringPage.Strings(childComplexity), true
 
 	case "MinionSession.address":
 		if e.ComplexityRoot.MinionSession.Address == nil {
@@ -6452,6 +6518,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Me(childComplexity), true
+	case "Query.minionFileStrings":
+		if e.ComplexityRoot.Query.MinionFileStrings == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionFileStrings_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionFileStrings(childComplexity, args["fileId"].(string), args["after"].(*int), args["first"].(*int), args["minLength"].(*int), args["encoding"].(*string), args["search"].(*string)), true
 	case "Query.minionSession":
 		if e.ComplexityRoot.Query.MinionSession == nil {
 			break
@@ -11032,8 +11109,30 @@ type MinionFile {
   state: String!
   # Why it failed or was cancelled.
   err: String
+  # What its first bytes say it is (a MIME type), once kept; null before.
+  contentType: String
   createdAt: String!
   doneAt: String
+}
+
+# A printable string in a kept file, as strings(1) finds it: length bytes
+# from offset, in encoding: ascii (a byte a character) or utf16le (each
+# character followed by a zero byte).
+type MinionFileString {
+  offset: Int!
+  length: Int!
+  encoding: String!
+  text: String!
+}
+
+# A page of a file's strings, in the order they are in it.
+type MinionFileStringPage {
+  strings: [MinionFileString!]!
+  # Where in the file the next page reads from (its after); the file's size
+  # when done.
+  next: Int!
+  # The file was read to its end.
+  done: Boolean!
 }
 
 # A page of a session's tasks, newest first.
@@ -11056,6 +11155,15 @@ extend type Query {
   # The commands a session's minion takes: its build's, with what a task of
   # each takes. Needs at least viewer.
   minionSessionCommands(sessionId: ID!): [BuildCommand!]!
+    @hasPermission(permission: "operation:member")
+
+  # A page of the printable strings in a kept file, read from after (0, or
+  # a page's next): at most first (200 by default, 1000 at most), of at
+  # least minLength characters (4 by default, 2 to 256), in encoding (ascii
+  # or utf16le; both by default), holding search in any case. A page reads
+  # at most 8 MiB of the file: with a search, it can come back short, or
+  # empty, and not done. Needs at least viewer.
+  minionFileStrings(fileId: ID!, after: Int, first: Int, minLength: Int, encoding: String, search: String): MinionFileStringPage!
     @hasPermission(permission: "operation:member")
 }
 
@@ -15123,6 +15231,42 @@ func (ec *executionContext) field_Query_hosts_args(ctx context.Context, rawArgs 
 		return nil, err
 	}
 	args["before"] = arg7
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_minionFileStrings_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "fileId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["fileId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "minLength", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["minLength"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "encoding", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["encoding"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg5
 	return args, nil
 }
 
@@ -25946,6 +26090,35 @@ func (ec *executionContext) fieldContext_MinionFile_err(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionFile_contentType(ctx context.Context, field graphql.CollectedField, obj *model.MinionFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFile_contentType,
+		func(ctx context.Context) (any, error) {
+			return obj.ContentType, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFile_contentType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionFile_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionFile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25999,6 +26172,219 @@ func (ec *executionContext) fieldContext_MinionFile_doneAt(_ context.Context, fi
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileString_offset(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileString) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileString_offset,
+		func(ctx context.Context) (any, error) {
+			return obj.Offset, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileString_offset(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileString",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileString_length(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileString) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileString_length,
+		func(ctx context.Context) (any, error) {
+			return obj.Length, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileString_length(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileString",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileString_encoding(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileString) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileString_encoding,
+		func(ctx context.Context) (any, error) {
+			return obj.Encoding, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileString_encoding(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileString",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileString_text(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileString) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileString_text,
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileString_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileString",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileStringPage_strings(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileStringPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileStringPage_strings,
+		func(ctx context.Context) (any, error) {
+			return obj.Strings, nil
+		},
+		nil,
+		ec.marshalNMinionFileString2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileStringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileStringPage_strings(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileStringPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "offset":
+				return ec.fieldContext_MinionFileString_offset(ctx, field)
+			case "length":
+				return ec.fieldContext_MinionFileString_length(ctx, field)
+			case "encoding":
+				return ec.fieldContext_MinionFileString_encoding(ctx, field)
+			case "text":
+				return ec.fieldContext_MinionFileString_text(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionFileString", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileStringPage_next(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileStringPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileStringPage_next,
+		func(ctx context.Context) (any, error) {
+			return obj.Next, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileStringPage_next(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileStringPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionFileStringPage_done(ctx context.Context, field graphql.CollectedField, obj *model.MinionFileStringPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionFileStringPage_done,
+		func(ctx context.Context) (any, error) {
+			return obj.Done, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionFileStringPage_done(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionFileStringPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -29317,6 +29703,8 @@ func (ec *executionContext) fieldContext_MinionTask_file(_ context.Context, fiel
 				return ec.fieldContext_MinionFile_state(ctx, field)
 			case "err":
 				return ec.fieldContext_MinionFile_err(ctx, field)
+			case "contentType":
+				return ec.fieldContext_MinionFile_contentType(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_MinionFile_createdAt(ctx, field)
 			case "doneAt":
@@ -46025,6 +46413,73 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_minionSessionCommands_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_minionFileStrings(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionFileStrings,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionFileStrings(ctx, fc.Args["fileId"].(string), fc.Args["after"].(*int), fc.Args["first"].(*int), fc.Args["minLength"].(*int), fc.Args["encoding"].(*string), fc.Args["search"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionFileStringPage
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionFileStringPage
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionFileStringPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileStringPage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionFileStrings(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "strings":
+				return ec.fieldContext_MinionFileStringPage_strings(ctx, field)
+			case "next":
+				return ec.fieldContext_MinionFileStringPage_next(ctx, field)
+			case "done":
+				return ec.fieldContext_MinionFileStringPage_done(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionFileStringPage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionFileStrings_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -67163,6 +67618,8 @@ func (ec *executionContext) _MinionFile(ctx context.Context, sel ast.SelectionSe
 			}
 		case "err":
 			out.Values[i] = ec._MinionFile_err(ctx, field, obj)
+		case "contentType":
+			out.Values[i] = ec._MinionFile_contentType(ctx, field, obj)
 		case "createdAt":
 			out.Values[i] = ec._MinionFile_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -67170,6 +67627,109 @@ func (ec *executionContext) _MinionFile(ctx context.Context, sel ast.SelectionSe
 			}
 		case "doneAt":
 			out.Values[i] = ec._MinionFile_doneAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionFileStringImplementors = []string{"MinionFileString"}
+
+func (ec *executionContext) _MinionFileString(ctx context.Context, sel ast.SelectionSet, obj *model.MinionFileString) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionFileStringImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionFileString")
+		case "offset":
+			out.Values[i] = ec._MinionFileString_offset(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "length":
+			out.Values[i] = ec._MinionFileString_length(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "encoding":
+			out.Values[i] = ec._MinionFileString_encoding(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._MinionFileString_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionFileStringPageImplementors = []string{"MinionFileStringPage"}
+
+func (ec *executionContext) _MinionFileStringPage(ctx context.Context, sel ast.SelectionSet, obj *model.MinionFileStringPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionFileStringPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionFileStringPage")
+		case "strings":
+			out.Values[i] = ec._MinionFileStringPage_strings(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "next":
+			out.Values[i] = ec._MinionFileStringPage_next(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "done":
+			out.Values[i] = ec._MinionFileStringPage_done(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -71707,6 +72267,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_minionSessionCommands(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionFileStrings":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionFileStrings(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -78938,6 +79520,46 @@ func (ec *executionContext) marshalNMinion2ᚖgithubᚗcomᚋlogoscoreᚋlogos�
 		return graphql.Null
 	}
 	return ec._Minion(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionFileString2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileStringᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionFileString) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionFileString2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileString(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionFileString2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileString(ctx context.Context, sel ast.SelectionSet, v *model.MinionFileString) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionFileString(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionFileStringPage2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileStringPage(ctx context.Context, sel ast.SelectionSet, v model.MinionFileStringPage) graphql.Marshaler {
+	return ec._MinionFileStringPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionFileStringPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileStringPage(ctx context.Context, sel ast.SelectionSet, v *model.MinionFileStringPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionFileStringPage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMinionSession2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v model.MinionSession) graphql.Marshaler {

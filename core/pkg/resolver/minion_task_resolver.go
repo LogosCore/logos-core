@@ -16,6 +16,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/taskdata"
@@ -40,6 +41,8 @@ type IMinionTaskResolver interface {
 	Document(ctx context.Context, taskID string) (string, error)
 	// File is a file_download task's file, as far as it came; nil for none.
 	File(ctx context.Context, taskID string) (*model.MinionFile, error)
+	// MinionFileStrings is a page of a kept file's printable strings.
+	MinionFileStrings(ctx context.Context, fileID string, after, first, minLength *int, encoding, search *string) (*model.MinionFileStringPage, error)
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -69,9 +72,12 @@ type minionTaskResolver struct {
 	files         TaskFiles
 }
 
-// TaskFiles finds a task's file (minionfiles.Service).
+// TaskFiles finds a task's file, and reads a kept one's strings
+// (minionfiles.Service).
 type TaskFiles interface {
 	File(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
+	FileByID(ctx context.Context, fileID uuid.UUID) (*models.MinionFile, error)
+	Strings(ctx context.Context, f models.MinionFile, q minionfiles.StringsQuery) (minionfiles.StringsPage, error)
 }
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
@@ -392,10 +398,70 @@ func (r *minionTaskResolver) File(ctx context.Context, taskID string) (*model.Mi
 		return nil, err
 	}
 	out := &model.MinionFile{ID: f.FileID.String(), Name: f.Name, Size: int(f.Total), Received: int(f.Received),
-		State: f.State, Err: strPtr(f.Err), CreatedAt: f.CreateAt.UTC().Format(time.RFC3339Nano), DoneAt: taskTime(f.DoneAt)}
+		State: f.State, Err: strPtr(f.Err), ContentType: strPtr(f.ContentType), CreatedAt: f.CreateAt.UTC().Format(time.RFC3339Nano), DoneAt: taskTime(f.DoneAt)}
 	if len(f.SHA256) > 0 {
 		h := hex.EncodeToString(f.SHA256)
 		out.Sha256 = &h
+	}
+	return out, nil
+}
+
+const (
+	defaultStringsPage = 200
+	maxStringsPage     = 1000
+	defaultMinString   = 4
+)
+
+func (r *minionTaskResolver) MinionFileStrings(ctx context.Context, fileID string, after, first, minLength *int, encoding, search *string) (*model.MinionFileStringPage, error) {
+	id, err := uuid.Parse(fileID)
+	if err != nil || r.files == nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid file ID")
+	}
+	f, err := r.files.FileByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if f == nil {
+		return nil, moduleGQLError(ctx, errCodeNotFound, "file not found")
+	}
+	if _, err := r.session(ctx, f.SessionID.String(), models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	q := minionfiles.StringsQuery{First: defaultStringsPage, MinLength: defaultMinString}
+	if after != nil {
+		q.After = int64(*after)
+	}
+	if first != nil {
+		q.First = min(max(*first, 1), maxStringsPage)
+	}
+	if minLength != nil {
+		if *minLength < 2 || *minLength > 256 {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "minLength is 2 to 256")
+		}
+		q.MinLength = *minLength
+	}
+	if encoding != nil && *encoding != "" {
+		if *encoding != minionfiles.EncodingASCII && *encoding != minionfiles.EncodingUTF16LE {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "encoding is ascii or utf16le")
+		}
+		q.Encoding = *encoding
+	}
+	if search != nil {
+		q.Search = *search
+	}
+	if f.State != models.MinionFileComplete {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the file is "+strings.ToLower(f.State))
+	}
+	if q.After < 0 || q.After > f.Total {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "after is past the file's end")
+	}
+	page, err := r.files.Strings(ctx, *f, q)
+	if err != nil {
+		return nil, fmt.Errorf("read the file's strings: %w", err)
+	}
+	out := &model.MinionFileStringPage{Strings: make([]*model.MinionFileString, 0, len(page.Strings)), Next: int(page.Next), Done: page.Done}
+	for _, s := range page.Strings {
+		out.Strings = append(out.Strings, &model.MinionFileString{Offset: int(s.Off), Length: int(s.Len), Encoding: s.Encoding, Text: s.Text})
 	}
 	return out, nil
 }

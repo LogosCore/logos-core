@@ -460,15 +460,29 @@ type Minion struct {
 }
 
 type MinionFile struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Size      int     `json:"size"`
-	Received  int     `json:"received"`
-	Sha256    *string `json:"sha256,omitempty"`
-	State     string  `json:"state"`
-	Err       *string `json:"err,omitempty"`
-	CreatedAt string  `json:"createdAt"`
-	DoneAt    *string `json:"doneAt,omitempty"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Size        int     `json:"size"`
+	Received    int     `json:"received"`
+	Sha256      *string `json:"sha256,omitempty"`
+	State       string  `json:"state"`
+	Err         *string `json:"err,omitempty"`
+	ContentType *string `json:"contentType,omitempty"`
+	CreatedAt   string  `json:"createdAt"`
+	DoneAt      *string `json:"doneAt,omitempty"`
+}
+
+type MinionFileString struct {
+	Offset   int    `json:"offset"`
+	Length   int    `json:"length"`
+	Encoding string `json:"encoding"`
+	Text     string `json:"text"`
+}
+
+type MinionFileStringPage struct {
+	Strings []*MinionFileString `json:"strings"`
+	Next    int                 `json:"next"`
+	Done    bool                `json:"done"`
 }
 
 type MinionSession struct {

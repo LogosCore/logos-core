@@ -493,6 +493,12 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Inline, for a type the browser shows safely",
+                        "name": "preview",
+                        "in": "query"
                     }
                 ],
                 "responses": {}

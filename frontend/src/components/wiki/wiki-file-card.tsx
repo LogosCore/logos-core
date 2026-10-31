@@ -7,14 +7,6 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   EyeIcon,
-  FileArchiveIcon,
-  FileAudioIcon,
-  FileCodeIcon,
-  FileIcon,
-  FileSpreadsheetIcon,
-  FileTextIcon,
-  FileVideoIcon,
-  ImageIcon,
   Maximize2Icon,
   Trash2Icon,
 } from "lucide-react"
@@ -23,10 +15,8 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
-  type RefObject,
 } from "react"
 
 import Lightbox from "yet-another-react-lightbox"
@@ -43,62 +33,18 @@ import {
   removeFilePreviewState,
 } from "@/lib/wiki-file-preview-state"
 import { useFocusRestoreWithoutScroll } from "@/hooks/use-focus-restore-without-scroll"
-import { PreviewResizeHandle } from "./wiki-file-preview-resize"
-import { estimateTextHeight } from "./wiki-file-preview-fit"
-import { imagePreviewFormat } from "./wiki-file-preview-image"
-import { useDecodedImage } from "./use-decoded-image"
+import { FileTypeIcon } from "@/components/file-preview/file-type-icon"
+import {
+  canonicalContentType,
+  filePreviewKind,
+  panelPreviews,
+  servedInline,
+} from "@/components/file-preview/kind"
+import { FilePreviewPanel } from "@/components/file-preview/preview-panel"
+import { useRenderedPreview } from "@/components/file-preview/source"
+import { useDecodedImage } from "@/components/file-preview/use-decoded-image"
 // Through the alias path, not "./": the viewer build replaces this module.
 import { useServerContentType } from "@/components/wiki/wiki-file-type-probe"
-import {
-  detectMediaPreviewKind,
-  type MediaPreviewKind,
-} from "./wiki-file-preview-media"
-import {
-  detectInlinePreviewKind,
-  useRenderedPreview,
-  type InlinePreviewKind,
-  type RenderedPreviewState,
-} from "./wiki-file-preview-source"
-
-/** Content types the browser can render inline without executing scripts.
- *  Must stay in sync with previewAllowedContentTypes in wiki_file_controller.go. */
-const PREVIEW_ALLOWED_CONTENT_TYPES = new Set<string>([
-  "application/pdf",
-  "text/plain",
-  "text/markdown",
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "image/avif",
-  "image/bmp",
-  "image/svg+xml",
-  "image/x-icon",
-  "image/vnd.microsoft.icon",
-  "video/webm",
-  "video/mp4",
-  "video/ogg",
-  "video/quicktime",
-  "video/x-m4v",
-  "audio/mpeg",
-  "audio/ogg",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/webm",
-  "audio/mp4",
-  "audio/flac",
-])
-
-/** Types we never serve inline regardless of ?preview=1 — mirrors the backend's
- *  dangerousContentTypes list in wiki_file_controller.go. */
-const DANGEROUS_CONTENT_TYPES = new Set<string>([
-  "text/html",
-  "application/xhtml+xml",
-  "application/javascript",
-  "application/x-javascript",
-  "text/javascript",
-])
-
 
 interface FileNodeAttrs {
   fileId: string | null
@@ -132,31 +78,19 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   const filename = attrs.filename || "file"
   // A card written as Markdown may only have guessed its type; the server's
   // answer replaces a guess of octet-stream (wiki-file-type-probe.ts).
-  const contentType = useServerContentType(url, canonicalize(attrs.contentType))
-  const canPreview =
-    PREVIEW_ALLOWED_CONTENT_TYPES.has(contentType) &&
-    !DANGEROUS_CONTENT_TYPES.has(contentType)
-  // Two inline-preview mechanisms share the expandable panel:
-  //   - PDF: <iframe src=...?preview=1> served inline by the backend.
-  //   - everything else: <iframe srcdoc> built from bytes we fetched and
-  //     converted ourselves, fully sandboxed and CSP-constrained.
-  // Other previewable types (text, markdown) still open in a new tab.
-  const isPdf = contentType === "application/pdf"
+  const contentType = useServerContentType(url, canonicalContentType(attrs.contentType))
+  const canPreview = servedInline(contentType)
+  // How it previews (file-preview/kind.ts). The expandable panel shows a PDF
+  // (<iframe src=...?preview=1>), media (a native player), or a document we
+  // fetched and converted ourselves into a sandboxed, CSP-constrained srcdoc.
   // Images bypass the panel entirely — see the thumbnail/lightbox path below.
   // "native" ones the browser draws from the URL; TIFF and HEIC are decoded
   // first (use-decoded-image.ts).
-  const imageFormat = url !== "" ? imagePreviewFormat(contentType, filename) : null
+  const kind = filePreviewKind(contentType, filename, attrs.size)
+  const { isPdf, mediaKind, renderedKind } = kind
+  const imageFormat = url !== "" ? kind.imageFormat : null
   const isImage = imageFormat !== null
-  // Video and audio play in the panel through a native element pointed at
-  // the inline URL; nothing is fetched or converted here.
-  const mediaKind: MediaPreviewKind | null =
-    isPdf || isImage ? null : detectMediaPreviewKind(contentType, filename)
-  const renderedKind: InlinePreviewKind | null =
-    isPdf || isImage || mediaKind !== null
-      ? null
-      : detectInlinePreviewKind(contentType, filename, attrs.size)
-  const canPreviewInline =
-    (isPdf || mediaKind !== null || renderedKind !== null) && url !== ""
+  const canPreviewInline = panelPreviews(kind) && url !== ""
   const previewUrl = url ? `${url}?preview=1` : ""
 
   // The frame is style-isolated, so the converters embed a palette rather than
@@ -413,7 +347,7 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
           </button>
         ) : (
           <div className="wiki-file-icon" aria-hidden="true">
-            {renderIcon(contentType, filename)}
+            <FileTypeIcon contentType={contentType} filename={filename} size={FILE_ICON_SIZE} />
           </div>
         )}
         <div className="wiki-file-meta">
@@ -514,160 +448,6 @@ export function WikiFileCard({ node, editor, getPos }: ReactNodeViewProps): Reac
   )
 }
 
-interface FilePreviewPanelProps {
-  /** Container ref — the element handed to the native Fullscreen request and
-   *  the target the resize drag mutates in place. */
-  containerRef: RefObject<HTMLDivElement | null>
-  isPdf: boolean
-  /** Video or audio rendered through a native player; null otherwise. */
-  mediaKind: MediaPreviewKind | null
-  /** Inline-disposition URL for the PDF iframe and the media player (unused for HTML). */
-  previewUrl: string
-  filename: string
-  rendered: RenderedPreviewState
-  /** User-dragged height in px, or null for the CSS default. */
-  height: number | null
-  /** Commits a new dragged height once the drag ends. */
-  onHeightChange: (height: number) => void
-  /** The frame takes the pointer from the start, without a first click. */
-  startActive: boolean
-}
-
-// The expandable preview panel. PDFs render via an inline iframe src; every
-// other format renders a converted document into a fully locked sandbox (no
-// allow-scripts, no allow-same-origin) so embedded scripts are inert, carrying
-// an injected CSP that also denies the document any network egress, while
-// inline CSS and data-URI assets still display. A drag handle lets the
-// reader grow or shrink the frame; the chosen height is held on the card.
-function FilePreviewPanel({
-  containerRef,
-  isPdf,
-  mediaKind,
-  previewUrl,
-  filename,
-  rendered,
-  height,
-  onHeightChange,
-  startActive,
-}: FilePreviewPanelProps): ReactElement {
-  // Shared by whichever of the two iframes renders — the resize handle measures
-  // this to seed the drag. Absent while HTML is still loading or errored, which
-  // is exactly when we also hide the handle.
-  const frameRef = useRef<HTMLIFrameElement>(null)
-  // Media sizes itself to its own aspect ratio, so no drag handle.
-  const hasFrame = mediaKind === null && (isPdf || rendered.content !== null)
-  // An inactive frame has pointer-events disabled, so the wheel scrolls the
-  // wiki page past it; clicking the preview activates it. A panel the reader
-  // just opened starts active: they opened it to read it. One restored open
-  // with the page starts inactive, or scrolling down the page would stop dead
-  // inside the first preview the pointer crossed.
-  const [frameActive, setFrameActive] = useState(startActive)
-  // Set when the browser cannot decode the media; see the players below.
-  const [mediaFailed, setMediaFailed] = useState(false)
-  // A listing shorter than the frame caps it at its own height (see
-  // wiki-file-preview-fit.ts). Wrapped text depends on the width, so the
-  // panel's width is followed as the page resizes.
-  const [panelWidth, setPanelWidth] = useState(0)
-  const layout = rendered.textLayout
-  useEffect(() => {
-    const panel = containerRef.current
-    if (!panel || layout === null) return
-    const observer = new ResizeObserver(() => setPanelWidth(panel.clientWidth))
-    observer.observe(panel)
-    return () => observer.disconnect()
-  }, [containerRef, layout])
-  const frameCap =
-    layout !== null && panelWidth > 0 ? estimateTextHeight(layout, panelWidth) : null
-  const frameStyle = {
-    ...(frameActive ? {} : { pointerEvents: "none" as const }),
-    ...(frameCap === null ? {} : { "--wiki-preview-max": `${frameCap}px` }),
-  } as CSSProperties
-
-  return (
-    <div className="wiki-file-preview" contentEditable={false} ref={containerRef}>
-      {mediaKind !== null && mediaFailed ? (
-        <p className="wiki-file-preview-status wiki-file-preview-status--error">
-          This browser can&rsquo;t play this {mediaKind === "video" ? "video" : "recording"}: it was
-          encoded in a format the browser does not decode. Download it to watch it in a desktop
-          player.
-        </p>
-      ) : mediaKind === "video" ? (
-        // preload="metadata": duration and first frame only, until played.
-        <video
-          className="wiki-file-preview-media"
-          controls
-          preload="metadata"
-          src={previewUrl}
-          title={filename}
-          onError={() => setMediaFailed(true)}
-          onLoadedMetadata={(e) => {
-            // A video track the browser cannot decode next to an audio track it
-            // can raises no error: the file "plays", sound over a black frame.
-            // No picture size is how that shows.
-            if (e.currentTarget.videoWidth === 0) setMediaFailed(true)
-          }}
-        />
-      ) : mediaKind === "audio" ? (
-        <audio
-          className="wiki-file-preview-media wiki-file-preview-media--audio"
-          controls
-          preload="metadata"
-          src={previewUrl}
-          title={filename}
-          onError={() => setMediaFailed(true)}
-        />
-      ) : isPdf ? (
-        <div className="wiki-file-preview-frame-wrap">
-          <iframe
-            ref={frameRef}
-            className="wiki-file-preview-frame"
-            src={previewUrl}
-            title={`Preview of ${filename}`}
-            style={frameActive ? undefined : { pointerEvents: "none" }}
-          />
-          {!frameActive && (
-            <div
-              className="wiki-file-preview-frame-overlay"
-              onClick={() => setFrameActive(true)}
-            />
-          )}
-        </div>
-      ) : rendered.error !== null ? (
-        <p className="wiki-file-preview-status wiki-file-preview-status--error">
-          {rendered.error}
-        </p>
-      ) : rendered.content === null ? (
-        <p className="wiki-file-preview-status">Loading preview…</p>
-      ) : (
-        <div className="wiki-file-preview-frame-wrap">
-          <iframe
-            ref={frameRef}
-            className="wiki-file-preview-frame"
-            sandbox=""
-            srcDoc={rendered.content}
-            title={`Preview of ${filename}`}
-            style={frameStyle}
-          />
-          {!frameActive && (
-            <div
-              className="wiki-file-preview-frame-overlay"
-              onClick={() => setFrameActive(true)}
-            />
-          )}
-        </div>
-      )}
-      {hasFrame ? (
-        <PreviewResizeHandle
-          containerRef={containerRef}
-          frameRef={frameRef}
-          height={height}
-          onCommit={onHeightChange}
-        />
-      ) : null}
-    </div>
-  )
-}
-
 interface FileActionButtonProps {
   icon: ReactElement
   /** Accessible name; also the screen-reader label. */
@@ -714,69 +494,6 @@ function FileActionButton({
 function swallow(e: ReactMouseEvent): void {
   e.preventDefault()
   e.stopPropagation()
-}
-
-// Strip any parameters (e.g. "; charset=utf-8") and lowercase so the MIME
-// comparison matches the backend's canonicalContentType in
-// wiki_file_controller.go.
-function canonicalize(contentType: string): string {
-  const ct = (contentType ?? "").split(";")[0]
-  return ct.trim().toLowerCase()
-}
-
-function renderIcon(contentType: string, filename: string): ReactElement {
-  const size = FILE_ICON_SIZE
-  const type = (contentType ?? "").toLowerCase()
-
-  if (type.startsWith("audio/")) return <FileAudioIcon size={size} />
-  if (type.startsWith("video/")) return <FileVideoIcon size={size} />
-  // Reached by images that have no thumbnail: a format we have no decoder
-  // for, one still decoding or that failed to, or one whose bytes have gone
-  // missing.
-  if (type.startsWith("image/")) return <ImageIcon size={size} />
-  if (
-    type === "text/html" ||
-    type === "application/xhtml+xml" ||
-    type === "application/xml" ||
-    type === "text/xml"
-  ) {
-    return <FileCodeIcon size={size} />
-  }
-  if (
-    type.startsWith("text/") ||
-    type === "application/json" ||
-    type === "application/pdf" ||
-    type === "application/msword" ||
-    type.includes("wordprocessingml")
-  ) {
-    return <FileTextIcon size={size} />
-  }
-  if (
-    type.includes("spreadsheet") ||
-    type === "text/csv" ||
-    type === "application/vnd.ms-excel"
-  ) {
-    return <FileSpreadsheetIcon size={size} />
-  }
-  if (
-    type === "application/zip" ||
-    type === "application/x-tar" ||
-    type === "application/x-7z-compressed" ||
-    type === "application/x-rar-compressed" ||
-    type === "application/gzip"
-  ) {
-    return <FileArchiveIcon size={size} />
-  }
-
-  // Fall back to the extension when the server couldn't identify the type.
-  const ext = filename.toLowerCase().split(".").pop() ?? ""
-  if (["zip", "tar", "gz", "7z", "rar"].includes(ext))
-    return <FileArchiveIcon size={size} />
-  if (["xls", "xlsx", "csv", "tsv"].includes(ext))
-    return <FileSpreadsheetIcon size={size} />
-  if (["doc", "docx", "txt", "md", "rtf", "pdf"].includes(ext))
-    return <FileTextIcon size={size} />
-  return <FileIcon size={size} />
 }
 
 function formatBytes(bytes: number): string {

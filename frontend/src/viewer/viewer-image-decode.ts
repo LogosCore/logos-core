@@ -1,4 +1,4 @@
-// The HTML export's stand-in for wiki-image-decode.ts.
+// The HTML export's stand-in for file-preview/image-decode.ts.
 //
 // The viewer is one inlined script per bundle, so the app's decoders would
 // ride along in every export: libheif alone is about 1.5 MB, for a format

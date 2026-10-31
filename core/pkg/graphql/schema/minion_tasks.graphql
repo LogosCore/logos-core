@@ -96,8 +96,30 @@ type MinionFile {
   state: String!
   # Why it failed or was cancelled.
   err: String
+  # What its first bytes say it is (a MIME type), once kept; null before.
+  contentType: String
   createdAt: String!
   doneAt: String
+}
+
+# A printable string in a kept file, as strings(1) finds it: length bytes
+# from offset, in encoding: ascii (a byte a character) or utf16le (each
+# character followed by a zero byte).
+type MinionFileString {
+  offset: Int!
+  length: Int!
+  encoding: String!
+  text: String!
+}
+
+# A page of a file's strings, in the order they are in it.
+type MinionFileStringPage {
+  strings: [MinionFileString!]!
+  # Where in the file the next page reads from (its after); the file's size
+  # when done.
+  next: Int!
+  # The file was read to its end.
+  done: Boolean!
 }
 
 # A page of a session's tasks, newest first.
@@ -120,6 +142,15 @@ extend type Query {
   # The commands a session's minion takes: its build's, with what a task of
   # each takes. Needs at least viewer.
   minionSessionCommands(sessionId: ID!): [BuildCommand!]!
+    @hasPermission(permission: "operation:member")
+
+  # A page of the printable strings in a kept file, read from after (0, or
+  # a page's next): at most first (200 by default, 1000 at most), of at
+  # least minLength characters (4 by default, 2 to 256), in encoding (ascii
+  # or utf16le; both by default), holding search in any case. A page reads
+  # at most 8 MiB of the file: with a search, it can come back short, or
+  # empty, and not done. Needs at least viewer.
+  minionFileStrings(fileId: ID!, after: Int, first: Int, minLength: Int, encoding: String, search: String): MinionFileStringPage!
     @hasPermission(permission: "operation:member")
 }
 

@@ -450,7 +450,7 @@ func (r *exportRun) file(ctx context.Context, doc models.WikiDocument, label str
 
 // maxInlinePreviewBytes is the largest file the viewer can preview from its
 // bytes: the frontend's own ceiling (MAX_INLINE_HTML_BYTES in
-// wiki-file-preview-source.ts). Anything larger is offered as a download
+// file-preview/source.ts). Anything larger is offered as a download
 // there too, so carrying its bytes twice would buy nothing.
 const maxInlinePreviewBytes = 25 << 20
 

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"regexp"
@@ -39,13 +40,19 @@ func NewMinionTaskController(tasks repository.IMinionTaskRepository, files Minio
 // DownloadFile handles GET /api/v1/minion-files/{id}.
 //
 // A file a minion sent core, as it came: for anyone who can see its
-// operation, as a task's output, and always an attachment, never rendered.
+// operation, as a task's output. Its type is what its first bytes say;
+// it is an attachment unless ?preview=1 asks for it inline and it is a
+// type the browser shows without running anything (as a wiki file's:
+// previewAllowedContentTypes). It never changes, so it is cached by its
+// SHA-256, and byte ranges are answered: the console's hex view reads it a
+// piece at a time, a player seeks.
 //
 //	@Summary		Download a file a minion sent
 //	@Tags			Minion tasks
 //	@Produce		application/octet-stream
 //	@Security		BearerAuth
-//	@Param			id	path	string	true	"File ID"
+//	@Param			id		path	string	true	"File ID"
+//	@Param			preview	query	bool	false	"Inline, for a type the browser shows safely"
 //	@Router			/minion-files/{id} [get]
 func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
@@ -79,14 +86,18 @@ func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
 	if name == "" || name == "_" {
 		name = "file-" + id.String()[:8]
 	}
-	c.Header("Content-Type", "application/octet-stream")
-	c.Header("Content-Disposition", contentDispositionFor(name, "application/octet-stream", false))
-	c.Header("Content-Length", strconv.FormatInt(f.Total, 10))
-	c.Header("Cache-Control", "private, no-store")
+	contentType := f.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	preview := c.Query("preview") == "1" || c.Query("preview") == "true"
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", contentDispositionFor(name, contentType, preview))
+	c.Header("ETag", fileETagFor(hex.EncodeToString(f.SHA256)))
+	c.Header("Cache-Control", "private, max-age=31536000, immutable")
 	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
-	c.Status(http.StatusOK)
-	if _, err := io.Copy(c.Writer, body); err != nil {
+	c.Header("Content-Security-Policy", fileCSPFor(contentType))
+	if err := writeFileBody(c.Writer, c.Request, body, f.Total); err != nil {
 		mc.logger.Debug("Minion file download aborted", zap.Error(err))
 	}
 }

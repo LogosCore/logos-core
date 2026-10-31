@@ -21,7 +21,8 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { DirListingView } from "./dir-listing-view"
-import { FileCard } from "./file-card"
+import { FileView } from "./file-view"
+import { TabButton } from "./tab-button"
 import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
@@ -240,9 +241,7 @@ export function TaskDetail({
             <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
           )}
           {isFile && t.file && !rawData ? (
-            <div className="min-h-0 flex-1 overflow-auto">
-              <FileCard file={t.file} />
-            </div>
+            <FileView key={t.file.id} file={t.file} />
           ) : listing && !rawData ? (
             <DirListingView
               listing={listing}
@@ -277,23 +276,6 @@ export function TaskDetail({
         )
       )}
     </div>
-  )
-}
-
-function TabButton({ active, onClick, title, children }: { active: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "cursor-pointer rounded px-2 py-0.5 text-xs font-medium",
-        active ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   )
 }
 

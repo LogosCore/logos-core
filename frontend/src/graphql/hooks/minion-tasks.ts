@@ -4,6 +4,7 @@ import { isOlder } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
   CancelMinionTaskDocument,
+  MinionFileStringsDocument,
   MinionSessionCommandsDocument,
   MinionTaskChangedDocument,
   MinionTaskDocumentDocument,
@@ -24,7 +25,18 @@ export const minionTaskKeys = {
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
   output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
   document: (id: string) => [...minionTaskKeys.all, "document", id] as const,
+  fileStrings: (fileId: string, filter: MinionFileStringsFilter) =>
+    [...minionTaskKeys.all, "fileStrings", fileId, filter] as const,
 }
+
+/** What the strings of a file are read with: unset for core's defaults. */
+export interface MinionFileStringsFilter {
+  minLength: number
+  encoding: "" | "ascii" | "utf16le"
+  search: string
+}
+
+export const DEFAULT_STRINGS_FILTER: MinionFileStringsFilter = { minLength: 4, encoding: "", search: "" }
 
 const PAGE = 50
 
@@ -69,6 +81,31 @@ export function useMinionTaskDocument(id: string, version: string, enabled: bool
     enabled,
     placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === id ? prev : undefined),
     gcTime: 30_000,
+  })
+}
+
+/**
+ * A kept file's printable strings, a page at a time from where the last
+ * stopped (an offset in the file), as core reads them: a page may be short,
+ * or empty, and not the last.
+ */
+export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFilter) {
+  return useInfiniteQuery({
+    queryKey: minionTaskKeys.fileStrings(fileId, filter),
+    queryFn: ({ pageParam }) =>
+      graphqlClient(MinionFileStringsDocument, {
+        fileId,
+        after: pageParam,
+        first: 500,
+        minLength: filter.minLength,
+        encoding: filter.encoding || null,
+        search: filter.search || null,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.minionFileStrings.done ? undefined : last.minionFileStrings.next),
+    // The file never changes: what was read stays good.
+    staleTime: Infinity,
+    gcTime: 60_000,
   })
 }
 

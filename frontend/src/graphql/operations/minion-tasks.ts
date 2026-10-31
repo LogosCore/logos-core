@@ -41,6 +41,7 @@ export const MinionTaskFields = graphql(`
       sha256
       state
       err
+      contentType
       doneAt
     }
   }
@@ -53,6 +54,21 @@ export const MinionTaskOutputQuery = graphql(`
       output
       outputUtf8
       data
+    }
+  }
+`)
+
+export const MinionFileStringsQuery = graphql(`
+  query MinionFileStrings($fileId: ID!, $after: Int, $first: Int, $minLength: Int, $encoding: String, $search: String) {
+    minionFileStrings(fileId: $fileId, after: $after, first: $first, minLength: $minLength, encoding: $encoding, search: $search) {
+      strings {
+        offset
+        length
+        encoding
+        text
+      }
+      next
+      done
     }
   }
 `)

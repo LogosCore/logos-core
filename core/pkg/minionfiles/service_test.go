@@ -145,6 +145,9 @@ func (m *memFiles) Move(_ context.Context, id uuid.UUID, from []string, state st
 	if v, ok := set["err"].(string); ok {
 		f.Err = v
 	}
+	if v, ok := set["content_type"].(string); ok {
+		f.ContentType = v
+	}
 	c := *f
 	return &c, nil
 }
@@ -234,6 +237,9 @@ func TestTransfer(t *testing.T) {
 	got, _ := io.ReadAll(rc)
 	if !bytes.Equal(got, body) || store.keys("staging/") != 0 {
 		t.Fatalf("kept %q, %d chunks left", got, store.keys("staging/"))
+	}
+	if f.ContentType != "text/plain; charset=utf-8" {
+		t.Fatalf("its type: %q", f.ContentType)
 	}
 }
 

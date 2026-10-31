@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/blob"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
@@ -207,10 +208,11 @@ func (s *Service) goJoin(f models.MinionFile) {
 }
 
 // join makes the file's object from its chunks, in order, checks it, and
-// drops the chunks.
+// drops the chunks. What its first bytes say it is becomes its content type.
 func (s *Service) join(ctx context.Context, f models.MinionFile) {
 	pr, pw := io.Pipe()
 	sum := sha256.New()
+	head := &prefix{max: sniffLen}
 	go func() {
 		var off int64
 		for off < f.Total {
@@ -219,7 +221,7 @@ func (s *Service) join(ctx context.Context, f models.MinionFile) {
 				pw.CloseWithError(fmt.Errorf("chunk at %d: %w", off, err))
 				return
 			}
-			n, err := io.Copy(io.MultiWriter(pw, sum), body)
+			n, err := io.Copy(io.MultiWriter(pw, sum, head), body)
 			_ = body.Close()
 			if err == nil && n == 0 {
 				err = errors.New("empty")
@@ -251,7 +253,8 @@ func (s *Service) join(ctx context.Context, f models.MinionFile) {
 			bson.M{"err": problem, "done_at": now})
 		s.logger.Warn("minion file did not check out", zap.String("file_id", f.FileID.String()), zap.String("problem", problem))
 	} else {
-		after, err = s.files.Move(ctx, f.FileID, []string{models.MinionFileJoining}, models.MinionFileComplete, bson.M{"done_at": now})
+		after, err = s.files.Move(ctx, f.FileID, []string{models.MinionFileJoining}, models.MinionFileComplete,
+			bson.M{"done_at": now, "content_type": mimetype.Detect(head.b).String()})
 		s.logger.Info("minion file kept", zap.String("file_id", f.FileID.String()), zap.Int64("size", size))
 	}
 	if err != nil {
@@ -260,6 +263,23 @@ func (s *Service) join(ctx context.Context, f models.MinionFile) {
 	}
 	s.dropStaging(ctx, *after)
 	s.publish(after)
+}
+
+// sniffLen is how much of a file its type is read from: mimetype's own
+// default.
+const sniffLen = 3072
+
+// prefix keeps the first max bytes written to it.
+type prefix struct {
+	b   []byte
+	max int
+}
+
+func (p *prefix) Write(b []byte) (int, error) {
+	if room := p.max - len(p.b); room > 0 {
+		p.b = append(p.b, b[:min(room, len(b))]...)
+	}
+	return len(b), nil
 }
 
 // dropStaging deletes a file's chunks: as far as it got, each the size it
@@ -322,6 +342,15 @@ func (s *Service) Open(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, *m
 // File is a task's file, nil for none.
 func (s *Service) File(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error) {
 	f, err := s.files.FindByTask(ctx, taskID)
+	if repository.IsNotFound(err) {
+		return nil, nil
+	}
+	return f, err
+}
+
+// FileByID is a file by its id, nil for none.
+func (s *Service) FileByID(ctx context.Context, fileID uuid.UUID) (*models.MinionFile, error) {
+	f, err := s.files.FindByID(ctx, fileID)
 	if repository.IsNotFound(err) {
 		return nil, nil
 	}
