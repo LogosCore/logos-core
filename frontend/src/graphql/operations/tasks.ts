@@ -8,6 +8,7 @@ import { graphql } from "@/graphql/gql"
 export const TaskFields = graphql(`
   fragment TaskFields on Task {
     id
+    rev
     operationId
     name
     description

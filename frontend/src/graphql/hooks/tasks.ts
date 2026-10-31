@@ -11,6 +11,7 @@ import {
   applyRowUpdate,
   patchDetail,
   scheduleRefresh,
+  setNewer,
   type LiveListSpec,
 } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
@@ -112,7 +113,7 @@ const taskLists: LiveListSpec<TaskFieldsFragment> = {
 // updatedTask applies a mutation's returned row: the detail takes it whole,
 // the lists get it patched in.
 function updatedTask(queryClient: QueryClient, task: TaskFieldsFragment) {
-  queryClient.setQueryData(taskKeys.detail(task.id), { task })
+  setNewer(queryClient, taskKeys.detail(task.id), "task", task)
   applyRowUpdate(queryClient, taskLists, task)
 }
 
@@ -358,9 +359,7 @@ export function useChangeTaskStage() {
       }
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(taskKeys.detail(data.changeTaskStage.id), {
-        task: data.changeTaskStage,
-      })
+      setNewer(queryClient, taskKeys.detail(data.changeTaskStage.id), "task", data.changeTaskStage)
     },
     onSettled: () => {
       scheduleRefresh(queryClient, taskKeys.lists())
@@ -431,9 +430,7 @@ export function useRestoreTask() {
   return useMutation({
     mutationFn: (id: string) => graphqlClient(RestoreTaskDocument, { id }),
     onSuccess: (data, id) => {
-      queryClient.setQueryData(taskKeys.detail(id), {
-        task: data.restoreTask,
-      })
+      setNewer(queryClient, taskKeys.detail(id), "task", data.restoreTask)
       scheduleRefresh(queryClient, taskKeys.lists())
       scheduleRefresh(queryClient, taskKeys.trashLists())
     },

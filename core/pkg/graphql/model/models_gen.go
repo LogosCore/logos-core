@@ -460,6 +460,7 @@ type Minion struct {
 
 type MinionSession struct {
 	ID               string                  `json:"id"`
+	Rev              int                     `json:"rev"`
 	State            string                  `json:"state"`
 	Number           int                     `json:"number"`
 	OperationID      string                  `json:"operationId"`
@@ -600,6 +601,7 @@ type MinionSessionsLayoutInput struct {
 
 type MinionTask struct {
 	ID                string  `json:"id"`
+	Rev               int     `json:"rev"`
 	SessionID         string  `json:"sessionId"`
 	OperationID       string  `json:"operationId"`
 	Command           string  `json:"command"`

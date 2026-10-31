@@ -108,6 +108,7 @@ func NewHostRepository(db database.Database) IHostRepository {
 }
 
 func (r *hostRepository) Create(ctx context.Context, h *models.Host) error {
+	h.Rev = 1
 	_, err := r.coll.InsertOne(ctx, h)
 	return err
 }
@@ -151,7 +152,7 @@ func (r *hostRepository) CountByOperationID(ctx context.Context, opID uuid.UUID,
 func (r *hostRepository) Update(ctx context.Context, h *models.Host, updates map[string]interface{}) error {
 	return r.coll.UpdateOne(ctx,
 		bson.M{"host_id": h.HostID, "operation_id": h.OperationID},
-		bson.M{"$set": updates},
+		revised(bson.M{"$set": bson.M(updates)}),
 	)
 }
 

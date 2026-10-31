@@ -60,6 +60,7 @@ type Login struct {
 // this data, so the graph can never go stale relative to its hosts.
 type Host struct {
 	field.DefaultField `bson:",inline"`
+	Rev                int64     `bson:"rev" json:"rev"` // writes counted (repository.revised): a client keeps the higher copy
 	HostID             uuid.UUID `bson:"host_id"       json:"host_id"`
 	OperationID        uuid.UUID `bson:"operation_id"  json:"operation_id"`
 	Hostname           string    `bson:"hostname"      json:"hostname"`

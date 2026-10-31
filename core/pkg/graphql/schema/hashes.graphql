@@ -24,6 +24,9 @@ enum HashStatus {
 
 type Hash {
   id: ID!
+  # Counts the row's changes: of two copies, the one with the higher rev is
+  # the newer (a mutation's answer can come after live updates).
+  rev: Int!
   operationId: ID!
   # Full parent Operation. Used by the global Findings page where one row may
   # belong to any operation. In scoped views the operation is implicit — skip

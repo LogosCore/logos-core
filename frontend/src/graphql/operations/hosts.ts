@@ -9,6 +9,7 @@ import { graphql } from "@/graphql/gql"
 export const HostFields = graphql(`
   fragment HostFields on Host {
     id
+    rev
     operationId
     hostname
     description

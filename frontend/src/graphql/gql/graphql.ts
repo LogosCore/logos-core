@@ -411,6 +411,7 @@ export type Credential = {
   operationId: Scalars['ID']['output'];
   password: Scalars['String']['output'];
   properties: Array<CredentialProperty>;
+  rev: Scalars['Int']['output'];
   sourceHashes: Array<Hash>;
   tags: Array<Scalars['String']['output']>;
   taskBacklinks: Array<Task>;
@@ -515,6 +516,7 @@ export type Hash = {
   id: Scalars['ID']['output'];
   operation: Operation;
   operationId: Scalars['ID']['output'];
+  rev: Scalars['Int']['output'];
   status: HashStatus;
   tags: Array<Scalars['String']['output']>;
   updatedAt: Scalars['String']['output'];
@@ -560,6 +562,7 @@ export type Host = {
   operation: Operation;
   operationId: Scalars['ID']['output'];
   os: Scalars['String']['output'];
+  rev: Scalars['Int']['output'];
   routes: Array<Route>;
   updatedAt: Scalars['String']['output'];
 };
@@ -660,6 +663,7 @@ export type MinionSession = {
   proc?: Maybe<Scalars['String']['output']>;
   restartCount: Scalars['Int']['output'];
   restarts: Array<MinionSessionRestart>;
+  rev: Scalars['Int']['output'];
   sleepInterval?: Maybe<Scalars['Int']['output']>;
   sleepJitter?: Maybe<Scalars['Int']['output']>;
   staged: Scalars['Boolean']['output'];
@@ -812,6 +816,7 @@ export type MinionTask = {
   outputUtf8: Scalars['Boolean']['output'];
   parts: Scalars['Int']['output'];
   queuedAt: Scalars['String']['output'];
+  rev: Scalars['Int']['output'];
   sendCount: Scalars['Int']['output'];
   sentAt?: Maybe<Scalars['String']['output']>;
   sessionId: Scalars['ID']['output'];
@@ -2585,6 +2590,7 @@ export type Task = {
   operationId: Scalars['ID']['output'];
   profitDescription: Scalars['String']['output'];
   profitScore: Scalars['Int']['output'];
+  rev: Scalars['Int']['output'];
   riskDescription: Scalars['String']['output'];
   riskScore: Scalars['Int']['output'];
   stage: TaskStage;
@@ -3204,9 +3210,9 @@ export type DeleteChannelEndpointMutation = { deleteChannelEndpoint: boolean };
 
 export type CredentialCommentFieldsFragment = { id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null };
 
-export type CredentialFieldsFragment = { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
+export type CredentialFieldsFragment = { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
 
-export type CredentialFieldsWithOperationFragment = { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
+export type CredentialFieldsWithOperationFragment = { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
 
 export type CredentialChipFieldsFragment = { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }> };
 
@@ -3222,7 +3228,7 @@ export type CredentialQueryVariables = Exact<{
 }>;
 
 
-export type CredentialQuery = { credential: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type CredentialQuery = { credential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type CredentialsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3238,7 +3244,7 @@ export type CredentialsQueryVariables = Exact<{
 }>;
 
 
-export type CredentialsQuery = { credentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type CredentialsQuery = { credentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type CredentialTagsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3275,7 +3281,7 @@ export type MyCredentialsQueryVariables = Exact<{
 }>;
 
 
-export type MyCredentialsQuery = { myCredentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MyCredentialsQuery = { myCredentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MyCredentialTagsQueryVariables = Exact<{
   operationIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
@@ -3290,7 +3296,7 @@ export type CreateCredentialMutationVariables = Exact<{
 }>;
 
 
-export type CreateCredentialMutation = { createCredential: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type CreateCredentialMutation = { createCredential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type UpdateCredentialMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3298,7 +3304,7 @@ export type UpdateCredentialMutationVariables = Exact<{
 }>;
 
 
-export type UpdateCredentialMutation = { updateCredential: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type UpdateCredentialMutation = { updateCredential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type DeleteCredentialMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3313,7 +3319,7 @@ export type AddCredentialCommentMutationVariables = Exact<{
 }>;
 
 
-export type AddCredentialCommentMutation = { addCredentialComment: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type AddCredentialCommentMutation = { addCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type UpdateCredentialCommentMutationVariables = Exact<{
   credentialId: Scalars['ID']['input'];
@@ -3322,7 +3328,7 @@ export type UpdateCredentialCommentMutationVariables = Exact<{
 }>;
 
 
-export type UpdateCredentialCommentMutation = { updateCredentialComment: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type UpdateCredentialCommentMutation = { updateCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type DeleteCredentialCommentMutationVariables = Exact<{
   credentialId: Scalars['ID']['input'];
@@ -3330,21 +3336,21 @@ export type DeleteCredentialCommentMutationVariables = Exact<{
 }>;
 
 
-export type DeleteCredentialCommentMutation = { deleteCredentialComment: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type DeleteCredentialCommentMutation = { deleteCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type CredentialChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type CredentialChangedSubscription = { credentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
+export type CredentialChangedSubscription = { credentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
 
 export type MyCredentialChangedSubscriptionVariables = Exact<{
   operationIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 
-export type MyCredentialChangedSubscription = { myCredentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
+export type MyCredentialChangedSubscription = { myCredentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
 
 export type PublishOperatorFocusMutationVariables = Exact<{
   input: OperatorFocusInput;
@@ -3358,11 +3364,11 @@ export type MyOperatorFocusQueryVariables = Exact<{ [key: string]: never; }>;
 
 export type MyOperatorFocusQuery = { myOperatorFocus?: { route: string, operationId?: string | null, wikiOperationId?: string | null, wikiDocumentId?: string | null, hostId?: string | null, credentialId?: string | null, hashId?: string | null, taskId?: string | null, findingsTab?: string | null, topologyLens?: string | null, topologyFocusedNodeId?: string | null, topologyFocusedEdgeId?: string | null, searchSummary?: string | null, updatedAt?: string | null } | null };
 
-export type HashFieldsFragment = { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null };
+export type HashFieldsFragment = { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null };
 
-export type HashFieldsWithCredentialFragment = { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, credential?: { id: string, name: string, type: CredentialType, username: string } | null, createdBy?: { id: string, username: string } | null };
+export type HashFieldsWithCredentialFragment = { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, credential?: { id: string, name: string, type: CredentialType, username: string } | null, createdBy?: { id: string, username: string } | null };
 
-export type HashFieldsWithOperationFragment = { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, operation: { id: string, name: string }, createdBy?: { id: string, username: string } | null };
+export type HashFieldsWithOperationFragment = { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, operation: { id: string, name: string }, createdBy?: { id: string, username: string } | null };
 
 export type HashChipFieldsFragment = { id: string, operationId: string, value: string, status: HashStatus, credentialId?: string | null };
 
@@ -3378,7 +3384,7 @@ export type HashQueryVariables = Exact<{
 }>;
 
 
-export type HashQuery = { hash: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, credential?: { id: string, name: string, type: CredentialType, username: string } | null, createdBy?: { id: string, username: string } | null } };
+export type HashQuery = { hash: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, credential?: { id: string, name: string, type: CredentialType, username: string } | null, createdBy?: { id: string, username: string } | null } };
 
 export type HashesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3391,7 +3397,7 @@ export type HashesQueryVariables = Exact<{
 }>;
 
 
-export type HashesQuery = { hashes: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type HashesQuery = { hashes: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type HashTagsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3418,7 +3424,7 @@ export type MyHashesQueryVariables = Exact<{
 }>;
 
 
-export type MyHashesQuery = { myHashes: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, operation: { id: string, name: string }, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MyHashesQuery = { myHashes: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, operation: { id: string, name: string }, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MyHashTagsQueryVariables = Exact<{
   operationIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
@@ -3433,7 +3439,7 @@ export type CreateHashMutationVariables = Exact<{
 }>;
 
 
-export type CreateHashMutation = { createHash: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } };
+export type CreateHashMutation = { createHash: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } };
 
 export type UpdateHashMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3441,7 +3447,7 @@ export type UpdateHashMutationVariables = Exact<{
 }>;
 
 
-export type UpdateHashMutation = { updateHash: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } };
+export type UpdateHashMutation = { updateHash: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } };
 
 export type DeleteHashMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3456,7 +3462,7 @@ export type BulkImportHashesMutationVariables = Exact<{
 }>;
 
 
-export type BulkImportHashesMutation = { bulkImportHashes: { added: number, skipped: number, hashes: Array<{ id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null }> } };
+export type BulkImportHashesMutation = { bulkImportHashes: { added: number, skipped: number, hashes: Array<{ id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null }> } };
 
 export type MarkHashCrackedMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3464,23 +3470,23 @@ export type MarkHashCrackedMutationVariables = Exact<{
 }>;
 
 
-export type MarkHashCrackedMutation = { markHashCracked: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, credential?: { id: string, name: string, type: CredentialType, username: string } | null, createdBy?: { id: string, username: string } | null } };
+export type MarkHashCrackedMutation = { markHashCracked: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, credential?: { id: string, name: string, type: CredentialType, username: string } | null, createdBy?: { id: string, username: string } | null } };
 
 export type HashChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type HashChangedSubscription = { hashChanged: { action: EventAction, hashId: string, operationId: string, hash?: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } | null } };
+export type HashChangedSubscription = { hashChanged: { action: EventAction, hashId: string, operationId: string, hash?: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, createdBy?: { id: string, username: string } | null } | null } };
 
 export type MyHashChangedSubscriptionVariables = Exact<{
   operationIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 
-export type MyHashChangedSubscription = { myHashChanged: { action: EventAction, hashId: string, operationId: string, hash?: { id: string, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, operation: { id: string, name: string }, createdBy?: { id: string, username: string } | null } | null } };
+export type MyHashChangedSubscription = { myHashChanged: { action: EventAction, hashId: string, operationId: string, hash?: { id: string, rev: number, operationId: string, value: string, status: HashStatus, comment: string, tags: Array<string>, credentialId?: string | null, createdAt: string, updatedAt: string, operation: { id: string, name: string }, createdBy?: { id: string, username: string } | null } | null } };
 
-export type HostFieldsFragment = { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null };
+export type HostFieldsFragment = { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null };
 
 export type HostsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3492,14 +3498,14 @@ export type HostsQueryVariables = Exact<{
 }>;
 
 
-export type HostsQuery = { hosts: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type HostsQuery = { hosts: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type HostQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type HostQuery = { host: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } };
+export type HostQuery = { host: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } };
 
 export type CreateHostMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3507,7 +3513,7 @@ export type CreateHostMutationVariables = Exact<{
 }>;
 
 
-export type CreateHostMutation = { createHost: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } };
+export type CreateHostMutation = { createHost: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } };
 
 export type UpdateHostMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3515,7 +3521,7 @@ export type UpdateHostMutationVariables = Exact<{
 }>;
 
 
-export type UpdateHostMutation = { updateHost: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } };
+export type UpdateHostMutation = { updateHost: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } };
 
 export type DeleteHostMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3529,9 +3535,9 @@ export type HostChangedSubscriptionVariables = Exact<{
 }>;
 
 
-export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
+export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
 
-export type MinionSessionFieldsFragment = { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> };
+export type MinionSessionFieldsFragment = { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> };
 
 export type MinionSessionsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3544,14 +3550,14 @@ export type MinionSessionsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MinionSessionChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null } };
+export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null } };
 
 export type MinionSessionValuesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3581,14 +3587,14 @@ export type SetMinionSessionAddressMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
+export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
 
 export type MinionSessionQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionQuery = { minionSession?: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null };
+export type MinionSessionQuery = { minionSession?: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } | null };
 
 export type SetMinionSessionArchivedMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3596,7 +3602,7 @@ export type SetMinionSessionArchivedMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
+export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
 
 export type SetMinionSessionsArchivedMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3614,7 +3620,7 @@ export type SetMinionSessionDescriptionMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionDescriptionMutation = { setMinionSessionDescription: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
+export type SetMinionSessionDescriptionMutation = { setMinionSessionDescription: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
 
 export type SetMinionSessionMarkMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3622,7 +3628,7 @@ export type SetMinionSessionMarkMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionMarkMutation = { setMinionSessionMark: { id: string, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
+export type SetMinionSessionMarkMutation = { setMinionSessionMark: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }> } };
 
 export type SetMinionSessionsMarkMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3634,7 +3640,7 @@ export type SetMinionSessionsMarkMutationVariables = Exact<{
 
 export type SetMinionSessionsMarkMutation = { setMinionSessionsMark: number };
 
-export type MinionTaskFieldsFragment = { id: string, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number };
+export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number };
 
 export type MinionTaskOutputQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3650,7 +3656,7 @@ export type MinionTasksQueryVariables = Exact<{
 }>;
 
 
-export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number }> } };
+export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number }> } };
 
 export type MinionTaskDocumentQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3673,21 +3679,21 @@ export type QueueMinionTaskMutationVariables = Exact<{
 }>;
 
 
-export type QueueMinionTaskMutation = { queueMinionTask: { id: string, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
+export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
 
 export type CancelMinionTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
+export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
 
 export type MinionTaskChangedSubscriptionVariables = Exact<{
   sessionId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
+export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, handler?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -3994,7 +4000,7 @@ export type SkillChangedSubscriptionVariables = Exact<{ [key: string]: never; }>
 
 export type SkillChangedSubscription = { skillChanged: { action: EventAction, skillId: string, name: string } };
 
-export type TaskFieldsFragment = { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null };
+export type TaskFieldsFragment = { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null };
 
 export type TaskBacklinkFieldsFragment = { id: string, operationId: string, name: string, stage: TaskStage, status: TaskStatus, riskScore: number, profitScore: number, assignees: Array<{ id: string, username: string }> };
 
@@ -4003,7 +4009,7 @@ export type TaskQueryVariables = Exact<{
 }>;
 
 
-export type TaskQuery = { task: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type TaskQuery = { task: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type TasksQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4019,7 +4025,7 @@ export type TasksQueryVariables = Exact<{
 }>;
 
 
-export type TasksQuery = { tasks: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type TasksQuery = { tasks: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type TaskTrashQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4028,7 +4034,7 @@ export type TaskTrashQueryVariables = Exact<{
 }>;
 
 
-export type TaskTrashQuery = { taskTrash: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type TaskTrashQuery = { taskTrash: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type TasksReferencingWikiDocumentQueryVariables = Exact<{
   documentId: Scalars['ID']['input'];
@@ -4049,7 +4055,7 @@ export type CreateTaskMutationVariables = Exact<{
 }>;
 
 
-export type CreateTaskMutation = { createTask: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type CreateTaskMutation = { createTask: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type UpdateTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4057,14 +4063,14 @@ export type UpdateTaskMutationVariables = Exact<{
 }>;
 
 
-export type UpdateTaskMutation = { updateTask: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type UpdateTaskMutation = { updateTask: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type ChangeTaskStageMutationVariables = Exact<{
   input: ChangeTaskStageInput;
 }>;
 
 
-export type ChangeTaskStageMutation = { changeTaskStage: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type ChangeTaskStageMutation = { changeTaskStage: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type SetTaskAssigneesMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4072,7 +4078,7 @@ export type SetTaskAssigneesMutationVariables = Exact<{
 }>;
 
 
-export type SetTaskAssigneesMutation = { setTaskAssignees: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type SetTaskAssigneesMutation = { setTaskAssignees: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type SetTaskWikiReferencesMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4080,7 +4086,7 @@ export type SetTaskWikiReferencesMutationVariables = Exact<{
 }>;
 
 
-export type SetTaskWikiReferencesMutation = { setTaskWikiReferences: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type SetTaskWikiReferencesMutation = { setTaskWikiReferences: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type AddTaskWikiReferenceMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4088,7 +4094,7 @@ export type AddTaskWikiReferenceMutationVariables = Exact<{
 }>;
 
 
-export type AddTaskWikiReferenceMutation = { addTaskWikiReference: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type AddTaskWikiReferenceMutation = { addTaskWikiReference: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type SetTaskCredentialReferencesMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4096,7 +4102,7 @@ export type SetTaskCredentialReferencesMutationVariables = Exact<{
 }>;
 
 
-export type SetTaskCredentialReferencesMutation = { setTaskCredentialReferences: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type SetTaskCredentialReferencesMutation = { setTaskCredentialReferences: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type DeleteTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4110,7 +4116,7 @@ export type RestoreTaskMutationVariables = Exact<{
 }>;
 
 
-export type RestoreTaskMutation = { restoreTask: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
+export type RestoreTaskMutation = { restoreTask: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } };
 
 export type PurgeTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4124,7 +4130,7 @@ export type TaskChangedSubscriptionVariables = Exact<{
 }>;
 
 
-export type TaskChangedSubscription = { taskChanged: { action: EventAction, taskId: string, operationId: string, task?: { id: string, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } | null } };
+export type TaskChangedSubscription = { taskChanged: { action: EventAction, taskId: string, operationId: string, task?: { id: string, rev: number, operationId: string, name: string, description: string, riskScore: number, riskDescription: string, profitScore: number, profitDescription: string, stage: TaskStage, status: TaskStatus, summary: string, lastUpdatedAt?: string | null, deletedAt?: string | null, doneAt?: string | null, createdAt: string, updatedAt: string, assignees: Array<{ id: string, username: string }>, wikiReferences: Array<{ id: string, title: string, emoji: string }>, credentialReferences: Array<{ id: string, name: string, type: CredentialType }>, createdBy?: { id: string, username: string } | null, lastUpdatedBy?: { id: string, username: string } | null } | null } };
 
 export type TimelineEventFieldsFragment = { id: string, operationId: string, topic: string, subjectKind: string, subjectId: string, subjectName: string, occurredAt: string, metadata: string, actorKind: string, actorLabel: string, actor?: { id: string, username: string } | null };
 
@@ -4751,6 +4757,7 @@ export const CredentialCommentFieldsFragmentDoc = new TypedDocumentString(`
 export const CredentialFieldsFragmentDoc = new TypedDocumentString(`
     fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -4808,6 +4815,7 @@ export const CredentialFieldsWithOperationFragmentDoc = new TypedDocumentString(
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -4857,6 +4865,7 @@ export const CredentialChipFieldsFragmentDoc = new TypedDocumentString(`
 export const HashFieldsFragmentDoc = new TypedDocumentString(`
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -4883,6 +4892,7 @@ export const HashFieldsWithCredentialFragmentDoc = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -4906,6 +4916,7 @@ export const HashFieldsWithOperationFragmentDoc = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -4931,6 +4942,7 @@ export const HashChipFieldsFragmentDoc = new TypedDocumentString(`
 export const HostFieldsFragmentDoc = new TypedDocumentString(`
     fragment HostFields on Host {
   id
+  rev
   operationId
   hostname
   description
@@ -4966,6 +4978,7 @@ export const HostFieldsFragmentDoc = new TypedDocumentString(`
 export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -5043,6 +5056,7 @@ export const MinionSessionsLayoutFieldsFragmentDoc = new TypedDocumentString(`
 export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     fragment MinionTaskFields on MinionTask {
   id
+  rev
   sessionId
   operationId
   command
@@ -5410,6 +5424,7 @@ export const SessionFieldsFragmentDoc = new TypedDocumentString(`
 export const TaskFieldsFragmentDoc = new TypedDocumentString(`
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -6506,6 +6521,7 @@ export const CredentialDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6572,6 +6588,7 @@ export const CredentialsDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6679,6 +6696,7 @@ export const MyCredentialsDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6736,6 +6754,7 @@ export const CreateCredentialDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6781,6 +6800,7 @@ export const UpdateCredentialDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6831,6 +6851,7 @@ export const AddCredentialCommentDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6880,6 +6901,7 @@ export const UpdateCredentialCommentDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6925,6 +6947,7 @@ export const DeleteCredentialCommentDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -6975,6 +6998,7 @@ export const CredentialChangedDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -7025,6 +7049,7 @@ export const MyCredentialChangedDocument = new TypedDocumentString(`
 }
 fragment CredentialFields on Credential {
   id
+  rev
   operationId
   name
   type
@@ -7105,6 +7130,7 @@ export const HashDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7153,6 +7179,7 @@ export const HashesDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7221,6 +7248,7 @@ export const MyHashesDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7254,6 +7282,7 @@ export const CreateHashDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7275,6 +7304,7 @@ export const UpdateHashDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7305,6 +7335,7 @@ export const BulkImportHashesDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7326,6 +7357,7 @@ export const MarkHashCrackedDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7361,6 +7393,7 @@ export const HashChangedDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7387,6 +7420,7 @@ export const MyHashChangedDocument = new TypedDocumentString(`
 }
     fragment HashFields on Hash {
   id
+  rev
   operationId
   value
   status
@@ -7432,6 +7466,7 @@ export const HostsDocument = new TypedDocumentString(`
 }
     fragment HostFields on Host {
   id
+  rev
   operationId
   hostname
   description
@@ -7471,6 +7506,7 @@ export const HostDocument = new TypedDocumentString(`
 }
     fragment HostFields on Host {
   id
+  rev
   operationId
   hostname
   description
@@ -7510,6 +7546,7 @@ export const CreateHostDocument = new TypedDocumentString(`
 }
     fragment HostFields on Host {
   id
+  rev
   operationId
   hostname
   description
@@ -7549,6 +7586,7 @@ export const UpdateHostDocument = new TypedDocumentString(`
 }
     fragment HostFields on Host {
   id
+  rev
   operationId
   hostname
   description
@@ -7597,6 +7635,7 @@ export const HostChangedDocument = new TypedDocumentString(`
 }
     fragment HostFields on Host {
   id
+  rev
   operationId
   hostname
   description
@@ -7654,6 +7693,7 @@ export const MinionSessionsDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -7718,6 +7758,7 @@ export const MinionSessionChangedDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -7834,6 +7875,7 @@ export const SetMinionSessionAddressDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -7893,6 +7935,7 @@ export const MinionSessionDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -7952,6 +7995,7 @@ export const SetMinionSessionArchivedDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -8021,6 +8065,7 @@ export const SetMinionSessionDescriptionDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -8080,6 +8125,7 @@ export const SetMinionSessionMarkDocument = new TypedDocumentString(`
 }
     fragment MinionSessionFields on MinionSession {
   id
+  rev
   state
   archived
   mark {
@@ -8162,6 +8208,7 @@ export const MinionTasksDocument = new TypedDocumentString(`
 }
     fragment MinionTaskFields on MinionTask {
   id
+  rev
   sessionId
   operationId
   command
@@ -8242,6 +8289,7 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
 }
     fragment MinionTaskFields on MinionTask {
   id
+  rev
   sessionId
   operationId
   command
@@ -8276,6 +8324,7 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
 }
     fragment MinionTaskFields on MinionTask {
   id
+  rev
   sessionId
   operationId
   command
@@ -8310,6 +8359,7 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
 }
     fragment MinionTaskFields on MinionTask {
   id
+  rev
   sessionId
   operationId
   command
@@ -9398,6 +9448,7 @@ export const TaskDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9465,6 +9516,7 @@ export const TasksDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9521,6 +9573,7 @@ export const TaskTrashDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9605,6 +9658,7 @@ export const CreateTaskDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9651,6 +9705,7 @@ export const UpdateTaskDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9697,6 +9752,7 @@ export const ChangeTaskStageDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9743,6 +9799,7 @@ export const SetTaskAssigneesDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9789,6 +9846,7 @@ export const SetTaskWikiReferencesDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9835,6 +9893,7 @@ export const AddTaskWikiReferenceDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9881,6 +9940,7 @@ export const SetTaskCredentialReferencesDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9932,6 +9992,7 @@ export const RestoreTaskDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description
@@ -9988,6 +10049,7 @@ export const TaskChangedDocument = new TypedDocumentString(`
 }
     fragment TaskFields on Task {
   id
+  rev
   operationId
   name
   description

@@ -12,6 +12,7 @@ import {
   findCachedRow,
   patchDetail,
   scheduleRefresh,
+  setNewer,
   type LiveListSpec,
 } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
@@ -307,7 +308,7 @@ export function useMarkHashCracked() {
       graphqlClient(MarkHashCrackedDocument, vars),
     onSuccess: (data) => {
       const hash = data.markHashCracked
-      queryClient.setQueryData(hashKeys.detail(hash.id), { hash })
+      setNewer(queryClient, hashKeys.detail(hash.id), "hash", hash)
       patchDetail(queryClient, hashKeys.chip(hash.id), "hash", hash)
       applyRowUpdate(queryClient, hashLists, hash)
       scheduleRefresh(queryClient, hashKeys.tagSets())

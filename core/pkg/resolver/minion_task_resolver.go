@@ -418,7 +418,7 @@ func (r *minionTaskResolver) names(ctx context.Context, tasks []models.MinionTas
 // for (Output, Data).
 func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, names map[uuid.UUID]string) (*model.MinionTask, error) {
 	m := &model.MinionTask{
-		ID: t.TaskID.String(), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Command: t.Command,
+		ID: t.TaskID.String(), Rev: int(t.Rev), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Command: t.Command,
 		IssuedBy: t.IssuedBy.String(), State: t.State, QueuedAt: t.QueuedAt.UTC().Format(time.RFC3339Nano),
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),

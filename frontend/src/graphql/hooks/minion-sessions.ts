@@ -9,7 +9,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
-import { mapListRows, mergeRow, scheduleRefresh } from "@/lib/live-lists"
+import { mapListRows, mergeRow, scheduleRefresh, setNewer } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
   MinionSessionsDocument,
@@ -185,7 +185,7 @@ export function applyMinionSessionEvent(
   }
   // The session's own query (its Details), where loaded.
   if (queryClient.getQueryData(minionSessionKeys.detail(session.id))) {
-    queryClient.setQueryData(minionSessionKeys.detail(session.id), { minionSession: session })
+    setNewer(queryClient, minionSessionKeys.detail(session.id), "minionSession", session)
   }
   for (const [key, data] of queryClient.getQueriesData<ListData>({ queryKey: minionSessionKeys.lists() })) {
     if (!data) continue
@@ -295,8 +295,26 @@ export function useSetMinionSessionMark() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (vars: { id: string; mark: MinionSessionMarkInput | null }) => graphqlClient(SetMinionSessionMarkDocument, vars),
-    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionMark),
+    onSuccess: (data) => applyMinionSessionMark(queryClient, data.setMinionSessionMark),
   })
+}
+
+/**
+ * The caller's mark on a session, from its mutation's answer: the mark alone.
+ * A mark is the caller's, not the session's, and does not count in its rev,
+ * so the answer's copy of the session may be older than the one held (a
+ * check-in came first); its mark is the newest all the same.
+ */
+export function applyMinionSessionMark(queryClient: QueryClient, session: MinionSessionFieldsFragment) {
+  const detail = queryClient.getQueryData<{ minionSession: MinionSessionFieldsFragment | null }>(minionSessionKeys.detail(session.id))
+  if (detail?.minionSession) {
+    queryClient.setQueryData(minionSessionKeys.detail(session.id), { minionSession: { ...detail.minionSession, mark: session.mark } })
+  }
+  for (const [key, data] of queryClient.getQueriesData<ListData>({ queryKey: minionSessionKeys.lists() })) {
+    if (!data) continue
+    const next = mapListRows(data as never, (r) => (r.id === session.id ? { ...r, mark: session.mark } : r))
+    if (next !== (data as never)) queryClient.setQueryData(key, next)
+  }
 }
 
 /** Marks many sessions alike for the caller: by ids, or all a list matches. */

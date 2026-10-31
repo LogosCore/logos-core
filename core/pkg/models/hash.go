@@ -41,6 +41,7 @@ func (s HashStatus) IsValid() bool {
 // Credential's UUID lands here. A nil CredentialID means "not yet linked".
 type Hash struct {
 	field.DefaultField `bson:",inline"`
+	Rev                int64      `bson:"rev" json:"rev"` // writes counted (repository.revised): a client keeps the higher copy
 	HashID             uuid.UUID  `bson:"hash_id"                 json:"hash_id"`
 	OperationID        uuid.UUID  `bson:"operation_id"            json:"operation_id"`
 	Value              string     `bson:"value"                   json:"value"`

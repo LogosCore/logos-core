@@ -91,6 +91,7 @@ func NewHashRepository(db database.Database) IHashRepository {
 }
 
 func (r *hashRepository) Create(ctx context.Context, h *models.Hash) error {
+	h.Rev = 1
 	_, err := r.coll.InsertOne(ctx, h)
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrHashDuplicate
@@ -212,7 +213,7 @@ func (r *hashRepository) FindByCredentialID(ctx context.Context, opID uuid.UUID,
 func (r *hashRepository) Update(ctx context.Context, h *models.Hash, updates map[string]interface{}) error {
 	return r.coll.UpdateOne(ctx,
 		bson.M{"hash_id": h.HashID, "operation_id": h.OperationID},
-		bson.M{"$set": updates},
+		revised(bson.M{"$set": bson.M(updates)}),
 	)
 }
 
@@ -230,7 +231,7 @@ func (r *hashRepository) DeleteByOperationID(ctx context.Context, operationID uu
 func (r *hashRepository) ClearCredentialReference(ctx context.Context, opID uuid.UUID, credentialID uuid.UUID) error {
 	_, err := r.coll.UpdateAll(ctx,
 		bson.M{"operation_id": opID, "credential_id": credentialID},
-		bson.M{"$unset": bson.M{"credential_id": ""}},
+		revised(bson.M{"$unset": bson.M{"credential_id": ""}}),
 	)
 	return err
 }

@@ -7,6 +7,7 @@ import { graphql } from "@/graphql/gql"
 export const MinionTaskFields = graphql(`
   fragment MinionTaskFields on MinionTask {
     id
+    rev
     sessionId
     operationId
     command

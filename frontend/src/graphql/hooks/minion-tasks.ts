@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
+import { isOlder } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
   CancelMinionTaskDocument,
@@ -96,7 +97,9 @@ export function upsertMinionTask(queryClient: QueryClient, task: MinionTaskField
       const tasks = p.minionTasks.tasks.map((t) => {
         if (t.id !== task.id) return t
         found = true
-        return task
+        // An older copy (a mutation's answer after the live updates it
+        // raced) does not take the task back.
+        return isOlder(t, task) ? t : task
       })
       return { ...p, minionTasks: { ...p.minionTasks, tasks } }
     })

@@ -89,7 +89,28 @@ export function mapListRows(
 // adds a linked record — and an event carries the base fragment only, so the
 // fields it lacks are kept rather than dropped.
 export function mergeRow<T extends object>(cached: T, update: object): T {
+  if (isOlder(cached, update)) return cached
   return { ...cached, ...update }
+}
+
+// isOlder says whether incoming is an older copy of cached than the one held:
+// both carry a rev (core counts each row's writes) and incoming's is lower.
+// A mutation's answer can come after the live updates it raced, and writing
+// it would take the row back (a minion task stuck as queued, done already).
+// Rows without a rev are taken as they come.
+export function isOlder(cached: object, incoming: object): boolean {
+  const a = (cached as { rev?: unknown }).rev
+  const b = (incoming as { rev?: unknown }).rev
+  return typeof a === "number" && typeof b === "number" && b < a
+}
+
+// setNewer writes row as a detail query's field, unless the copy there is
+// newer (isOlder).
+export function setNewer(queryClient: QueryClient, queryKey: QueryKey, field: string, row: object): void {
+  const old = queryClient.getQueryData<Record<string, object | null>>(queryKey)
+  const cached = old?.[field]
+  if (cached && isOlder(cached, row)) return
+  queryClient.setQueryData(queryKey, { ...(old ?? {}), [field]: row })
 }
 
 // findCachedRow returns the row with this id from any page of any list under

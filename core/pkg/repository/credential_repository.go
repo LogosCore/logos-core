@@ -186,6 +186,7 @@ func NewCredentialRepository(db database.Database) ICredentialRepository {
 }
 
 func (r *credentialRepository) Create(ctx context.Context, c *models.Credential) error {
+	c.Rev = 1
 	_, err := r.coll.InsertOne(ctx, c)
 	return err
 }
@@ -306,7 +307,7 @@ func (r *credentialRepository) Update(ctx context.Context, c *models.Credential,
 	// accidentally mutate a credential belonging to a different operation.
 	return r.coll.UpdateOne(ctx,
 		bson.M{"credential_id": c.CredentialID, "operation_id": c.OperationID},
-		bson.M{"$set": updates},
+		revised(bson.M{"$set": bson.M(updates)}),
 	)
 }
 
@@ -325,7 +326,7 @@ func (r *credentialRepository) DeleteByOperationID(ctx context.Context, operatio
 func (r *credentialRepository) AddComment(ctx context.Context, credentialID uuid.UUID, comment models.CredentialComment) error {
 	return r.coll.UpdateOne(ctx,
 		bson.M{"credential_id": credentialID},
-		bson.M{"$push": bson.M{"comments": comment}},
+		revised(bson.M{"$push": bson.M{"comments": comment}}),
 	)
 }
 
@@ -336,10 +337,10 @@ func (r *credentialRepository) UpdateComment(ctx context.Context, credentialID, 
 			"credential_id":       credentialID,
 			"comments.comment_id": commentID,
 		},
-		bson.M{"$set": bson.M{
+		revised(bson.M{"$set": bson.M{
 			"comments.$.text":       text,
 			"comments.$.updated_at": updatedAt,
-		}},
+		}}),
 	)
 }
 
@@ -347,7 +348,7 @@ func (r *credentialRepository) UpdateComment(ctx context.Context, credentialID, 
 func (r *credentialRepository) RemoveComment(ctx context.Context, credentialID, commentID uuid.UUID) error {
 	return r.coll.UpdateOne(ctx,
 		bson.M{"credential_id": credentialID},
-		bson.M{"$pull": bson.M{"comments": bson.M{"comment_id": commentID}}},
+		revised(bson.M{"$pull": bson.M{"comments": bson.M{"comment_id": commentID}}}),
 	)
 }
 

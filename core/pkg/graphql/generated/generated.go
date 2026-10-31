@@ -318,6 +318,7 @@ type ComplexityRoot struct {
 		OperationID               func(childComplexity int) int
 		Password                  func(childComplexity int) int
 		Properties                func(childComplexity int) int
+		Rev                       func(childComplexity int) int
 		SourceHashes              func(childComplexity int) int
 		Tags                      func(childComplexity int) int
 		TaskBacklinks             func(childComplexity int) int
@@ -383,6 +384,7 @@ type ComplexityRoot struct {
 		ID            func(childComplexity int) int
 		Operation     func(childComplexity int) int
 		OperationID   func(childComplexity int) int
+		Rev           func(childComplexity int) int
 		Status        func(childComplexity int) int
 		Tags          func(childComplexity int) int
 		UpdatedAt     func(childComplexity int) int
@@ -421,6 +423,7 @@ type ComplexityRoot struct {
 		OS          func(childComplexity int) int
 		Operation   func(childComplexity int) int
 		OperationID func(childComplexity int) int
+		Rev         func(childComplexity int) int
 		Routes      func(childComplexity int) int
 		UpdatedAt   func(childComplexity int) int
 	}
@@ -492,6 +495,7 @@ type ComplexityRoot struct {
 		Proc             func(childComplexity int) int
 		RestartCount     func(childComplexity int) int
 		Restarts         func(childComplexity int) int
+		Rev              func(childComplexity int) int
 		SleepInterval    func(childComplexity int) int
 		SleepJitter      func(childComplexity int) int
 		Staged           func(childComplexity int) int
@@ -591,6 +595,7 @@ type ComplexityRoot struct {
 		OutputUtf8        func(childComplexity int) int
 		Parts             func(childComplexity int) int
 		QueuedAt          func(childComplexity int) int
+		Rev               func(childComplexity int) int
 		SendCount         func(childComplexity int) int
 		SentAt            func(childComplexity int) int
 		SessionID         func(childComplexity int) int
@@ -1151,6 +1156,7 @@ type ComplexityRoot struct {
 		OperationID          func(childComplexity int) int
 		ProfitDescription    func(childComplexity int) int
 		ProfitScore          func(childComplexity int) int
+		Rev                  func(childComplexity int) int
 		RiskDescription      func(childComplexity int) int
 		RiskScore            func(childComplexity int) int
 		Stage                func(childComplexity int) int
@@ -1443,6 +1449,7 @@ type AgentKeyResolver interface {
 }
 type CredentialResolver interface {
 	ID(ctx context.Context, obj *models.Credential) (string, error)
+
 	OperationID(ctx context.Context, obj *models.Credential) (string, error)
 	Operation(ctx context.Context, obj *models.Credential) (*models.Operation, error)
 
@@ -1465,6 +1472,7 @@ type CredentialCommentResolver interface {
 }
 type HashResolver interface {
 	ID(ctx context.Context, obj *models.Hash) (string, error)
+
 	OperationID(ctx context.Context, obj *models.Hash) (string, error)
 	Operation(ctx context.Context, obj *models.Hash) (*models.Operation, error)
 
@@ -1478,6 +1486,7 @@ type HashResolver interface {
 }
 type HostResolver interface {
 	ID(ctx context.Context, obj *models.Host) (string, error)
+
 	OperationID(ctx context.Context, obj *models.Host) (string, error)
 	Operation(ctx context.Context, obj *models.Host) (*models.Operation, error)
 
@@ -1734,6 +1743,7 @@ type SubscriptionResolver interface {
 }
 type TaskResolver interface {
 	ID(ctx context.Context, obj *models.Task) (string, error)
+
 	OperationID(ctx context.Context, obj *models.Task) (string, error)
 	Operation(ctx context.Context, obj *models.Task) (*models.Operation, error)
 
@@ -2910,6 +2920,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Credential.Properties(childComplexity), true
+	case "Credential.rev":
+		if e.ComplexityRoot.Credential.Rev == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Credential.Rev(childComplexity), true
 	case "Credential.sourceHashes":
 		if e.ComplexityRoot.Credential.SourceHashes == nil {
 			break
@@ -3164,6 +3180,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Hash.OperationID(childComplexity), true
+	case "Hash.rev":
+		if e.ComplexityRoot.Hash.Rev == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hash.Rev(childComplexity), true
 	case "Hash.status":
 		if e.ComplexityRoot.Hash.Status == nil {
 			break
@@ -3324,6 +3346,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Host.OperationID(childComplexity), true
+	case "Host.rev":
+		if e.ComplexityRoot.Host.Rev == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Host.Rev(childComplexity), true
 	case "Host.routes":
 		if e.ComplexityRoot.Host.Routes == nil {
 			break
@@ -3648,6 +3676,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Restarts(childComplexity), true
+	case "MinionSession.rev":
+		if e.ComplexityRoot.MinionSession.Rev == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Rev(childComplexity), true
 	case "MinionSession.sleepInterval":
 		if e.ComplexityRoot.MinionSession.SleepInterval == nil {
 			break
@@ -4072,6 +4106,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.QueuedAt(childComplexity), true
+	case "MinionTask.rev":
+		if e.ComplexityRoot.MinionTask.Rev == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Rev(childComplexity), true
 	case "MinionTask.sendCount":
 		if e.ComplexityRoot.MinionTask.SendCount == nil {
 			break
@@ -7614,6 +7654,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.ProfitScore(childComplexity), true
+	case "Task.rev":
+		if e.ComplexityRoot.Task.Rev == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Rev(childComplexity), true
 	case "Task.riskDescription":
 		if e.ComplexityRoot.Task.RiskDescription == nil {
 			break
@@ -9698,6 +9744,9 @@ type CredentialProperty {
 
 type Credential {
   id: ID!
+  # Counts the row's changes: of two copies, the one with the higher rev is
+  # the newer (a mutation's answer can come after live updates).
+  rev: Int!
   operationId: ID!
   # The full parent Operation. Resolved on demand via a DB lookup.
   #
@@ -10035,6 +10084,9 @@ enum HashStatus {
 
 type Hash {
   id: ID!
+  # Counts the row's changes: of two copies, the one with the higher rev is
+  # the newer (a mutation's answer can come after live updates).
+  rev: Int!
   operationId: ID!
   # Full parent Operation. Used by the global Findings page where one row may
   # belong to any operation. In scoped views the operation is implicit — skip
@@ -10292,6 +10344,9 @@ type Login {
 
 type Host {
   id: ID!
+  # Counts the row's changes: of two copies, the one with the higher rev is
+  # the newer (a mutation's answer can come after live updates).
+  rev: Int!
   operationId: ID!
   # Full parent Operation. Used by views where a row may belong to any
   # operation. In scoped views the operation is implicit — skip this field to
@@ -10442,6 +10497,11 @@ extend type Subscription {
 type MinionSession {
   # The session id the minion sends its messages under.
   id: ID!
+  # Counts the session's changes: of two copies, the one with the higher
+  # rev is the newer (a mutation's answer can come after live updates).
+  # The caller's mark is not the session's: it does not count. 0 for a
+  # reserved session.
+  rev: Int!
   # OPEN, CLOSED (expired or of a deleted operation), or RESERVED: reserved
   # with a build for its minion's first claim, with no number, keys or host
   # yet (only minionSession(id) returns one).
@@ -10785,6 +10845,9 @@ extend type Subscription {
 type MinionTask {
   # The id it travels under.
   id: ID!
+  # Counts the task's changes: of two copies, the one with the higher rev
+  # is the newer (a mutation's answer can come after live updates).
+  rev: Int!
   sessionId: ID!
   operationId: ID!
   # One of the session's build's commands (minionSessionCommands).
@@ -12101,6 +12164,9 @@ enum TaskStatus {
 
 type Task {
   id: ID!
+  # Counts the row's changes: of two copies, the one with the higher rev is
+  # the newer (a mutation's answer can come after live updates).
+  rev: Int!
   operationId: ID!
   # The full parent Operation. Resolved on demand via a DB lookup. Use in
   # cross-operation views; in scoped views prefer operationId.
@@ -20814,6 +20880,8 @@ func (ec *executionContext) fieldContext_BulkImportHashesResult_hashes(_ context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -21706,6 +21774,35 @@ func (ec *executionContext) fieldContext_Credential_id(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Credential_rev(ctx context.Context, field graphql.CollectedField, obj *models.Credential) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Credential_rev,
+		func(ctx context.Context) (any, error) {
+			return obj.Rev, nil
+		},
+		nil,
+		ec.marshalNInt2int64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Credential_rev(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Credential",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Credential_operationId(ctx context.Context, field graphql.CollectedField, obj *models.Credential) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22363,6 +22460,8 @@ func (ec *executionContext) fieldContext_Credential_sourceHashes(_ context.Conte
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -22422,6 +22521,8 @@ func (ec *executionContext) fieldContext_Credential_taskBacklinks(_ context.Cont
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -22775,6 +22876,8 @@ func (ec *executionContext) fieldContext_CredentialEdge_node(_ context.Context, 
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -22962,6 +23065,8 @@ func (ec *executionContext) fieldContext_CredentialEvent_credential(_ context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -23313,6 +23418,35 @@ func (ec *executionContext) fieldContext_Hash_id(_ context.Context, field graphq
 	return fc, nil
 }
 
+func (ec *executionContext) _Hash_rev(ctx context.Context, field graphql.CollectedField, obj *models.Hash) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Hash_rev,
+		func(ctx context.Context) (any, error) {
+			return obj.Rev, nil
+		},
+		nil,
+		ec.marshalNInt2int64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Hash_rev(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Hash",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Hash_operationId(ctx context.Context, field graphql.CollectedField, obj *models.Hash) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23556,6 +23690,8 @@ func (ec *executionContext) fieldContext_Hash_credential(_ context.Context, fiel
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -23975,6 +24111,8 @@ func (ec *executionContext) fieldContext_HashEdge_node(_ context.Context, field 
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -24150,6 +24288,8 @@ func (ec *executionContext) fieldContext_HashEvent_hash(_ context.Context, field
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -24207,6 +24347,35 @@ func (ec *executionContext) fieldContext_Host_id(_ context.Context, field graphq
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Host_rev(ctx context.Context, field graphql.CollectedField, obj *models.Host) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Host_rev,
+		func(ctx context.Context) (any, error) {
+			return obj.Rev, nil
+		},
+		nil,
+		ec.marshalNInt2int64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Host_rev(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Host",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -24819,6 +24988,8 @@ func (ec *executionContext) fieldContext_HostEdge_node(_ context.Context, field 
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Host_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Host_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Host_operationId(ctx, field)
 			case "operation":
@@ -24996,6 +25167,8 @@ func (ec *executionContext) fieldContext_HostEvent_host(_ context.Context, field
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Host_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Host_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Host_operationId(ctx, field)
 			case "operation":
@@ -25440,6 +25613,35 @@ func (ec *executionContext) fieldContext_MinionSession_id(_ context.Context, fie
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSession_rev(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_rev,
+		func(ctx context.Context) (any, error) {
+			return obj.Rev, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_rev(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -26646,6 +26848,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -26867,6 +27071,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -27784,6 +27990,35 @@ func (ec *executionContext) fieldContext_MinionTask_id(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_rev(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_rev,
+		func(ctx context.Context) (any, error) {
+			return obj.Rev, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_rev(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_sessionId(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28651,6 +28886,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
 			case "sessionId":
 				return ec.fieldContext_MinionTask_sessionId(ctx, field)
 			case "operationId":
@@ -35089,6 +35326,8 @@ func (ec *executionContext) fieldContext_Mutation_createCredential(ctx context.C
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -35190,6 +35429,8 @@ func (ec *executionContext) fieldContext_Mutation_updateCredential(ctx context.C
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -35350,6 +35591,8 @@ func (ec *executionContext) fieldContext_Mutation_addCredentialComment(ctx conte
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -35451,6 +35694,8 @@ func (ec *executionContext) fieldContext_Mutation_updateCredentialComment(ctx co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -35552,6 +35797,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteCredentialComment(ctx co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -35712,6 +35959,8 @@ func (ec *executionContext) fieldContext_Mutation_createHash(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -35801,6 +36050,8 @@ func (ec *executionContext) fieldContext_Mutation_updateHash(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -36016,6 +36267,8 @@ func (ec *executionContext) fieldContext_Mutation_markHashCracked(ctx context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -36105,6 +36358,8 @@ func (ec *executionContext) fieldContext_Mutation_createHost(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Host_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Host_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Host_operationId(ctx, field)
 			case "operation":
@@ -36196,6 +36451,8 @@ func (ec *executionContext) fieldContext_Mutation_updateHost(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Host_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Host_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Host_operationId(ctx, field)
 			case "operation":
@@ -36346,6 +36603,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -36540,6 +36799,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -36675,6 +36936,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -36869,6 +37132,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -37081,6 +37346,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
 			case "sessionId":
 				return ec.fieldContext_MinionTask_sessionId(ctx, field)
 			case "operationId":
@@ -37202,6 +37469,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
 			case "sessionId":
 				return ec.fieldContext_MinionTask_sessionId(ctx, field)
 			case "operationId":
@@ -38346,6 +38615,8 @@ func (ec *executionContext) fieldContext_Mutation_createTask(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -38451,6 +38722,8 @@ func (ec *executionContext) fieldContext_Mutation_updateTask(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -38556,6 +38829,8 @@ func (ec *executionContext) fieldContext_Mutation_changeTaskStage(ctx context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -38661,6 +38936,8 @@ func (ec *executionContext) fieldContext_Mutation_setTaskAssignees(ctx context.C
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -38766,6 +39043,8 @@ func (ec *executionContext) fieldContext_Mutation_setTaskWikiReferences(ctx cont
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -38871,6 +39150,8 @@ func (ec *executionContext) fieldContext_Mutation_addTaskWikiReference(ctx conte
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -38976,6 +39257,8 @@ func (ec *executionContext) fieldContext_Mutation_setTaskCredentialReferences(ct
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -39140,6 +39423,8 @@ func (ec *executionContext) fieldContext_Mutation_restoreTask(ctx context.Contex
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -43695,6 +43980,8 @@ func (ec *executionContext) fieldContext_Query_credential(ctx context.Context, f
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -44089,6 +44376,8 @@ func (ec *executionContext) fieldContext_Query_hash(ctx context.Context, field g
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Hash_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Hash_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Hash_operationId(ctx, field)
 			case "operation":
@@ -44523,6 +44812,8 @@ func (ec *executionContext) fieldContext_Query_host(ctx context.Context, field g
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Host_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Host_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Host_operationId(ctx, field)
 			case "operation":
@@ -44748,6 +45039,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionSession_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionSession_rev(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionSession_state(ctx, field)
 			case "number":
@@ -45001,6 +45294,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
 			case "sessionId":
 				return ec.fieldContext_MinionTask_sessionId(ctx, field)
 			case "operationId":
@@ -45986,6 +46281,8 @@ func (ec *executionContext) fieldContext_Query_task(ctx context.Context, field g
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -46225,6 +46522,8 @@ func (ec *executionContext) fieldContext_Query_tasksReferencingWikiDocument(ctx 
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -46330,6 +46629,8 @@ func (ec *executionContext) fieldContext_Query_tasksReferencingCredential(ctx co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -51040,6 +51341,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_MinionTask_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_MinionTask_rev(ctx, field)
 			case "sessionId":
 				return ec.fieldContext_MinionTask_sessionId(ctx, field)
 			case "operationId":
@@ -51752,6 +52055,35 @@ func (ec *executionContext) fieldContext_Task_id(_ context.Context, field graphq
 	return fc, nil
 }
 
+func (ec *executionContext) _Task_rev(ctx context.Context, field graphql.CollectedField, obj *models.Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Task_rev,
+		func(ctx context.Context) (any, error) {
+			return obj.Rev, nil
+		},
+		nil,
+		ec.marshalNInt2int64,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Task_rev(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Task",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Task_operationId(ctx context.Context, field graphql.CollectedField, obj *models.Task) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -52269,6 +52601,8 @@ func (ec *executionContext) fieldContext_Task_credentialReferences(_ context.Con
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Credential_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Credential_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Credential_operationId(ctx, field)
 			case "operation":
@@ -52706,6 +53040,8 @@ func (ec *executionContext) fieldContext_TaskEdge_node(_ context.Context, field 
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -52897,6 +53233,8 @@ func (ec *executionContext) fieldContext_TaskEvent_task(_ context.Context, field
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -55852,6 +56190,8 @@ func (ec *executionContext) fieldContext_WikiDocument_taskBacklinks(_ context.Co
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Task_id(ctx, field)
+			case "rev":
+				return ec.fieldContext_Task_rev(ctx, field)
 			case "operationId":
 				return ec.fieldContext_Task_operationId(ctx, field)
 			case "operation":
@@ -64202,6 +64542,11 @@ func (ec *executionContext) _Credential(ctx context.Context, sel ast.SelectionSe
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "rev":
+			out.Values[i] = ec._Credential_rev(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "operationId":
 			field := field
 
@@ -65176,6 +65521,11 @@ func (ec *executionContext) _Hash(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "rev":
+			out.Values[i] = ec._Hash_rev(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "operationId":
 			field := field
 
@@ -65725,6 +66075,11 @@ func (ec *executionContext) _Host(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "rev":
+			out.Values[i] = ec._Host_rev(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "operationId":
 			field := field
 
@@ -66260,6 +66615,11 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = graphql.MarshalString("MinionSession")
 		case "id":
 			out.Values[i] = ec._MinionSession_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rev":
+			out.Values[i] = ec._MinionSession_rev(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -66875,6 +67235,11 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = graphql.MarshalString("MinionTask")
 		case "id":
 			out.Values[i] = ec._MinionTask_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "rev":
+			out.Values[i] = ec._MinionTask_rev(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
@@ -72598,6 +72963,11 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "rev":
+			out.Values[i] = ec._Task_rev(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "operationId":
 			field := field
 
@@ -77812,6 +78182,22 @@ func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, 
 func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
 	_ = sel
 	res := graphql.MarshalInt(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNInt2int64(ctx context.Context, v any) (int64, error) {
+	res, err := graphql.UnmarshalInt64(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int64(ctx context.Context, sel ast.SelectionSet, v int64) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt64(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")

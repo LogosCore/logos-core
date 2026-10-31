@@ -582,7 +582,7 @@ func (r *minionSessionResolver) withMark(ctx context.Context, s *models.MinionSe
 func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	h := s.Hello
 	out := &model.MinionSession{
-		ID: s.SessionID.String(), State: sessionState(s), Archived: s.Archived, Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
+		ID: s.SessionID.String(), Rev: int(s.Rev), State: sessionState(s), Archived: s.Archived, Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
 		BuildDescription: s.BuildDescription, Description: s.Description, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),

@@ -22,6 +22,12 @@ import (
 type MinionSession struct {
 	field.DefaultField `bson:",inline"`
 
+	// Rev counts the session's writes: 1 when it opens, one more with each
+	// change (a check-in, a description). A client keeps the copy with the
+	// higher one, whichever comes last (a mutation's answer after the live
+	// updates it raced).
+	Rev int64 `bson:"rev" json:"rev"`
+
 	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	// Number is the session's display id for operators: the operation's

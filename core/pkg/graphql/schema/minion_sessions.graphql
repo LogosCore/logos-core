@@ -11,6 +11,11 @@
 type MinionSession {
   # The session id the minion sends its messages under.
   id: ID!
+  # Counts the session's changes: of two copies, the one with the higher
+  # rev is the newer (a mutation's answer can come after live updates).
+  # The caller's mark is not the session's: it does not count. 0 for a
+  # reserved session.
+  rev: Int!
   # OPEN, CLOSED (expired or of a deleted operation), or RESERVED: reserved
   # with a build for its minion's first claim, with no number, keys or host
   # yet (only minionSession(id) returns one).

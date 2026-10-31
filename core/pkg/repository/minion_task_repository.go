@@ -105,7 +105,11 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 	return &minionTaskRepository{tasks: db.Collection(minionTaskCollection), parts: db.Collection(minionTaskPartCollection)}
 }
 
+// bumpRev is in every write of a task (models.MinionTask.Rev).
+var bumpRev = bson.M{"rev": 1}
+
 func (r *minionTaskRepository) Insert(ctx context.Context, t *models.MinionTask) error {
+	t.Rev = 1
 	_, err := r.tasks.InsertOne(ctx, t)
 	return err
 }
@@ -157,10 +161,10 @@ func (r *minionTaskRepository) MarkSent(ctx context.Context, taskIDs []uuid.UUID
 	}
 	in := uuidsIn(taskIDs)
 	if _, err := r.tasks.UpdateAll(ctx, bson.M{"task_id": bson.M{"$in": in}, "state": models.MinionTaskQueued},
-		bson.M{"$set": bson.M{"state": models.MinionTaskSent, "sent_at": at}}); err != nil {
+		bson.M{"$set": bson.M{"state": models.MinionTaskSent, "sent_at": at}, "$inc": bumpRev}); err != nil {
 		return err
 	}
-	_, err := r.tasks.UpdateAll(ctx, bson.M{"task_id": bson.M{"$in": in}}, bson.M{"$inc": bson.M{"send_count": 1}})
+	_, err := r.tasks.UpdateAll(ctx, bson.M{"task_id": bson.M{"$in": in}}, bson.M{"$inc": bson.M{"send_count": 1, "rev": 1}})
 	return err
 }
 
@@ -170,7 +174,7 @@ func (r *minionTaskRepository) Ack(ctx context.Context, sessionID uuid.UUID, tas
 	}
 	_, err := r.tasks.UpdateAll(ctx,
 		bson.M{"session_id": sessionID, "task_id": bson.M{"$in": uuidsIn(taskIDs)}, "acked_at": bson.M{"$exists": false}},
-		bson.M{"$set": bson.M{"acked_at": at}})
+		bson.M{"$set": bson.M{"acked_at": at}, "$inc": bumpRev})
 	return err
 }
 
@@ -254,7 +258,7 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 			set["state"] = models.MinionTaskFailed
 		}
 	}
-	update := bson.M{"$inc": bson.M{"parts": 1, "out_size": len(out), "data_size": len(data)}}
+	update := bson.M{"$inc": bson.M{"parts": 1, "out_size": len(out), "data_size": len(data), "rev": 1}}
 	if len(set) > 0 {
 		update["$set"] = set
 	}
@@ -270,7 +274,7 @@ func (r *minionTaskRepository) RequestCancel(ctx context.Context, taskID uuid.UU
 	var after models.MinionTask
 	// Never sent: cancelled now.
 	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": models.MinionTaskQueued}).Apply(qmgo.Change{
-		Update:    bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at, "cancel_requested_at": at}},
+		Update:    bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at, "cancel_requested_at": at}, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
 	if err == nil {
@@ -282,7 +286,7 @@ func (r *minionTaskRepository) RequestCancel(ctx context.Context, taskID uuid.UU
 	// Sent and not over: the minion is told.
 	err = r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": bson.M{"$in": bson.A{models.MinionTaskSent, models.MinionTaskRunning}},
 		"cancel_requested_at": bson.M{"$exists": false}}).Apply(qmgo.Change{
-		Update:    bson.M{"$set": bson.M{"cancel_requested_at": at}},
+		Update:    bson.M{"$set": bson.M{"cancel_requested_at": at}, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
 	if err == nil {
@@ -307,7 +311,7 @@ func (r *minionTaskRepository) CancelsToSend(ctx context.Context, sessionID uuid
 			// Never acked, cancelled again and again: it most likely never
 			// reached the minion.
 			err := r.tasks.UpdateOne(ctx, bson.M{"task_id": t.TaskID, "state": models.MinionTaskSent, "acked_at": bson.M{"$exists": false}},
-				bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at}})
+				bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at}, "$inc": bumpRev})
 			if err != nil && !IsNotFound(err) {
 				return nil, nil, err
 			}
@@ -324,7 +328,7 @@ func (r *minionTaskRepository) CancelsToSend(ctx context.Context, sessionID uuid
 		for i, t := range send {
 			ids[i] = t.TaskID
 		}
-		if _, err := r.tasks.UpdateAll(ctx, bson.M{"task_id": bson.M{"$in": uuidsIn(ids)}}, bson.M{"$inc": bson.M{"cancel_sends": 1}}); err != nil {
+		if _, err := r.tasks.UpdateAll(ctx, bson.M{"task_id": bson.M{"$in": uuidsIn(ids)}}, bson.M{"$inc": bson.M{"cancel_sends": 1, "rev": 1}}); err != nil {
 			return nil, nil, err
 		}
 	}

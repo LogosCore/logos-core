@@ -11,6 +11,7 @@ import {
   applyRowUpdate,
   patchDetail,
   scheduleRefresh,
+  setNewer,
   type LiveListSpec,
 } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
@@ -305,7 +306,7 @@ export function useCreateCredential() {
 // updatedCredential applies a mutation's returned row: the detail takes it
 // whole, the lists get it patched in.
 function updatedCredential(queryClient: QueryClient, credential: CredentialFieldsFragment) {
-  queryClient.setQueryData(credentialKeys.detail(credential.id), { credential })
+  setNewer(queryClient, credentialKeys.detail(credential.id), "credential", credential)
   patchDetail(queryClient, credentialKeys.chip(credential.id), "credential", credential)
   applyRowUpdate(queryClient, credentialLists, credential)
 }

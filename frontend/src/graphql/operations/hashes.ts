@@ -6,6 +6,7 @@ import { graphql } from "@/graphql/gql"
 export const HashFields = graphql(`
   fragment HashFields on Hash {
     id
+    rev
     operationId
     value
     status

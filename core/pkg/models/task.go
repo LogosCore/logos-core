@@ -80,6 +80,7 @@ const (
 // credential?") are one index probe.
 type Task struct {
 	field.DefaultField `bson:",inline"`
+	Rev                int64     `bson:"rev" json:"rev"` // writes counted (repository.revised): a client keeps the higher copy
 	TaskID             uuid.UUID `bson:"task_id" json:"taskId"`
 	OperationID        uuid.UUID `bson:"operation_id" json:"operationId"`
 

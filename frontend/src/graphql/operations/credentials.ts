@@ -16,6 +16,7 @@ export const CredentialCommentFields = graphql(`
 export const CredentialFields = graphql(`
   fragment CredentialFields on Credential {
     id
+    rev
     operationId
     name
     type

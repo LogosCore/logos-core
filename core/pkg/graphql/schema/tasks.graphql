@@ -36,6 +36,9 @@ enum TaskStatus {
 
 type Task {
   id: ID!
+  # Counts the row's changes: of two copies, the one with the higher rev is
+  # the newer (a mutation's answer can come after live updates).
+  rev: Int!
   operationId: ID!
   # The full parent Operation. Resolved on demand via a DB lookup. Use in
   # cross-operation views; in scoped views prefer operationId.

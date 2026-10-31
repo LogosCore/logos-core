@@ -183,6 +183,7 @@ func (r *taskRepository) Create(ctx context.Context, t *models.Task) error {
 	if t.CredentialReferences == nil {
 		t.CredentialReferences = []uuid.UUID{}
 	}
+	t.Rev = 1
 	_, err := r.coll.InsertOne(ctx, t)
 	return err
 }
@@ -286,7 +287,7 @@ func (r *taskRepository) Update(ctx context.Context, t *models.Task, updates map
 	// across operation boundaries.
 	return r.coll.UpdateOne(ctx,
 		bson.M{"task_id": t.TaskID, "operation_id": t.OperationID},
-		bson.M{"$set": updates},
+		revised(bson.M{"$set": bson.M(updates)}),
 	)
 }
 
@@ -294,20 +295,20 @@ func (r *taskRepository) SoftDelete(ctx context.Context, t *models.Task, deleted
 	now := time.Now().UTC()
 	return r.coll.UpdateOne(ctx,
 		bson.M{"task_id": t.TaskID},
-		bson.M{"$set": bson.M{
+		revised(bson.M{"$set": bson.M{
 			"deleted_at":    now,
 			"deleted_by_id": deletedByID,
-		}},
+		}}),
 	)
 }
 
 func (r *taskRepository) Restore(ctx context.Context, t *models.Task) error {
 	return r.coll.UpdateOne(ctx,
 		bson.M{"task_id": t.TaskID},
-		bson.M{"$set": bson.M{
+		revised(bson.M{"$set": bson.M{
 			"deleted_at":    nil,
 			"deleted_by_id": nil,
-		}},
+		}}),
 	)
 }
 
@@ -342,13 +343,13 @@ func (r *taskRepository) addReference(ctx context.Context, taskID uuid.UUID, fie
 	now := time.Now().UTC()
 	err := r.coll.UpdateOne(ctx,
 		bson.M{"task_id": taskID},
-		bson.M{
+		revised(bson.M{
 			"$addToSet": bson.M{field: refID},
 			"$set": bson.M{
 				"last_updated_at":    now,
 				"last_updated_by_id": callerID,
 			},
-		},
+		}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to add %s: %w", field, err)
@@ -371,7 +372,7 @@ func (r *taskRepository) PullWikiReferences(ctx context.Context, opID uuid.UUID,
 			"operation_id":    opID,
 			"wiki_references": bson.M{"$in": wikiIDs},
 		},
-		bson.M{"$pull": bson.M{"wiki_references": bson.M{"$in": wikiIDs}}},
+		revised(bson.M{"$pull": bson.M{"wiki_references": bson.M{"$in": wikiIDs}}}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to pull wiki references: %w", err)
@@ -385,7 +386,7 @@ func (r *taskRepository) PullCredentialReference(ctx context.Context, opID, cred
 			"operation_id":          opID,
 			"credential_references": credentialID,
 		},
-		bson.M{"$pull": bson.M{"credential_references": credentialID}},
+		revised(bson.M{"$pull": bson.M{"credential_references": credentialID}}),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to pull credential reference: %w", err)

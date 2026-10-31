@@ -150,6 +150,7 @@ describe("live updates", () => {
 
   const session = (id: string, patch: Partial<MinionSessionFieldsFragment> = {}): MinionSessionFieldsFragment => ({
     id,
+    rev: 1,
     state: "OPEN",
     archived: false,
     mark: null,

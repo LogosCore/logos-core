@@ -97,6 +97,7 @@ type CredentialProperty struct {
 // stored as plain data, not application secrets, and are not redacted.
 type Credential struct {
 	field.DefaultField `bson:",inline"`
+	Rev                int64                `bson:"rev" json:"rev"` // writes counted (repository.revised): a client keeps the higher copy
 	CredentialID       uuid.UUID            `bson:"credential_id" json:"credential_id"`
 	OperationID        uuid.UUID            `bson:"operation_id"  json:"operation_id"`
 	Name               string               `bson:"name"          json:"name"`

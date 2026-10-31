@@ -121,7 +121,28 @@ func (r *minionSessionRepository) NextNumber(ctx context.Context, operationID uu
 	return counter.Seq, err
 }
 
+// withRev is a session's update (operators, not a pipeline) with its rev
+// counted (models.MinionSession.Rev); revStage is the same in a pipeline's
+// $set.
+func withRev(update bson.M) bson.M {
+	out := make(bson.M, len(update)+1)
+	for k, v := range update {
+		out[k] = v
+	}
+	inc := bson.M{"rev": 1}
+	if have, ok := update["$inc"].(bson.M); ok {
+		for k, v := range have {
+			inc[k] = v
+		}
+	}
+	out["$inc"] = inc
+	return out
+}
+
+var revStage = bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$rev", 0}}, 1}}
+
 func (r *minionSessionRepository) Insert(ctx context.Context, s *models.MinionSession) error {
+	s.Rev = 1
 	_, err := r.coll.InsertOne(ctx, s)
 	return err
 }
@@ -159,7 +180,7 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 	}
 	// A check-in also restores an archived session: its minion is back.
 	if c.Peer == "" {
-		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": set, "$unset": bson.M{"purge_at": "", "archived": ""}})
+		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": set, "$unset": bson.M{"purge_at": "", "archived": ""}}))
 	}
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(c.At, c.Peer, set))
 }
@@ -202,12 +223,13 @@ func checkInPipeline(at time.Time, peer string, set bson.M) bson.A {
 	for k, v := range set {
 		stage[k] = bson.M{"$literal": v}
 	}
+	stage["rev"] = revStage
 	return bson.A{bson.M{"$set": stage}, bson.M{"$unset": bson.A{"purge_at", "archived"}}}
 }
 
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
-		bson.M{"$set": bson.M{"hello": hello, "address": address, "address_picked": picked}})
+		withRev(bson.M{"$set": bson.M{"hello": hello, "address": address, "address_picked": picked}}))
 }
 
 func (r *minionSessionRepository) SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error {
@@ -215,7 +237,7 @@ func (r *minionSessionRepository) SetAddress(ctx context.Context, sessionID uuid
 	if address != "" {
 		filter["hello.addrs"] = address
 	}
-	return r.coll.UpdateOne(ctx, filter, bson.M{"$set": bson.M{"address": address, "address_picked": picked}})
+	return r.coll.UpdateOne(ctx, filter, withRev(bson.M{"$set": bson.M{"address": address, "address_picked": picked}}))
 }
 
 // minionSessionListFilter is an operation's sessions, searched (searchPattern)
@@ -293,9 +315,9 @@ func (r *minionSessionRepository) Values(ctx context.Context, operationID uuid.U
 }
 
 func (r *minionSessionRepository) CloseByOperationID(ctx context.Context, operationID uuid.UUID, reason string, at time.Time) error {
-	if _, err := r.coll.UpdateAll(ctx, bson.M{"operation_id": operationID, "closed_at": nil}, bson.M{"$set": bson.M{
+	if _, err := r.coll.UpdateAll(ctx, bson.M{"operation_id": operationID, "closed_at": nil}, withRev(bson.M{"$set": bson.M{
 		"closed_at": at, "close_reason": reason, "purge_at": at.Add(models.MinionSessionTombstone),
-	}}); err != nil {
+	}})); err != nil {
 		return err
 	}
 	_, err := r.counters.RemoveAll(ctx, bson.M{"operation_id": operationID})
@@ -324,9 +346,9 @@ func (r *minionSessionRepository) SetArchived(ctx context.Context, sessionID uui
 // archiveUpdate archives (sets the flag) or restores (removes it).
 func archiveUpdate(archived bool) bson.M {
 	if archived {
-		return bson.M{"$set": bson.M{"archived": true}}
+		return withRev(bson.M{"$set": bson.M{"archived": true}})
 	}
-	return bson.M{"$unset": bson.M{"archived": ""}}
+	return withRev(bson.M{"$unset": bson.M{"archived": ""}})
 }
 
 func (r *minionSessionRepository) SetArchivedMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, archived bool) (int64, error) {
@@ -357,7 +379,7 @@ func (r *minionSessionRepository) SetDescription(ctx context.Context, sessionID 
 	if description == "" {
 		update = bson.M{"$set": bson.M{"description_set": true}, "$unset": bson.M{"description": ""}}
 	}
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
 }
 
 // BackfillDescriptions is one update inside Mongo: description from
@@ -420,7 +442,7 @@ func (r *minionSessionRepository) OwnSessionIDs(ctx context.Context, operationID
 }
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, bson.M{"$set": bson.M{"persisted": true}})
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": bson.M{"persisted": true}}))
 }
 
 // Claim is one update inside Mongo: the session's keys move to the front of
@@ -454,6 +476,7 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 		"sleep":             sleepOrRemove(c.Sleep),
 		"late_at":           "$$REMOVE", // set again by the claim's check-in
 		"lost_at":           "$$REMOVE",
+		"rev":               revStage,
 	}}})
 }
 

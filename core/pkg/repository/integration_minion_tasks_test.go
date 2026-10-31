@@ -63,6 +63,19 @@ func TestIntegrationMinionTasks(t *testing.T) {
 		t.Fatalf("wire args back: %#v %v", args, err)
 	}
 
+	// Every write counts the task's rev: a client keeps the higher copy.
+	rev := func(id uuid.UUID) int64 {
+		t.Helper()
+		x, err := repo.FindByTaskID(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return x.Rev
+	}
+	if r := rev(ids[0]); r != 1 {
+		t.Fatalf("a new task's rev: %d", r)
+	}
+
 	// Oldest first, at most the limit; sent ones not yet acked come first next time.
 	got, _ := repo.ForDelivery(ctx, session, 2)
 	if g := taskIDs(got); len(g) != 2 || g[0] != ids[0] || g[1] != ids[1] {
@@ -75,8 +88,15 @@ func TestIntegrationMinionTasks(t *testing.T) {
 	if g := taskIDs(got); len(g) != 3 || g[0] != ids[0] || g[1] != ids[1] || g[2] != ids[2] {
 		t.Fatalf("resend first: %v, want %v", g, ids[:3])
 	}
+	sentRev := rev(ids[0])
+	if sentRev <= 1 {
+		t.Fatalf("rev after sending: %d", sentRev)
+	}
 	if err := repo.Ack(ctx, session, []uuid.UUID{ids[0]}, t0); err != nil {
 		t.Fatal(err)
+	}
+	if r := rev(ids[0]); r <= sentRev {
+		t.Fatalf("rev after the ack: %d, was %d", r, sentRev)
 	}
 	if g, _ := repo.ForDelivery(ctx, session, 10); len(g) != 3 || g[0].TaskID != ids[1] {
 		t.Fatalf("after the ack: %v", taskIDs(g))

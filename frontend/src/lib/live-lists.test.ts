@@ -3,10 +3,13 @@ import { QueryClient } from "@tanstack/react-query"
 import {
   applyRowRemoval,
   applyRowUpdate,
+  isOlder,
   mapListRows,
+  mergeRow,
   patchDetail,
   REFRESH_WINDOW_MS,
   scheduleRefresh,
+  setNewer,
   type LiveListSpec,
 } from "./live-lists"
 
@@ -184,5 +187,31 @@ describe("patchDetail", () => {
   test("leaves a detail nobody loaded alone", () => {
     patchDetail(qc, ["thing", "b"], "thing", { id: "b", name: "B" })
     expect(qc.getQueryData(["thing", "b"])).toBeUndefined()
+  })
+})
+
+// A mutation's answer can come after the live updates it raced: an older
+// copy of a row (a lower rev) must not take the row back.
+describe("an older copy does not take a row back", () => {
+  test("isOlder and mergeRow: by rev, rows without one as they come", () => {
+    expect(isOlder({ rev: 5 }, { rev: 3 })).toBe(true)
+    expect(isOlder({ rev: 5 }, { rev: 5 })).toBe(false)
+    expect(isOlder({ rev: 5 }, {})).toBe(false)
+    const cached = { id: "a", rev: 5, name: "new" }
+    expect(mergeRow(cached, { id: "a", rev: 4, name: "old" })).toBe(cached)
+    expect(mergeRow(cached, { id: "a", rev: 6, name: "newer" })).toEqual({ id: "a", rev: 6, name: "newer" })
+  })
+
+  test("in lists and in a detail", () => {
+    const key = listKey({})
+    qc.setQueryData(key, pages([{ id: "a", name: "new", rev: 5 } as Thing]))
+    applyRowUpdate(qc, spec, { id: "a", name: "old", rev: 4 } as Thing)
+    expect(rowsOf(qc.getQueryData<Cached>(key))[0].name).toBe("new")
+
+    qc.setQueryData(["thing", "a"], { thing: { id: "a", rev: 5, name: "new" } })
+    setNewer(qc, ["thing", "a"], "thing", { id: "a", rev: 4, name: "old" })
+    expect(qc.getQueryData<{ thing: Thing }>(["thing", "a"])!.thing.name).toBe("new")
+    setNewer(qc, ["thing", "a"], "thing", { id: "a", rev: 6, name: "newer" })
+    expect(qc.getQueryData<{ thing: Thing }>(["thing", "a"])!.thing.name).toBe("newer")
   })
 })

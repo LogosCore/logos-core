@@ -18,6 +18,7 @@ function host(
 ): HostFieldsFragment {
   return {
     id,
+    rev: 1,
     operationId: "op1",
     hostname,
     description: "",
@@ -201,6 +202,7 @@ function loginHost(
 ): HostFieldsFragment {
   return {
     id,
+    rev: 1,
     operationId: "op1",
     hostname,
     description: "",

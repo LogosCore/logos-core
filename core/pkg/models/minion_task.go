@@ -16,6 +16,10 @@ import (
 type MinionTask struct {
 	field.DefaultField `bson:",inline"`
 
+	// Rev counts the task's writes: 1 when queued, one more with each change.
+	// A client keeps the copy with the higher one, whichever comes last (a
+	// mutation's answer after the live updates it raced).
+	Rev int64 `bson:"rev" json:"rev"`
 	// TaskID is the id the task travels under: 16 bytes, a UUIDv4.
 	TaskID      uuid.UUID `bson:"task_id" json:"task_id"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
