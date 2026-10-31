@@ -235,6 +235,10 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 		return from, err
 	}
 	gen := t.Stream.Gen
+	// What the stream records does not hang on the downloader's
+	// connection: a client with every byte closes it at once, and the last
+	// chunk must still count as delivered.
+	wctx := context.WithoutCancel(ctx)
 	s.logger.Info("minion stream downloader attached", zap.String("task_id", taskID.String()), zap.Int64("from", from), zap.Int64("gen", gen))
 	s.publish(t)
 	pos := from
@@ -263,7 +267,7 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 			}
 			_ = s.buf.Del(ctx, key)
 			pos += int64(len(data))
-			ours, err := s.tasks.StreamDelivered(ctx, taskID, gen, min(pos, t.Stream.Size), s.now())
+			ours, err := s.tasks.StreamDelivered(wctx, taskID, gen, min(pos, t.Stream.Size), s.now())
 			if err != nil {
 				return pos, err
 			}
@@ -272,7 +276,7 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 			}
 			beat = s.now()
 			if s.now().Sub(lastPublish) >= time.Second || pos >= end {
-				if after, err := s.tasks.FindByTaskID(ctx, taskID); err == nil {
+				if after, err := s.tasks.FindByTaskID(wctx, taskID); err == nil {
 					s.publish(after)
 				}
 				lastPublish = s.now()
@@ -281,11 +285,11 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 		}
 		if s.now().Sub(beat) >= time.Second {
 			// Still there, still ours, and the task still going.
-			ours, err := s.tasks.StreamDelivered(ctx, taskID, gen, pos, s.now())
+			ours, err := s.tasks.StreamDelivered(wctx, taskID, gen, pos, s.now())
 			if err != nil || !ours {
 				return pos, err
 			}
-			after, err := s.tasks.FindByTaskID(ctx, taskID)
+			after, err := s.tasks.FindByTaskID(wctx, taskID)
 			if err != nil || after.Finished() {
 				return pos, err
 			}

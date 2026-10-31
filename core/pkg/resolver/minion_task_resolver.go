@@ -637,6 +637,10 @@ func (r *minionTaskResolver) streamState(t *models.MinionTask) string {
 		return "CANCELLED"
 	case t.Finished():
 		return "FAILED"
+	case st.Ran && st.Delivered >= st.Size:
+		// The downloader has it all; the minion ends the task at its next
+		// check-in.
+		return "DONE"
 	case st.Reader != "" && st.ReaderAt != nil && st.ReaderAt.After(time.Now().Add(-gone)):
 		return "STREAMING"
 	case st.Ran:

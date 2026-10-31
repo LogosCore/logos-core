@@ -96,7 +96,11 @@ func (m *memTasks) StreamAttach(_ context.Context, _ uuid.UUID, reader string, f
 	return &t, nil
 }
 
-func (m *memTasks) StreamDelivered(_ context.Context, _ uuid.UUID, gen, delivered int64, at time.Time) (bool, error) {
+func (m *memTasks) StreamDelivered(ctx context.Context, _ uuid.UUID, gen, delivered int64, at time.Time) (bool, error) {
+	// As Mongo: a cancelled context writes nothing.
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.t.Stream.Gen != gen {
@@ -325,5 +329,34 @@ func TestStreamLinkAndSweep(t *testing.T) {
 	s.Sweep(context.Background())
 	if tasks.get().CancelRequestedAt == nil {
 		t.Fatal("an hour idle: not stopped")
+	}
+}
+
+// A downloader that closes its connection the moment it has the last byte
+// (curl) has still had every byte delivered: the stream ends, not pauses.
+func TestStreamLastChunkCounts(t *testing.T) {
+	s, tasks, session, body, xfer := setup(t, protocol.MaxChunkData+100)
+	a := announce(t, s, tasks, session, body, xfer)
+	ctx, cancel := context.WithCancel(context.Background())
+	var got int64
+	done := make(chan struct{})
+	go func() {
+		_, _ = s.Read(ctx, tasks.t.TaskID, 0, int64(len(body)), func(b []byte) error {
+			if got += int64(len(b)); got == int64(len(body)) {
+				cancel()
+			}
+			return nil
+		})
+		close(done)
+	}()
+	waitFor(t, "downloader", func() bool { return tasks.get().Stream.Reader != "" })
+	minion(t, s, session, body, xfer, a, 10)
+	<-done
+	if st := tasks.get().Stream; st.Delivered != int64(len(body)) {
+		t.Fatalf("delivered %d of %d", st.Delivered, len(body))
+	}
+	acks, _ := s.Acks(context.Background(), session, map[string]bool{})
+	if len(acks) != 1 || acks[0].Hold || *acks[0].Next != uint64(len(body)) {
+		t.Fatalf("the end: %+v", acks)
 	}
 }
