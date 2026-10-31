@@ -16,6 +16,8 @@ import { FileHexView } from "./file-hex-view"
 import { FileStringsView } from "./file-strings-view"
 import { hexPlaceOf, type HexPlace } from "./hex"
 import { TabButton } from "./tab-button"
+import { savedName } from "./verify-commands"
+import { VerifyHashCard } from "./verify-hash-card"
 import { useByteBlocks } from "./use-byte-blocks"
 
 // A file_download task's file (docs: contracts/task-results-and-actions.md,
@@ -173,42 +175,45 @@ function FileOverview({ file: f, name, contentType, url }: { file: File; name: s
           )}
         </div>
 
-        <InfoCard labelWidth="w-24">
-          <LabelRow label="Path">
-            <span className="font-mono text-xs break-all">{f.name}</span>
-          </LabelRow>
-          <LabelRow label="Size">
-            <span className="tabular-nums">{f.size.toLocaleString("en-US")} bytes</span>
-          </LabelRow>
-          <LabelRow label="Type">
-            {contentType ? (
-              <span className="block truncate" title={contentType}>
-                {contentType}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">{f.state === "COMPLETE" ? "not detected" : "known once kept"}</span>
-            )}
-          </LabelRow>
-          <LabelRow label="SHA-256">
-            {f.sha256 ? (
-              <span className="flex min-w-0 items-center gap-1">
-                <code className="min-w-0 flex-1 truncate font-mono text-xs" title={f.sha256}>
-                  {f.sha256}
-                </code>
-                <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
-                  onClick={() => void copyToClipboard(f.sha256!, "SHA-256")}>
-                  <CopyIcon />
-                </Button>
-              </span>
-            ) : (
-              <span className="text-muted-foreground">said with the last chunk</span>
-            )}
-          </LabelRow>
-          <LabelRow label="State">
-            <span className={state.className}>{state.label}</span>
-            {f.doneAt && <span className="text-muted-foreground tabular-nums"> · {formatDateTime(f.doneAt)}</span>}
-          </LabelRow>
-        </InfoCard>
+        <div className="flex min-w-0 flex-col gap-4">
+          <InfoCard labelWidth="w-24">
+            <LabelRow label="Path">
+              <span className="font-mono text-xs break-all">{f.name}</span>
+            </LabelRow>
+            <LabelRow label="Size">
+              <span className="tabular-nums">{f.size.toLocaleString("en-US")} bytes</span>
+            </LabelRow>
+            <LabelRow label="Type">
+              {contentType ? (
+                <span className="block truncate" title={contentType}>
+                  {contentType}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">{f.state === "COMPLETE" ? "not detected" : "known once kept"}</span>
+              )}
+            </LabelRow>
+            <LabelRow label="SHA-256">
+              {f.sha256 ? (
+                <span className="flex min-w-0 items-center gap-1">
+                  <code className="min-w-0 flex-1 truncate font-mono text-xs" title={f.sha256}>
+                    {f.sha256}
+                  </code>
+                  <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
+                    onClick={() => void copyToClipboard(f.sha256!, "SHA-256")}>
+                    <CopyIcon />
+                  </Button>
+                </span>
+              ) : (
+                <span className="text-muted-foreground">said with the last chunk</span>
+              )}
+            </LabelRow>
+            <LabelRow label="State">
+              <span className={state.className}>{state.label}</span>
+              {f.doneAt && <span className="text-muted-foreground tabular-nums"> · {formatDateTime(f.doneAt)}</span>}
+            </LabelRow>
+          </InfoCard>
+          {f.state === "COMPLETE" && f.sha256 && <VerifyHashCard name={savedName(f.name, `file-${f.id.slice(0, 8)}`)} sha256={f.sha256} />}
+        </div>
       </div>
     </div>
   )

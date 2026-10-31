@@ -12,6 +12,8 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
+import { savedName, shellQuote } from "./verify-commands"
+import { VerifyHashCard } from "./verify-hash-card"
 
 // A stream_file task's stream (docs: contracts/task-results-and-actions.md,
 // file_stream), laid out as a kept file's Overview: the file on the host,
@@ -51,17 +53,14 @@ function duration(secs: number): string {
   return `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m`
 }
 
-/** A string for a POSIX shell, single-quoted. */
-function shellQuote(s: string): string {
-  return `'${s.replaceAll("'", `'\\''`)}'`
-}
-
 export function StreamView({ task: t, stream: st }: { task: Task; stream: Stream }) {
   const state = STATE[st.state] ?? { label: st.state.toLowerCase(), className: "text-muted-foreground" }
   const open = st.state === "WAITING" || st.state === "STREAMING" || st.state === "PAUSED"
   const pct = st.size > 0 ? Math.min(100, Math.floor((st.delivered / st.size) * 100)) : 100
   const bps = st.state === "STREAMING" ? rate(st) : null
   const name = baseName(st.name)
+  // What core's download saves it as: curl's -o, and what the checks name.
+  const saved = savedName(st.name, `stream-${t.id.slice(0, 8)}`)
   const typeName = fileTypeName("", name)
   const url = `${API_URL}/minion-streams/${encodeURIComponent(t.id)}`
   const [copying, setCopying] = useState(false)
@@ -73,7 +72,7 @@ export function StreamView({ task: t, stream: st }: { task: Task; stream: Stream
     try {
       const path = await fetchMinionStreamLink(t.id)
       const link = new URL(`${API_URL}${path}`, window.location.origin).toString()
-      await copyToClipboard(`curl -f -C - -o ${shellQuote(name)} ${shellQuote(link)}`, "curl command")
+      await copyToClipboard(`curl -f -C - -o ${shellQuote(saved)} ${shellQuote(link)}`, "curl command")
     } catch (err) {
       toast.error(errorMessage(err, "Could not make a link"))
     } finally {
@@ -144,40 +143,43 @@ export function StreamView({ task: t, stream: st }: { task: Task; stream: Stream
             </div>
           </div>
 
-          <InfoCard labelWidth="w-24">
-            <LabelRow label="Path">
-              <span className="font-mono text-xs break-all">{st.name}</span>
-            </LabelRow>
-            <LabelRow label="Size">
-              <span className="tabular-nums">{st.size.toLocaleString("en-US")} bytes</span>
-            </LabelRow>
-            <LabelRow label="SHA-256">
-              {st.sha256 ? (
-                <span className="flex min-w-0 items-center gap-1">
-                  <code className="min-w-0 flex-1 truncate font-mono text-xs" title={st.sha256}>
-                    {st.sha256}
-                  </code>
-                  <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
-                    onClick={() => void copyToClipboard(st.sha256 ?? "", "SHA-256")}>
-                    <CopyIcon />
-                  </Button>
-                </span>
-              ) : (
-                <span className="text-muted-foreground">once the minion has read it whole, in order</span>
-              )}
-            </LabelRow>
-            <LabelRow label="State">
-              <span className={state.className}>{state.label}</span>
-            </LabelRow>
-            <LabelRow label="Announced">
-              <span className="tabular-nums">{formatDateTime(st.announcedAt)}</span>
-            </LabelRow>
-            {t.doneAt && (
-              <LabelRow label="Ended">
-                <span className="tabular-nums">{formatDateTime(t.doneAt)}</span>
+          <div className="flex min-w-0 flex-col gap-4">
+            <InfoCard labelWidth="w-24">
+              <LabelRow label="Path">
+                <span className="font-mono text-xs break-all">{st.name}</span>
               </LabelRow>
-            )}
-          </InfoCard>
+              <LabelRow label="Size">
+                <span className="tabular-nums">{st.size.toLocaleString("en-US")} bytes</span>
+              </LabelRow>
+              <LabelRow label="SHA-256">
+                {st.sha256 ? (
+                  <span className="flex min-w-0 items-center gap-1">
+                    <code className="min-w-0 flex-1 truncate font-mono text-xs" title={st.sha256}>
+                      {st.sha256}
+                    </code>
+                    <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
+                      onClick={() => void copyToClipboard(st.sha256 ?? "", "SHA-256")}>
+                      <CopyIcon />
+                    </Button>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">once the minion has read it whole, in order</span>
+                )}
+              </LabelRow>
+              <LabelRow label="State">
+                <span className={state.className}>{state.label}</span>
+              </LabelRow>
+              <LabelRow label="Announced">
+                <span className="tabular-nums">{formatDateTime(st.announcedAt)}</span>
+              </LabelRow>
+              {t.doneAt && (
+                <LabelRow label="Ended">
+                  <span className="tabular-nums">{formatDateTime(t.doneAt)}</span>
+                </LabelRow>
+              )}
+            </InfoCard>
+            {st.sha256 && <VerifyHashCard name={saved} sha256={st.sha256} />}
+          </div>
         </div>
       </div>
     </div>
