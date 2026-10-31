@@ -83,10 +83,10 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
   const access = useCanBuild(own?.operationId ?? "")
   const workspace = useWorkspaceActions()
 
-  // The session actions run through: the one picked while the machine has
-  // it, else the tab's own.
+  // The session actions run through: the tab's. Act as another turns the
+  // tab into that session's (its label and mark), as it is.
   const sessions = machineQ.data?.fileBrowser.sessions ?? []
-  const actingId = state.actingSessionId && sessions.some((s) => s.id === state.actingSessionId) ? state.actingSessionId : sessionId
+  const actingId = sessionId
   const acting = sessions.find((s) => s.id === actingId)
   const actingNumber = acting?.number ?? own?.number
   const closed = (acting?.state ?? own?.state) === "CLOSED"
@@ -172,7 +172,7 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
         <span className="text-muted-foreground" title={machineKey.startsWith("session:") ? "The minion gave no lasting machine id: this session's own files" : `Machine ${machineKey}`}>
           Act as
         </span>
-        <Select value={actingId} onValueChange={(v) => v && set({ actingSessionId: v === sessionId ? null : v })}>
+        <Select value={actingId} disabled={!workspace} onValueChange={(v) => v && v !== sessionId && workspace?.switchFileBrowser(sessionId, v)}>
           <SelectTrigger size="sm" className="h-6 min-w-40 text-xs" aria-label="The session actions run through">
             <SelectValue>
               {(v: string) => {
@@ -183,7 +183,7 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
           </SelectTrigger>
           <SelectContent>
             {sessions
-              .filter((s) => s.state !== "CLOSED" || s.id === sessionId || s.id === actingId)
+              .filter((s) => s.state !== "CLOSED" || s.id === sessionId)
               .map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {sessionLabel(s)}

@@ -65,6 +65,17 @@ export function moveTab(tabs: WorkPaneTabs, id: string, to: string): WorkPaneTab
   return { ...tabs, ids }
 }
 
+/**
+ * Turns a tab into another, in its place (and in front if it was): a tab
+ * that comes to show something else. One already open for it stays, and
+ * this one closes into it.
+ */
+export function replaceTab(tabs: WorkPaneTabs, id: string, by: string): WorkPaneTabs {
+  if (id === by || !tabs.ids.includes(id)) return tabs
+  if (tabs.ids.includes(by)) return activateTab(closeTabs(tabs, [id]), by)
+  return { ids: tabs.ids.map((t) => (t === id ? by : t)), active: tabs.active === id ? by : tabs.active }
+}
+
 /** Tabs as stored, or none: whatever does not read as tabs is dropped. */
 export function readTabs(stored: unknown): WorkPaneTabs {
   if (typeof stored !== "object" || stored === null) return NO_TABS

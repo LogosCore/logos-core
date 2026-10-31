@@ -1,9 +1,9 @@
 import { useMemo } from "react"
 import { FolderTreeIcon, SquareTerminalIcon } from "lucide-react"
 import { WorkPane } from "@/components/work-pane/work-pane"
-import { openTab, type WorkPaneTabs } from "@/components/work-pane/work-pane-tabs"
+import { openTab, replaceTab, type WorkPaneTabs } from "@/components/work-pane/work-pane-tabs"
 import { FileBrowser } from "@/components/file-browser/file-browser"
-import { dropFileBrowserState, setFileBrowserState } from "@/components/file-browser/file-browser-state"
+import { dropFileBrowserState, moveFileBrowserState, setFileBrowserState } from "@/components/file-browser/file-browser-state"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { useFactoryIcons } from "@/graphql/hooks/builds"
@@ -32,6 +32,14 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
         const id = fileBrowserTabId(sessionId)
         if (path) setFileBrowserState(id, { path })
         onTabsChange(openTab(tabs, id))
+      },
+      switchFileBrowser: (from, to) => {
+        const fromId = fileBrowserTabId(from)
+        const toId = fileBrowserTabId(to)
+        // Into a tab already open for it: that one's state stays.
+        if (tabs.ids.includes(toId)) dropFileBrowserState(fromId)
+        else moveFileBrowserState(fromId, toId)
+        onTabsChange(replaceTab(tabs, fromId, toId))
       },
     }),
     [tabs, onTabsChange],

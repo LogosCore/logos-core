@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { NO_TABS, activateTab, closeTabs, moveTab, openTab, readTabs, tabsToClose } from "./work-pane-tabs"
+import { NO_TABS, activateTab, closeTabs, moveTab, openTab, readTabs, replaceTab, tabsToClose } from "./work-pane-tabs"
 
 const tabs = (active: string | null, ...ids: string[]) => ({ ids, active })
 
@@ -38,6 +38,15 @@ describe("work pane tabs", () => {
     expect(moveTab(tabs("a", "a", "b", "c"), "c", "a").ids).toEqual(["c", "a", "b"])
     const t = tabs("a", "a", "b")
     expect(moveTab(t, "a", "a")).toBe(t)
+  })
+
+  test("a tab turns into another in its place, or into one already open", () => {
+    expect(replaceTab(tabs("b", "a", "b", "c"), "b", "x")).toEqual(tabs("x", "a", "x", "c"))
+    expect(replaceTab(tabs("a", "a", "b"), "b", "x")).toEqual(tabs("a", "a", "x"))
+    expect(replaceTab(tabs("b", "a", "b", "c"), "b", "c")).toEqual(tabs("c", "a", "c"))
+    const t = tabs("a", "a")
+    expect(replaceTab(t, "a", "a")).toBe(t)
+    expect(replaceTab(t, "gone", "x")).toBe(t)
   })
 
   test("stored tabs are read back, anything else dropped", () => {

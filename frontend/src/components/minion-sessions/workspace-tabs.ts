@@ -24,6 +24,8 @@ export interface WorkspaceActions {
   openConsole: (sessionId: string) => void
   /** Opens a session's machine's file browser; at a folder, when given. */
   openFileBrowser: (sessionId: string, path?: string) => void
+  /** Turns a session's file browser into another session's of the machine, as it is. */
+  switchFileBrowser: (from: string, to: string) => void
 }
 
 export const WorkspaceActionsContext = createContext<WorkspaceActions | null>(null)
