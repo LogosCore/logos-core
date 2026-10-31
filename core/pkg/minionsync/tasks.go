@@ -105,6 +105,12 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 			// is checked, and let go.
 			s.endFile(ctx, task)
 			s.endUpload(ctx, task, res)
+			// The file browser takes what it says of its machine's files,
+			// after this exchange (a listing may be large).
+			if s.fileBrowser != nil {
+				ended := *task
+				go s.fileBrowser.TaskEnded(context.WithoutCancel(ctx), &ended)
+			}
 		}
 	}
 	return nil, nil

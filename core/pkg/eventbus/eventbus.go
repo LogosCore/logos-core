@@ -98,6 +98,9 @@ const (
 	// was asked to stop (pkg/minionsync and the MinionTaskResolver). Power a
 	// session's work pane tab; subscribers refetch the task.
 	TopicMinionTaskChanged Topic = "minion_task.changed"
+	// TopicFileBrowserChanged: a machine's file system snapshot changed
+	// (docs: contracts/file-browser.md); subscribers re-read its folders.
+	TopicFileBrowserChanged Topic = "file_browser.changed"
 
 	// Module lifecycle events — emitted by the lifecycle Service + reaper
 	// (control plane) and the ModuleResolver (admin remove). Power the

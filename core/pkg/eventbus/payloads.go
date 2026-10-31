@@ -309,6 +309,18 @@ func NewMinionTaskChangedEvent(p MinionTaskEventPayload) Event {
 	return NewEvent(TopicMinionTaskChanged, SystemActor(), p)
 }
 
+// FileBrowserEventPayload is a machine's snapshot changing: its operation,
+// its key (models.FsMachineKey), and the folder that changed most.
+type FileBrowserEventPayload struct {
+	OperationID string
+	Machine     string
+	Folder      string
+}
+
+func NewFileBrowserChangedEvent(p FileBrowserEventPayload) Event {
+	return NewEvent(TopicFileBrowserChanged, SystemActor(), p)
+}
+
 // --- Task event payloads ---
 
 // TaskEventPayload is the payload for every task topic. The bus stays

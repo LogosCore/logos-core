@@ -82,10 +82,12 @@ type Service struct {
 	// streams relays the files minions stream (streams.go); nil relays
 	// none.
 	streams Streams
-	cache   cache.Cache
-	bus     eventbus.IEventBus
-	logger  *zap.Logger
-	now     func() time.Time
+	// fileBrowser is told of tasks' ends (streams.go); nil: nothing is.
+	fileBrowser FileBrowser
+	cache       cache.Cache
+	bus         eventbus.IEventBus
+	logger      *zap.Logger
+	now         func() time.Time
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,

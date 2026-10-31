@@ -374,6 +374,72 @@ type ComplexityRoot struct {
 		Schema     func(childComplexity int) int
 	}
 
+	FsChange struct {
+		Folder func(childComplexity int) int
+	}
+
+	FsEntry struct {
+		Downloaded func(childComplexity int) int
+		GoneAt     func(childComplexity int) int
+		GoneBy     func(childComplexity int) int
+		GoneHow    func(childComplexity int) int
+		Group      func(childComplexity int) int
+		Hidden     func(childComplexity int) int
+		Known      func(childComplexity int) int
+		ListedAt   func(childComplexity int) int
+		ListedBy   func(childComplexity int) int
+		Mode       func(childComplexity int) int
+		Modified   func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Owner      func(childComplexity int) int
+		Parent     func(childComplexity int) int
+		Path       func(childComplexity int) int
+		SeenAt     func(childComplexity int) int
+		SeenBy     func(childComplexity int) int
+		Sep        func(childComplexity int) int
+		Size       func(childComplexity int) int
+		Target     func(childComplexity int) int
+		Type       func(childComplexity int) int
+		Uploaded   func(childComplexity int) int
+	}
+
+	FsEntryPage struct {
+		Entries func(childComplexity int) int
+		Folder  func(childComplexity int) int
+		Next    func(childComplexity int) int
+	}
+
+	FsMachine struct {
+		Key      func(childComplexity int) int
+		Sessions func(childComplexity int) int
+	}
+
+	FsMachineSession struct {
+		Host       func(childComplexity int) int
+		ID         func(childComplexity int) int
+		LastSeenAt func(childComplexity int) int
+		Number     func(childComplexity int) int
+		State      func(childComplexity int) int
+		User       func(childComplexity int) int
+	}
+
+	FsTaskRef struct {
+		Number    func(childComplexity int) int
+		SessionID func(childComplexity int) int
+		TaskID    func(childComplexity int) int
+		User      func(childComplexity int) int
+	}
+
+	FsTransfer struct {
+		At     func(childComplexity int) int
+		By     func(childComplexity int) int
+		FileID func(childComplexity int) int
+		Sha256 func(childComplexity int) int
+		Size   func(childComplexity int) int
+		Stream func(childComplexity int) int
+		TaskID func(childComplexity int) int
+	}
+
 	Hash struct {
 		BacklinkCount func(childComplexity int) int
 		Backlinks     func(childComplexity int) int
@@ -1025,6 +1091,9 @@ type ComplexityRoot struct {
 		CredentialTags                     func(childComplexity int, operationID string) int
 		Credentials                        func(childComplexity int, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		FactoryKinds                       func(childComplexity int) int
+		FileBrowser                        func(childComplexity int, sessionID string) int
+		FileBrowserEntries                 func(childComplexity int, sessionID string, path *string, after *string, first *int, search *string, sort *string, desc *bool, showDeleted *bool, foldersOnly *bool) int
+		FileBrowserSearch                  func(childComplexity int, sessionID string, query string, after *string, first *int, showDeleted *bool) int
 		FreeChannelEndpointSlug            func(childComplexity int, operationID string, text string, tag *string) int
 		Hash                               func(childComplexity int, id string) int
 		HashTags                           func(childComplexity int, operationID string) int
@@ -1188,6 +1257,7 @@ type ComplexityRoot struct {
 	Subscription struct {
 		AgentActivity               func(childComplexity int, operationID string) int
 		CredentialChanged           func(childComplexity int, operationID string) int
+		FileBrowserChanged          func(childComplexity int, sessionID string) int
 		HashChanged                 func(childComplexity int, operationID string) int
 		HostChanged                 func(childComplexity int, operationID string) int
 		MinionSessionChanged        func(childComplexity int, operationID string) int
@@ -1723,6 +1793,9 @@ type QueryResolver interface {
 	CredentialTags(ctx context.Context, operationID string) ([]string, error)
 	MyCredentials(ctx context.Context, operationIds []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	MyCredentialTags(ctx context.Context, operationIds []string) ([]string, error)
+	FileBrowser(ctx context.Context, sessionID string) (*model.FsMachine, error)
+	FileBrowserEntries(ctx context.Context, sessionID string, path *string, after *string, first *int, search *string, sort *string, desc *bool, showDeleted *bool, foldersOnly *bool) (*model.FsEntryPage, error)
+	FileBrowserSearch(ctx context.Context, sessionID string, query string, after *string, first *int, showDeleted *bool) (*model.FsEntryPage, error)
 	MyOperatorFocus(ctx context.Context) (*model.OperatorFocus, error)
 	Hash(ctx context.Context, id string) (*models.Hash, error)
 	Hashes(ctx context.Context, operationID string, search *string, statuses []models.HashStatus, tags []string, hasCredential *bool, first *int, after *string, last *int, before *string) (*model.HashConnection, error)
@@ -1799,6 +1872,7 @@ type SubscriptionResolver interface {
 	AgentActivity(ctx context.Context, operationID string) (<-chan *model.AgentActivityEvent, error)
 	CredentialChanged(ctx context.Context, operationID string) (<-chan *model.CredentialEvent, error)
 	MyCredentialChanged(ctx context.Context, operationIds []string) (<-chan *model.CredentialEvent, error)
+	FileBrowserChanged(ctx context.Context, sessionID string) (<-chan *model.FsChange, error)
 	HashChanged(ctx context.Context, operationID string) (<-chan *model.HashEvent, error)
 	MyHashChanged(ctx context.Context, operationIds []string) (<-chan *model.HashEvent, error)
 	HostChanged(ctx context.Context, operationID string) (<-chan *model.HostEvent, error)
@@ -3198,6 +3272,283 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FactoryKind.Schema(childComplexity), true
+
+	case "FsChange.folder":
+		if e.ComplexityRoot.FsChange.Folder == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsChange.Folder(childComplexity), true
+
+	case "FsEntry.downloaded":
+		if e.ComplexityRoot.FsEntry.Downloaded == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Downloaded(childComplexity), true
+	case "FsEntry.goneAt":
+		if e.ComplexityRoot.FsEntry.GoneAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.GoneAt(childComplexity), true
+	case "FsEntry.goneBy":
+		if e.ComplexityRoot.FsEntry.GoneBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.GoneBy(childComplexity), true
+	case "FsEntry.goneHow":
+		if e.ComplexityRoot.FsEntry.GoneHow == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.GoneHow(childComplexity), true
+	case "FsEntry.group":
+		if e.ComplexityRoot.FsEntry.Group == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Group(childComplexity), true
+	case "FsEntry.hidden":
+		if e.ComplexityRoot.FsEntry.Hidden == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Hidden(childComplexity), true
+	case "FsEntry.known":
+		if e.ComplexityRoot.FsEntry.Known == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Known(childComplexity), true
+	case "FsEntry.listedAt":
+		if e.ComplexityRoot.FsEntry.ListedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.ListedAt(childComplexity), true
+	case "FsEntry.listedBy":
+		if e.ComplexityRoot.FsEntry.ListedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.ListedBy(childComplexity), true
+	case "FsEntry.mode":
+		if e.ComplexityRoot.FsEntry.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Mode(childComplexity), true
+	case "FsEntry.modified":
+		if e.ComplexityRoot.FsEntry.Modified == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Modified(childComplexity), true
+	case "FsEntry.name":
+		if e.ComplexityRoot.FsEntry.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Name(childComplexity), true
+	case "FsEntry.owner":
+		if e.ComplexityRoot.FsEntry.Owner == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Owner(childComplexity), true
+	case "FsEntry.parent":
+		if e.ComplexityRoot.FsEntry.Parent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Parent(childComplexity), true
+	case "FsEntry.path":
+		if e.ComplexityRoot.FsEntry.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Path(childComplexity), true
+	case "FsEntry.seenAt":
+		if e.ComplexityRoot.FsEntry.SeenAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.SeenAt(childComplexity), true
+	case "FsEntry.seenBy":
+		if e.ComplexityRoot.FsEntry.SeenBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.SeenBy(childComplexity), true
+	case "FsEntry.sep":
+		if e.ComplexityRoot.FsEntry.Sep == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Sep(childComplexity), true
+	case "FsEntry.size":
+		if e.ComplexityRoot.FsEntry.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Size(childComplexity), true
+	case "FsEntry.target":
+		if e.ComplexityRoot.FsEntry.Target == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Target(childComplexity), true
+	case "FsEntry.type":
+		if e.ComplexityRoot.FsEntry.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Type(childComplexity), true
+	case "FsEntry.uploaded":
+		if e.ComplexityRoot.FsEntry.Uploaded == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.Uploaded(childComplexity), true
+
+	case "FsEntryPage.entries":
+		if e.ComplexityRoot.FsEntryPage.Entries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntryPage.Entries(childComplexity), true
+	case "FsEntryPage.folder":
+		if e.ComplexityRoot.FsEntryPage.Folder == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntryPage.Folder(childComplexity), true
+	case "FsEntryPage.next":
+		if e.ComplexityRoot.FsEntryPage.Next == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntryPage.Next(childComplexity), true
+
+	case "FsMachine.key":
+		if e.ComplexityRoot.FsMachine.Key == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachine.Key(childComplexity), true
+	case "FsMachine.sessions":
+		if e.ComplexityRoot.FsMachine.Sessions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachine.Sessions(childComplexity), true
+
+	case "FsMachineSession.host":
+		if e.ComplexityRoot.FsMachineSession.Host == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachineSession.Host(childComplexity), true
+	case "FsMachineSession.id":
+		if e.ComplexityRoot.FsMachineSession.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachineSession.ID(childComplexity), true
+	case "FsMachineSession.lastSeenAt":
+		if e.ComplexityRoot.FsMachineSession.LastSeenAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachineSession.LastSeenAt(childComplexity), true
+	case "FsMachineSession.number":
+		if e.ComplexityRoot.FsMachineSession.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachineSession.Number(childComplexity), true
+	case "FsMachineSession.state":
+		if e.ComplexityRoot.FsMachineSession.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachineSession.State(childComplexity), true
+	case "FsMachineSession.user":
+		if e.ComplexityRoot.FsMachineSession.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsMachineSession.User(childComplexity), true
+
+	case "FsTaskRef.number":
+		if e.ComplexityRoot.FsTaskRef.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTaskRef.Number(childComplexity), true
+	case "FsTaskRef.sessionId":
+		if e.ComplexityRoot.FsTaskRef.SessionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTaskRef.SessionID(childComplexity), true
+	case "FsTaskRef.taskId":
+		if e.ComplexityRoot.FsTaskRef.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTaskRef.TaskID(childComplexity), true
+	case "FsTaskRef.user":
+		if e.ComplexityRoot.FsTaskRef.User == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTaskRef.User(childComplexity), true
+
+	case "FsTransfer.at":
+		if e.ComplexityRoot.FsTransfer.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.At(childComplexity), true
+	case "FsTransfer.by":
+		if e.ComplexityRoot.FsTransfer.By == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.By(childComplexity), true
+	case "FsTransfer.fileId":
+		if e.ComplexityRoot.FsTransfer.FileID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.FileID(childComplexity), true
+	case "FsTransfer.sha256":
+		if e.ComplexityRoot.FsTransfer.Sha256 == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.Sha256(childComplexity), true
+	case "FsTransfer.size":
+		if e.ComplexityRoot.FsTransfer.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.Size(childComplexity), true
+	case "FsTransfer.stream":
+		if e.ComplexityRoot.FsTransfer.Stream == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.Stream(childComplexity), true
+	case "FsTransfer.taskId":
+		if e.ComplexityRoot.FsTransfer.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsTransfer.TaskID(childComplexity), true
 
 	case "Hash.backlinkCount":
 		if e.ComplexityRoot.Hash.BacklinkCount == nil {
@@ -6674,6 +7025,39 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.FactoryKinds(childComplexity), true
+	case "Query.fileBrowser":
+		if e.ComplexityRoot.Query.FileBrowser == nil {
+			break
+		}
+
+		args, err := ec.field_Query_fileBrowser_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.FileBrowser(childComplexity, args["sessionId"].(string)), true
+	case "Query.fileBrowserEntries":
+		if e.ComplexityRoot.Query.FileBrowserEntries == nil {
+			break
+		}
+
+		args, err := ec.field_Query_fileBrowserEntries_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.FileBrowserEntries(childComplexity, args["sessionId"].(string), args["path"].(*string), args["after"].(*string), args["first"].(*int), args["search"].(*string), args["sort"].(*string), args["desc"].(*bool), args["showDeleted"].(*bool), args["foldersOnly"].(*bool)), true
+	case "Query.fileBrowserSearch":
+		if e.ComplexityRoot.Query.FileBrowserSearch == nil {
+			break
+		}
+
+		args, err := ec.field_Query_fileBrowserSearch_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.FileBrowserSearch(childComplexity, args["sessionId"].(string), args["query"].(string), args["after"].(*string), args["first"].(*int), args["showDeleted"].(*bool)), true
 	case "Query.freeChannelEndpointSlug":
 		if e.ComplexityRoot.Query.FreeChannelEndpointSlug == nil {
 			break
@@ -7774,6 +8158,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.CredentialChanged(childComplexity, args["operationId"].(string)), true
+	case "Subscription.fileBrowserChanged":
+		if e.ComplexityRoot.Subscription.FileBrowserChanged == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_fileBrowserChanged_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.FileBrowserChanged(childComplexity, args["sessionId"].(string)), true
 	case "Subscription.hashChanged":
 		if e.ComplexityRoot.Subscription.HashChanged == nil {
 			break
@@ -10380,6 +10775,119 @@ extend type Subscription {
   # reconnect to pick up the new membership set — same constraint as
   # operationChanged.
   myCredentialChanged(operationIds: [ID!]): CredentialEvent!
+}
+`, BuiltIn: false},
+	{Name: "../schema/file_browser.graphql", Input: `# The file browser (docs: contracts/file-browser.md): what core's minions
+# have seen of a machine's file system, made from its sessions' tasks'
+# results as they end. Asked for by a session: its machine's. Needs at
+# least viewer.
+
+# A session's machine: the snapshot's key, and the operation's sessions
+# that feed it, newest first.
+type FsMachine {
+  key: String!
+  sessions: [FsMachineSession!]!
+}
+
+type FsMachineSession {
+  id: ID!
+  number: Int!
+  host: String
+  # The host user it runs as: a root session lists what a user's cannot.
+  user: String
+  # CLOSED sessions run no tasks.
+  state: String!
+  lastSeenAt: String
+}
+
+# A path the machine was seen to have, and what was last known of it.
+type FsEntry {
+  path: String!
+  name: String!
+  # null for a root.
+  parent: String
+  sep: String!
+  # dir, file, link or other.
+  type: String!
+  size: Int
+  # Unix seconds.
+  modified: Int
+  mode: String
+  owner: String
+  group: String
+  target: String
+  hidden: Boolean!
+  # A task said what it is; false for a folder known only as a parent.
+  known: Boolean!
+  seenAt: String
+  seenBy: FsTaskRef
+  # Gone: deleted (goneHow "deleted"), or a later listing of its folder no
+  # longer had it ("not_listed").
+  goneAt: String
+  goneBy: FsTaskRef
+  goneHow: String
+  # A folder: when its children were last listed, and by whom.
+  listedAt: String
+  listedBy: FsTaskRef
+  downloaded: [FsTransfer!]!
+  uploaded: [FsTransfer!]!
+}
+
+# The task that said something of an entry, and its session then.
+type FsTaskRef {
+  taskId: ID!
+  sessionId: ID!
+  number: Int!
+  user: String
+}
+
+# A file a task moved: downloaded (fileId: the kept file's; none for a
+# stream) or uploaded (by: the operator).
+type FsTransfer {
+  taskId: ID!
+  fileId: ID
+  size: Int!
+  sha256: String
+  stream: Boolean!
+  by: ID
+  at: String!
+}
+
+# A page of entries; next is the cursor of the next, null on the last.
+# folder is the folder's own entry (null when the snapshot has none).
+type FsEntryPage {
+  entries: [FsEntry!]!
+  next: String
+  folder: FsEntry
+}
+
+# A folder of a machine changed.
+type FsChange {
+  folder: String!
+}
+
+extend type Query {
+  fileBrowser(sessionId: ID!): FsMachine!
+    @hasPermission(permission: "operation:member")
+
+  # A folder's entries (path null: the machine's roots), folders first, by
+  # sort (name, size or modified; desc reverses), at most first (200 by
+  # default, 500 at most), after a page's cursor. search keeps the names
+  # that hold it; foldersOnly the folders (the tree); showDeleted the gone.
+  fileBrowserEntries(sessionId: ID!, path: String, after: String, first: Int, search: String, sort: String,
+    desc: Boolean, showDeleted: Boolean, foldersOnly: Boolean): FsEntryPage!
+    @hasPermission(permission: "operation:member")
+
+  # The machine's entries anywhere whose names match query: a part of the
+  # name, or a glob (* and ?), any case; by path.
+  fileBrowserSearch(sessionId: ID!, query: String!, after: String, first: Int, showDeleted: Boolean): FsEntryPage!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Subscription {
+  # The folders of the session's machine that change, as tasks end.
+  fileBrowserChanged(sessionId: ID!): FsChange!
+    @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
 	{Name: "../schema/focus.graphql", Input: `# =============================================================================
@@ -15400,6 +15908,99 @@ func (ec *executionContext) field_Query_credentials_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_fileBrowserEntries_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "path", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "sort", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["sort"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "desc", ec.unmarshalOBoolean2ᚖbool)
+	if err != nil {
+		return nil, err
+	}
+	args["desc"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "showDeleted", ec.unmarshalOBoolean2ᚖbool)
+	if err != nil {
+		return nil, err
+	}
+	args["showDeleted"] = arg7
+	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "foldersOnly", ec.unmarshalOBoolean2ᚖbool)
+	if err != nil {
+		return nil, err
+	}
+	args["foldersOnly"] = arg8
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_fileBrowserSearch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "query", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["query"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "showDeleted", ec.unmarshalOBoolean2ᚖbool)
+	if err != nil {
+		return nil, err
+	}
+	args["showDeleted"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_fileBrowser_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_freeChannelEndpointSlug_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -16817,6 +17418,17 @@ func (ec *executionContext) field_Subscription_credentialChanged_args(ctx contex
 		return nil, err
 	}
 	args["operationId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_fileBrowserChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sessionId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["sessionId"] = arg0
 	return args, nil
 }
 
@@ -23994,6 +24606,1479 @@ func (ec *executionContext) _FactoryKind_iconLight(ctx context.Context, field gr
 func (ec *executionContext) fieldContext_FactoryKind_iconLight(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "FactoryKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsChange_folder(ctx context.Context, field graphql.CollectedField, obj *model.FsChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsChange_folder,
+		func(ctx context.Context) (any, error) {
+			return obj.Folder, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsChange_folder(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_path(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_name(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_parent(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_parent,
+		func(ctx context.Context) (any, error) {
+			return obj.Parent, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_parent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_sep(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_sep,
+		func(ctx context.Context) (any, error) {
+			return obj.Sep, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_sep(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_type(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_type,
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_size(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_size,
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_modified(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_modified,
+		func(ctx context.Context) (any, error) {
+			return obj.Modified, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_modified(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_mode(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_mode,
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_owner(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_owner,
+		func(ctx context.Context) (any, error) {
+			return obj.Owner, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_owner(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_group(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_group,
+		func(ctx context.Context) (any, error) {
+			return obj.Group, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_group(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_target(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_target,
+		func(ctx context.Context) (any, error) {
+			return obj.Target, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_target(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_hidden(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_hidden,
+		func(ctx context.Context) (any, error) {
+			return obj.Hidden, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_hidden(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_known(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_known,
+		func(ctx context.Context) (any, error) {
+			return obj.Known, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_known(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_seenAt(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_seenAt,
+		func(ctx context.Context) (any, error) {
+			return obj.SeenAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_seenAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_seenBy(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_seenBy,
+		func(ctx context.Context) (any, error) {
+			return obj.SeenBy, nil
+		},
+		nil,
+		ec.marshalOFsTaskRef2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTaskRef,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_seenBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTaskRef_taskId(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_FsTaskRef_sessionId(ctx, field)
+			case "number":
+				return ec.fieldContext_FsTaskRef_number(ctx, field)
+			case "user":
+				return ec.fieldContext_FsTaskRef_user(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTaskRef", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_goneAt(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_goneAt,
+		func(ctx context.Context) (any, error) {
+			return obj.GoneAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_goneAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_goneBy(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_goneBy,
+		func(ctx context.Context) (any, error) {
+			return obj.GoneBy, nil
+		},
+		nil,
+		ec.marshalOFsTaskRef2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTaskRef,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_goneBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTaskRef_taskId(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_FsTaskRef_sessionId(ctx, field)
+			case "number":
+				return ec.fieldContext_FsTaskRef_number(ctx, field)
+			case "user":
+				return ec.fieldContext_FsTaskRef_user(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTaskRef", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_goneHow(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_goneHow,
+		func(ctx context.Context) (any, error) {
+			return obj.GoneHow, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_goneHow(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_listedAt(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_listedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ListedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_listedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_listedBy(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_listedBy,
+		func(ctx context.Context) (any, error) {
+			return obj.ListedBy, nil
+		},
+		nil,
+		ec.marshalOFsTaskRef2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTaskRef,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_listedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTaskRef_taskId(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_FsTaskRef_sessionId(ctx, field)
+			case "number":
+				return ec.fieldContext_FsTaskRef_number(ctx, field)
+			case "user":
+				return ec.fieldContext_FsTaskRef_user(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTaskRef", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_downloaded(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_downloaded,
+		func(ctx context.Context) (any, error) {
+			return obj.Downloaded, nil
+		},
+		nil,
+		ec.marshalNFsTransfer2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTransferᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_downloaded(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTransfer_taskId(ctx, field)
+			case "fileId":
+				return ec.fieldContext_FsTransfer_fileId(ctx, field)
+			case "size":
+				return ec.fieldContext_FsTransfer_size(ctx, field)
+			case "sha256":
+				return ec.fieldContext_FsTransfer_sha256(ctx, field)
+			case "stream":
+				return ec.fieldContext_FsTransfer_stream(ctx, field)
+			case "by":
+				return ec.fieldContext_FsTransfer_by(ctx, field)
+			case "at":
+				return ec.fieldContext_FsTransfer_at(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTransfer", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_uploaded(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_uploaded,
+		func(ctx context.Context) (any, error) {
+			return obj.Uploaded, nil
+		},
+		nil,
+		ec.marshalNFsTransfer2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTransferᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_uploaded(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTransfer_taskId(ctx, field)
+			case "fileId":
+				return ec.fieldContext_FsTransfer_fileId(ctx, field)
+			case "size":
+				return ec.fieldContext_FsTransfer_size(ctx, field)
+			case "sha256":
+				return ec.fieldContext_FsTransfer_sha256(ctx, field)
+			case "stream":
+				return ec.fieldContext_FsTransfer_stream(ctx, field)
+			case "by":
+				return ec.fieldContext_FsTransfer_by(ctx, field)
+			case "at":
+				return ec.fieldContext_FsTransfer_at(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTransfer", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntryPage_entries(ctx context.Context, field graphql.CollectedField, obj *model.FsEntryPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntryPage_entries,
+		func(ctx context.Context) (any, error) {
+			return obj.Entries, nil
+		},
+		nil,
+		ec.marshalNFsEntry2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntryᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntryPage_entries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntryPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "path":
+				return ec.fieldContext_FsEntry_path(ctx, field)
+			case "name":
+				return ec.fieldContext_FsEntry_name(ctx, field)
+			case "parent":
+				return ec.fieldContext_FsEntry_parent(ctx, field)
+			case "sep":
+				return ec.fieldContext_FsEntry_sep(ctx, field)
+			case "type":
+				return ec.fieldContext_FsEntry_type(ctx, field)
+			case "size":
+				return ec.fieldContext_FsEntry_size(ctx, field)
+			case "modified":
+				return ec.fieldContext_FsEntry_modified(ctx, field)
+			case "mode":
+				return ec.fieldContext_FsEntry_mode(ctx, field)
+			case "owner":
+				return ec.fieldContext_FsEntry_owner(ctx, field)
+			case "group":
+				return ec.fieldContext_FsEntry_group(ctx, field)
+			case "target":
+				return ec.fieldContext_FsEntry_target(ctx, field)
+			case "hidden":
+				return ec.fieldContext_FsEntry_hidden(ctx, field)
+			case "known":
+				return ec.fieldContext_FsEntry_known(ctx, field)
+			case "seenAt":
+				return ec.fieldContext_FsEntry_seenAt(ctx, field)
+			case "seenBy":
+				return ec.fieldContext_FsEntry_seenBy(ctx, field)
+			case "goneAt":
+				return ec.fieldContext_FsEntry_goneAt(ctx, field)
+			case "goneBy":
+				return ec.fieldContext_FsEntry_goneBy(ctx, field)
+			case "goneHow":
+				return ec.fieldContext_FsEntry_goneHow(ctx, field)
+			case "listedAt":
+				return ec.fieldContext_FsEntry_listedAt(ctx, field)
+			case "listedBy":
+				return ec.fieldContext_FsEntry_listedBy(ctx, field)
+			case "downloaded":
+				return ec.fieldContext_FsEntry_downloaded(ctx, field)
+			case "uploaded":
+				return ec.fieldContext_FsEntry_uploaded(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsEntry", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntryPage_next(ctx context.Context, field graphql.CollectedField, obj *model.FsEntryPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntryPage_next,
+		func(ctx context.Context) (any, error) {
+			return obj.Next, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntryPage_next(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntryPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntryPage_folder(ctx context.Context, field graphql.CollectedField, obj *model.FsEntryPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntryPage_folder,
+		func(ctx context.Context) (any, error) {
+			return obj.Folder, nil
+		},
+		nil,
+		ec.marshalOFsEntry2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntry,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntryPage_folder(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntryPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "path":
+				return ec.fieldContext_FsEntry_path(ctx, field)
+			case "name":
+				return ec.fieldContext_FsEntry_name(ctx, field)
+			case "parent":
+				return ec.fieldContext_FsEntry_parent(ctx, field)
+			case "sep":
+				return ec.fieldContext_FsEntry_sep(ctx, field)
+			case "type":
+				return ec.fieldContext_FsEntry_type(ctx, field)
+			case "size":
+				return ec.fieldContext_FsEntry_size(ctx, field)
+			case "modified":
+				return ec.fieldContext_FsEntry_modified(ctx, field)
+			case "mode":
+				return ec.fieldContext_FsEntry_mode(ctx, field)
+			case "owner":
+				return ec.fieldContext_FsEntry_owner(ctx, field)
+			case "group":
+				return ec.fieldContext_FsEntry_group(ctx, field)
+			case "target":
+				return ec.fieldContext_FsEntry_target(ctx, field)
+			case "hidden":
+				return ec.fieldContext_FsEntry_hidden(ctx, field)
+			case "known":
+				return ec.fieldContext_FsEntry_known(ctx, field)
+			case "seenAt":
+				return ec.fieldContext_FsEntry_seenAt(ctx, field)
+			case "seenBy":
+				return ec.fieldContext_FsEntry_seenBy(ctx, field)
+			case "goneAt":
+				return ec.fieldContext_FsEntry_goneAt(ctx, field)
+			case "goneBy":
+				return ec.fieldContext_FsEntry_goneBy(ctx, field)
+			case "goneHow":
+				return ec.fieldContext_FsEntry_goneHow(ctx, field)
+			case "listedAt":
+				return ec.fieldContext_FsEntry_listedAt(ctx, field)
+			case "listedBy":
+				return ec.fieldContext_FsEntry_listedBy(ctx, field)
+			case "downloaded":
+				return ec.fieldContext_FsEntry_downloaded(ctx, field)
+			case "uploaded":
+				return ec.fieldContext_FsEntry_uploaded(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsEntry", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachine_key(ctx context.Context, field graphql.CollectedField, obj *model.FsMachine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachine_key,
+		func(ctx context.Context) (any, error) {
+			return obj.Key, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachine_key(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachine",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachine_sessions(ctx context.Context, field graphql.CollectedField, obj *model.FsMachine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachine_sessions,
+		func(ctx context.Context) (any, error) {
+			return obj.Sessions, nil
+		},
+		nil,
+		ec.marshalNFsMachineSession2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachineSessionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachine_sessions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachine",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FsMachineSession_id(ctx, field)
+			case "number":
+				return ec.fieldContext_FsMachineSession_number(ctx, field)
+			case "host":
+				return ec.fieldContext_FsMachineSession_host(ctx, field)
+			case "user":
+				return ec.fieldContext_FsMachineSession_user(ctx, field)
+			case "state":
+				return ec.fieldContext_FsMachineSession_state(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_FsMachineSession_lastSeenAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsMachineSession", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachineSession_id(ctx context.Context, field graphql.CollectedField, obj *model.FsMachineSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachineSession_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachineSession_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachineSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachineSession_number(ctx context.Context, field graphql.CollectedField, obj *model.FsMachineSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachineSession_number,
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachineSession_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachineSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachineSession_host(ctx context.Context, field graphql.CollectedField, obj *model.FsMachineSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachineSession_host,
+		func(ctx context.Context) (any, error) {
+			return obj.Host, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachineSession_host(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachineSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachineSession_user(ctx context.Context, field graphql.CollectedField, obj *model.FsMachineSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachineSession_user,
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachineSession_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachineSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachineSession_state(ctx context.Context, field graphql.CollectedField, obj *model.FsMachineSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachineSession_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachineSession_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachineSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsMachineSession_lastSeenAt(ctx context.Context, field graphql.CollectedField, obj *model.FsMachineSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsMachineSession_lastSeenAt,
+		func(ctx context.Context) (any, error) {
+			return obj.LastSeenAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsMachineSession_lastSeenAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsMachineSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTaskRef_taskId(ctx context.Context, field graphql.CollectedField, obj *model.FsTaskRef) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTaskRef_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTaskRef_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTaskRef",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTaskRef_sessionId(ctx context.Context, field graphql.CollectedField, obj *model.FsTaskRef) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTaskRef_sessionId,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTaskRef_sessionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTaskRef",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTaskRef_number(ctx context.Context, field graphql.CollectedField, obj *model.FsTaskRef) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTaskRef_number,
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTaskRef_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTaskRef",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTaskRef_user(ctx context.Context, field graphql.CollectedField, obj *model.FsTaskRef) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTaskRef_user,
+		func(ctx context.Context) (any, error) {
+			return obj.User, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTaskRef_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTaskRef",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_taskId(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_fileId(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_fileId,
+		func(ctx context.Context) (any, error) {
+			return obj.FileID, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_fileId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_size(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_size,
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_sha256(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_sha256,
+		func(ctx context.Context) (any, error) {
+			return obj.Sha256, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_sha256(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_stream(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_stream,
+		func(ctx context.Context) (any, error) {
+			return obj.Stream, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_stream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_by(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_by,
+		func(ctx context.Context) (any, error) {
+			return obj.By, nil
+		},
+		nil,
+		ec.marshalOID2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_by(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsTransfer_at(ctx context.Context, field graphql.CollectedField, obj *model.FsTransfer) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsTransfer_at,
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsTransfer_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsTransfer",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -46442,6 +48527,205 @@ func (ec *executionContext) fieldContext_Query_myCredentialTags(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_fileBrowser(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_fileBrowser,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().FileBrowser(ctx, fc.Args["sessionId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.FsMachine
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.FsMachine
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNFsMachine2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachine,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_fileBrowser(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "key":
+				return ec.fieldContext_FsMachine_key(ctx, field)
+			case "sessions":
+				return ec.fieldContext_FsMachine_sessions(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsMachine", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_fileBrowser_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_fileBrowserEntries(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_fileBrowserEntries,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().FileBrowserEntries(ctx, fc.Args["sessionId"].(string), fc.Args["path"].(*string), fc.Args["after"].(*string), fc.Args["first"].(*int), fc.Args["search"].(*string), fc.Args["sort"].(*string), fc.Args["desc"].(*bool), fc.Args["showDeleted"].(*bool), fc.Args["foldersOnly"].(*bool))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.FsEntryPage
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.FsEntryPage
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNFsEntryPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntryPage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_fileBrowserEntries(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "entries":
+				return ec.fieldContext_FsEntryPage_entries(ctx, field)
+			case "next":
+				return ec.fieldContext_FsEntryPage_next(ctx, field)
+			case "folder":
+				return ec.fieldContext_FsEntryPage_folder(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsEntryPage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_fileBrowserEntries_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_fileBrowserSearch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_fileBrowserSearch,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().FileBrowserSearch(ctx, fc.Args["sessionId"].(string), fc.Args["query"].(string), fc.Args["after"].(*string), fc.Args["first"].(*int), fc.Args["showDeleted"].(*bool))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.FsEntryPage
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.FsEntryPage
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNFsEntryPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntryPage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_fileBrowserSearch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "entries":
+				return ec.fieldContext_FsEntryPage_entries(ctx, field)
+			case "next":
+				return ec.fieldContext_FsEntryPage_next(ctx, field)
+			case "folder":
+				return ec.fieldContext_FsEntryPage_folder(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsEntryPage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_fileBrowserSearch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_myOperatorFocus(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -53297,6 +55581,69 @@ func (ec *executionContext) fieldContext_Subscription_myCredentialChanged(ctx co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Subscription_myCredentialChanged_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_fileBrowserChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Subscription_fileBrowserChanged,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().FileBrowserChanged(ctx, fc.Args["sessionId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.FsChange
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.FsChange
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNFsChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsChange,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Subscription_fileBrowserChanged(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "folder":
+				return ec.fieldContext_FsChange_folder(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsChange", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_fileBrowserChanged_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -67747,6 +70094,400 @@ func (ec *executionContext) _FactoryKind(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var fsChangeImplementors = []string{"FsChange"}
+
+func (ec *executionContext) _FsChange(ctx context.Context, sel ast.SelectionSet, obj *model.FsChange) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsChangeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsChange")
+		case "folder":
+			out.Values[i] = ec._FsChange_folder(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var fsEntryImplementors = []string{"FsEntry"}
+
+func (ec *executionContext) _FsEntry(ctx context.Context, sel ast.SelectionSet, obj *model.FsEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsEntry")
+		case "path":
+			out.Values[i] = ec._FsEntry_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._FsEntry_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "parent":
+			out.Values[i] = ec._FsEntry_parent(ctx, field, obj)
+		case "sep":
+			out.Values[i] = ec._FsEntry_sep(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "type":
+			out.Values[i] = ec._FsEntry_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._FsEntry_size(ctx, field, obj)
+		case "modified":
+			out.Values[i] = ec._FsEntry_modified(ctx, field, obj)
+		case "mode":
+			out.Values[i] = ec._FsEntry_mode(ctx, field, obj)
+		case "owner":
+			out.Values[i] = ec._FsEntry_owner(ctx, field, obj)
+		case "group":
+			out.Values[i] = ec._FsEntry_group(ctx, field, obj)
+		case "target":
+			out.Values[i] = ec._FsEntry_target(ctx, field, obj)
+		case "hidden":
+			out.Values[i] = ec._FsEntry_hidden(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "known":
+			out.Values[i] = ec._FsEntry_known(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "seenAt":
+			out.Values[i] = ec._FsEntry_seenAt(ctx, field, obj)
+		case "seenBy":
+			out.Values[i] = ec._FsEntry_seenBy(ctx, field, obj)
+		case "goneAt":
+			out.Values[i] = ec._FsEntry_goneAt(ctx, field, obj)
+		case "goneBy":
+			out.Values[i] = ec._FsEntry_goneBy(ctx, field, obj)
+		case "goneHow":
+			out.Values[i] = ec._FsEntry_goneHow(ctx, field, obj)
+		case "listedAt":
+			out.Values[i] = ec._FsEntry_listedAt(ctx, field, obj)
+		case "listedBy":
+			out.Values[i] = ec._FsEntry_listedBy(ctx, field, obj)
+		case "downloaded":
+			out.Values[i] = ec._FsEntry_downloaded(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "uploaded":
+			out.Values[i] = ec._FsEntry_uploaded(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var fsEntryPageImplementors = []string{"FsEntryPage"}
+
+func (ec *executionContext) _FsEntryPage(ctx context.Context, sel ast.SelectionSet, obj *model.FsEntryPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsEntryPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsEntryPage")
+		case "entries":
+			out.Values[i] = ec._FsEntryPage_entries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "next":
+			out.Values[i] = ec._FsEntryPage_next(ctx, field, obj)
+		case "folder":
+			out.Values[i] = ec._FsEntryPage_folder(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var fsMachineImplementors = []string{"FsMachine"}
+
+func (ec *executionContext) _FsMachine(ctx context.Context, sel ast.SelectionSet, obj *model.FsMachine) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsMachineImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsMachine")
+		case "key":
+			out.Values[i] = ec._FsMachine_key(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessions":
+			out.Values[i] = ec._FsMachine_sessions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var fsMachineSessionImplementors = []string{"FsMachineSession"}
+
+func (ec *executionContext) _FsMachineSession(ctx context.Context, sel ast.SelectionSet, obj *model.FsMachineSession) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsMachineSessionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsMachineSession")
+		case "id":
+			out.Values[i] = ec._FsMachineSession_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "number":
+			out.Values[i] = ec._FsMachineSession_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "host":
+			out.Values[i] = ec._FsMachineSession_host(ctx, field, obj)
+		case "user":
+			out.Values[i] = ec._FsMachineSession_user(ctx, field, obj)
+		case "state":
+			out.Values[i] = ec._FsMachineSession_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastSeenAt":
+			out.Values[i] = ec._FsMachineSession_lastSeenAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var fsTaskRefImplementors = []string{"FsTaskRef"}
+
+func (ec *executionContext) _FsTaskRef(ctx context.Context, sel ast.SelectionSet, obj *model.FsTaskRef) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsTaskRefImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsTaskRef")
+		case "taskId":
+			out.Values[i] = ec._FsTaskRef_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessionId":
+			out.Values[i] = ec._FsTaskRef_sessionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "number":
+			out.Values[i] = ec._FsTaskRef_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "user":
+			out.Values[i] = ec._FsTaskRef_user(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var fsTransferImplementors = []string{"FsTransfer"}
+
+func (ec *executionContext) _FsTransfer(ctx context.Context, sel ast.SelectionSet, obj *model.FsTransfer) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fsTransferImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FsTransfer")
+		case "taskId":
+			out.Values[i] = ec._FsTransfer_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fileId":
+			out.Values[i] = ec._FsTransfer_fileId(ctx, field, obj)
+		case "size":
+			out.Values[i] = ec._FsTransfer_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha256":
+			out.Values[i] = ec._FsTransfer_sha256(ctx, field, obj)
+		case "stream":
+			out.Values[i] = ec._FsTransfer_stream(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "by":
+			out.Values[i] = ec._FsTransfer_by(ctx, field, obj)
+		case "at":
+			out.Values[i] = ec._FsTransfer_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var hashImplementors = []string{"Hash"}
 
 func (ec *executionContext) _Hash(ctx context.Context, sel ast.SelectionSet, obj *models.Hash) graphql.Marshaler {
@@ -73460,6 +76201,72 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "fileBrowser":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_fileBrowser(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "fileBrowserEntries":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_fileBrowserEntries(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "fileBrowserSearch":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_fileBrowserSearch(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "myOperatorFocus":
 			field := field
 
@@ -75612,6 +78419,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_credentialChanged(ctx, fields[0])
 	case "myCredentialChanged":
 		return ec._Subscription_myCredentialChanged(ctx, fields[0])
+	case "fileBrowserChanged":
+		return ec._Subscription_fileBrowserChanged(ctx, fields[0])
 	case "hashChanged":
 		return ec._Subscription_hashChanged(ctx, fields[0])
 	case "myHashChanged":
@@ -80663,6 +83472,126 @@ func (ec *executionContext) marshalNFactoryKind2ᚖgithubᚗcomᚋlogoscoreᚋlo
 	return ec._FactoryKind(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNFsChange2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsChange(ctx context.Context, sel ast.SelectionSet, v model.FsChange) graphql.Marshaler {
+	return ec._FsChange(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFsChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsChange(ctx context.Context, sel ast.SelectionSet, v *model.FsChange) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FsChange(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFsEntry2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FsEntry) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFsEntry2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntry(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFsEntry2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntry(ctx context.Context, sel ast.SelectionSet, v *model.FsEntry) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FsEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFsEntryPage2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntryPage(ctx context.Context, sel ast.SelectionSet, v model.FsEntryPage) graphql.Marshaler {
+	return ec._FsEntryPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFsEntryPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntryPage(ctx context.Context, sel ast.SelectionSet, v *model.FsEntryPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FsEntryPage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFsMachine2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachine(ctx context.Context, sel ast.SelectionSet, v model.FsMachine) graphql.Marshaler {
+	return ec._FsMachine(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFsMachine2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachine(ctx context.Context, sel ast.SelectionSet, v *model.FsMachine) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FsMachine(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFsMachineSession2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachineSessionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FsMachineSession) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFsMachineSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachineSession(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFsMachineSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsMachineSession(ctx context.Context, sel ast.SelectionSet, v *model.FsMachineSession) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FsMachineSession(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFsTransfer2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTransferᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FsTransfer) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFsTransfer2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTransfer(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFsTransfer2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTransfer(ctx context.Context, sel ast.SelectionSet, v *model.FsTransfer) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FsTransfer(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNHash2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐHash(ctx context.Context, sel ast.SelectionSet, v models.Hash) graphql.Marshaler {
 	return ec._Hash(ctx, sel, &v)
 }
@@ -83432,6 +86361,20 @@ func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel as
 	_ = sel
 	res := graphql.MarshalFloatContext(*v)
 	return graphql.WrapContextMarshaler(ctx, res)
+}
+
+func (ec *executionContext) marshalOFsEntry2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsEntry(ctx context.Context, sel ast.SelectionSet, v *model.FsEntry) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._FsEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOFsTaskRef2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTaskRef(ctx context.Context, sel ast.SelectionSet, v *model.FsTaskRef) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._FsTaskRef(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOHash2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐHash(ctx context.Context, sel ast.SelectionSet, v *models.Hash) graphql.Marshaler {

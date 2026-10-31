@@ -24,6 +24,19 @@ type Streams interface {
 	Pull(ctx context.Context, t *models.MinionTask, next int64, room int) (*protocol.ChunkItem, *protocol.AckItem, error)
 }
 
+// FileBrowser keeps the snapshots of machines' file systems, from tasks'
+// results (filebrowser.Service).
+type FileBrowser interface {
+	TaskEnded(ctx context.Context, t *models.MinionTask)
+}
+
+// WithFileBrowser gives the service the file browser, told of each task's
+// end; without it, nothing is.
+func (s *Service) WithFileBrowser(fb FileBrowser) *Service {
+	s.fileBrowser = fb
+	return s
+}
+
 // WithStreams gives the service the streams. Without it, a stream's chunks
 // go where a download's do, and fail there.
 func (s *Service) WithStreams(streams Streams) *Service {

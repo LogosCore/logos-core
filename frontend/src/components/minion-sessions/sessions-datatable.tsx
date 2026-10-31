@@ -35,6 +35,7 @@ import {
   PencilIcon,
   PinIcon,
   SquareTerminalIcon,
+  FolderTreeIcon,
   TagIcon,
   XIcon,
 } from "lucide-react"
@@ -139,6 +140,7 @@ export function SessionsDatatable({
   layout,
   onLayoutChange,
   onInteract,
+  onFileBrowser,
   activeSessionId = null,
   sessions,
   icons,
@@ -161,6 +163,8 @@ export function SessionsDatatable({
   onLayoutChange: (layout: SessionsLayout | null) => void
   /** Opens the session in the work pane below. */
   onInteract: (session: MinionSessionFieldsFragment) => void
+  /** Opens the session's machine's file browser in the work pane below. */
+  onFileBrowser: (session: MinionSessionFieldsFragment) => void
   /** The session whose tab is in front in the work pane: marked, and
    *  scrolled to when the tab changes. */
   activeSessionId?: string | null
@@ -445,6 +449,7 @@ export function SessionsDatatable({
                       onSelect={() => setSelection(toggleSelected(selection, order, s.id, false))}
                       onEditDescription={() => setDescribing(s)}
                       onInteract={() => onInteract(s)}
+                      onFileBrowser={() => onFileBrowser(s)}
                       onMark={() =>
                         setMarking({
                           title: `session #${s.number}`,
@@ -834,6 +839,7 @@ function SessionMenu({
   onEditDescription,
   onMark,
   onInteract,
+  onFileBrowser,
 }: {
   session: MinionSessionFieldsFragment
   canWrite: boolean
@@ -844,6 +850,8 @@ function SessionMenu({
   onMark: () => void
   /** Opens the session in the work pane. */
   onInteract: () => void
+  /** Opens its machine's file browser in the work pane. */
+  onFileBrowser: () => void
   /** Picks the row for bulk actions (or unpicks it). */
   onSelect: () => void
   selected: boolean
@@ -860,6 +868,10 @@ function SessionMenu({
       <ContextMenuItem onClick={onInteract}>
         <SquareTerminalIcon />
         Interact
+      </ContextMenuItem>
+      <ContextMenuItem onClick={onFileBrowser}>
+        <FolderTreeIcon />
+        File Browser
       </ContextMenuItem>
       <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
         <InfoIcon />

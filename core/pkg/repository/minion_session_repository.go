@@ -28,6 +28,10 @@ type IMinionSessionRepository interface {
 	// NextNumber reserves the operation's next session number: 1, 2, 3, …
 	NextNumber(ctx context.Context, operationID uuid.UUID) (int64, error)
 	Insert(ctx context.Context, s *models.MinionSession) error
+	// ByMachine are the operation's sessions whose hello says machineID,
+	// newest first (the file browser's machine; docs:
+	// contracts/file-browser.md).
+	ByMachine(ctx context.Context, operationID uuid.UUID, machineID string) ([]models.MinionSession, error)
 	// FindBySessionID returns one session; IsNotFound on a miss.
 	FindBySessionID(ctx context.Context, sessionID uuid.UUID) (*models.MinionSession, error)
 	// CheckIn records a message under the session id (MinionSessionCheckIn):
@@ -92,6 +96,7 @@ func NewMinionSessionRepository(db database.Database) IMinionSessionRepository {
 		{Key: []string{"session_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "number"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "-created_at", "-_id"}},
+		{Key: []string{"operation_id", "hello.machine_id"}},
 		{Key: []string{"operation_id", "late_at"}},
 		{Key: []string{"operation_id", "lost_at"}},
 		// A session without purge_at (checked in, open) stays.
@@ -504,4 +509,10 @@ func (r *minionSessionRepository) BackfillLostAt(ctx context.Context) (int64, er
 		return 0, err
 	}
 	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) ByMachine(ctx context.Context, operationID uuid.UUID, machineID string) ([]models.MinionSession, error) {
+	var out []models.MinionSession
+	err := r.coll.Find(ctx, bson.M{"operation_id": operationID, "hello.machine_id": machineID}).Sort("-created_at").All(&out)
+	return out, err
 }

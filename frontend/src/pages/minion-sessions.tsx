@@ -17,6 +17,7 @@ import { useCanBuild } from "@/components/builds/build-access"
 import { SessionWorkspace } from "@/components/minion-sessions/session-workspace"
 import { useSessionTabs } from "@/components/minion-sessions/use-session-tabs"
 import { openTab } from "@/components/work-pane/work-pane-tabs"
+import { fileBrowserTabId, workspaceTab } from "@/components/minion-sessions/workspace-tabs"
 
 /**
  * The scoped operation's minion sessions, live: a minion's hello opens one,
@@ -80,7 +81,8 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
                 layout={layout}
                 onLayoutChange={setLayout}
                 onInteract={(s) => setTabs(openTab(tabs, s.id))}
-                activeSessionId={tabs.active}
+                onFileBrowser={(s) => setTabs(openTab(tabs, fileBrowserTabId(s.id)))}
+                activeSessionId={tabs.active ? workspaceTab(tabs.active).sessionId : null}
                 sessions={sessions}
                 icons={icons}
                 isLoading={isLoading || layoutLoading}

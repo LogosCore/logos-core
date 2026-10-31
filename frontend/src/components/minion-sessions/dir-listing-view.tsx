@@ -8,6 +8,7 @@ import {
   FileIcon,
   FolderIcon,
   FolderOpenIcon,
+  FolderTreeIcon,
   Link2Icon,
   RadioTowerIcon,
   Trash2Icon,
@@ -32,7 +33,8 @@ import type { DeleteTarget } from "./delete-dialog"
 // on a file, Upload here on a folder (and for the folder listed, by the
 // crumbs), Delete on any (after a confirmation), with a submenu of commands
 // when the session has more than one, and copying its path or name. onOpen is absent where the viewer may not
-// give tasks, who then only reads what is listed.
+// give tasks, who then only reads what is listed. Open in File Browser shows
+// the folder in the machine's file browser (docs: contracts/file-browser.md).
 
 const SHOWN = 500
 
@@ -50,6 +52,7 @@ export function DirListingView({
   streamCommands = [],
   onDelete,
   deleteCommands = [],
+  onOpenInFileBrowser,
 }: {
   listing: DirListing
   /** Lists a folder: with commandId, or the listing's own command. */
@@ -72,6 +75,8 @@ export function DirListingView({
   onDelete?: (target: DeleteTarget, commandId: string) => void
   /** The session's delete_path commands. */
   deleteCommands?: readonly MenuCommand[]
+  /** Opens the folder in the machine's file browser. */
+  onOpenInFileBrowser?: (path: string) => void
 }) {
   const [all, setAll] = useState(false)
   // The entry whose menu is open, marked while it is.
@@ -112,6 +117,17 @@ export function DirListingView({
         <span className="shrink-0 text-xs text-muted-foreground">
           {listing.entries.length} {listing.entries.length === 1 ? "entry" : "entries"}
         </span>
+        {onOpenInFileBrowser && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Open in File Browser: the machine's files, as its sessions have seen them"
+            aria-label="Open in File Browser"
+            onClick={() => onOpenInFileBrowser(listing.path)}
+          >
+            <FolderTreeIcon />
+          </Button>
+        )}
         {uploads && (
           <Button
             variant="ghost"

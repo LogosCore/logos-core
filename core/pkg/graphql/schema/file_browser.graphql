@@ -1,0 +1,112 @@
+# The file browser (docs: contracts/file-browser.md): what core's minions
+# have seen of a machine's file system, made from its sessions' tasks'
+# results as they end. Asked for by a session: its machine's. Needs at
+# least viewer.
+
+# A session's machine: the snapshot's key, and the operation's sessions
+# that feed it, newest first.
+type FsMachine {
+  key: String!
+  sessions: [FsMachineSession!]!
+}
+
+type FsMachineSession {
+  id: ID!
+  number: Int!
+  host: String
+  # The host user it runs as: a root session lists what a user's cannot.
+  user: String
+  # CLOSED sessions run no tasks.
+  state: String!
+  lastSeenAt: String
+}
+
+# A path the machine was seen to have, and what was last known of it.
+type FsEntry {
+  path: String!
+  name: String!
+  # null for a root.
+  parent: String
+  sep: String!
+  # dir, file, link or other.
+  type: String!
+  size: Int
+  # Unix seconds.
+  modified: Int
+  mode: String
+  owner: String
+  group: String
+  target: String
+  hidden: Boolean!
+  # A task said what it is; false for a folder known only as a parent.
+  known: Boolean!
+  seenAt: String
+  seenBy: FsTaskRef
+  # Gone: deleted (goneHow "deleted"), or a later listing of its folder no
+  # longer had it ("not_listed").
+  goneAt: String
+  goneBy: FsTaskRef
+  goneHow: String
+  # A folder: when its children were last listed, and by whom.
+  listedAt: String
+  listedBy: FsTaskRef
+  downloaded: [FsTransfer!]!
+  uploaded: [FsTransfer!]!
+}
+
+# The task that said something of an entry, and its session then.
+type FsTaskRef {
+  taskId: ID!
+  sessionId: ID!
+  number: Int!
+  user: String
+}
+
+# A file a task moved: downloaded (fileId: the kept file's; none for a
+# stream) or uploaded (by: the operator).
+type FsTransfer {
+  taskId: ID!
+  fileId: ID
+  size: Int!
+  sha256: String
+  stream: Boolean!
+  by: ID
+  at: String!
+}
+
+# A page of entries; next is the cursor of the next, null on the last.
+# folder is the folder's own entry (null when the snapshot has none).
+type FsEntryPage {
+  entries: [FsEntry!]!
+  next: String
+  folder: FsEntry
+}
+
+# A folder of a machine changed.
+type FsChange {
+  folder: String!
+}
+
+extend type Query {
+  fileBrowser(sessionId: ID!): FsMachine!
+    @hasPermission(permission: "operation:member")
+
+  # A folder's entries (path null: the machine's roots), folders first, by
+  # sort (name, size or modified; desc reverses), at most first (200 by
+  # default, 500 at most), after a page's cursor. search keeps the names
+  # that hold it; foldersOnly the folders (the tree); showDeleted the gone.
+  fileBrowserEntries(sessionId: ID!, path: String, after: String, first: Int, search: String, sort: String,
+    desc: Boolean, showDeleted: Boolean, foldersOnly: Boolean): FsEntryPage!
+    @hasPermission(permission: "operation:member")
+
+  # The machine's entries anywhere whose names match query: a part of the
+  # name, or a glob (* and ?), any case; by path.
+  fileBrowserSearch(sessionId: ID!, query: String!, after: String, first: Int, showDeleted: Boolean): FsEntryPage!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Subscription {
+  # The folders of the session's machine that change, as tasks end.
+  fileBrowserChanged(sessionId: ID!): FsChange!
+    @hasPermission(permission: "operation:member")
+}

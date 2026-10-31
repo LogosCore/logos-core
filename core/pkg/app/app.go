@@ -19,6 +19,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/filebrowser"
 	"github.com/logoscore/logos-core/core/pkg/lifecycle"
 	"github.com/logoscore/logos-core/core/pkg/logger"
 	"github.com/logoscore/logos-core/core/pkg/mcp"
@@ -83,6 +84,7 @@ type Repositories struct {
 	MinionMark         repository.IMinionSessionMarkRepository
 	MinionTask         repository.IMinionTaskRepository
 	MinionFile         repository.IMinionFileRepository
+	FsEntry            repository.IFsEntryRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
@@ -150,6 +152,8 @@ type App struct {
 	minionFiles *minionfiles.Service
 	// minionStreams relays the files minions stream (stream_file tasks).
 	minionStreams *minionstreams.Service
+	// fileBrowser keeps the snapshots of machines' file systems.
+	fileBrowser *filebrowser.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -223,6 +227,7 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
 	minionStreams := minionstreams.NewService(repos.MinionTask, infra.cache, bus, auth.DeriveKey(e.JWTSecretKey, "minion-stream"),
 		minionstreams.DefaultConfig(), l)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
@@ -281,6 +286,7 @@ func NewApp() (*App, error) {
 		builds:          buildSvc,
 		minionFiles:     minionFiles,
 		minionStreams:   minionStreams,
+		fileBrowser:     fileBrowser,
 	}, nil
 }
 

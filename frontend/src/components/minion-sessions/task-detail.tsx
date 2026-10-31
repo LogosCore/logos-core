@@ -80,6 +80,7 @@ export function TaskDetail({
   onStreamFile,
   streamCommands,
   onDeletePath,
+  onOpenInFileBrowser,
   deleteCommands,
   findSignal,
 }: {
@@ -110,6 +111,8 @@ export function TaskDetail({
   /** Deletes an entry of a listing, with a delete_path command (after a
    *  confirmation); absent where the viewer may not give tasks. */
   onDeletePath?: (target: DeleteTarget, commandId: string) => void
+  /** Opens a listing's folder in the machine's file browser. */
+  onOpenInFileBrowser?: (path: string) => void
   /** The session's delete_path commands: what Delete offers. */
   deleteCommands?: readonly MenuCommand[]
   /** The session's list_dir commands, the task's own first: what List
@@ -291,6 +294,7 @@ export function TaskDetail({
               streamCommands={streamCommands}
               onDelete={onDeletePath}
               deleteCommands={deleteCommands}
+              onOpenInFileBrowser={onOpenInFileBrowser}
             />
           ) : (
             data && (

@@ -73,6 +73,13 @@ type Documents = {
     "\n  mutation DeleteCredentialComment($credentialId: ID!, $commentId: ID!) {\n    deleteCredentialComment(credentialId: $credentialId, commentId: $commentId) {\n      ...CredentialFields\n    }\n  }\n": typeof types.DeleteCredentialCommentDocument,
     "\n  subscription CredentialChanged($operationId: ID!) {\n    credentialChanged(operationId: $operationId) {\n      action\n      credentialId\n      operationId\n      credential {\n        ...CredentialFields\n      }\n    }\n  }\n": typeof types.CredentialChangedDocument,
     "\n  subscription MyCredentialChanged($operationIds: [ID!]) {\n    myCredentialChanged(operationIds: $operationIds) {\n      action\n      credentialId\n      operationId\n      credential {\n        ...CredentialFieldsWithOperation\n      }\n    }\n  }\n": typeof types.MyCredentialChangedDocument,
+    "\n  fragment FsTaskRefFields on FsTaskRef {\n    taskId\n    sessionId\n    number\n    user\n  }\n": typeof types.FsTaskRefFieldsFragmentDoc,
+    "\n  fragment FsEntryFields on FsEntry {\n    path\n    name\n    parent\n    sep\n    type\n    size\n    modified\n    mode\n    owner\n    group\n    target\n    hidden\n    known\n    seenAt\n    seenBy {\n      ...FsTaskRefFields\n    }\n    goneAt\n    goneBy {\n      ...FsTaskRefFields\n    }\n    goneHow\n    listedAt\n    listedBy {\n      ...FsTaskRefFields\n    }\n    downloaded {\n      taskId\n      fileId\n      size\n      sha256\n      stream\n      at\n    }\n    uploaded {\n      taskId\n      size\n      sha256\n      stream\n      by\n      at\n    }\n  }\n": typeof types.FsEntryFieldsFragmentDoc,
+    "\n  query FileBrowser($sessionId: ID!) {\n    fileBrowser(sessionId: $sessionId) {\n      key\n      sessions {\n        id\n        number\n        host\n        user\n        state\n        lastSeenAt\n      }\n    }\n  }\n": typeof types.FileBrowserDocument,
+    "\n  query FileBrowserEntries(\n    $sessionId: ID!\n    $path: String\n    $after: String\n    $first: Int\n    $search: String\n    $sort: String\n    $desc: Boolean\n    $showDeleted: Boolean\n    $foldersOnly: Boolean\n  ) {\n    fileBrowserEntries(\n      sessionId: $sessionId\n      path: $path\n      after: $after\n      first: $first\n      search: $search\n      sort: $sort\n      desc: $desc\n      showDeleted: $showDeleted\n      foldersOnly: $foldersOnly\n    ) {\n      entries {\n        ...FsEntryFields\n      }\n      next\n      folder {\n        ...FsEntryFields\n      }\n    }\n  }\n": typeof types.FileBrowserEntriesDocument,
+    "\n  query FileBrowserSearch($sessionId: ID!, $query: String!, $after: String, $first: Int, $showDeleted: Boolean) {\n    fileBrowserSearch(sessionId: $sessionId, query: $query, after: $after, first: $first, showDeleted: $showDeleted) {\n      entries {\n        ...FsEntryFields\n      }\n      next\n    }\n  }\n": typeof types.FileBrowserSearchDocument,
+    "\n  subscription FileBrowserChanged($sessionId: ID!) {\n    fileBrowserChanged(sessionId: $sessionId) {\n      folder\n    }\n  }\n": typeof types.FileBrowserChangedDocument,
+    "\n  query MinionTask($id: ID!) {\n    minionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.MinionTaskDocument,
     "\n  mutation PublishOperatorFocus($input: OperatorFocusInput!) {\n    publishOperatorFocus(input: $input)\n  }\n": typeof types.PublishOperatorFocusDocument,
     "\n  query MyOperatorFocus {\n    myOperatorFocus {\n      route\n      operationId\n      wikiOperationId\n      wikiDocumentId\n      hostId\n      credentialId\n      hashId\n      taskId\n      findingsTab\n      topologyLens\n      topologyFocusedNodeId\n      topologyFocusedEdgeId\n      searchSummary\n      updatedAt\n    }\n  }\n": typeof types.MyOperatorFocusDocument,
     "\n  fragment HashFields on Hash {\n    id\n    rev\n    operationId\n    value\n    status\n    comment\n    tags\n    credentialId\n    createdBy {\n      id\n      username\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.HashFieldsFragmentDoc,
@@ -315,6 +322,13 @@ const documents: Documents = {
     "\n  mutation DeleteCredentialComment($credentialId: ID!, $commentId: ID!) {\n    deleteCredentialComment(credentialId: $credentialId, commentId: $commentId) {\n      ...CredentialFields\n    }\n  }\n": types.DeleteCredentialCommentDocument,
     "\n  subscription CredentialChanged($operationId: ID!) {\n    credentialChanged(operationId: $operationId) {\n      action\n      credentialId\n      operationId\n      credential {\n        ...CredentialFields\n      }\n    }\n  }\n": types.CredentialChangedDocument,
     "\n  subscription MyCredentialChanged($operationIds: [ID!]) {\n    myCredentialChanged(operationIds: $operationIds) {\n      action\n      credentialId\n      operationId\n      credential {\n        ...CredentialFieldsWithOperation\n      }\n    }\n  }\n": types.MyCredentialChangedDocument,
+    "\n  fragment FsTaskRefFields on FsTaskRef {\n    taskId\n    sessionId\n    number\n    user\n  }\n": types.FsTaskRefFieldsFragmentDoc,
+    "\n  fragment FsEntryFields on FsEntry {\n    path\n    name\n    parent\n    sep\n    type\n    size\n    modified\n    mode\n    owner\n    group\n    target\n    hidden\n    known\n    seenAt\n    seenBy {\n      ...FsTaskRefFields\n    }\n    goneAt\n    goneBy {\n      ...FsTaskRefFields\n    }\n    goneHow\n    listedAt\n    listedBy {\n      ...FsTaskRefFields\n    }\n    downloaded {\n      taskId\n      fileId\n      size\n      sha256\n      stream\n      at\n    }\n    uploaded {\n      taskId\n      size\n      sha256\n      stream\n      by\n      at\n    }\n  }\n": types.FsEntryFieldsFragmentDoc,
+    "\n  query FileBrowser($sessionId: ID!) {\n    fileBrowser(sessionId: $sessionId) {\n      key\n      sessions {\n        id\n        number\n        host\n        user\n        state\n        lastSeenAt\n      }\n    }\n  }\n": types.FileBrowserDocument,
+    "\n  query FileBrowserEntries(\n    $sessionId: ID!\n    $path: String\n    $after: String\n    $first: Int\n    $search: String\n    $sort: String\n    $desc: Boolean\n    $showDeleted: Boolean\n    $foldersOnly: Boolean\n  ) {\n    fileBrowserEntries(\n      sessionId: $sessionId\n      path: $path\n      after: $after\n      first: $first\n      search: $search\n      sort: $sort\n      desc: $desc\n      showDeleted: $showDeleted\n      foldersOnly: $foldersOnly\n    ) {\n      entries {\n        ...FsEntryFields\n      }\n      next\n      folder {\n        ...FsEntryFields\n      }\n    }\n  }\n": types.FileBrowserEntriesDocument,
+    "\n  query FileBrowserSearch($sessionId: ID!, $query: String!, $after: String, $first: Int, $showDeleted: Boolean) {\n    fileBrowserSearch(sessionId: $sessionId, query: $query, after: $after, first: $first, showDeleted: $showDeleted) {\n      entries {\n        ...FsEntryFields\n      }\n      next\n    }\n  }\n": types.FileBrowserSearchDocument,
+    "\n  subscription FileBrowserChanged($sessionId: ID!) {\n    fileBrowserChanged(sessionId: $sessionId) {\n      folder\n    }\n  }\n": types.FileBrowserChangedDocument,
+    "\n  query MinionTask($id: ID!) {\n    minionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": types.MinionTaskDocument,
     "\n  mutation PublishOperatorFocus($input: OperatorFocusInput!) {\n    publishOperatorFocus(input: $input)\n  }\n": types.PublishOperatorFocusDocument,
     "\n  query MyOperatorFocus {\n    myOperatorFocus {\n      route\n      operationId\n      wikiOperationId\n      wikiDocumentId\n      hostId\n      credentialId\n      hashId\n      taskId\n      findingsTab\n      topologyLens\n      topologyFocusedNodeId\n      topologyFocusedEdgeId\n      searchSummary\n      updatedAt\n    }\n  }\n": types.MyOperatorFocusDocument,
     "\n  fragment HashFields on Hash {\n    id\n    rev\n    operationId\n    value\n    status\n    comment\n    tags\n    credentialId\n    createdBy {\n      id\n      username\n    }\n    createdAt\n    updatedAt\n  }\n": types.HashFieldsFragmentDoc,
@@ -731,6 +745,34 @@ export function graphql(source: "\n  subscription CredentialChanged($operationId
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  subscription MyCredentialChanged($operationIds: [ID!]) {\n    myCredentialChanged(operationIds: $operationIds) {\n      action\n      credentialId\n      operationId\n      credential {\n        ...CredentialFieldsWithOperation\n      }\n    }\n  }\n"): typeof import('./graphql').MyCredentialChangedDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment FsTaskRefFields on FsTaskRef {\n    taskId\n    sessionId\n    number\n    user\n  }\n"): typeof import('./graphql').FsTaskRefFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  fragment FsEntryFields on FsEntry {\n    path\n    name\n    parent\n    sep\n    type\n    size\n    modified\n    mode\n    owner\n    group\n    target\n    hidden\n    known\n    seenAt\n    seenBy {\n      ...FsTaskRefFields\n    }\n    goneAt\n    goneBy {\n      ...FsTaskRefFields\n    }\n    goneHow\n    listedAt\n    listedBy {\n      ...FsTaskRefFields\n    }\n    downloaded {\n      taskId\n      fileId\n      size\n      sha256\n      stream\n      at\n    }\n    uploaded {\n      taskId\n      size\n      sha256\n      stream\n      by\n      at\n    }\n  }\n"): typeof import('./graphql').FsEntryFieldsFragmentDoc;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query FileBrowser($sessionId: ID!) {\n    fileBrowser(sessionId: $sessionId) {\n      key\n      sessions {\n        id\n        number\n        host\n        user\n        state\n        lastSeenAt\n      }\n    }\n  }\n"): typeof import('./graphql').FileBrowserDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query FileBrowserEntries(\n    $sessionId: ID!\n    $path: String\n    $after: String\n    $first: Int\n    $search: String\n    $sort: String\n    $desc: Boolean\n    $showDeleted: Boolean\n    $foldersOnly: Boolean\n  ) {\n    fileBrowserEntries(\n      sessionId: $sessionId\n      path: $path\n      after: $after\n      first: $first\n      search: $search\n      sort: $sort\n      desc: $desc\n      showDeleted: $showDeleted\n      foldersOnly: $foldersOnly\n    ) {\n      entries {\n        ...FsEntryFields\n      }\n      next\n      folder {\n        ...FsEntryFields\n      }\n    }\n  }\n"): typeof import('./graphql').FileBrowserEntriesDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query FileBrowserSearch($sessionId: ID!, $query: String!, $after: String, $first: Int, $showDeleted: Boolean) {\n    fileBrowserSearch(sessionId: $sessionId, query: $query, after: $after, first: $first, showDeleted: $showDeleted) {\n      entries {\n        ...FsEntryFields\n      }\n      next\n    }\n  }\n"): typeof import('./graphql').FileBrowserSearchDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  subscription FileBrowserChanged($sessionId: ID!) {\n    fileBrowserChanged(sessionId: $sessionId) {\n      folder\n    }\n  }\n"): typeof import('./graphql').FileBrowserChangedDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query MinionTask($id: ID!) {\n    minionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n"): typeof import('./graphql').MinionTaskDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

@@ -506,6 +506,72 @@ export type FactoryKind = {
   schema: BuildSchema;
 };
 
+export type FsChange = {
+  folder: Scalars['String']['output'];
+};
+
+export type FsEntry = {
+  downloaded: Array<FsTransfer>;
+  goneAt?: Maybe<Scalars['String']['output']>;
+  goneBy?: Maybe<FsTaskRef>;
+  goneHow?: Maybe<Scalars['String']['output']>;
+  group?: Maybe<Scalars['String']['output']>;
+  hidden: Scalars['Boolean']['output'];
+  known: Scalars['Boolean']['output'];
+  listedAt?: Maybe<Scalars['String']['output']>;
+  listedBy?: Maybe<FsTaskRef>;
+  mode?: Maybe<Scalars['String']['output']>;
+  modified?: Maybe<Scalars['Int']['output']>;
+  name: Scalars['String']['output'];
+  owner?: Maybe<Scalars['String']['output']>;
+  parent?: Maybe<Scalars['String']['output']>;
+  path: Scalars['String']['output'];
+  seenAt?: Maybe<Scalars['String']['output']>;
+  seenBy?: Maybe<FsTaskRef>;
+  sep: Scalars['String']['output'];
+  size?: Maybe<Scalars['Int']['output']>;
+  target?: Maybe<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
+  uploaded: Array<FsTransfer>;
+};
+
+export type FsEntryPage = {
+  entries: Array<FsEntry>;
+  folder?: Maybe<FsEntry>;
+  next?: Maybe<Scalars['String']['output']>;
+};
+
+export type FsMachine = {
+  key: Scalars['String']['output'];
+  sessions: Array<FsMachineSession>;
+};
+
+export type FsMachineSession = {
+  host?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  lastSeenAt?: Maybe<Scalars['String']['output']>;
+  number: Scalars['Int']['output'];
+  state: Scalars['String']['output'];
+  user?: Maybe<Scalars['String']['output']>;
+};
+
+export type FsTaskRef = {
+  number: Scalars['Int']['output'];
+  sessionId: Scalars['ID']['output'];
+  taskId: Scalars['ID']['output'];
+  user?: Maybe<Scalars['String']['output']>;
+};
+
+export type FsTransfer = {
+  at: Scalars['String']['output'];
+  by?: Maybe<Scalars['ID']['output']>;
+  fileId?: Maybe<Scalars['ID']['output']>;
+  sha256?: Maybe<Scalars['String']['output']>;
+  size: Scalars['Int']['output'];
+  stream: Scalars['Boolean']['output'];
+  taskId: Scalars['ID']['output'];
+};
+
 export type Hash = {
   backlinkCount: Scalars['Int']['output'];
   backlinks: Array<WikiDocument>;
@@ -1848,6 +1914,9 @@ export type Query = {
   credentialTags: Array<Scalars['String']['output']>;
   credentials: CredentialConnection;
   factoryKinds: Array<FactoryKind>;
+  fileBrowser: FsMachine;
+  fileBrowserEntries: FsEntryPage;
+  fileBrowserSearch: FsEntryPage;
   freeChannelEndpointSlug: Scalars['String']['output'];
   hash: Hash;
   hashTags: Array<Scalars['String']['output']>;
@@ -1988,6 +2057,33 @@ export type QueryCredentialsArgs = {
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<CredentialType>;
   validity?: InputMaybe<Array<CredentialValidity>>;
+};
+
+
+export type QueryFileBrowserArgs = {
+  sessionId: Scalars['ID']['input'];
+};
+
+
+export type QueryFileBrowserEntriesArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  desc?: InputMaybe<Scalars['Boolean']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  foldersOnly?: InputMaybe<Scalars['Boolean']['input']>;
+  path?: InputMaybe<Scalars['String']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  sessionId: Scalars['ID']['input'];
+  showDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+  sort?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryFileBrowserSearchArgs = {
+  after?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  query: Scalars['String']['input'];
+  sessionId: Scalars['ID']['input'];
+  showDeleted?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
 
@@ -2556,6 +2652,7 @@ export type SortDirection =
 export type Subscription = {
   agentActivity: AgentActivityEvent;
   credentialChanged: CredentialEvent;
+  fileBrowserChanged: FsChange;
   hashChanged: HashEvent;
   hostChanged: HostEvent;
   minionSessionChanged: MinionSessionEvent;
@@ -2585,6 +2682,11 @@ export type SubscriptionAgentActivityArgs = {
 
 export type SubscriptionCredentialChangedArgs = {
   operationId: Scalars['ID']['input'];
+};
+
+
+export type SubscriptionFileBrowserChangedArgs = {
+  sessionId: Scalars['ID']['input'];
 };
 
 
@@ -3435,6 +3537,57 @@ export type MyCredentialChangedSubscriptionVariables = Exact<{
 
 
 export type MyCredentialChangedSubscription = { myCredentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
+
+export type FsTaskRefFieldsFragment = { taskId: string, sessionId: string, number: number, user?: string | null };
+
+export type FsEntryFieldsFragment = { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> };
+
+export type FileBrowserQueryVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+}>;
+
+
+export type FileBrowserQuery = { fileBrowser: { key: string, sessions: Array<{ id: string, number: number, host?: string | null, user?: string | null, state: string, lastSeenAt?: string | null }> } };
+
+export type FileBrowserEntriesQueryVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+  path?: InputMaybe<Scalars['String']['input']>;
+  after?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  search?: InputMaybe<Scalars['String']['input']>;
+  sort?: InputMaybe<Scalars['String']['input']>;
+  desc?: InputMaybe<Scalars['Boolean']['input']>;
+  showDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+  foldersOnly?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type FileBrowserEntriesQuery = { fileBrowserEntries: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }>, folder?: { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> } | null } };
+
+export type FileBrowserSearchQueryVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+  query: Scalars['String']['input'];
+  after?: InputMaybe<Scalars['String']['input']>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  showDeleted?: InputMaybe<Scalars['Boolean']['input']>;
+}>;
+
+
+export type FileBrowserSearchQuery = { fileBrowserSearch: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }> } };
+
+export type FileBrowserChangedSubscriptionVariables = Exact<{
+  sessionId: Scalars['ID']['input'];
+}>;
+
+
+export type FileBrowserChangedSubscription = { fileBrowserChanged: { folder: string } };
+
+export type MinionTaskQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null } | null };
 
 export type PublishOperatorFocusMutationVariables = Exact<{
   input: OperatorFocusInput;
@@ -4965,6 +5118,65 @@ export const CredentialChipFieldsFragmentDoc = new TypedDocumentString(`
   }
 }
     `, {"fragmentName":"CredentialChipFields"}) as unknown as TypedDocumentString<CredentialChipFieldsFragment, unknown>;
+export const FsTaskRefFieldsFragmentDoc = new TypedDocumentString(`
+    fragment FsTaskRefFields on FsTaskRef {
+  taskId
+  sessionId
+  number
+  user
+}
+    `, {"fragmentName":"FsTaskRefFields"}) as unknown as TypedDocumentString<FsTaskRefFieldsFragment, unknown>;
+export const FsEntryFieldsFragmentDoc = new TypedDocumentString(`
+    fragment FsEntryFields on FsEntry {
+  path
+  name
+  parent
+  sep
+  type
+  size
+  modified
+  mode
+  owner
+  group
+  target
+  hidden
+  known
+  seenAt
+  seenBy {
+    ...FsTaskRefFields
+  }
+  goneAt
+  goneBy {
+    ...FsTaskRefFields
+  }
+  goneHow
+  listedAt
+  listedBy {
+    ...FsTaskRefFields
+  }
+  downloaded {
+    taskId
+    fileId
+    size
+    sha256
+    stream
+    at
+  }
+  uploaded {
+    taskId
+    size
+    sha256
+    stream
+    by
+    at
+  }
+}
+    fragment FsTaskRefFields on FsTaskRef {
+  taskId
+  sessionId
+  number
+  user
+}`, {"fragmentName":"FsEntryFields"}) as unknown as TypedDocumentString<FsEntryFieldsFragment, unknown>;
 export const HashFieldsFragmentDoc = new TypedDocumentString(`
     fragment HashFields on Hash {
   id
@@ -7228,6 +7440,240 @@ fragment CredentialFieldsWithOperation on Credential {
     name
   }
 }`) as unknown as TypedDocumentString<MyCredentialChangedSubscription, MyCredentialChangedSubscriptionVariables>;
+export const FileBrowserDocument = new TypedDocumentString(`
+    query FileBrowser($sessionId: ID!) {
+  fileBrowser(sessionId: $sessionId) {
+    key
+    sessions {
+      id
+      number
+      host
+      user
+      state
+      lastSeenAt
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<FileBrowserQuery, FileBrowserQueryVariables>;
+export const FileBrowserEntriesDocument = new TypedDocumentString(`
+    query FileBrowserEntries($sessionId: ID!, $path: String, $after: String, $first: Int, $search: String, $sort: String, $desc: Boolean, $showDeleted: Boolean, $foldersOnly: Boolean) {
+  fileBrowserEntries(
+    sessionId: $sessionId
+    path: $path
+    after: $after
+    first: $first
+    search: $search
+    sort: $sort
+    desc: $desc
+    showDeleted: $showDeleted
+    foldersOnly: $foldersOnly
+  ) {
+    entries {
+      ...FsEntryFields
+    }
+    next
+    folder {
+      ...FsEntryFields
+    }
+  }
+}
+    fragment FsTaskRefFields on FsTaskRef {
+  taskId
+  sessionId
+  number
+  user
+}
+fragment FsEntryFields on FsEntry {
+  path
+  name
+  parent
+  sep
+  type
+  size
+  modified
+  mode
+  owner
+  group
+  target
+  hidden
+  known
+  seenAt
+  seenBy {
+    ...FsTaskRefFields
+  }
+  goneAt
+  goneBy {
+    ...FsTaskRefFields
+  }
+  goneHow
+  listedAt
+  listedBy {
+    ...FsTaskRefFields
+  }
+  downloaded {
+    taskId
+    fileId
+    size
+    sha256
+    stream
+    at
+  }
+  uploaded {
+    taskId
+    size
+    sha256
+    stream
+    by
+    at
+  }
+}`) as unknown as TypedDocumentString<FileBrowserEntriesQuery, FileBrowserEntriesQueryVariables>;
+export const FileBrowserSearchDocument = new TypedDocumentString(`
+    query FileBrowserSearch($sessionId: ID!, $query: String!, $after: String, $first: Int, $showDeleted: Boolean) {
+  fileBrowserSearch(
+    sessionId: $sessionId
+    query: $query
+    after: $after
+    first: $first
+    showDeleted: $showDeleted
+  ) {
+    entries {
+      ...FsEntryFields
+    }
+    next
+  }
+}
+    fragment FsTaskRefFields on FsTaskRef {
+  taskId
+  sessionId
+  number
+  user
+}
+fragment FsEntryFields on FsEntry {
+  path
+  name
+  parent
+  sep
+  type
+  size
+  modified
+  mode
+  owner
+  group
+  target
+  hidden
+  known
+  seenAt
+  seenBy {
+    ...FsTaskRefFields
+  }
+  goneAt
+  goneBy {
+    ...FsTaskRefFields
+  }
+  goneHow
+  listedAt
+  listedBy {
+    ...FsTaskRefFields
+  }
+  downloaded {
+    taskId
+    fileId
+    size
+    sha256
+    stream
+    at
+  }
+  uploaded {
+    taskId
+    size
+    sha256
+    stream
+    by
+    at
+  }
+}`) as unknown as TypedDocumentString<FileBrowserSearchQuery, FileBrowserSearchQueryVariables>;
+export const FileBrowserChangedDocument = new TypedDocumentString(`
+    subscription FileBrowserChanged($sessionId: ID!) {
+  fileBrowserChanged(sessionId: $sessionId) {
+    folder
+  }
+}
+    `) as unknown as TypedDocumentString<FileBrowserChangedSubscription, FileBrowserChangedSubscriptionVariables>;
+export const MinionTaskDocument = new TypedDocumentString(`
+    query MinionTask($id: ID!) {
+  minionTask(id: $id) {
+    ...MinionTaskFields
+  }
+}
+    fragment MinionTaskFields on MinionTask {
+  id
+  rev
+  sessionId
+  operationId
+  command
+  args
+  issuedBy
+  issuedByName
+  state
+  queuedAt
+  sentAt
+  sendCount
+  ackedAt
+  startedAt
+  doneAt
+  cancelRequestedAt
+  ok
+  exit
+  err
+  outputSize
+  outputTruncated
+  parts
+  result
+  dataSize
+  dataTruncated
+  dataProblem
+  missingParts
+  file {
+    id
+    name
+    size
+    received
+    sha256
+    state
+    err
+    contentType
+    doneAt
+  }
+  upload {
+    fileId
+    name
+    size
+    sha256
+    acked
+    state
+    firstAckAt
+    lastAckAt
+    stream
+    sized
+    received
+    uploaderState
+    from
+    attachedAt
+    uploaderAt
+  }
+  stream {
+    name
+    size
+    sent
+    delivered
+    state
+    sha256
+    announcedAt
+    from
+    attachedAt
+    readerAt
+  }
+}`) as unknown as TypedDocumentString<MinionTaskQuery, MinionTaskQueryVariables>;
 export const PublishOperatorFocusDocument = new TypedDocumentString(`
     mutation PublishOperatorFocus($input: OperatorFocusInput!) {
   publishOperatorFocus(input: $input)

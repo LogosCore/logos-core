@@ -90,7 +90,7 @@ func (a *App) buildControllers() *controllers {
 		}),
 		channel: controller.NewChannelController(a.cache, a.moduleGate,
 			minionsync.NewService(a.repos.Build, a.repos.MinionStaging, a.repos.MinionSession, a.repos.MinionReservation, a.cache, a.eventBus, a.logger).
-				WithTasks(a.repos.MinionTask).WithFiles(a.minionFiles).WithStreams(a.minionStreams), a.logger, a.env.ChannelSyncMaxSize),
+				WithTasks(a.repos.MinionTask).WithFiles(a.minionFiles).WithStreams(a.minionStreams).WithFileBrowser(a.fileBrowser), a.logger, a.env.ChannelSyncMaxSize),
 		skill:  controller.NewSkillController(a.skillService, a.logger),
 		build:  controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
 		task:   controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
@@ -185,6 +185,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithMinionSessionMarkRepo(a.repos.MinionMark),
 			resolver.WithMinionTaskRepo(a.repos.MinionTask),
 			resolver.WithMinionFiles(a.minionFiles),
+			resolver.WithFsEntryRepo(a.repos.FsEntry),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -214,6 +215,6 @@ func (a *App) buildResolvers() *resolvers {
 		builds:         resolver.NewBuildResolver(a.builds, a.repos.Operation),
 		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.eventBus),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
-			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams),
+			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser),
 	}
 }

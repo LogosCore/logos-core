@@ -238,6 +238,8 @@ func extractOperationID(event eventbus.Event) string {
 		return p.OperationID
 	case eventbus.MinionTaskEventPayload:
 		return p.OperationID
+	case eventbus.FileBrowserEventPayload:
+		return p.OperationID
 	case eventbus.TaskEventPayload:
 		return p.OperationID
 	case eventbus.OperationEventLoggedPayload:

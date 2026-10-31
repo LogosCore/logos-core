@@ -33,6 +33,10 @@ type MinionTask struct {
 	// (protocol.BuildCommand.Result): the shape its data is checked
 	// against and joined by. Empty: no declared shape.
 	Result string `bson:"result,omitempty" json:"result,omitempty"`
+	// Action is the command's action when it was queued
+	// (protocol.BuildCommand.Action): what the file browser reads a task
+	// without a result by (a delete_path's rm).
+	Action string `bson:"action,omitempty" json:"action,omitempty"`
 	// WireArgs are the args as the task carries them (protocol.TaskArgs),
 	// CBOR-encoded: checked against the command's params when queued, so
 	// delivery needs no schema; kept as bytes, so a duration's milliseconds

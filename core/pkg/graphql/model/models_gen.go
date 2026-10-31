@@ -388,6 +388,72 @@ type FactoryKind struct {
 	IconLight  string       `json:"iconLight"`
 }
 
+type FsChange struct {
+	Folder string `json:"folder"`
+}
+
+type FsEntry struct {
+	Path       string        `json:"path"`
+	Name       string        `json:"name"`
+	Parent     *string       `json:"parent,omitempty"`
+	Sep        string        `json:"sep"`
+	Type       string        `json:"type"`
+	Size       *int          `json:"size,omitempty"`
+	Modified   *int          `json:"modified,omitempty"`
+	Mode       *string       `json:"mode,omitempty"`
+	Owner      *string       `json:"owner,omitempty"`
+	Group      *string       `json:"group,omitempty"`
+	Target     *string       `json:"target,omitempty"`
+	Hidden     bool          `json:"hidden"`
+	Known      bool          `json:"known"`
+	SeenAt     *string       `json:"seenAt,omitempty"`
+	SeenBy     *FsTaskRef    `json:"seenBy,omitempty"`
+	GoneAt     *string       `json:"goneAt,omitempty"`
+	GoneBy     *FsTaskRef    `json:"goneBy,omitempty"`
+	GoneHow    *string       `json:"goneHow,omitempty"`
+	ListedAt   *string       `json:"listedAt,omitempty"`
+	ListedBy   *FsTaskRef    `json:"listedBy,omitempty"`
+	Downloaded []*FsTransfer `json:"downloaded"`
+	Uploaded   []*FsTransfer `json:"uploaded"`
+}
+
+type FsEntryPage struct {
+	Entries []*FsEntry `json:"entries"`
+	Next    *string    `json:"next,omitempty"`
+	Folder  *FsEntry   `json:"folder,omitempty"`
+}
+
+type FsMachine struct {
+	Key      string              `json:"key"`
+	Sessions []*FsMachineSession `json:"sessions"`
+}
+
+type FsMachineSession struct {
+	ID         string  `json:"id"`
+	Number     int     `json:"number"`
+	Host       *string `json:"host,omitempty"`
+	User       *string `json:"user,omitempty"`
+	State      string  `json:"state"`
+	LastSeenAt *string `json:"lastSeenAt,omitempty"`
+}
+
+type FsTaskRef struct {
+	TaskID    string  `json:"taskId"`
+	SessionID string  `json:"sessionId"`
+	Number    int     `json:"number"`
+	User      *string `json:"user,omitempty"`
+}
+
+type FsTransfer struct {
+	TaskID string  `json:"taskId"`
+	FileID *string `json:"fileId,omitempty"`
+	Size   int     `json:"size"`
+	Sha256 *string `json:"sha256,omitempty"`
+	Stream bool    `json:"stream"`
+	By     *string `json:"by,omitempty"`
+	At     string  `json:"at"`
+}
+
 type HashConnection struct {
 	Edges      []*HashEdge          `json:"edges"`
 	PageInfo   *pagination.PageInfo `json:"pageInfo"`

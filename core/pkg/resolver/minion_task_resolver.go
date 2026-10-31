@@ -44,6 +44,12 @@ type IMinionTaskResolver interface {
 	File(ctx context.Context, taskID string) (*model.MinionFile, error)
 	// MinionFileStrings is a page of a kept file's printable strings.
 	MinionFileStrings(ctx context.Context, fileID string, after, first, minLength *int, encoding, search *string) (*model.MinionFileStringPage, error)
+	// The file browser (file_browser_resolver.go).
+	FileBrowser(ctx context.Context, sessionID string) (*model.FsMachine, error)
+	FileBrowserEntries(ctx context.Context, sessionID string, path, after *string, first *int, search, sort *string,
+		desc, showDeleted, foldersOnly *bool) (*model.FsEntryPage, error)
+	FileBrowserSearch(ctx context.Context, sessionID, query string, after *string, first *int, showDeleted *bool) (*model.FsEntryPage, error)
+	MachineOfSession(ctx context.Context, sessionID string) (operationID, machine string, err error)
 	// MinionStreamLink is a signed link to download a task's stream.
 	MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error)
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
@@ -81,6 +87,7 @@ type minionTaskResolver struct {
 	bus           eventbus.IEventBus
 	files         TaskFiles
 	streams       TaskStreams
+	fileBrowser   TaskFileBrowser
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -95,9 +102,9 @@ type TaskFiles interface {
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
-	files TaskFiles, streams TaskStreams) IMinionTaskResolver {
+	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
-		operationRepo: operationRepo, bus: bus, files: files, streams: streams}
+		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser}
 }
 
 const (
@@ -261,7 +268,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		return nil, fmt.Errorf("encode the args: %w", err)
 	}
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
-		Args: values, WireArgs: wireBytes, Result: commands[i].Result, IssuedBy: uid, State: models.MinionTaskQueued,
+		Args: values, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action, IssuedBy: uid, State: models.MinionTaskQueued,
 		QueuedAt: time.Now().UTC(), Upload: upload}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)

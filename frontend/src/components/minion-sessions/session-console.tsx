@@ -5,8 +5,9 @@ import { useCanBuild } from "@/components/builds/build-access"
 import { useMinionSession, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
 import { toast } from "sonner"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import { useMinionSessionCommands, useMinionTaskSubscription, useMinionTasks, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
-import { CommandBar, type ConsoleCommand } from "./command-bar"
+import { useMinionTaskSubscription, useMinionTasks, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
+import { CommandBar } from "./command-bar"
+import { useConsoleCommands } from "./console-commands"
 import { commandHistory, lineOf } from "./command-line"
 import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleSelection } from "./console-selection"
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
@@ -18,6 +19,7 @@ import { startStreamUpload } from "@/lib/stream-upload"
 import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
 import type { Task } from "./task-actions"
+import { useWorkspaceActions } from "./workspace-tabs"
 
 // A session's console, in its work pane tab: the tasks given its minion on
 // the left, the one picked on the right with what came back, and the
@@ -34,23 +36,11 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const canWrite = access.canWrite
   useMinionTaskSubscription(sessionId)
   const tasksQ = useMinionTasks(sessionId)
-  const commandsQ = useMinionSessionCommands(sessionId)
+  const commandsQ = useConsoleCommands(sessionId)
   // The divider is the operator's, kept with their sessions layout.
   const { layout, setLayout } = useMinionSessionsLayout()
 
-  const commands = useMemo<ConsoleCommand[]>(
-    () =>
-      (commandsQ.data?.minionSessionCommands ?? []).map((c) => ({
-        id: c.id,
-        label: c.label,
-        description: c.description,
-        result: c.result,
-        action: c.action,
-        fields: c.params,
-        params: c.params.map((p) => ({ key: p.key, type: p.type, label: p.label, required: p.required, default: p.default })),
-      })),
-    [commandsQ.data],
-  )
+  const commands = commandsQ.commands
   const byId = useMemo(() => new Map(commands.map((c) => [c.id, c])), [commands])
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
@@ -100,6 +90,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
       { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not list the folder")) },
     )
   }
+  const workspace = useWorkspaceActions()
   // Ctrl+F anywhere in the console finds in the output shown.
   const [findSignal, setFindSignal] = useState(0)
 
@@ -180,6 +171,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 streamCommands={commandsFor(commands, "stream_file")}
                 onDeletePath={writable ? (target, commandId) => setDeleting({ target, commandId }) : undefined}
                 deleteCommands={commandsFor(commands, "delete_path")}
+                onOpenInFileBrowser={workspace ? (path) => workspace.openFileBrowser(sessionId, path) : undefined}
                 findSignal={findSignal}
               />
             ) : (
