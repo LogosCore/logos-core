@@ -79,6 +79,9 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // A listing's Upload here: the folder, and the upload_file command picked,
   // in the upload dialog until it runs.
   const [uploadTo, setUploadTo] = useState<{ target: UploadTarget; commandId: string } | null>(null)
+  // Read here, not in the dialog's handlers: the compiler reads what a
+  // handler uses at render, where there may be no upload.
+  const uploadCommand = uploadTo ? byId.get(uploadTo.commandId) : undefined
   const openPath = (t: Task, path: string, picked?: string) => {
     const commandId = picked ?? commandsFor(commands, "list_dir", t.command)[0]?.id
     if (!commandId) return
@@ -182,11 +185,12 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
       />
       <UploadDialog
         target={uploadTo?.target ?? null}
-        command={uploadTo ? byId.get(uploadTo.commandId) : undefined}
+        command={uploadCommand}
         operationId={session?.operationId ?? ""}
         onOpenChange={(open) => !open && setUploadTo(null)}
         onSubmit={async (args) => {
-          await queue.mutateAsync({ sessionId, command: uploadTo!.commandId, args })
+          if (!uploadCommand) return
+          await queue.mutateAsync({ sessionId, command: uploadCommand.id, args })
           follow()
         }}
       />
