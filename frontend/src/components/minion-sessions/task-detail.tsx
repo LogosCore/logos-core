@@ -24,6 +24,7 @@ import { DirListingView } from "./dir-listing-view"
 import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
 import { StreamView } from "./stream-view"
+import type { DeleteTarget } from "./delete-dialog"
 import type { UploadTarget } from "./upload-target"
 import { TabButton } from "./tab-button"
 import type { MenuCommand } from "./action-menu"
@@ -78,6 +79,8 @@ export function TaskDetail({
   uploadCommands,
   onStreamFile,
   streamCommands,
+  onDeletePath,
+  deleteCommands,
   findSignal,
 }: {
   task: Task
@@ -104,6 +107,11 @@ export function TaskDetail({
   onStreamFile?: (path: string, commandId: string) => void
   /** The session's stream_file commands: what Stream offers. */
   streamCommands?: readonly MenuCommand[]
+  /** Deletes an entry of a listing, with a delete_path command (after a
+   *  confirmation); absent where the viewer may not give tasks. */
+  onDeletePath?: (target: DeleteTarget, commandId: string) => void
+  /** The session's delete_path commands: what Delete offers. */
+  deleteCommands?: readonly MenuCommand[]
   /** The session's list_dir commands, the task's own first: what List
    *  directory offers. */
   listCommands?: readonly MenuCommand[]
@@ -281,6 +289,8 @@ export function TaskDetail({
               uploadCommands={uploadCommands}
               onStream={onStreamFile}
               streamCommands={streamCommands}
+              onDelete={onDeletePath}
+              deleteCommands={deleteCommands}
             />
           ) : (
             data && (

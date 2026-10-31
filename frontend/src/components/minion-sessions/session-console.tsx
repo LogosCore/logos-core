@@ -13,6 +13,7 @@ import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
 import { UploadDialog } from "./upload-dialog"
+import { DeleteDialog, type DeleteTarget } from "./delete-dialog"
 import { startStreamUpload } from "@/lib/stream-upload"
 import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
@@ -83,6 +84,10 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // Read here, not in the dialog's handlers: the compiler reads what a
   // handler uses at render, where there may be no upload.
   const uploadCommand = uploadTo ? byId.get(uploadTo.commandId) : undefined
+  // A listing's Delete: the entry, and the delete_path command picked, in
+  // the confirmation until it runs.
+  const [deleting, setDeleting] = useState<{ target: DeleteTarget; commandId: string } | null>(null)
+  const deleteCommandId = deleting?.commandId ?? null
   const openPath = (t: Task, path: string, picked?: string) => {
     const commandId = picked ?? commandsFor(commands, "list_dir", t.command)[0]?.id
     if (!commandId) return
@@ -173,6 +178,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 uploadCommands={[...commandsFor(commands, "upload_file"), ...commandsFor(commands, "upload_stream")]}
                 onStreamFile={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
                 streamCommands={commandsFor(commands, "stream_file")}
+                onDeletePath={writable ? (target, commandId) => setDeleting({ target, commandId }) : undefined}
+                deleteCommands={commandsFor(commands, "delete_path")}
                 findSignal={findSignal}
               />
             ) : (
@@ -185,6 +192,16 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
             )}
           </div>
         }
+      />
+      <DeleteDialog
+        target={deleting?.target ?? null}
+        commandId={deleteCommandId}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        onDelete={async (args) => {
+          if (!deleteCommandId) return
+          await queue.mutateAsync({ sessionId, command: deleteCommandId, args })
+          follow()
+        }}
       />
       <UploadDialog
         target={uploadTo?.target ?? null}

@@ -10,6 +10,7 @@ import {
   FolderOpenIcon,
   Link2Icon,
   RadioTowerIcon,
+  Trash2Icon,
   UploadIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils"
 import { childPath, crumbs, sortEntries, type DirEntry, type DirListing } from "./dir-listing"
 import { ActionItem, type MenuCommand } from "./action-menu"
 import type { UploadTarget } from "./upload-target"
+import type { DeleteTarget } from "./delete-dialog"
 
 // A dir_listing task's data as a file browser (docs:
 // contracts/task-results-and-actions.md, View): the path as crumbs, up, and
@@ -28,8 +30,8 @@ import type { UploadTarget } from "./upload-target"
 // listing's own command; an entry's actions are in its context menu (a
 // right click): List directory on a folder or a link, Download and Stream
 // on a file, Upload here on a folder (and for the folder listed, by the
-// crumbs), with a submenu of commands when the session has more than one,
-// and copying its path or name. onOpen is absent where the viewer may not
+// crumbs), Delete on any (after a confirmation), with a submenu of commands
+// when the session has more than one, and copying its path or name. onOpen is absent where the viewer may not
 // give tasks, who then only reads what is listed.
 
 const SHOWN = 500
@@ -46,6 +48,8 @@ export function DirListingView({
   uploadCommands = [],
   onStream,
   streamCommands = [],
+  onDelete,
+  deleteCommands = [],
 }: {
   listing: DirListing
   /** Lists a folder: with commandId, or the listing's own command. */
@@ -64,6 +68,10 @@ export function DirListingView({
   onStream?: (path: string, commandId: string) => void
   /** The session's stream_file commands. */
   streamCommands?: readonly MenuCommand[]
+  /** Deletes an entry with a delete_path command (after a confirmation). */
+  onDelete?: (target: DeleteTarget, commandId: string) => void
+  /** The session's delete_path commands. */
+  deleteCommands?: readonly MenuCommand[]
 }) {
   const [all, setAll] = useState(false)
   // The entry whose menu is open, marked while it is.
@@ -192,6 +200,18 @@ export function DirListingView({
                     {onStream && e.type === "file" && streamCommands.length > 0 && (
                       <>
                         <ActionItem label="Stream" icon={<RadioTowerIcon />} commands={streamCommands} onRun={(id) => onStream(path, id)} />
+                        <ContextMenuSeparator />
+                      </>
+                    )}
+                    {onDelete && deleteCommands.length > 0 && (
+                      <>
+                        <ActionItem
+                          label="Delete…"
+                          icon={<Trash2Icon />}
+                          variant="destructive"
+                          commands={deleteCommands}
+                          onRun={(id) => onDelete({ path, name: e.name, type: e.type }, id)}
+                        />
                         <ContextMenuSeparator />
                       </>
                     )}

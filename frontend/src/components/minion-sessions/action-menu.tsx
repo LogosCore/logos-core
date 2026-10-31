@@ -18,9 +18,12 @@ export function ActionItem({
   icon,
   commands,
   onRun,
+  variant = "default",
 }: {
   label: string
   icon?: ReactNode
+  /** destructive: an item that removes something (Delete). */
+  variant?: "default" | "destructive"
   /** The commands it can run, the first the one to prefer. */
   commands: readonly MenuCommand[]
   onRun: (commandId: string) => void
@@ -29,7 +32,7 @@ export function ActionItem({
   if (commands.length === 1) {
     const c = commands[0]
     return (
-      <ContextMenuItem onClick={() => onRun(c.id)}>
+      <ContextMenuItem variant={variant} onClick={() => onRun(c.id)}>
         {icon}
         {label}
         <span className="ml-auto pl-4 font-mono text-xs text-muted-foreground">{c.id}</span>
@@ -44,7 +47,7 @@ export function ActionItem({
       </ContextMenuSubTrigger>
       <ContextMenuSubContent>
         {commands.map((c) => (
-          <ContextMenuItem key={c.id} onClick={() => onRun(c.id)}>
+          <ContextMenuItem key={c.id} variant={variant} onClick={() => onRun(c.id)}>
             <span className="truncate">{c.label}</span>
             <span className="ml-auto pl-4 font-mono text-xs text-muted-foreground">{c.id}</span>
           </ContextMenuItem>
