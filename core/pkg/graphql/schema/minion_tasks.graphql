@@ -73,6 +73,9 @@ type MinionTask {
   # The file core sends the minion for the task's file param (an upload),
   # and how far the minion has it; null for a task without one.
   upload: MinionTaskUpload
+  # The file a stream_file task's minion streams to whoever downloads it,
+  # from its announcement; null before, and for other tasks.
+  stream: MinionTaskStream
   # The task as core keeps it (its minion_tasks document, its result parts
   # left out), as indented JSON in the stored key order: for debugging.
   # Ids read as UUIDs, times as RFC 3339, wire_args decoded from CBOR
@@ -123,6 +126,38 @@ type MinionTaskUpload {
   # The minion's first ask for a chunk, and its last.
   firstAckAt: String
   lastAckAt: String
+}
+
+# A file a minion streams (docs: contracts/minion-messages.md, Streaming
+# a file): GET /api/v1/minion-streams/{task} downloads it, as it comes.
+type MinionTaskStream {
+  # The file's path on the host, and the size the minion announced.
+  name: String!
+  size: Int!
+  # How far the minion has sent it (what core wants next), and how far
+  # the downloader has it.
+  sent: Int!
+  delivered: Int!
+  # WAITING (for a downloader), STREAMING, PAUSED (its downloader went
+  # away), DONE, FAILED or CANCELLED.
+  state: String!
+  # The whole's SHA-256 in hex, when the minion read it in order once.
+  sha256: String
+  announcedAt: String!
+  # Where and when the downloader now took the stream, and when it last
+  # said it is there: its rate is delivered - from over readerAt -
+  # attachedAt. Null before a downloader.
+  from: Int!
+  attachedAt: String
+  readerAt: String
+}
+
+# A link to download a stream without a session (curl), valid while the
+# stream lasts and until expiresAt at most.
+type MinionStreamLink {
+  # A path under /api/v1, with its signature.
+  path: String!
+  expiresAt: String!
 }
 
 # A printable string in a kept file, as strings(1) finds it: length bytes
@@ -188,6 +223,11 @@ extend type Mutation {
   # to stop (it still sends its end). Nothing for one that ended. Needs
   # operator.
   cancelMinionTask(id: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # A signed link to download a stream_file task's stream (for curl).
+  # Needs at least viewer.
+  minionStreamLink(taskId: ID!): MinionStreamLink!
     @hasPermission(permission: "operation:member")
 }
 

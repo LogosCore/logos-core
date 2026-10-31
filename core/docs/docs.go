@@ -565,6 +565,50 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/minion-streams/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Download a file a minion streams",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Signed link: until (unix seconds)",
+                        "name": "exp",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Signed link: its signature",
+                        "name": "sig",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "bytes=N- to resume",
+                        "name": "Range",
+                        "in": "header"
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/minion-tasks/{id}/data": {
             "get": {
                 "security": [

@@ -54,6 +54,18 @@ export const MinionTaskFields = graphql(`
       firstAckAt
       lastAckAt
     }
+    stream {
+      name
+      size
+      sent
+      delivered
+      state
+      sha256
+      announcedAt
+      from
+      attachedAt
+      readerAt
+    }
   }
 `)
 
@@ -131,6 +143,15 @@ export const CancelMinionTaskMutation = graphql(`
   mutation CancelMinionTask($id: ID!) {
     cancelMinionTask(id: $id) {
       ...MinionTaskFields
+    }
+  }
+`)
+
+export const MinionStreamLinkMutation = graphql(`
+  mutation MinionStreamLink($taskId: ID!) {
+    minionStreamLink(taskId: $taskId) {
+      path
+      expiresAt
     }
   }
 `)

@@ -170,6 +170,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 downloadCommands={commandsFor(commands, "download_file")}
                 onUploadHere={writable ? (target, commandId) => setUploadTo({ target, commandId }) : undefined}
                 uploadCommands={commandsFor(commands, "upload_file")}
+                onStreamFile={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
+                streamCommands={commandsFor(commands, "stream_file")}
                 findSignal={findSignal}
               />
             ) : (

@@ -78,11 +78,14 @@ type Service struct {
 	tasks repository.IMinionTaskRepository
 	// files takes the chunks of files minions send (files.go); nil takes
 	// none.
-	files  Files
-	cache  cache.Cache
-	bus    eventbus.IEventBus
-	logger *zap.Logger
-	now    func() time.Time
+	files Files
+	// streams relays the files minions stream (streams.go); nil relays
+	// none.
+	streams Streams
+	cache   cache.Cache
+	bus     eventbus.IEventBus
+	logger  *zap.Logger
+	now     func() time.Time
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
@@ -399,6 +402,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	var wantTasks bool
 	var wantMax *uint64
 	var pulls []pull
+	// The streams whose chunks this reply answers (streams.go).
+	answered := map[string]bool{}
 	for i, raw := range msg.Items {
 		var out []cbor.RawMessage
 		var err error
@@ -447,11 +452,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				pulls = append(pulls, *p)
 			}
 		case protocol.ItemChunk:
-			if s.files == nil {
-				out, err = errItem(protocol.ErrItemUnknownItem, "no files are taken", i)
-				break
-			}
-			out, err = s.takeChunk(ctx, session, raw, i)
+			out, err = s.takeChunk(ctx, session, raw, i, answered)
 		case protocol.ItemResult:
 			if s.tasks == nil {
 				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)
@@ -487,6 +488,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			items = append(items, tasks...)
 		}
+		// What each stream may do now, but those answered already.
+		acks, err := s.streamAcks(ctx, session, answered)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, acks...)
 		// Chunks last: in the room the rest leaves.
 		if len(pulls) > 0 {
 			chunks, err := s.serveUploads(ctx, session, pulls, items)

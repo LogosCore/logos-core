@@ -63,6 +63,11 @@ func (r *mutationResolver) CancelMinionTask(ctx context.Context, id string) (*mo
 	return r.MinionTaskResolver.CancelMinionTask(ctx, id)
 }
 
+// MinionStreamLink is the resolver for the minionStreamLink field.
+func (r *mutationResolver) MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error) {
+	return r.MinionTaskResolver.MinionStreamLink(ctx, taskID)
+}
+
 // MinionTask is the resolver for the minionTask field.
 func (r *queryResolver) MinionTask(ctx context.Context, id string) (*model.MinionTask, error) {
 	return r.MinionTaskResolver.MinionTask(ctx, id)

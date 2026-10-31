@@ -28,6 +28,8 @@ func Check(result string, seq uint64, data []byte) error {
 		_, err = protocol.ReadFileDownload(seq, data)
 	case protocol.ResultFileUpload:
 		_, err = protocol.ReadFileUpload(seq, data)
+	case protocol.ResultFileStream:
+		_, err = protocol.ReadFileStream(seq, data)
 	}
 	return err
 }

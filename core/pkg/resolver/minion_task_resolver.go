@@ -44,6 +44,8 @@ type IMinionTaskResolver interface {
 	File(ctx context.Context, taskID string) (*model.MinionFile, error)
 	// MinionFileStrings is a page of a kept file's printable strings.
 	MinionFileStrings(ctx context.Context, fileID string, after, first, minLength *int, encoding, search *string) (*model.MinionFileStringPage, error)
+	// MinionStreamLink is a signed link to download a task's stream.
+	MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error)
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -62,6 +64,13 @@ type TaskSchemas interface {
 	LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error)
 }
 
+// TaskStreams signs the links streams download from
+// (minionstreams.Service).
+type TaskStreams interface {
+	Link(taskID uuid.UUID) (string, time.Time)
+	ReaderGone() time.Duration
+}
+
 type minionTaskResolver struct {
 	tasks         repository.IMinionTaskRepository
 	sessions      repository.IMinionSessionRepository
@@ -71,6 +80,7 @@ type minionTaskResolver struct {
 	operationRepo repository.IOperationRepository
 	bus           eventbus.IEventBus
 	files         TaskFiles
+	streams       TaskStreams
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -85,9 +95,9 @@ type TaskFiles interface {
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
-	files TaskFiles) IMinionTaskResolver {
+	files TaskFiles, streams TaskStreams) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
-		operationRepo: operationRepo, bus: bus, files: files}
+		operationRepo: operationRepo, bus: bus, files: files, streams: streams}
 }
 
 const (
@@ -507,6 +517,28 @@ func (r *minionTaskResolver) MinionFileStrings(ctx context.Context, fileID strin
 	return out, nil
 }
 
+func (r *minionTaskResolver) MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error) {
+	tid, err := uuid.Parse(taskID)
+	if err != nil || r.streams == nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
+	}
+	t, err := r.tasks.FindByTaskID(ctx, tid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "task not found")
+		}
+		return nil, err
+	}
+	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	if t.Result != protocol.ResultFileStream || t.Finished() {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the task streams nothing now")
+	}
+	path, exp := r.streams.Link(tid)
+	return &model.MinionStreamLink{Path: path, ExpiresAt: exp.UTC().Format(time.RFC3339)}, nil
+}
+
 func (r *minionTaskResolver) Load(ctx context.Context, taskID string) *model.MinionTask {
 	tid, err := uuid.Parse(taskID)
 	if err != nil {
@@ -574,12 +606,43 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		exit := int(*t.Exit)
 		m.Exit = &exit
 	}
+	if st := t.Stream; st != nil {
+		m.Stream = &model.MinionTaskStream{Name: st.Name, Size: int(st.Size), Sent: int(st.Want), Delivered: int(st.Delivered),
+			State: r.streamState(t), AnnouncedAt: st.AnnouncedAt.UTC().Format(time.RFC3339Nano), From: int(st.From),
+			AttachedAt: taskTime(st.AttachedAt), ReaderAt: taskTime(st.ReaderAt)}
+		if len(st.SHA256) > 0 {
+			h := hex.EncodeToString(st.SHA256)
+			m.Stream.Sha256 = &h
+		}
+	}
 	if up := t.Upload; up != nil {
 		m.Upload = &model.MinionTaskUpload{FileID: up.FileID.String(), Name: up.Name, Size: int(up.Size),
 			Sha256: hex.EncodeToString(up.SHA256), Acked: int(up.Acked), State: uploadState(t),
 			FirstAckAt: taskTime(up.FirstAckAt), LastAckAt: taskTime(up.LastAckAt)}
 	}
 	return m, nil
+}
+
+// streamState is where a task's stream stands (MinionTaskStream.state).
+func (r *minionTaskResolver) streamState(t *models.MinionTask) string {
+	st := t.Stream
+	gone := 30 * time.Second
+	if r.streams != nil {
+		gone = r.streams.ReaderGone()
+	}
+	switch {
+	case t.State == models.MinionTaskDone:
+		return "DONE"
+	case t.State == models.MinionTaskCancelled:
+		return "CANCELLED"
+	case t.Finished():
+		return "FAILED"
+	case st.Reader != "" && st.ReaderAt != nil && st.ReaderAt.After(time.Now().Add(-gone)):
+		return "STREAMING"
+	case st.Ran:
+		return "PAUSED"
+	}
+	return "WAITING"
 }
 
 // uploadState is where a task's upload stands (MinionTaskUpload.state).

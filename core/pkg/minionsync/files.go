@@ -33,14 +33,21 @@ func (s *Service) WithFiles(files Files) *Service {
 	return s
 }
 
-// takeChunk takes one chunk of a file the minion sends.
-func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int) ([]cbor.RawMessage, error) {
+// takeChunk takes one chunk of a file the minion sends: a stream's
+// (streams.go), answered[xfer] then set, or a download's.
+func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int, answered map[string]bool) ([]cbor.RawMessage, error) {
 	var c protocol.ChunkItem
 	if protocol.UnmarshalCBOR(raw, &c) != nil {
 		return errItem(protocol.ErrItemBadMessage, "the chunk does not read", i)
 	}
 	if err := c.Validate(); err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), i)
+	}
+	if out, handled, err := s.streamChunk(ctx, session, c, i, answered); handled || err != nil {
+		return out, err
+	}
+	if s.files == nil {
+		return errItem(protocol.ErrItemUnknownItem, "no files are taken", i)
 	}
 	reply, err := s.files.TakeChunk(ctx, session, c)
 	if err != nil {

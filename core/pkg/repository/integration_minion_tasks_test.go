@@ -314,3 +314,68 @@ func TestIntegrationMinionTaskUploads(t *testing.T) {
 		t.Fatalf("a second problem: %q", got.DataProblem)
 	}
 }
+
+// A stream: announced once, for a file_stream task of the session; a
+// downloader takes it (a new generation each), says how far it is, lets
+// go; want moves past a chunk only from where it is, for the generation
+// now; idle streams are found.
+func TestIntegrationMinionStreams(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("task indexes: %v", err)
+	}
+	session, xfer := uuid.New(), []byte("0123456789abcdef")
+	task := &models.MinionTask{TaskID: uuid.New(), OperationID: uuid.New(), SessionID: session, Command: "stream_download",
+		Result: protocol.ResultFileStream, State: models.MinionTaskRunning, QueuedAt: time.Now().UTC()}
+	if err := repo.Insert(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Now().UTC().Truncate(time.Millisecond)
+	st := models.MinionTaskStream{Xfer: xfer, Name: "/a", Size: 100, AnnouncedAt: t0, IdleSince: &t0}
+	if _, err := repo.StreamAnnounce(ctx, uuid.New(), task.TaskID, st); !IsNotFound(err) {
+		t.Fatalf("another session's: %v", err)
+	}
+	got, err := repo.StreamAnnounce(ctx, session, task.TaskID, st)
+	if err != nil || got.Stream == nil || got.Stream.Size != 100 {
+		t.Fatalf("announce: %+v %v", got, err)
+	}
+	st2 := st
+	st2.Size = 5
+	if again, err := repo.StreamAnnounce(ctx, session, task.TaskID, st2); err != nil || again.Stream.Size != 100 {
+		t.Fatalf("again: %v", err)
+	}
+	if f, err := repo.FindByStreamXfer(ctx, session, xfer); err != nil || f.TaskID != task.TaskID {
+		t.Fatalf("by xfer: %v", err)
+	}
+
+	a, err := repo.StreamAttach(ctx, task.TaskID, "r1", 10, t0)
+	if err != nil || a.Stream.Gen != 1 || a.Stream.Want != 10 || a.Stream.Delivered != 10 || a.Stream.IdleSince != nil || !a.Stream.Ran {
+		t.Fatalf("attach: %+v %v", a.Stream, err)
+	}
+	if took, _ := repo.StreamTook(ctx, task.TaskID, 1, 0, 5, nil); took {
+		t.Fatal("took a chunk from elsewhere")
+	}
+	if took, _ := repo.StreamTook(ctx, task.TaskID, 1, 10, 5, []byte{1}); !took {
+		t.Fatal("did not take a chunk from want")
+	}
+	if ok, _ := repo.StreamDelivered(ctx, task.TaskID, 1, 15, t0); !ok {
+		t.Fatal("delivered: not ours")
+	}
+	b, _ := repo.StreamAttach(ctx, task.TaskID, "r2", 0, t0)
+	if b.Stream.Gen != 2 || b.Stream.Want != 0 || len(b.Stream.SHA256) != 1 {
+		t.Fatalf("second: %+v", b.Stream)
+	}
+	if ok, _ := repo.StreamDelivered(ctx, task.TaskID, 1, 20, t0); ok {
+		t.Fatal("the first downloader still counts")
+	}
+	if err := repo.StreamDetach(ctx, task.TaskID, 2, t0); err != nil {
+		t.Fatal(err)
+	}
+	active, _ := repo.ActiveStreams(ctx, session)
+	idle, _ := repo.IdleStreams(ctx, t0.Add(time.Second))
+	if len(active) != 1 || len(idle) != 1 || active[0].Stream.Reader != "" {
+		t.Fatalf("active %d, idle %d", len(active), len(idle))
+	}
+}

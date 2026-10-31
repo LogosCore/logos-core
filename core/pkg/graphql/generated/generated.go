@@ -597,6 +597,11 @@ type ComplexityRoot struct {
 		Split        func(childComplexity int) int
 	}
 
+	MinionStreamLink struct {
+		ExpiresAt func(childComplexity int) int
+		Path      func(childComplexity int) int
+	}
+
 	MinionTask struct {
 		AckedAt           func(childComplexity int) int
 		Args              func(childComplexity int) int
@@ -630,12 +635,26 @@ type ComplexityRoot struct {
 		SessionID         func(childComplexity int) int
 		StartedAt         func(childComplexity int) int
 		State             func(childComplexity int) int
+		Stream            func(childComplexity int) int
 		Upload            func(childComplexity int) int
 	}
 
 	MinionTaskPage struct {
 		Before func(childComplexity int) int
 		Tasks  func(childComplexity int) int
+	}
+
+	MinionTaskStream struct {
+		AnnouncedAt func(childComplexity int) int
+		AttachedAt  func(childComplexity int) int
+		Delivered   func(childComplexity int) int
+		From        func(childComplexity int) int
+		Name        func(childComplexity int) int
+		ReaderAt    func(childComplexity int) int
+		Sent        func(childComplexity int) int
+		Sha256      func(childComplexity int) int
+		Size        func(childComplexity int) int
+		State       func(childComplexity int) int
 	}
 
 	MinionTaskUpload struct {
@@ -867,6 +886,7 @@ type ComplexityRoot struct {
 		InstantiateTemplate           func(childComplexity int, templateID string, targetOperationID string, parentDocumentID *string, title *string, emoji *string, icon *string, color *string) int
 		InvokeModuleAction            func(childComplexity int, instance string, action string, params any) int
 		MarkHashCracked               func(childComplexity int, id string, input model.MarkHashCrackedInput) int
+		MinionStreamLink              func(childComplexity int, taskID string) int
 		PermanentlyDeleteWikiDocument func(childComplexity int, id string) int
 		PublishOperatorFocus          func(childComplexity int, input model.OperatorFocusInput) int
 		PurgeTask                     func(childComplexity int, id string) int
@@ -1617,6 +1637,7 @@ type MutationResolver interface {
 	SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error)
 	QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
+	MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error)
 	UpdateModuleConfig(ctx context.Context, instance string, values []*model.ModuleConfigValueInput, expectedRevision int) (*models.Module, error)
 	InvokeModuleAction(ctx context.Context, instance string, action string, params any) (*model.ModuleActionInvocation, error)
 	BlockModule(ctx context.Context, instance string, reason *string) (*models.Module, error)
@@ -4118,6 +4139,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionSessionsLayout.Split(childComplexity), true
 
+	case "MinionStreamLink.expiresAt":
+		if e.ComplexityRoot.MinionStreamLink.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionStreamLink.ExpiresAt(childComplexity), true
+	case "MinionStreamLink.path":
+		if e.ComplexityRoot.MinionStreamLink.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionStreamLink.Path(childComplexity), true
+
 	case "MinionTask.ackedAt":
 		if e.ComplexityRoot.MinionTask.AckedAt == nil {
 			break
@@ -4310,6 +4344,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.State(childComplexity), true
+	case "MinionTask.stream":
+		if e.ComplexityRoot.MinionTask.Stream == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Stream(childComplexity), true
 	case "MinionTask.upload":
 		if e.ComplexityRoot.MinionTask.Upload == nil {
 			break
@@ -4329,6 +4369,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTaskPage.Tasks(childComplexity), true
+
+	case "MinionTaskStream.announcedAt":
+		if e.ComplexityRoot.MinionTaskStream.AnnouncedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.AnnouncedAt(childComplexity), true
+	case "MinionTaskStream.attachedAt":
+		if e.ComplexityRoot.MinionTaskStream.AttachedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.AttachedAt(childComplexity), true
+	case "MinionTaskStream.delivered":
+		if e.ComplexityRoot.MinionTaskStream.Delivered == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.Delivered(childComplexity), true
+	case "MinionTaskStream.from":
+		if e.ComplexityRoot.MinionTaskStream.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.From(childComplexity), true
+	case "MinionTaskStream.name":
+		if e.ComplexityRoot.MinionTaskStream.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.Name(childComplexity), true
+	case "MinionTaskStream.readerAt":
+		if e.ComplexityRoot.MinionTaskStream.ReaderAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.ReaderAt(childComplexity), true
+	case "MinionTaskStream.sent":
+		if e.ComplexityRoot.MinionTaskStream.Sent == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.Sent(childComplexity), true
+	case "MinionTaskStream.sha256":
+		if e.ComplexityRoot.MinionTaskStream.Sha256 == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.Sha256(childComplexity), true
+	case "MinionTaskStream.size":
+		if e.ComplexityRoot.MinionTaskStream.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.Size(childComplexity), true
+	case "MinionTaskStream.state":
+		if e.ComplexityRoot.MinionTaskStream.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTaskStream.State(childComplexity), true
 
 	case "MinionTaskUpload.acked":
 		if e.ComplexityRoot.MinionTaskUpload.Acked == nil {
@@ -5617,6 +5718,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.MarkHashCracked(childComplexity, args["id"].(string), args["input"].(model.MarkHashCrackedInput)), true
+	case "Mutation.minionStreamLink":
+		if e.ComplexityRoot.Mutation.MinionStreamLink == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_minionStreamLink_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MinionStreamLink(childComplexity, args["taskId"].(string)), true
 	case "Mutation.permanentlyDeleteWikiDocument":
 		if e.ComplexityRoot.Mutation.PermanentlyDeleteWikiDocument == nil {
 			break
@@ -11154,6 +11266,9 @@ type MinionTask {
   # The file core sends the minion for the task's file param (an upload),
   # and how far the minion has it; null for a task without one.
   upload: MinionTaskUpload
+  # The file a stream_file task's minion streams to whoever downloads it,
+  # from its announcement; null before, and for other tasks.
+  stream: MinionTaskStream
   # The task as core keeps it (its minion_tasks document, its result parts
   # left out), as indented JSON in the stored key order: for debugging.
   # Ids read as UUIDs, times as RFC 3339, wire_args decoded from CBOR
@@ -11204,6 +11319,38 @@ type MinionTaskUpload {
   # The minion's first ask for a chunk, and its last.
   firstAckAt: String
   lastAckAt: String
+}
+
+# A file a minion streams (docs: contracts/minion-messages.md, Streaming
+# a file): GET /api/v1/minion-streams/{task} downloads it, as it comes.
+type MinionTaskStream {
+  # The file's path on the host, and the size the minion announced.
+  name: String!
+  size: Int!
+  # How far the minion has sent it (what core wants next), and how far
+  # the downloader has it.
+  sent: Int!
+  delivered: Int!
+  # WAITING (for a downloader), STREAMING, PAUSED (its downloader went
+  # away), DONE, FAILED or CANCELLED.
+  state: String!
+  # The whole's SHA-256 in hex, when the minion read it in order once.
+  sha256: String
+  announcedAt: String!
+  # Where and when the downloader now took the stream, and when it last
+  # said it is there: its rate is delivered - from over readerAt -
+  # attachedAt. Null before a downloader.
+  from: Int!
+  attachedAt: String
+  readerAt: String
+}
+
+# A link to download a stream without a session (curl), valid while the
+# stream lasts and until expiresAt at most.
+type MinionStreamLink {
+  # A path under /api/v1, with its signature.
+  path: String!
+  expiresAt: String!
 }
 
 # A printable string in a kept file, as strings(1) finds it: length bytes
@@ -11269,6 +11416,11 @@ extend type Mutation {
   # to stop (it still sends its end). Nothing for one that ended. Needs
   # operator.
   cancelMinionTask(id: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # A signed link to download a stream_file task's stream (for curl).
+  # Needs at least viewer.
+  minionStreamLink(taskId: ID!): MinionStreamLink!
     @hasPermission(permission: "operation:member")
 }
 
@@ -14229,6 +14381,17 @@ func (ec *executionContext) field_Mutation_markHashCracked_args(ctx context.Cont
 		return nil, err
 	}
 	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_minionStreamLink_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
 	return args, nil
 }
 
@@ -28886,6 +29049,64 @@ func (ec *executionContext) fieldContext_MinionSessionsLayout_consoleSplit(_ con
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionStreamLink_path(ctx context.Context, field graphql.CollectedField, obj *model.MinionStreamLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionStreamLink_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionStreamLink_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionStreamLink",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionStreamLink_expiresAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionStreamLink) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionStreamLink_expiresAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionStreamLink_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionStreamLink",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29854,6 +30075,57 @@ func (ec *executionContext) fieldContext_MinionTask_upload(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_stream(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_stream,
+		func(ctx context.Context) (any, error) {
+			return obj.Stream, nil
+		},
+		nil,
+		ec.marshalOMinionTaskStream2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTaskStream,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_stream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_MinionTaskStream_name(ctx, field)
+			case "size":
+				return ec.fieldContext_MinionTaskStream_size(ctx, field)
+			case "sent":
+				return ec.fieldContext_MinionTaskStream_sent(ctx, field)
+			case "delivered":
+				return ec.fieldContext_MinionTaskStream_delivered(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTaskStream_state(ctx, field)
+			case "sha256":
+				return ec.fieldContext_MinionTaskStream_sha256(ctx, field)
+			case "announcedAt":
+				return ec.fieldContext_MinionTaskStream_announcedAt(ctx, field)
+			case "from":
+				return ec.fieldContext_MinionTaskStream_from(ctx, field)
+			case "attachedAt":
+				return ec.fieldContext_MinionTaskStream_attachedAt(ctx, field)
+			case "readerAt":
+				return ec.fieldContext_MinionTaskStream_readerAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTaskStream", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_document(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29971,6 +30243,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_file(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -29999,6 +30273,296 @@ func (ec *executionContext) _MinionTaskPage_before(ctx context.Context, field gr
 func (ec *executionContext) fieldContext_MinionTaskPage_before(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTaskPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_name(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_size(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_size,
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_sent(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_sent,
+		func(ctx context.Context) (any, error) {
+			return obj.Sent, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_sent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_delivered(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_delivered,
+		func(ctx context.Context) (any, error) {
+			return obj.Delivered, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_delivered(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_state(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_sha256(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_sha256,
+		func(ctx context.Context) (any, error) {
+			return obj.Sha256, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_sha256(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_announcedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_announcedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.AnnouncedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_announcedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_from(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_from,
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_attachedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_attachedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.AttachedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_attachedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTaskStream_readerAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTaskStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTaskStream_readerAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ReaderAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTaskStream_readerAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTaskStream",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -38675,6 +39239,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_file(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -38802,6 +39368,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_file(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -38816,6 +39384,71 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_cancelMinionTask_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_minionStreamLink(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_minionStreamLink,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MinionStreamLink(ctx, fc.Args["taskId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionStreamLink
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionStreamLink
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionStreamLink2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionStreamLink,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_minionStreamLink(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "path":
+				return ec.fieldContext_MinionStreamLink_path(ctx, field)
+			case "expiresAt":
+				return ec.fieldContext_MinionStreamLink_expiresAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionStreamLink", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_minionStreamLink_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -46633,6 +47266,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_file(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -52753,6 +53388,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_file(ctx, field)
 			case "upload":
 				return ec.fieldContext_MinionTask_upload(ctx, field)
+			case "stream":
+				return ec.fieldContext_MinionTask_stream(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -68755,6 +69392,50 @@ func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.S
 	return out
 }
 
+var minionStreamLinkImplementors = []string{"MinionStreamLink"}
+
+func (ec *executionContext) _MinionStreamLink(ctx context.Context, sel ast.SelectionSet, obj *model.MinionStreamLink) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionStreamLinkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionStreamLink")
+		case "path":
+			out.Values[i] = ec._MinionStreamLink_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._MinionStreamLink_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionTaskImplementors = []string{"MinionTask"}
 
 func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSet, obj *model.MinionTask) graphql.Marshaler {
@@ -69005,6 +69686,8 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "upload":
 			out.Values[i] = ec._MinionTask_upload(ctx, field, obj)
+		case "stream":
+			out.Values[i] = ec._MinionTask_stream(ctx, field, obj)
 		case "document":
 			field := field
 
@@ -69082,6 +69765,81 @@ func (ec *executionContext) _MinionTaskPage(ctx context.Context, sel ast.Selecti
 			}
 		case "before":
 			out.Values[i] = ec._MinionTaskPage_before(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionTaskStreamImplementors = []string{"MinionTaskStream"}
+
+func (ec *executionContext) _MinionTaskStream(ctx context.Context, sel ast.SelectionSet, obj *model.MinionTaskStream) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionTaskStreamImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionTaskStream")
+		case "name":
+			out.Values[i] = ec._MinionTaskStream_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._MinionTaskStream_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sent":
+			out.Values[i] = ec._MinionTaskStream_sent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "delivered":
+			out.Values[i] = ec._MinionTaskStream_delivered(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._MinionTaskStream_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha256":
+			out.Values[i] = ec._MinionTaskStream_sha256(ctx, field, obj)
+		case "announcedAt":
+			out.Values[i] = ec._MinionTaskStream_announcedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "from":
+			out.Values[i] = ec._MinionTaskStream_from(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attachedAt":
+			out.Values[i] = ec._MinionTaskStream_attachedAt(ctx, field, obj)
+		case "readerAt":
+			out.Values[i] = ec._MinionTaskStream_readerAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -70888,6 +71646,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "cancelMinionTask":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_cancelMinionTask(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "minionStreamLink":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_minionStreamLink(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -80188,6 +80953,20 @@ func (ec *executionContext) marshalNMinionSessionRestart2ᚖgithubᚗcomᚋlogos
 	return ec._MinionSessionRestart(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionStreamLink2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionStreamLink(ctx context.Context, sel ast.SelectionSet, v model.MinionStreamLink) graphql.Marshaler {
+	return ec._MinionStreamLink(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionStreamLink2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionStreamLink(ctx context.Context, sel ast.SelectionSet, v *model.MinionStreamLink) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionStreamLink(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMinionTask2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTask(ctx context.Context, sel ast.SelectionSet, v model.MinionTask) graphql.Marshaler {
 	return ec._MinionTask(ctx, sel, &v)
 }
@@ -82633,6 +83412,13 @@ func (ec *executionContext) marshalOMinionTask2ᚖgithubᚗcomᚋlogoscoreᚋlog
 		return graphql.Null
 	}
 	return ec._MinionTask(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOMinionTaskStream2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTaskStream(ctx context.Context, sel ast.SelectionSet, v *model.MinionTaskStream) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionTaskStream(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOMinionTaskUpload2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTaskUpload(ctx context.Context, sel ast.SelectionSet, v *model.MinionTaskUpload) graphql.Marshaler {

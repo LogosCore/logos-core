@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/logoscore/logos-core/core/pkg/auth/permissions"
+	"github.com/logoscore/logos-core/core/pkg/controller"
 	gql "github.com/logoscore/logos-core/core/pkg/graphql"
 	"github.com/logoscore/logos-core/core/pkg/mcp"
 	"github.com/logoscore/logos-core/core/pkg/middleware"
@@ -46,6 +47,23 @@ func (a *App) mountPublicRoutes(v1 *gin.RouterGroup, c *controllers) {
 	// previous login/refresh) but no JWT — the access cookie may already be
 	// expired by the time refresh is called.
 	v1.POST("/login/refresh", middleware.CSRF(a.authCfg.csrfEnabled), c.auth.Refresh)
+
+	// A minion's stream: with a signed link, for anyone holding it (curl);
+	// without one, through AuthN as any download (the browser's session).
+	authn := middleware.AuthN(a.authProvider, a.repos.APIKey, a.repos.AgentKey, a.repos.User, a.cache)
+	human := middleware.RequireHuman()
+	streamAuth := func(c *gin.Context) {
+		if controller.Signed(c) {
+			c.Next()
+			return
+		}
+		authn(c)
+		if c.IsAborted() {
+			return
+		}
+		human(c)
+	}
+	v1.GET("/minion-streams/:id", streamAuth, c.stream.Download)
 
 	// Internal webhook endpoint: not behind AuthN, behind HMAC validation.
 	internal := v1.Group("/internal")

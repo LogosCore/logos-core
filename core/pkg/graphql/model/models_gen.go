@@ -627,6 +627,11 @@ type MinionSessionsLayoutInput struct {
 	ConsoleSplit *float64                    `json:"consoleSplit,omitempty"`
 }
 
+type MinionStreamLink struct {
+	Path      string `json:"path"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
 type MinionTask struct {
 	ID                string            `json:"id"`
 	Rev               int               `json:"rev"`
@@ -660,12 +665,26 @@ type MinionTask struct {
 	MissingParts      int               `json:"missingParts"`
 	File              *MinionFile       `json:"file,omitempty"`
 	Upload            *MinionTaskUpload `json:"upload,omitempty"`
+	Stream            *MinionTaskStream `json:"stream,omitempty"`
 	Document          string            `json:"document"`
 }
 
 type MinionTaskPage struct {
 	Tasks  []*MinionTask `json:"tasks"`
 	Before *string       `json:"before,omitempty"`
+}
+
+type MinionTaskStream struct {
+	Name        string  `json:"name"`
+	Size        int     `json:"size"`
+	Sent        int     `json:"sent"`
+	Delivered   int     `json:"delivered"`
+	State       string  `json:"state"`
+	Sha256      *string `json:"sha256,omitempty"`
+	AnnouncedAt string  `json:"announcedAt"`
+	From        int     `json:"from"`
+	AttachedAt  *string `json:"attachedAt,omitempty"`
+	ReaderAt    *string `json:"readerAt,omitempty"`
 }
 
 type MinionTaskUpload struct {

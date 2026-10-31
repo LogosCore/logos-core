@@ -9,6 +9,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   Link2Icon,
+  RadioTowerIcon,
   UploadIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,10 +26,10 @@ import type { UploadTarget } from "./upload-target"
 // contracts/task-results-and-actions.md, View): the path as crumbs, up, and
 // the entries, folders first. Up and a crumb list that folder with the
 // listing's own command; an entry's actions are in its context menu (a
-// right click): List directory on a folder or a link, Download on a file,
-// Upload here on a folder (and for the folder listed, by the crumbs), with
-// a submenu of commands when the session has more than one, and copying
-// its path or name. onOpen is absent where the viewer may not
+// right click): List directory on a folder or a link, Download and Stream
+// on a file, Upload here on a folder (and for the folder listed, by the
+// crumbs), with a submenu of commands when the session has more than one,
+// and copying its path or name. onOpen is absent where the viewer may not
 // give tasks, who then only reads what is listed.
 
 const SHOWN = 500
@@ -43,6 +44,8 @@ export function DirListingView({
   downloadCommands = [],
   onUploadHere,
   uploadCommands = [],
+  onStream,
+  streamCommands = [],
 }: {
   listing: DirListing
   /** Lists a folder: with commandId, or the listing's own command. */
@@ -57,6 +60,10 @@ export function DirListingView({
   onUploadHere?: (target: UploadTarget, commandId: string) => void
   /** The session's upload_file commands. */
   uploadCommands?: readonly MenuCommand[]
+  /** Streams a file with a stream_file command. */
+  onStream?: (path: string, commandId: string) => void
+  /** The session's stream_file commands. */
+  streamCommands?: readonly MenuCommand[]
 }) {
   const [all, setAll] = useState(false)
   // The entry whose menu is open, marked while it is.
@@ -179,6 +186,12 @@ export function DirListingView({
                     {onDownload && e.type === "file" && downloadCommands.length > 0 && (
                       <>
                         <ActionItem label="Download" icon={<DownloadIcon />} commands={downloadCommands} onRun={(id) => onDownload(path, id)} />
+                        {!(onStream && streamCommands.length > 0) && <ContextMenuSeparator />}
+                      </>
+                    )}
+                    {onStream && e.type === "file" && streamCommands.length > 0 && (
+                      <>
+                        <ActionItem label="Stream" icon={<RadioTowerIcon />} commands={streamCommands} onRun={(id) => onStream(path, id)} />
                         <ContextMenuSeparator />
                       </>
                     )}

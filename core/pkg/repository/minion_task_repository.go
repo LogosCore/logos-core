@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo"
 	opts "github.com/qiniu/qmgo/options"
 	"go.mongodb.org/mongo-driver/bson"
@@ -95,6 +96,31 @@ type IMinionTaskRepository interface {
 	// SetDataProblem records why the task's data does not fit, unless one is
 	// recorded.
 	SetDataProblem(ctx context.Context, taskID uuid.UUID, problem string) (*models.MinionTask, error)
+
+	// Streams (minionstreams). StreamAnnounce records a stream_file
+	// task's announcement, once: IsNotFound for a task that is not the
+	// session's, not a file_stream one, or over; the task as it is when
+	// announced already.
+	StreamAnnounce(ctx context.Context, sessionID, taskID uuid.UUID, s models.MinionTaskStream) (*models.MinionTask, error)
+	// FindByStreamXfer is the session's task streaming in transfer xfer.
+	FindByStreamXfer(ctx context.Context, sessionID uuid.UUID, xfer []byte) (*models.MinionTask, error)
+	// StreamAttach gives the stream to a downloader from offset from: a new
+	// generation. It returns the task after.
+	StreamAttach(ctx context.Context, taskID uuid.UUID, reader string, from int64, at time.Time) (*models.MinionTask, error)
+	// StreamDelivered records how far generation gen's downloader has the
+	// file; false when another took the stream.
+	StreamDelivered(ctx context.Context, taskID uuid.UUID, gen, delivered int64, at time.Time) (bool, error)
+	// StreamDetach lets go of generation gen's downloader.
+	StreamDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error
+	// StreamTook moves want past a chunk kept for generation gen, when want
+	// is its offset; false when it was not (a chunk from elsewhere, or
+	// another downloader's). sha256, when given, is the whole's.
+	StreamTook(ctx context.Context, taskID uuid.UUID, gen, off, n int64, sha256 []byte) (bool, error)
+	// ActiveStreams are a session's streams whose tasks have not ended.
+	ActiveStreams(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error)
+	// IdleStreams are streams whose tasks have not ended with no
+	// downloader since before (or one that stopped saying it is there).
+	IdleStreams(ctx context.Context, before time.Time) ([]models.MinionTask, error)
 }
 
 type minionTaskRepository struct {
@@ -112,6 +138,7 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		// A transfer's task, and the tasks of a task file.
 		{Key: []string{"session_id", "upload.xfer"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"upload.file_id"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"session_id", "stream.xfer"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
 		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
@@ -435,4 +462,98 @@ func (r *minionTaskRepository) SetDataProblem(ctx context.Context, taskID uuid.U
 		return nil, err
 	}
 	return &after, nil
+}
+
+// openStates are the states of a task that has not ended and was sent.
+var openStates = bson.A{models.MinionTaskSent, models.MinionTaskRunning}
+
+func (r *minionTaskRepository) StreamAnnounce(ctx context.Context, sessionID, taskID uuid.UUID, st models.MinionTaskStream) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "result": protocol.ResultFileStream,
+		"state":  bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}},
+		"stream": bson.M{"$exists": false}}).Apply(qmgo.Change{
+		Update: bson.M{"$set": bson.M{"stream": st}, "$inc": bumpRev}, ReturnNew: true,
+	}, &after)
+	if IsNotFound(err) {
+		t, ferr := r.FindByTaskID(ctx, taskID)
+		if ferr != nil || t.SessionID != sessionID || t.Stream == nil || t.Finished() {
+			return nil, qmgo.ErrNoSuchDocuments
+		}
+		return t, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) FindByStreamXfer(ctx context.Context, sessionID uuid.UUID, xfer []byte) (*models.MinionTask, error) {
+	var t models.MinionTask
+	if err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "stream.xfer": xfer}).One(&t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *minionTaskRepository) StreamAttach(ctx context.Context, taskID uuid.UUID, reader string, from int64, at time.Time) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "stream": bson.M{"$exists": true}}).Apply(qmgo.Change{
+		Update: bson.M{
+			"$set": bson.M{"stream.reader": reader, "stream.reader_at": at, "stream.want": from, "stream.delivered": from, "stream.ran": true,
+				"stream.from": from, "stream.attached_at": at},
+			"$unset": bson.M{"stream.idle_since": ""},
+			"$inc":   bson.M{"stream.gen": 1, "rev": 1},
+		},
+		ReturnNew: true,
+	}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) StreamDelivered(ctx context.Context, taskID uuid.UUID, gen, delivered int64, at time.Time) (bool, error) {
+	err := r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID, "stream.gen": gen},
+		bson.M{"$set": bson.M{"stream.delivered": delivered, "stream.reader_at": at}, "$inc": bumpRev})
+	if IsNotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *minionTaskRepository) StreamDetach(ctx context.Context, taskID uuid.UUID, gen int64, at time.Time) error {
+	err := r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID, "stream.gen": gen},
+		bson.M{"$set": bson.M{"stream.reader": "", "stream.idle_since": at}, "$inc": bumpRev})
+	if IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
+func (r *minionTaskRepository) StreamTook(ctx context.Context, taskID uuid.UUID, gen, off, n int64, sha256 []byte) (bool, error) {
+	update := bson.M{"$inc": bson.M{"stream.want": n, "rev": 1}}
+	if sha256 != nil {
+		update["$set"] = bson.M{"stream.sha256": sha256}
+	}
+	err := r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID, "stream.gen": gen, "stream.want": off}, update)
+	if IsNotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (r *minionTaskRepository) ActiveStreams(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "stream": bson.M{"$exists": true}, "state": bson.M{"$in": openStates}}).All(&out)
+	return out, err
+}
+
+func (r *minionTaskRepository) IdleStreams(ctx context.Context, before time.Time) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"stream": bson.M{"$exists": true}, "state": bson.M{"$in": openStates},
+		"$or": bson.A{
+			bson.M{"stream.idle_since": bson.M{"$lt": before}},
+			bson.M{"stream.reader": bson.M{"$ne": ""}, "stream.reader_at": bson.M{"$lt": before}},
+		}}).All(&out)
+	return out, err
 }

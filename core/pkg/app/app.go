@@ -24,6 +24,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/mcp"
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
+	"github.com/logoscore/logos-core/core/pkg/minionstreams"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
@@ -147,6 +148,8 @@ type App struct {
 	builds *builds.Service
 	// minionFiles keeps the files minions send (download_file tasks).
 	minionFiles *minionfiles.Service
+	// minionStreams relays the files minions stream (stream_file tasks).
+	minionStreams *minionstreams.Service
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -220,6 +223,8 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	minionStreams := minionstreams.NewService(repos.MinionTask, infra.cache, bus, auth.DeriveKey(e.JWTSecretKey, "minion-stream"),
+		minionstreams.DefaultConfig(), l)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
@@ -275,6 +280,7 @@ func NewApp() (*App, error) {
 		endpoints:       endpoints,
 		builds:          buildSvc,
 		minionFiles:     minionFiles,
+		minionStreams:   minionStreams,
 	}, nil
 }
 
@@ -373,6 +379,7 @@ func (a *App) startLifecycle() {
 	}
 	a.builds.Start()
 	a.minionFiles.Start()
+	a.minionStreams.Start()
 }
 
 // stopLifecycle tears down the reaper, RPC server, and broker connection. All
@@ -390,6 +397,9 @@ func (a *App) stopLifecycle() {
 	}
 	if a.minionFiles != nil {
 		a.minionFiles.Stop()
+	}
+	if a.minionStreams != nil {
+		a.minionStreams.Stop()
 	}
 	// Pushes in flight use the RPC client: cancel and drain them first.
 	if a.moduleMgmt != nil {

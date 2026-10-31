@@ -78,6 +78,44 @@ type MinionTask struct {
 	// param (docs: contracts/minion-messages.md, Core sending a file); nil
 	// for a task without one.
 	Upload *MinionTaskUpload `bson:"upload,omitempty" json:"upload,omitempty"`
+	// Stream is the file the task's minion streams to whoever downloads
+	// it (docs: contracts/minion-messages.md, Streaming a file), from its
+	// announcement; nil before, and for other tasks.
+	Stream *MinionTaskStream `bson:"stream,omitempty" json:"stream,omitempty"`
+}
+
+// MinionTaskStream is a file a minion streams: what it announced, and
+// where its downloader and the minion are. Core keeps a few chunks of it at
+// a time (minionstreams), never the file.
+type MinionTaskStream struct {
+	Xfer []byte `bson:"xfer" json:"-"`
+	// Name is the file's path on the host; Size what the minion announced.
+	Name string `bson:"name" json:"name"`
+	Size int64  `bson:"size" json:"size"`
+	// Gen counts the downloaders: each takes the stream from the one before
+	// (the newest wins), and the chunks kept for one are not another's.
+	Gen int64 `bson:"gen" json:"gen"`
+	// Reader is the downloader now (an id of its request), "" for none;
+	// ReaderAt when it last said it is there.
+	Reader   string     `bson:"reader,omitempty" json:"reader,omitempty"`
+	ReaderAt *time.Time `bson:"reader_at,omitempty" json:"reader_at,omitempty"`
+	// Want is where core wants the minion's next chunk from: the chunks
+	// before it are kept for the downloader or written to it. Delivered is
+	// how far the downloader has the file.
+	Want      int64 `bson:"want" json:"want"`
+	Delivered int64 `bson:"delivered" json:"delivered"`
+	// Ran: a downloader took the stream once. From and AttachedAt are
+	// where and when the downloader now took it: its rate is what it got
+	// since.
+	Ran        bool       `bson:"ran,omitempty" json:"ran,omitempty"`
+	From       int64      `bson:"from" json:"from"`
+	AttachedAt *time.Time `bson:"attached_at,omitempty" json:"attached_at,omitempty"`
+	// IdleSince is when the stream last had no downloader: an hour of it
+	// ends the task.
+	IdleSince   *time.Time `bson:"idle_since,omitempty" json:"idle_since,omitempty"`
+	AnnouncedAt time.Time  `bson:"announced_at" json:"announced_at"`
+	// SHA256 is the whole's, when the minion read it in order once.
+	SHA256 []byte `bson:"sha256,omitempty" json:"sha256,omitempty"`
 }
 
 // MinionTaskUpload is a task's file going to its minion: the file as it

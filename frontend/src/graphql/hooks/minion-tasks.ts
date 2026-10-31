@@ -6,6 +6,7 @@ import {
   CancelMinionTaskDocument,
   MinionFileStringsDocument,
   MinionSessionCommandsDocument,
+  MinionStreamLinkDocument,
   MinionTaskChangedDocument,
   MinionTaskDocumentDocument,
   MinionTaskOutputDocument,
@@ -107,6 +108,13 @@ export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFi
     staleTime: Infinity,
     gcTime: 60_000,
   })
+}
+
+/** A signed link to download a stream without a session (for curl): a
+ *  path under the API's base. */
+export async function fetchMinionStreamLink(taskId: string): Promise<string> {
+  const data = await graphqlClient(MinionStreamLinkDocument, { taskId })
+  return data.minionStreamLink.path
 }
 
 /** A task's output text, for copying it from where it is not shown. */
