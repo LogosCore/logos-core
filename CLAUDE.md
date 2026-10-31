@@ -118,8 +118,10 @@ the half of the layer only a server can answer unverified. A reversed sort or a
 page that drops one row returns plausible data, not an error.
 
 Each test uses its own scratch database (`itest_*`) via `database.Connect`, so
-they never touch the database named in `.env`, and drops its collections
-afterwards. When adding one, check it fails when the behaviour it describes is
+they never touch the database named in `.env`, and drops that database
+afterwards (whatever collections it came to hold: a fixed list left newer
+repositories' behind, until the dev Mongo ran out of file handles and
+restarted under the suite). When adding one, check it fails when the behaviour it describes is
 broken — several obvious-looking assertions here do not, because `$text` and a
 regex branch can cover for each other, and `searchPattern` is byte-identical to
 `regexp.QuoteMeta` for any input without quotes.

@@ -10,6 +10,9 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/qiniu/qmgo/field"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Repository integration tests.
@@ -66,17 +69,12 @@ func integrationDB(t *testing.T) database.Database {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		// Drop the collections these tests can create. The database itself is
-		// per-test and left empty; an empty database costs nothing and dropping
-		// one needs privileges a test user may not have.
-		for _, c := range []string{
-			wikiDocumentCollection, credentialCollection, taskCollection,
-			hostCollection, hashCollection, userCollection, operationCollection,
-			wikiDocumentBackupCollection, sessionCollection,
-			wikiImageCollection, wikiFileCollection,
-		} {
-			_ = db.Collection(c).DropCollection(ctx)
-		}
+		// Drop the test's database, whatever collections it came to hold. A
+		// fixed list of collections left every newer repository's behind,
+		// a database a run, until Mongo ran out of file handles and
+		// restarted under the suite (its WiredTiger files stay open). A user
+		// that may not drop a database drops each collection instead.
+		dropDatabase(ctx, t, uri, name)
 		if err := db.Close(ctx); err != nil {
 			t.Logf("warning: could not close connection: %v", err)
 		}
@@ -215,4 +213,27 @@ func (c *seedClock) next() time.Time {
 // instead of depending on how fast the inserts run.
 func createdAt(at time.Time) field.DefaultField {
 	return field.DefaultField{CreateAt: at, UpdateAt: at}
+}
+
+// dropDatabase drops a test's scratch database: whole, or each of its
+// collections where the user may not drop a database.
+func dropDatabase(ctx context.Context, t *testing.T, uri, name string) {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		t.Logf("warning: could not drop %s: %v", name, err)
+		return
+	}
+	defer func() { _ = client.Disconnect(ctx) }()
+	d := client.Database(name)
+	if err := d.Drop(ctx); err == nil {
+		return
+	}
+	names, err := d.ListCollectionNames(ctx, bson.D{})
+	if err != nil {
+		t.Logf("warning: could not list %s's collections: %v", name, err)
+		return
+	}
+	for _, c := range names {
+		_ = d.Collection(c).Drop(ctx)
+	}
 }

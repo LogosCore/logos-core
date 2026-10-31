@@ -148,6 +148,12 @@ services:
 
   mongodb:
     image: mongo:7
+    # Mongo keeps a file open per collection and index: the default 1024
+    # ran out under the repository integration tests, and mongod restarted.
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     container_name: logos-mongodb
     restart: unless-stopped
     environment:
