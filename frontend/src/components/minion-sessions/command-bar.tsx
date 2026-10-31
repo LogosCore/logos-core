@@ -46,6 +46,7 @@ export function CommandBar({
   const [line, setLine] = useState("")
   const [pick, setPick] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [focused, setFocused] = useState(false)
   // Where ↑ and ↓ are in the history; null: the line being typed.
   const [back, setBack] = useState<number | null>(null)
   const draft = useRef("")
@@ -140,13 +141,20 @@ export function CommandBar({
     setFormOpen(true)
   }
 
+  // The suggestions, while the first word could be more than one command.
+  const suggesting = offered.length > 0 && prefix !== "" && !(offered.length === 1 && offered[0].id === prefix)
+  // Nothing while the first word is no command yet: it is being typed.
+  const message =
+    error ?? (!parsed || !command ? null : !parsed.ok ? parsed.error : readsAs(parsed.command, parsed.args))
+  const problem = error !== null || (parsed !== null && !parsed.ok)
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault()
       openForm()
       return
     }
-    if (offered.length > 0 && prefix !== "" && !(offered.length === 1 && offered[0].id === prefix)) {
+    if (suggesting) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault()
         setPick((p) => (p + (e.key === "ArrowDown" ? 1 : offered.length - 1)) % offered.length)
@@ -192,7 +200,21 @@ export function CommandBar({
   return (
     <div className="relative border-t">
       {/* The commands the first word could be, above the line. */}
-      {offered.length > 0 && prefix !== "" && !(offered.length === 1 && offered[0].id === prefix) && (
+      {/* How the line reads, or why it does not: floating above the line,
+          as the suggestions do (which it gives way to), so the line keeps
+          its place. While it is being typed; an error from a run stays. */}
+      {!suggesting && message && (focused || error !== null) && (
+        <div
+          role={problem ? "alert" : "status"}
+          className={cn(
+            "absolute bottom-full left-2 z-20 mb-1 max-w-[calc(100%-1rem)] rounded-md border bg-popover px-3 py-1.5 font-mono text-xs break-words whitespace-pre-wrap shadow-md",
+            problem ? "border-red-300 text-red-600 dark:border-red-900 dark:text-red-400" : "text-muted-foreground",
+          )}
+        >
+          {message}
+        </div>
+      )}
+      {suggesting && (
         <div className="absolute inset-x-2 bottom-full z-20 mb-1 overflow-hidden rounded-md border bg-popover shadow-md" role="listbox">
           {offered.map((c, i) => (
             <button
@@ -222,6 +244,8 @@ export function CommandBar({
             setPick(0)
           }}
           onKeyDown={onKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           spellCheck={false}
           autoComplete="off"
           aria-label="Command"
@@ -303,12 +327,7 @@ export function CommandBar({
         }}
         idPrefix={`task-${sessionId}`}
       />
-      {/* How the line reads, or why it does not. */}
-      {(error || (parsed && command)) && (
-        <div className={cn("px-9 pb-2 font-mono text-xs", error || (parsed && !parsed.ok) ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-          {error ?? (parsed && !parsed.ok ? parsed.error : parsed?.ok ? readsAs(parsed.command, parsed.args) : null)}
-        </div>
-      )}
+
     </div>
   )
 }
