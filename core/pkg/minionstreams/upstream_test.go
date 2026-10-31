@@ -6,9 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -25,29 +27,33 @@ func setupUp(t *testing.T, size int) (*Service, *memTasks, []byte) {
 }
 
 // pullAll plays the minion: it asks for each chunk from what it has, as
-// they come, and records how far it has the file, as minionsync does.
-func pullAll(t *testing.T, s *Service, tasks *memTasks, want int) []byte {
-	t.Helper()
+// they come, and records how far it has the file, as minionsync does. It
+// runs beside the uploader, so it says what went wrong rather than fail
+// the test itself.
+func pullAll(s *Service, tasks *memTasks, want int) ([]byte, error) {
 	var got bytes.Buffer
 	var sum []byte
-	for tries := 0; got.Len() < want && tries < 5000; tries++ {
+	for tries := 0; got.Len() < want; tries++ {
+		if tries > 50000 {
+			return nil, fmt.Errorf("stuck at %d", got.Len())
+		}
 		cur := tasks.get()
 		c, a, err := s.Pull(context.Background(), &cur, int64(got.Len()), protocol.MaxMinionMessageSize)
 		if err != nil {
-			t.Fatal(err)
+			return nil, err
 		}
 		tasks.mu.Lock()
 		tasks.t.Upload.Acked = int64(got.Len())
 		tasks.mu.Unlock()
 		if c == nil {
 			if a == nil || !a.Hold {
-				t.Fatalf("neither a chunk nor hold at %d: %+v", got.Len(), a)
+				return nil, fmt.Errorf("neither a chunk nor hold at %d: %+v", got.Len(), a)
 			}
-			waitFor(t, "more bytes", func() bool { return tasks.get().Upload.Received > int64(got.Len()) })
+			time.Sleep(time.Millisecond)
 			continue
 		}
 		if c.Off == 0 && (c.Total == nil || int(*c.Total) != want) {
-			t.Fatalf("the first chunk's total: %v", c.Total)
+			return nil, fmt.Errorf("the first chunk's total: %v", c.Total)
 		}
 		got.Write(c.Data)
 		if c.SHA256 != nil {
@@ -56,9 +62,9 @@ func pullAll(t *testing.T, s *Service, tasks *memTasks, want int) []byte {
 	}
 	whole := sha256.Sum256(got.Bytes())
 	if !bytes.Equal(sum, whole[:]) {
-		t.Fatalf("the last chunk's sha256 %x, the bytes' %x", sum, whole)
+		return nil, fmt.Errorf("the last chunk's sha256 %x, the bytes' %x", sum, whole)
 	}
-	return got.Bytes()
+	return got.Bytes(), nil
 }
 
 // An uploader's body goes to the minion through the buffer, a window
@@ -70,9 +76,9 @@ func TestUpstream(t *testing.T) {
 		_, err := s.Write(context.Background(), tasks.t.TaskID, 0, int64(len(body)), bytes.NewReader(body))
 		done <- err
 	}()
-	got := pullAll(t, s, tasks, len(body))
-	if err := <-done; err != nil || !bytes.Equal(got, body) {
-		t.Fatalf("write: %v, equal %v", err, bytes.Equal(got, body))
+	got, perr := pullAll(s, tasks, len(body))
+	if err := <-done; err != nil || perr != nil || !bytes.Equal(got, body) {
+		t.Fatalf("write: %v, pull: %v, equal %v", err, perr, bytes.Equal(got, body))
 	}
 }
 
@@ -82,7 +88,13 @@ func TestUpstreamResume(t *testing.T) {
 	s, tasks, body := setupUp(t, 3*protocol.MaxChunkData)
 	id := tasks.t.TaskID
 	pulled := make(chan []byte)
-	go func() { pulled <- pullAll(t, s, tasks, len(body)) }()
+	go func() {
+		got, err := pullAll(s, tasks, len(body))
+		if err != nil {
+			got = nil
+		}
+		pulled <- got
+	}()
 
 	cut := protocol.MaxChunkData + 7
 	if at, err := s.Write(context.Background(), id, 0, int64(len(body)), io.LimitReader(bytes.NewReader(body), int64(cut))); err != nil || at != int64(cut) {
@@ -116,7 +128,7 @@ func TestUpstreamNoSize(t *testing.T) {
 // moment); one cut short lets go of it.
 func TestUpstreamPartKeepsUploader(t *testing.T) {
 	s, tasks, body := setupUp(t, 2*protocol.MaxChunkData)
-	go pullAll(t, s, tasks, len(body))
+	go func() { _, _ = pullAll(s, tasks, len(body)) }()
 	if _, err := s.Write(context.Background(), tasks.t.TaskID, 0, int64(len(body)), io.LimitReader(bytes.NewReader(body), 100)); err != nil {
 		t.Fatal(err)
 	}
