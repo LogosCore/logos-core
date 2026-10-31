@@ -15,6 +15,17 @@ export function handlerCommands<C extends HandlerCommand>(commands: readonly C[]
   return commands.filter((c) => c.handler === handler)
 }
 
+/**
+ * The commands an action on a view's item can run: the session's commands
+ * with handler, the view's own command first (continuing its task), then
+ * the rest in the factory's order.
+ */
+export function commandsFor<C extends HandlerCommand>(commands: readonly C[], handler: string, own?: string): C[] {
+  const all = handlerCommands(commands, handler)
+  const first = all.find((c) => c.id === own)
+  return first ? [first, ...all.filter((c) => c !== first)] : all
+}
+
 /** The one to run: the picked one while the session has it, else the first. */
 export function chooseHandlerCommand<C extends HandlerCommand>(candidates: readonly C[], picked: string | null): C | undefined {
   return candidates.find((c) => c.id === picked) ?? candidates[0]

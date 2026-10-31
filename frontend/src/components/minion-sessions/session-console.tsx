@@ -12,6 +12,7 @@ import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type Consol
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
+import { commandsFor } from "./handler-commands"
 import type { Task } from "./task-actions"
 
 // A session's console, in its work pane tab: the tasks given its minion on
@@ -60,12 +61,17 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const moved = newestMoved(tasks, selection)
   // A task the operator runs is the newest: shown, and followed.
   const follow = () => setSelection(FOLLOWING)
-  // A folder opened in a listing: the same command again on its path, its
-  // other args as they were.
+  // A folder opened in a listing: its own command again on the path, its
+  // other args as they were; another dir_listing command with the path alone
+  // (the rest its defaults).
   const queue = useQueueMinionTask()
-  const openPath = (t: Task, path: string) =>
+  const openPath = (t: Task, path: string, commandId = t.command) =>
     queue.mutate(
-      { sessionId, command: t.command, args: { ...((t.args as Record<string, unknown> | null) ?? {}), path } },
+      {
+        sessionId,
+        command: commandId,
+        args: commandId === t.command ? { ...((t.args as Record<string, unknown> | null) ?? {}), path } : { path },
+      },
       { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not list the folder")) },
     )
   // Ctrl+F anywhere in the console finds in the output shown.
@@ -133,7 +139,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 command={byId.get(selected.command)}
                 canWrite={writable}
                 onQueued={follow}
-                onOpenPath={writable ? (path) => openPath(selected, path) : undefined}
+                onOpenPath={writable ? (path, commandId) => openPath(selected, path, commandId) : undefined}
+                listCommands={commandsFor(commands, "dir_listing", selected.command)}
                 findSignal={findSignal}
               />
             ) : (

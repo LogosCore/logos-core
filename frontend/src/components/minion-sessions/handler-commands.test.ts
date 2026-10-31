@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { chooseHandlerCommand, handlerCommands } from "./handler-commands"
+import { chooseHandlerCommand, commandsFor, handlerCommands } from "./handler-commands"
 
 const commands = [
   { id: "sleep", handler: null },
@@ -20,5 +20,11 @@ describe("the command run for a handler", () => {
     expect(chooseHandlerCommand(listing, "ls")?.id).toBe("ls")
     expect(chooseHandlerCommand(listing, "gone")?.id).toBe("ls_sh")
     expect(chooseHandlerCommand([], "ls")).toBeUndefined()
+  })
+
+  test("an action on a view's item: the view's own command first, then the factory's order", () => {
+    expect(commandsFor(commands, "dir_listing", "ls").map((c) => c.id)).toEqual(["ls", "ls_sh"])
+    expect(commandsFor(commands, "dir_listing").map((c) => c.id)).toEqual(["ls_sh", "ls"])
+    expect(commandsFor(commands, "dir_listing", "sleep").map((c) => c.id)).toEqual(["ls_sh", "ls"])
   })
 })

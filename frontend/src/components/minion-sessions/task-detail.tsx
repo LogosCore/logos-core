@@ -21,6 +21,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { DirListingView } from "./dir-listing-view"
+import type { MenuCommand } from "./handler-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
@@ -65,15 +66,20 @@ export function TaskDetail({
   canWrite,
   onQueued,
   onOpenPath,
+  listCommands,
   findSignal,
 }: {
   task: Task
   command?: CommandDef
   canWrite: boolean
   onQueued: (t: Task) => void
-  /** Runs the task's command again on another path (a folder opened in a
-   *  listing); absent where the viewer may not give tasks. */
-  onOpenPath?: (path: string) => void
+  /** Lists another path (a folder opened in a listing): with commandId, or
+   *  the task's own command again; absent where the viewer may not give
+   *  tasks. */
+  onOpenPath?: (path: string, commandId?: string) => void
+  /** The session's dir_listing commands, the task's own first: what List
+   *  directory offers. */
+  listCommands?: readonly MenuCommand[]
   /** Goes up when Ctrl+F is pressed in the console: the find bar opens. */
   findSignal: number
 }) {
@@ -222,7 +228,7 @@ export function TaskDetail({
             <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
           )}
           {listing && !rawData ? (
-            <DirListingView listing={listing} onOpen={onOpenPath} />
+            <DirListingView listing={listing} onOpen={onOpenPath} listCommands={listCommands} />
           ) : (
             data && (
               <LazyJsonEditor
