@@ -1,8 +1,8 @@
 import { useCallback, useState, type ReactNode } from "react"
-import { CheckIcon, CopyIcon, DownloadIcon, LoaderIcon, XIcon } from "lucide-react"
+import { CheckIcon, CopyIcon, DownloadIcon, EyeIcon, LoaderIcon, XIcon } from "lucide-react"
 import { FilePreviewPane } from "@/components/file-preview/file-preview-pane"
 import { FileTypeIcon } from "@/components/file-preview/file-type-icon"
-import { canonicalContentType, filePreviewKind, panelPreviews } from "@/components/file-preview/kind"
+import { canonicalContentType, filePreviewKind, panelPreviews, type FilePreviewKind } from "@/components/file-preview/kind"
 import { fileTypeName } from "@/components/file-preview/type-name"
 import { Button } from "@/components/ui/button"
 import { InfoCard, LabelRow } from "@/components/ui/info-card"
@@ -114,7 +114,14 @@ export function FileView({ file: f }: { file: File }) {
     <div className="flex min-h-0 flex-1 flex-col">
       {toolbar(null)}
       <div className="flex min-h-0 flex-1 overflow-auto">
-        <FileOverview file={f} name={name} contentType={f.contentType ? contentType : null} url={url} />
+        <FileOverview
+          file={f}
+          name={name}
+          contentType={f.contentType ? contentType : null}
+          url={url}
+          thumbnail={kept && f.size <= THUMBNAIL_MAX ? thumbnailOf(kind) : null}
+          onPreview={views.includes("preview") ? () => setPicked("preview") : undefined}
+        />
       </div>
     </div>
   )
@@ -124,7 +131,23 @@ export function FileView({ file: f }: { file: File }) {
 // columns where it is wide: its kind's icon, name, size and kind in words,
 // the download once kept (or how much came, or why it ended); its details
 // beside them. One column, the details under, where it is narrow.
-function FileOverview({ file: f, name, contentType, url }: { file: File; name: string; contentType: string | null; url: string }) {
+function FileOverview({
+  file: f,
+  name,
+  contentType,
+  url,
+  thumbnail,
+  onPreview,
+}: {
+  file: File
+  name: string
+  contentType: string | null
+  url: string
+  /** A picture or a video's first frame in place of the kind's icon. */
+  thumbnail: "image" | "video" | null
+  /** Shows the Preview tab; absent when the file has none. */
+  onPreview?: () => void
+}) {
   const state = STATE[f.state] ?? { label: f.state.toLowerCase(), className: "text-muted-foreground" }
   const coming = f.state === "RECEIVING" || f.state === "JOINING"
   const pct = f.size > 0 ? Math.min(100, Math.round((f.received / f.size) * 100)) : 100
@@ -137,9 +160,7 @@ function FileOverview({ file: f, name, contentType, url }: { file: File; name: s
       <div className="grid items-center gap-6 @2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @2xl:gap-10">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-              <FileTypeIcon contentType={contentType ?? ""} filename={name} size={26} />
-            </div>
+            <Thumbnail url={url} kind={thumbnail} contentType={contentType ?? ""} name={name} onClick={onPreview} />
             <div className="flex min-w-0 flex-col gap-0.5">
               <h3 className="font-mono text-base font-medium break-all">{name}</h3>
               <p className="text-xs text-muted-foreground tabular-nums">
@@ -150,10 +171,18 @@ function FileOverview({ file: f, name, contentType, url }: { file: File; name: s
           </div>
 
           {f.state === "COMPLETE" ? (
-            <Button className="self-start" render={<a href={url} download />}>
-              <DownloadIcon />
-              Download
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button render={<a href={url} download />}>
+                <DownloadIcon />
+                Download
+              </Button>
+              {onPreview && (
+                <Button variant="outline" onClick={onPreview}>
+                  <EyeIcon />
+                  Preview
+                </Button>
+              )}
+            </div>
           ) : (
             <div className="flex w-full max-w-sm flex-col gap-2">
               <div className={cn("inline-flex items-center gap-1.5 text-sm", state.className)}>
@@ -216,5 +245,52 @@ function FileOverview({ file: f, name, contentType, url }: { file: File; name: s
         </div>
       </div>
     </div>
+  )
+}
+
+// Pictures the browser draws itself, up to this size, show in the overview
+// (a big one is the Preview's to load); a video, its first frame, which
+// costs only its start.
+const THUMBNAIL_MAX = 25 * 1024 * 1024
+
+function thumbnailOf(kind: FilePreviewKind): "image" | "video" | null {
+  if (kind.imageFormat === "native") return "image"
+  if (kind.mediaKind === "video") return "video"
+  return null
+}
+
+/** The overview's picture of the file: a thumbnail of a picture or video, else its kind's icon; a click previews it. */
+function Thumbnail({
+  url,
+  kind,
+  contentType,
+  name,
+  onClick,
+}: {
+  url: string
+  kind: "image" | "video" | null
+  contentType: string
+  name: string
+  onClick?: () => void
+}) {
+  const [failed, setFailed] = useState(false)
+  const inline = `${url}?preview=1`
+  const shown = !failed ? kind : null
+  const box = "flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted text-muted-foreground"
+  if (shown === null)
+    return (
+      <div className={cn(box, "size-14")}>
+        <FileTypeIcon contentType={contentType} filename={name} size={26} />
+      </div>
+    )
+  return (
+    <button type="button" className={cn(box, "size-20 cursor-pointer ring-foreground/10 hover:ring-2")} title="Preview" onClick={onClick}>
+      {shown === "image" ? (
+        <img src={inline} alt="" className="size-full object-cover" draggable={false} onError={() => setFailed(true)} />
+      ) : (
+        // The first frame, a moment in: at 0 some videos are still black.
+        <video src={`${inline}#t=0.1`} preload="metadata" muted playsInline className="size-full object-cover" onError={() => setFailed(true)} />
+      )}
+    </button>
   )
 }

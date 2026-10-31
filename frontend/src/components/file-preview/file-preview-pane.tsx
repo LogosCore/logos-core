@@ -54,11 +54,14 @@ export function FilePreviewPane({
         ) : src === null ? (
           <p className="text-sm text-muted-foreground">Decoding the picture…</p>
         ) : (
-          <button type="button" className="max-h-full max-w-full cursor-zoom-in" title="Open full size" onClick={() => setLightbox(true)}>
+          // The button fills the pane and the picture is fitted in it: a
+          // button the size of its picture gives max-h-full nothing to be a
+          // share of, and a tall picture ran under the pane's edge.
+          <button type="button" className="relative size-full cursor-zoom-in" title="Open full size" onClick={() => setLightbox(true)}>
             <img
               src={src}
               alt={filename}
-              className="max-h-full max-w-full object-contain [background:repeating-conic-gradient(var(--color-muted)_0_25%,transparent_0_50%)_0_0/16px_16px]"
+              className="absolute inset-0 m-auto max-h-full max-w-full object-contain [background:repeating-conic-gradient(var(--color-muted)_0_25%,transparent_0_50%)_0_0/16px_16px]"
               draggable={false}
               onError={() => setImageFailed(true)}
             />

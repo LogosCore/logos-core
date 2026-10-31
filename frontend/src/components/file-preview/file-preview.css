@@ -143,6 +143,15 @@ body.file-preview-resizing .file-preview-frame {
   max-height: none;
 }
 
+/* A video filling the pane: fitted into it, as large as it allows. */
+.file-preview--fill .file-preview-media:not(.file-preview-media--audio) {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+}
+
 .file-preview--fill .file-preview-media {
   margin: auto;
   max-height: 100%;
