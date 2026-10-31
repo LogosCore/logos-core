@@ -118,7 +118,7 @@ type Documents = {
     "\n  query MinionTaskOutput($id: ID!) {\n    minionTask(id: $id) {\n      id\n      output\n      outputUtf8\n      data\n    }\n  }\n": typeof types.MinionTaskOutputDocument,
     "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n": typeof types.MinionTasksDocument,
     "\n  query MinionTaskDocument($id: ID!) {\n    minionTask(id: $id) {\n      id\n      document\n    }\n  }\n": typeof types.MinionTaskDocumentDocument,
-    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": typeof types.MinionSessionCommandsDocument,
+    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      handler\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": typeof types.MinionSessionCommandsDocument,
     "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.QueueMinionTaskDocument,
     "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.CancelMinionTaskDocument,
     "\n  subscription MinionTaskChanged($sessionId: ID!) {\n    minionTaskChanged(sessionId: $sessionId) {\n      ...MinionTaskFields\n    }\n  }\n": typeof types.MinionTaskChangedDocument,
@@ -358,7 +358,7 @@ const documents: Documents = {
     "\n  query MinionTaskOutput($id: ID!) {\n    minionTask(id: $id) {\n      id\n      output\n      outputUtf8\n      data\n    }\n  }\n": types.MinionTaskOutputDocument,
     "\n  query MinionTasks($sessionId: ID!, $last: Int, $before: String) {\n    minionTasks(sessionId: $sessionId, last: $last, before: $before) {\n      tasks {\n        ...MinionTaskFields\n      }\n      before\n    }\n  }\n": types.MinionTasksDocument,
     "\n  query MinionTaskDocument($id: ID!) {\n    minionTask(id: $id) {\n      id\n      document\n    }\n  }\n": types.MinionTaskDocumentDocument,
-    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": types.MinionSessionCommandsDocument,
+    "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      handler\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n": types.MinionSessionCommandsDocument,
     "\n  mutation QueueMinionTask($sessionId: ID!, $command: String!, $args: JSON) {\n    queueMinionTask(sessionId: $sessionId, command: $command, args: $args) {\n      ...MinionTaskFields\n    }\n  }\n": types.QueueMinionTaskDocument,
     "\n  mutation CancelMinionTask($id: ID!) {\n    cancelMinionTask(id: $id) {\n      ...MinionTaskFields\n    }\n  }\n": types.CancelMinionTaskDocument,
     "\n  subscription MinionTaskChanged($sessionId: ID!) {\n    minionTaskChanged(sessionId: $sessionId) {\n      ...MinionTaskFields\n    }\n  }\n": types.MinionTaskChangedDocument,
@@ -910,7 +910,7 @@ export function graphql(source: "\n  query MinionTaskDocument($id: ID!) {\n    m
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionCommandsDocument;
+export function graphql(source: "\n  query MinionSessionCommands($sessionId: ID!) {\n    minionSessionCommands(sessionId: $sessionId) {\n      id\n      label\n      description\n      handler\n      params {\n        ...ModuleFieldDefFields\n      }\n    }\n  }\n"): typeof import('./graphql').MinionSessionCommandsDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

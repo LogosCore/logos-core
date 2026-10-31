@@ -39,6 +39,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         id: c.id,
         label: c.label,
         description: c.description,
+        handler: c.handler,
         fields: c.params,
         params: c.params.map((p) => ({ key: p.key, type: p.type, label: p.label, required: p.required, default: p.default })),
       })),

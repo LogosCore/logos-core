@@ -73,6 +73,7 @@ export const MinionSessionCommandsQuery = graphql(`
       id
       label
       description
+      handler
       params {
         ...ModuleFieldDefFields
       }

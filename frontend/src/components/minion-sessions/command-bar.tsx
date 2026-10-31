@@ -9,6 +9,7 @@ import { draftsFromTexts } from "@/components/command-form/command-drafts"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { cn } from "@/lib/utils"
+import { BrowseButton } from "./browse-button"
 import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type CommandDef } from "./command-line"
 
 // The console's command line: a command of the session's build typed as a
@@ -22,6 +23,8 @@ import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type Comm
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
   fields: readonly FieldDef[]
+  /** The result handler its data follows (dir_listing), if any. */
+  handler?: string | null
 }
 
 export function CommandBar({
@@ -260,6 +263,7 @@ export function CommandBar({
           <kbd className="rounded border px-1 font-mono">↵</kbd> run
           <kbd className="ml-1 rounded border px-1 font-mono">⇧↵</kbd> form
         </span>
+        <BrowseButton sessionId={sessionId} commands={commands} onQueued={onQueued} />
         <Button variant="ghost" size="icon-xs" title="Fill the command's params in a form (Shift+Enter)" aria-label="Command form"
           disabled={commands.length === 0} onMouseDown={(e) => e.preventDefault()} onClick={openForm}>
           <SlidersHorizontalIcon />
