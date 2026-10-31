@@ -252,7 +252,7 @@ func minionSessionListFilter(operationID uuid.UUID, search string) bson.M {
 	rx := bson.M{"$regex": searchPattern(search), "$options": "i"}
 	or := bson.A{}
 	for _, field := range []string{
-		"hello.host", "hello.user", "hello.domain", "hello.proc", "hello.os", "hello.arch", "hello.integrity",
+		"hello.host", "hello.user", "hello.domain", "hello.proc", "hello.os", "hello.arch", "hello.integrity", "hello.machine_id",
 		"hello.addrs", "hello.version", "description", "build_description", "module_name", "target", "platform", "peers.address",
 	} {
 		or = append(or, bson.M{field: rx})

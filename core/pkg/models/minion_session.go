@@ -209,6 +209,7 @@ type MinionHello struct {
 	Integrity string         `bson:"integrity,omitempty" json:"integrity,omitempty"`
 	Addrs     []string       `bson:"addrs,omitempty" json:"addrs,omitempty"`
 	Version   string         `bson:"version,omitempty" json:"version,omitempty"`
+	MachineID string         `bson:"machine_id,omitempty" json:"machine_id,omitempty"` // "<source>:<value>" (protocol.MachineID); empty from minions built before it
 	X         map[string]any `bson:"x,omitempty" json:"x,omitempty"`
 }
 
@@ -216,7 +217,7 @@ type MinionHello struct {
 func MinionHelloFrom(h protocol.HelloItem) MinionHello {
 	return MinionHello{
 		PID: h.PID, OS: h.OS, Arch: h.Arch, Host: h.Host, User: h.User, Domain: h.Domain, Proc: ProcessName(h.Proc),
-		Integrity: h.Integrity, Addrs: h.Addrs, Version: h.Version, X: h.X,
+		Integrity: h.Integrity, Addrs: h.Addrs, Version: h.Version, MachineID: h.MachineID, X: h.X,
 	}
 }
 

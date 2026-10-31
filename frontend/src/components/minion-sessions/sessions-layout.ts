@@ -26,6 +26,7 @@ export type SessionColumnId =
   | "user"
   | "domain"
   | "proc"
+  | "machine"
   | "pid"
   | "os"
   | "arch"
@@ -82,6 +83,8 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => [s.user, s.integrity] },
   { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.domain },
   { id: "proc", label: "Process", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.1), value: (s) => s.proc },
+  // What tells apart machines with the same host and user (source:value).
+  { id: "machine", label: "Machine", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.2), value: (s) => s.machineId },
   { id: "pid", label: "PID", kind: "number", sortable: true, initialDirection: "ASC", width: fr(0.5), value: (s) => s.pid },
   { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.os },
   { id: "arch", label: "Arch", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.6), value: (s) => s.arch },

@@ -478,6 +478,7 @@ type MinionSession struct {
 	User             *string                 `json:"user,omitempty"`
 	Domain           *string                 `json:"domain,omitempty"`
 	Proc             *string                 `json:"proc,omitempty"`
+	MachineID        *string                 `json:"machineId,omitempty"`
 	Integrity        *string                 `json:"integrity,omitempty"`
 	Addrs            []string                `json:"addrs"`
 	Address          *string                 `json:"address,omitempty"`

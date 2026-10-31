@@ -482,6 +482,7 @@ type ComplexityRoot struct {
 		LastSeenAt       func(childComplexity int) int
 		LateAt           func(childComplexity int) int
 		LostAt           func(childComplexity int) int
+		MachineID        func(childComplexity int) int
 		Mark             func(childComplexity int) int
 		ModuleName       func(childComplexity int) int
 		Number           func(childComplexity int) int
@@ -3598,6 +3599,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.LostAt(childComplexity), true
+	case "MinionSession.machineId":
+		if e.ComplexityRoot.MinionSession.MachineID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.MachineID(childComplexity), true
 	case "MinionSession.mark":
 		if e.ComplexityRoot.MinionSession.Mark == nil {
 			break
@@ -10533,6 +10540,11 @@ type MinionSession {
   user: String
   domain: String
   proc: String
+  # What tells this machine apart from others with the same host and user:
+  # "<source>:<value>" (smbios-uuid:…, linux-machine-id:…, hostname:…; docs:
+  # contracts/minion-messages.md, Machine identity). Null from minions built
+  # before hellos had it.
+  machineId: String
   # low | medium | high | system (Windows) | root | user
   integrity: String
   addrs: [String!]!
@@ -26140,6 +26152,35 @@ func (ec *executionContext) fieldContext_MinionSession_proc(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_machineId(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_machineId,
+		func(ctx context.Context) (any, error) {
+			return obj.MachineID, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_machineId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_integrity(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26884,6 +26925,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -27107,6 +27150,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -36639,6 +36684,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -36835,6 +36882,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -36972,6 +37021,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -37168,6 +37219,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -45075,6 +45128,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_domain(ctx, field)
 			case "proc":
 				return ec.fieldContext_MinionSession_proc(ctx, field)
+			case "machineId":
+				return ec.fieldContext_MinionSession_machineId(ctx, field)
 			case "integrity":
 				return ec.fieldContext_MinionSession_integrity(ctx, field)
 			case "addrs":
@@ -66696,6 +66751,8 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = ec._MinionSession_domain(ctx, field, obj)
 		case "proc":
 			out.Values[i] = ec._MinionSession_proc(ctx, field, obj)
+		case "machineId":
+			out.Values[i] = ec._MinionSession_machineId(ctx, field, obj)
 		case "integrity":
 			out.Values[i] = ec._MinionSession_integrity(ctx, field, obj)
 		case "addrs":

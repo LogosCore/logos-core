@@ -69,6 +69,7 @@ var MinionSessionColumns = map[string]MinionSessionColumn{
 	"user":             {Field: "hello.user", Kind: SessionColumnText, Sortable: true, AlsoMatch: "hello.integrity"},
 	"domain":           {Field: "hello.domain", Kind: SessionColumnText, Sortable: true},
 	"proc":             {Field: "hello.proc", Kind: SessionColumnText, Sortable: true},
+	"machine":          {Field: "hello.machine_id", Kind: SessionColumnText, Sortable: true},
 	"pid":              {Field: "hello.pid", Kind: SessionColumnNumber, Sortable: true},
 	"os":               {Field: "hello.os", Kind: SessionColumnEnum, Sortable: true},
 	"arch":             {Field: "hello.arch", Kind: SessionColumnEnum, Sortable: true},

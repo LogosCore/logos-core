@@ -207,6 +207,7 @@ function HostCard({ s }: { s: Session }) {
   return (
     <InfoCard title="Host">
       <LabelRow label="Host">{s.host || none}</LabelRow>
+      <LabelRow label="Machine">{s.machineId ? <span className="font-mono text-xs break-all">{s.machineId}</span> : none}</LabelRow>
       <LabelRow label="User">{user || none}</LabelRow>
       <LabelRow label="Domain">{s.domain || none}</LabelRow>
       <LabelRow label="Integrity">{s.integrity || none}</LabelRow>

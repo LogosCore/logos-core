@@ -47,6 +47,11 @@ type MinionSession {
   user: String
   domain: String
   proc: String
+  # What tells this machine apart from others with the same host and user:
+  # "<source>:<value>" (smbios-uuid:…, linux-machine-id:…, hostname:…; docs:
+  # contracts/minion-messages.md, Machine identity). Null from minions built
+  # before hellos had it.
+  machineId: String
   # low | medium | high | system (Windows) | root | user
   integrity: String
   addrs: [String!]!

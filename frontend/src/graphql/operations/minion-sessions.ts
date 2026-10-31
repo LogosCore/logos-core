@@ -29,6 +29,7 @@ export const MinionSessionFields = graphql(`
     user
     domain
     proc
+    machineId
     integrity
     addrs
     address
