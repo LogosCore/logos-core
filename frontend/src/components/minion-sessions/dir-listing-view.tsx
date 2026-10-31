@@ -21,6 +21,7 @@ import { formatBytes } from "@/lib/format-bytes"
 import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import { childPath, crumbs, sortEntries, type DirEntry, type DirListing } from "./dir-listing"
+import { FileNameIcon } from "@/components/file-preview/file-type-icon"
 import { ActionItem, type MenuCommand } from "./action-menu"
 import { UploadHereButton } from "./upload-here-button"
 import type { UploadTarget } from "./upload-target"
@@ -158,12 +159,17 @@ export function DirListingView({
                   >
                     <td className="w-full max-w-0 truncate px-3 py-1 font-mono">
                       <span className="inline-flex max-w-full items-baseline gap-1.5">
-                        <Icon
-                          className={cn(
-                            "size-3.5 shrink-0 self-center",
-                            e.type === "dir" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
-                          )}
-                        />
+                        {/* A file's icon says its kind, by its name. */}
+                        {e.type === "file" ? (
+                          <FileNameIcon name={e.name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
+                        ) : (
+                          <Icon
+                            className={cn(
+                              "size-3.5 shrink-0 self-center",
+                              e.type === "dir" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+                            )}
+                          />
+                        )}
                         <span className="truncate" title={e.name}>
                           {e.name}
                         </span>

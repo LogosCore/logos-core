@@ -53,6 +53,7 @@ import { UploadDialog } from "@/components/minion-sessions/upload-dialog"
 import type { UploadTarget } from "@/components/minion-sessions/upload-target"
 import { UploadHereButton } from "@/components/minion-sessions/upload-here-button"
 import { useWorkspaceActions } from "@/components/minion-sessions/workspace-tabs"
+import { FileNameIcon } from "@/components/file-preview/file-type-icon"
 import { DownloadedFileDialog } from "./downloaded-file-dialog"
 import { FolderTree } from "./file-browser-tree"
 import { byWhom, inFlight, inFlightAt, parentOf, pathsTo, sepOf, when, type InFlight } from "./file-browser-model"
@@ -639,7 +640,12 @@ function EntryRow({
         }
       >
         <span className="flex min-w-0 items-baseline gap-1.5 font-mono" title={title}>
-          <Icon className={cn("size-3.5 shrink-0 self-center", isDir && !gone ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+          {/* A file's icon says its kind, by its name: the snapshot has no content types. */}
+          {isFile && e.parent ? (
+            <FileNameIcon name={e.name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
+          ) : (
+            <Icon className={cn("size-3.5 shrink-0 self-center", isDir && !gone ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+          )}
           <span className={cn("truncate", gone && "line-through", !e.known && "italic")}>{fullPath ? e.path : e.name}</span>
           {e.target && <span className="truncate text-muted-foreground">→ {e.target}</span>}
           {lastDownload && (

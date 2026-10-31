@@ -2,7 +2,6 @@ import {
   FileArchiveIcon,
   FileAudioIcon,
   FileCodeIcon,
-  FileIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileVideoIcon,
@@ -10,6 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { createElement, type ReactElement } from "react"
+import { iconByName } from "./icon-by-name"
 
 /** The icon of a file's kind, from its content type, else its name. */
 export function FileTypeIcon({
@@ -65,10 +65,12 @@ function fileTypeIcon(contentType: string, filename: string): LucideIcon {
     return FileArchiveIcon
   }
 
-  // Fall back to the extension when the server couldn't identify the type.
-  const ext = filename.toLowerCase().split(".").pop() ?? ""
-  if (["zip", "tar", "gz", "7z", "rar"].includes(ext)) return FileArchiveIcon
-  if (["xls", "xlsx", "csv", "tsv"].includes(ext)) return FileSpreadsheetIcon
-  if (["doc", "docx", "txt", "md", "rtf", "pdf"].includes(ext)) return FileTextIcon
-  return FileIcon
+  // Fall back to the name when the type is not known: a file core does
+  // not keep (the file browser's), or one the server couldn't identify.
+  return iconByName(filename)
+}
+
+/** The icon of a file's kind by its name alone: for files whose type is not known. */
+export function FileNameIcon({ name, className }: { name: string; className?: string }): ReactElement {
+  return createElement(iconByName(name), { className })
 }
