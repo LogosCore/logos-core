@@ -5,8 +5,6 @@ import {
   ChevronUpIcon,
   CopyIcon,
   DownloadIcon,
-  FileIcon,
-  FolderIcon,
   RotateCcwIcon,
   SearchIcon,
   SquareIcon,
@@ -19,17 +17,20 @@ import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-edi
 import { useMinionTaskDocument, useMinionTaskOutput } from "@/graphql/hooks/minion-tasks"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
+import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { lineOf, type CommandDef } from "./command-line"
+import { readDirListing } from "./dir-listing"
+import { DirListingView } from "./dir-listing-view"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
-import { formatDateTime } from "@/lib/date-format"
 
 // The right of a session's console: the task picked in the list, whole
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
 // and what came back: the output as text, read again as more comes (Ctrl+F
-// finds in it), and any data the command gave (an ls as a table, the rest
-// as JSON, or all of it as raw JSON). The raw bytes download as they came.
+// finds in it), and any data the command gave, in its result handler's
+// view (a dir_listing as a file browser) or as raw JSON. Output and data
+// download as the minion sent them.
 // The JSON tab shows the task as core keeps it, for debugging.
 
 const API_URL = import.meta.env.VITE_API_URL as string
@@ -63,12 +64,16 @@ export function TaskDetail({
   command,
   canWrite,
   onQueued,
+  onOpenPath,
   findSignal,
 }: {
   task: Task
   command?: CommandDef
   canWrite: boolean
   onQueued: (t: Task) => void
+  /** Runs the task's command again on another path (a folder opened in a
+   *  listing); absent where the viewer may not give tasks. */
+  onOpenPath?: (path: string) => void
   /** Goes up when Ctrl+F is pressed in the console: the find bar opens. */
   findSignal: number
 }) {
@@ -79,10 +84,20 @@ export function TaskDetail({
   const detail = outputQ.data?.minionTask
   const output = detail?.output ?? ""
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null
-  // Whether it gave data, guessed from its parts until they are read (parts
-  // with no output are data), so an ls opens on its Data tab at once rather
-  // than on an empty Output first.
-  const hasData = detail ? data !== null : t.outputSize === 0 && t.parts > 0
+  // Whether it gave data, known from its size until it is read (and
+  // guessed for a task kept before that: parts with no output are data),
+  // so an ls opens on its Data tab at once rather than on an empty Output.
+  const hasData = detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0)
+  // The handler's view, for data that fits it; the rest shows raw.
+  const listing = t.handler === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
+  const dataNotes = [
+    t.dataProblem ? `The data does not fit ${t.handler}: ${t.dataProblem}. It shows raw.` : null,
+    t.handler && t.handler !== "dir_listing" ? `Its handler, ${t.handler}, is not one this version shows: the data shows raw.` : null,
+    t.missingParts > 0
+      ? `${t.missingParts} ${t.missingParts === 1 ? "part" : "parts"} before the last never came: the data may lack some.`
+      : null,
+    t.dataTruncated ? "Cut at 4 MiB with the output: the rest was dropped." : null,
+  ].filter((n): n is string => n !== null)
 
   const [tab, setTab] = useState<"output" | "data" | "json" | null>(null)
   // Data alone shows as data; with output, the output first.
@@ -140,7 +155,7 @@ export function TaskDetail({
               <WrapTextIcon />
             </Button>
           )}
-          {shown === "data" && (
+          {shown === "data" && listing && (
             <Button variant={rawData ? "secondary" : "ghost"} size="icon-xs" title={rawData ? "Raw JSON: show it rendered" : "Rendered: show the raw JSON"}
               aria-label="Show the data as raw JSON" aria-pressed={rawData}
               onClick={() => {
@@ -150,15 +165,30 @@ export function TaskDetail({
               <BracesIcon />
             </Button>
           )}
-          <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
-            onClick={() => void actions.copyOutput(detail ? output : undefined)}>
-            <CopyIcon />
-          </Button>
-          <Button variant="ghost" size="icon-xs" title="Download the output as it came, bytes and all" aria-label="Download the raw output"
-            disabled={!actions.hasOutput}
-            render={actions.hasOutput ? <a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/output`} download /> : undefined}>
-            <DownloadIcon />
-          </Button>
+          {shown === "data" ? (
+            <>
+              <Button variant="ghost" size="icon-xs" title="Copy the data as JSON" aria-label="Copy the data" disabled={!data}
+                onClick={() => void copyToClipboard(JSON.stringify(data, null, 2), "data")}>
+                <CopyIcon />
+              </Button>
+              <Button variant="ghost" size="icon-xs" title="Download the data as the minion sent it: CBOR, a sequence of its parts" aria-label="Download the raw data"
+                render={<a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/data`} download />}>
+                <DownloadIcon />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
+                onClick={() => void actions.copyOutput(detail ? output : undefined)}>
+                <CopyIcon />
+              </Button>
+              <Button variant="ghost" size="icon-xs" title="Download the output as it came, bytes and all" aria-label="Download the raw output"
+                disabled={!actions.hasOutput}
+                render={actions.hasOutput ? <a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/output`} download /> : undefined}>
+                <DownloadIcon />
+              </Button>
+            </>
+          )}
           {actions.canRunAgain && (
             <Button variant="ghost" size="icon-xs" title="Run it again" aria-label="Run the task again" disabled={actions.runningAgain} onClick={actions.runAgain}>
               <RotateCcwIcon />
@@ -187,20 +217,25 @@ export function TaskDetail({
           ]}
         />
       ) : shown === "data" ? (
-        rawData ? (
-          data && (
-            <LazyJsonEditor
-              value={JSON.stringify(data, null, 2)}
-              onChange={noChange}
-              readOnly
-              fileName={`${t.command}-${t.id.slice(0, 8)}.data.json`}
-              aria-label="The task's data as JSON"
-              className="min-h-0 flex-1"
-            />
-          )
-        ) : (
-          <div className="min-h-0 flex-1 overflow-auto p-2">{data && <DataView data={data} />}</div>
-        )
+        <div className="flex min-h-0 flex-1 flex-col">
+          {dataNotes.length > 0 && (
+            <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
+          )}
+          {listing && !rawData ? (
+            <DirListingView listing={listing} onOpen={onOpenPath} />
+          ) : (
+            data && (
+              <LazyJsonEditor
+                value={JSON.stringify(data, null, 2)}
+                onChange={noChange}
+                readOnly
+                fileName={`${t.command}-${t.id.slice(0, 8)}.data.json`}
+                aria-label="The task's data as JSON"
+                className="min-h-0 flex-1"
+              />
+            )
+          )}
+        </div>
       ) : (
         documentQ.data?.minionTask && (
           <LazyJsonEditor
@@ -383,81 +418,4 @@ function OutputView({
       {shownNotes.length > 0 && <p className="border-t px-3 py-1 text-xs text-muted-foreground">{shownNotes.join(" ")}</p>}
     </div>
   )
-}
-
-interface Entry {
-  name: string
-  dir?: boolean
-  size?: number
-  mode?: string
-  modified?: string
-}
-
-function isEntries(v: unknown): v is Entry[] {
-  return Array.isArray(v) && v.every((e) => typeof e === "object" && e !== null && typeof (e as Entry).name === "string")
-}
-
-/** A byte count, short: "4.2 KiB". */
-function size(n?: number): string {
-  if (n === undefined) return ""
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"]
-  let v = n
-  let u = 0
-  while (v >= 1024 && u < units.length - 1) {
-    v /= 1024
-    u++
-  }
-  return u === 0 ? `${v} B` : `${v.toFixed(1)} ${units[u]}`
-}
-
-/** What a command gave besides output: an ls's entries as a table, the rest as JSON. */
-function DataView({ data }: { data: Record<string, unknown> }) {
-  const [all, setAll] = useState(false)
-  const { entries, path, ...rest } = data
-  if (!isEntries(entries)) return <Json value={data} />
-  // Directories first, then by name.
-  const sorted = [...entries].sort((a, b) => Number(!!b.dir) - Number(!!a.dir) || a.name.localeCompare(b.name))
-  const shown = all ? sorted : sorted.slice(0, 500)
-  return (
-    <div className="overflow-hidden rounded-md border">
-      {typeof path === "string" && (
-        <div className="border-b bg-muted/40 px-3 py-1 font-mono text-xs text-muted-foreground">
-          {path} · {entries.length} {entries.length === 1 ? "entry" : "entries"}
-        </div>
-      )}
-      <table className="w-full text-xs">
-        <tbody>
-          {shown.map((e) => (
-            <tr key={e.name} className="border-b last:border-b-0 hover:bg-muted/40">
-              <td className="w-full max-w-0 truncate px-3 py-1 font-mono" title={e.name}>
-                <span className="inline-flex items-baseline gap-1.5">
-                  {e.dir ? (
-                    <FolderIcon className="size-3.5 self-center text-amber-600 dark:text-amber-400" />
-                  ) : (
-                    <FileIcon className="size-3.5 self-center text-muted-foreground" />
-                  )}
-                  {e.name}
-                </span>
-              </td>
-              <td className="px-3 py-1 text-right whitespace-nowrap text-muted-foreground tabular-nums">{e.dir ? "" : size(e.size)}</td>
-              <td className="px-3 py-1 font-mono whitespace-nowrap text-muted-foreground">{e.mode}</td>
-              <td className="px-3 py-1 whitespace-nowrap text-muted-foreground" title={e.modified ? formatAbsolute(e.modified) : undefined}>
-                {e.modified ? formatDateTime(e.modified) : ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!all && sorted.length > shown.length && (
-        <button type="button" className="w-full cursor-pointer border-t px-3 py-1 text-xs text-muted-foreground hover:bg-muted/40" onClick={() => setAll(true)}>
-          Show all {sorted.length}
-        </button>
-      )}
-      {Object.keys(rest).length > 0 && <Json value={rest} />}
-    </div>
-  )
-}
-
-function Json({ value }: { value: unknown }) {
-  return <pre className="px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
 }

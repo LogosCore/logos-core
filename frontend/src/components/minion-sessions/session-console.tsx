@@ -3,13 +3,16 @@ import { SquareTerminalIcon } from "lucide-react"
 import { SplitPane } from "@/components/ui/split-pane"
 import { useCanBuild } from "@/components/builds/build-access"
 import { useMinionSession, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
-import { useMinionSessionCommands, useMinionTaskSubscription, useMinionTasks } from "@/graphql/hooks/minion-tasks"
+import { toast } from "sonner"
+import { errorMessage } from "@/components/modules/management/api-errors"
+import { useMinionSessionCommands, useMinionTaskSubscription, useMinionTasks, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { CommandBar, type ConsoleCommand } from "./command-bar"
 import { commandHistory, lineOf } from "./command-line"
 import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleSelection } from "./console-selection"
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
+import type { Task } from "./task-actions"
 
 // A session's console, in its work pane tab: the tasks given its minion on
 // the left, the one picked on the right with what came back, and the
@@ -56,6 +59,14 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const moved = newestMoved(tasks, selection)
   // A task the operator runs is the newest: shown, and followed.
   const follow = () => setSelection(FOLLOWING)
+  // A folder opened in a listing: the same command again on its path, its
+  // other args as they were.
+  const queue = useQueueMinionTask()
+  const openPath = (t: Task, path: string) =>
+    queue.mutate(
+      { sessionId, command: t.command, args: { ...((t.args as Record<string, unknown> | null) ?? {}), path } },
+      { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not list the folder")) },
+    )
   // Ctrl+F anywhere in the console finds in the output shown.
   const [findSignal, setFindSignal] = useState(0)
 
@@ -121,6 +132,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 command={byId.get(selected.command)}
                 canWrite={writable}
                 onQueued={follow}
+                onOpenPath={writable ? (path) => openPath(selected, path) : undefined}
                 findSignal={findSignal}
               />
             ) : (
