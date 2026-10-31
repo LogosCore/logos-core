@@ -102,7 +102,7 @@ export function StreamView({ task: t, stream: st }: { task: Task; stream: Stream
 
             {open && (
               <div className="flex flex-wrap gap-2">
-                <Button render={<a href={url} download />} title="Download it in this browser: it comes as the minion sends it, and resumes">
+                <Button nativeButton={false} render={<a href={url} download />} title="Download it in this browser: it comes as the minion sends it, and resumes">
                   <DownloadIcon />
                   Download
                 </Button>

@@ -82,7 +82,7 @@ export function FileView({ file: f }: { file: File }) {
     </div>
   )
   const download = (
-    <Button variant="ghost" size="icon-xs" title={`Download ${name}`} aria-label="Download the file" render={<a href={url} download />}>
+    <Button variant="ghost" size="icon-xs" title={`Download ${name}`} aria-label="Download the file" nativeButton={false} render={<a href={url} download />}>
       <DownloadIcon />
     </Button>
   )
@@ -175,7 +175,7 @@ function FileOverview({
 
           {f.state === "COMPLETE" ? (
             <div className="flex flex-wrap gap-2">
-              <Button render={<a href={url} download />}>
+              <Button nativeButton={false} render={<a href={url} download />}>
                 <DownloadIcon />
                 Download
               </Button>

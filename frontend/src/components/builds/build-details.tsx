@@ -142,7 +142,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
               </Button>
             )}
             {canWrite && artifact && (
-              <Button render={<a href={artifactUrl(b.id)} download={artifact.filename} />}>
+              <Button nativeButton={false} render={<a href={artifactUrl(b.id)} download={artifact.filename} />}>
                 <DownloadIcon />
                 Download
               </Button>

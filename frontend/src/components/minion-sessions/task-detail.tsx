@@ -226,6 +226,7 @@ export function TaskDetail({
                 <CopyIcon />
               </Button>
               <Button variant="ghost" size="icon-xs" title="Download the data as the minion sent it: CBOR, a sequence of its parts" aria-label="Download the raw data"
+                nativeButton={false}
                 render={<a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/data`} download />}>
                 <DownloadIcon />
               </Button>
@@ -238,6 +239,7 @@ export function TaskDetail({
               </Button>
               <Button variant="ghost" size="icon-xs" title="Download the output as it came, bytes and all" aria-label="Download the raw output"
                 disabled={!actions.hasOutput}
+                nativeButton={!actions.hasOutput}
                 render={actions.hasOutput ? <a href={`${API_URL}/minion-tasks/${encodeURIComponent(t.id)}/output`} download /> : undefined}>
                 <DownloadIcon />
               </Button>
