@@ -127,7 +127,8 @@ export function CommandBar({
   }
 
   if (disabled) {
-    return <div className="border-t px-4 py-2.5 text-sm text-muted-foreground">{disabledReason}</div>
+    // As tall as the line it stands for, said or not.
+    return <div className="min-h-10 border-t px-4 py-2.5 text-sm text-muted-foreground">{disabledReason}</div>
   }
 
   return (

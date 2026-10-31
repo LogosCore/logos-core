@@ -19,9 +19,10 @@ import { TaskList } from "./task-list"
 // which the table scrolls to with the tab.
 
 export function SessionConsole({ sessionId }: { sessionId: string }) {
-  const { data } = useMinionSession(sessionId)
-  const session = data?.minionSession ?? null
-  const { canWrite } = useCanBuild(session?.operationId ?? "")
+  const sessionQ = useMinionSession(sessionId)
+  const session = sessionQ.data?.minionSession ?? null
+  const access = useCanBuild(session?.operationId ?? "")
+  const canWrite = access.canWrite
   useMinionTaskSubscription(sessionId)
   const tasksQ = useMinionTasks(sessionId)
   const commandsQ = useMinionSessionCommands(sessionId)
@@ -53,7 +54,12 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
 
   const closed = session?.state === "CLOSED"
   const writable = canWrite && !closed
-  const disabledReason = !session
+  // Until the session and the caller's role are in, the line waits without
+  // a word: a reason said then would be a wrong one, gone a moment later.
+  const pending = sessionQ.isLoading || access.loading
+  const disabledReason = pending
+    ? ""
+    : !session
     ? "This session does not exist any more."
     : closed
       ? "The session is closed: its minion takes no tasks."
@@ -84,6 +90,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         first={
           <TaskList
             tasks={tasks}
+            loading={tasksQ.isLoading}
             selectedId={selected?.id ?? null}
             following={selection.pinned === null}
             onSelect={(id) => setSelection(selectTask(tasks, id))}
@@ -113,7 +120,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
                 <SquareTerminalIcon className="size-6 opacity-50" />
                 <p className="text-sm">
-                  {tasksQ.isLoading ? "Loading…" : "No tasks yet. Type a command below; it goes out when the minion next checks in."}
+                  {tasksQ.isLoading ? "" : "No tasks yet. Type a command below; it goes out when the minion next checks in."}
                 </p>
               </div>
             )}

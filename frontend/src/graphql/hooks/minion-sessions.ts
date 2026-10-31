@@ -108,6 +108,9 @@ const SAVE_DELAY_MS = 600
  * and browsers. Changes show at once and are saved shortly after; a failed
  * save reloads what core has.
  */
+// The layouts setLayout put in the cache: already as the page uses them.
+const setHere = new WeakSet<object>()
+
 export function useMinionSessionsLayout() {
   const queryClient = useQueryClient()
   const query = useQuery({
@@ -115,7 +118,13 @@ export function useMinionSessionsLayout() {
     queryFn: () => graphqlClient(MinionSessionsLayoutDocument),
     staleTime: Infinity,
   })
-  const layout = useMemo(() => readSessionsLayout(query.data?.minionSessionsLayout), [query.data])
+  // A layout set here is used as it is: its parts that did not change keep
+  // their identity, so moving a divider does not hand the table new columns
+  // and filters and re-render every row.
+  const layout = useMemo(() => {
+    const stored = query.data?.minionSessionsLayout
+    return stored && setHere.has(stored) ? (stored as unknown as SessionsLayout) : readSessionsLayout(stored)
+  }, [query.data])
   const save = useMutation({
     mutationFn: (next: SessionsLayout | null) =>
       graphqlClient(SetMinionSessionsLayoutDocument, { layout: next ? sessionsLayoutInput(next) : null }),
@@ -138,6 +147,7 @@ export function useMinionSessionsLayout() {
 
   const setLayout = useCallback(
     (next: SessionsLayout | null) => {
+      if (next) setHere.add(next)
       queryClient.setQueryData<MinionSessionsLayoutQuery>(minionSessionKeys.layout(), {
         minionSessionsLayout: next as MinionSessionsLayoutQuery["minionSessionsLayout"],
       })

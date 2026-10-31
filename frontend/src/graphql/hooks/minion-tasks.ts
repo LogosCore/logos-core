@@ -40,16 +40,18 @@ export function useMinionTasks(sessionId: string) {
 
 /**
  * A task's output and data, read again whenever version changes (its parts
- * and state, say): what was shown stays until the new read is in.
+ * and state, say): what was shown stays until the new read is in. A
+ * finished task's is kept a while, so going back to it shows it at once.
  */
-export function useMinionTaskOutput(id: string | null, version: string) {
+export function useMinionTaskOutput(id: string | null, version: string, finished: boolean) {
   return useQuery({
     queryKey: [...minionTaskKeys.output(id ?? ""), version],
     queryFn: () => graphqlClient(MinionTaskOutputDocument, { id: id! }),
     enabled: id !== null,
     placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === id ? prev : undefined),
-    // Up to 4 MiB each: the older reads of a growing output go soon.
-    gcTime: 10_000,
+    // Up to 4 MiB each: the reads of a growing output go soon, its last one
+    // (the task ended) stays as long as any other query.
+    gcTime: finished ? 5 * 60_000 : 10_000,
   })
 }
 

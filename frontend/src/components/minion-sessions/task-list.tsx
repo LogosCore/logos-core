@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from
 import { ArrowDownIcon, CopyIcon, RotateCcwIcon, SquareIcon, TerminalIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { useNow } from "@/hooks/use-now"
 import { dayGroup, formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
@@ -16,6 +17,7 @@ import { StateIcon } from "./task-state"
 
 export function TaskList({
   tasks,
+  loading,
   selectedId,
   following,
   onSelect,
@@ -31,6 +33,8 @@ export function TaskList({
 }: {
   /** Oldest first. */
   tasks: readonly Task[]
+  /** The first page is still coming. */
+  loading: boolean
   selectedId: string | null
   /** Whether the newest is followed: the list then stays at the bottom. */
   following: boolean
@@ -48,8 +52,8 @@ export function TaskList({
   onFollow: () => void
 }) {
   const list = useRef<HTMLDivElement>(null)
-  // Today and Yesterday are as of this render.
-  const now = new Date()
+  // Today and Yesterday move on at midnight.
+  const now = new Date(useNow(60_000))
 
   // Following, the list stays at the bottom as tasks come; otherwise the
   // picked one is kept in view.
@@ -58,9 +62,14 @@ export function TaskList({
     if (el && following) el.scrollTop = el.scrollHeight
   }, [following, tasks.length])
   useEffect(() => {
-    if (!following && selectedId) {
-      list.current?.querySelector(`[data-task-id="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: "nearest" })
-    }
+    const el = list.current
+    const row = selectedId ? el?.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(selectedId)}"]`) : null
+    if (!el || !row || following) return
+    // The list alone scrolls: scrollIntoView would move the page too.
+    const top = row.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
+    const heading = 24 // the sticky day heading over the list's top
+    if (top - heading < el.scrollTop) el.scrollTop = top - heading
+    else if (top + row.offsetHeight > el.scrollTop + el.clientHeight) el.scrollTop = top + row.offsetHeight - el.clientHeight
   }, [following, selectedId])
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -90,7 +99,7 @@ export function TaskList({
             </Button>
           </div>
         )}
-        {tasks.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">No tasks yet.</p>}
+        {tasks.length === 0 && !loading && <p className="px-3 py-2 text-xs text-muted-foreground">No tasks yet.</p>}
         {tasks.map((t, i) => {
           const day = dayGroup(t.queuedAt, now)
           const newDay = i === 0 || dayGroup(tasks[i - 1].queuedAt, now).key !== day.key
@@ -150,7 +159,6 @@ function TaskRow({
   canWrite: boolean
 }) {
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
-  const actions = useTaskActions(t, line, { canWrite, onQueued })
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -175,24 +183,34 @@ function TaskRow({
         <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem disabled={!actions.canStop || actions.stopping} onClick={actions.stop}>
-          <SquareIcon />
-          Stop
-        </ContextMenuItem>
-        <ContextMenuItem disabled={!actions.canRunAgain || actions.runningAgain} onClick={actions.runAgain}>
-          <RotateCcwIcon />
-          Run again
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={actions.copyCommand}>
-          <TerminalIcon />
-          Copy command
-        </ContextMenuItem>
-        <ContextMenuItem disabled={!actions.hasOutput} onClick={() => void actions.copyOutput()}>
-          <CopyIcon />
-          Copy output
-        </ContextMenuItem>
+        <TaskMenu task={t} line={line} canWrite={canWrite} onQueued={onQueued} />
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+/** A row's menu: mounted while it is open, so a row holds no mutations of its own. */
+function TaskMenu({ task: t, line, canWrite, onQueued }: { task: Task; line: string; canWrite: boolean; onQueued: (t: Task) => void }) {
+  const actions = useTaskActions(t, line, { canWrite, onQueued })
+  return (
+    <>
+      <ContextMenuItem disabled={!actions.canStop || actions.stopping} onClick={actions.stop}>
+        <SquareIcon />
+        Stop
+      </ContextMenuItem>
+      <ContextMenuItem disabled={!actions.canRunAgain || actions.runningAgain} onClick={actions.runAgain}>
+        <RotateCcwIcon />
+        Run again
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onClick={actions.copyCommand}>
+        <TerminalIcon />
+        Copy command
+      </ContextMenuItem>
+      <ContextMenuItem disabled={!actions.hasOutput} onClick={() => void actions.copyOutput()}>
+        <CopyIcon />
+        Copy output
+      </ContextMenuItem>
+    </>
   )
 }

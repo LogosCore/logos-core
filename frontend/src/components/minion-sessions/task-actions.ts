@@ -38,17 +38,18 @@ export function useTaskActions(t: Task, line: string, { canWrite, onQueued }: { 
   return {
     canStop: canWrite && !finished && !t.cancelRequestedAt,
     stopping: cancel.isPending,
-    stop: () => cancel.mutate(t.id, { onError: (err) => toast.error(errorMessage(err, "Could not stop the task")) }),
+    // mutateAsync, not mutate's callbacks: a menu that ran it closes, and
+    // callbacks do not run once the caller is gone.
+    stop: () => void cancel.mutateAsync(t.id).catch((err: unknown) => toast.error(errorMessage(err, "Could not stop the task"))),
     canRunAgain: canWrite,
     runningAgain: queue.isPending,
     runAgain: () =>
-      queue.mutate(
-        { sessionId: t.sessionId, command: t.command, args: (t.args as Record<string, unknown> | null) ?? null },
-        {
-          onSuccess: (data) => onQueued?.(data.queueMinionTask),
-          onError: (err) => toast.error(errorMessage(err, "Could not queue the task")),
-        },
-      ),
+      void queue
+        .mutateAsync({ sessionId: t.sessionId, command: t.command, args: (t.args as Record<string, unknown> | null) ?? null })
+        .then(
+          (data) => onQueued?.(data.queueMinionTask),
+          (err: unknown) => toast.error(errorMessage(err, "Could not queue the task")),
+        ),
     copyCommand: () => void copyToClipboard(line, "command"),
     hasOutput: t.outputSize > 0,
     copyOutput: async (output?: string) => {

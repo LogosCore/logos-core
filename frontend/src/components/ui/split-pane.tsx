@@ -5,7 +5,10 @@ import { cn } from "@/lib/utils"
 // between them the user drags to share the space: with the pointer, with the
 // arrow keys once it has focus (Home and End go to the ends), and back to the
 // default on a double click. While it moves only this component re-renders;
-// onChange gets the new share when the move ends, to keep.
+// onChange gets the new share when the move ends, to keep. The new share is
+// held until split comes back with it: an owner keeping it in a query cache
+// hears of the change a tick later, and the panes would snap back to the old
+// share for that frame (the work pane flickered on every release).
 
 const KEY_STEP = 0.05
 
@@ -42,8 +45,20 @@ export function SplitPane({
   const box = useRef<HTMLDivElement>(null)
   // The share while the divider moves; null at rest, when split rules.
   const [moving, setMoving] = useState<number | null>(null)
-  const current = moving ?? split
+  // The share given to onChange, until split changes.
+  const [held, setHeld] = useState<number | null>(null)
+  const [heldFor, setHeldFor] = useState(split)
+  if (heldFor !== split) {
+    setHeldFor(split)
+    setHeld(null)
+  }
+  const current = moving ?? held ?? split
   const clamp = (v: number) => Math.min(max, Math.max(min, v))
+  const commit = (v: number) => {
+    if (v === current && moving === null) return
+    setHeld(v)
+    onChange(v)
+  }
   const across = orientation === "horizontal"
 
   const at = (e: PointerEvent) => {
@@ -64,7 +79,7 @@ export function SplitPane({
     e.currentTarget.releasePointerCapture(e.pointerId)
     const end = at(e)
     setMoving(null)
-    if (end !== split) onChange(end)
+    commit(end)
   }
   const onKeyDown = (e: KeyboardEvent) => {
     const next = {
@@ -75,7 +90,7 @@ export function SplitPane({
     }[e.key]
     if (next === undefined) return
     e.preventDefault()
-    if (next !== split) onChange(next)
+    commit(next)
   }
 
   return (
@@ -109,7 +124,7 @@ export function SplitPane({
         onPointerUp={onPointerUp}
         onPointerCancel={() => setMoving(null)}
         onKeyDown={onKeyDown}
-        onDoubleClick={() => defaultSplit !== split && onChange(defaultSplit)}
+        onDoubleClick={() => commit(defaultSplit)}
       >
         <div
           className={cn(

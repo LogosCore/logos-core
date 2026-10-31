@@ -66,14 +66,18 @@ export function TaskDetail({
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
   const actions = useTaskActions(t, line, { canWrite, onQueued })
   // Read again as parts come and when it ends.
-  const outputQ = useMinionTaskOutput(t.id, `${t.parts}:${t.state}`)
+  const outputQ = useMinionTaskOutput(t.id, `${t.parts}:${t.state}`, FINISHED.has(t.state))
   const detail = outputQ.data?.minionTask
   const output = detail?.output ?? ""
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null
+  // Whether it gave data, guessed from its parts until they are read (parts
+  // with no output are data), so an ls opens on its Data tab at once rather
+  // than on an empty Output first.
+  const hasData = detail ? data !== null : t.outputSize === 0 && t.parts > 0
 
   const [tab, setTab] = useState<"output" | "data" | null>(null)
   // Data alone shows as data; with output, the output first.
-  const shown = tab === "data" && data ? "data" : tab === "output" || !data || t.outputSize > 0 ? "output" : "data"
+  const shown = tab === "data" && hasData ? "data" : tab === "output" || !hasData || t.outputSize > 0 ? "output" : "data"
   const [wrap, setWrap] = useState(readWrap)
 
   return (
@@ -85,7 +89,7 @@ export function TaskDetail({
           <TabButton active={shown === "output"} onClick={() => setTab("output")}>
             Output
           </TabButton>
-          {data && (
+          {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
               Data
             </TabButton>
@@ -215,7 +219,16 @@ function OutputView({
 
   useEffect(() => {
     if (at < 0) return
-    box.current?.querySelector("[data-current]")?.scrollIntoView({ block: "center" })
+    // The output alone scrolls, to put the match in its middle:
+    // scrollIntoView would move the page too.
+    const el = box.current
+    const mark = el?.querySelector<HTMLElement>("[data-current]")
+    if (el && mark) {
+      const r = mark.getBoundingClientRect()
+      const b = el.getBoundingClientRect()
+      el.scrollTop += r.top - b.top - (el.clientHeight - r.height) / 2
+      if (r.left < b.left || r.right > b.right) el.scrollLeft += r.left - b.left - (el.clientWidth - r.width) / 2
+    }
     atBottom.current = false
   }, [at, query])
 
@@ -277,10 +290,13 @@ function OutputView({
         className="min-h-0 flex-1 overflow-auto outline-none"
       >
         {output === "" ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
-            <SquareTerminalIcon className="size-6 opacity-50" />
-            <p className="text-sm">{loading ? "Loading…" : empty}</p>
-          </div>
+          // Nothing while it is read: a placeholder for a moment is a flicker.
+          !loading && (
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+              <SquareTerminalIcon className="size-6 opacity-50" />
+              <p className="text-sm">{empty}</p>
+            </div>
+          )
         ) : (
           <pre className={cn("px-3 py-2 font-mono text-xs", wrap ? "break-all whitespace-pre-wrap" : "w-max whitespace-pre")}>
             {parts
