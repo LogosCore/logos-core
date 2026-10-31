@@ -7,8 +7,8 @@ package resolver
 
 import (
 	"context"
-	"github.com/logoscore/logos-core/core/pkg/eventbus"
 
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
 

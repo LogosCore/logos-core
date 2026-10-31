@@ -133,6 +133,7 @@ export const MinionSessionsLayoutFields = graphql(`
     }
     split
     consoleSplit
+    filesSplit
   }
 `)
 

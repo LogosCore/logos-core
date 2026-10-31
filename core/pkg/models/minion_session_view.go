@@ -230,6 +230,9 @@ type MinionSessionsLayout struct {
 	// takes beside the selected task's output, MinSessionsSplit to
 	// MaxSessionsSplit; nil for the default.
 	ConsoleSplit *float64 `bson:"console_split,omitempty" json:"console_split,omitempty"`
+	// FilesSplit is the share of a file browser's width its folder tree
+	// takes, MinSessionsSplit to MaxSessionsSplit; nil for the default.
+	FilesSplit *float64 `bson:"files_split,omitempty" json:"files_split,omitempty"`
 }
 
 // The range a layout's Split keeps to: neither half shrinks away.
@@ -266,6 +269,9 @@ func (l MinionSessionsLayout) Validate() error {
 	}
 	if l.ConsoleSplit != nil && (*l.ConsoleSplit < MinSessionsSplit || *l.ConsoleSplit > MaxSessionsSplit) {
 		return fmt.Errorf("layout: consoleSplit is %g to %g", MinSessionsSplit, MaxSessionsSplit)
+	}
+	if l.FilesSplit != nil && (*l.FilesSplit < MinSessionsSplit || *l.FilesSplit > MaxSessionsSplit) {
+		return fmt.Errorf("layout: filesSplit is %g to %g", MinSessionsSplit, MaxSessionsSplit)
 	}
 	for _, f := range l.Filters {
 		if err := f.Validate(); err != nil {

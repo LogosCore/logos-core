@@ -51,6 +51,7 @@ func TestMinionSessionsLayoutValidate(t *testing.T) {
 		"bad filter":            {Columns: []string{"host"}, Filters: []MinionSessionFilter{{Column: "host", Op: "NEVER"}}},
 		"split too small":       {Columns: []string{"host"}, Split: &tooSmall},
 		"console split too big": {Columns: []string{"host"}, ConsoleSplit: &tooBig},
+		"files split too small": {Columns: []string{"host"}, FilesSplit: &tooSmall},
 	} {
 		if l.Validate() == nil {
 			t.Errorf("%s passed", name)

@@ -16,8 +16,6 @@ export interface FileBrowserState {
   desc: boolean
   /** The tree's open folders. */
   expanded: string[]
-  /** The tree's share of the width. */
-  split: number
 }
 
 export const DEFAULT_STATE: FileBrowserState = {
@@ -27,7 +25,6 @@ export const DEFAULT_STATE: FileBrowserState = {
   sort: "name",
   desc: false,
   expanded: [],
-  split: 0.25,
 }
 
 const SORTS = new Set(["name", "size", "modified"])
@@ -44,7 +41,6 @@ export function readState(stored: unknown): FileBrowserState {
     sort: typeof s.sort === "string" && SORTS.has(s.sort) ? (s.sort as FileBrowserState["sort"]) : DEFAULT_STATE.sort,
     desc: s.desc === true,
     expanded: Array.isArray(s.expanded) ? s.expanded.filter((p): p is string => typeof p === "string").slice(0, 500) : [],
-    split: typeof s.split === "number" && s.split > 0 && s.split < 1 ? s.split : DEFAULT_STATE.split,
   }
 }
 

@@ -124,6 +124,8 @@ export interface SessionsLayout {
   split: number | null
   /** The share of a session console's width its task list takes; null: DEFAULT_CONSOLE_SPLIT. */
   consoleSplit: number | null
+  /** The share of a file browser's width its folder tree takes; null: DEFAULT_FILES_SPLIT. */
+  filesSplit: number | null
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -132,6 +134,7 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   filters: [],
   split: null,
   consoleSplit: null,
+  filesSplit: null,
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
@@ -139,6 +142,7 @@ export const DEFAULT_SPLIT = 0.6
 export const MIN_SPLIT = 0.1
 export const MAX_SPLIT = 0.9
 export const DEFAULT_CONSOLE_SPLIT = 0.3
+export const DEFAULT_FILES_SPLIT = 0.25
 
 const isColumn = (id: string): id is SessionColumnId => SESSION_COLUMN_BY_ID.has(id)
 
@@ -166,12 +170,13 @@ export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | 
     filters,
     split: share(stored.split),
     consoleSplit: share(stored.consoleSplit),
+    filesSplit: share(stored.filesSplit),
   }
 }
 
 /** The layout as the mutation takes it. */
 export function sessionsLayoutInput(layout: SessionsLayout) {
-  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split, consoleSplit: layout.consoleSplit }
+  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split, consoleSplit: layout.consoleSplit, filesSplit: layout.filesSplit }
 }
 
 function withoutNulls(f: SessionFilter): SessionFilter {

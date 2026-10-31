@@ -38,7 +38,8 @@ import {
   useFileBrowserSearch,
   type FsEntriesFilter,
 } from "@/graphql/hooks/file-browser"
-import { useMinionSession } from "@/graphql/hooks/minion-sessions"
+import { useMinionSession, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
+import { DEFAULT_FILES_SPLIT, MIN_SPLIT } from "@/components/minion-sessions/sessions-layout"
 import { useMinionTaskSubscription, useMinionTasks, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatDateTime } from "@/lib/date-format"
@@ -75,6 +76,7 @@ const ROW_H = 26
 
 export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: string }) {
   const [state, set] = useFileBrowserState(tabId)
+  const { layout, setLayout } = useMinionSessionsLayout()
   const machineQ = useFileBrowser(sessionId)
   useFileBrowserChanged(sessionId)
   const own = useMinionSession(sessionId).data?.minionSession ?? null
@@ -211,11 +213,13 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
       <SplitPane
         orientation="horizontal"
         label="Resize the folder tree and the folder beside it"
-        split={state.split}
-        defaultSplit={0.25}
-        min={0.1}
+        // The divider is the operator's, kept with their sessions layout:
+        // every file browser opens with it where they left it.
+        split={layout.filesSplit ?? DEFAULT_FILES_SPLIT}
+        defaultSplit={DEFAULT_FILES_SPLIT}
+        min={MIN_SPLIT}
         max={0.6}
-        onChange={(split) => set({ split })}
+        onChange={(filesSplit) => setLayout({ ...layout, filesSplit })}
         first={
           <FolderTree
             sessionId={sessionId}

@@ -683,6 +683,7 @@ type MinionSessionsLayout struct {
 	Filters      []*MinionSessionFilter `json:"filters"`
 	Split        *float64               `json:"split,omitempty"`
 	ConsoleSplit *float64               `json:"consoleSplit,omitempty"`
+	FilesSplit   *float64               `json:"filesSplit,omitempty"`
 }
 
 type MinionSessionsLayoutInput struct {
@@ -691,6 +692,7 @@ type MinionSessionsLayoutInput struct {
 	Filters      []*MinionSessionFilterInput `json:"filters"`
 	Split        *float64                    `json:"split,omitempty"`
 	ConsoleSplit *float64                    `json:"consoleSplit,omitempty"`
+	FilesSplit   *float64                    `json:"filesSplit,omitempty"`
 }
 
 type MinionStreamLink struct {

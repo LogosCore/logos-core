@@ -242,6 +242,9 @@ type MinionSessionsLayout {
   # The share of a session console's width its task list takes beside the
   # selected task, 0.1 to 0.9; null for the default.
   consoleSplit: Float
+  # The share of a file browser's width its folder tree takes, 0.1 to 0.9;
+  # null for the default.
+  filesSplit: Float
 }
 
 input MinionSessionsLayoutInput {
@@ -250,6 +253,7 @@ input MinionSessionsLayoutInput {
   filters: [MinionSessionFilterInput!]!
   split: Float
   consoleSplit: Float
+  filesSplit: Float
 }
 
 type MinionSessionEvent {
