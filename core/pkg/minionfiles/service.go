@@ -40,9 +40,11 @@ type Store interface {
 	Delete(ctx context.Context, key string) error
 }
 
-// Tasks reads the task a transfer says it is for.
+// Tasks reads the task a transfer says it is for, and which tasks name a
+// task file.
 type Tasks interface {
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
+	UploadFileUse(ctx context.Context, fileID uuid.UUID) (open, named bool, err error)
 }
 
 type Config struct {
@@ -398,9 +400,11 @@ func (s *Service) Stop() {
 	s.wg.Wait()
 }
 
-// Sweep gives up transfers idle for IdleAfter, and joins anew the files
-// left joining for a while (a core stopped on the way).
+// Sweep gives up transfers idle for IdleAfter, joins anew the files left
+// joining for a while (a core stopped on the way), and drops the task files
+// no task needs any more.
 func (s *Service) Sweep(ctx context.Context) {
+	s.sweepTaskFiles(ctx)
 	files, err := s.files.Idle(ctx, s.now().Add(-s.cfg.IdleAfter))
 	if err != nil {
 		s.logger.Error("minion files: sweep", zap.Error(err))

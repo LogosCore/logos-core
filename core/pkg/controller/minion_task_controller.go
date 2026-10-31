@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"io"
 	"net/http"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/responses"
@@ -28,9 +30,101 @@ type MinionTaskController struct {
 	logger *zap.Logger
 }
 
-// MinionFiles opens the files minions sent (minionfiles.Service).
+// MinionFiles opens the files minions sent, and keeps the task files
+// operators upload (minionfiles.Service).
 type MinionFiles interface {
 	Open(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, *models.MinionFile, error)
+	PutTaskFile(ctx context.Context, operationID, by uuid.UUID, name string, body io.Reader) (*models.MinionFile, error)
+}
+
+// TaskFileResponse is the JSON body POST /minion-files answers with.
+type TaskFileResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	SHA256      string `json:"sha256"`
+	ContentType string `json:"contentType"`
+}
+
+// UploadFile handles POST /api/v1/minion-files (multipart/form-data).
+//
+// A task file: one an operator uploads for a command's file param, which
+// core sends the minion with the task (docs:
+// contracts/task-results-and-actions.md, Task files). Streamed into the
+// minion files bucket as it comes, never held whole, so operationId must
+// come before file. It is kept while a task that names it has not ended;
+// one no task names is dropped after a day.
+//
+//	@Summary		Upload a file to send a minion
+//	@Tags			Minion tasks
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			operationId	formData	string	true	"Operation ID (UUID), before file"
+//	@Param			file		formData	file	true	"File bytes (at most MINION_FILE_MAX_SIZE, 2 GiB by default)"
+//	@Success		201			{object}	TaskFileResponse
+//	@Failure		400			{object}	responses.ErrorResponse
+//	@Failure		403			{object}	responses.ErrorResponse
+//	@Failure		413			{object}	responses.ErrorResponse
+//	@Router			/minion-files [post]
+func (mc *MinionTaskController) UploadFile(c *gin.Context) {
+	mr, err := c.Request.MultipartReader()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("a multipart/form-data body"))
+		return
+	}
+	uid, err := uuid.Parse(c.GetString("userID"))
+	if err != nil {
+		c.JSON(http.StatusForbidden, responses.ErrForbidden)
+		return
+	}
+	var opID uuid.UUID
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			c.JSON(http.StatusBadRequest, responses.NewErrorResponse("the body does not read: %s", err.Error()))
+			return
+		}
+		switch part.FormName() {
+		case "operationId":
+			raw, _ := io.ReadAll(io.LimitReader(part, 64))
+			if opID, err = uuid.Parse(strings.TrimSpace(string(raw))); err != nil {
+				c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid operationId"))
+				return
+			}
+			if !callerHasOperationRole(c, mc.opRepo, opID, models.OperationRoleOperator) {
+				c.JSON(http.StatusForbidden, responses.ErrForbidden)
+				return
+			}
+		case "file":
+			if opID == uuid.Nil {
+				c.JSON(http.StatusBadRequest, responses.NewErrorResponse("operationId comes before file"))
+				return
+			}
+			name := SanitizeUploadFilename(part.FileName())
+			if name == "" {
+				c.JSON(http.StatusBadRequest, responses.NewErrorResponse("filename is required"))
+				return
+			}
+			f, err := mc.files.PutTaskFile(c.Request.Context(), opID, uid, name, part)
+			switch {
+			case errors.Is(err, minionfiles.ErrTooLarge):
+				c.JSON(http.StatusRequestEntityTooLarge, responses.NewErrorResponse("the file is over the largest taken"))
+				return
+			case err != nil:
+				mc.logger.Error("Failed to keep a task file", zap.Error(err))
+				c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+				return
+			}
+			c.JSON(http.StatusCreated, TaskFileResponse{ID: f.FileID.String(), Name: f.Name, Size: f.Total,
+				SHA256: hex.EncodeToString(f.SHA256), ContentType: f.ContentType})
+			return
+		}
+	}
+	c.JSON(http.StatusBadRequest, responses.NewErrorResponse("file is required"))
 }
 
 func NewMinionTaskController(tasks repository.IMinionTaskRepository, files MinionFiles, opRepo repository.IOperationRepository, logger *zap.Logger) *MinionTaskController {

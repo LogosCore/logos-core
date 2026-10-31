@@ -628,43 +628,55 @@ type MinionSessionsLayoutInput struct {
 }
 
 type MinionTask struct {
-	ID                string      `json:"id"`
-	Rev               int         `json:"rev"`
-	SessionID         string      `json:"sessionId"`
-	OperationID       string      `json:"operationId"`
-	Command           string      `json:"command"`
-	Args              any         `json:"args,omitempty"`
-	IssuedBy          string      `json:"issuedBy"`
-	IssuedByName      *string     `json:"issuedByName,omitempty"`
-	State             string      `json:"state"`
-	QueuedAt          string      `json:"queuedAt"`
-	SentAt            *string     `json:"sentAt,omitempty"`
-	SendCount         int         `json:"sendCount"`
-	AckedAt           *string     `json:"ackedAt,omitempty"`
-	StartedAt         *string     `json:"startedAt,omitempty"`
-	DoneAt            *string     `json:"doneAt,omitempty"`
-	CancelRequestedAt *string     `json:"cancelRequestedAt,omitempty"`
-	Ok                *bool       `json:"ok,omitempty"`
-	Exit              *int        `json:"exit,omitempty"`
-	Err               *string     `json:"err,omitempty"`
-	Output            string      `json:"output"`
-	OutputSize        int         `json:"outputSize"`
-	OutputUtf8        bool        `json:"outputUtf8"`
-	OutputTruncated   bool        `json:"outputTruncated"`
-	Parts             int         `json:"parts"`
-	Result            *string     `json:"result,omitempty"`
-	Data              any         `json:"data,omitempty"`
-	DataSize          int         `json:"dataSize"`
-	DataTruncated     bool        `json:"dataTruncated"`
-	DataProblem       *string     `json:"dataProblem,omitempty"`
-	MissingParts      int         `json:"missingParts"`
-	File              *MinionFile `json:"file,omitempty"`
-	Document          string      `json:"document"`
+	ID                string            `json:"id"`
+	Rev               int               `json:"rev"`
+	SessionID         string            `json:"sessionId"`
+	OperationID       string            `json:"operationId"`
+	Command           string            `json:"command"`
+	Args              any               `json:"args,omitempty"`
+	IssuedBy          string            `json:"issuedBy"`
+	IssuedByName      *string           `json:"issuedByName,omitempty"`
+	State             string            `json:"state"`
+	QueuedAt          string            `json:"queuedAt"`
+	SentAt            *string           `json:"sentAt,omitempty"`
+	SendCount         int               `json:"sendCount"`
+	AckedAt           *string           `json:"ackedAt,omitempty"`
+	StartedAt         *string           `json:"startedAt,omitempty"`
+	DoneAt            *string           `json:"doneAt,omitempty"`
+	CancelRequestedAt *string           `json:"cancelRequestedAt,omitempty"`
+	Ok                *bool             `json:"ok,omitempty"`
+	Exit              *int              `json:"exit,omitempty"`
+	Err               *string           `json:"err,omitempty"`
+	Output            string            `json:"output"`
+	OutputSize        int               `json:"outputSize"`
+	OutputUtf8        bool              `json:"outputUtf8"`
+	OutputTruncated   bool              `json:"outputTruncated"`
+	Parts             int               `json:"parts"`
+	Result            *string           `json:"result,omitempty"`
+	Data              any               `json:"data,omitempty"`
+	DataSize          int               `json:"dataSize"`
+	DataTruncated     bool              `json:"dataTruncated"`
+	DataProblem       *string           `json:"dataProblem,omitempty"`
+	MissingParts      int               `json:"missingParts"`
+	File              *MinionFile       `json:"file,omitempty"`
+	Upload            *MinionTaskUpload `json:"upload,omitempty"`
+	Document          string            `json:"document"`
 }
 
 type MinionTaskPage struct {
 	Tasks  []*MinionTask `json:"tasks"`
 	Before *string       `json:"before,omitempty"`
+}
+
+type MinionTaskUpload struct {
+	FileID     string  `json:"fileId"`
+	Name       string  `json:"name"`
+	Size       int     `json:"size"`
+	Sha256     string  `json:"sha256"`
+	Acked      int     `json:"acked"`
+	State      string  `json:"state"`
+	FirstAckAt *string `json:"firstAckAt,omitempty"`
+	LastAckAt  *string `json:"lastAckAt,omitempty"`
 }
 
 type ModuleAction struct {

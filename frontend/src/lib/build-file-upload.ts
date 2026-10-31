@@ -38,7 +38,33 @@ export async function uploadBuildFile(
   operationId: string,
   opts: UploadBuildFileOptions = {},
 ): Promise<UploadedBuildFile> {
-  const send = () => postFile(file, operationId, opts)
+  return withRefresh(() => postFile<UploadedBuildFile>("/build-files", file, operationId, opts))
+}
+
+/** A task file as POST /minion-files returns it: one to send a minion with a task. */
+export interface UploadedTaskFile {
+  id: string
+  name: string
+  size: number
+  sha256: string
+  contentType: string
+}
+
+/**
+ * POST a file for a command's file param to the operation (docs:
+ * contracts/task-results-and-actions.md, Task files), with upload progress.
+ * Core streams it into its minion files bucket and keeps it while a task
+ * that names it has not ended.
+ */
+export async function uploadTaskFile(
+  file: File,
+  operationId: string,
+  opts: UploadBuildFileOptions = {},
+): Promise<UploadedTaskFile> {
+  return withRefresh(() => postFile<UploadedTaskFile>("/minion-files", file, operationId, opts))
+}
+
+async function withRefresh<T>(send: () => Promise<T>): Promise<T> {
   try {
     return await send()
   } catch (err) {
@@ -47,14 +73,16 @@ export async function uploadBuildFile(
   }
 }
 
-function postFile(file: File, operationId: string, opts: UploadBuildFileOptions): Promise<UploadedBuildFile> {
+function postFile<T>(path: string, file: File, operationId: string, opts: UploadBuildFileOptions): Promise<T> {
   return new Promise((resolve, reject) => {
+    // operationId first: core reads the body as it streams, and checks the
+    // caller's role before it takes the file.
     const form = new FormData()
     form.append("operationId", operationId)
     form.append("file", file, file.name || "upload")
 
     const xhr = new XMLHttpRequest()
-    xhr.open("POST", `${API_URL}/build-files`, true)
+    xhr.open("POST", `${API_URL}${path}`, true)
     xhr.withCredentials = true
     const csrf = readCsrfToken()
     if (csrf) xhr.setRequestHeader("X-CSRF-Token", csrf)
@@ -77,7 +105,7 @@ function postFile(file: File, operationId: string, opts: UploadBuildFileOptions)
       opts.signal?.removeEventListener("abort", abort)
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          resolve(JSON.parse(xhr.responseText) as UploadedBuildFile)
+          resolve(JSON.parse(xhr.responseText) as T)
         } catch (parseErr) {
           reject(parseErr)
         }

@@ -10,6 +10,7 @@ import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { cn } from "@/lib/utils"
 import { BrowseButton } from "./browse-button"
+import { TaskFilesProvider } from "./task-files"
 import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type CommandDef } from "./command-line"
 
 // The console's command line: a command of the session's build typed as a
@@ -31,6 +32,7 @@ export interface ConsoleCommand extends CommandDef {
 
 export function CommandBar({
   sessionId,
+  operationId,
   commands,
   disabled,
   disabledReason,
@@ -38,6 +40,8 @@ export function CommandBar({
   onQueued,
 }: {
   sessionId: string
+  /** The session's operation: a file param's file is uploaded to it. */
+  operationId: string
   commands: readonly ConsoleCommand[]
   disabled: boolean
   /** Why it is disabled, said in its place. */
@@ -102,6 +106,15 @@ export function CommandBar({
   const parsed = line.trim() === "" ? null : parseCommandLine(line, commands)
 
   const run = (text: string) => {
+    // A file is picked in the form: a line for a command that sends one,
+    // without it, opens there.
+    const lt = lineTexts(text, commands)
+    const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
+    const file = c?.fields.find((f) => f.type === "file")
+    if (file && !lt.texts.has(file.key)) {
+      openForm()
+      return
+    }
     const p = parseCommandLine(text, commands)
     if (!p.ok) {
       setError(p.error)
@@ -275,64 +288,66 @@ export function CommandBar({
           Run
         </Button>
       </div>
-      <CommandFormDialog
-        open={formOpen}
-        onOpenChange={(o) => {
-          if (o) return
-          setFormOpen(false)
-          input.current?.focus()
-        }}
-        formKey={`${form?.key}-${form?.id}`}
-        title={formCommand ? formCommand.label : "Run a command"}
-        description={
-          formCommand ? (
-            <>
-              <code className="font-mono text-xs">{usage(formCommand)}</code>
-              {formCommand.description && <span className="mt-1 block">{formCommand.description}</span>}
-            </>
-          ) : (
-            "Pick one of the session's commands."
-          )
-        }
-        before={
-          form?.picking && (
-            <Select
-              value={form.id}
-              onValueChange={(v) => typeof v === "string" && setForm({ ...form, id: v, drafts: undefined, typed: [], key: nextKey() })}
-            >
-              <SelectTrigger className="w-full" aria-label="Command">
-                <SelectValue placeholder="Command" />
-              </SelectTrigger>
-              <SelectContent>
-                {commands.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.label} <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )
-        }
-        fields={formCommand?.fields ?? []}
-        initialDrafts={form?.drafts}
-        showErrorsFor={form?.typed}
-        after={(values) =>
-          formCommand && (
-            <p className="truncate font-mono text-xs text-muted-foreground" title={values ? lineOf(formCommand.id, values, formCommand) : undefined}>
-              Same as: {values ? lineOf(formCommand.id, values, formCommand) : "…"}
-            </p>
-          )
-        }
-        onSubmit={async (values) => {
-          if (!formCommand) throw new Error("Pick a command first.")
-          const data = await queue.mutateAsync({ sessionId, command: formCommand.id, args: Object.keys(values).length > 0 ? values : null })
-          onQueued?.(data.queueMinionTask)
-          setLine("")
-          setBack(null)
-          setError(null)
-        }}
-        idPrefix={`task-${sessionId}`}
-      />
+      <TaskFilesProvider key={`${form?.key}-${form?.id}`} operationId={operationId}>
+        <CommandFormDialog
+          open={formOpen}
+          onOpenChange={(o) => {
+            if (o) return
+            setFormOpen(false)
+            input.current?.focus()
+          }}
+          formKey={`${form?.key}-${form?.id}`}
+          title={formCommand ? formCommand.label : "Run a command"}
+          description={
+            formCommand ? (
+              <>
+                <code className="font-mono text-xs">{usage(formCommand)}</code>
+                {formCommand.description && <span className="mt-1 block">{formCommand.description}</span>}
+              </>
+            ) : (
+              "Pick one of the session's commands."
+            )
+          }
+          before={
+            form?.picking && (
+              <Select
+                value={form.id}
+                onValueChange={(v) => typeof v === "string" && setForm({ ...form, id: v, drafts: undefined, typed: [], key: nextKey() })}
+              >
+                <SelectTrigger className="w-full" aria-label="Command">
+                  <SelectValue placeholder="Command" />
+                </SelectTrigger>
+                <SelectContent>
+                  {commands.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label} <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )
+          }
+          fields={formCommand?.fields ?? []}
+          initialDrafts={form?.drafts}
+          showErrorsFor={form?.typed}
+          after={(values) =>
+            formCommand && (
+              <p className="truncate font-mono text-xs text-muted-foreground" title={values ? lineOf(formCommand.id, values, formCommand) : undefined}>
+                Same as: {values ? lineOf(formCommand.id, values, formCommand) : "…"}
+              </p>
+            )
+          }
+          onSubmit={async (values) => {
+            if (!formCommand) throw new Error("Pick a command first.")
+            const data = await queue.mutateAsync({ sessionId, command: formCommand.id, args: Object.keys(values).length > 0 ? values : null })
+            onQueued?.(data.queueMinionTask)
+            setLine("")
+            setBack(null)
+            setError(null)
+          }}
+          idPrefix={`task-${sessionId}`}
+        />
+      </TaskFilesProvider>
 
     </div>
   )

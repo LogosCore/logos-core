@@ -69,6 +69,19 @@ definitions:
       updateAt:
         type: string
     type: object
+  controller.TaskFileResponse:
+    properties:
+      contentType:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      sha256:
+        type: string
+      size:
+        type: integer
+    type: object
   controller.WikiFileUploadResponse:
     properties:
       contentType:
@@ -575,6 +588,45 @@ paths:
       summary: Logout
       tags:
       - Auth
+  /minion-files:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Operation ID (UUID), before file
+        in: formData
+        name: operationId
+        required: true
+        type: string
+      - description: File bytes (at most MINION_FILE_MAX_SIZE, 2 GiB by default)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/controller.TaskFileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload a file to send a minion
+      tags:
+      - Minion tasks
   /minion-files/{id}:
     get:
       parameters:

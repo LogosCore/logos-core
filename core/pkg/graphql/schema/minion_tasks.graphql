@@ -70,6 +70,9 @@ type MinionTask {
   # The file a file_download task's minion sends core, as far as it came;
   # null for other tasks, or before its first chunk.
   file: MinionFile
+  # The file core sends the minion for the task's file param (an upload),
+  # and how far the minion has it; null for a task without one.
+  upload: MinionTaskUpload
   # The task as core keeps it (its minion_tasks document, its result parts
   # left out), as indented JSON in the stored key order: for debugging.
   # Ids read as UUIDs, times as RFC 3339, wire_args decoded from CBOR
@@ -100,6 +103,26 @@ type MinionFile {
   contentType: String
   createdAt: String!
   doneAt: String
+}
+
+# A task's file going to its minion (docs: contracts/minion-messages.md,
+# Core sending a file). The file is as it was when the task was queued:
+# core drops the task file once its tasks end, these stay.
+type MinionTaskUpload {
+  fileId: ID!
+  name: String!
+  size: Int!
+  # The file's SHA-256 in hex.
+  sha256: String!
+  # How far the minion has it: its last ack.
+  acked: Int!
+  # WAITING (the minion has not asked for it yet), SENDING, SENT (all of it
+  # there: the minion checks it), DONE (it wrote it, its size and SHA-256
+  # the file's), FAILED or CANCELLED.
+  state: String!
+  # The minion's first ask for a chunk, and its last.
+  firstAckAt: String
+  lastAckAt: String
 }
 
 # A printable string in a kept file, as strings(1) finds it: length bytes

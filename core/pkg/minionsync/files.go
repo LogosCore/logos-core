@@ -20,6 +20,10 @@ type Files interface {
 	TakeChunk(ctx context.Context, session *models.MinionSession, c protocol.ChunkItem) (minionfiles.Reply, error)
 	// AbortTask ends a task's file still coming, for a task that ended.
 	AbortTask(ctx context.Context, taskID uuid.UUID, reason string) error
+	// ReadChunk is n bytes of a kept file from off, for a minion pulling a
+	// task file; ReleaseTaskFile drops one once no task needs it.
+	ReadChunk(ctx context.Context, fileID uuid.UUID, off int64, n int) ([]byte, error)
+	ReleaseTaskFile(ctx context.Context, fileID uuid.UUID) error
 }
 
 // WithFiles gives the service the files minions send. Without it, a chunk

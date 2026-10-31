@@ -16,7 +16,11 @@ import (
 type MinionFile struct {
 	field.DefaultField `bson:",inline"`
 
-	FileID      uuid.UUID `bson:"file_id" json:"file_id"`
+	FileID uuid.UUID `bson:"file_id" json:"file_id"`
+	// Kind is MinionFileKindTask for a task file an operator uploaded for
+	// core to send minions (UploadedBy); empty for one a minion sent.
+	Kind        string    `bson:"kind,omitempty" json:"kind,omitempty"`
+	UploadedBy  uuid.UUID `bson:"uploaded_by,omitempty" json:"uploaded_by,omitempty"`
 	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
 	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
 	TaskID      uuid.UUID `bson:"task_id" json:"task_id"`
@@ -40,6 +44,12 @@ type MinionFile struct {
 	LastChunkAt time.Time  `bson:"last_chunk_at" json:"last_chunk_at"`
 	DoneAt      *time.Time `bson:"done_at,omitempty" json:"done_at,omitempty"`
 }
+
+// MinionFileKindTask is a task file: one an operator uploaded for a task's
+// file param, which core sends the minion (docs:
+// contracts/task-results-and-actions.md, Task files). Kept COMPLETE from its
+// upload while a task that names it has not ended.
+const MinionFileKindTask = "task"
 
 // Minion file states.
 const (

@@ -22,6 +22,8 @@ import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { DirListingView } from "./dir-listing-view"
 import { FileView } from "./file-view"
+import { UploadView } from "./upload-view"
+import type { UploadTarget } from "./upload-target"
 import { TabButton } from "./tab-button"
 import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
@@ -71,6 +73,8 @@ export function TaskDetail({
   listCommands,
   onDownloadFile,
   downloadCommands,
+  onUploadHere,
+  uploadCommands,
   findSignal,
 }: {
   task: Task
@@ -86,6 +90,12 @@ export function TaskDetail({
   onDownloadFile?: (path: string, commandId: string) => void
   /** The session's download_file commands: what Download offers. */
   downloadCommands?: readonly MenuCommand[]
+  /** Uploads a file to a folder in a listing, with an upload_file command:
+   *  the folder, and the names in it when the listing shows them; absent
+   *  where the viewer may not give tasks. */
+  onUploadHere?: (target: UploadTarget, commandId: string) => void
+  /** The session's upload_file commands: what Upload here offers. */
+  uploadCommands?: readonly MenuCommand[]
   /** The session's list_dir commands, the task's own first: what List
    *  directory offers. */
   listCommands?: readonly MenuCommand[]
@@ -104,12 +114,15 @@ export function TaskDetail({
   // so an ls opens on its Data tab at once rather than on an empty Output.
   // A file_download task's file shows from its first chunk, before its data.
   const isFile = t.result === "file_download"
-  const hasData = (isFile && t.file != null) || (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
+  // A file_upload task's upload shows from its queueing, before its data.
+  const isUpload = t.result === "file_upload" && t.upload != null
+  const hasData =
+    (isFile && t.file != null) || isUpload || (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
   // The result's view, for data that fits it; the rest shows raw.
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
   const dataNotes = [
     t.dataProblem ? `The data does not fit ${t.result}: ${t.dataProblem}. It shows raw.` : null,
-    t.result && t.result !== "dir_listing" && !isFile
+    t.result && t.result !== "dir_listing" && !isFile && t.result !== "file_upload"
       ? `Its result, ${t.result}, is not one this version shows: the data shows raw.`
       : null,
     t.missingParts > 0
@@ -119,13 +132,14 @@ export function TaskDetail({
   ].filter((n): n is string => n !== null)
 
   const [tab, setTab] = useState<"output" | "data" | "json" | null>(null)
-  // Data alone shows as data; with output, the output first.
+  // Data alone shows as data; with output, the output first. An upload
+  // shows its progress first, whatever it prints.
   const shown =
     tab === "json"
       ? "json"
       : tab === "data" && hasData
         ? "data"
-        : tab === "output" || !hasData || t.outputSize > 0
+        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload)
           ? "output"
           : "data"
   const [wrap, setWrap] = useState(() => readFlag(WRAP_KEY, true))
@@ -150,7 +164,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              {isFile ? "File" : "Data"}
+              {isFile ? "File" : isUpload ? "Upload" : "Data"}
             </TabButton>
           )}
           <TabButton active={shown === "json"} onClick={() => setTab("json")} title="The task as core keeps it: for debugging">
@@ -174,7 +188,7 @@ export function TaskDetail({
               <WrapTextIcon />
             </Button>
           )}
-          {shown === "data" && (listing || (isFile && t.file && data)) && (
+          {shown === "data" && (listing || (isFile && t.file && data) || (isUpload && data)) && (
             <Button variant={rawData ? "secondary" : "ghost"} size="icon-xs" title={rawData ? "Raw JSON: show it rendered" : "Rendered: show the raw JSON"}
               aria-label="Show the data as raw JSON" aria-pressed={rawData}
               onClick={() => {
@@ -242,6 +256,8 @@ export function TaskDetail({
           )}
           {isFile && t.file && !rawData ? (
             <FileView key={t.file.id} file={t.file} />
+          ) : isUpload && !(rawData && data) ? (
+            <UploadView task={t} data={data} />
           ) : listing && !rawData ? (
             <DirListingView
               listing={listing}
@@ -249,6 +265,8 @@ export function TaskDetail({
               listCommands={listCommands}
               onDownload={onDownloadFile}
               downloadCommands={downloadCommands}
+              onUploadHere={onUploadHere}
+              uploadCommands={uploadCommands}
             />
           ) : (
             data && (

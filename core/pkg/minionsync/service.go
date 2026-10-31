@@ -398,6 +398,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	var items []cbor.RawMessage
 	var wantTasks bool
 	var wantMax *uint64
+	var pulls []pull
 	for i, raw := range msg.Items {
 		var out []cbor.RawMessage
 		var err error
@@ -440,7 +441,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)
 				break
 			}
-			out, err = s.takeAck(ctx, session, raw, i)
+			var p *pull
+			out, p, err = s.takeAck(ctx, session, raw, i)
+			if p != nil {
+				pulls = append(pulls, *p)
+			}
 		case protocol.ItemChunk:
 			if s.files == nil {
 				out, err = errItem(protocol.ErrItemUnknownItem, "no files are taken", i)
@@ -481,6 +486,14 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				return nil, err
 			}
 			items = append(items, tasks...)
+		}
+		// Chunks last: in the room the rest leaves.
+		if len(pulls) > 0 {
+			chunks, err := s.serveUploads(ctx, session, pulls, items)
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, chunks...)
 		}
 	}
 	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))

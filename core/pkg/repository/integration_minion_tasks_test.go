@@ -260,3 +260,57 @@ func TestIntegrationMinionTaskParts(t *testing.T) {
 		t.Fatalf("the gap filled: %+v", task)
 	}
 }
+
+// A task's upload: found by its session and transfer, its progress taken
+// with the first ask kept; a task file in use while one of its tasks is not
+// over; a data problem recorded once.
+func TestIntegrationMinionTaskUploads(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	if err := db.IndexSetupErr(); err != nil {
+		t.Fatalf("task indexes: %v", err)
+	}
+	session, fileID, xfer := uuid.New(), uuid.New(), []byte("0123456789abcdef")
+	task := &models.MinionTask{TaskID: uuid.New(), OperationID: uuid.New(), SessionID: session, Command: "upload",
+		State: models.MinionTaskSent, QueuedAt: time.Now().UTC(),
+		Upload: &models.MinionTaskUpload{FileID: fileID, Name: "a", Size: 10, SHA256: make([]byte, 32), Xfer: xfer}}
+	if err := repo.Insert(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.FindByUploadXfer(ctx, uuid.New(), xfer); !IsNotFound(err) {
+		t.Fatalf("another session's: %v", err)
+	}
+	if got, err := repo.FindByUploadXfer(ctx, session, xfer); err != nil || got.TaskID != task.TaskID {
+		t.Fatalf("by its transfer: %v", err)
+	}
+	t1 := time.Now().UTC().Truncate(time.Millisecond)
+	if _, err := repo.UploadAcked(ctx, task.TaskID, 0, t1); err != nil {
+		t.Fatal(err)
+	}
+	after, err := repo.UploadAcked(ctx, task.TaskID, 6, t1.Add(time.Second))
+	if err != nil || after.Upload.Acked != 6 || !after.Upload.FirstAckAt.Equal(t1) || !after.Upload.LastAckAt.Equal(t1.Add(time.Second)) ||
+		after.Rev != 3 {
+		t.Fatalf("acked: %+v %v", after.Upload, err)
+	}
+
+	if open, named, err := repo.UploadFileUse(ctx, fileID); err != nil || !open || !named {
+		t.Fatalf("in use: %v %v %v", open, named, err)
+	}
+	if open, named, _ := repo.UploadFileUse(ctx, uuid.New()); open || named {
+		t.Fatal("a file no task names: in use")
+	}
+	if _, _, err := repo.AddResult(ctx, session, task.TaskID, MinionTaskResult{Seq: 0, Done: true, At: t1}); err != nil {
+		t.Fatal(err)
+	}
+	if open, named, _ := repo.UploadFileUse(ctx, fileID); open || !named {
+		t.Fatalf("its task over: open %v, named %v", open, named)
+	}
+
+	if got, _ := repo.SetDataProblem(ctx, task.TaskID, "first"); got.DataProblem != "first" {
+		t.Fatalf("problem: %q", got.DataProblem)
+	}
+	if got, _ := repo.SetDataProblem(ctx, task.TaskID, "second"); got.DataProblem != "first" {
+		t.Fatalf("a second problem: %q", got.DataProblem)
+	}
+}

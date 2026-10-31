@@ -38,6 +38,9 @@ type IMinionFileRepository interface {
 	Idle(ctx context.Context, before time.Time) ([]models.MinionFile, error)
 	ListByOperation(ctx context.Context, operationID uuid.UUID) ([]models.MinionFile, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
+	// TaskFiles are the task files uploaded before before.
+	TaskFiles(ctx context.Context, before time.Time) ([]models.MinionFile, error)
+	Delete(ctx context.Context, fileID uuid.UUID) error
 }
 
 type minionFileRepository struct {
@@ -51,6 +54,7 @@ func NewMinionFileRepository(db database.Database) IMinionFileRepository {
 		{Key: []string{"task_id", "-createAt"}},
 		{Key: []string{"state", "last_chunk_at"}},
 		{Key: []string{"operation_id"}},
+		{Key: []string{"kind", "createAt"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	return &minionFileRepository{coll: db.Collection(minionFileCollection)}
 }
@@ -122,5 +126,19 @@ func (r *minionFileRepository) ListByOperation(ctx context.Context, operationID 
 
 func (r *minionFileRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
+	return err
+}
+
+func (r *minionFileRepository) TaskFiles(ctx context.Context, before time.Time) ([]models.MinionFile, error) {
+	var out []models.MinionFile
+	err := r.coll.Find(ctx, bson.M{"kind": models.MinionFileKindTask, "createAt": bson.M{"$lt": before}}).All(&out)
+	return out, err
+}
+
+func (r *minionFileRepository) Delete(ctx context.Context, fileID uuid.UUID) error {
+	err := r.coll.Remove(ctx, bson.M{"file_id": fileID})
+	if IsNotFound(err) {
+		return nil
+	}
 	return err
 }

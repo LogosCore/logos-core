@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -77,6 +78,8 @@ type minionTaskResolver struct {
 type TaskFiles interface {
 	File(ctx context.Context, taskID uuid.UUID) (*models.MinionFile, error)
 	FileByID(ctx context.Context, fileID uuid.UUID) (*models.MinionFile, error)
+	// TaskFile is an operation's task file, for a file param's value.
+	TaskFile(ctx context.Context, operationID uuid.UUID, id string) (*models.MinionFile, error)
 	Strings(ctx context.Context, f models.MinionFile, q minionfiles.StringsQuery) (minionfiles.StringsPage, error)
 }
 
@@ -239,18 +242,56 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if s.Closed(time.Now().UTC()) {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the session is closed: its minion takes no tasks")
 	}
+	upload, err := r.offerFile(ctx, s, commands[i].Params, wire)
+	if err != nil {
+		return nil, err
+	}
 	wireBytes, err := protocol.MarshalCBOR(wire)
 	if err != nil {
 		return nil, fmt.Errorf("encode the args: %w", err)
 	}
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
 		Args: values, WireArgs: wireBytes, Result: commands[i].Result, IssuedBy: uid, State: models.MinionTaskQueued,
-		QueuedAt: time.Now().UTC()}
+		QueuedAt: time.Now().UTC(), Upload: upload}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)
 	}
 	r.publish(t)
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// offerFile turns a file param's value, a task file's id, into the file
+// offer the task carries (protocol.FileOffer: a transfer of its own, the
+// file's name, size and SHA-256), checked against the param's accept and
+// max_size; the upload it records. Nil for a command without a file param,
+// or a task not given one.
+func (r *minionTaskResolver) offerFile(ctx context.Context, s *models.MinionSession, params []protocol.FieldSpec, wire map[string]any) (*models.MinionTaskUpload, error) {
+	i := slices.IndexFunc(params, func(p protocol.FieldSpec) bool { return p.Type == protocol.FieldFile })
+	if i < 0 {
+		return nil, nil
+	}
+	p := params[i]
+	id, ok := wire[p.Key].(string)
+	if !ok {
+		return nil, nil
+	}
+	if r.files == nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, p.Key+": core keeps no task files")
+	}
+	f, err := r.files.TaskFile(ctx, s.OperationID, id)
+	if errors.Is(err, minionfiles.ErrNoTaskFile) {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, p.Key+": "+err.Error())
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load the task file: %w", err)
+	}
+	mediaType, _, _ := strings.Cut(f.ContentType, ";")
+	if err := protocol.ValidateFile(p, protocol.BuildFile{ID: id, Name: f.Name, Size: f.Total, MediaType: mediaType}); err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s: %s: %v", p.Key, f.Name, err))
+	}
+	xfer := uuid.New()
+	wire[p.Key] = protocol.FileOffer{Xfer: xfer[:], Name: f.Name, Size: uint64(f.Total), SHA256: f.SHA256}
+	return &models.MinionTaskUpload{FileID: f.FileID, Name: f.Name, Size: f.Total, SHA256: f.SHA256, Xfer: xfer[:]}, nil
 }
 
 // answerHelp keeps a help task, answered: it goes in as already started,
@@ -533,7 +574,30 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		exit := int(*t.Exit)
 		m.Exit = &exit
 	}
+	if up := t.Upload; up != nil {
+		m.Upload = &model.MinionTaskUpload{FileID: up.FileID.String(), Name: up.Name, Size: int(up.Size),
+			Sha256: hex.EncodeToString(up.SHA256), Acked: int(up.Acked), State: uploadState(t),
+			FirstAckAt: taskTime(up.FirstAckAt), LastAckAt: taskTime(up.LastAckAt)}
+	}
 	return m, nil
+}
+
+// uploadState is where a task's upload stands (MinionTaskUpload.state).
+func uploadState(t *models.MinionTask) string {
+	up := t.Upload
+	switch {
+	case t.State == models.MinionTaskDone && t.DataProblem == "":
+		return "DONE"
+	case t.State == models.MinionTaskCancelled:
+		return "CANCELLED"
+	case t.Finished():
+		return "FAILED"
+	case up.FirstAckAt == nil:
+		return "WAITING"
+	case up.Acked < up.Size:
+		return "SENDING"
+	}
+	return "SENT"
 }
 
 func taskTime(t *time.Time) *string {

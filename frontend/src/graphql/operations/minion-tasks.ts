@@ -44,6 +44,16 @@ export const MinionTaskFields = graphql(`
       contentType
       doneAt
     }
+    upload {
+      fileId
+      name
+      size
+      sha256
+      acked
+      state
+      firstAckAt
+      lastAckAt
+    }
   }
 `)
 

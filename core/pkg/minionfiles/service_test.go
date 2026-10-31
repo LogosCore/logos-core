@@ -85,6 +85,9 @@ type memFiles struct {
 func (m *memFiles) Insert(_ context.Context, f *models.MinionFile) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if f.CreateAt.IsZero() {
+		f.CreateAt = time.Now().UTC()
+	}
 	c := *f
 	m.files[f.FileID] = &c
 	return nil
@@ -164,7 +167,37 @@ func (m *memFiles) Idle(_ context.Context, before time.Time) ([]models.MinionFil
 	return out, nil
 }
 
+func (m *memFiles) TaskFiles(_ context.Context, before time.Time) ([]models.MinionFile, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []models.MinionFile
+	for _, f := range m.files {
+		if f.Kind == models.MinionFileKindTask && f.CreateAt.Before(before) {
+			out = append(out, *f)
+		}
+	}
+	return out, nil
+}
+
+func (m *memFiles) Delete(_ context.Context, id uuid.UUID) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.files, id)
+	return nil
+}
+
 type tasks map[uuid.UUID]*models.MinionTask
+
+func (t tasks) UploadFileUse(_ context.Context, fileID uuid.UUID) (bool, bool, error) {
+	open, named := false, false
+	for _, x := range t {
+		if x.Upload != nil && x.Upload.FileID == fileID {
+			named = true
+			open = open || !x.Finished()
+		}
+	}
+	return open, named, nil
+}
 
 func (t tasks) FindByTaskID(_ context.Context, id uuid.UUID) (*models.MinionTask, error) {
 	if x, ok := t[id]; ok {

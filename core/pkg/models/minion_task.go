@@ -73,6 +73,27 @@ type MinionTask struct {
 	// DataProblem is the first part whose data does not fit the result's
 	// shape, and why: the data is then shown raw.
 	DataProblem string `bson:"data_problem,omitempty" json:"data_problem,omitempty"`
+
+	// Upload is the task file core sends the minion for the task's file
+	// param (docs: contracts/minion-messages.md, Core sending a file); nil
+	// for a task without one.
+	Upload *MinionTaskUpload `bson:"upload,omitempty" json:"upload,omitempty"`
+}
+
+// MinionTaskUpload is a task's file going to its minion: the file as it
+// was when the task was queued (the file itself is dropped once its tasks
+// end), the transfer's id, and how far the minion has it.
+type MinionTaskUpload struct {
+	FileID uuid.UUID `bson:"file_id" json:"file_id"`
+	Name   string    `bson:"name" json:"name"`
+	Size   int64     `bson:"size" json:"size"`
+	SHA256 []byte    `bson:"sha256" json:"sha256"`
+	Xfer   []byte    `bson:"xfer" json:"-"`
+	// Acked is how far the minion has the file: its last ack's next.
+	Acked int64 `bson:"acked" json:"acked"`
+	// FirstAckAt is the minion's first ask for a chunk; LastAckAt its last.
+	FirstAckAt *time.Time `bson:"first_ack_at,omitempty" json:"first_ack_at,omitempty"`
+	LastAckAt  *time.Time `bson:"last_ack_at,omitempty" json:"last_ack_at,omitempty"`
 }
 
 // MissingParts is how many parts before the done part never came: parts

@@ -33,27 +33,37 @@ func taskID(raw []byte) (uuid.UUID, error) {
 	return uuid.FromBytes(raw)
 }
 
-// takeAck records the tasks an ack says the minion received.
-func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int) ([]cbor.RawMessage, error) {
+// takeAck records the tasks an ack says the minion received; one with a
+// transfer is the minion asking for a chunk of a file core sends it
+// (uploads.go), answered once the reply's other items are in.
+func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int) ([]cbor.RawMessage, *pull, error) {
 	var ack protocol.AckItem
 	if protocol.UnmarshalCBOR(raw, &ack) != nil {
-		return errItem(protocol.ErrItemBadMessage, "the ack does not read", i)
+		out, err := errItem(protocol.ErrItemBadMessage, "the ack does not read", i)
+		return out, nil, err
 	}
 	if err := ack.Validate(); err != nil {
-		return errItem(protocol.ErrItemBadMessage, err.Error(), i)
+		out, err := errItem(protocol.ErrItemBadMessage, err.Error(), i)
+		return out, nil, err
 	}
 	ids := make([]uuid.UUID, 0, len(ack.Tasks))
 	for _, t := range ack.Tasks {
 		id, err := taskID(t)
 		if err != nil {
-			return errItem(protocol.ErrItemBadMessage, "an acked task id does not read", i)
+			out, err := errItem(protocol.ErrItemBadMessage, "an acked task id does not read", i)
+			return out, nil, err
 		}
 		ids = append(ids, id)
 	}
-	if err := s.tasks.Ack(ctx, session.SessionID, ids, s.now()); err != nil {
-		return nil, fmt.Errorf("ack tasks: %w", err)
+	if len(ids) > 0 {
+		if err := s.tasks.Ack(ctx, session.SessionID, ids, s.now()); err != nil {
+			return nil, nil, fmt.Errorf("ack tasks: %w", err)
+		}
 	}
-	return nil, nil
+	if ack.Xfer != nil {
+		return nil, &pull{xfer: ack.Xfer, next: *ack.Next, i: i}, nil
+	}
+	return nil, nil, nil
 }
 
 // takeResult keeps one part of a task's output.
@@ -91,8 +101,10 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		if res.Done {
 			s.logger.Info("minion task done", zap.String("task_id", id.String()), zap.String("state", task.State),
 				zap.String("session_id", session.SessionID.String()))
-			// A file still coming for it stops with it.
+			// A file still coming for it stops with it; one going to it
+			// is checked, and let go.
 			s.endFile(ctx, task)
+			s.endUpload(ctx, task, res)
 		}
 	}
 	return nil, nil

@@ -12,6 +12,8 @@ import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type Consol
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
+import { UploadDialog } from "./upload-dialog"
+import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
 import type { Task } from "./task-actions"
 
@@ -69,11 +71,14 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const queue = useQueueMinionTask()
   // An action on a listing's file (Download): the command picked, with the
   // path alone; the console follows the new task.
-  const runAction = (commandId: string, path: string) =>
+  const runAction = (commandId: string, args: Record<string, unknown>) =>
     queue.mutate(
-      { sessionId, command: commandId, args: { path } },
+      { sessionId, command: commandId, args },
       { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not run it")) },
     )
+  // A listing's Upload here: the folder, and the upload_file command picked,
+  // in the upload dialog until it runs.
+  const [uploadTo, setUploadTo] = useState<{ target: UploadTarget; commandId: string } | null>(null)
   const openPath = (t: Task, path: string, picked?: string) => {
     const commandId = picked ?? commandsFor(commands, "list_dir", t.command)[0]?.id
     if (!commandId) return
@@ -158,8 +163,10 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                     : undefined
                 }
                 listCommands={commandsFor(commands, "list_dir", selected.command)}
-                onDownloadFile={writable ? (path, commandId) => runAction(commandId, path) : undefined}
+                onDownloadFile={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
                 downloadCommands={commandsFor(commands, "download_file")}
+                onUploadHere={writable ? (target, commandId) => setUploadTo({ target, commandId }) : undefined}
+                uploadCommands={commandsFor(commands, "upload_file")}
                 findSignal={findSignal}
               />
             ) : (
@@ -173,8 +180,19 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           </div>
         }
       />
+      <UploadDialog
+        target={uploadTo?.target ?? null}
+        command={uploadTo ? byId.get(uploadTo.commandId) : undefined}
+        operationId={session?.operationId ?? ""}
+        onOpenChange={(open) => !open && setUploadTo(null)}
+        onSubmit={async (args) => {
+          await queue.mutateAsync({ sessionId, command: uploadTo!.commandId, args })
+          follow()
+        }}
+      />
       <CommandBar
         sessionId={sessionId}
+        operationId={session?.operationId ?? ""}
         commands={commands}
         disabled={disabledReason !== undefined}
         disabledReason={disabledReason}

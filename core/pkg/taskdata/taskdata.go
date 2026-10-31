@@ -20,11 +20,16 @@ import (
 // Check checks one part's data against its task's result, as the part
 // comes. No result takes any data.
 func Check(result string, seq uint64, data []byte) error {
-	if result == protocol.ResultDirListing {
-		_, err := protocol.ReadDirListing(seq, data)
-		return err
+	var err error
+	switch result {
+	case protocol.ResultDirListing:
+		_, err = protocol.ReadDirListing(seq, data)
+	case protocol.ResultFileDownload:
+		_, err = protocol.ReadFileDownload(seq, data)
+	case protocol.ResultFileUpload:
+		_, err = protocol.ReadFileUpload(seq, data)
 	}
-	return nil
+	return err
 }
 
 // Join is a task's data, its parts (in seq order) joined by its result's

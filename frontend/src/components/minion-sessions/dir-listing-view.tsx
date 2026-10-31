@@ -9,6 +9,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   Link2Icon,
+  UploadIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -18,14 +19,16 @@ import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import { childPath, crumbs, sortEntries, type DirEntry, type DirListing } from "./dir-listing"
 import { ActionItem, type MenuCommand } from "./action-menu"
+import type { UploadTarget } from "./upload-target"
 
 // A dir_listing task's data as a file browser (docs:
 // contracts/task-results-and-actions.md, View): the path as crumbs, up, and
 // the entries, folders first. Up and a crumb list that folder with the
 // listing's own command; an entry's actions are in its context menu (a
-// right click): List directory on a folder or a link, Download on a file, with a submenu of
-// commands when the session has more than one list_dir command, and
-// copying its path or name. onOpen is absent where the viewer may not
+// right click): List directory on a folder or a link, Download on a file,
+// Upload here on a folder (and for the folder listed, by the crumbs), with
+// a submenu of commands when the session has more than one, and copying
+// its path or name. onOpen is absent where the viewer may not
 // give tasks, who then only reads what is listed.
 
 const SHOWN = 500
@@ -38,6 +41,8 @@ export function DirListingView({
   listCommands = [],
   onDownload,
   downloadCommands = [],
+  onUploadHere,
+  uploadCommands = [],
 }: {
   listing: DirListing
   /** Lists a folder: with commandId, or the listing's own command. */
@@ -48,6 +53,10 @@ export function DirListingView({
   onDownload?: (path: string, commandId: string) => void
   /** The session's download_file commands. */
   downloadCommands?: readonly MenuCommand[]
+  /** Uploads a file to a folder with an upload_file command. */
+  onUploadHere?: (target: UploadTarget, commandId: string) => void
+  /** The session's upload_file commands. */
+  uploadCommands?: readonly MenuCommand[]
 }) {
   const [all, setAll] = useState(false)
   // The entry whose menu is open, marked while it is.
@@ -56,6 +65,7 @@ export function DirListingView({
   const shown = all ? sorted : sorted.slice(0, SHOWN)
   const path = crumbs(listing.path, listing.sep)
   const lists = (e: DirEntry) => !!onOpen && (e.type === "dir" || e.type === "link")
+  const uploads = !!onUploadHere && uploadCommands.length > 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -87,6 +97,19 @@ export function DirListingView({
         <span className="shrink-0 text-xs text-muted-foreground">
           {listing.entries.length} {listing.entries.length === 1 ? "entry" : "entries"}
         </span>
+        {uploads && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title={`Upload a file to ${listing.path} (${uploadCommands[0].id})`}
+            aria-label="Upload here"
+            onClick={() =>
+              onUploadHere!({ folder: listing.path, sep: listing.sep, names: listing.entries.map((e) => e.name) }, uploadCommands[0].id)
+            }
+          >
+            <UploadIcon />
+          </Button>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-xs">
@@ -140,6 +163,17 @@ export function DirListingView({
                           onRun={(id) => onOpen!(path, id)}
                         />
                         {listCommands.length > 0 && <ContextMenuSeparator />}
+                      </>
+                    )}
+                    {uploads && e.type === "dir" && (
+                      <>
+                        <ActionItem
+                          label="Upload here…"
+                          icon={<UploadIcon />}
+                          commands={uploadCommands}
+                          onRun={(id) => onUploadHere!({ folder: path, sep: listing.sep }, id)}
+                        />
+                        <ContextMenuSeparator />
                       </>
                     )}
                     {onDownload && e.type === "file" && downloadCommands.length > 0 && (

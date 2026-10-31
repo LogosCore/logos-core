@@ -84,6 +84,17 @@ type IMinionTaskRepository interface {
 	// Parts returns a task's output parts in seq order.
 	Parts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
+	// FindByUploadXfer is the session's task whose file goes in transfer
+	// xfer.
+	FindByUploadXfer(ctx context.Context, sessionID uuid.UUID, xfer []byte) (*models.MinionTask, error)
+	// UploadAcked records how far the minion has its task's file.
+	UploadAcked(ctx context.Context, taskID uuid.UUID, next int64, at time.Time) (*models.MinionTask, error)
+	// UploadFileUse says whether a task file is named by a task that has not
+	// ended (open), and by any task at all (named).
+	UploadFileUse(ctx context.Context, fileID uuid.UUID) (open, named bool, err error)
+	// SetDataProblem records why the task's data does not fit, unless one is
+	// recorded.
+	SetDataProblem(ctx context.Context, taskID uuid.UUID, problem string) (*models.MinionTask, error)
 }
 
 type minionTaskRepository struct {
@@ -98,6 +109,9 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		{Key: []string{"session_id", "-queued_at", "-task_id"}},
 		{Key: []string{"session_id", "state", "queued_at"}},
 		{Key: []string{"operation_id"}},
+		// A transfer's task, and the tasks of a task file.
+		{Key: []string{"session_id", "upload.xfer"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"upload.file_id"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
 		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
@@ -372,4 +386,53 @@ func (r *minionTaskRepository) DeleteByOperationID(ctx context.Context, operatio
 	}
 	_, err := r.tasks.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
+}
+
+func (r *minionTaskRepository) FindByUploadXfer(ctx context.Context, sessionID uuid.UUID, xfer []byte) (*models.MinionTask, error) {
+	var t models.MinionTask
+	if err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "upload.xfer": xfer}).One(&t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *minionTaskRepository) UploadAcked(ctx context.Context, taskID uuid.UUID, next int64, at time.Time) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "upload": bson.M{"$exists": true}}).Apply(qmgo.Change{
+		Update: bson.M{
+			"$set": bson.M{"upload.acked": next, "upload.last_ack_at": at},
+			// The first ask sets it; later ones are later.
+			"$min": bson.M{"upload.first_ack_at": at},
+			"$inc": bumpRev,
+		},
+		ReturnNew: true,
+	}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) UploadFileUse(ctx context.Context, fileID uuid.UUID) (bool, bool, error) {
+	named, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID}).Count()
+	if err != nil || named == 0 {
+		return false, false, err
+	}
+	open, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID, "state": bson.M{"$in": bson.A{
+		models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}}}).Count()
+	return open > 0, true, err
+}
+
+func (r *minionTaskRepository) SetDataProblem(ctx context.Context, taskID uuid.UUID, problem string) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "data_problem": bson.M{"$exists": false}}).Apply(qmgo.Change{
+		Update: bson.M{"$set": bson.M{"data_problem": problem}, "$inc": bumpRev}, ReturnNew: true,
+	}, &after)
+	if IsNotFound(err) {
+		return r.FindByTaskID(ctx, taskID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
 }
