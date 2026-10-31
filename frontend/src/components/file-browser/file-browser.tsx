@@ -367,6 +367,33 @@ function FolderView({
             </span>
           ))}
         </nav>
+        {/* Where the folder stands, beside its path: one row, not two. */}
+        <span className="flex min-w-0 shrink items-center gap-3 px-1 text-xs whitespace-nowrap text-muted-foreground">
+          {path !== null &&
+            (folder?.listedAt ? (
+              <span className="truncate" title={formatDateTime(folder.listedAt)}>
+                Listed {when(folder.listedAt)} by {byWhom(folder.listedBy)}
+              </span>
+            ) : (
+              <span className="truncate" title="Only what other tasks put here: Refresh lists it">
+                Never listed
+              </span>
+            ))}
+          {folder?.goneAt && <span className="truncate text-red-600 dark:text-red-400">{goneSays(folder)}</span>}
+          {here && (
+            <span className="flex shrink-0 items-center gap-1">
+              <LoaderIcon className="size-3 animate-spin" />
+              {here.label}
+            </span>
+          )}
+          {arriving.length > 0 && (
+            <span className="shrink-0">{arriving.length === 1 ? "1 upload" : `${arriving.length} uploads`} on the way</span>
+          )}
+          <span className="shrink-0 tabular-nums">
+            {entries.length.toLocaleString("en-US")}
+            {q.hasNextPage ? "+" : ""} {entries.length === 1 ? "entry" : "entries"}
+          </span>
+        </span>
         <SearchInput
           value={search}
           onValueChange={setSearch}
@@ -396,24 +423,6 @@ function FolderView({
         >
           <RefreshCwIcon className={cn(here?.action === "list_dir" && "animate-spin")} />
         </Button>
-      </div>
-      <div className="flex min-h-6 items-center gap-3 border-b px-3 py-0.5 text-xs text-muted-foreground">
-        {path === null ? (
-          <span>The machine&apos;s file systems, as its sessions have seen them.</span>
-        ) : folder?.listedAt ? (
-          <span title={formatDateTime(folder.listedAt)}>
-            Listed {when(folder.listedAt)} by {byWhom(folder.listedBy)}
-          </span>
-        ) : (
-          <span>Never listed: only what other tasks put here.</span>
-        )}
-        {folder?.goneAt && <span className="text-red-600 dark:text-red-400">{goneSays(folder)}</span>}
-        {here && <span className="flex items-center gap-1"><LoaderIcon className="size-3 animate-spin" />{here.label}</span>}
-        {arriving.length > 0 && <span>{arriving.length === 1 ? "1 upload" : `${arriving.length} uploads`} on the way</span>}
-        <span className="ml-auto tabular-nums">
-          {entries.length.toLocaleString("en-US")}
-          {q.hasNextPage ? "+" : ""} {entries.length === 1 ? "entry" : "entries"}
-        </span>
       </div>
       <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase`}>
         <SortableHeader label="Name" field="name" sort={sort} onSortChange={(s) => onSort(s.field, s.direction === "DESC")} />
