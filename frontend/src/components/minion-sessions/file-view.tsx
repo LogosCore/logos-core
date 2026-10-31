@@ -52,13 +52,16 @@ export function FileView({ file: f }: { file: File }) {
   const contentType = canonicalContentType(f.contentType) || "application/octet-stream"
   const kept = f.state === "COMPLETE"
   const kind = filePreviewKind(contentType, name, f.size)
+  // A file with a preview opens on it, first of the views; the others on
+  // their overview. Until the operator picks one, the view follows the
+  // file: a download that is kept while shown turns to its preview.
   const views: View[] = [
-    "overview",
     ...(kept && (panelPreviews(kind) || kind.imageFormat !== null) ? (["preview"] as const) : []),
+    "overview",
     ...(kept && f.size > 0 ? (["hex", "strings"] as const) : []),
   ]
-  const [picked, setPicked] = useState<View>("overview")
-  const view = views.includes(picked) ? picked : "overview"
+  const [picked, setPicked] = useState<View | null>(null)
+  const view = picked !== null && views.includes(picked) ? picked : views[0]
 
   const bytes = useByteBlocks(url, f.size)
   const [hexPlace, setHexPlace] = useState<HexPlace>({ top: 0, sel: null })
