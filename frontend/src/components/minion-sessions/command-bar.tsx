@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { ChevronRightIcon, PlayIcon, SlidersHorizontalIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,7 @@ import { commandOf, parseCommandLine, usage, words, type CommandDef } from "./co
 // The console's command line: a command of the session's build typed as a
 // line (command-line.ts), with its commands offered as the first word is
 // typed and how the line reads shown under it; ↑ and ↓ go through what was
-// run here. The form beside it fills a command's params field by field.
+// run here, and / anywhere else on the page comes to it. The form beside it fills a command's params field by field.
 
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
@@ -49,6 +49,25 @@ export function CommandBar({
   const draft = useRef("")
   const input = useRef<HTMLInputElement>(null)
   const history = histories.get(sessionId) ?? []
+
+  // / comes to the line: the one on screen (the work pane keeps the tabs
+  // behind it mounted), and not while something else takes typing or holds
+  // the keys (a field, a dialog, a menu).
+  useEffect(() => {
+    if (disabled) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return
+      const el = input.current
+      if (!el || el.getClientRects().length === 0 || document.activeElement === el) return
+      const target = e.target instanceof HTMLElement ? e.target : null
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      if (target?.closest('[role="dialog"], [role="alertdialog"], [role="menu"]')) return
+      e.preventDefault()
+      el.focus()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [disabled])
 
   // The commands the first word could be, while it is being typed.
   const typingCommand = words(line).length <= 1 && !/\s$/.test(line)
@@ -168,8 +187,12 @@ export function CommandBar({
           autoComplete="off"
           aria-label="Command"
           placeholder={commands.length > 0 ? `${commands.map((c) => c.id).join(", ")}` : "No commands"}
-          className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground/60"
+          title="The command line (/)"
+          className="peer min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground/60"
         />
+        <kbd className="rounded border px-1.5 font-mono text-[11px] text-muted-foreground peer-focus:hidden" title="Press / to type a command">
+          /
+        </kbd>
         <ParamsForm sessionId={sessionId} commands={commands} initial={command} onQueued={onQueued} />
         <Button size="xs" disabled={queue.isPending || line.trim() === ""} onClick={() => run(line)}>
           <PlayIcon />
