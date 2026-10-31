@@ -142,3 +142,43 @@ func TestUpstreamPartKeepsUploader(t *testing.T) {
 		t.Fatalf("cut short: uploader %q still", u.Uploader)
 	}
 }
+
+// A minion asking for a chunk not come yet, while an uploader sends, gets
+// it as it comes rather than a hold; with no uploader, a hold at once.
+func TestUpstreamPullWaits(t *testing.T) {
+	s, tasks, body := setupUp(t, 2*protocol.MaxChunkData)
+	s.cfg.PullWait, s.cfg.PullPoll = 2*time.Second, time.Millisecond
+	id := tasks.t.TaskID
+
+	// No uploader: hold, without waiting.
+	cur := tasks.get()
+	start := time.Now()
+	if c, a, _ := s.Pull(context.Background(), &cur, 0, protocol.MaxMinionMessageSize); c != nil || a == nil || !a.Hold ||
+		time.Since(start) > time.Second {
+		t.Fatalf("no uploader: %+v %+v after %s", c, a, time.Since(start))
+	}
+
+	// An uploader that sends a part, then the rest a moment later.
+	pr, pw := io.Pipe()
+	go func() { _, _ = s.Write(context.Background(), id, 0, int64(len(body)), pr) }()
+	_, _ = pw.Write(body[:protocol.MaxChunkData])
+	waitFor(t, "the first chunk", func() bool { return tasks.get().Upload.Received == int64(protocol.MaxChunkData) })
+	cur = tasks.get()
+	c, _, _ := s.Pull(context.Background(), &cur, 0, protocol.MaxMinionMessageSize)
+	if c == nil {
+		t.Fatal("no first chunk")
+	}
+	tasks.mu.Lock()
+	tasks.t.Upload.Acked = int64(protocol.MaxChunkData)
+	tasks.mu.Unlock()
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = pw.Write(body[protocol.MaxChunkData:])
+		_ = pw.Close()
+	}()
+	cur = tasks.get()
+	c, a, _ := s.Pull(context.Background(), &cur, int64(protocol.MaxChunkData), protocol.MaxMinionMessageSize)
+	if c == nil || c.Off != uint64(protocol.MaxChunkData) || c.SHA256 == nil {
+		t.Fatalf("waited for the last chunk: %+v %+v", c, a)
+	}
+}

@@ -71,13 +71,20 @@ type Config struct {
 	Poll time.Duration
 	// LinkTTL is the longest a signed link lasts.
 	LinkTTL time.Duration
+	// PullWait is how long a minion's ask for a stream's chunk that has
+	// not come yet waits for it while an uploader is there, and PullPoll
+	// how often it looks: the minion's asks then follow the upload, rather
+	// than being held a check-in's while each time they catch up with it.
+	PullWait time.Duration
+	PullPoll time.Duration
 }
 
 // DefaultConfig is the docs' numbers: a window of eight chunks (4 MiB), an
 // hour without a downloader.
 func DefaultConfig() Config {
 	return Config{Window: 8 * protocol.MaxChunkData, ReaderGone: 30 * time.Second, IdleAfter: time.Hour,
-		ChunkTTL: 15 * time.Minute, Poll: 50 * time.Millisecond, LinkTTL: 24 * time.Hour}
+		ChunkTTL: 15 * time.Minute, Poll: 50 * time.Millisecond, LinkTTL: 24 * time.Hour,
+		PullWait: 2 * time.Second, PullPoll: 20 * time.Millisecond}
 }
 
 type Service struct {

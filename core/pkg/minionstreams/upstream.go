@@ -179,7 +179,10 @@ func (s *Service) Write(ctx context.Context, taskID uuid.UUID, start, total int6
 }
 
 // Pull answers a minion asking for its stream's chunk from next: the chunk
-// when the buffer has it (the one before let go), or hold.
+// when the buffer has it (the one before let go), or hold. A chunk not come
+// yet while an uploader is there is waited for, PullWait at most: the
+// minion is faster than the upload, and a hold would idle it a check-in
+// (a second) each time it catches up.
 func (s *Service) Pull(ctx context.Context, t *models.MinionTask, next int64, room int) (*protocol.ChunkItem, *protocol.AckItem, error) {
 	u := t.Upload
 	if next > u.Acked {
@@ -188,6 +191,11 @@ func (s *Service) Pull(ctx context.Context, t *models.MinionTask, next int64, ro
 	}
 	if u.Sized && next >= u.Size {
 		return nil, nil, nil
+	}
+	if next >= u.Received && s.uploaderAlive(u) {
+		if after, ok := s.awaitChunk(ctx, t.TaskID, next); ok {
+			t, u = after, after.Upload
+		}
 	}
 	if next < u.Received {
 		data, err := s.buf.Get(ctx, upKey(t.TaskID, next))
@@ -219,4 +227,36 @@ func (s *Service) Pull(ctx context.Context, t *models.MinionTask, next int64, ro
 func (s *Service) upAck(u *models.MinionTaskUpload, at int64) protocol.AckItem {
 	next := uint64(at)
 	return protocol.AckItem{T: protocol.ItemAck, Xfer: u.Xfer, Next: &next, Hold: u.Received <= at && !(u.Sized && at >= u.Size)}
+}
+
+// uploaderAlive: the stream has an uploader that sent lately.
+func (s *Service) uploaderAlive(u *models.MinionTaskUpload) bool {
+	return u.Uploader != "" && u.UploaderAt != nil && u.UploaderAt.After(s.now().Add(-s.cfg.ReaderGone))
+}
+
+// awaitChunk waits, PullWait at most, for the chunk from next to come in
+// the buffer: the task as it is then, ok when it came.
+func (s *Service) awaitChunk(ctx context.Context, taskID uuid.UUID, next int64) (*models.MinionTask, bool) {
+	deadline := time.Now().Add(s.cfg.PullWait)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return nil, false
+		case <-time.After(s.cfg.PullPoll):
+		}
+		if data, err := s.buf.Get(ctx, upKey(taskID, next)); err != nil || data == "" {
+			continue
+		}
+		// Come: the task as it is now (its size, and the SHA-256 when the
+		// chunk is the last), once the uploader recorded it, a moment after
+		// it buffered it.
+		t, err := s.tasks.FindByTaskID(ctx, taskID)
+		if err != nil || t.Upload == nil {
+			return nil, false
+		}
+		if t.Upload.Received > next {
+			return t, true
+		}
+	}
+	return nil, false
 }
