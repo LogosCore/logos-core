@@ -27,6 +27,7 @@ import {
 import { Toaster } from "@/components/ui/sonner"
 import { ViewerPageBody } from "./viewer-page"
 import { Highlighted } from "./viewer-highlight"
+import { formatDateTime } from "@/lib/date-format"
 
 // Per-viewer conveniences only. Storage may be unavailable (some browsers
 // block it for file:// pages), so every access is guarded and nothing
@@ -165,7 +166,7 @@ export function ViewerApp({ tree }: { tree: ExportTree }) {
             <div className="truncate text-sm font-medium">{tree.title}</div>
             <div className="truncate text-xs text-muted-foreground">
               {tree.operation && tree.operation !== tree.title ? `${tree.operation} · ` : ""}
-              Exported {new Date(tree.exportedAt).toLocaleString()}
+              Exported {formatDateTime(tree.exportedAt)}
             </div>
           </div>
           <button

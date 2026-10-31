@@ -39,6 +39,7 @@ import {
 } from "@/graphql/hooks/wiki"
 import { useMyOperationRole } from "@/graphql/hooks/operations"
 import { useAuthStore } from "@/stores/auth"
+import { formatDate } from "@/lib/date-format"
 
 interface WikiTrashPanelProps {
   operationId: string
@@ -68,7 +69,7 @@ function formatRelativeTime(dateStr: string | null | undefined): string {
   if (diffHours < 24) return `${diffHours}h ago`
   const diffDays = Math.floor(diffHours / 24)
   if (diffDays < 30) return `${diffDays}d ago`
-  return new Date(dateStr).toLocaleDateString()
+  return formatDate(dateStr)
 }
 
 export function WikiTrashPanel({ operationId }: WikiTrashPanelProps) {

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { SessionFieldsFragment } from "@/graphql/gql/graphql"
+import { formatDate } from "@/lib/date-format"
 
 interface SessionItemProps {
   session: SessionFieldsFragment
@@ -42,7 +43,7 @@ function formatRelativeTime(dateStr: string): string {
   if (diffHours < 24) return `${diffHours}h ago`
   const diffDays = Math.floor(diffHours / 24)
   if (diffDays < 30) return `${diffDays}d ago`
-  return new Date(dateStr).toLocaleDateString()
+  return formatDate(dateStr)
 }
 
 export function SessionItem({ session, onRevoke, showUser, username }: SessionItemProps) {

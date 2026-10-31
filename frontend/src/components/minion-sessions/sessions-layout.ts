@@ -6,6 +6,7 @@ import type {
   SortDirection,
 } from "@/graphql/gql/graphql"
 import { platformLabel } from "@/components/builds/build-values"
+import { formatDateTime } from "@/lib/date-format"
 
 // The Sessions table's model: the columns an operator can show (every
 // property of a session), what each holds, and the layout they keep (columns
@@ -297,7 +298,7 @@ export function describeFilter(f: SessionFilter): string {
       return "lost"
     case "RANGE":
       if (col?.kind === "time") {
-        const at = (t: string) => new Date(t).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })
+        const at = (t: string) => formatDateTime(t)
         if (f.from && f.to) return `between ${at(f.from)} and ${at(f.to)}`
         return f.from ? `since ${at(f.from)}` : `until ${at(f.to!)}`
       }

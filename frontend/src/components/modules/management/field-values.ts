@@ -23,6 +23,7 @@ import type {
   ModuleConfigChangesQuery,
   ModuleFieldDefFieldsFragment,
 } from "@/graphql/gql/graphql"
+import { formatDateTime } from "@/lib/date-format"
 
 export type FieldDef = ModuleFieldDefFieldsFragment
 
@@ -508,9 +509,7 @@ export function formatValue(type: string, value: unknown, unit?: string | null):
   if (type === "bytes" && typeof value === "number") return humanizeBytes(value)
   if (type === "datetime" && typeof value === "string") {
     const ms = Date.parse(value)
-    return Number.isNaN(ms)
-      ? value
-      : new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+    return Number.isNaN(ms) ? value : formatDateTime(ms)
   }
   if (type === "bool" && typeof value === "boolean") return value ? "true" : "false"
   if (Array.isArray(value)) {

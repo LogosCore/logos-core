@@ -71,7 +71,6 @@ export function ActivityTab({
                   <span className="text-xs text-muted-foreground">rev {c.revision}</span>
                   <FormattedDateTimeText
                     date={c.at}
-                    format="yyyy.mm.dd hh:MM:ss"
                     className="ml-auto text-xs text-muted-foreground"
                   />
                 </div>
@@ -119,7 +118,6 @@ export function ActivityTab({
                 </Button>
                 <FormattedDateTimeText
                   date={inv.startedAt}
-                  format="yyyy.mm.dd hh:MM:ss"
                   className="ml-auto text-xs text-muted-foreground"
                 />
               </div>

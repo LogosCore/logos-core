@@ -1,4 +1,5 @@
 import { StateIndicator, type StateHint, type StateTone } from "./state-indicator"
+import { formatDateTime } from "@/lib/date-format"
 
 // Registration as core sees it. Registered is green, deregistered a neutral
 // "gone on purpose" amber, dead a failure red, blocked an operator's red.
@@ -42,7 +43,7 @@ export function ModuleStatusIndicator({
 }) {
   const s = STATES[status] ?? { tone: "bad" as const, hint: { title: status, body: "Unknown registration state." } }
   const detail = lastHeartbeatAt
-    ? `Last heartbeat ${new Date(lastHeartbeatAt).toLocaleString()}`
+    ? `Last heartbeat ${formatDateTime(lastHeartbeatAt)}`
     : "No heartbeat received yet."
   return (
     <StateIndicator tone={s.tone} hint={{ ...s.hint, detail }}>

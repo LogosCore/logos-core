@@ -21,9 +21,10 @@ import { lineOf, type CommandDef } from "./command-line"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
+import { formatDateTime } from "@/lib/date-format"
 
-// The right of a session's console: the task picked in the list, whole.
-// Its command, where it stands and who gave it, what can be done with it,
+// The right of a session's console: the task picked in the list, whole
+// (its command is the list's row): where it stands and who gave it, what can be done with it,
 // and what came back: the output as text, read again as more comes (Ctrl+F
 // finds in it), and any data the command gave (an ls as a table, the rest
 // as JSON). The raw bytes download as they came.
@@ -78,8 +79,15 @@ export function TaskDetail({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex flex-col gap-1 border-b px-3 py-2">
-        <div className="flex items-start gap-2">
-          <code className="min-w-0 flex-1 font-mono text-sm break-all whitespace-pre-wrap">{line}</code>
+        {/* The command itself is the list's picked row. */}
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+            <StateLabel t={t} />
+            <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
+              by {t.issuedByName ?? "someone gone"}
+            </span>
+            <TaskTimes t={t} />
+          </div>
           <div className="flex shrink-0 items-center gap-0.5">
             <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
               onClick={() => void actions.copyOutput(detail ? output : undefined)}>
@@ -101,13 +109,6 @@ export function TaskDetail({
               </Button>
             )}
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <StateLabel t={t} />
-          <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
-            by {t.issuedByName ?? "someone gone"}
-          </span>
-          <TaskTimes t={t} />
         </div>
         {t.err && <div className="font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
       </div>
@@ -365,7 +366,7 @@ function DataView({ data }: { data: Record<string, unknown> }) {
               <td className="px-3 py-1 text-right whitespace-nowrap text-muted-foreground tabular-nums">{e.dir ? "" : size(e.size)}</td>
               <td className="px-3 py-1 font-mono whitespace-nowrap text-muted-foreground">{e.mode}</td>
               <td className="px-3 py-1 whitespace-nowrap text-muted-foreground" title={e.modified ? formatAbsolute(e.modified) : undefined}>
-                {e.modified ? new Date(e.modified).toLocaleString() : ""}
+                {e.modified ? formatDateTime(e.modified) : ""}
               </td>
             </tr>
           ))}

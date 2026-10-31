@@ -4,6 +4,7 @@ import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { fetchMinionTaskOutput, useCancelMinionTask, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatInterval } from "./sessions-layout"
+import { formatTime } from "@/lib/date-format"
 
 // What the console's task list and the task it shows share: a task's
 // times, and what can be done with it (task-state.tsx draws where it
@@ -15,7 +16,7 @@ export const FINISHED = new Set(["DONE", "FAILED", "CANCELLED"])
 
 /** HH:MM:SS of a time. */
 export function clock(at: string): string {
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
+  return formatTime(at)
 }
 
 /** How long it ran, from when it went out to its end. */

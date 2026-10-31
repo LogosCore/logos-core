@@ -368,7 +368,7 @@ function InvocationsTable({ instance, actions }: { instance: string; actions: re
                         {open ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        <FormattedDateTimeText date={inv.startedAt} format="yyyy.mm.dd hh:MM:ss" />
+                        <FormattedDateTimeText date={inv.startedAt} />
                       </TableCell>
                       <TableCell>{labelOf(inv.action)}</TableCell>
                       <TableCell>{actorLabel(inv.actor)}</TableCell>

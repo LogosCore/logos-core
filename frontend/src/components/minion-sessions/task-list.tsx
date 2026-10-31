@@ -1,15 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
+import { Fragment, useEffect, useLayoutEffect, useRef, type KeyboardEvent } from "react"
 import { ArrowDownIcon, CopyIcon, RotateCcwIcon, SquareIcon, TerminalIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { formatAbsolute } from "@/lib/relative-time"
+import { dayGroup, formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
 import { clock, useTaskActions, type Task } from "./task-actions"
 import { StateIcon } from "./task-state"
 
 // The left of a session's console: its tasks, a row each, oldest at the
-// top and the newest at the bottom by the command line. A click or ↑ and ↓
+// top and the newest at the bottom by the command line, under a heading
+// for each day. A click or ↑ and ↓
 // pick the one shown beside it; a row's context menu stops it, runs it
 // again, or copies its command or output. Older tasks load at the top.
 
@@ -47,6 +48,8 @@ export function TaskList({
   onFollow: () => void
 }) {
   const list = useRef<HTMLDivElement>(null)
+  // Today and Yesterday are as of this render.
+  const now = new Date()
 
   // Following, the list stays at the bottom as tasks come; otherwise the
   // picked one is kept in view.
@@ -78,7 +81,7 @@ export function TaskList({
         aria-label="Tasks"
         tabIndex={0}
         onKeyDown={onKeyDown}
-        className="min-h-0 flex-1 overflow-y-auto py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="min-h-0 flex-1 overflow-y-auto pb-1 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         {hasOlder && (
           <div className="flex justify-center py-1">
@@ -88,17 +91,23 @@ export function TaskList({
           </div>
         )}
         {tasks.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">No tasks yet.</p>}
-        {tasks.map((t) => (
-          <TaskRow
-            key={t.id}
-            task={t}
-            command={commands.get(t.command)}
-            selected={t.id === selectedId}
-            onSelect={() => onSelect(t.id)}
-            onQueued={onQueued}
-            canWrite={canWrite}
-          />
-        ))}
+        {tasks.map((t, i) => {
+          const day = dayGroup(t.queuedAt, now)
+          const newDay = i === 0 || dayGroup(tasks[i - 1].queuedAt, now).key !== day.key
+          return (
+            <Fragment key={t.id}>
+              {newDay && <DaySeparator label={day.label} />}
+              <TaskRow
+                task={t}
+                command={commands.get(t.command)}
+                selected={t.id === selectedId}
+                onSelect={() => onSelect(t.id)}
+                onQueued={onQueued}
+                canWrite={canWrite}
+              />
+            </Fragment>
+          )
+        })}
       </div>
       {moved && (
         <button
@@ -112,6 +121,15 @@ export function TaskList({
           <code className="min-w-0 truncate font-mono">{lineOf(moved.task.command, moved.task.args as Record<string, unknown> | null)}</code>
         </button>
       )}
+    </div>
+  )
+}
+
+/** Where a day's tasks start, as in a messenger: it stays at the top while its day scrolls by. */
+function DaySeparator({ label }: { label: string }) {
+  return (
+    <div role="presentation" className="sticky top-0 z-10 flex justify-center bg-background/90 py-1 backdrop-blur-sm">
+      <span className="rounded-full border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground tabular-nums">{label}</span>
     </div>
   )
 }

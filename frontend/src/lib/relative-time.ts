@@ -1,5 +1,10 @@
 // Human-friendly time helpers. No date library — the project has none and
-// this is all we need.
+// this is all we need. Dates and times are in the app's format
+// (lib/date-format.ts), never the browser locale's.
+
+import { DATE_TIME, formatDate, formatDateTime } from "./date-format"
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 const MINUTE = 60 * 1000
 const HOUR = 60 * MINUTE
@@ -26,28 +31,16 @@ export function relativeTime(input: string | Date, now: Date = new Date()): stri
   }
 
   if (diff < 7 * DAY) {
-    return `${date.toLocaleDateString(undefined, { weekday: "short" })} at ${formatClock(date)}`
+    return `${WEEKDAYS[date.getDay()]} at ${formatClock(date)}`
   }
 
   // Older than a week: drop time.
-  const sameYear = date.getFullYear() === now.getFullYear()
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: sameYear ? undefined : "numeric",
-  })
+  return formatDate(date)
 }
 
+/** The full time, yyyy.mm.dd hh:mm:ss: a tooltip's, beside a relative one. */
 export function formatAbsolute(input: string | Date): string {
-  const date = typeof input === "string" ? new Date(input) : input
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  })
+  return formatDateTime(input, DATE_TIME)
 }
 
 // Day-group bucketing. Returns a stable key + display label.
@@ -62,15 +55,8 @@ export function dayGroup(input: string | Date, now: Date = new Date()): { key: s
   yesterday.setDate(yesterday.getDate() - 1)
   if (isSameDay(date, yesterday)) return { key: "yesterday", label: "Yesterday" }
 
-  const sameYear = date.getFullYear() === now.getFullYear()
   const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
-  const label = date.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: sameYear ? undefined : "numeric",
-  })
-  return { key, label }
+  return { key, label: `${formatDate(date)}, ${WEEKDAYS[date.getDay()]}` }
 }
 
 // Visit-history bucketing. Coarser than dayGroup: collapses days 2–7 into a
@@ -98,14 +84,8 @@ export function historyGroup(
     return { key: "2-7d", label: "2–7 days ago" }
   }
 
-  const sameYear = date.getFullYear() === now.getFullYear()
   const key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
-  const label = date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: sameYear ? undefined : "numeric",
-  })
-  return { key, label }
+  return { key, label: formatDate(date) }
 }
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -117,5 +97,5 @@ function isSameDay(a: Date, b: Date): boolean {
 }
 
 function formatClock(date: Date): string {
-  return date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+  return formatDateTime(date, "hh:MM")
 }

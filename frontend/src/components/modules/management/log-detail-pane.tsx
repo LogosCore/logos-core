@@ -5,6 +5,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { cn } from "@/lib/utils"
 import type { LogLine } from "./log-buffer"
 import { detailSections, recordJSON, type DetailRow } from "./log-detail"
+import { formatDateTime } from "@/lib/date-format"
 
 const LEVEL_BADGE: Record<LogLine["level"], string> = {
   DEBUG: "bg-muted text-muted-foreground",
@@ -43,7 +44,7 @@ export function LogDetailPane({ line, onClose, className }: LogDetailPaneProps) 
               {line.level}
             </span>
             <time className="text-xs text-muted-foreground tabular-nums" dateTime={line.time} title={line.time}>
-              {local.toLocaleDateString()} {local.toLocaleTimeString()}.{String(local.getMilliseconds()).padStart(3, "0")}
+              {formatDateTime(local, "yyyy.mm.dd hh:MM:ss.SSS")}
             </time>
           </div>
           <p className="text-sm font-medium break-words">{line.message}</p>

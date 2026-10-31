@@ -171,7 +171,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function DateOrDash({ date }: { date?: string | null }) {
-  return date ? <FormattedDateTimeText date={date} format="yyyy.mm.dd hh:MM:ss" /> : <>—</>
+  return date ? <FormattedDateTimeText date={date} /> : <>—</>
 }
 
 export function ModuleIdentity({ module }: { module: ModuleDetailFieldsFragment }) {
