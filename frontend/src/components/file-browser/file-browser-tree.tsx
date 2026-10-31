@@ -27,16 +27,20 @@ export function FolderTree({
 }) {
   return (
     <nav aria-label="Folders" className="min-h-0 flex-1 overflow-auto py-1 text-xs [scrollbar-width:thin]">
-      <Folders
-        sessionId={sessionId}
-        path={null}
-        depth={0}
-        showDeleted={showDeleted}
-        current={current}
-        expanded={expanded}
-        onToggle={onToggle}
-        onOpen={onOpen}
-      />
+      {/* As wide as its widest row: a deep or long name scrolls sideways
+          rather than being cut. */}
+      <div className="w-max min-w-full">
+        <Folders
+          sessionId={sessionId}
+          path={null}
+          depth={0}
+          showDeleted={showDeleted}
+          current={current}
+          expanded={expanded}
+          onToggle={onToggle}
+          onOpen={onOpen}
+        />
+      </div>
     </nav>
   )
 }
@@ -77,7 +81,7 @@ function Folders({
       </div>
     )
   if (path === null && folders.length === 0)
-    return <p className="px-3 py-2 text-muted-foreground">Nothing seen yet: list a folder (ls) in the session&apos;s console, or Refresh here.</p>
+    return <p className="max-w-xs px-3 py-2 text-muted-foreground">Nothing seen yet: list a folder (ls) in the session&apos;s console, or Refresh here.</p>
   return (
     <>
       {folders.map((f) => (
@@ -154,7 +158,7 @@ function FolderNode({
           <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         </button>
         <Icon className={cn("size-3.5 shrink-0", f.parent ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
-        <span className="truncate font-mono">{f.name}</span>
+        <span className="font-mono whitespace-nowrap">{f.name}</span>
       </div>
       {open && (
         <Folders
