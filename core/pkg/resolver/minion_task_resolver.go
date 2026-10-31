@@ -158,11 +158,13 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	}
 	var out []protocol.BuildCommand
 	for _, c := range sc.Commands {
-		if slices.Contains(b.Commands, c.ID) {
+		// help is core's own: a schema from before it was reserved does not
+		// shadow it.
+		if slices.Contains(b.Commands, c.ID) && c.ID != protocol.CommandHelp {
 			out = append(out, c)
 		}
 	}
-	return &sc.BuildSchema, out, nil
+	return &sc.BuildSchema, append(out, helpCommand(out)), nil
 }
 
 func (r *minionTaskResolver) MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error) {
@@ -185,9 +187,6 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	s, err := r.session(ctx, sessionID, models.OperationRoleOperator)
 	if err != nil {
 		return nil, err
-	}
-	if s.Closed(time.Now().UTC()) {
-		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the session is closed: its minion takes no tasks")
 	}
 	values := map[string]any{}
 	if args != nil {
@@ -213,6 +212,13 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if err != nil {
 		return nil, err
 	}
+	if command == protocol.CommandHelp {
+		topic, _ := protocol.ArgString(wire, "command")
+		return r.answerHelp(ctx, s, uid, values, helpText(commands, topic))
+	}
+	if s.Closed(time.Now().UTC()) {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the session is closed: its minion takes no tasks")
+	}
 	wireBytes, err := protocol.MarshalCBOR(wire)
 	if err != nil {
 		return nil, fmt.Errorf("encode the args: %w", err)
@@ -224,6 +230,28 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	r.publish(t)
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// answerHelp keeps a help task, answered: it goes in as already started,
+// so no get_tasks hands it to the minion, and ends with text as its
+// output, as a minion's last result would. A closed session's commands
+// can be read too.
+func (r *minionTaskResolver) answerHelp(ctx context.Context, s *models.MinionSession, uid uuid.UUID, values map[string]any, text string) (*model.MinionTask, error) {
+	now := time.Now().UTC()
+	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: protocol.CommandHelp,
+		Args: values, IssuedBy: uid, State: models.MinionTaskRunning, QueuedAt: now, AckedAt: &now, StartedAt: &now}
+	if err := r.tasks.Insert(ctx, t); err != nil {
+		return nil, fmt.Errorf("keep the help task: %w", err)
+	}
+	ok := true
+	after, _, err := r.tasks.AddResult(ctx, s.SessionID, t.TaskID, repository.MinionTaskResult{
+		Seq: 1, Done: true, OK: &ok, Out: []byte(text), At: now,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("answer the help task: %w", err)
+	}
+	r.publish(after)
+	return r.toModel(ctx, after, r.names(ctx, []models.MinionTask{*after}))
 }
 
 // problemsText is a TaskArgs report as one message, by param.
