@@ -69,9 +69,9 @@ export function FileView({ file: f }: { file: File }) {
   const [stringsFilter, setStringsFilter] = useState<MinionFileStringsFilter>(DEFAULT_STRINGS_FILTER)
 
   const LABEL: Record<View, string> = { overview: "Overview", preview: "Preview", hex: "Hex", strings: "Strings" }
-  // heading: the file's name beside the tabs, where the view has no other
-  // word of which file it is (the preview).
-  const toolbar = (tools: ReactNode, heading = false) => (
+  // The file's name beside the tabs, in every view: which file it is stays
+  // in sight.
+  const toolbar = (tools: ReactNode) => (
     <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1">
       <div className="flex shrink-0 items-center gap-1">
         {views.map((v) => (
@@ -80,13 +80,11 @@ export function FileView({ file: f }: { file: File }) {
           </TabButton>
         ))}
       </div>
-      {heading && (
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 px-1" title={f.name}>
-          <FileTypeIcon contentType={contentType} filename={name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
-          <span className="truncate font-mono text-xs font-medium">{name}</span>
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatBytes(f.size)}</span>
-        </span>
-      )}
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5 px-1" title={f.name}>
+        <FileTypeIcon contentType={contentType} filename={name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
+        <span className="truncate font-mono text-xs font-medium">{name}</span>
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatBytes(f.size)}</span>
+      </span>
       {tools && <div className="ml-auto flex items-center gap-1">{tools}</div>}
     </div>
   )
@@ -99,7 +97,7 @@ export function FileView({ file: f }: { file: File }) {
   if (view === "preview") {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        {toolbar(download, true)}
+        {toolbar(download)}
         <FilePreviewPane url={url} kind={kind} filename={name} size={f.size} />
       </div>
     )
