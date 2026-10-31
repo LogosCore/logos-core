@@ -19,7 +19,10 @@ import { fileBrowserTabId, workspaceTab, WorkspaceActionsContext, type Workspace
 // of their machines ("File Browser" in the menu, file-browser.tsx).
 
 export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; onTabsChange: (next: WorkPaneTabs) => void }) {
-  const sessions = useMinionSessions(tabs.ids.map((id) => workspaceTab(id).sessionId))
+  // A session's console and its file browser are one session: read once.
+  const sessionIds = [...new Set(tabs.ids.map((id) => workspaceTab(id).sessionId))]
+  const loaded = useMinionSessions(sessionIds)
+  const sessionOf = (id: string) => loaded[sessionIds.indexOf(workspaceTab(id).sessionId)]
   // A closed file browser's state goes with it.
   const change = (next: WorkPaneTabs) => {
     for (const id of tabs.ids) if (!next.ids.includes(id) && workspaceTab(id).kind === "files") dropFileBrowserState(id)
@@ -48,9 +51,9 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
     <WorkspaceActionsContext value={actions}>
     <WorkPane
       label="Sessions being worked with"
-      tabs={tabs.ids.map((id, i) => {
+      tabs={tabs.ids.map((id) => {
         // A tab looks as its session's row: the caller's mark, color or style.
-        const color = sessions[i]?.mark?.color
+        const color = sessionOf(id)?.mark?.color
         return {
           id,
           label: <SessionTabLabel id={id} />,

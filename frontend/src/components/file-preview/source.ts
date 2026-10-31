@@ -233,6 +233,9 @@ export function useRenderedPreview(
         if (!cancelled) setBody(rendered)
       } catch (err: unknown) {
         if (cancelled) return
+        // Shown as a line in the panel; the console gets it whole, with
+        // where it was thrown.
+        console.error("File preview:", url, err)
         setError(err instanceof Error ? err.message : "Couldn't load preview.")
       }
     })()
