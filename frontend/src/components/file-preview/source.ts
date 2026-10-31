@@ -223,10 +223,15 @@ export function useRenderedPreview(
     if (body !== null || error !== null) return
 
     let cancelled = false
+    // A read the effect no longer wants is stopped (React runs effects twice
+    // in development), and each read skips the browser's cache: Firefox has
+    // a second read of a URL wait on the first's cache entry, and a file over
+    // its in-memory entry limit (5 MB) gets that read aborted.
+    const abort = new AbortController()
 
     void (async () => {
       try {
-        const res = await fetch(url, { credentials: "same-origin" })
+        const res = await fetch(url, { credentials: "same-origin", cache: "no-store", signal: abort.signal })
         if (!res.ok) throw new Error(`Couldn't load preview (HTTP ${res.status}).`)
 
         const rendered = await renderByKind(res, kind)
@@ -242,6 +247,7 @@ export function useRenderedPreview(
 
     return () => {
       cancelled = true
+      abort.abort()
     }
   }, [active, url, kind, body, error])
 
