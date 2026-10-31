@@ -7,14 +7,14 @@ import { formatBytes } from "@/lib/format-bytes"
 import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
 import { childPath, crumbs, sortEntries, type DirEntry, type DirListing } from "./dir-listing"
-import { HandlerActionItem, type MenuCommand } from "./handler-menu"
+import { ActionItem, type MenuCommand } from "./action-menu"
 
 // A dir_listing task's data as a file browser (docs:
-// contracts/task-result-handlers.md, View): the path as crumbs, up, and
+// contracts/task-results-and-actions.md, View): the path as crumbs, up, and
 // the entries, folders first. Up and a crumb list that folder with the
 // listing's own command; an entry's actions are in its context menu (a
 // right click): List directory on a folder or a link, with a submenu of
-// commands when the session has more than one dir_listing command, and
+// commands when the session has more than one list_dir command, and
 // copying its path or name. onOpen is absent where the viewer may not
 // give tasks, who then only reads what is listed.
 
@@ -30,7 +30,7 @@ export function DirListingView({
   listing: DirListing
   /** Lists a folder: with commandId, or the listing's own command. */
   onOpen?: (path: string, commandId?: string) => void
-  /** The session's dir_listing commands, the listing's own first. */
+  /** The session's list_dir commands, the listing's own first. */
   listCommands?: readonly MenuCommand[]
 }) {
   const [all, setAll] = useState(false)
@@ -117,7 +117,7 @@ export function DirListingView({
                   <ContextMenuContent>
                     {lists(e) && (
                       <>
-                        <HandlerActionItem
+                        <ActionItem
                           label="List directory"
                           icon={<FolderOpenIcon />}
                           commands={listCommands}

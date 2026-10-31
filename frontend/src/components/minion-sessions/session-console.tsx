@@ -12,7 +12,7 @@ import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type Consol
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
 import { TaskList } from "./task-list"
-import { commandsFor } from "./handler-commands"
+import { commandsFor } from "./action-commands"
 import type { Task } from "./task-actions"
 
 // A session's console, in its work pane tab: the tasks given its minion on
@@ -40,7 +40,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         id: c.id,
         label: c.label,
         description: c.description,
-        handler: c.handler,
+        result: c.result,
+        action: c.action,
         fields: c.params,
         params: c.params.map((p) => ({ key: p.key, type: p.type, label: p.label, required: p.required, default: p.default })),
       })),
@@ -61,11 +62,14 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const moved = newestMoved(tasks, selection)
   // A task the operator runs is the newest: shown, and followed.
   const follow = () => setSelection(FOLLOWING)
-  // A folder opened in a listing: its own command again on the path, its
-  // other args as they were; another dir_listing command with the path alone
-  // (the rest its defaults).
+  // A folder opened in a listing, with a list_dir command: the one picked
+  // (an item's menu), else the listing's own when it is one (Up, a crumb),
+  // else the session's first. The listing's own keeps its other args;
+  // another runs with path alone, the rest its defaults.
   const queue = useQueueMinionTask()
-  const openPath = (t: Task, path: string, commandId = t.command) =>
+  const openPath = (t: Task, path: string, picked?: string) => {
+    const commandId = picked ?? commandsFor(commands, "list_dir", t.command)[0]?.id
+    if (!commandId) return
     queue.mutate(
       {
         sessionId,
@@ -74,6 +78,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
       },
       { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not list the folder")) },
     )
+  }
   // Ctrl+F anywhere in the console finds in the output shown.
   const [findSignal, setFindSignal] = useState(0)
 
@@ -139,8 +144,13 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 command={byId.get(selected.command)}
                 canWrite={writable}
                 onQueued={follow}
-                onOpenPath={writable ? (path, commandId) => openPath(selected, path, commandId) : undefined}
-                listCommands={commandsFor(commands, "dir_listing", selected.command)}
+                // No list_dir command: a listing is read, not browsed.
+                onOpenPath={
+                  writable && commandsFor(commands, "list_dir").length > 0
+                    ? (path, commandId) => openPath(selected, path, commandId)
+                    : undefined
+                }
+                listCommands={commandsFor(commands, "list_dir", selected.command)}
                 findSignal={findSignal}
               />
             ) : (

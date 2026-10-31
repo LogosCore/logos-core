@@ -32,9 +32,9 @@ type MinionTaskResult struct {
 	// Data is the part's data, the CBOR map as it came.
 	Data []byte
 	At   time.Time
-	// Check checks Data against the task's handler (taskdata.Check); nil:
+	// Check checks Data against the task's result (taskdata.Check); nil:
 	// no check.
-	Check func(handler string, seq uint64, data []byte) error
+	Check func(result string, seq uint64, data []byte) error
 }
 
 // ErrMinionTaskEnded is AddResult's answer to a part for a task that
@@ -204,7 +204,7 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	}
 	problem := ""
 	if len(data) > 0 && t.DataProblem == "" && res.Check != nil {
-		if err := res.Check(t.Handler, res.Seq, data); err != nil {
+		if err := res.Check(t.Result, res.Seq, data); err != nil {
 			problem = fmt.Sprintf("part %d: %v", res.Seq, err)
 		}
 	}

@@ -29,10 +29,10 @@ type MinionTask struct {
 	// task carries them in their CBOR forms, defaults filled in.
 	Command string  `bson:"command" json:"command"`
 	Args    JSONMap `bson:"args,omitempty" json:"args,omitempty"`
-	// Handler is the command's result handler when it was queued
-	// (protocol.BuildCommand.Handler): the shape its data is checked
+	// Result is the command's result when it was queued
+	// (protocol.BuildCommand.Result): the shape its data is checked
 	// against and joined by. Empty: no declared shape.
-	Handler string `bson:"handler,omitempty" json:"handler,omitempty"`
+	Result string `bson:"result,omitempty" json:"result,omitempty"`
 	// WireArgs are the args as the task carries them (protocol.TaskArgs),
 	// CBOR-encoded: checked against the command's params when queued, so
 	// delivery needs no schema; kept as bytes, so a duration's milliseconds
@@ -70,7 +70,7 @@ type MinionTask struct {
 	OutTruncated  bool  `bson:"out_truncated,omitempty" json:"out_truncated,omitempty"`
 	DataSize      int64 `bson:"data_size,omitempty" json:"data_size,omitempty"`
 	DataTruncated bool  `bson:"data_truncated,omitempty" json:"data_truncated,omitempty"`
-	// DataProblem is the first part whose data does not fit the handler's
+	// DataProblem is the first part whose data does not fit the result's
 	// shape, and why: the data is then shown raw.
 	DataProblem string `bson:"data_problem,omitempty" json:"data_problem,omitempty"`
 }
@@ -115,7 +115,7 @@ func (t MinionTask) Finished() bool {
 // MinionTaskPart is one result part of a task, kept as the minion sent it:
 // Out raw bytes (in the host's own encoding), DataCBOR the command's
 // structured output, the CBOR map as it came (docs:
-// contracts/task-result-handlers.md, How core keeps data). Unique by
+// contracts/task-results-and-actions.md, How core keeps data). Unique by
 // (task, seq): a part sent again changes nothing.
 type MinionTaskPart struct {
 	field.DefaultField `bson:",inline"`

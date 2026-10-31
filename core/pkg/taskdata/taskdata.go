@@ -1,6 +1,6 @@
 // Package taskdata is what core does with a task's data (docs:
-// contracts/task-result-handlers.md): checks each part against the task's
-// result handler as it comes, joins the parts when the data is read, and
+// contracts/task-results-and-actions.md): checks each part against the
+// task's result as it comes, joins the parts when the data is read, and
 // converts it to JSON for the web app by one mapping. Parts keep their
 // data as the CBOR it came in (models.MinionTaskPart.DataCBOR); this
 // package decodes it when it is needed.
@@ -17,22 +17,22 @@ import (
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
-// Check checks one part's data against handler, as the part comes. A
-// handler this core does not know, or none, takes any data.
-func Check(handler string, seq uint64, data []byte) error {
-	if handler == protocol.HandlerDirListing {
+// Check checks one part's data against its task's result, as the part
+// comes. No result takes any data.
+func Check(result string, seq uint64, data []byte) error {
+	if result == protocol.ResultDirListing {
 		_, err := protocol.ReadDirListing(seq, data)
 		return err
 	}
 	return nil
 }
 
-// Join is a task's data, its parts (in seq order) joined by its handler's
+// Join is a task's data, its parts (in seq order) joined by its result's
 // rule, as JSON values (Value): nil when no part has data. A task whose
-// data did not fit its handler (t.DataProblem) is joined by the generic
+// data did not fit its result (t.DataProblem) is joined by the generic
 // rule, to be shown raw.
 func Join(t models.MinionTask, parts []models.MinionTaskPart) (any, error) {
-	if t.Handler == protocol.HandlerDirListing && t.DataProblem == "" {
+	if t.Result == protocol.ResultDirListing && t.DataProblem == "" {
 		return joinDirListing(parts)
 	}
 	return joinGeneric(parts)

@@ -228,7 +228,7 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		return nil, fmt.Errorf("encode the args: %w", err)
 	}
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
-		Args: values, WireArgs: wireBytes, Handler: commands[i].Handler, IssuedBy: uid, State: models.MinionTaskQueued,
+		Args: values, WireArgs: wireBytes, Result: commands[i].Result, IssuedBy: uid, State: models.MinionTaskQueued,
 		QueuedAt: time.Now().UTC()}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)
@@ -423,7 +423,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts,
-		Handler: strPtr(t.Handler), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
+		Result: strPtr(t.Result), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
 	}
 	if name, ok := names[t.IssuedBy]; ok {

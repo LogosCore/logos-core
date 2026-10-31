@@ -231,7 +231,7 @@ func TestIntegrationMinionTaskParts(t *testing.T) {
 	session, t0 := uuid.New(), time.Now().UTC().Truncate(time.Millisecond)
 	id := uuid.New()
 	if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: uuid.New(), SessionID: session, Command: "ls",
-		Handler: protocol.HandlerDirListing, State: models.MinionTaskSent, QueuedAt: t0}); err != nil {
+		Result: protocol.ResultDirListing, State: models.MinionTaskSent, QueuedAt: t0}); err != nil {
 		t.Fatal(err)
 	}
 	add := func(r MinionTaskResult) *models.MinionTask {
@@ -245,7 +245,7 @@ func TestIntegrationMinionTaskParts(t *testing.T) {
 	}
 	task := add(MinionTaskResult{Seq: 0, Data: cborData(t, protocol.DirListing{Path: "/tmp", Sep: "/",
 		Entries: []protocol.DirEntry{{Name: "a", Type: protocol.DirEntryFile}}})})
-	if task.DataProblem != "" || task.Handler != protocol.HandlerDirListing {
+	if task.DataProblem != "" || task.Result != protocol.ResultDirListing {
 		t.Fatalf("a fitting part: %+v", task)
 	}
 	// Part 1 is lost; part 2 names the directory again, which only the first may.

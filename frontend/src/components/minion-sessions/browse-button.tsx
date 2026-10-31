@@ -15,17 +15,17 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import type { ConsoleCommand } from "./command-bar"
-import { chooseHandlerCommand, handlerCommands, readPicked, savePicked } from "./handler-commands"
+import { actionCommands, chooseActionCommand, readPicked, savePicked } from "./action-commands"
 
-// Browse files: a session's dir_listing command run from the console, with
-// its defaults alone (the handler's params, the rest their defaults: the
+// Browse files: a session's list_dir command run from the console, with
+// its defaults alone (the action's params, the rest their defaults: the
 // minion's working directory, or wherever the command's path defaults to).
 // The listing shows as a file browser, its folders opening from there.
-// With several dir_listing commands, the one the operator picks for the
-// session, else the factory's first (handler-commands.ts); the menu beside
+// With several list_dir commands, the one the operator picks for the
+// session, else the factory's first (action-commands.ts); the menu beside
 // it picks another, and runs it.
 
-const HANDLER = "dir_listing"
+const ACTION = "list_dir"
 
 export function BrowseButton({
   sessionId,
@@ -37,9 +37,9 @@ export function BrowseButton({
   onQueued?: (task: MinionTaskFieldsFragment) => void
 }) {
   const queue = useQueueMinionTask()
-  const [picked, setPicked] = useState(() => readPicked(sessionId, HANDLER))
-  const candidates = handlerCommands(commands, HANDLER)
-  const chosen = chooseHandlerCommand(candidates, picked)
+  const [picked, setPicked] = useState(() => readPicked(sessionId, ACTION))
+  const candidates = actionCommands(commands, ACTION)
+  const chosen = chooseActionCommand(candidates, picked)
   if (!chosen) return null
 
   const browse = (id: string) =>
@@ -77,7 +77,7 @@ export function BrowseButton({
                 value={chosen.id}
                 onValueChange={(v) => {
                   if (typeof v !== "string") return
-                  savePicked(sessionId, HANDLER, v)
+                  savePicked(sessionId, ACTION, v)
                   setPicked(v)
                   browse(v)
                 }}

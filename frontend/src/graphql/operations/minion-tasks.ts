@@ -28,7 +28,7 @@ export const MinionTaskFields = graphql(`
     outputSize
     outputTruncated
     parts
-    handler
+    result
     dataSize
     dataTruncated
     dataProblem
@@ -74,7 +74,8 @@ export const MinionSessionCommandsQuery = graphql(`
       id
       label
       description
-      handler
+      result
+      action
       params {
         ...ModuleFieldDefFields
       }

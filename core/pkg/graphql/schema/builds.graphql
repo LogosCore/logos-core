@@ -60,9 +60,12 @@ type BuildCommand {
   default: Boolean!
   # In every build of its targets: the minion cannot run without it.
   required: Boolean!
-  # The core result handler whose shape its data follows (dir_listing);
-  # null: no declared shape (docs: contracts/task-result-handlers.md).
-  handler: String
+  # What its data is: one of core's results (dir_listing), its shape and
+  # view; null: none, shown raw. And what core can ask it to do itself: one
+  # of core's actions (list_dir); null: none (docs:
+  # contracts/task-results-and-actions.md).
+  result: String
+  action: String
   # What a task of the command takes.
   params: [ModuleField!]!
 }

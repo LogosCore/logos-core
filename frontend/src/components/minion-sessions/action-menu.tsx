@@ -1,11 +1,11 @@
 import type { ReactNode } from "react"
 import { ContextMenuItem, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from "@/components/ui/context-menu"
 
-// An action on an item of a result handler's view, in the item's context
-// menu: run one of the session's commands of a handler on it (List
+// One of core's actions on an item of a result's view, in the item's
+// context menu: run one of the session's commands with the action on it (List
 // directory runs a dir_listing command on a folder). With one such command
 // it is an item; with several, a submenu of them, the view's own command
-// first (handler-commands.ts, commandsFor). None: no item. Every view's
+// first (action-commands.ts, commandsFor). None: no item. Every view's
 // actions are made of these.
 
 export interface MenuCommand {
@@ -13,7 +13,7 @@ export interface MenuCommand {
   label: string
 }
 
-export function HandlerActionItem({
+export function ActionItem({
   label,
   icon,
   commands,

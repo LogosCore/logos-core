@@ -1,5 +1,5 @@
 // A dir_listing task's data as the console's file browser reads it (docs:
-// contracts/task-result-handlers.md): the directory, how the host's paths
+// contracts/task-results-and-actions.md): the directory, how the host's paths
 // join, and its entries. Paths are the host's: they are split and joined
 // by the separator the minion gave, never guessed.
 

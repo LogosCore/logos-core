@@ -21,7 +21,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { DirListingView } from "./dir-listing-view"
-import type { MenuCommand } from "./handler-menu"
+import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
@@ -29,7 +29,7 @@ import { StateLabel, TaskTimes } from "./task-state"
 // The right of a session's console: the task picked in the list, whole
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
 // and what came back: the output as text, read again as more comes (Ctrl+F
-// finds in it), and any data the command gave, in its result handler's
+// finds in it), and any data the command gave, in its result's
 // view (a dir_listing as a file browser) or as raw JSON. Output and data
 // download as the minion sent them.
 // The JSON tab shows the task as core keeps it, for debugging.
@@ -77,7 +77,7 @@ export function TaskDetail({
    *  the task's own command again; absent where the viewer may not give
    *  tasks. */
   onOpenPath?: (path: string, commandId?: string) => void
-  /** The session's dir_listing commands, the task's own first: what List
+  /** The session's list_dir commands, the task's own first: what List
    *  directory offers. */
   listCommands?: readonly MenuCommand[]
   /** Goes up when Ctrl+F is pressed in the console: the find bar opens. */
@@ -94,11 +94,11 @@ export function TaskDetail({
   // guessed for a task kept before that: parts with no output are data),
   // so an ls opens on its Data tab at once rather than on an empty Output.
   const hasData = detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0)
-  // The handler's view, for data that fits it; the rest shows raw.
-  const listing = t.handler === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
+  // The result's view, for data that fits it; the rest shows raw.
+  const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
   const dataNotes = [
-    t.dataProblem ? `The data does not fit ${t.handler}: ${t.dataProblem}. It shows raw.` : null,
-    t.handler && t.handler !== "dir_listing" ? `Its handler, ${t.handler}, is not one this version shows: the data shows raw.` : null,
+    t.dataProblem ? `The data does not fit ${t.result}: ${t.dataProblem}. It shows raw.` : null,
+    t.result && t.result !== "dir_listing" ? `Its result, ${t.result}, is not one this version shows: the data shows raw.` : null,
     t.missingParts > 0
       ? `${t.missingParts} ${t.missingParts === 1 ? "part" : "parts"} before the last never came: the data may lack some.`
       : null,

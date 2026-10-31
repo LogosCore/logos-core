@@ -109,7 +109,8 @@ type BuildCommand struct {
 	Targets     []string       `json:"targets"`
 	Default     bool           `json:"default"`
 	Required    bool           `json:"required"`
-	Handler     *string        `json:"handler,omitempty"`
+	Result      *string        `json:"result,omitempty"`
+	Action      *string        `json:"action,omitempty"`
 	Params      []*ModuleField `json:"params"`
 }
 
@@ -625,7 +626,7 @@ type MinionTask struct {
 	OutputUtf8        bool    `json:"outputUtf8"`
 	OutputTruncated   bool    `json:"outputTruncated"`
 	Parts             int     `json:"parts"`
-	Handler           *string `json:"handler,omitempty"`
+	Result            *string `json:"result,omitempty"`
 	Data              any     `json:"data,omitempty"`
 	DataSize          int     `json:"dataSize"`
 	DataTruncated     bool    `json:"dataTruncated"`

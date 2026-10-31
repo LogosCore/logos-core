@@ -23,8 +23,10 @@ import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type Comm
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
   fields: readonly FieldDef[]
-  /** The result handler its data follows (dir_listing), if any. */
-  handler?: string | null
+  /** What its data is, one of core's results (dir_listing), if any. */
+  result?: string | null
+  /** What core can ask it to do, one of core's actions (list_dir), if any. */
+  action?: string | null
 }
 
 export function CommandBar({

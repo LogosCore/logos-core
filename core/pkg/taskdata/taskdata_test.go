@@ -45,7 +45,7 @@ func TestValue(t *testing.T) {
 
 func TestJoin(t *testing.T) {
 	size, mod := uint64(0), int64(1793438413)
-	listing := models.MinionTask{Handler: protocol.HandlerDirListing}
+	listing := models.MinionTask{Result: protocol.ResultDirListing}
 	parts := []models.MinionTaskPart{
 		{Seq: 0, DataCBOR: data(t, protocol.DirListing{Path: "/tmp", Sep: "/", Parent: "/", Entries: []protocol.DirEntry{
 			{Name: "a", Type: protocol.DirEntryDir}}})},
@@ -70,7 +70,7 @@ func TestJoin(t *testing.T) {
 		t.Fatalf("flagged: %v %v", got, err)
 	}
 
-	// No handler: arrays appended, the rest the latest; parts kept before
+	// No result: arrays appended, the rest the latest; parts kept before
 	// CBOR read as they were.
 	generic := []models.MinionTaskPart{
 		{Seq: 0, Data: models.JSONMap{"rows": []any{"old"}, "n": 1.0}},
@@ -85,11 +85,11 @@ func TestJoin(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-	if Check(protocol.HandlerDirListing, 1, data(t, protocol.DirListing{Path: "/x"})) == nil {
+	if Check(protocol.ResultDirListing, 1, data(t, protocol.DirListing{Path: "/x"})) == nil {
 		t.Error("a later part naming the directory passed")
 	}
 	if Check("", 0, data(t, map[string]any{"anything": 1})) != nil || Check("process_list", 0, data(t, map[string]any{})) != nil {
-		t.Error("no handler, or one core does not know, takes any data")
+		t.Error("no result, or one core does not know, takes any data")
 	}
 }
 
