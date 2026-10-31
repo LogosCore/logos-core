@@ -114,11 +114,12 @@ body.file-preview-resizing .file-preview-frame {
   margin: 0;
   padding: 16px;
   font-size: 0.85rem;
-  color: var(--color-text-muted, rgba(0, 0, 0, 0.6));
+  /* The theme's: a fixed grey read as black on the dark theme. */
+  color: var(--color-muted-foreground);
 }
 
 .file-preview .file-preview-status--error {
-  color: var(--color-danger, #c0392b);
+  color: var(--color-destructive);
 }
 
 /* Filling its parent: no frame of its own, the frame or the player taking
