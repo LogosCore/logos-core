@@ -148,6 +148,7 @@ func (a *App) mountBuildRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.POST("/build-files", c.build.UploadFile)
 	v1.GET("/builds/:id/artifact", c.build.DownloadArtifact)
 	v1.GET("/minion-tasks/:id/output", c.task.DownloadOutput)
+	v1.GET("/minion-tasks/:id/data", c.task.DownloadData)
 }
 
 // mountWikiRoutes registers the wiki REST surface. Every route here authorizes

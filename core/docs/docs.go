@@ -472,6 +472,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/minion-tasks/{id}/data": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/cbor-seq"
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Download a minion task's data as CBOR",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/minion-tasks/{id}/output": {
             "get": {
                 "security": [

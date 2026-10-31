@@ -352,6 +352,7 @@ func toBuildCommandModel(s protocol.BuildSchema, c protocol.BuildCommand) *model
 	mc := &model.BuildCommand{
 		ID: c.ID, Label: orKey(c.Label, c.ID), Description: strPtr(c.Description),
 		Targets: []string{}, Default: c.Default, Required: c.Required, Params: toBuildFieldModels(c.Params),
+		Handler: strPtr(c.Handler),
 	}
 	for _, t := range s.Targets {
 		if c.For(t.ID) {

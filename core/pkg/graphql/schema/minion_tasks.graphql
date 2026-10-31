@@ -46,9 +46,24 @@ type MinionTask {
   # How many result parts came: it grows with each, output or data, so a
   # client showing a task's output knows when to read it again.
   parts: Int!
-  # The command's structured output (ls entries, say): the parts' data
-  # joined, arrays appended.
+  # The result handler its data follows (dir_listing), as its command had
+  # when it was queued; null: no declared shape.
+  handler: String
+  # The command's structured output: the parts' data, kept as the CBOR it
+  # came in, joined by the handler's rule (or, with none, arrays appended)
+  # and given as JSON by the contract's mapping (docs:
+  # contracts/task-result-handlers.md). The bytes as they came:
+  # GET /api/v1/minion-tasks/{id}/data, a CBOR sequence.
   data: JSON
+  # The data bytes kept, and whether more came and was dropped: output and
+  # data share the task's 4 MiB.
+  dataSize: Int!
+  dataTruncated: Boolean!
+  # The first part whose data does not fit the handler, and why: the data
+  # is then shown raw.
+  dataProblem: String
+  # Parts before the done part that never came: lost for good.
+  missingParts: Int!
   # The task as core keeps it (its minion_tasks document, its result parts
   # left out), as indented JSON in the stored key order: for debugging.
   # Ids read as UUIDs, times as RFC 3339, wire_args decoded from CBOR

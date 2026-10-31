@@ -35,11 +35,7 @@ func (r *minionTaskResolver) OutputUtf8(ctx context.Context, obj *model.MinionTa
 
 // Data is the resolver for the data field.
 func (r *minionTaskResolver) Data(ctx context.Context, obj *model.MinionTask) (any, error) {
-	data, err := r.MinionTaskResolver.Data(ctx, obj.ID)
-	if err != nil || data == nil {
-		return nil, err
-	}
-	return data, nil
+	return r.MinionTaskResolver.Data(ctx, obj.ID)
 }
 
 // Document is the resolver for the document field.

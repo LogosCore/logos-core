@@ -1,13 +1,25 @@
 package repository
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/taskdata"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
+
+func cborData(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := protocol.ResultData(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
 
 // A session's tasks through their life: delivered oldest first, sent again
 // until acked, output kept once per part and in order, done, failed or
@@ -79,31 +91,51 @@ func TestIntegrationMinionTasks(t *testing.T) {
 		t.Fatal("a part sent again was kept")
 	}
 	task, _, err := repo.AddResult(ctx, session, ids[1], MinionTaskResult{Seq: 0, Out: []byte("hello "), Done: false,
-		Data: map[string]any{"entries": []any{"a"}}, At: t0})
+		Data: cborData(t, map[string]any{"entries": []any{"a"}}), At: t0})
 	if err != nil || task.State != models.MinionTaskRunning || task.AckedAt == nil || task.StartedAt == nil {
 		t.Fatalf("running: %+v %v", task, err)
 	}
 	task, _, _ = repo.AddResult(ctx, session, ids[1], MinionTaskResult{Seq: 2, Done: true, OK: &ok, Exit: &exit,
-		Data: map[string]any{"entries": []any{"b"}}, At: t0})
-	if task.State != models.MinionTaskDone || task.Exit == nil || *task.Exit != 0 || task.Parts != 3 || task.OutSize != 11 {
+		Data: cborData(t, map[string]any{"entries": []any{"b"}}), At: t0})
+	if task.State != models.MinionTaskDone || task.Exit == nil || *task.Exit != 0 || task.Parts != 3 || task.OutSize != 11 ||
+		task.DoneSeq == nil || *task.DoneSeq != 2 || task.MissingParts() != 0 || task.DataSize == 0 {
 		t.Fatalf("done: %+v", task)
+	}
+	// The done part is the last: a later part, or another done part, changes nothing.
+	failedToo := false
+	if _, _, err := repo.AddResult(ctx, session, ids[1], MinionTaskResult{Seq: 3, Out: []byte("late"), At: t0}); !errors.Is(err, ErrMinionTaskEnded) {
+		t.Fatalf("a part after the end: %v", err)
+	}
+	if _, _, err := repo.AddResult(ctx, session, ids[1], MinionTaskResult{Seq: 7, Done: true, OK: &failedToo, At: t0}); !errors.Is(err, ErrMinionTaskEnded) {
+		t.Fatalf("a second done part: %v", err)
+	}
+	if after, _ := repo.FindByTaskID(ctx, ids[1]); after.State != models.MinionTaskDone || after.Parts != 3 {
+		t.Fatalf("after the late parts: %+v", after)
 	}
 	parts, _ := repo.Parts(ctx, ids[1])
 	if len(parts) != 3 || string(parts[0].Out)+string(parts[1].Out) != "hello world" {
 		t.Fatalf("parts %+v", parts)
 	}
-	if d := models.MergeMinionTaskData(parts); len(d["entries"].([]any)) != 2 {
-		t.Fatalf("merged data %v", d)
+	// The data stays the CBOR it came in, and joins as the contract says.
+	if len(parts[0].DataCBOR) == 0 || parts[0].Data != nil {
+		t.Fatalf("part 0 data kept as %+v", parts[0])
+	}
+	if d, err := taskdata.Join(*task, parts); err != nil || len(d.(map[string]any)["entries"].([]any)) != 2 {
+		t.Fatalf("joined data %v %v", d, err)
 	}
 	if _, _, err := repo.AddResult(ctx, uuid.New(), ids[1], MinionTaskResult{Seq: 9, At: t0}); !IsNotFound(err) {
 		t.Fatalf("another session's result: %v", err)
 	}
 
-	// Output past the cap is dropped.
+	// Output past the cap is dropped, and data past it too: they share it.
 	big := make([]byte, models.MaxMinionTaskOutput+10)
 	task, _, _ = repo.AddResult(ctx, session, ids[0], MinionTaskResult{Seq: 0, Out: big, At: t0})
 	if task.OutSize != models.MaxMinionTaskOutput || !task.OutTruncated {
 		t.Fatalf("capped: size %d truncated %v", task.OutSize, task.OutTruncated)
+	}
+	task, _, _ = repo.AddResult(ctx, session, ids[0], MinionTaskResult{Seq: 1, Data: cborData(t, map[string]any{"n": 1}), At: t0})
+	if task.DataSize != 0 || !task.DataTruncated || task.Parts != 2 {
+		t.Fatalf("data past the cap: %+v", task)
 	}
 
 	// Cancel: never sent, at once; sent, by cancels until its end, which
@@ -121,7 +153,7 @@ func TestIntegrationMinionTasks(t *testing.T) {
 		t.Fatalf("cancels %v, gave up %v", taskIDs(send), taskIDs(gaveUp))
 	}
 	failed := false
-	task, _, _ = repo.AddResult(ctx, session, ids[0], MinionTaskResult{Seq: 1, Done: true, OK: &failed, Err: "cancelled", At: t0})
+	task, _, _ = repo.AddResult(ctx, session, ids[0], MinionTaskResult{Seq: 2, Done: true, OK: &failed, Err: "cancelled", At: t0})
 	if task.State != models.MinionTaskCancelled {
 		t.Fatalf("stopped: %s", task.State)
 	}
@@ -166,5 +198,45 @@ func TestIntegrationMinionTasks(t *testing.T) {
 	}
 	if left, _ := repo.Parts(ctx, ids[1]); len(left) != 0 {
 		t.Fatal("parts outlived their operation")
+	}
+}
+
+// A dir_listing task: each part's data is checked as it comes, the first
+// that does not fit flags the task; a part lost before the done part shows
+// as missing until it comes late, which only fills the gap.
+func TestIntegrationMinionTaskParts(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	session, t0 := uuid.New(), time.Now().UTC().Truncate(time.Millisecond)
+	id := uuid.New()
+	if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: uuid.New(), SessionID: session, Command: "ls",
+		Handler: protocol.HandlerDirListing, State: models.MinionTaskSent, QueuedAt: t0}); err != nil {
+		t.Fatal(err)
+	}
+	add := func(r MinionTaskResult) *models.MinionTask {
+		t.Helper()
+		r.At, r.Check = t0, taskdata.Check
+		task, _, err := repo.AddResult(ctx, session, id, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return task
+	}
+	task := add(MinionTaskResult{Seq: 0, Data: cborData(t, protocol.DirListing{Path: "/tmp", Sep: "/",
+		Entries: []protocol.DirEntry{{Name: "a", Type: protocol.DirEntryFile}}})})
+	if task.DataProblem != "" || task.Handler != protocol.HandlerDirListing {
+		t.Fatalf("a fitting part: %+v", task)
+	}
+	// Part 1 is lost; part 2 names the directory again, which only the first may.
+	ok := true
+	task = add(MinionTaskResult{Seq: 2, Done: true, OK: &ok, Data: cborData(t, protocol.DirListing{Path: "/again"})})
+	if !strings.HasPrefix(task.DataProblem, "part 2: dir_listing: only the first part") || task.MissingParts() != 1 {
+		t.Fatalf("a misfit, a gap: problem %q, missing %d", task.DataProblem, task.MissingParts())
+	}
+	// Late, part 1 fills the gap and changes nothing else; the first problem stays.
+	task = add(MinionTaskResult{Seq: 1, Data: cborData(t, map[string]any{"entries": "nope"})})
+	if task.MissingParts() != 0 || task.State != models.MinionTaskDone || !strings.HasPrefix(task.DataProblem, "part 2:") {
+		t.Fatalf("the gap filled: %+v", task)
 	}
 }

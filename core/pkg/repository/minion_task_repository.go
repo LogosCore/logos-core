@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,9 +29,17 @@ type MinionTaskResult struct {
 	Exit *int64
 	Err  string
 	Out  []byte
-	Data map[string]any
+	// Data is the part's data, the CBOR map as it came.
+	Data []byte
 	At   time.Time
+	// Check checks Data against the task's handler (taskdata.Check); nil:
+	// no check.
+	Check func(handler string, seq uint64, data []byte) error
 }
+
+// ErrMinionTaskEnded is AddResult's answer to a part for a task that
+// ended, other than one it lacks before its done part: ignored.
+var ErrMinionTaskEnded = errors.New("the task ended")
 
 // MinionTaskCursor is where a page of a session's tasks starts: before
 // this one, newest first.
@@ -57,7 +67,9 @@ type IMinionTaskRepository interface {
 	// AddResult keeps a result part of a task of the session and brings the
 	// task up to it. It returns the task after, and whether the part was
 	// new: a part sent again changes nothing. IsNotFound for a task the
-	// session does not have.
+	// session does not have; ErrMinionTaskEnded for a part after the task
+	// ended (a part it lacks before its done part is still kept, and
+	// changes nothing but the output and data).
 	AddResult(ctx context.Context, sessionID, taskID uuid.UUID, r MinionTaskResult) (*models.MinionTask, bool, error)
 	// RequestCancel asks to stop a task: one never sent is cancelled at
 	// once, one sent gets cancels until its last part comes. Nothing for a
@@ -167,13 +179,33 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	if err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID}).One(&t); err != nil {
 		return nil, false, err
 	}
-	// The output kept stops at MaxMinionTaskOutput.
-	out := res.Out
-	truncated := false
-	if room := int64(models.MaxMinionTaskOutput) - t.OutSize; int64(len(out)) > room {
-		out, truncated = out[:max(room, 0)], true
+	// After its end a task takes only the parts it lacks before its done
+	// part, late; the done part is the last.
+	late := t.Finished()
+	if late && (t.DoneSeq == nil || res.Seq >= *t.DoneSeq) {
+		return &t, false, ErrMinionTaskEnded
 	}
-	part := models.MinionTaskPart{TaskID: taskID, Seq: res.Seq, Out: out, Data: res.Data, At: res.At}
+
+	// Output and data share one budget: past it, output is cut and data
+	// (whole or none: a CBOR map is not cut) dropped.
+	room := max(int64(models.MaxMinionTaskOutput)-t.OutSize-t.DataSize, 0)
+	out, data := res.Out, res.Data
+	outCut, dataCut := false, false
+	if int64(len(out)) > room {
+		out, outCut = out[:room], true
+	}
+	room -= int64(len(out))
+	if int64(len(data)) > room {
+		data, dataCut = nil, true
+	}
+	problem := ""
+	if len(data) > 0 && t.DataProblem == "" && res.Check != nil {
+		if err := res.Check(t.Handler, res.Seq, data); err != nil {
+			problem = fmt.Sprintf("part %d: %v", res.Seq, err)
+		}
+	}
+
+	part := models.MinionTaskPart{TaskID: taskID, Seq: res.Seq, Out: out, DataCBOR: data, At: res.At}
 	if _, err := r.parts.InsertOne(ctx, &part); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return &t, false, nil
@@ -182,20 +214,27 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	}
 
 	set := bson.M{}
-	if t.AckedAt == nil {
-		set["acked_at"] = res.At
-	}
-	if t.StartedAt == nil {
-		set["started_at"] = res.At
-	}
-	if !t.Finished() {
-		set["state"] = models.MinionTaskRunning
-	}
-	if truncated {
+	if outCut {
 		set["out_truncated"] = true
 	}
-	if res.Done {
+	if dataCut {
+		set["data_truncated"] = true
+	}
+	if problem != "" {
+		set["data_problem"] = problem
+	}
+	if !late {
+		if t.AckedAt == nil {
+			set["acked_at"] = res.At
+		}
+		if t.StartedAt == nil {
+			set["started_at"] = res.At
+		}
+		set["state"] = models.MinionTaskRunning
+	}
+	if res.Done && !late {
 		set["done_at"] = res.At
+		set["done_seq"] = res.Seq
 		if res.OK != nil {
 			set["ok"] = *res.OK
 		}
@@ -215,11 +254,12 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 			set["state"] = models.MinionTaskFailed
 		}
 	}
+	update := bson.M{"$inc": bson.M{"parts": 1, "out_size": len(out), "data_size": len(data)}}
+	if len(set) > 0 {
+		update["$set"] = set
+	}
 	var after models.MinionTask
-	err := r.tasks.Find(ctx, bson.M{"task_id": taskID}).Apply(qmgo.Change{
-		Update:    bson.M{"$set": set, "$inc": bson.M{"parts": 1, "out_size": len(out)}},
-		ReturnNew: true,
-	}, &after)
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID}).Apply(qmgo.Change{Update: update, ReturnNew: true}, &after)
 	if err != nil {
 		return nil, false, err
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-core/core/pkg/taskdata"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
@@ -70,9 +71,17 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 	}
 	task, fresh, err := s.tasks.AddResult(ctx, session.SessionID, id, repository.MinionTaskResult{
 		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(),
+		Check: taskdata.Check,
 	})
 	if repository.IsNotFound(err) {
 		return errItem(protocol.ErrItemUnknownTask, "no such task under this session", i)
+	}
+	// A part after the task ended: the minion delivered it, so no error;
+	// it just changes nothing.
+	if errors.Is(err, repository.ErrMinionTaskEnded) {
+		s.logger.Info("minion task part after its end, ignored", zap.String("task_id", id.String()),
+			zap.Uint64("seq", res.Seq), zap.String("session_id", session.SessionID.String()))
+		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("keep a result: %w", err)

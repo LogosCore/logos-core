@@ -575,6 +575,22 @@ paths:
       summary: Logout
       tags:
       - Auth
+  /minion-tasks/{id}/data:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/cbor-seq
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download a minion task's data as CBOR
+      tags:
+      - Minion tasks
   /minion-tasks/{id}/output:
     get:
       parameters:

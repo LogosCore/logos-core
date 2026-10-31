@@ -188,6 +188,7 @@ type ComplexityRoot struct {
 	BuildCommand struct {
 		Default     func(childComplexity int) int
 		Description func(childComplexity int) int
+		Handler     func(childComplexity int) int
 		ID          func(childComplexity int) int
 		Label       func(childComplexity int) int
 		Params      func(childComplexity int) int
@@ -570,13 +571,18 @@ type ComplexityRoot struct {
 		CancelRequestedAt func(childComplexity int) int
 		Command           func(childComplexity int) int
 		Data              func(childComplexity int) int
+		DataProblem       func(childComplexity int) int
+		DataSize          func(childComplexity int) int
+		DataTruncated     func(childComplexity int) int
 		Document          func(childComplexity int) int
 		DoneAt            func(childComplexity int) int
 		Err               func(childComplexity int) int
 		Exit              func(childComplexity int) int
+		Handler           func(childComplexity int) int
 		ID                func(childComplexity int) int
 		IssuedBy          func(childComplexity int) int
 		IssuedByName      func(childComplexity int) int
+		MissingParts      func(childComplexity int) int
 		Ok                func(childComplexity int) int
 		OperationID       func(childComplexity int) int
 		Output            func(childComplexity int) int
@@ -1485,6 +1491,7 @@ type MinionTaskResolver interface {
 	OutputUtf8(ctx context.Context, obj *model.MinionTask) (bool, error)
 
 	Data(ctx context.Context, obj *model.MinionTask) (any, error)
+
 	Document(ctx context.Context, obj *model.MinionTask) (string, error)
 }
 type ModuleResolver interface {
@@ -2378,6 +2385,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.Description(childComplexity), true
+	case "BuildCommand.handler":
+		if e.ComplexityRoot.BuildCommand.Handler == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Handler(childComplexity), true
 	case "BuildCommand.id":
 		if e.ComplexityRoot.BuildCommand.ID == nil {
 			break
@@ -3939,6 +3952,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Data(childComplexity), true
+	case "MinionTask.dataProblem":
+		if e.ComplexityRoot.MinionTask.DataProblem == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.DataProblem(childComplexity), true
+	case "MinionTask.dataSize":
+		if e.ComplexityRoot.MinionTask.DataSize == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.DataSize(childComplexity), true
+	case "MinionTask.dataTruncated":
+		if e.ComplexityRoot.MinionTask.DataTruncated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.DataTruncated(childComplexity), true
 	case "MinionTask.document":
 		if e.ComplexityRoot.MinionTask.Document == nil {
 			break
@@ -3963,6 +3994,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Exit(childComplexity), true
+	case "MinionTask.handler":
+		if e.ComplexityRoot.MinionTask.Handler == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Handler(childComplexity), true
 	case "MinionTask.id":
 		if e.ComplexityRoot.MinionTask.ID == nil {
 			break
@@ -3981,6 +4018,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.IssuedByName(childComplexity), true
+	case "MinionTask.missingParts":
+		if e.ComplexityRoot.MinionTask.MissingParts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.MissingParts(childComplexity), true
 	case "MinionTask.ok":
 		if e.ComplexityRoot.MinionTask.Ok == nil {
 			break
@@ -9115,6 +9158,9 @@ type BuildCommand {
   default: Boolean!
   # In every build of its targets: the minion cannot run without it.
   required: Boolean!
+  # The core result handler whose shape its data follows (dir_listing);
+  # null: no declared shape (docs: contracts/task-result-handlers.md).
+  handler: String
   # What a task of the command takes.
   params: [ModuleField!]!
 }
@@ -10779,9 +10825,24 @@ type MinionTask {
   # How many result parts came: it grows with each, output or data, so a
   # client showing a task's output knows when to read it again.
   parts: Int!
-  # The command's structured output (ls entries, say): the parts' data
-  # joined, arrays appended.
+  # The result handler its data follows (dir_listing), as its command had
+  # when it was queued; null: no declared shape.
+  handler: String
+  # The command's structured output: the parts' data, kept as the CBOR it
+  # came in, joined by the handler's rule (or, with none, arrays appended)
+  # and given as JSON by the contract's mapping (docs:
+  # contracts/task-result-handlers.md). The bytes as they came:
+  # GET /api/v1/minion-tasks/{id}/data, a CBOR sequence.
   data: JSON
+  # The data bytes kept, and whether more came and was dropped: output and
+  # data share the task's 4 MiB.
+  dataSize: Int!
+  dataTruncated: Boolean!
+  # The first part whose data does not fit the handler, and why: the data
+  # is then shown raw.
+  dataProblem: String
+  # Parts before the done part that never came: lost for good.
+  missingParts: Int!
   # The task as core keeps it (its minion_tasks document, its result parts
   # left out), as indented JSON in the stored key order: for debugging.
   # Ids read as UUIDs, times as RFC 3339, wire_args decoded from CBOR
@@ -19255,6 +19316,35 @@ func (ec *executionContext) fieldContext_BuildCommand_required(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildCommand_handler(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_handler,
+		func(ctx context.Context) (any, error) {
+			return obj.Handler, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_handler(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildCommand_params(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -20146,6 +20236,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
 				return ec.fieldContext_BuildCommand_required(ctx, field)
+			case "handler":
+				return ec.fieldContext_BuildCommand_handler(ctx, field)
 			case "params":
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
@@ -28330,6 +28422,35 @@ func (ec *executionContext) fieldContext_MinionTask_parts(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_handler(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_handler,
+		func(ctx context.Context) (any, error) {
+			return obj.Handler, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_handler(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_data(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28354,6 +28475,122 @@ func (ec *executionContext) fieldContext_MinionTask_data(_ context.Context, fiel
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_dataSize(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_dataSize,
+		func(ctx context.Context) (any, error) {
+			return obj.DataSize, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_dataSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_dataTruncated(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_dataTruncated,
+		func(ctx context.Context) (any, error) {
+			return obj.DataTruncated, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_dataTruncated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_dataProblem(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_dataProblem,
+		func(ctx context.Context) (any, error) {
+			return obj.DataProblem, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_dataProblem(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_missingParts(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_missingParts,
+		func(ctx context.Context) (any, error) {
+			return obj.MissingParts, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_missingParts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -28458,8 +28695,18 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "handler":
+				return ec.fieldContext_MinionTask_handler(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -36878,8 +37125,18 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "handler":
+				return ec.fieldContext_MinionTask_handler(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -36989,8 +37246,18 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "handler":
+				return ec.fieldContext_MinionTask_handler(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -44778,8 +45045,18 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "handler":
+				return ec.fieldContext_MinionTask_handler(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -44920,6 +45197,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_default(ctx, field)
 			case "required":
 				return ec.fieldContext_BuildCommand_required(ctx, field)
+			case "handler":
+				return ec.fieldContext_BuildCommand_handler(ctx, field)
 			case "params":
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
@@ -50805,8 +51084,18 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "handler":
+				return ec.fieldContext_MinionTask_handler(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
+			case "dataSize":
+				return ec.fieldContext_MinionTask_dataSize(ctx, field)
+			case "dataTruncated":
+				return ec.fieldContext_MinionTask_dataTruncated(ctx, field)
+			case "dataProblem":
+				return ec.fieldContext_MinionTask_dataProblem(ctx, field)
+			case "missingParts":
+				return ec.fieldContext_MinionTask_missingParts(ctx, field)
 			case "document":
 				return ec.fieldContext_MinionTask_document(ctx, field)
 			}
@@ -63052,6 +63341,8 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "handler":
+			out.Values[i] = ec._BuildCommand_handler(ctx, field, obj)
 		case "params":
 			out.Values[i] = ec._BuildCommand_params(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -66729,6 +67020,8 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "handler":
+			out.Values[i] = ec._MinionTask_handler(ctx, field, obj)
 		case "data":
 			field := field
 
@@ -66762,6 +67055,23 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "dataSize":
+			out.Values[i] = ec._MinionTask_dataSize(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "dataTruncated":
+			out.Values[i] = ec._MinionTask_dataTruncated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "dataProblem":
+			out.Values[i] = ec._MinionTask_dataProblem(ctx, field, obj)
+		case "missingParts":
+			out.Values[i] = ec._MinionTask_missingParts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "document":
 			field := field
 

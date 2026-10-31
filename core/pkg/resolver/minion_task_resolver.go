@@ -17,6 +17,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-core/core/pkg/taskdata"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -32,7 +33,7 @@ type IMinionTaskResolver interface {
 	// Data their data merged: read only when a query asks (the selected
 	// task's), the parent query having checked the caller.
 	Output(ctx context.Context, taskID string) ([]byte, error)
-	Data(ctx context.Context, taskID string) (map[string]any, error)
+	Data(ctx context.Context, taskID string) (any, error)
 	// Document is the task's stored document as JSON, for debugging
 	// (minion_task_document.go).
 	Document(ctx context.Context, taskID string) (string, error)
@@ -227,7 +228,8 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		return nil, fmt.Errorf("encode the args: %w", err)
 	}
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
-		Args: values, WireArgs: wireBytes, IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC()}
+		Args: values, WireArgs: wireBytes, Handler: commands[i].Handler, IssuedBy: uid, State: models.MinionTaskQueued,
+		QueuedAt: time.Now().UTC()}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)
 	}
@@ -335,12 +337,24 @@ func (r *minionTaskResolver) Output(ctx context.Context, taskID string) ([]byte,
 	return out, nil
 }
 
-func (r *minionTaskResolver) Data(ctx context.Context, taskID string) (map[string]any, error) {
+func (r *minionTaskResolver) Data(ctx context.Context, taskID string) (any, error) {
+	tid, err := uuid.Parse(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid task ID")
+	}
+	t, err := r.tasks.FindByTaskID(ctx, tid)
+	if err != nil {
+		return nil, fmt.Errorf("load the task: %w", err)
+	}
 	parts, err := r.parts(ctx, taskID)
 	if err != nil {
 		return nil, err
 	}
-	return models.MergeMinionTaskData(parts), nil
+	data, err := taskdata.Join(*t, parts)
+	if err != nil {
+		return nil, fmt.Errorf("join the data: %w", err)
+	}
+	return data, nil
 }
 
 func (r *minionTaskResolver) Document(ctx context.Context, taskID string) (string, error) {
@@ -409,6 +423,8 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts,
+		Handler: strPtr(t.Handler), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
+		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
 	}
 	if name, ok := names[t.IssuedBy]; ok {
 		m.IssuedByName = &name
