@@ -80,6 +80,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
                 layout={layout}
                 onLayoutChange={setLayout}
                 onInteract={(s) => setTabs(openTab(tabs, s.id))}
+                activeSessionId={tabs.active}
                 sessions={sessions}
                 icons={icons}
                 isLoading={isLoading || layoutLoading}

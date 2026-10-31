@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { Virtuoso } from "react-virtuoso"
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso"
 import {
   DndContext,
   PointerSensor,
@@ -139,6 +139,7 @@ export function SessionsDatatable({
   layout,
   onLayoutChange,
   onInteract,
+  activeSessionId = null,
   sessions,
   icons,
   isLoading,
@@ -160,6 +161,9 @@ export function SessionsDatatable({
   onLayoutChange: (layout: SessionsLayout | null) => void
   /** Opens the session in the work pane below. */
   onInteract: (session: MinionSessionFieldsFragment) => void
+  /** The session whose tab is in front in the work pane: marked, and
+   *  scrolled to when the tab changes. */
+  activeSessionId?: string | null
   sessions: MinionSessionFieldsFragment[]
   icons: ReadonlyMap<string, ModuleIconSvgs>
   isLoading: boolean
@@ -221,6 +225,19 @@ export function SessionsDatatable({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [selecting, scope])
+
+  // The work pane's tab in front: its row comes into view when the tab
+  // changes (only then: scrolling away from it is the operator's to do).
+  const list = useRef<VirtuosoHandle>(null)
+  const loaded = useRef(sessions)
+  useEffect(() => {
+    loaded.current = sessions
+  }, [sessions])
+  useEffect(() => {
+    if (!activeSessionId) return
+    const index = loaded.current.findIndex((s) => s.id === activeSessionId)
+    if (index >= 0) list.current?.scrollIntoView({ index, behavior: "smooth" })
+  }, [activeSessionId])
 
   const columns = useMemo(() => layout.columns.map((id) => SESSION_COLUMN_BY_ID.get(id)!), [layout.columns])
   const template = [...(selecting ? [CHECK_TRACK] : []), ...columns.map((c) => c.width), MENU_TRACK].join(" ")
@@ -392,6 +409,7 @@ export function SessionsDatatable({
         {showList && (
           <div className="flex min-h-0 flex-1 flex-col">
             <Virtuoso
+              ref={list}
               data={sessions}
               endReached={() => {
                 if (hasNextPage && !isFetchingNextPage) fetchNextPage()
@@ -411,6 +429,9 @@ export function SessionsDatatable({
                     selecting && "select-none",
                     markRowClass(s.mark?.color),
                     pickedSet.has(s.id) && "ring-2 ring-primary/60 ring-inset",
+                    // Its tab is in front: a bar down its left edge.
+                    s.id === activeSessionId &&
+                      "relative before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary",
                   )}
                   // While selecting, a click picks the row (shift: a range).
                   onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
