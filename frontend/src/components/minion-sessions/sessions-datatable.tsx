@@ -470,7 +470,7 @@ export function SessionsDatatable({
                         />
                       )}
                       {columns.map((col) => (
-                        <div key={col.id} data-cell className="min-w-0">
+                        <div key={col.id} data-cell data-column={col.id} className="min-w-0">
                           <SessionCell id={col.id} session={s} ctx={ctx} />
                         </div>
                       ))}

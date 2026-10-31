@@ -13,7 +13,8 @@
  *                   the text is transparent and icons take --fx-icon. Per
  *                   cell, not per row: a row's clip does not reach its
  *                   cells' text, and the gradient covered the whole row.
- * Last seen keeps the table's own live/late/lost colors under every style.
+ * Last seen is the table's under every style: its font, weight, colors and
+ * focus (the rules at the end).
  *
  * Plain (unlayered) CSS on purpose: it wins over the row's utilities (its
  * hover background) without !important, and leaves the picked row's ring
@@ -55,11 +56,6 @@
 }
 .mark-fx-ink :is(svg, [data-module-icon], [data-mark-icon]) * {
   color: inherit;
-}
-
-.mark-fx [data-seen],
-.mark-fx [data-seen] * {
-  color: revert-layer;
 }
 
 /* Haxor: a terminal, in a terminal font. On dark, a dark green screen and
@@ -207,24 +203,6 @@
   --fx-fg: #ffb000;
   --fx-scan: rgb(0 0 0 / 0.25);
   text-shadow: 0 0 5px rgb(255 176 0 / 0.45);
-}
-/* Last seen on the light LCDs: the table's own live/late/lost colors are too
- * light for their tinted screens, so the next darker shades. */
-:is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen="live"],
-:is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen="live"] * {
-  color: #047857;
-}
-:is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen="late"],
-:is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen="late"] * {
-  color: #b45309;
-}
-:is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen="lost"],
-:is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen="lost"] * {
-  color: #b91c1c;
-}
-.dark :is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen],
-.dark :is(.mark-fx-haxor, .mark-fx-amber-crt) [data-seen] * {
-  color: revert-layer;
 }
 /* The scanlines, over the text as on a screen. */
 .mark-fx-haxor::after,
@@ -486,15 +464,16 @@
   font-weight: 600;
 }
 
-/* Ghost: faded and blurred, back in focus on hover. For the dead. */
-.mark-fx-ghost {
+/* Ghost: faded and blurred, back in focus on hover. For the dead. Cell by
+ * cell, not the row: Last seen stays sharp. */
+.mark-fx-ghost > :not([data-column="lastSeen"]) {
   opacity: 0.45;
   filter: blur(0.6px) grayscale(1);
   transition:
     opacity 0.3s,
     filter 0.3s;
 }
-.mark-fx-ghost:hover {
+.mark-fx-ghost:hover > * {
   opacity: 1;
   filter: none;
 }
@@ -506,6 +485,33 @@
 .mark-fx [data-slot="checkbox"],
 .mark-fx [data-slot="checkbox"] * {
   color: revert-layer;
+  text-shadow: none;
+}
+
+/* A button in a cell (an address list's +N) under the ink styles: its text
+ * showed the cell's gradient through it, until hovering painted the
+ * button's own background over it and left it empty. It takes the style's
+ * icon color, as the row's other controls do. */
+.mark-fx-ink [data-cell] [data-slot="button"],
+.mark-fx-ink [data-cell] [data-slot="button"] * {
+  color: var(--fx-icon);
+}
+
+/* Last seen is the table's under every style: its own font, weight and
+ * live/late/lost colors, no glow, no gradient, no blur. A session's
+ * liveness reads the same on every row. */
+.mark-fx > [data-column="lastSeen"] {
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  text-shadow: none;
+  background-image: none;
+  animation: none;
+}
+.mark-fx [data-column="lastSeen"] * {
+  color: revert-layer;
+  font-family: inherit;
+  font-weight: inherit;
   text-shadow: none;
 }
 
