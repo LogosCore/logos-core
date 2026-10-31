@@ -5,6 +5,7 @@ import { useCanBuild } from "@/components/builds/build-access"
 import { useMinionSession, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
 import { useMinionSessionCommands, useMinionTaskSubscription, useMinionTasks } from "@/graphql/hooks/minion-tasks"
 import { CommandBar, type ConsoleCommand } from "./command-bar"
+import { commandHistory, lineOf } from "./command-line"
 import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleSelection } from "./console-selection"
 import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
 import { TaskDetail } from "./task-detail"
@@ -43,6 +44,12 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const byId = useMemo(() => new Map(commands.map((c) => [c.id, c])), [commands])
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
+
+  // What ↑ and ↓ go through on the command line: the tasks as typed.
+  const history = useMemo(
+    () => commandHistory(tasks.map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command)))),
+    [tasks, byId],
+  )
 
   const [selection, setSelection] = useState<ConsoleSelection>(FOLLOWING)
   const selected = selectedTask(tasks, selection)
@@ -132,6 +139,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         commands={commands}
         disabled={disabledReason !== undefined}
         disabledReason={disabledReason}
+        history={history}
         onQueued={follow}
       />
     </div>

@@ -15,21 +15,19 @@ import { commandOf, parseCommandLine, usage, words, type CommandDef } from "./co
 // The console's command line: a command of the session's build typed as a
 // line (command-line.ts), with its commands offered as the first word is
 // typed and how the line reads shown under it; ↑ and ↓ go through what was
-// run here, and / anywhere else on the page comes to it. The form beside it fills a command's params field by field.
+// run here (the session's tasks, as lines), and / anywhere else on the page comes to it. The form beside it fills a command's params field by field.
 
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
   fields: readonly FieldDef[]
 }
 
-// What was run, per session, for ↑ and ↓: kept while the page is.
-const histories = new Map<string, string[]>()
-
 export function CommandBar({
   sessionId,
   commands,
   disabled,
   disabledReason,
+  history,
   onQueued,
 }: {
   sessionId: string
@@ -37,6 +35,8 @@ export function CommandBar({
   disabled: boolean
   /** Why it is disabled, said in its place. */
   disabledReason?: string
+  /** The lines ↑ and ↓ go through, oldest first: the session's tasks (commandHistory). */
+  history: readonly string[]
   /** A task this queued. */
   onQueued?: (task: MinionTaskFieldsFragment) => void
 }) {
@@ -48,7 +48,6 @@ export function CommandBar({
   const [back, setBack] = useState<number | null>(null)
   const draft = useRef("")
   const input = useRef<HTMLInputElement>(null)
-  const history = histories.get(sessionId) ?? []
 
   // / comes to the line: the one on screen (the work pane keeps the tabs
   // behind it mounted), and not while something else takes typing or holds
@@ -70,7 +69,8 @@ export function CommandBar({
   }, [disabled])
 
   // The commands the first word could be, while it is being typed.
-  const typingCommand = words(line).length <= 1 && !/\s$/.test(line)
+  // Not while going through the history: ↑ and ↓ are its then.
+  const typingCommand = back === null && words(line).length <= 1 && !/\s$/.test(line)
   const prefix = line.trim().toLowerCase()
   const offered = useMemo(
     () => (typingCommand ? commands.filter((c) => c.id.toLowerCase().startsWith(prefix)) : []),
@@ -91,7 +91,6 @@ export function CommandBar({
       {
         onSuccess: (data) => {
           onQueued?.(data.queueMinionTask)
-          histories.set(sessionId, [...history.filter((h) => h !== text), text].slice(-100))
           setLine("")
           setBack(null)
         },

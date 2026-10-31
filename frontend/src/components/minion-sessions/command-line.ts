@@ -217,3 +217,13 @@ export function lineOf(command: string, args: Record<string, unknown> | null | u
   for (const [k, v] of entries) parts.push(`--${k}=${quote(show(v))}`)
   return parts.join(" ")
 }
+
+/**
+ * The lines a command line's ↑ and ↓ go through, oldest first: each line
+ * once, where it was last run, the last max of them.
+ */
+export function commandHistory(lines: readonly string[], max = 200): string[] {
+  const last = new Map<string, number>()
+  lines.forEach((l, i) => last.set(l, i))
+  return lines.filter((l, i) => last.get(l) === i).slice(-max)
+}

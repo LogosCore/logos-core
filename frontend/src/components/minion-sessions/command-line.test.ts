@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { commandOf, lineOf, parseCommandLine, usage, words, type CommandDef } from "./command-line"
+import { commandHistory, commandOf, lineOf, parseCommandLine, usage, words, type CommandDef } from "./command-line"
 
 const commands: CommandDef[] = [
   {
@@ -54,5 +54,11 @@ describe("the console's command line", () => {
     expect(usage(commands[0])).toBe("shell <command> [timeout=30s]")
     expect(lineOf("shell", { command: "ls -la", timeout: "1m" }, commands[0])).toBe("shell ls -la --timeout=1m")
     expect(lineOf("sleep", { interval: "30s", jitter: 20 }, commands[2])).toBe("sleep --interval=30s --jitter=20")
+  })
+
+  test("the history: each line once, where it was last run, the last of them", () => {
+    expect(commandHistory(["ls", "shell id", "ls", "hello", "shell id"])).toEqual(["ls", "hello", "shell id"])
+    expect(commandHistory(["a", "b", "c"], 2)).toEqual(["b", "c"])
+    expect(commandHistory([])).toEqual([])
   })
 })
