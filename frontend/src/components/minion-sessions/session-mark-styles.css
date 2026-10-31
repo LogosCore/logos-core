@@ -491,9 +491,10 @@
 /* A button in a cell (an address list's +N) under the ink styles: its text
  * showed the cell's gradient through it, until hovering painted the
  * button's own background over it and left it empty. It takes the style's
- * icon color, as the row's other controls do. */
-.mark-fx-ink [data-cell] [data-slot="button"],
-.mark-fx-ink [data-cell] [data-slot="button"] * {
+ * icon color, as the row's other controls do. By element, not data-slot: a
+ * menu trigger replaces the button's data-slot with its own. */
+.mark-fx-ink [data-cell] :is(button, [role="button"]),
+.mark-fx-ink [data-cell] :is(button, [role="button"]) * {
   color: var(--fx-icon);
 }
 
