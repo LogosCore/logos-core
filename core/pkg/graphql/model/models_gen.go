@@ -582,17 +582,19 @@ type MinionSessionSortInput struct {
 }
 
 type MinionSessionsLayout struct {
-	Columns []string               `json:"columns"`
-	Sort    *MinionSessionSort     `json:"sort,omitempty"`
-	Filters []*MinionSessionFilter `json:"filters"`
-	Split   *float64               `json:"split,omitempty"`
+	Columns      []string               `json:"columns"`
+	Sort         *MinionSessionSort     `json:"sort,omitempty"`
+	Filters      []*MinionSessionFilter `json:"filters"`
+	Split        *float64               `json:"split,omitempty"`
+	ConsoleSplit *float64               `json:"consoleSplit,omitempty"`
 }
 
 type MinionSessionsLayoutInput struct {
-	Columns []string                    `json:"columns"`
-	Sort    *MinionSessionSortInput     `json:"sort,omitempty"`
-	Filters []*MinionSessionFilterInput `json:"filters"`
-	Split   *float64                    `json:"split,omitempty"`
+	Columns      []string                    `json:"columns"`
+	Sort         *MinionSessionSortInput     `json:"sort,omitempty"`
+	Filters      []*MinionSessionFilterInput `json:"filters"`
+	Split        *float64                    `json:"split,omitempty"`
+	ConsoleSplit *float64                    `json:"consoleSplit,omitempty"`
 }
 
 type MinionTask struct {
@@ -618,6 +620,7 @@ type MinionTask struct {
 	OutputSize        int     `json:"outputSize"`
 	OutputUtf8        bool    `json:"outputUtf8"`
 	OutputTruncated   bool    `json:"outputTruncated"`
+	Parts             int     `json:"parts"`
 	Data              any     `json:"data,omitempty"`
 }
 

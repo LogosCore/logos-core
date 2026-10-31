@@ -528,3 +528,13 @@ models:
         resolver: true         # time.Time -> RFC3339 string
       metadata:
         resolver: true         # map[string]any -> JSON-encoded string
+  MinionTask:
+    fields:
+      # Read from the task's parts only when a query asks: a list asks for
+      # the rest, the selected task for these.
+      output:
+        resolver: true
+      outputUtf8:
+        resolver: true
+      data:
+        resolver: true

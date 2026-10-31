@@ -38,18 +38,19 @@ func TestMinionSessionFilterValidate(t *testing.T) {
 }
 
 func TestMinionSessionsLayoutValidate(t *testing.T) {
-	tooSmall := 0.05
+	tooSmall, tooBig := 0.05, 0.95
 	ok := MinionSessionsLayout{Columns: []string{"number", "host"}, Sort: &MinionSessionSort{Column: "lastSeen", Desc: true}}
 	if err := ok.Validate(); err != nil {
 		t.Fatal(err)
 	}
 	for name, l := range map[string]MinionSessionsLayout{
-		"no columns":      {},
-		"twice":           {Columns: []string{"host", "host"}},
-		"unknown":         {Columns: []string{"nope"}},
-		"unsortable sort": {Columns: []string{"host"}, Sort: &MinionSessionSort{Column: "buildId"}},
-		"bad filter":      {Columns: []string{"host"}, Filters: []MinionSessionFilter{{Column: "host", Op: "NEVER"}}},
-		"split too small": {Columns: []string{"host"}, Split: &tooSmall},
+		"no columns":            {},
+		"twice":                 {Columns: []string{"host", "host"}},
+		"unknown":               {Columns: []string{"nope"}},
+		"unsortable sort":       {Columns: []string{"host"}, Sort: &MinionSessionSort{Column: "buildId"}},
+		"bad filter":            {Columns: []string{"host"}, Filters: []MinionSessionFilter{{Column: "host", Op: "NEVER"}}},
+		"split too small":       {Columns: []string{"host"}, Split: &tooSmall},
+		"console split too big": {Columns: []string{"host"}, ConsoleSplit: &tooBig},
 	} {
 		if l.Validate() == nil {
 			t.Errorf("%s passed", name)

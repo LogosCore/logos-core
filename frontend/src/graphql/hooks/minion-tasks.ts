@@ -5,6 +5,7 @@ import {
   CancelMinionTaskDocument,
   MinionSessionCommandsDocument,
   MinionTaskChangedDocument,
+  MinionTaskOutputDocument,
   MinionTasksDocument,
   QueueMinionTaskDocument,
   type MinionTaskFieldsFragment,
@@ -19,6 +20,7 @@ export const minionTaskKeys = {
   all: ["minionTasks"] as const,
   session: (sessionId: string) => [...minionTaskKeys.all, "session", sessionId] as const,
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
+  output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
 }
 
 const PAGE = 50
@@ -34,6 +36,27 @@ export function useMinionTasks(sessionId: string) {
     getNextPageParam: (last) => last.minionTasks.before ?? undefined,
     enabled: sessionId !== "",
   })
+}
+
+/**
+ * A task's output and data, read again whenever version changes (its parts
+ * and state, say): what was shown stays until the new read is in.
+ */
+export function useMinionTaskOutput(id: string | null, version: string) {
+  return useQuery({
+    queryKey: [...minionTaskKeys.output(id ?? ""), version],
+    queryFn: () => graphqlClient(MinionTaskOutputDocument, { id: id! }),
+    enabled: id !== null,
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === id ? prev : undefined),
+    // Up to 4 MiB each: the older reads of a growing output go soon.
+    gcTime: 10_000,
+  })
+}
+
+/** A task's output text, for copying it from where it is not shown. */
+export async function fetchMinionTaskOutput(id: string): Promise<string> {
+  const data = await graphqlClient(MinionTaskOutputDocument, { id })
+  return data.minionTask?.output ?? ""
 }
 
 /** The commands a session's minion takes, with their params. */

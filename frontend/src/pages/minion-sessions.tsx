@@ -67,7 +67,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
         min={MIN_SPLIT}
         max={MAX_SPLIT}
         onChange={(split) => setLayout({ ...layout, split })}
-        top={
+        first={
           <div className="flex min-h-0 flex-1 flex-col">
             {error ? (
               <div className="m-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
@@ -108,7 +108,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
             )}
           </div>
         }
-        bottom={<SessionWorkspace tabs={tabs} onTabsChange={setTabs} />}
+        second={<SessionWorkspace tabs={tabs} onTabsChange={setTabs} />}
       />
     </div>
   )

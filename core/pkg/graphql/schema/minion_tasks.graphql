@@ -37,11 +37,15 @@ type MinionTask {
   err: String
   # The output: the parts joined in order, read as UTF-8 (bytes that are not
   # stand as U+FFFD; outputUtf8 says whether all were). At most 4 MiB is
-  # kept (outputTruncated).
+  # kept (outputTruncated). Read only when asked for: a list asks for the
+  # rest. The bytes as they came: GET /api/v1/minion-tasks/{id}/output.
   output: String!
   outputSize: Int!
   outputUtf8: Boolean!
   outputTruncated: Boolean!
+  # How many result parts came: it grows with each, output or data, so a
+  # client showing a task's output knows when to read it again.
+  parts: Int!
   # The command's structured output (ls entries, say): the parts' data
   # joined, arrays appended.
   data: JSON
@@ -55,6 +59,10 @@ type MinionTaskPage {
 }
 
 extend type Query {
+  # One task, with its output. Needs at least viewer.
+  minionTask(id: ID!): MinionTask
+    @hasPermission(permission: "operation:member")
+
   # A session's tasks, newest first, at most last (50 by default, 200 at
   # most), before a page's cursor. Needs at least viewer.
   minionTasks(sessionId: ID!, last: Int, before: String): MinionTaskPage!

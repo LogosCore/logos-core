@@ -118,6 +118,8 @@ export interface SessionsLayout {
   filters: SessionFilter[]
   /** The share of the page's height the list takes above the session; null: DEFAULT_SPLIT. */
   split: number | null
+  /** The share of a session console's width its task list takes; null: DEFAULT_CONSOLE_SPLIT. */
+  consoleSplit: number | null
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -125,12 +127,14 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   sort: null,
   filters: [],
   split: null,
+  consoleSplit: null,
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
 export const DEFAULT_SPLIT = 0.6
 export const MIN_SPLIT = 0.1
 export const MAX_SPLIT = 0.9
+export const DEFAULT_CONSOLE_SPLIT = 0.3
 
 const isColumn = (id: string): id is SessionColumnId => SESSION_COLUMN_BY_ID.has(id)
 
@@ -151,13 +155,19 @@ export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | 
     if (!isColumn(f.column) || filters.some((g) => g.column === f.column)) continue
     filters.push(withoutNulls({ ...f, column: f.column }))
   }
-  const split = stored.split != null ? Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, stored.split)) : null
-  return { columns: columns.length > 0 ? columns : DEFAULT_SESSIONS_LAYOUT.columns, sort, filters, split }
+  const share = (v: number | null | undefined) => (v != null ? Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, v)) : null)
+  return {
+    columns: columns.length > 0 ? columns : DEFAULT_SESSIONS_LAYOUT.columns,
+    sort,
+    filters,
+    split: share(stored.split),
+    consoleSplit: share(stored.consoleSplit),
+  }
 }
 
 /** The layout as the mutation takes it. */
 export function sessionsLayoutInput(layout: SessionsLayout) {
-  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split }
+  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split, consoleSplit: layout.consoleSplit }
 }
 
 function withoutNulls(f: SessionFilter): SessionFilter {

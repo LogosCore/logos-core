@@ -472,6 +472,32 @@ const docTemplate = `{
                 }
             }
         },
+        "/minion-tasks/{id}/output": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "Minion tasks"
+                ],
+                "summary": "Download a minion task's raw output",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/skills": {
             "post": {
                 "description": "Uploads a zip as a new version of a named skill, claiming the name if it is free. Only the operator who claimed a name may publish new versions of it; an administrator may publish to any name.",

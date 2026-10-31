@@ -23,6 +23,7 @@ type controllers struct {
 	channel  controller.IChannelController
 	skill    *controller.SkillController
 	build    *controller.BuildController
+	task     *controller.MinionTaskController
 	wiki     *controller.WikiController
 	transfer *controller.WikiTransferController
 	webhook  *wiki.WebhookHandler
@@ -91,6 +92,7 @@ func (a *App) buildControllers() *controllers {
 				WithTasks(a.repos.MinionTask), a.logger, a.env.ChannelSyncMaxSize),
 		skill: controller.NewSkillController(a.skillService, a.logger),
 		build: controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
+		task:  controller.NewMinionTaskController(a.repos.MinionTask, a.repos.Operation, a.logger),
 		wiki:  controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
 		// The runner and its pipeline are built in NewApp; this controller only

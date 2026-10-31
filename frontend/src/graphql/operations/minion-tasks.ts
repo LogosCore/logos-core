@@ -1,7 +1,9 @@
 import { graphql } from "@/graphql/gql"
 
 // The commands operators give a session's minion, and what it answered
-// (core: minion_tasks.graphql).
+// (core: minion_tasks.graphql). Lists and live updates carry a task without
+// its output; the console reads the output of the task it shows
+// (MinionTaskOutput) again as parts come.
 export const MinionTaskFields = graphql(`
   fragment MinionTaskFields on MinionTask {
     id
@@ -22,11 +24,20 @@ export const MinionTaskFields = graphql(`
     ok
     exit
     err
-    output
     outputSize
-    outputUtf8
     outputTruncated
-    data
+    parts
+  }
+`)
+
+export const MinionTaskOutputQuery = graphql(`
+  query MinionTaskOutput($id: ID!) {
+    minionTask(id: $id) {
+      id
+      output
+      outputUtf8
+      data
+    }
   }
 `)
 

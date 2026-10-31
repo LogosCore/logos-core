@@ -7,10 +7,40 @@ package resolver
 
 import (
 	"context"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
+	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
+
+// Output is the resolver for the output field.
+func (r *minionTaskResolver) Output(ctx context.Context, obj *model.MinionTask) (string, error) {
+	out, err := r.MinionTaskResolver.Output(ctx, obj.ID)
+	if err != nil {
+		return "", err
+	}
+	return strings.ToValidUTF8(string(out), "\uFFFD"), nil
+}
+
+// OutputUtf8 is the resolver for the outputUtf8 field.
+func (r *minionTaskResolver) OutputUtf8(ctx context.Context, obj *model.MinionTask) (bool, error) {
+	out, err := r.MinionTaskResolver.Output(ctx, obj.ID)
+	if err != nil {
+		return false, err
+	}
+	return utf8.Valid(out), nil
+}
+
+// Data is the resolver for the data field.
+func (r *minionTaskResolver) Data(ctx context.Context, obj *model.MinionTask) (any, error) {
+	data, err := r.MinionTaskResolver.Data(ctx, obj.ID)
+	if err != nil || data == nil {
+		return nil, err
+	}
+	return data, nil
+}
 
 // QueueMinionTask is the resolver for the queueMinionTask field.
 func (r *mutationResolver) QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error) {
@@ -20,6 +50,11 @@ func (r *mutationResolver) QueueMinionTask(ctx context.Context, sessionID string
 // CancelMinionTask is the resolver for the cancelMinionTask field.
 func (r *mutationResolver) CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error) {
 	return r.MinionTaskResolver.CancelMinionTask(ctx, id)
+}
+
+// MinionTask is the resolver for the minionTask field.
+func (r *queryResolver) MinionTask(ctx context.Context, id string) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.MinionTask(ctx, id)
 }
 
 // MinionTasks is the resolver for the minionTasks field.
@@ -58,3 +93,8 @@ func (r *subscriptionResolver) MinionTaskChanged(ctx context.Context, sessionID 
 			return r.MinionTaskResolver.Load(ctx, e.Payload.(eventbus.MinionTaskEventPayload).TaskID)
 		}), nil
 }
+
+// MinionTask returns generated.MinionTaskResolver implementation.
+func (r *Resolver) MinionTask() generated.MinionTaskResolver { return &minionTaskResolver{r} }
+
+type minionTaskResolver struct{ *Resolver }

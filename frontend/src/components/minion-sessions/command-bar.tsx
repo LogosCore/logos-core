@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { ParamFields } from "@/components/modules/management/param-fields"
 import { checkDraft, emptyDraft, type Draft, type FieldDef } from "@/components/modules/management/field-values"
+import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { cn } from "@/lib/utils"
 import { commandOf, parseCommandLine, usage, words, type CommandDef } from "./command-line"
@@ -29,12 +30,15 @@ export function CommandBar({
   commands,
   disabled,
   disabledReason,
+  onQueued,
 }: {
   sessionId: string
   commands: readonly ConsoleCommand[]
   disabled: boolean
   /** Why it is disabled, said in its place. */
   disabledReason?: string
+  /** A task this queued. */
+  onQueued?: (task: MinionTaskFieldsFragment) => void
 }) {
   const queue = useQueueMinionTask()
   const [line, setLine] = useState("")
@@ -66,7 +70,8 @@ export function CommandBar({
     queue.mutate(
       { sessionId, command: p.command.id, args: Object.keys(p.args).length > 0 ? p.args : null },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          onQueued?.(data.queueMinionTask)
           histories.set(sessionId, [...history.filter((h) => h !== text), text].slice(-100))
           setLine("")
           setBack(null)
@@ -164,7 +169,7 @@ export function CommandBar({
           placeholder={commands.length > 0 ? `${commands.map((c) => c.id).join(", ")}` : "No commands"}
           className="min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground/60"
         />
-        <ParamsForm sessionId={sessionId} commands={commands} initial={command} />
+        <ParamsForm sessionId={sessionId} commands={commands} initial={command} onQueued={onQueued} />
         <Button size="xs" disabled={queue.isPending || line.trim() === ""} onClick={() => run(line)}>
           <PlayIcon />
           Run
@@ -191,7 +196,17 @@ function readsAs(command: CommandDef, args: Record<string, unknown>): string {
 }
 
 /** A command's params, field by field: for those with many, or unusual types. */
-function ParamsForm({ sessionId, commands, initial }: { sessionId: string; commands: readonly ConsoleCommand[]; initial?: CommandDef }) {
+function ParamsForm({
+  sessionId,
+  commands,
+  initial,
+  onQueued,
+}: {
+  sessionId: string
+  commands: readonly ConsoleCommand[]
+  initial?: CommandDef
+  onQueued?: (task: MinionTaskFieldsFragment) => void
+}) {
   const queue = useQueueMinionTask()
   const [open, setOpen] = useState(false)
   const [id, setId] = useState<string | null>(null)
@@ -213,7 +228,8 @@ function ParamsForm({ sessionId, commands, initial }: { sessionId: string; comma
     queue.mutate(
       { sessionId, command: command.id, args: Object.keys(args).length > 0 ? args : null },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          onQueued?.(data.queueMinionTask)
           setOpen(false)
           setDrafts({})
         },

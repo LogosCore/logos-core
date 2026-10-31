@@ -1,16 +1,22 @@
-import { useLayoutEffect, useMemo, useRef } from "react"
+import { useMemo, useState, type KeyboardEvent } from "react"
 import { SquareTerminalIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { SplitPane } from "@/components/ui/split-pane"
 import { useCanBuild } from "@/components/builds/build-access"
-import { useMinionSession } from "@/graphql/hooks/minion-sessions"
+import { useMinionSession, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
 import { useMinionSessionCommands, useMinionTaskSubscription, useMinionTasks } from "@/graphql/hooks/minion-tasks"
 import { CommandBar, type ConsoleCommand } from "./command-bar"
-import { TaskEntry } from "./task-entry"
+import { FOLLOWING, newestMoved, selectTask, selectedTask, stepTask, type ConsoleSelection } from "./console-selection"
+import { DEFAULT_CONSOLE_SPLIT, MAX_SPLIT, MIN_SPLIT } from "./sessions-layout"
+import { TaskDetail } from "./task-detail"
+import { TaskList } from "./task-list"
 
-// A session's console, in its work pane tab: the tasks given its minion and
-// what came back, oldest at the top, and the command line. Live: the tasks
-// change as the minion takes them and answers. Where the session stands
-// (live, late, lost) is its row's, which the table scrolls to with the tab.
+// A session's console, in its work pane tab: the tasks given its minion on
+// the left, the one picked on the right with what came back, and the
+// command line under both. Live: the tasks change as the minion takes them
+// and answers. The console follows the newest task until another is picked
+// (console-selection.ts); what is picked stays per tab, as the tab's panel
+// stays mounted. Where the session stands (live, late, lost) is its row's,
+// which the table scrolls to with the tab.
 
 export function SessionConsole({ sessionId }: { sessionId: string }) {
   const { data } = useMinionSession(sessionId)
@@ -19,6 +25,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   useMinionTaskSubscription(sessionId)
   const tasksQ = useMinionTasks(sessionId)
   const commandsQ = useMinionSessionCommands(sessionId)
+  // The divider is the operator's, kept with their sessions layout.
+  const { layout, setLayout } = useMinionSessionsLayout()
 
   const commands = useMemo<ConsoleCommand[]>(
     () =>
@@ -35,17 +43,16 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
 
-  // Stays at the bottom as tasks and output come, unless the operator
-  // scrolled up to read.
-  const log = useRef<HTMLDivElement>(null)
-  const atBottom = useRef(true)
-  const lastSize = tasks.reduce((n, t) => n + t.outputSize + (t.state.length << 20), tasks.length)
-  useLayoutEffect(() => {
-    const el = log.current
-    if (el && atBottom.current) el.scrollTop = el.scrollHeight
-  }, [lastSize])
+  const [selection, setSelection] = useState<ConsoleSelection>(FOLLOWING)
+  const selected = selectedTask(tasks, selection)
+  const moved = newestMoved(tasks, selection)
+  // A task the operator runs is the newest: shown, and followed.
+  const follow = () => setSelection(FOLLOWING)
+  // Ctrl+F anywhere in the console finds in the output shown.
+  const [findSignal, setFindSignal] = useState(0)
 
   const closed = session?.state === "CLOSED"
+  const writable = canWrite && !closed
   const disabledReason = !session
     ? "This session does not exist any more."
     : closed
@@ -56,34 +63,70 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
           ? (commandsQ.error as Error).message
           : undefined
 
+  const onKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "f" && selected) {
+      e.preventDefault()
+      setFindSignal((n) => n + 1)
+    }
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div
-        ref={log}
-        className="min-h-0 flex-1 overflow-y-auto"
-        onScroll={(e) => {
-          const el = e.currentTarget
-          atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
-        }}
-      >
-        {tasksQ.hasNextPage && (
-          <div className="flex justify-center py-2">
-            <Button variant="ghost" size="xs" disabled={tasksQ.isFetchingNextPage} onClick={() => void tasksQ.fetchNextPage()}>
-              {tasksQ.isFetchingNextPage ? "Loading…" : "Older tasks"}
-            </Button>
+    <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKeyDown}>
+      <SplitPane
+        orientation="horizontal"
+        label="Resize the task list and the task beside it"
+        split={layout.consoleSplit ?? DEFAULT_CONSOLE_SPLIT}
+        defaultSplit={DEFAULT_CONSOLE_SPLIT}
+        min={MIN_SPLIT}
+        max={MAX_SPLIT}
+        onChange={(consoleSplit) => setLayout({ ...layout, consoleSplit })}
+        className="border-t"
+        first={
+          <TaskList
+            tasks={tasks}
+            selectedId={selected?.id ?? null}
+            following={selection.pinned === null}
+            onSelect={(id) => setSelection(selectTask(tasks, id))}
+            onStep={(by) => setSelection(stepTask(tasks, selection, by))}
+            onQueued={follow}
+            commands={byId}
+            canWrite={writable}
+            hasOlder={!!tasksQ.hasNextPage}
+            loadingOlder={tasksQ.isFetchingNextPage}
+            onLoadOlder={() => void tasksQ.fetchNextPage()}
+            moved={moved}
+            onFollow={() => follow()}
+          />
+        }
+        second={
+          <div className="flex min-h-0 flex-1 flex-col border-l">
+            {selected ? (
+              <TaskDetail
+                key={selected.id}
+                task={selected}
+                command={byId.get(selected.command)}
+                canWrite={writable}
+                onQueued={follow}
+                findSignal={findSignal}
+              />
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+                <SquareTerminalIcon className="size-6 opacity-50" />
+                <p className="text-sm">
+                  {tasksQ.isLoading ? "Loading…" : "No tasks yet. Type a command below; it goes out when the minion next checks in."}
+                </p>
+              </div>
+            )}
           </div>
-        )}
-        {tasks.length === 0 && !tasksQ.isLoading && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
-            <SquareTerminalIcon className="size-6 opacity-50" />
-            <p className="text-sm">No tasks yet. Type a command below; it goes out when the minion next checks in.</p>
-          </div>
-        )}
-        {tasks.map((t) => (
-          <TaskEntry key={t.id} task={t} command={byId.get(t.command)} canWrite={canWrite && !closed} />
-        ))}
-      </div>
-      <CommandBar sessionId={sessionId} commands={commands} disabled={disabledReason !== undefined} disabledReason={disabledReason} />
+        }
+      />
+      <CommandBar
+        sessionId={sessionId}
+        commands={commands}
+        disabled={disabledReason !== undefined}
+        disabledReason={disabledReason}
+        onQueued={follow}
+      />
     </div>
   )
 }

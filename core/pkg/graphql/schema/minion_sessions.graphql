@@ -229,6 +229,9 @@ type MinionSessionsLayout {
   # The share of the page's height the list takes, 0.1 to 0.9; null for the
   # default.
   split: Float
+  # The share of a session console's width its task list takes beside the
+  # selected task, 0.1 to 0.9; null for the default.
+  consoleSplit: Float
 }
 
 input MinionSessionsLayoutInput {
@@ -236,6 +239,7 @@ input MinionSessionsLayoutInput {
   sort: MinionSessionSortInput
   filters: [MinionSessionFilterInput!]!
   split: Float
+  consoleSplit: Float
 }
 
 type MinionSessionEvent {

@@ -575,6 +575,22 @@ paths:
       summary: Logout
       tags:
       - Auth
+  /minion-tasks/{id}/output:
+    get:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Download a minion task's raw output
+      tags:
+      - Minion tasks
   /skills:
     post:
       consumes:

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
@@ -28,6 +27,12 @@ type IMinionTaskResolver interface {
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
+	MinionTask(ctx context.Context, id string) (*model.MinionTask, error)
+	// Output is a task's output parts joined, as the minion sent them, and
+	// Data their data merged: read only when a query asks (the selected
+	// task's), the parent query having checked the caller.
+	Output(ctx context.Context, taskID string) ([]byte, error)
+	Data(ctx context.Context, taskID string) (map[string]any, error)
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -257,6 +262,56 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
+func (r *minionTaskResolver) MinionTask(ctx context.Context, id string) (*model.MinionTask, error) {
+	tid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
+	}
+	t, err := r.tasks.FindByTaskID(ctx, tid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+func (r *minionTaskResolver) parts(ctx context.Context, taskID string) ([]models.MinionTaskPart, error) {
+	tid, err := uuid.Parse(taskID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid task ID")
+	}
+	parts, err := r.tasks.Parts(ctx, tid)
+	if err != nil {
+		return nil, fmt.Errorf("load the output: %w", err)
+	}
+	return parts, nil
+}
+
+func (r *minionTaskResolver) Output(ctx context.Context, taskID string) ([]byte, error) {
+	parts, err := r.parts(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p.Out...)
+	}
+	return out, nil
+}
+
+func (r *minionTaskResolver) Data(ctx context.Context, taskID string) (map[string]any, error) {
+	parts, err := r.parts(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	return models.MergeMinionTaskData(parts), nil
+}
+
 func (r *minionTaskResolver) Load(ctx context.Context, taskID string) *model.MinionTask {
 	tid, err := uuid.Parse(taskID)
 	if err != nil {
@@ -302,23 +357,15 @@ func (r *minionTaskResolver) names(ctx context.Context, tasks []models.MinionTas
 	return out
 }
 
-// toModel is a task as GraphQL, its output parts joined.
-func (r *minionTaskResolver) toModel(ctx context.Context, t *models.MinionTask, names map[uuid.UUID]string) (*model.MinionTask, error) {
-	parts, err := r.tasks.Parts(ctx, t.TaskID)
-	if err != nil {
-		return nil, fmt.Errorf("load the output: %w", err)
-	}
-	var out []byte
-	for _, p := range parts {
-		out = append(out, p.Out...)
-	}
+// toModel is a task as GraphQL; its output and data are read when asked
+// for (Output, Data).
+func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, names map[uuid.UUID]string) (*model.MinionTask, error) {
 	m := &model.MinionTask{
 		ID: t.TaskID.String(), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Command: t.Command,
 		IssuedBy: t.IssuedBy.String(), State: t.State, QueuedAt: t.QueuedAt.UTC().Format(time.RFC3339Nano),
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),
-		Output: strings.ToValidUTF8(string(out), "�"), OutputSize: len(out), OutputUtf8: utf8.Valid(out),
-		OutputTruncated: t.OutTruncated,
+		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts,
 	}
 	if name, ok := names[t.IssuedBy]; ok {
 		m.IssuedByName = &name
@@ -329,9 +376,6 @@ func (r *minionTaskResolver) toModel(ctx context.Context, t *models.MinionTask, 
 	if t.Exit != nil {
 		exit := int(*t.Exit)
 		m.Exit = &exit
-	}
-	if data := models.MergeMinionTaskData(parts); data != nil {
-		m.Data = data
 	}
 	return m, nil
 }

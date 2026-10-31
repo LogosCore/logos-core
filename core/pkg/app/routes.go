@@ -140,12 +140,14 @@ func (a *App) mountHumanRoutes(v1 *gin.RouterGroup, c *controllers, res *resolve
 	a.mountGraphQLRoutes(v1, res)
 }
 
-// mountBuildRoutes registers the byte paths of minion builds: build file
-// uploads and artifact downloads. Both authorize against the operation the
-// file or build belongs to; everything else about builds is GraphQL.
+// mountBuildRoutes registers the byte paths of minion builds and their
+// sessions: build file uploads, artifact downloads, a task's raw output.
+// Each authorizes against the operation the file, build or task belongs to;
+// everything else about them is GraphQL.
 func (a *App) mountBuildRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.POST("/build-files", c.build.UploadFile)
 	v1.GET("/builds/:id/artifact", c.build.DownloadArtifact)
+	v1.GET("/minion-tasks/:id/output", c.task.DownloadOutput)
 }
 
 // mountWikiRoutes registers the wiki REST surface. Every route here authorizes
