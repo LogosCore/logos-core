@@ -115,16 +115,25 @@ function convert(param: CommandParam, text: string): { ok: true; value: unknown 
   return { ok: true, value: text }
 }
 
-/** Reads a line as one of commands with its args. */
-export function parseCommandLine(line: string, commands: readonly CommandDef[]): ParsedLine {
+/**
+ * A line's command and each param's text as typed, unconverted and
+ * unchecked: what a command form opens with (Shift+Enter). Words past the
+ * params are extra.
+ */
+export interface LineTexts {
+  command?: CommandDef
+  texts: Map<string, string>
+  extra: string[]
+}
+
+/** Reads a line's command and its params' texts, leniently (LineTexts). */
+export function lineTexts(line: string, commands: readonly CommandDef[]): LineTexts {
   const all = words(line)
-  if (all.length === 0) return { ok: false, error: "Type a command" }
   const command = commandOf(line, commands)
-  if (!command) {
-    return { ok: false, error: `No command "${all[0].text}": ${commands.map((c) => c.id).join(", ") || "none"}` }
-  }
+  if (!command) return { texts: new Map(), extra: [] }
   const byKey = new Map(command.params.map((p) => [p.key, p]))
   const texts = new Map<string, string>()
+  const extra: string[] = []
   const rest = all.slice(1)
 
   // An option: --key=value, or --key value. Only a param's key makes one.
@@ -173,12 +182,23 @@ export function parseCommandLine(line: string, commands: readonly CommandDef[]):
       i++
     }
     const free = command.params.filter((p) => !texts.has(p.key))
-    if (positional.length > free.length) {
-      return { ok: false, command, error: `${command.id} takes ${command.params.length === 0 ? "nothing" : `at most ${command.params.length}`}: ${usage(command)}` }
-    }
-    positional.forEach((text, i) => texts.set(free[i].key, text))
+    positional.forEach((text, i) => (i < free.length ? texts.set(free[i].key, text) : extra.push(text)))
   }
+  return { command, texts, extra }
+}
 
+/** Reads a line as one of commands with its args. */
+export function parseCommandLine(line: string, commands: readonly CommandDef[]): ParsedLine {
+  const all = words(line)
+  if (all.length === 0) return { ok: false, error: "Type a command" }
+  const { command, texts, extra } = lineTexts(line, commands)
+  if (!command) {
+    return { ok: false, error: `No command "${all[0].text}": ${commands.map((c) => c.id).join(", ") || "none"}` }
+  }
+  if (extra.length > 0) {
+    return { ok: false, command, error: `${command.id} takes ${command.params.length === 0 ? "nothing" : `at most ${command.params.length}`}: ${usage(command)}` }
+  }
+  const byKey = new Map(command.params.map((p) => [p.key, p]))
   const args: Record<string, unknown> = {}
   for (const [key, text] of texts) {
     const r = convert(byKey.get(key)!, text)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { commandHistory, commandOf, lineOf, parseCommandLine, usage, words, type CommandDef } from "./command-line"
+import { commandHistory, commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type CommandDef } from "./command-line"
 
 const commands: CommandDef[] = [
   {
@@ -60,5 +60,15 @@ describe("the console's command line", () => {
     expect(commandHistory(["ls", "shell id", "ls", "hello", "shell id"])).toEqual(["ls", "hello", "shell id"])
     expect(commandHistory(["a", "b", "c"], 2)).toEqual(["b", "c"])
     expect(commandHistory([])).toEqual([])
+  })
+
+  test("a line read leniently for the form: each param's text as typed, nothing checked", () => {
+    const t = lineTexts("sleep abc --jitter=x extra", commands)
+    expect(t.command?.id).toBe("sleep")
+    expect(Object.fromEntries(t.texts)).toEqual({ interval: "abc", jitter: "x" })
+    expect(t.extra).toEqual(["extra"])
+    expect(Object.fromEntries(lineTexts("shell ls -la --timeout=1m", commands).texts)).toEqual({ command: "ls -la", timeout: "1m" })
+    expect(lineTexts("sleep", commands).texts.size).toBe(0)
+    expect(lineTexts("rm -rf /", commands).command).toBeUndefined()
   })
 })

@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { ChevronRightIcon, PlayIcon, SlidersHorizontalIcon } from "lucide-react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { errorMessage } from "@/components/modules/management/api-errors"
-import { ParamFields } from "@/components/modules/management/param-fields"
-import { checkDraft, emptyDraft, type Draft, type FieldDef } from "@/components/modules/management/field-values"
+import type { Draft, FieldDef } from "@/components/modules/management/field-values"
+import { CommandFormDialog } from "@/components/command-form/command-form-dialog"
+import { draftsFromTexts } from "@/components/command-form/command-drafts"
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql"
 import { useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
 import { cn } from "@/lib/utils"
-import { commandOf, parseCommandLine, usage, words, type CommandDef } from "./command-line"
+import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type CommandDef } from "./command-line"
 
 // The console's command line: a command of the session's build typed as a
 // line (command-line.ts), with its commands offered as the first word is
-// typed and how the line reads shown under it; ↑ and ↓ go through what was
-// run here (the session's tasks, as lines), and / anywhere else on the page comes to it. The form beside it fills a command's params field by field.
+// typed and how the line reads shown under it. Enter runs the line;
+// Shift+Enter (or the form button) opens it in the command form, its params
+// filled from what was typed (an empty line opens it with a command to
+// pick). ↑ and ↓ go through what was run here (the session's tasks, as
+// lines), and / anywhere else on the page comes to it.
 
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
@@ -48,6 +50,20 @@ export function CommandBar({
   const [back, setBack] = useState<number | null>(null)
   const draft = useRef("")
   const input = useRef<HTMLInputElement>(null)
+  // The command form: its command (null: one to pick), where its fields
+  // start, and which were typed; key starts it over. Kept while it closes,
+  // so it does not change on its way out.
+  const [formOpen, setFormOpen] = useState(false)
+  const [form, setForm] = useState<{
+    id: string | null
+    picking: boolean
+    drafts?: Record<string, Draft>
+    typed: string[]
+    key: number
+  } | null>(null)
+  const formCommand = form?.id ? commands.find((c) => c.id === form.id) : undefined
+  const openings = useRef(0)
+  const nextKey = () => (openings.current += 1)
 
   // / comes to the line: the one on screen (the work pane keeps the tabs
   // behind it mounted), and not while something else takes typing or holds
@@ -105,7 +121,31 @@ export function CommandBar({
     input.current?.focus()
   }
 
+  // Opens the command form on the line: its command's params filled from
+  // what was typed for them; an empty line, to pick a command.
+  const openForm = () => {
+    if (line.trim() === "") {
+      setForm({ id: null, picking: true, typed: [], key: nextKey() })
+      setFormOpen(true)
+      return
+    }
+    const lt = lineTexts(line, commands)
+    const c = lt.command ? commands.find((x) => x.id === lt.command!.id) : undefined
+    if (!c) {
+      setError(`No command "${words(line)[0].text}": ${commands.map((x) => x.id).join(", ") || "none"}`)
+      return
+    }
+    setError(null)
+    setForm({ id: c.id, picking: false, drafts: draftsFromTexts(c.fields, lt.texts), typed: [...lt.texts.keys()], key: nextKey() })
+    setFormOpen(true)
+  }
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && e.shiftKey) {
+      e.preventDefault()
+      openForm()
+      return
+    }
     if (offered.length > 0 && prefix !== "" && !(offered.length === 1 && offered[0].id === prefix)) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault()
@@ -192,12 +232,77 @@ export function CommandBar({
         <kbd className="rounded border px-1.5 font-mono text-[11px] text-muted-foreground peer-focus:hidden" title="Press / to type a command">
           /
         </kbd>
-        <ParamsForm sessionId={sessionId} commands={commands} initial={command} onQueued={onQueued} />
+        <span className="hidden shrink-0 items-center gap-1 text-[11px] text-muted-foreground peer-focus:inline-flex">
+          <kbd className="rounded border px-1 font-mono">↵</kbd> run
+          <kbd className="ml-1 rounded border px-1 font-mono">⇧↵</kbd> form
+        </span>
+        <Button variant="ghost" size="icon-xs" title="Fill the command's params in a form (Shift+Enter)" aria-label="Command form"
+          disabled={commands.length === 0} onMouseDown={(e) => e.preventDefault()} onClick={openForm}>
+          <SlidersHorizontalIcon />
+        </Button>
         <Button size="xs" disabled={queue.isPending || line.trim() === ""} onClick={() => run(line)}>
           <PlayIcon />
           Run
         </Button>
       </div>
+      <CommandFormDialog
+        open={formOpen}
+        onOpenChange={(o) => {
+          if (o) return
+          setFormOpen(false)
+          input.current?.focus()
+        }}
+        formKey={`${form?.key}-${form?.id}`}
+        title={formCommand ? formCommand.label : "Run a command"}
+        description={
+          formCommand ? (
+            <>
+              <code className="font-mono text-xs">{usage(formCommand)}</code>
+              {formCommand.description && <span className="mt-1 block">{formCommand.description}</span>}
+            </>
+          ) : (
+            "Pick one of the session's commands."
+          )
+        }
+        before={
+          form?.picking && (
+            <Select
+              value={form.id}
+              onValueChange={(v) => typeof v === "string" && setForm({ ...form, id: v, drafts: undefined, typed: [], key: nextKey() })}
+            >
+              <SelectTrigger className="w-full" aria-label="Command">
+                <SelectValue placeholder="Command" />
+              </SelectTrigger>
+              <SelectContent>
+                {commands.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.label} <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        }
+        fields={formCommand?.fields ?? []}
+        initialDrafts={form?.drafts}
+        showErrorsFor={form?.typed}
+        after={(values) =>
+          formCommand && (
+            <p className="truncate font-mono text-xs text-muted-foreground" title={values ? lineOf(formCommand.id, values, formCommand) : undefined}>
+              Same as: {values ? lineOf(formCommand.id, values, formCommand) : "…"}
+            </p>
+          )
+        }
+        onSubmit={async (values) => {
+          if (!formCommand) throw new Error("Pick a command first.")
+          const data = await queue.mutateAsync({ sessionId, command: formCommand.id, args: Object.keys(values).length > 0 ? values : null })
+          onQueued?.(data.queueMinionTask)
+          setLine("")
+          setBack(null)
+          setError(null)
+        }}
+        idPrefix={`task-${sessionId}`}
+      />
       {/* How the line reads, or why it does not. */}
       {(error || (parsed && command)) && (
         <div className={cn("px-9 pb-2 font-mono text-xs", error || (parsed && !parsed.ok) ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
@@ -216,98 +321,4 @@ function readsAs(command: CommandDef, args: Record<string, unknown>): string {
     return null
   })
   return [command.id, ...parts.filter((p) => p !== null)].join("  ")
-}
-
-/** A command's params, field by field: for those with many, or unusual types. */
-function ParamsForm({
-  sessionId,
-  commands,
-  initial,
-  onQueued,
-}: {
-  sessionId: string
-  commands: readonly ConsoleCommand[]
-  initial?: CommandDef
-  onQueued?: (task: MinionTaskFieldsFragment) => void
-}) {
-  const queue = useQueueMinionTask()
-  const [open, setOpen] = useState(false)
-  const [id, setId] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const command = commands.find((c) => c.id === id)
-
-  const submit = () => {
-    if (!command) return
-    const args: Record<string, unknown> = {}
-    const problems: Record<string, string> = {}
-    for (const f of command.fields) {
-      const r = checkDraft(f, drafts[f.key] ?? emptyDraft(f, { secretAsText: true }))
-      if (!r.ok) problems[f.key] = r.error
-      else if (r.value !== null && r.value !== undefined) args[f.key] = r.value
-    }
-    setErrors(problems)
-    if (Object.keys(problems).length > 0) return
-    queue.mutate(
-      { sessionId, command: command.id, args: Object.keys(args).length > 0 ? args : null },
-      {
-        onSuccess: (data) => {
-          onQueued?.(data.queueMinionTask)
-          setOpen(false)
-          setDrafts({})
-        },
-        onError: (err) => toast.error(errorMessage(err, "Could not queue the task")),
-      },
-    )
-  }
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o)
-        if (o) {
-          setId(initial?.id ?? commands[0]?.id ?? null)
-          setDrafts({})
-          setErrors({})
-        }
-      }}
-    >
-      <PopoverTrigger
-        render={<Button variant="ghost" size="icon-xs" title="Fill a command's params in a form" aria-label="Command form" disabled={commands.length === 0} />}
-      >
-        <SlidersHorizontalIcon />
-      </PopoverTrigger>
-      <PopoverContent align="end" side="top" className="w-96">
-        <div className="flex flex-col gap-4">
-          <Select value={id} onValueChange={(v) => { setId(typeof v === "string" ? v : null); setDrafts({}); setErrors({}) }}>
-            <SelectTrigger className="w-full" aria-label="Command">
-              <SelectValue placeholder="Command" />
-            </SelectTrigger>
-            <SelectContent>
-              {commands.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.label} <span className="font-mono text-xs text-muted-foreground">{c.id}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {command?.description && <p className="text-sm text-muted-foreground">{command.description}</p>}
-          {command && command.fields.length > 0 && (
-            <ParamFields
-              params={command.fields}
-              drafts={drafts}
-              onChange={(key, d) => setDrafts((ds) => ({ ...ds, [key]: d }))}
-              errors={errors}
-              idPrefix={`task-${sessionId}`}
-            />
-          )}
-          <Button onClick={submit} disabled={!command || queue.isPending}>
-            <PlayIcon />
-            Run
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
 }

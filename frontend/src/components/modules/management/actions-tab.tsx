@@ -11,14 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { CommandFormDialog } from "@/components/command-form/command-form-dialog"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import {
   Table,
@@ -40,16 +33,8 @@ import {
 import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
 import { actionBlocker } from "./action-blocker"
 import { errorMessage, graphqlErrorCode } from "./api-errors"
-import {
-  durationMs,
-  evaluateParams,
-  formatElapsed,
-  initialParamDrafts,
-  prettyJson,
-  type Draft,
-} from "./field-values"
+import { durationMs, formatElapsed, prettyJson } from "./field-values"
 import { actorLabel } from "./labels"
-import { ParamFields } from "./param-fields"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
 type Action = Management["actions"][number]
@@ -217,6 +202,7 @@ export function InvocationStatusBadge({ status }: { status: ModuleActionStatus }
   )
 }
 
+/** An action's params and confirmation, in the app's command form. */
 function ActionDialog({
   action,
   instance,
@@ -228,90 +214,37 @@ function ActionDialog({
   onClose: () => void
   onRun: (action: Action, params: Record<string, unknown> | null) => void
 }) {
-  return (
-    <Dialog open={action !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        {/* Keyed so each opening starts from the action's defaults. */}
-        {action && (
-          <ActionDialogBody key={action.name} action={action} instance={instance} onClose={onClose} onRun={onRun} />
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function ActionDialogBody({
-  action,
-  instance,
-  onClose,
-  onRun,
-}: {
-  action: Action
-  instance: string
-  onClose: () => void
-  onRun: (action: Action, params: Record<string, unknown> | null) => void
-}) {
-  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => initialParamDrafts(action.params))
-  const [submitted, setSubmitted] = useState(false)
-  const high = action.risk === "high"
+  // The action shown stays while the dialog closes, so it does not empty
+  // on its way out.
+  const [last, setLast] = useState(action)
+  if (action && action !== last) setLast(action)
+  const shown = action ?? last
+  const high = shown?.risk === "high"
   // A high-risk action, or one with a confirm prompt, opens to be confirmed;
   // others open only for their params.
-  const confirming = high || !!action.confirm
-  const { values, errors } = evaluateParams(action.params, drafts)
-  const hasErrors = Object.keys(errors).length > 0
-
-  function submit() {
-    setSubmitted(true)
-    if (hasErrors) return
-    onRun(action, action.params.length > 0 ? values : null)
-  }
-
+  const confirming = high || !!shown?.confirm
   return (
-    <form
-      className="flex flex-col gap-4"
-      onSubmit={(e) => {
-        e.preventDefault()
-        submit()
+    <CommandFormDialog
+      open={action !== null}
+      onOpenChange={(o) => !o && onClose()}
+      formKey={shown?.name}
+      title={shown?.label}
+      description={shown ? shown.description || `Run ${shown.name} on ${instance}.` : undefined}
+      fields={shown?.params ?? []}
+      idPrefix={`action-${shown?.name ?? ""}`}
+      destructive={high}
+      submitLabel={confirming ? "Confirm" : "Run"}
+      after={() =>
+        confirming && (
+          <div className={high ? "rounded-md bg-destructive/10 p-3 text-sm text-destructive" : "rounded-md bg-muted p-3 text-sm"}>
+            {shown?.confirm || "This is a high-risk action."}
+          </div>
+        )
+      }
+      onSubmit={(values) => {
+        if (shown) onRun(shown, shown.params.length > 0 ? values : null)
       }}
-    >
-      <DialogHeader>
-        <DialogTitle>{action.label}</DialogTitle>
-        <DialogDescription>
-          {action.description || `Run ${action.name} on ${instance}.`}
-        </DialogDescription>
-      </DialogHeader>
-
-      {action.params.length > 0 && (
-        <ParamFields
-          params={action.params}
-          drafts={drafts}
-          onChange={(key, d) => setDrafts((prev) => ({ ...prev, [key]: d }))}
-          errors={submitted ? errors : {}}
-          idPrefix={`action-${action.name}`}
-        />
-      )}
-
-      {confirming && (
-        <div
-          className={
-            high
-              ? "rounded-md bg-destructive/10 p-3 text-sm text-destructive"
-              : "rounded-md bg-muted p-3 text-sm"
-          }
-        >
-          {action.confirm || "This is a high-risk action."}
-        </div>
-      )}
-
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" variant={high ? "destructive" : "default"} disabled={submitted && hasErrors}>
-          {confirming ? "Confirm" : "Run"}
-        </Button>
-      </DialogFooter>
-    </form>
+    />
   )
 }
 
