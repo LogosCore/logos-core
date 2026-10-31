@@ -634,6 +634,18 @@ export type Minion = {
   target: Scalars['String']['output'];
 };
 
+export type MinionFile = {
+  createdAt: Scalars['String']['output'];
+  doneAt?: Maybe<Scalars['String']['output']>;
+  err?: Maybe<Scalars['String']['output']>;
+  id: Scalars['ID']['output'];
+  name: Scalars['String']['output'];
+  received: Scalars['Int']['output'];
+  sha256?: Maybe<Scalars['String']['output']>;
+  size: Scalars['Int']['output'];
+  state: Scalars['String']['output'];
+};
+
 export type MinionSession = {
   address?: Maybe<Scalars['String']['output']>;
   addressPicked: Scalars['Boolean']['output'];
@@ -805,6 +817,7 @@ export type MinionTask = {
   doneAt?: Maybe<Scalars['String']['output']>;
   err?: Maybe<Scalars['String']['output']>;
   exit?: Maybe<Scalars['Int']['output']>;
+  file?: Maybe<MinionFile>;
   id: Scalars['ID']['output'];
   issuedBy: Scalars['ID']['output'];
   issuedByName?: Maybe<Scalars['String']['output']>;
@@ -3642,7 +3655,7 @@ export type SetMinionSessionsMarkMutationVariables = Exact<{
 
 export type SetMinionSessionsMarkMutation = { setMinionSessionsMark: number };
 
-export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number };
+export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, doneAt?: string | null } | null };
 
 export type MinionTaskOutputQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3658,7 +3671,7 @@ export type MinionTasksQueryVariables = Exact<{
 }>;
 
 
-export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number }> } };
+export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, doneAt?: string | null } | null }> } };
 
 export type MinionTaskDocumentQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3681,21 +3694,21 @@ export type QueueMinionTaskMutationVariables = Exact<{
 }>;
 
 
-export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
+export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, doneAt?: string | null } | null } };
 
 export type CancelMinionTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
+export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, doneAt?: string | null } | null } };
 
 export type MinionTaskChangedSubscriptionVariables = Exact<{
   sessionId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number } };
+export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, doneAt?: string | null } | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -5085,6 +5098,16 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
   dataTruncated
   dataProblem
   missingParts
+  file {
+    id
+    name
+    size
+    received
+    sha256
+    state
+    err
+    doneAt
+  }
 }
     `, {"fragmentName":"MinionTaskFields"}) as unknown as TypedDocumentString<MinionTaskFieldsFragment, unknown>;
 export const ModuleFieldsFragmentDoc = new TypedDocumentString(`
@@ -8244,6 +8267,16 @@ export const MinionTasksDocument = new TypedDocumentString(`
   dataTruncated
   dataProblem
   missingParts
+  file {
+    id
+    name
+    size
+    received
+    sha256
+    state
+    err
+    doneAt
+  }
 }`) as unknown as TypedDocumentString<MinionTasksQuery, MinionTasksQueryVariables>;
 export const MinionTaskDocumentDocument = new TypedDocumentString(`
     query MinionTaskDocument($id: ID!) {
@@ -8326,6 +8359,16 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
   dataTruncated
   dataProblem
   missingParts
+  file {
+    id
+    name
+    size
+    received
+    sha256
+    state
+    err
+    doneAt
+  }
 }`) as unknown as TypedDocumentString<QueueMinionTaskMutation, QueueMinionTaskMutationVariables>;
 export const CancelMinionTaskDocument = new TypedDocumentString(`
     mutation CancelMinionTask($id: ID!) {
@@ -8361,6 +8404,16 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
   dataTruncated
   dataProblem
   missingParts
+  file {
+    id
+    name
+    size
+    received
+    sha256
+    state
+    err
+    doneAt
+  }
 }`) as unknown as TypedDocumentString<CancelMinionTaskMutation, CancelMinionTaskMutationVariables>;
 export const MinionTaskChangedDocument = new TypedDocumentString(`
     subscription MinionTaskChanged($sessionId: ID!) {
@@ -8396,6 +8449,16 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
   dataTruncated
   dataProblem
   missingParts
+  file {
+    id
+    name
+    size
+    received
+    sha256
+    state
+    err
+    doneAt
+  }
 }`) as unknown as TypedDocumentString<MinionTaskChangedSubscription, MinionTaskChangedSubscriptionVariables>;
 export const ModulesDocument = new TypedDocumentString(`
     query Modules($search: String, $status: [String!], $type: [String!], $first: Int, $after: String) {

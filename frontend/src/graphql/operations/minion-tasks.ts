@@ -33,6 +33,16 @@ export const MinionTaskFields = graphql(`
     dataTruncated
     dataProblem
     missingParts
+    file {
+      id
+      name
+      size
+      received
+      sha256
+      state
+      err
+      doneAt
+    }
   }
 `)
 

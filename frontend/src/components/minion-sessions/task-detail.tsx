@@ -21,6 +21,7 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { DirListingView } from "./dir-listing-view"
+import { FileCard } from "./file-card"
 import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
@@ -67,6 +68,8 @@ export function TaskDetail({
   onQueued,
   onOpenPath,
   listCommands,
+  onDownloadFile,
+  downloadCommands,
   findSignal,
 }: {
   task: Task
@@ -77,6 +80,11 @@ export function TaskDetail({
    *  the task's own command again; absent where the viewer may not give
    *  tasks. */
   onOpenPath?: (path: string, commandId?: string) => void
+  /** Downloads a file in a listing, with a download_file command; absent
+   *  where the viewer may not give tasks. */
+  onDownloadFile?: (path: string, commandId: string) => void
+  /** The session's download_file commands: what Download offers. */
+  downloadCommands?: readonly MenuCommand[]
   /** The session's list_dir commands, the task's own first: what List
    *  directory offers. */
   listCommands?: readonly MenuCommand[]
@@ -93,12 +101,16 @@ export function TaskDetail({
   // Whether it gave data, known from its size until it is read (and
   // guessed for a task kept before that: parts with no output are data),
   // so an ls opens on its Data tab at once rather than on an empty Output.
-  const hasData = detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0)
+  // A file_download task's file shows from its first chunk, before its data.
+  const isFile = t.result === "file_download"
+  const hasData = (isFile && t.file != null) || (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
   // The result's view, for data that fits it; the rest shows raw.
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
   const dataNotes = [
     t.dataProblem ? `The data does not fit ${t.result}: ${t.dataProblem}. It shows raw.` : null,
-    t.result && t.result !== "dir_listing" ? `Its result, ${t.result}, is not one this version shows: the data shows raw.` : null,
+    t.result && t.result !== "dir_listing" && !isFile
+      ? `Its result, ${t.result}, is not one this version shows: the data shows raw.`
+      : null,
     t.missingParts > 0
       ? `${t.missingParts} ${t.missingParts === 1 ? "part" : "parts"} before the last never came: the data may lack some.`
       : null,
@@ -137,7 +149,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              Data
+              {isFile ? "File" : "Data"}
             </TabButton>
           )}
           <TabButton active={shown === "json"} onClick={() => setTab("json")} title="The task as core keeps it: for debugging">
@@ -161,7 +173,7 @@ export function TaskDetail({
               <WrapTextIcon />
             </Button>
           )}
-          {shown === "data" && listing && (
+          {shown === "data" && (listing || (isFile && t.file && data)) && (
             <Button variant={rawData ? "secondary" : "ghost"} size="icon-xs" title={rawData ? "Raw JSON: show it rendered" : "Rendered: show the raw JSON"}
               aria-label="Show the data as raw JSON" aria-pressed={rawData}
               onClick={() => {
@@ -227,8 +239,18 @@ export function TaskDetail({
           {dataNotes.length > 0 && (
             <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
           )}
-          {listing && !rawData ? (
-            <DirListingView listing={listing} onOpen={onOpenPath} listCommands={listCommands} />
+          {isFile && t.file && !rawData ? (
+            <div className="min-h-0 flex-1 overflow-auto">
+              <FileCard file={t.file} />
+            </div>
+          ) : listing && !rawData ? (
+            <DirListingView
+              listing={listing}
+              onOpen={onOpenPath}
+              listCommands={listCommands}
+              onDownload={onDownloadFile}
+              downloadCommands={downloadCommands}
+            />
           ) : (
             data && (
               <LazyJsonEditor

@@ -67,6 +67,13 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   // else the session's first. The listing's own keeps its other args;
   // another runs with path alone, the rest its defaults.
   const queue = useQueueMinionTask()
+  // An action on a listing's file (Download): the command picked, with the
+  // path alone; the console follows the new task.
+  const runAction = (commandId: string, path: string) =>
+    queue.mutate(
+      { sessionId, command: commandId, args: { path } },
+      { onSuccess: follow, onError: (err) => toast.error(errorMessage(err, "Could not run it")) },
+    )
   const openPath = (t: Task, path: string, picked?: string) => {
     const commandId = picked ?? commandsFor(commands, "list_dir", t.command)[0]?.id
     if (!commandId) return
@@ -151,6 +158,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                     : undefined
                 }
                 listCommands={commandsFor(commands, "list_dir", selected.command)}
+                onDownloadFile={writable ? (path, commandId) => runAction(commandId, path) : undefined}
+                downloadCommands={commandsFor(commands, "download_file")}
                 findSignal={findSignal}
               />
             ) : (

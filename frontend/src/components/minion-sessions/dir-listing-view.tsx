@@ -1,5 +1,15 @@
 import { useState } from "react"
-import { ArrowUpIcon, ChevronRightIcon, CircleHelpIcon, CopyIcon, FileIcon, FolderIcon, FolderOpenIcon, Link2Icon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  ChevronRightIcon,
+  CircleHelpIcon,
+  CopyIcon,
+  DownloadIcon,
+  FileIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  Link2Icon,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
@@ -13,7 +23,7 @@ import { ActionItem, type MenuCommand } from "./action-menu"
 // contracts/task-results-and-actions.md, View): the path as crumbs, up, and
 // the entries, folders first. Up and a crumb list that folder with the
 // listing's own command; an entry's actions are in its context menu (a
-// right click): List directory on a folder or a link, with a submenu of
+// right click): List directory on a folder or a link, Download on a file, with a submenu of
 // commands when the session has more than one list_dir command, and
 // copying its path or name. onOpen is absent where the viewer may not
 // give tasks, who then only reads what is listed.
@@ -26,12 +36,18 @@ export function DirListingView({
   listing,
   onOpen,
   listCommands = [],
+  onDownload,
+  downloadCommands = [],
 }: {
   listing: DirListing
   /** Lists a folder: with commandId, or the listing's own command. */
   onOpen?: (path: string, commandId?: string) => void
   /** The session's list_dir commands, the listing's own first. */
   listCommands?: readonly MenuCommand[]
+  /** Downloads a file with a download_file command. */
+  onDownload?: (path: string, commandId: string) => void
+  /** The session's download_file commands. */
+  downloadCommands?: readonly MenuCommand[]
 }) {
   const [all, setAll] = useState(false)
   // The entry whose menu is open, marked while it is.
@@ -124,6 +140,12 @@ export function DirListingView({
                           onRun={(id) => onOpen!(path, id)}
                         />
                         {listCommands.length > 0 && <ContextMenuSeparator />}
+                      </>
+                    )}
+                    {onDownload && e.type === "file" && downloadCommands.length > 0 && (
+                      <>
+                        <ActionItem label="Download" icon={<DownloadIcon />} commands={downloadCommands} onRun={(id) => onDownload(path, id)} />
+                        <ContextMenuSeparator />
                       </>
                     )}
                     <ContextMenuItem onClick={() => void copyToClipboard(path, "path")}>
