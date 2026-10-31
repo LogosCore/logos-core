@@ -24,10 +24,11 @@ export function UploadHereButton({ folder, commands, onRun }: { folder: string; 
           </Button>
         }
       />
-      <DropdownMenuContent align="end">
+      {/* As wide as its labels: the content is the trigger's width otherwise, an icon's. */}
+      <DropdownMenuContent align="end" className="w-auto min-w-48">
         {commands.map((c) => (
           <DropdownMenuItem key={c.id} onClick={() => onRun(c.id)}>
-            <span className="truncate">{c.label}</span>
+            <span className="whitespace-nowrap">{c.label || c.id}</span>
             <span className="ml-auto pl-4 font-mono text-xs text-muted-foreground">{c.id}</span>
           </DropdownMenuItem>
         ))}
