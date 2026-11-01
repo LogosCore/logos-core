@@ -15,7 +15,8 @@
 # against the kind's current schema when saved, and again on every read.
 #
 # Viewers of an operation read its endpoints; operators and admins change
-# them. Agent API keys may read but not write.
+# them. Agent API keys have no access: they reach only the MCP routes, never
+# GraphQL (router.go, RequireHuman).
 
 extend type Module {
   # The minion connection schema this instance declared; null when it declared

@@ -23,7 +23,8 @@ import (
 // Channel endpoints over GraphQL (channel_endpoints.graphql): an operation's
 // ready-to-use minion connection settings. The logic is
 // channelendpoints.Service; this resolver authorizes by operation role
-// (viewer reads, operator writes; agent keys read only) and maps the results.
+// (viewer reads, operator writes) and maps the results. Agent keys never get
+// here: GraphQL is closed to them (router.go, RequireHuman).
 
 // ChannelEndpointManager is the endpoint surface the resolver needs.
 // Satisfied by *channelendpoints.Service.
@@ -61,8 +62,9 @@ func NewChannelEndpointResolver(endpoints ChannelEndpointManager, operationRepo 
 	return &channelEndpointResolver{endpoints: endpoints, operationRepo: operationRepo}
 }
 
-// authorize enforces a minimum operation role. Writes pass write=true:
-// agent keys may read endpoints but never change them.
+// authorize enforces a minimum operation role. Writes pass write=true and
+// refuse an agent key: a second line, as RequireHuman keeps agents out of
+// GraphQL altogether.
 func (r *channelEndpointResolver) authorize(ctx context.Context, operationID uuid.UUID, minRole models.OperationRole, write bool) error {
 	if write && gqlctx.AuthFromContext(ctx).Agent != nil {
 		return moduleGQLError(ctx, errCodeForbidden, "forbidden")

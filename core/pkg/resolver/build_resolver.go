@@ -22,8 +22,9 @@ import (
 
 // Minion builds over GraphQL (builds.graphql): factory kinds, an operation's
 // build files, builds and minions. The logic is builds.Service; this
-// resolver authorizes by operation role (viewer reads, operator writes; agent
-// keys read only) and maps the results.
+// resolver authorizes by operation role (viewer reads, operator writes) and
+// maps the results. Agent keys never get here: GraphQL is closed to them
+// (router.go, RequireHuman).
 
 // BuildManager is the build surface the resolver needs. Satisfied by
 // *builds.Service.
@@ -66,8 +67,9 @@ func NewBuildResolver(b BuildManager, operationRepo repository.IOperationReposit
 	return &buildResolver{builds: b, operationRepo: operationRepo}
 }
 
-// authorize enforces a minimum operation role. Writes pass write=true: agent
-// keys may read builds but never change them.
+// authorize enforces a minimum operation role. Writes pass write=true and
+// refuse an agent key: a second line, as RequireHuman keeps agents out of
+// GraphQL altogether.
 func (r *buildResolver) authorize(ctx context.Context, operationID uuid.UUID, minRole models.OperationRole, write bool) error {
 	if write && gqlctx.AuthFromContext(ctx).Agent != nil {
 		return moduleGQLError(ctx, errCodeForbidden, "forbidden")

@@ -9996,7 +9996,8 @@ extend type Mutation {
 # the minion. Its artifact downloads from GET /api/v1/builds/{id}/artifact.
 #
 # Viewers of an operation read all of it; operators and admins upload, build,
-# cancel and delete. Agent API keys may read but not write.
+# cancel and delete. Agent API keys have no access: they reach only the MCP
+# routes, never GraphQL (router.go, RequireHuman).
 
 extend type Module {
   # The build schema this instance declared; null when it declared none (only
@@ -10350,7 +10351,8 @@ extend type Mutation {
 # against the kind's current schema when saved, and again on every read.
 #
 # Viewers of an operation read its endpoints; operators and admins change
-# them. Agent API keys may read but not write.
+# them. Agent API keys have no access: they reach only the MCP routes, never
+# GraphQL (router.go, RequireHuman).
 
 extend type Module {
   # The minion connection schema this instance declared; null when it declared
