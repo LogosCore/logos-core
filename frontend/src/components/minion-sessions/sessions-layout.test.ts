@@ -46,7 +46,7 @@ describe("layout", () => {
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, consoleSplit: 0.95 }).consoleSplit).toBe(0.9)
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null }).consoleSplit).toBeNull()
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, filesSplit: 0.05 }).filesSplit).toBe(0.1)
-    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, paneTextSize: 14 }).paneTextSize).toBe(14)
+    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, paneTextSize: 11 }).paneTextSize).toBe(11)
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, paneTextSize: 30 }).paneTextSize).toBeNull()
   })
 

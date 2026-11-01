@@ -240,8 +240,8 @@ type MinionSessionsLayout struct {
 
 // The text sizes the work pane offers.
 const (
-	MinPaneTextSize = 12
-	MaxPaneTextSize = 14
+	MinPaneTextSize = 10
+	MaxPaneTextSize = 12
 )
 
 // The range a layout's Split keeps to: neither half shrinks away.

@@ -11651,8 +11651,8 @@ type MinionSessionsLayout {
   # The share of a file browser's width its folder tree takes, 0.1 to 0.9;
   # null for the default.
   filesSplit: Float
-  # The session work pane's text size in pixels, 12 to 14; null for the
-  # default.
+  # The session work pane's text size in pixels, 10 to 12; null for the
+  # default (12).
   paneTextSize: Int
 }
 
