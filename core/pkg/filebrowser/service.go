@@ -1,8 +1,9 @@
 // Package filebrowser keeps what core's minions have seen of each machine's
 // file system (docs: contracts/file-browser.md): a snapshot per machine of
-// an operation, made from its sessions' tasks' results as they end (a
-// listing, a delete, a download, an upload), and read by the file browser.
-// Nothing is asked of a minion for it.
+// an operation, made from its sessions' tasks: their listings as their
+// pieces come (any command's), and their results as they end (a delete, a
+// download, an upload); read by the file browser. Nothing is asked of a
+// minion for it.
 package filebrowser
 
 import (
@@ -37,6 +38,7 @@ type Files interface {
 
 type Service struct {
 	entries  repository.IFsEntryRepository
+	listings repository.IFsListingRepository
 	tasks    Tasks
 	sessions Sessions
 	files    Files
@@ -44,8 +46,116 @@ type Service struct {
 	logger   *zap.Logger
 }
 
-func NewService(entries repository.IFsEntryRepository, tasks Tasks, sessions Sessions, files Files, bus eventbus.IEventBus, logger *zap.Logger) *Service {
-	return &Service{entries: entries, tasks: tasks, sessions: sessions, files: files, bus: bus, logger: logger.Named("filebrowser")}
+func NewService(entries repository.IFsEntryRepository, listings repository.IFsListingRepository, tasks Tasks, sessions Sessions, files Files,
+	bus eventbus.IEventBus, logger *zap.Logger) *Service {
+	return &Service{entries: entries, listings: listings, tasks: tasks, sessions: sessions, files: files, bus: bus, logger: logger.Named("filebrowser")}
+}
+
+// Listings takes a result part's listing pieces into the snapshot as they
+// come: each at its listing's time (when core took its first piece), and
+// once a listing's last piece and every one before it are in, what a whole
+// listing no longer has gone. A piece before its listing's first waits for
+// it (a part resent late). Errors are logged: the part is kept already.
+func (s *Service) Listings(ctx context.Context, t *models.MinionTask, session *models.MinionSession, pieces []protocol.ListingPiece, now time.Time) {
+	if len(pieces) == 0 {
+		return
+	}
+	machine := models.FsMachineKey(*session)
+	ref := models.FsTaskRef{TaskID: t.TaskID, SessionID: session.SessionID, Number: session.Number, User: session.Hello.User}
+	changed := map[string]bool{}
+	for _, p := range pieces {
+		folder, err := s.piece(ctx, t, machine, ref, p, now)
+		if err != nil {
+			s.logger.Warn("file browser: a listing piece", zap.String("task_id", t.TaskID.String()), zap.Uint64("listing", p.ID),
+				zap.Uint64("part", p.Part), zap.Error(err))
+			continue
+		}
+		if folder != "" {
+			changed[folder] = true
+		}
+	}
+	if s.bus == nil {
+		return
+	}
+	for folder := range changed {
+		s.bus.Publish(eventbus.NewFileBrowserChangedEvent(eventbus.FileBrowserEventPayload{
+			OperationID: t.OperationID.String(), Machine: machine, Folder: folder}))
+	}
+}
+
+// piece applies one piece: the folder it changed, "" for none yet.
+func (s *Service) piece(ctx context.Context, t *models.MinionTask, machine string, ref models.FsTaskRef, p protocol.ListingPiece, now time.Time) (string, error) {
+	op := t.OperationID
+	l, err := s.listings.Piece(ctx, t.TaskID, p, now)
+	if err != nil {
+		return "", err
+	}
+	if l.Path == "" {
+		// Its folder is named by its first piece, not here yet.
+		return "", s.listings.Stash(ctx, t.TaskID, p)
+	}
+	folder := entryAt(l.Path, l.Sep)
+	parts := []uint64{p.Part}
+	if p.Part == 0 {
+		if err := s.entries.Ensure(ctx, op, machine, ancestors(folder)); err != nil {
+			return "", err
+		}
+		if l.Err != "" {
+			if err := s.entries.ListingFailed(ctx, op, machine, folder, l.Err, l.At, ref); err != nil {
+				return "", err
+			}
+		}
+	}
+	entries := p.Entries
+	if p.Part == 0 {
+		pending, err := s.listings.TakePending(ctx, t.TaskID, p.ID)
+		if err != nil {
+			return "", err
+		}
+		for _, q := range pending {
+			entries = append(entries, q.Entries...)
+			parts = append(parts, q.Part)
+		}
+	}
+	if l.Err == "" {
+		children := make([]models.FsEntry, 0, len(entries))
+		for _, d := range entries {
+			children = append(children, describedChild(folder, d))
+		}
+		if _, err := s.entries.ListingPiece(ctx, op, machine, folder, children, l.At, ref); err != nil {
+			return "", err
+		}
+	}
+	l, err = s.listings.Applied(ctx, t.TaskID, p.ID, parts)
+	if err != nil {
+		return "", err
+	}
+	// Whole once every piece is in, and only then: earlier ones applied
+	// later would be taken for gone.
+	if l.Complete() && !l.Partial && l.Err == "" {
+		claimed, err := s.listings.ClaimWhole(ctx, t.TaskID, p.ID)
+		if err != nil {
+			return "", err
+		}
+		if claimed {
+			if err := s.entries.ListingWhole(ctx, op, machine, folder, l.At, ref); err != nil {
+				return "", err
+			}
+		}
+	}
+	return folder.Path, nil
+}
+
+// describedChild is a listing's entry in folder, as the snapshot keeps it.
+func describedChild(folder models.FsEntry, d protocol.DirEntry) models.FsEntry {
+	e := child(folder, d.Name)
+	e.Type, e.Mode, e.Owner, e.Group, e.Target, e.Hidden = d.Type, d.Mode, d.Owner, d.Group, d.Target, d.Hidden
+	if d.Size != nil {
+		n := int64(*d.Size)
+		e.Size = &n
+	}
+	e.Modified = d.Modified
+	return e
 }
 
 // removed is the line BOB's rm (a delete_path) says what went with.
@@ -57,8 +167,9 @@ func (s *Service) TaskEnded(ctx context.Context, t *models.MinionTask) {
 	if t.State != models.MinionTaskDone || t.DoneAt == nil {
 		return
 	}
+	// A listing is taken as its pieces come (Listings), not here.
 	switch {
-	case t.Result == protocol.ResultDirListing, t.Result == protocol.ResultFileDownload, t.Result == protocol.ResultFileStream,
+	case t.Result == protocol.ResultFileDownload, t.Result == protocol.ResultFileStream,
 		t.Result == protocol.ResultFileUpload, t.Action == protocol.ActionDeletePath:
 	default:
 		return
@@ -113,14 +224,6 @@ func (s *Service) take(ctx context.Context, t *models.MinionTask, machine string
 	if err != nil {
 		return "", err
 	}
-	if t.Result == protocol.ResultDirListing {
-		if t.DataProblem != "" {
-			return "", nil
-		}
-		// A listing core kept only part of (its data past the 4 MiB a task
-		// keeps, or parts lost) adds what it has, and says nothing of the rest.
-		return s.listing(ctx, op, machine, parts, !t.DataTruncated && t.MissingParts() == 0, at, ref)
-	}
 	for _, p := range parts {
 		if len(p.DataCBOR) == 0 {
 			continue
@@ -167,51 +270,6 @@ func (s *Service) take(ctx context.Context, t *models.MinionTask, machine string
 		return e.Parent, nil
 	}
 	return "", nil
-}
-
-// listing applies a dir_listing's parts: the folder the first says, the
-// entries all of them have.
-func (s *Service) listing(ctx context.Context, op uuid.UUID, machine string, parts []models.MinionTaskPart, whole bool, at time.Time, ref models.FsTaskRef) (string, error) {
-	var folder models.FsEntry
-	var children []models.FsEntry
-	first := true
-	for _, p := range parts {
-		if len(p.DataCBOR) == 0 {
-			continue
-		}
-		seq := uint64(1)
-		if first {
-			seq = 0
-		}
-		l, err := protocol.ReadDirListing(seq, p.DataCBOR)
-		if err != nil {
-			return "", err
-		}
-		if first {
-			folder, first = entryAt(l.Path, l.Sep), false
-		}
-		for _, d := range l.Entries {
-			e := child(folder, d.Name)
-			e.Type, e.Mode, e.Owner, e.Group, e.Target, e.Hidden = d.Type, d.Mode, d.Owner, d.Group, d.Target, d.Hidden
-			if d.Size != nil {
-				n := int64(*d.Size)
-				e.Size = &n
-			}
-			e.Modified = d.Modified
-			children = append(children, e)
-		}
-	}
-	if first {
-		return "", nil
-	}
-	if err := s.entries.Ensure(ctx, op, machine, ancestors(folder)); err != nil {
-		return "", err
-	}
-	applied, err := s.entries.Listing(ctx, op, machine, folder, children, whole, at, ref)
-	if err != nil || !applied {
-		return "", err
-	}
-	return folder.Path, nil
 }
 
 // Machine is a session's machine: its key, and the operation's sessions

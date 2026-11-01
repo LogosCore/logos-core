@@ -40,6 +40,11 @@ export const FsEntryFields = graphql(`
     listedBy {
       ...FsTaskRefFields
     }
+    listErr
+    listErrAt
+    listErrBy {
+      ...FsTaskRefFields
+    }
     downloaded {
       taskId
       fileId

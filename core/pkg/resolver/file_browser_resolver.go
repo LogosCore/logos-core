@@ -131,6 +131,7 @@ func fsEntryModel(e models.FsEntry) *model.FsEntry {
 		Owner: strPtr(e.Owner), Group: strPtr(e.Group), Target: strPtr(e.Target), Hidden: e.Hidden, Known: e.Known,
 		SeenAt: taskTime(e.SeenAt), SeenBy: fsRefModel(e.SeenBy), GoneAt: taskTime(e.GoneAt), GoneBy: fsRefModel(e.GoneBy),
 		GoneHow: strPtr(e.GoneHow), ListedAt: taskTime(e.ListedAt), ListedBy: fsRefModel(e.ListedBy),
+		ListErr: strPtr(e.ListErr), ListErrAt: taskTime(e.ListErrAt), ListErrBy: fsRefModel(e.ListErrBy),
 		Downloaded: fsTransfersModel(e.Downloaded), Uploaded: fsTransfersModel(e.Uploaded)}
 	if e.Size != nil {
 		n := int(*e.Size)

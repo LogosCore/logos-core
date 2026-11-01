@@ -82,6 +82,13 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 	task, fresh, err := s.tasks.AddResult(ctx, session.SessionID, id, repository.MinionTaskResult{
 		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(),
 		Check: taskdata.Check,
+		// A dir_listing command's data is its listing, made by core.
+		Compose: func(result string) []byte {
+			if result != protocol.ResultDirListing {
+				return nil
+			}
+			return taskdata.ListingData(res.Ls)
+		},
 	})
 	if repository.IsNotFound(err) {
 		return errItem(protocol.ErrItemUnknownTask, "no such task under this session", i)
@@ -97,6 +104,12 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		return nil, fmt.Errorf("keep a result: %w", err)
 	}
 	if fresh {
+		// What it saw of its machine's files, into the snapshot as it comes
+		// (any command's): before the task is told changed, so a listing
+		// shown from it is there.
+		if s.fileBrowser != nil && len(res.Ls) > 0 {
+			s.fileBrowser.Listings(ctx, task, session, res.Ls, s.now())
+		}
 		s.publishTask(task)
 		if res.Done {
 			s.logger.Info("minion task done", zap.String("task_id", id.String()), zap.String("state", task.State),

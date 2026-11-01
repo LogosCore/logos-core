@@ -31,6 +31,15 @@ type IFsEntryRepository interface {
 	// whole, those it no longer has gone. False when the folder holds a
 	// newer listing, and nothing changed.
 	Listing(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, children []models.FsEntry, whole bool, at time.Time, ref models.FsTaskRef) (bool, error)
+	// ListingPiece applies a piece of a folder's listing at at: the folder
+	// listed by ref, the entries given seen. A listing's pieces share its
+	// at. False when the folder holds a newer listing, and nothing changed.
+	ListingPiece(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, children []models.FsEntry, at time.Time, ref models.FsTaskRef) (bool, error)
+	// ListingWhole ends a whole listing of at: what the folder no longer
+	// has, gone (unless a newer change holds it).
+	ListingWhole(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, at time.Time, ref models.FsTaskRef) error
+	// ListingFailed records that ref could not read the folder at at, why.
+	ListingFailed(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, why string, at time.Time, ref models.FsTaskRef) error
 	// Gone marks an entry, and what is under it, gone at at.
 	Gone(ctx context.Context, op uuid.UUID, machine string, e models.FsEntry, how string, at time.Time, ref models.FsTaskRef) error
 	// Transfer records a file a task moved: the entry seen (a file of its
@@ -110,15 +119,24 @@ func described(e models.FsEntry) bson.M {
 func (r *fsEntryRepository) raw() (*mongo.Collection, error) { return r.coll.RawCollection() }
 
 func (r *fsEntryRepository) Listing(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, children []models.FsEntry, whole bool, at time.Time, ref models.FsTaskRef) (bool, error) {
+	applied, err := r.ListingPiece(ctx, op, machine, folder, children, at, ref)
+	if err != nil || !applied || !whole {
+		return applied, err
+	}
+	return true, r.ListingWhole(ctx, op, machine, folder, at, ref)
+}
+
+func (r *fsEntryRepository) ListingPiece(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, children []models.FsEntry, at time.Time, ref models.FsTaskRef) (bool, error) {
 	c, err := r.raw()
 	if err != nil {
 		return false, err
 	}
-	// The folder, unless a newer listing holds it.
+	// The folder, unless a newer listing holds it (this one's earlier
+	// pieces hold it at the same at). A listing clears a failed one.
 	folderSet := bson.M{"type": "dir", "dir_rank": 0, "known": true, "listed_at": at, "listed_by": ref, "seen_at": at, "seen_by": ref}
 	_, err = c.UpdateOne(ctx, bson.M{"operation_id": op, "machine": machine, "path_key": folder.PathKey,
-		"$or": bson.A{bson.M{"listed_at": bson.M{"$lt": at}}, bson.M{"listed_at": bson.M{"$exists": false}}}},
-		bson.M{"$set": folderSet, "$unset": bson.M{"gone_at": "", "gone_by": "", "gone_how": ""},
+		"$or": bson.A{bson.M{"listed_at": bson.M{"$lte": at}}, bson.M{"listed_at": bson.M{"$exists": false}}}},
+		bson.M{"$set": folderSet, "$unset": bson.M{"gone_at": "", "gone_by": "", "gone_how": "", "list_err": "", "list_err_at": "", "list_err_by": ""},
 			"$setOnInsert": withKeys(identity(op, machine, folder), bson.M{"size_key": int64(-1), "mod_key": int64(math.MinInt64), "changed_at": at})},
 		options.Update().SetUpsert(true))
 	if mongo.IsDuplicateKeyError(err) {
@@ -143,18 +161,45 @@ func (r *fsEntryRepository) Listing(ctx context.Context, op uuid.UUID, machine s
 			return false, fmt.Errorf("the listed entries: %w", err)
 		}
 	}
-	// What it no longer has: gone, unless a newer change holds it. A
-	// listing cut short says nothing of what it lacks.
-	if !whole {
-		return true, nil
+	return true, nil
+}
+
+func (r *fsEntryRepository) ListingWhole(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, at time.Time, ref models.FsTaskRef) error {
+	c, err := r.raw()
+	if err != nil {
+		return err
 	}
+	// What it no longer has: gone, unless a newer change holds it. Only a
+	// whole listing says so: one cut short says nothing of what it lacks.
 	_, err = c.UpdateMany(ctx, bson.M{"operation_id": op, "machine": machine, "parent_key": folder.PathKey,
 		"changed_at": bson.M{"$lt": at}, "gone_at": bson.M{"$exists": false}},
 		bson.M{"$set": bson.M{"gone_at": at, "gone_by": ref, "gone_how": models.FsGoneNotListed, "changed_at": at}})
 	if err != nil {
-		return false, fmt.Errorf("the entries no longer listed: %w", err)
+		return fmt.Errorf("the entries no longer listed: %w", err)
 	}
-	return true, nil
+	return nil
+}
+
+func (r *fsEntryRepository) ListingFailed(ctx context.Context, op uuid.UUID, machine string, folder models.FsEntry, why string, at time.Time, ref models.FsTaskRef) error {
+	c, err := r.raw()
+	if err != nil {
+		return err
+	}
+	// The folder is there (it was named, and refused): unless a newer
+	// failure or listing holds it.
+	_, err = c.UpdateOne(ctx, bson.M{"operation_id": op, "machine": machine, "path_key": folder.PathKey,
+		"$and": bson.A{
+			bson.M{"$or": bson.A{bson.M{"list_err_at": bson.M{"$lt": at}}, bson.M{"list_err_at": bson.M{"$exists": false}}}},
+			bson.M{"$or": bson.A{bson.M{"listed_at": bson.M{"$lt": at}}, bson.M{"listed_at": bson.M{"$exists": false}}}},
+		}},
+		bson.M{"$set": bson.M{"type": "dir", "dir_rank": 0, "known": true, "list_err": why, "list_err_at": at, "list_err_by": ref, "seen_at": at, "seen_by": ref},
+			"$unset":       bson.M{"gone_at": "", "gone_by": "", "gone_how": ""},
+			"$setOnInsert": withKeys(identity(op, machine, folder), bson.M{"size_key": int64(-1), "mod_key": int64(math.MinInt64), "changed_at": at})},
+		options.Update().SetUpsert(true))
+	if err != nil && !mongo.IsDuplicateKeyError(err) {
+		return fmt.Errorf("the folder not read: %w", err)
+	}
+	return nil
 }
 
 // onlyDuplicates: a bulk write's errors are all duplicate keys (an upsert

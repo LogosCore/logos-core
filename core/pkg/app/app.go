@@ -85,6 +85,7 @@ type Repositories struct {
 	MinionTask         repository.IMinionTaskRepository
 	MinionFile         repository.IMinionFileRepository
 	FsEntry            repository.IFsEntryRepository
+	FsListing          repository.IFsListingRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
 	SkillSubscription  repository.ISkillSubscriptionRepository
@@ -227,7 +228,7 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
+	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.FsListing, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
 	minionStreams := minionstreams.NewService(repos.MinionTask, infra.cache, bus, auth.DeriveKey(e.JWTSecretKey, "minion-stream"),
 		minionstreams.DefaultConfig(), l)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)

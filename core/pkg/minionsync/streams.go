@@ -3,6 +3,7 @@ package minionsync
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/logoscore/logos-core/core/pkg/minionstreams"
@@ -28,6 +29,7 @@ type Streams interface {
 // results (filebrowser.Service).
 type FileBrowser interface {
 	TaskEnded(ctx context.Context, t *models.MinionTask)
+	Listings(ctx context.Context, t *models.MinionTask, session *models.MinionSession, pieces []protocol.ListingPiece, now time.Time)
 }
 
 // WithFileBrowser gives the service the file browser, told of each task's

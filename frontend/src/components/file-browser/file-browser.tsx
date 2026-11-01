@@ -10,6 +10,7 @@ import {
   DownloadIcon,
   FileIcon,
   FolderIcon,
+  FolderLockIcon,
   FolderOpenIcon,
   HardDriveIcon,
   Link2Icon,
@@ -64,10 +65,12 @@ import {
   inFlight,
   inFlightAt,
   LISTED_FOLDER,
+  listedSays,
   parentOf,
   pathsTo,
   sepOf,
   UNLISTED_FOLDER,
+  UNREADABLE_FOLDER,
   when,
   type InFlight,
 } from "./file-browser-model"
@@ -439,6 +442,11 @@ function FolderView({
                       Never listed
                     </span>
                   ))}
+                {folder?.listErr && (
+                  <span className="truncate text-red-600 dark:text-red-400" title={listedSays(folder)}>
+                    Could not be read{folder.listErrAt ? ` ${when(folder.listErrAt)}` : ""}: {folder.listErr}
+                  </span>
+                )}
                 {folder?.goneAt && <span className="truncate text-red-600 dark:text-red-400">{goneSays(folder)}</span>}
                 {here && (
                   <span className="flex shrink-0 items-center gap-1">
@@ -683,7 +691,7 @@ function EntryRow({
   onMenu: (open: boolean) => void
   onClick?: () => void
 }) {
-  const Icon = e.parent ? (ICONS[e.type as keyof typeof ICONS] ?? CircleHelpIcon) : HardDriveIcon
+  const Icon = !e.parent ? HardDriveIcon : e.type === "dir" && e.listErr ? FolderLockIcon : (ICONS[e.type as keyof typeof ICONS] ?? CircleHelpIcon)
   const gone = !!e.goneAt
   const kept = e.downloaded.findLast((d) => !!d.fileId)
   const lastDownload = e.downloaded.at(-1)
@@ -694,7 +702,7 @@ function EntryRow({
     e.path,
     gone ? goneSays(e) : null,
     !e.known ? "Known only as a folder on the way to another entry" : null,
-    isDir ? (e.listedAt ? `Listed ${formatDateTime(e.listedAt)} by ${byWhom(e.listedBy)}` : "Never listed") : null,
+    isDir ? listedSays(e) : null,
     e.seenAt ? `Seen ${formatDateTime(e.seenAt)} by ${byWhom(e.seenBy)}` : null,
   ]
     .filter(Boolean)
@@ -724,7 +732,7 @@ function EntryRow({
             <Icon
               className={cn(
                 "size-3.5 shrink-0 self-center",
-                isDir && !gone ? (e.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER) : "text-muted-foreground",
+                isDir && !gone ? (e.listErr ? UNREADABLE_FOLDER : e.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER) : "text-muted-foreground",
               )}
             />
           )}

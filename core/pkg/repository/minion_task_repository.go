@@ -36,6 +36,10 @@ type MinionTaskResult struct {
 	// Check checks Data against the task's result (taskdata.Check); nil:
 	// no check.
 	Check func(result string, seq uint64, data []byte) error
+	// Compose is the part's data for a part without, made from what else
+	// it carries for the task's result (a dir_listing from its listing:
+	// taskdata.ListingData); nil, or nil data: none.
+	Compose func(result string) []byte
 }
 
 // ErrMinionTaskEnded is AddResult's answer to a part for a task that
@@ -249,6 +253,9 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	// (whole or none: a CBOR map is not cut) dropped.
 	room := max(int64(models.MaxMinionTaskOutput)-t.OutSize-t.DataSize, 0)
 	out, data := res.Out, res.Data
+	if len(data) == 0 && res.Compose != nil {
+		data = res.Compose(t.Result)
+	}
 	outCut, dataCut := false, false
 	if int64(len(out)) > room {
 		out, outCut = out[:room], true

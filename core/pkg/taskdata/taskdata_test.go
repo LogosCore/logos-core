@@ -107,3 +107,34 @@ func must(v any, err error) any {
 	}
 	return v
 }
+
+// An ls's data is made from its first listing's pieces in the part: in
+// order, the first naming the folder; other listings, and a folder not
+// read, make none.
+func TestListingData(t *testing.T) {
+	size := uint64(1)
+	e := func(n string) protocol.DirEntry {
+		return protocol.DirEntry{Name: n, Type: protocol.DirEntryFile, Size: &size}
+	}
+	data := ListingData([]protocol.ListingPiece{
+		{ID: 0, Part: 1, Last: true, Entries: []protocol.DirEntry{e("b")}},
+		{ID: 1, Part: 0, Last: true, Path: "/other", Sep: "/", Entries: []protocol.DirEntry{e("x")}},
+		{ID: 0, Part: 0, Path: "/home", Sep: "/", Parent: "/", Entries: []protocol.DirEntry{e("a")}},
+	})
+	l, err := protocol.ReadDirListing(0, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Path != "/home" || l.Parent != "/" || len(l.Entries) != 2 || l.Entries[0].Name != "a" || l.Entries[1].Name != "b" {
+		t.Fatalf("listing %+v", l)
+	}
+	if ListingData([]protocol.ListingPiece{{ID: 1, Part: 0, Path: "/x", Sep: "/"}}) != nil {
+		t.Fatal("another listing made data")
+	}
+	if ListingData([]protocol.ListingPiece{{ID: 0, Part: 0, Last: true, Path: "/root", Sep: "/", Err: "denied"}}) != nil {
+		t.Fatal("a folder not read made data")
+	}
+	if ListingData(nil) != nil {
+		t.Fatal("no pieces made data")
+	}
+}

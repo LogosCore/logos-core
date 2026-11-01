@@ -518,6 +518,9 @@ export type FsEntry = {
   group?: Maybe<Scalars['String']['output']>;
   hidden: Scalars['Boolean']['output'];
   known: Scalars['Boolean']['output'];
+  listErr?: Maybe<Scalars['String']['output']>;
+  listErrAt?: Maybe<Scalars['String']['output']>;
+  listErrBy?: Maybe<FsTaskRef>;
   listedAt?: Maybe<Scalars['String']['output']>;
   listedBy?: Maybe<FsTaskRef>;
   mode?: Maybe<Scalars['String']['output']>;
@@ -3544,7 +3547,7 @@ export type MyCredentialChangedSubscription = { myCredentialChanged: { action: E
 
 export type FsTaskRefFieldsFragment = { taskId: string, sessionId: string, number: number, user?: string | null };
 
-export type FsEntryFieldsFragment = { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> };
+export type FsEntryFieldsFragment = { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> };
 
 export type FileBrowserQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -3566,7 +3569,7 @@ export type FileBrowserEntriesQueryVariables = Exact<{
 }>;
 
 
-export type FileBrowserEntriesQuery = { fileBrowserEntries: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }>, folder?: { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> } | null } };
+export type FileBrowserEntriesQuery = { fileBrowserEntries: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }>, folder?: { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> } | null } };
 
 export type FileBrowserSearchQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -3577,7 +3580,7 @@ export type FileBrowserSearchQueryVariables = Exact<{
 }>;
 
 
-export type FileBrowserSearchQuery = { fileBrowserSearch: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }> } };
+export type FileBrowserSearchQuery = { fileBrowserSearch: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }> } };
 
 export type FileBrowserChangedSubscriptionVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -5156,6 +5159,11 @@ export const FsEntryFieldsFragmentDoc = new TypedDocumentString(`
   goneHow
   listedAt
   listedBy {
+    ...FsTaskRefFields
+  }
+  listErr
+  listErrAt
+  listErrBy {
     ...FsTaskRefFields
   }
   downloaded {
@@ -7516,6 +7524,11 @@ fragment FsEntryFields on FsEntry {
   listedBy {
     ...FsTaskRefFields
   }
+  listErr
+  listErrAt
+  listErrBy {
+    ...FsTaskRefFields
+  }
   downloaded {
     taskId
     fileId
@@ -7579,6 +7592,11 @@ fragment FsEntryFields on FsEntry {
   goneHow
   listedAt
   listedBy {
+    ...FsTaskRefFields
+  }
+  listErr
+  listErrAt
+  listErrBy {
     ...FsTaskRefFields
   }
   downloaded {

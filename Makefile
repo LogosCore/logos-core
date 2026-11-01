@@ -63,7 +63,7 @@ test-integration: ## Run the repository, token-store and object-store integratio
 	INTEGRATION_S3_ENDPOINT=$(SEAWEEDFS_S3_ENDPOINT) \
 	INTEGRATION_S3_ACCESS_KEY=$(SEAWEEDFS_S3_ACCESS_KEY) \
 	INTEGRATION_S3_SECRET_KEY=$(SEAWEEDFS_S3_SECRET_KEY) \
-	go test -count=1 -v ./pkg/repository/ ./pkg/auth/ ./pkg/blob/ ./pkg/cache/ -run 'TestIntegration|TestBSONRoundTrip'
+	go test -count=1 -v ./pkg/repository/ ./pkg/filebrowser/ ./pkg/auth/ ./pkg/blob/ ./pkg/cache/ -run 'TestIntegration|TestBSONRoundTrip'
 
 viewer: ## viewer: Builds the HTML export's offline viewer into core/pkg/wikitransfer/htmlbundle/viewer (embedded by the core binary)
 	cd frontend && npm run build:viewer

@@ -8,9 +8,11 @@ package taskdata
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/base64"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -221,4 +223,37 @@ func Sequence(parts []models.MinionTaskPart) ([]byte, error) {
 		}
 	}
 	return b.Bytes(), nil
+}
+
+// ListingData is a dir_listing part's data made from a result part's
+// listing pieces (docs: contracts/task-results-and-actions.md): the task's
+// first listing (id 0), its pieces in the part in order, the first naming
+// the folder. nil when the part has none of it, or the folder could not be
+// read (the task says why).
+func ListingData(pieces []protocol.ListingPiece) []byte {
+	var own []protocol.ListingPiece
+	for _, p := range pieces {
+		if p.ID == 0 {
+			own = append(own, p)
+		}
+	}
+	if len(own) == 0 {
+		return nil
+	}
+	slices.SortFunc(own, func(a, b protocol.ListingPiece) int { return cmp.Compare(a.Part, b.Part) })
+	var l protocol.DirListing
+	for _, p := range own {
+		if p.Err != "" {
+			return nil
+		}
+		if p.Part == 0 {
+			l.Path, l.Sep, l.Parent = p.Path, p.Sep, p.Parent
+		}
+		l.Entries = append(l.Entries, p.Entries...)
+	}
+	data, err := protocol.ResultData(l)
+	if err != nil {
+		return nil
+	}
+	return data
 }

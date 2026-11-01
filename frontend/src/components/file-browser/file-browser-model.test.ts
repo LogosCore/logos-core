@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { byWhom, inFlight, inFlightAt, parentOf, pathsTo } from "./file-browser-model"
+import { byWhom, inFlight, inFlightAt, listedSays, parentOf, pathsTo } from "./file-browser-model"
 
 describe("inFlight", () => {
   const actions: Record<string, string> = { ls: "list_dir", rm: "delete_path", up: "upload_file", ps: "" }
@@ -40,5 +40,15 @@ describe("paths", () => {
     expect(byWhom({ number: 46, user: "root" })).toBe("#46 (root)")
     expect(byWhom({ number: 7 })).toBe("#7")
     expect(byWhom(null)).toBe("")
+  })
+})
+
+describe("listedSays", () => {
+  it("says a folder listed, never, or not read and why", () => {
+    expect(listedSays({})).toBe("Never listed")
+    expect(listedSays({ listedAt: "2026-11-01T10:00:00Z", listedBy: { number: 5, user: "u" } })).toMatch(/^Listed .* by #5 \(u\)$/)
+    const denied = listedSays({ listErr: "permission denied", listErrAt: "2026-11-01T10:00:00Z", listErrBy: { number: 6 } })
+    expect(denied).toMatch(/^Could not be read .* by #6: permission denied$/)
+    expect(listedSays({ listErr: "denied", listedAt: "2026-10-01T10:00:00Z", listedBy: { number: 1 } }).split("\n")).toHaveLength(2)
   })
 })

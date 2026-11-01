@@ -80,6 +80,22 @@ export function byWhom(r: TaskRefLike | null | undefined): string {
 /** How a folder's icon looks: amber once listed; grey and dashed while only what other tasks put there is known. */
 export const LISTED_FOLDER = "text-amber-600 dark:text-amber-400"
 export const UNLISTED_FOLDER = "text-muted-foreground [stroke-dasharray:3_2]"
+/** A folder a task could not read: its lock. */
+export const UNREADABLE_FOLDER = "text-red-600 dark:text-red-400"
+
+/** What a folder's hover says of its listings: listed, never, or not read and why. */
+export function listedSays(e: {
+  listedAt?: string | null
+  listedBy?: TaskRefLike | null
+  listErr?: string | null
+  listErrAt?: string | null
+  listErrBy?: TaskRefLike | null
+}): string {
+  const listed = e.listedAt ? `Listed ${formatDateTime(e.listedAt)} by ${byWhom(e.listedBy)}` : "Never listed"
+  if (!e.listErr) return listed
+  const failed = `Could not be read${e.listErrAt ? ` ${formatDateTime(e.listErrAt)}` : ""}${e.listErrBy ? ` by ${byWhom(e.listErrBy)}` : ""}: ${e.listErr}`
+  return e.listedAt ? `${failed}\n${listed}` : failed
+}
 
 /** "3h ago", or the date and time from a day on. */
 export function when(at: string, now = Date.now()): string {

@@ -413,6 +413,9 @@ type FsEntry struct {
 	GoneHow    *string       `json:"goneHow,omitempty"`
 	ListedAt   *string       `json:"listedAt,omitempty"`
 	ListedBy   *FsTaskRef    `json:"listedBy,omitempty"`
+	ListErr    *string       `json:"listErr,omitempty"`
+	ListErrAt  *string       `json:"listErrAt,omitempty"`
+	ListErrBy  *FsTaskRef    `json:"listErrBy,omitempty"`
 	Downloaded []*FsTransfer `json:"downloaded"`
 	Uploaded   []*FsTransfer `json:"uploaded"`
 }

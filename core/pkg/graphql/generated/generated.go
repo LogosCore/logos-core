@@ -386,6 +386,9 @@ type ComplexityRoot struct {
 		Group      func(childComplexity int) int
 		Hidden     func(childComplexity int) int
 		Known      func(childComplexity int) int
+		ListErr    func(childComplexity int) int
+		ListErrAt  func(childComplexity int) int
+		ListErrBy  func(childComplexity int) int
 		ListedAt   func(childComplexity int) int
 		ListedBy   func(childComplexity int) int
 		Mode       func(childComplexity int) int
@@ -3324,6 +3327,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FsEntry.Known(childComplexity), true
+	case "FsEntry.listErr":
+		if e.ComplexityRoot.FsEntry.ListErr == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.ListErr(childComplexity), true
+	case "FsEntry.listErrAt":
+		if e.ComplexityRoot.FsEntry.ListErrAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.ListErrAt(childComplexity), true
+	case "FsEntry.listErrBy":
+		if e.ComplexityRoot.FsEntry.ListErrBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FsEntry.ListErrBy(childComplexity), true
 	case "FsEntry.listedAt":
 		if e.ComplexityRoot.FsEntry.ListedAt == nil {
 			break
@@ -10843,6 +10864,11 @@ type FsEntry {
   # A folder: when its children were last listed, and by whom.
   listedAt: String
   listedBy: FsTaskRef
+  # A folder a task could not read: why (permission denied), when, and by
+  # which task; cleared by a later listing of it.
+  listErr: String
+  listErrAt: String
+  listErrBy: FsTaskRef
   downloaded: [FsTransfer!]!
   uploaded: [FsTransfer!]!
 }
@@ -25277,6 +25303,103 @@ func (ec *executionContext) fieldContext_FsEntry_listedBy(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _FsEntry_listErr(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_listErr,
+		func(ctx context.Context) (any, error) {
+			return obj.ListErr, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_listErr(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_listErrAt(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_listErrAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ListErrAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_listErrAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FsEntry_listErrBy(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_FsEntry_listErrBy,
+		func(ctx context.Context) (any, error) {
+			return obj.ListErrBy, nil
+		},
+		nil,
+		ec.marshalOFsTaskRef2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐFsTaskRef,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_FsEntry_listErrBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FsEntry",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "taskId":
+				return ec.fieldContext_FsTaskRef_taskId(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_FsTaskRef_sessionId(ctx, field)
+			case "number":
+				return ec.fieldContext_FsTaskRef_number(ctx, field)
+			case "user":
+				return ec.fieldContext_FsTaskRef_user(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FsTaskRef", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _FsEntry_downloaded(ctx context.Context, field graphql.CollectedField, obj *model.FsEntry) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25431,6 +25554,12 @@ func (ec *executionContext) fieldContext_FsEntryPage_entries(_ context.Context, 
 				return ec.fieldContext_FsEntry_listedAt(ctx, field)
 			case "listedBy":
 				return ec.fieldContext_FsEntry_listedBy(ctx, field)
+			case "listErr":
+				return ec.fieldContext_FsEntry_listErr(ctx, field)
+			case "listErrAt":
+				return ec.fieldContext_FsEntry_listErrAt(ctx, field)
+			case "listErrBy":
+				return ec.fieldContext_FsEntry_listErrBy(ctx, field)
 			case "downloaded":
 				return ec.fieldContext_FsEntry_downloaded(ctx, field)
 			case "uploaded":
@@ -25535,6 +25664,12 @@ func (ec *executionContext) fieldContext_FsEntryPage_folder(_ context.Context, f
 				return ec.fieldContext_FsEntry_listedAt(ctx, field)
 			case "listedBy":
 				return ec.fieldContext_FsEntry_listedBy(ctx, field)
+			case "listErr":
+				return ec.fieldContext_FsEntry_listErr(ctx, field)
+			case "listErrAt":
+				return ec.fieldContext_FsEntry_listErrAt(ctx, field)
+			case "listErrBy":
+				return ec.fieldContext_FsEntry_listErrBy(ctx, field)
 			case "downloaded":
 				return ec.fieldContext_FsEntry_downloaded(ctx, field)
 			case "uploaded":
@@ -70304,6 +70439,12 @@ func (ec *executionContext) _FsEntry(ctx context.Context, sel ast.SelectionSet, 
 			out.Values[i] = ec._FsEntry_listedAt(ctx, field, obj)
 		case "listedBy":
 			out.Values[i] = ec._FsEntry_listedBy(ctx, field, obj)
+		case "listErr":
+			out.Values[i] = ec._FsEntry_listErr(ctx, field, obj)
+		case "listErrAt":
+			out.Values[i] = ec._FsEntry_listErrAt(ctx, field, obj)
+		case "listErrBy":
+			out.Values[i] = ec._FsEntry_listErrBy(ctx, field, obj)
 		case "downloaded":
 			out.Values[i] = ec._FsEntry_downloaded(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

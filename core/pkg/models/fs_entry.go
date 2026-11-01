@@ -1,10 +1,12 @@
 package models
 
 import (
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
 // FsEntry is a path a machine was seen to have (docs:
@@ -56,6 +58,11 @@ type FsEntry struct {
 	// A folder: when its children were last listed, and by whom.
 	ListedAt *time.Time `bson:"listed_at,omitempty" json:"listed_at,omitempty"`
 	ListedBy *FsTaskRef `bson:"listed_by,omitempty" json:"listed_by,omitempty"`
+	// A folder a task could not read (permission denied): why, when and
+	// by whom; cleared by a later listing of it.
+	ListErr   string     `bson:"list_err,omitempty" json:"list_err,omitempty"`
+	ListErrAt *time.Time `bson:"list_err_at,omitempty" json:"list_err_at,omitempty"`
+	ListErrBy *FsTaskRef `bson:"list_err_by,omitempty" json:"list_err_by,omitempty"`
 
 	Downloaded []FsTransfer `bson:"downloaded,omitempty" json:"downloaded,omitempty"`
 	Uploaded   []FsTransfer `bson:"uploaded,omitempty" json:"uploaded,omitempty"`
@@ -95,4 +102,50 @@ func FsMachineKey(s MinionSession) string {
 		return id
 	}
 	return "session:" + s.SessionID.String()
+}
+
+// FsListing is where a task's listing stands as its pieces come (a
+// ListingPiece's id within the task; docs: contracts/minion-messages.md,
+// Listings): when core began it, the folder once its first piece came,
+// the pieces applied to the snapshot, and its last. Kept a while after.
+type FsListing struct {
+	TaskID uuid.UUID `bson:"task_id"`
+	ID     uint64    `bson:"id"`
+	// At is when core took its first piece: the listing's time in the
+	// snapshot, every piece's.
+	At     time.Time `bson:"at"`
+	Path   string    `bson:"path,omitempty"`
+	Sep    string    `bson:"sep,omitempty"`
+	Parent string    `bson:"parent,omitempty"`
+	// Last is the last piece's number, once it came.
+	Last    *uint64 `bson:"last,omitempty"`
+	Partial bool    `bson:"partial,omitempty"`
+	Err     string  `bson:"err,omitempty"`
+	// Applied are the pieces in the snapshot; Whole, that what the folder
+	// no longer has was marked gone (once).
+	Applied []uint64 `bson:"applied,omitempty"`
+	Whole   bool     `bson:"whole,omitempty"`
+	// Pending are pieces that came before the first, which names the
+	// folder: applied when it comes.
+	Pending   []FsPendingPiece `bson:"pending,omitempty"`
+	CreatedAt time.Time        `bson:"created_at"`
+}
+
+// FsPendingPiece is a listing's piece kept until its folder is known.
+type FsPendingPiece struct {
+	Part    uint64              `bson:"part"`
+	Entries []protocol.DirEntry `bson:"entries,omitempty"`
+}
+
+// Complete: every piece up to the last applied.
+func (l FsListing) Complete() bool {
+	if l.Last == nil {
+		return false
+	}
+	for p := uint64(0); p <= *l.Last; p++ {
+		if !slices.Contains(l.Applied, p) {
+			return false
+		}
+	}
+	return true
 }

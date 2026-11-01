@@ -50,6 +50,11 @@ type FsEntry {
   # A folder: when its children were last listed, and by whom.
   listedAt: String
   listedBy: FsTaskRef
+  # A folder a task could not read: why (permission denied), when, and by
+  # which task; cleared by a later listing of it.
+  listErr: String
+  listErrAt: String
+  listErrBy: FsTaskRef
   downloaded: [FsTransfer!]!
   uploaded: [FsTransfer!]!
 }
