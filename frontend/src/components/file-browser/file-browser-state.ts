@@ -10,6 +10,8 @@ export interface FileBrowserState {
   /** The folder shown; null: the machine's roots. */
   path: string | null
   showDeleted: boolean
+  /** Entering a folder never listed lists it. */
+  autoList: boolean
   sort: "name" | "size" | "modified"
   desc: boolean
   /** The tree's open folders. */
@@ -19,6 +21,7 @@ export interface FileBrowserState {
 export const DEFAULT_STATE: FileBrowserState = {
   path: null,
   showDeleted: true,
+  autoList: false,
   sort: "name",
   desc: false,
   expanded: [],
@@ -34,6 +37,7 @@ export function readState(stored: unknown): FileBrowserState {
   return {
     path: typeof s.path === "string" && s.path !== "" ? s.path : null,
     showDeleted: typeof s.showDeleted === "boolean" ? s.showDeleted : DEFAULT_STATE.showDeleted,
+    autoList: s.autoList === true,
     sort: typeof s.sort === "string" && SORTS.has(s.sort) ? (s.sort as FileBrowserState["sort"]) : DEFAULT_STATE.sort,
     desc: s.desc === true,
     expanded: Array.isArray(s.expanded) ? s.expanded.filter((p): p is string => typeof p === "string").slice(0, 500) : [],

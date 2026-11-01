@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { Virtuoso } from "react-virtuoso"
@@ -127,11 +127,14 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
   const refreshCommand = chooseActionCommand(listCommands, readPicked(actingId, "list_dir"))
 
   const queue = useQueueMinionTask()
-  const run = (commandId: string, args: Record<string, unknown>, what: string) =>
+  // quiet: a task the browser runs by itself (Auto-list) says nothing
+  // unless it fails; its row and the folder's line show it going.
+  const run = (commandId: string, args: Record<string, unknown>, what: string, quiet = false) =>
     queue.mutate(
       { sessionId: actingId, command: commandId, args },
       {
         onSuccess: () =>
+          !quiet &&
           toast.success(`${what}: queued on #${actingNumber}`, {
             action: workspace ? { label: "Console", onClick: () => workspace.openConsole(actingId) } : undefined,
           }),
@@ -214,6 +217,13 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
           <Switch size="sm" checked={state.showDeleted} onCheckedChange={(v) => set({ showDeleted: v })} />
           Show deleted
         </label>
+        <label
+          className="flex cursor-pointer items-center gap-1.5 text-muted-foreground"
+          title="Entering a folder never listed lists it (ls), through this tab's session"
+        >
+          <Switch size="sm" checked={state.autoList} onCheckedChange={(v) => set({ autoList: v })} />
+          Auto-list
+        </label>
         {/* The folder's status and tools, from the folder view (a portal):
             in this row, not one of their own. */}
         <div className="ml-auto flex min-w-0 items-center gap-2">
@@ -271,7 +281,10 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
                 running={running}
                 actions={actions}
                 onOpen={(p) => open(p)}
-                onRefresh={refreshCommand && state.path ? () => run(refreshCommand.id, { path: state.path }, "Refresh") : undefined}
+                onRefresh={
+                  refreshCommand && state.path ? (quiet) => run(refreshCommand.id, { path: state.path }, "Refresh", quiet) : undefined
+                }
+                autoList={state.autoList}
                 toolsSlot={toolsSlot}
               />
             )}
@@ -337,6 +350,7 @@ function FolderView({
   actions,
   onOpen,
   onRefresh,
+  autoList,
   toolsSlot,
 }: {
   sessionId: string
@@ -347,7 +361,10 @@ function FolderView({
   running: readonly InFlight[]
   actions: EntryActions
   onOpen: (path: string | null) => void
-  onRefresh?: () => void
+  /** Lists the folder; quiet, when the browser does it by itself. */
+  onRefresh?: (quiet?: boolean) => void
+  /** Lists a folder never listed as it is entered. */
+  autoList: boolean
   /** Where the status and tools go: the browser's header. */
   toolsSlot: HTMLElement | null
 }) {
@@ -359,6 +376,17 @@ function FolderView({
   const sep = path ? sepOf(path) : "/"
   const way = path ? crumbs(path, sep) : []
   const here = path ? inFlightAt(running, path) : undefined
+  // Auto-list: a folder entered that was never listed (or is not in the
+  // snapshot at all) is listed, once while the tab shows it: a listing
+  // that fails is not run again and again. Its own entries, read, decide:
+  // not the folder before's, still shown while they come.
+  const autoListed = useRef(new Set<string>())
+  const unlisted = path !== null && !q.isLoading && !q.isPlaceholderData && !q.isError && !folder?.listedAt
+  useEffect(() => {
+    if (!autoList || !unlisted || !onRefresh || here || autoListed.current.has(path)) return
+    autoListed.current.add(path)
+    onRefresh(true)
+  }, [autoList, unlisted, onRefresh, here, path])
   // Uploads on their way into this folder: their files may not be in it yet.
   const arriving = path ? running.filter((f) => f.action.startsWith("upload") && parentOf(f.path) !== null && samePath(parentOf(f.path)!, path)) : []
   const sort = { field: filter.sort, direction: filter.desc ? "DESC" : "ASC" } as const
@@ -438,7 +466,7 @@ function FolderView({
                 aria-label="Refresh"
                 title={onRefresh ? `List ${path} again on the host` : path ? "No session that can list it" : "Open a folder to list it"}
                 disabled={!onRefresh || !!here}
-                onClick={onRefresh}
+                onClick={() => onRefresh?.()}
               >
                 <RefreshCwIcon className={cn(here?.action === "list_dir" && "animate-spin")} />
               </Button>
