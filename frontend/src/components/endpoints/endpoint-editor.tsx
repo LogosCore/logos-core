@@ -21,7 +21,6 @@ import { SettingsNav } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { childPointer, type JsonProblem } from "@/lib/json-edit"
 import { whenIdle } from "@/lib/preloadable"
-import { cn } from "@/lib/utils"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { useEditorModeStore } from "@/stores/editor-mode"
@@ -36,6 +35,7 @@ import {
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
 import { ModuleIcon } from "@/components/modules/module-icon"
+import { ConnectionKindPicker } from "@/components/endpoints/connection-kind-picker"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
 import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
@@ -45,7 +45,6 @@ import {
   endpointImportFrom,
   evaluateEndpoint,
   exportFileName,
-  kindLabels,
   kindNames,
   kindsByName,
   MAX_DESCRIPTION_LENGTH,
@@ -145,58 +144,6 @@ export function EditEndpoint({ id }: { id: string }) {
     )
   }
   return <EndpointEditor operationId={endpoint.operationId} kind={kind} endpoint={endpoint} />
-}
-
-/**
- * The endpoint's connection kind, above the rest of the form: it decides
- * which settings the form has. One card per kind the channel carries.
- */
-function KindPicker({
-  channel,
-  value,
-  onChange,
-  disabled,
-  error,
-}: {
-  channel: Kind
-  value: string
-  onChange: (kind: string) => void
-  disabled: boolean
-  error?: string
-}) {
-  return (
-    <section aria-labelledby="endpoint-kind-title">
-      <h2 id="endpoint-kind-title" className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Kind
-      </h2>
-      <div role="radiogroup" aria-labelledby="endpoint-kind-title" className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-        {kindNames(channel).map((k) => {
-          const on = k === value
-          return (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              disabled={disabled}
-              onClick={() => !on && onChange(k)}
-              className={cn(
-                "flex flex-col gap-0.5 rounded-xl border bg-card px-4 py-3 text-left transition-colors disabled:cursor-default",
-                on ? "border-foreground ring-1 ring-foreground" : "hover:bg-accent/50 disabled:hover:bg-card",
-              )}
-            >
-              <span className="text-sm font-medium">{kindLabels[k] ?? k}</span>
-              <span className="font-mono text-xs text-muted-foreground">{k}</span>
-            </button>
-          )
-        })}
-      </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        How minions given this endpoint keep in touch through the channel. Each kind has its own settings.
-      </p>
-      {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
-    </section>
-  )
 }
 
 function NotFound({ title, text }: { title: string; text: string }) {
@@ -476,7 +423,7 @@ function EndpointEditor({
 
         <div className="@container/settings min-w-0 flex-1">
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
-          <KindPicker
+          <ConnectionKindPicker
             channel={kind}
             value={connKind}
             onChange={changeKind}
