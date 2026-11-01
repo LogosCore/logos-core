@@ -114,6 +114,7 @@ import {
   type SessionColumnId,
   type SessionsLayout,
 } from "./sessions-layout"
+import { SwitchConnectionMenu } from "./switch-connection-menu"
 
 // The Sessions table: the operators' main view. Unlike the app's other
 // tables, its columns are the operator's: any property of a session, in any
@@ -873,6 +874,7 @@ function SessionMenu({
         <FolderTreeIcon />
         File Browser
       </ContextMenuItem>
+      <SwitchConnectionMenu s={s} canWrite={canWrite} />
       <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
         <InfoIcon />
         Details

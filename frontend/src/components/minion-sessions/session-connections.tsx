@@ -1,15 +1,12 @@
 import { useMemo } from "react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { IdRows, InfoCard, NoteRow } from "@/components/ui/info-card"
 import { kindLabels, kindsByName } from "@/components/endpoints/endpoint-values"
 import { settingsSummary } from "@/components/builds/build-values"
-import { errorMessage } from "@/components/modules/management/api-errors"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { useChannelKinds } from "@/graphql/hooks/channel-endpoints"
 import { useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
-import { useMinionSessionCommands, useQueueMinionTask } from "@/graphql/hooks/minion-tasks"
-import { actionCommands, chooseActionCommand, readPicked } from "./action-commands"
+import { useSwitchConnection } from "./use-connection-choices"
 
 // A session's connections (docs: contracts/channel-core-connections, Connection
 // management): its build's, in the order the minion tries them, the one it
@@ -20,27 +17,13 @@ import { actionCommands, chooseActionCommand, readPicked } from "./action-comman
 
 type Session = MinionSessionFieldsFragment
 
-const SWITCH = "switch_connection"
-
 export function ConnectionsCard({ s }: { s: Session }) {
   const { data } = useMinionSessionConnections(s.id)
   const connections = data?.minionSession?.connections ?? []
   const kinds = useChannelKinds()
   const channels = useMemo(() => kindsByName(kinds.data?.channelKinds ?? []), [kinds.data])
-  const commands = useMinionSessionCommands(s.id).data?.minionSessionCommands ?? []
-  const command = chooseActionCommand(actionCommands(commands, SWITCH), readPicked(s.id, SWITCH))
-  const queue = useQueueMinionTask()
+  const { command, pending, switchTo } = useSwitchConnection(s.id)
   const open = s.state === "OPEN"
-
-  async function switchTo(place: number) {
-    if (!command) return
-    try {
-      await queue.mutateAsync({ sessionId: s.id, command: command.id, args: { conn: place } })
-      toast.success(`Switch to connection ${place} queued (${command.id})`)
-    } catch (err) {
-      toast.error(errorMessage(err, "Failed to queue the switch"))
-    }
-  }
 
   return (
     <InfoCard
@@ -72,7 +55,7 @@ export function ConnectionsCard({ s }: { s: Session }) {
                       type="button"
                       variant="outline"
                       size="xs"
-                      disabled={queue.isPending}
+                      disabled={pending}
                       title={`Queue ${command.id} with conn ${c.place}: the minion moves once this connection answers`}
                       onClick={() => switchTo(c.place)}
                     >
