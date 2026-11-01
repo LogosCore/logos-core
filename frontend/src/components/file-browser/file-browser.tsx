@@ -589,7 +589,7 @@ function Rows({
           running={inFlightAt(running, e.path)}
           actions={actions}
           onMenu={(isOpen) => setMenuFor(isOpen ? e.path : null)}
-          onClick={onClick ? () => onClick(e) : e.type === "dir" ? () => actions.open(e) : undefined}
+          onClick={onClick ? () => onClick(e) : clickOf(e, actions)}
         />
       )}
       components={{
@@ -602,6 +602,13 @@ function Rows({
       }}
     />
   )
+}
+
+/** What a click on a folder's entry does: a folder opens; a file core keeps a download of opens that file. */
+function clickOf(e: Entry, actions: EntryActions): (() => void) | undefined {
+  if (e.type === "dir") return () => actions.open(e)
+  const kept = e.downloaded.findLast((d) => !!d.fileId)
+  return kept ? () => actions.view(kept.taskId) : undefined
 }
 
 /** Why an entry is gone, and when. */
