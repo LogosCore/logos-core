@@ -62,6 +62,21 @@ SPA, REST/GraphQL, and the Yjs WebSocket are all served from the same
 origin. The Ingress routes by path. WebSocket upgrades flow through
 `/api/v1/ws/wiki/` to the hocuspocus Service.
 
+### Minion transfers get Ingresses of their own
+ingress-nginx annotations apply to a whole Ingress, and two paths need
+what the rest of `/api/` must not have (`ingress.minionTransfers`):
+
+| Ingress | Path | Body | Buffering | Timeouts |
+|---|---|---|---|---|
+| `<release>-minion-files` | `POST /api/v1/minion-files` (task files for uploads) | `core.config.minionFile.maxSize` + 64 MiB | none: passed to core as it comes | 1 h |
+| `<release>-minion-streams` | `/api/v1/minion-streams/` (stream_download, stream_upload) | no limit | none, either way | 1 h |
+
+They carry `ingress.annotations` too (TLS, cert-manager), with
+`ingress.minionTransfers.annotations` over the transfer defaults: a longer
+`proxy-read-timeout` for very slow channels, say. The longer paths win over
+`/api/`. Core keeps a stream in Redis a few chunks at a time, so any core
+replica serves any stream.
+
 ### MONGO_URI is composed in-pod
 `MONGO_URI` is built from `MONGO_HOST` + `MONGO_PORT` (ConfigMap) and
 `MONGO_INITDB_ROOT_USERNAME` + `MONGO_INITDB_ROOT_PASSWORD` (Secret).
@@ -164,6 +179,8 @@ Credentials still come from `secrets.values` or `secrets.existingSecret`.
 | `secrets.existingSecret` | Read all app secrets from a Secret you manage |
 | `core.config.oidc.*` | Optional OpenID Connect login (Keycloak etc.). Set `enabled` and `issuerUrl`, register `https://<ingress host>/api/v1/auth/oidc/callback` at the provider, and put the client secret in `secrets.values.oidcClientSecret` (key `oidcClientSecret` in an existing Secret) |
 | `core.config.auth.localLoginEnabled` | `false` hides the password form; only valid with `oidc.enabled=true` |
+| `core.config.minionFile.maxSize` | Largest file a minion sends core, or core sends a minion (2 GiB; at most 64 GiB); the minion-files Ingress follows it |
+| `ingress.minionTransfers.enabled` / `.annotations` | The minion transfer Ingresses (above), and annotations for them only |
 | `secrets.values.*` | Inline secret values (development only) |
 | `global.storageClass` | StorageClass applied to all PVCs |
 | `mongodb.persistence.size` / `redis.master.persistence.size` / `seaweedfs.*.data.size` | PVC sizing |
@@ -200,6 +217,12 @@ not resolve `MONGO_HOST`, or the Secret keys are missing. Check:
 kubectl -n logos get cm,secret
 kubectl -n logos describe pod -l app.kubernetes.io/component=core
 ```
+
+### A large upload fails with 413, or a stream stops at a fixed size
+The transfer Ingresses are off, or another layer caps the body. Confirm
+`<release>-minion-files` and `<release>-minion-streams` exist
+(`ingress.minionTransfers.enabled`), and that a load balancer in front of
+the controller allows bodies that large and connections that long.
 
 ### Hocuspocus disconnects every few seconds
 Almost always an ingress configuration issue. Confirm:

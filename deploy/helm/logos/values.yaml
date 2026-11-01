@@ -128,6 +128,14 @@ core:
     wikiImport:
       zipMaxSize: 209715200    # 200 MB
 
+    # Files minions send core (a download task's) and task files core sends
+    # them (an upload's), kept in their own bucket (core creates it). maxSize
+    # caps both; the minion-files Ingress takes its body limit from it.
+    # Streams have no cap: core keeps a few chunks of one at a time.
+    minionFile:
+      bucket: minion-files
+      maxSize: 2147483648      # 2 GiB (at most 64 GiB)
+
     auth:
       accessTtl: "15m"
       refreshTtl: "168h"
@@ -375,6 +383,21 @@ ingress:
     # Disable buffering so SSE GraphQL subscription frames flush
     # immediately, matching the dev nginx.conf behaviour.
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
+
+  # Minion transfers, each an Ingress of its own: ingress-nginx annotations
+  # apply to a whole Ingress, and these paths need what the rest of /api/
+  # must not have. They take ingress.annotations (cert-manager, the class's
+  # own) with these over them:
+  #   POST /api/v1/minion-files (task files): bodies up to
+  #     core.config.minionFile.maxSize, passed to core as they come, not
+  #     buffered to disk first.
+  #   /api/v1/minion-streams/ (stream_download, stream_upload): no body
+  #     limit, nothing buffered either way, an hour's timeouts (a stream
+  #     waits on the minion's check-ins; curl resumes one cut off).
+  minionTransfers:
+    enabled: true
+    # Extra annotations for both transfer Ingresses only.
+    annotations: {}
 
   tls:
     enabled: false

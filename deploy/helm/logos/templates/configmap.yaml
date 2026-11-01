@@ -62,6 +62,10 @@ data:
   # ----- Wiki Outline import -----
   WIKI_IMPORT_ZIP_MAX_SIZE: {{ .Values.core.config.wikiImport.zipMaxSize | quote }}
 
+  # ----- Minion files (downloads, task files) -----
+  MINION_FILE_BUCKET: {{ .Values.core.config.minionFile.bucket | quote }}
+  MINION_FILE_MAX_SIZE: {{ .Values.core.config.minionFile.maxSize | int64 | quote }}
+
   # ----- Auth -----
   AUTH_ACCESS_TTL: {{ .Values.core.config.auth.accessTtl | quote }}
   AUTH_REFRESH_TTL: {{ .Values.core.config.auth.refreshTtl | quote }}

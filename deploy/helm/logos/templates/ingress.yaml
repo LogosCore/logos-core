@@ -47,6 +47,8 @@ spec:
                 name: {{ $coreSvc }}
                 port:
                   name: http
+          # Minion transfers have Ingresses of their own (below, when
+          # ingress.minionTransfers.enabled): their longer paths win.
           # Swagger UI lives outside /api/ on the core service.
           - path: /swagger/
             pathType: Prefix
@@ -63,4 +65,54 @@ spec:
                 name: {{ $frontendSvc }}
                 port:
                   name: http
+{{- if .Values.ingress.minionTransfers.enabled }}
+{{- /* A task file's body may be the whole of core's cap, and a little of
+       the multipart framing around it. */}}
+{{- $filesBody := printf "%dm" (add (div (int64 .Values.core.config.minionFile.maxSize) 1048576) 64) }}
+{{- $transfer := dict
+      "nginx.ingress.kubernetes.io/proxy-request-buffering" "off"
+      "nginx.ingress.kubernetes.io/proxy-buffering" "off"
+      "nginx.ingress.kubernetes.io/proxy-read-timeout" "3600"
+      "nginx.ingress.kubernetes.io/proxy-send-timeout" "3600" }}
+{{- range $t := list
+      (dict "name" "minion-files" "path" "/api/v1/minion-files" "pathType" "Exact" "body" $filesBody)
+      (dict "name" "minion-streams" "path" "/api/v1/minion-streams/" "pathType" "Prefix" "body" "0") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "logos.fullname" $ }}-{{ $t.name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "logos.labels" $ | nindent 4 }}
+  annotations:
+    {{- /* The body limit follows core's cap; extras over the transfer
+           defaults; both over ingress.annotations. */}}
+    {{- $own := merge (dict "nginx.ingress.kubernetes.io/proxy-body-size" $t.body) (deepCopy ($.Values.ingress.minionTransfers.annotations | default dict)) (deepCopy $transfer) }}
+    {{- toYaml (merge $own (deepCopy ($.Values.ingress.annotations | default dict))) | nindent 4 }}
+spec:
+  {{- if $.Values.ingress.className }}
+  ingressClassName: {{ $.Values.ingress.className }}
+  {{- end }}
+  {{- if $.Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $.Values.ingress.host | quote }}
+      {{- if $.Values.ingress.tls.secretName }}
+      secretName: {{ $.Values.ingress.tls.secretName | quote }}
+      {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ $.Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ $t.path }}
+            pathType: {{ $t.pathType }}
+            backend:
+              service:
+                name: {{ $coreSvc }}
+                port:
+                  name: http
+{{- end }}
+{{- end }}
 {{- end -}}
