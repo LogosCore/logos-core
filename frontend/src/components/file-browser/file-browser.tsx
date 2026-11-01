@@ -55,6 +55,7 @@ import { UploadDialog } from "@/components/minion-sessions/upload-dialog"
 import type { UploadTarget } from "@/components/minion-sessions/upload-target"
 import { UploadHereButton } from "@/components/minion-sessions/upload-here-button"
 import { useWorkspaceActions } from "@/components/minion-sessions/workspace-tabs"
+import { usePaneRow } from "@/components/minion-sessions/pane-text"
 import { FileNameIcon } from "@/components/file-preview/file-type-icon"
 import { DownloadedFileDialog } from "./downloaded-file-dialog"
 import { FolderTree } from "./file-browser-tree"
@@ -82,8 +83,10 @@ import { useFileBrowserState } from "./file-browser-state"
 type Entry = FsEntryFieldsFragment
 
 const ICONS = { dir: FolderIcon, file: FileIcon, link: Link2Icon, other: CircleHelpIcon } as const
-const GRID = "grid-cols-[minmax(0,1fr)_76px_136px_88px_minmax(0,110px)]"
-const ROW_H = 26
+// Columns as wide as the pane's text makes them (pane-text.ts): 76, 136, 88
+// and 110px at 12px.
+const GRID =
+  "grid-cols-[minmax(0,1fr)_calc(var(--text-xs)*6.4)_calc(var(--text-xs)*11.4)_calc(var(--text-xs)*7.4)_minmax(0,calc(var(--text-xs)*9.2))]"
 
 export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: string }) {
   const [state, set] = useFileBrowserState(tabId)
@@ -474,7 +477,7 @@ function FolderView({
             toolsSlot,
           )}
       </div>
-      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase`}>
+      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase`}>
         <SortableHeader label="Name" field="name" sort={sort} onSortChange={(s) => onSort(s.field, s.direction === "DESC")} />
         <SortableHeader
           label="Size"
@@ -547,7 +550,7 @@ function SearchResults({
           {q.hasNextPage ? "+" : ""} found
         </span>
       </div>
-      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase`}>
+      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase`}>
         <div>Path</div>
         <div className="text-right">Size</div>
         <div>Modified</div>
@@ -601,6 +604,8 @@ function Rows({
 }) {
   // The entry whose menu is open, marked while it is.
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  // 26px at 12px text: as tall as the pane's text makes it.
+  const rowH = usePaneRow(26)
   if (error) return <p className="p-4 text-sm text-red-600 dark:text-red-400">{error}</p>
   if (loading)
     return (
@@ -614,7 +619,7 @@ function Rows({
       data={entries}
       className="min-h-0 flex-1"
       style={{ height: "100%" }}
-      fixedItemHeight={ROW_H}
+      fixedItemHeight={rowH}
       overscan={400}
       // A marked entry (a search opened its folder at it) is scrolled to.
       initialTopMostItemIndex={marked ? Math.max(0, entries.findIndex((e) => samePath(e.path, marked))) : 0}
@@ -629,6 +634,7 @@ function Rows({
           actions={actions}
           onMenu={(isOpen) => setMenuFor(isOpen ? e.path : null)}
           onClick={onClick ? () => onClick(e) : clickOf(e, actions)}
+          height={rowH}
         />
       )}
       components={{
@@ -665,8 +671,11 @@ function EntryRow({
   actions,
   onMenu,
   onClick,
+  height,
 }: {
   entry: Entry
+  /** The row's height: the list lays rows out by it. */
+  height: number
   fullPath: boolean
   marked: boolean
   running?: InFlight
@@ -696,12 +705,13 @@ function EntryRow({
         render={
           <div
             className={cn(
-              `grid ${GRID} h-[26px] cursor-default items-center gap-3 border-b px-3 text-xs hover:bg-muted/40`,
+              `grid ${GRID} cursor-default items-center gap-3 border-b px-3 text-xs hover:bg-muted/40`,
               (e.hidden || !e.known) && "text-muted-foreground",
               gone && "text-muted-foreground",
               marked && "bg-muted",
               onClick && "cursor-pointer",
             )}
+            style={{ height }}
             onClick={onClick}
           />
         }

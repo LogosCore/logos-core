@@ -35,6 +35,13 @@
   background-size: 16px 16px;
 }
 
+/* A step under text-xs (labels, column headings), its own size so the
+   session work pane can scale it with the rest (pane-text.ts). */
+@theme {
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: calc(1 / 0.6875);
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;

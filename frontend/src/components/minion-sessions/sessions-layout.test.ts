@@ -46,10 +46,12 @@ describe("layout", () => {
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, consoleSplit: 0.95 }).consoleSplit).toBe(0.9)
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null }).consoleSplit).toBeNull()
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, filesSplit: 0.05 }).filesSplit).toBe(0.1)
+    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, paneTextSize: 14 }).paneTextSize).toBe(14)
+    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null, paneTextSize: 30 }).paneTextSize).toBeNull()
   })
 
   test("columns move, show and hide; the last one stays", () => {
-    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null }
+    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null }
     expect(moveColumn(l, "os", "number").columns).toEqual(["os", "number", "host"])
     expect(shiftColumn(l, "host", 1).columns).toEqual(["number", "os", "host"])
     expect(shiftColumn(l, "number", -1)).toBe(l)
@@ -57,7 +59,7 @@ describe("layout", () => {
     expect(toggleColumn(l, "pid", "host").columns).toEqual(["number", "host", "pid", "os"])
     expect(toggleColumn(l, "pid", "os").columns).toEqual(["number", "host", "os", "pid"])
     expect(toggleColumn(l, "host").columns).toEqual(["number", "os"])
-    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null }
+    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null }
     expect(toggleColumn(one, "host")).toBe(one)
   })
 

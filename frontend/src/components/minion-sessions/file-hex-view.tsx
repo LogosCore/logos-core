@@ -20,6 +20,7 @@ import {
   type HexPlace,
 } from "./hex"
 import { readRange, type ByteBlocks } from "./use-byte-blocks"
+import { usePaneRow } from "./pane-text"
 
 // A kept file's bytes, read-only: offset, 16 bytes in hex, the same as text.
 // The view scrolls itself rather than the page laying out every row — a
@@ -29,7 +30,6 @@ import { readRange, type ByteBlocks } from "./use-byte-blocks"
 // (use-byte-blocks.ts). Where it is and what is selected are its parent's,
 // kept while another tab shows.
 
-const ROW_H = 20
 /** The most a selection copies. */
 const MAX_COPY = 1 << 20
 
@@ -49,6 +49,8 @@ export function FileHexView({
   /** Renders the tool row: the tabs, with these tools at its end. */
   toolbar: (tools: ReactNode) => ReactNode
 }) {
+  // 20px at 12px text: as tall as the pane's text makes it.
+  const ROW_H = usePaneRow(20)
   const totalRows = Math.max(1, Math.ceil(size / BYTES_PER_ROW))
   const digits = offsetDigits(size)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -92,7 +94,7 @@ export function FileHexView({
     }
     el.addEventListener("wheel", onWheel, { passive: false })
     return () => el.removeEventListener("wheel", onWheel)
-  }, [onPlace, maxTop])
+  }, [onPlace, maxTop, ROW_H])
 
   /** Moves the caret, the anchor with it unless extending, and the rows to keep it in sight. */
   function moveTo(caret: number, extend: boolean) {
@@ -203,7 +205,7 @@ export function FileHexView({
       )
     }
     rows.push(
-      <div key={row} className="flex h-5 items-center whitespace-pre">
+      <div key={row} className="flex items-center whitespace-pre" style={{ height: ROW_H }}>
         <span className="w-[calc(var(--d)*1ch)] shrink-0 text-muted-foreground select-none" style={{ "--d": digits } as React.CSSProperties}>
           {formatOffset(base, digits)}
         </span>

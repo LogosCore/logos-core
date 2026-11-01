@@ -7,6 +7,7 @@ import type {
 } from "@/graphql/gql/graphql"
 import { platformLabel } from "@/components/builds/build-values"
 import { formatDateTime } from "@/lib/date-format"
+import { PANE_TEXT_SIZES } from "./pane-text"
 
 // The Sessions table's model: the columns an operator can show (every
 // property of a session), what each holds, and the layout they keep (columns
@@ -126,6 +127,8 @@ export interface SessionsLayout {
   consoleSplit: number | null
   /** The share of a file browser's width its folder tree takes; null: DEFAULT_FILES_SPLIT. */
   filesSplit: number | null
+  /** The work pane's text size in pixels; null: DEFAULT_PANE_TEXT (pane-text.ts). */
+  paneTextSize: number | null
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -135,6 +138,7 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   split: null,
   consoleSplit: null,
   filesSplit: null,
+  paneTextSize: null,
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
@@ -171,12 +175,13 @@ export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | 
     split: share(stored.split),
     consoleSplit: share(stored.consoleSplit),
     filesSplit: share(stored.filesSplit),
+    paneTextSize: stored.paneTextSize != null && PANE_TEXT_SIZES.includes(stored.paneTextSize) ? stored.paneTextSize : null,
   }
 }
 
 /** The layout as the mutation takes it. */
 export function sessionsLayoutInput(layout: SessionsLayout) {
-  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split, consoleSplit: layout.consoleSplit, filesSplit: layout.filesSplit }
+  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split, consoleSplit: layout.consoleSplit, filesSplit: layout.filesSplit, paneTextSize: layout.paneTextSize }
 }
 
 function withoutNulls(f: SessionFilter): SessionFilter {

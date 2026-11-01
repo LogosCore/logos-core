@@ -47,6 +47,8 @@ export function WorkPane({
   panel,
   empty,
   className,
+  style,
+  end,
 }: {
   /** The pane's accessible name. */
   label: string
@@ -59,6 +61,9 @@ export function WorkPane({
   /** What the pane shows with no tab open. */
   empty: ReactNode
   className?: string
+  style?: CSSProperties
+  /** At the tab row's end, after the tabs: the pane's own controls. */
+  end?: ReactNode
 }) {
   const strip = useRef<HTMLDivElement>(null)
   // A drag only past 6px: a click brings the tab to the front.
@@ -86,33 +91,41 @@ export function WorkPane({
     strip.current?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(id)}"]`)?.focus()
   }
 
-  if (tabs.length === 0) return <div className={cn("flex min-h-0 flex-1 flex-col", className)}>{empty}</div>
+  if (tabs.length === 0)
+    return (
+      <div className={cn("flex min-h-0 flex-1 flex-col", className)} style={style}>
+        {empty}
+      </div>
+    )
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={state.ids} strategy={horizontalListSortingStrategy}>
-          <div
-            ref={strip}
-            role="tablist"
-            aria-label={label}
-            onKeyDown={onKeyDown}
-            className="flex shrink-0 overflow-x-auto border-b bg-muted/40 [scrollbar-width:thin]"
-          >
-            {tabs.map((tab) => (
-              <Tab
-                key={tab.id}
-                tab={tab}
-                active={tab.id === state.active}
-                onActivate={() => onChange(activateTab(state, tab.id))}
-                onClose={(which) => onChange(closeTabs(state, tabsToClose(state, tab.id, which)))}
-                last={tab.id === state.ids[state.ids.length - 1]}
-                alone={state.ids.length === 1}
-              />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+    <div className={cn("flex min-h-0 flex-1 flex-col", className)} style={style}>
+      <div className="flex shrink-0 items-stretch border-b bg-muted/40">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={state.ids} strategy={horizontalListSortingStrategy}>
+            <div
+              ref={strip}
+              role="tablist"
+              aria-label={label}
+              onKeyDown={onKeyDown}
+              className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:thin]"
+            >
+              {tabs.map((tab) => (
+                <Tab
+                  key={tab.id}
+                  tab={tab}
+                  active={tab.id === state.active}
+                  onActivate={() => onChange(activateTab(state, tab.id))}
+                  onClose={(which) => onChange(closeTabs(state, tabsToClose(state, tab.id, which)))}
+                  last={tab.id === state.ids[state.ids.length - 1]}
+                  alone={state.ids.length === 1}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+        {end && <div className="flex shrink-0 items-center gap-0.5 border-l px-1">{end}</div>}
+      </div>
       {tabs.map((tab) => (
         <div
           key={tab.id}

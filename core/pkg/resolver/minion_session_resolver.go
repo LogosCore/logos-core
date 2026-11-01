@@ -453,7 +453,8 @@ func (r *minionSessionResolver) SetMinionSessionsLayout(ctx context.Context, in 
 	}
 	var layout *models.MinionSessionsLayout
 	if in != nil {
-		layout = &models.MinionSessionsLayout{Columns: in.Columns, Split: in.Split, ConsoleSplit: in.ConsoleSplit, FilesSplit: in.FilesSplit}
+		layout = &models.MinionSessionsLayout{Columns: in.Columns, Split: in.Split, ConsoleSplit: in.ConsoleSplit, FilesSplit: in.FilesSplit,
+			PaneTextSize: in.PaneTextSize}
 		if in.Sort != nil {
 			s := fromSessionSortInput(in.Sort)
 			layout.Sort = &s
@@ -509,7 +510,7 @@ func toSessionsLayoutModel(l *models.MinionSessionsLayout) *model.MinionSessions
 		return nil
 	}
 	out := &model.MinionSessionsLayout{Columns: l.Columns, Filters: []*model.MinionSessionFilter{}, Split: l.Split,
-		ConsoleSplit: l.ConsoleSplit, FilesSplit: l.FilesSplit}
+		ConsoleSplit: l.ConsoleSplit, FilesSplit: l.FilesSplit, PaneTextSize: l.PaneTextSize}
 	if l.Sort != nil {
 		dir := model.SortDirectionAsc
 		if l.Sort.Desc {

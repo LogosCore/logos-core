@@ -233,7 +233,16 @@ type MinionSessionsLayout struct {
 	// FilesSplit is the share of a file browser's width its folder tree
 	// takes, MinSessionsSplit to MaxSessionsSplit; nil for the default.
 	FilesSplit *float64 `bson:"files_split,omitempty" json:"files_split,omitempty"`
+	// PaneTextSize is the session work pane's text size in pixels,
+	// MinPaneTextSize to MaxPaneTextSize; nil for the default.
+	PaneTextSize *int `bson:"pane_text_size,omitempty" json:"pane_text_size,omitempty"`
 }
+
+// The text sizes the work pane offers.
+const (
+	MinPaneTextSize = 12
+	MaxPaneTextSize = 14
+)
 
 // The range a layout's Split keeps to: neither half shrinks away.
 const (
@@ -272,6 +281,9 @@ func (l MinionSessionsLayout) Validate() error {
 	}
 	if l.FilesSplit != nil && (*l.FilesSplit < MinSessionsSplit || *l.FilesSplit > MaxSessionsSplit) {
 		return fmt.Errorf("layout: filesSplit is %g to %g", MinSessionsSplit, MaxSessionsSplit)
+	}
+	if l.PaneTextSize != nil && (*l.PaneTextSize < MinPaneTextSize || *l.PaneTextSize > MaxPaneTextSize) {
+		return fmt.Errorf("layout: paneTextSize is %d to %d", MinPaneTextSize, MaxPaneTextSize)
 	}
 	for _, f := range l.Filters {
 		if err := f.Validate(); err != nil {

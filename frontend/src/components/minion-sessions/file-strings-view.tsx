@@ -9,13 +9,13 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
 import { formatOffset, offsetDigits } from "./hex"
+import { usePaneRow } from "./pane-text"
 
 // A kept file's printable strings, as strings(1) finds them: read by core a
 // page at a time from where the last stopped, searched and filtered there,
 // shown as they come, more read as the list nears its end. A string opens
 // in the hex view, selected.
 
-const ROW_H = 24
 const MIN_LENGTHS = [3, 4, 5, 6, 8, 10, 16, 32]
 const ENCODINGS: { value: MinionFileStringsFilter["encoding"]; label: string }[] = [
   { value: "", label: "ASCII and UTF-16" },
@@ -47,12 +47,16 @@ export function FileStringsView({
   const [picked, setPicked] = useState<number | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  // 24px at 12px text: as tall as the pane's text makes it.
+  const ROW_H = usePaneRow(24)
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_H,
     overscan: 20,
   })
+  // A new text size: the rows laid out again at their new height.
+  useEffect(() => virtualizer.measure(), [virtualizer, ROW_H])
   const virtualItems = virtualizer.getVirtualItems()
   const lastIndex = virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1
 
@@ -126,7 +130,7 @@ export function FileStringsView({
                   >
                     <span className="shrink-0 text-muted-foreground tabular-nums">{formatOffset(s.offset, digits)}</span>
                     <span
-                      className="w-9 shrink-0 text-[10px] tracking-wide text-muted-foreground uppercase"
+                      className="w-[4.5em] shrink-0 text-2xs tracking-wide text-muted-foreground uppercase"
                       title={s.encoding === "utf16le" ? "UTF-16LE: each character followed by a zero byte" : "ASCII: a byte a character"}
                     >
                       {s.encoding === "utf16le" ? "utf16" : "ascii"}

@@ -273,10 +273,10 @@ export function CommandBar({
           title="The command line (/)"
           className="peer min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground/60"
         />
-        <kbd className="rounded border px-1.5 font-mono text-[11px] text-muted-foreground peer-focus:hidden" title="Press / to type a command">
+        <kbd className="rounded border px-1.5 font-mono text-2xs text-muted-foreground peer-focus:hidden" title="Press / to type a command">
           /
         </kbd>
-        <span className="hidden shrink-0 items-center gap-1 text-[11px] text-muted-foreground peer-focus:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1 text-2xs text-muted-foreground peer-focus:inline-flex">
           <kbd className="rounded border px-1 font-mono">↵</kbd> run
           <kbd className="ml-1 rounded border px-1 font-mono">⇧↵</kbd> form
         </span>

@@ -1,5 +1,6 @@
 import { useMemo } from "react"
-import { FolderTreeIcon, SquareTerminalIcon } from "lucide-react"
+import { AArrowDownIcon, AArrowUpIcon, FolderTreeIcon, SquareTerminalIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { WorkPane } from "@/components/work-pane/work-pane"
 import { openTab, replaceTab, type WorkPaneTabs } from "@/components/work-pane/work-pane-tabs"
 import { FileBrowser } from "@/components/file-browser/file-browser"
@@ -7,7 +8,8 @@ import { dropFileBrowserState, moveFileBrowserState, setFileBrowserState } from 
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { useFactoryIcons } from "@/graphql/hooks/builds"
-import { useMinionSession, useMinionSessions } from "@/graphql/hooks/minion-sessions"
+import { useMinionSession, useMinionSessions, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
+import { DEFAULT_PANE_TEXT, PANE_TEXT_SIZES, PaneTextContext, paneTextStyle } from "./pane-text"
 import { markColorVars, markRowClass } from "./session-mark-colors"
 import { SessionFire } from "./session-fire"
 import { SessionConsole } from "./session-console"
@@ -19,6 +21,13 @@ import { fileBrowserTabId, workspaceTab, WorkspaceActionsContext, type Workspace
 // of their machines ("File Browser" in the menu, file-browser.tsx).
 
 export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; onTabsChange: (next: WorkPaneTabs) => void }) {
+  // The pane's text size is the operator's, kept with their sessions layout.
+  const { layout, setLayout } = useMinionSessionsLayout()
+  const textSize = layout.paneTextSize ?? DEFAULT_PANE_TEXT
+  const step = (by: -1 | 1) => {
+    const next = PANE_TEXT_SIZES[PANE_TEXT_SIZES.indexOf(textSize) + by]
+    if (next !== undefined) setLayout({ ...layout, paneTextSize: next })
+  }
   // A session's console and its file browser are one session: read once.
   const sessionIds = [...new Set(tabs.ids.map((id) => workspaceTab(id).sessionId))]
   const loaded = useMinionSessions(sessionIds)
@@ -49,10 +58,36 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
   )
   return (
     <WorkspaceActionsContext value={actions}>
+    <PaneTextContext value={textSize}>
     <WorkPane
       label="Sessions being worked with"
       // Dim on the dark theme (index.css, .work-pad): read for hours.
       className="work-pad bg-background text-foreground"
+      style={paneTextStyle(textSize)}
+      end={
+        <>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Smaller text"
+            title={`Smaller text (${textSize}px now)`}
+            disabled={textSize <= PANE_TEXT_SIZES[0]}
+            onClick={() => step(-1)}
+          >
+            <AArrowDownIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Larger text"
+            title={`Larger text (${textSize}px now)`}
+            disabled={textSize >= PANE_TEXT_SIZES[PANE_TEXT_SIZES.length - 1]}
+            onClick={() => step(1)}
+          >
+            <AArrowUpIcon />
+          </Button>
+        </>
+      }
       tabs={tabs.ids.map((id) => {
         // A tab looks as its session's row: the caller's mark, color or style.
         const color = sessionOf(id)?.mark?.color
@@ -74,6 +109,7 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
         </div>
       }
     />
+    </PaneTextContext>
     </WorkspaceActionsContext>
   )
 }

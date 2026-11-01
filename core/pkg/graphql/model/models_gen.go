@@ -684,6 +684,7 @@ type MinionSessionsLayout struct {
 	Split        *float64               `json:"split,omitempty"`
 	ConsoleSplit *float64               `json:"consoleSplit,omitempty"`
 	FilesSplit   *float64               `json:"filesSplit,omitempty"`
+	PaneTextSize *int                   `json:"paneTextSize,omitempty"`
 }
 
 type MinionSessionsLayoutInput struct {
@@ -693,6 +694,7 @@ type MinionSessionsLayoutInput struct {
 	Split        *float64                    `json:"split,omitempty"`
 	ConsoleSplit *float64                    `json:"consoleSplit,omitempty"`
 	FilesSplit   *float64                    `json:"filesSplit,omitempty"`
+	PaneTextSize *int                        `json:"paneTextSize,omitempty"`
 }
 
 type MinionStreamLink struct {

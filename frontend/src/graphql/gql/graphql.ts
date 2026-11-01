@@ -873,6 +873,7 @@ export type MinionSessionsLayout = {
   consoleSplit?: Maybe<Scalars['Float']['output']>;
   filesSplit?: Maybe<Scalars['Float']['output']>;
   filters: Array<MinionSessionFilter>;
+  paneTextSize?: Maybe<Scalars['Int']['output']>;
   sort?: Maybe<MinionSessionSort>;
   split?: Maybe<Scalars['Float']['output']>;
 };
@@ -882,6 +883,7 @@ export type MinionSessionsLayoutInput = {
   consoleSplit?: InputMaybe<Scalars['Float']['input']>;
   filesSplit?: InputMaybe<Scalars['Float']['input']>;
   filters: Array<MinionSessionFilterInput>;
+  paneTextSize?: InputMaybe<Scalars['Int']['input']>;
   sort?: InputMaybe<MinionSessionSortInput>;
   split?: InputMaybe<Scalars['Float']['input']>;
 };
@@ -3806,19 +3808,19 @@ export type MinionSessionValuesQueryVariables = Exact<{
 
 export type MinionSessionValuesQuery = { minionSessionValues: Array<string> };
 
-export type MinionSessionsLayoutFieldsFragment = { columns: Array<string>, split?: number | null, consoleSplit?: number | null, filesSplit?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> };
+export type MinionSessionsLayoutFieldsFragment = { columns: Array<string>, split?: number | null, consoleSplit?: number | null, filesSplit?: number | null, paneTextSize?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> };
 
 export type MinionSessionsLayoutQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type MinionSessionsLayoutQuery = { minionSessionsLayout?: { columns: Array<string>, split?: number | null, consoleSplit?: number | null, filesSplit?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
+export type MinionSessionsLayoutQuery = { minionSessionsLayout?: { columns: Array<string>, split?: number | null, consoleSplit?: number | null, filesSplit?: number | null, paneTextSize?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
 
 export type SetMinionSessionsLayoutMutationVariables = Exact<{
   layout?: InputMaybe<MinionSessionsLayoutInput>;
 }>;
 
 
-export type SetMinionSessionsLayoutMutation = { setMinionSessionsLayout?: { columns: Array<string>, split?: number | null, consoleSplit?: number | null, filesSplit?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
+export type SetMinionSessionsLayoutMutation = { setMinionSessionsLayout?: { columns: Array<string>, split?: number | null, consoleSplit?: number | null, filesSplit?: number | null, paneTextSize?: number | null, sort?: { column: string, direction: SortDirection } | null, filters: Array<{ column: string, op: MinionSessionFilterOp, text?: string | null, values?: Array<string> | null, min?: number | null, max?: number | null, seconds?: number | null, from?: string | null, to?: string | null }> } | null };
 
 export type SetMinionSessionAddressMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -5370,6 +5372,7 @@ export const MinionSessionsLayoutFieldsFragmentDoc = new TypedDocumentString(`
   split
   consoleSplit
   filesSplit
+  paneTextSize
 }
     `, {"fragmentName":"MinionSessionsLayoutFields"}) as unknown as TypedDocumentString<MinionSessionsLayoutFieldsFragment, unknown>;
 export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
@@ -8436,6 +8439,7 @@ export const MinionSessionsLayoutDocument = new TypedDocumentString(`
   split
   consoleSplit
   filesSplit
+  paneTextSize
 }`) as unknown as TypedDocumentString<MinionSessionsLayoutQuery, MinionSessionsLayoutQueryVariables>;
 export const SetMinionSessionsLayoutDocument = new TypedDocumentString(`
     mutation SetMinionSessionsLayout($layout: MinionSessionsLayoutInput) {
@@ -8463,6 +8467,7 @@ export const SetMinionSessionsLayoutDocument = new TypedDocumentString(`
   split
   consoleSplit
   filesSplit
+  paneTextSize
 }`) as unknown as TypedDocumentString<SetMinionSessionsLayoutMutation, SetMinionSessionsLayoutMutationVariables>;
 export const SetMinionSessionAddressDocument = new TypedDocumentString(`
     mutation SetMinionSessionAddress($id: ID!, $address: String) {

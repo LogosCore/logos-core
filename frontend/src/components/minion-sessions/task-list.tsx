@@ -138,7 +138,7 @@ export function TaskList({
 function DaySeparator({ label }: { label: string }) {
   return (
     <div role="presentation" className="sticky top-0 z-10 flex justify-center bg-background/90 py-1 backdrop-blur-sm">
-      <span className="text-[11px] font-medium text-muted-foreground tabular-nums">{label}</span>
+      <span className="text-2xs font-medium text-muted-foreground tabular-nums">{label}</span>
     </div>
   )
 }
