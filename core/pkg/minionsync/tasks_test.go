@@ -124,14 +124,14 @@ func itemsOf(msg protocol.CoreMessage, kind int) []cbor.RawMessage {
 func TestTasksUnderSession(t *testing.T) {
 	r := newRig(t)
 	sid, tasks := openSession(t, r)
-	queue := func(cmd string, args map[string]any) uuid.UUID {
+	queue := func(cmd string, op int, args protocol.Args) uuid.UUID {
 		id := uuid.New()
 		var wire []byte
 		if args != nil {
 			wire, _ = protocol.MarshalCBOR(args)
 		}
 		tasks.rows = append(tasks.rows, models.MinionTask{TaskID: id, SessionID: sid, OperationID: r.build.OperationID,
-			Command: cmd, WireArgs: wire, State: models.MinionTaskQueued})
+			Command: cmd, Op: op, WireArgs: wire, State: models.MinionTaskQueued})
 		return id
 	}
 	send := func(items ...any) protocol.CoreMessage {
@@ -147,8 +147,8 @@ func TestTasksUnderSession(t *testing.T) {
 	}
 	one := uint64(1)
 	offer := protocol.FileOffer{Xfer: bytes.Repeat([]byte{4}, 16), Name: "a.exe", Size: 1, SHA256: make([]byte, 32)}
-	shell := queue("shell", map[string]any{"command": "whoami", "timeout": uint64(30000), "file": offer})
-	ls := queue("ls", nil)
+	shell := queue("shell", 11, protocol.Args{1: "whoami", 2: uint64(30000), 3: offer})
+	ls := queue("ls", 4, nil)
 
 	// No get_tasks, no task: an empty check-in gets nothing (204).
 	if msg := send(); len(msg.Items) != 0 {
@@ -158,11 +158,11 @@ func TestTasksUnderSession(t *testing.T) {
 	msg := send(protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &one})
 	got := itemsOf(msg, protocol.ItemTask)
 	var task protocol.TaskItem
-	if len(got) != 1 || protocol.UnmarshalCBOR(got[0], &task) != nil || task.Cmd != "shell" || task.Args["command"] != "whoami" ||
-		task.Args["timeout"] != uint64(30000) {
+	if len(got) != 1 || protocol.UnmarshalCBOR(got[0], &task) != nil || task.Cmd != 11 || task.Args[1] != "whoami" ||
+		task.Args[2] != uint64(30000) {
 		t.Fatalf("first delivery: %+v", task)
 	}
-	if f, err := protocol.ArgFile(task.Args, "file"); err != nil || f.Name != "a.exe" || !bytes.Equal(f.Xfer, offer.Xfer) {
+	if f, err := protocol.ArgFile(task.Args, 3); err != nil || f.Name != "a.exe" || !bytes.Equal(f.Xfer, offer.Xfer) {
 		t.Fatalf("the file offer: %+v %v", f, err)
 	}
 	if id, _ := uuid.FromBytes(task.Task); id != shell || tasks.find(shell).State != models.MinionTaskSent {
@@ -206,5 +206,43 @@ func TestTasksUnderSession(t *testing.T) {
 	msg = send(protocol.GetTasksItem{T: protocol.ItemGetTasks}, protocol.GetTasksItem{T: protocol.ItemGetTasks})
 	if errs := itemsOf(msg, protocol.ItemErr); len(errs) != 1 {
 		t.Fatalf("two get_tasks: %d errs", len(errs))
+	}
+}
+
+// A part as a v3 minion sends it: the data numbered, listings numbered with
+// mode bits and owners by place. Core keeps the data by name, and the
+// listing with the mode as the host (linux) shows it.
+func TestResultPartNamed(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	id := uuid.New()
+	tasks.rows = append(tasks.rows, models.MinionTask{TaskID: id, SessionID: sid, OperationID: r.build.OperationID,
+		Command: "walk", Op: 10, Result: protocol.ResultDirWalk, State: models.MinionTaskSent})
+	data, err := protocol.WireResultData(protocol.DirWalk{Root: "/etc", Folders: 1, Entries: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := protocol.LsPiece{Path: "/etc", Sep: "/", Last: true}
+	p.Entries = []protocol.LsEntry{{Name: "hosts", Type: protocol.EntryFile, Mode: 0o100644, Owner: p.Owner("root")}}
+	reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(),
+		protocol.ResultItem{T: protocol.ItemResult, Task: id[:], Seq: 0, Data: data, Ls: []protocol.LsPiece{p}})
+	if err != nil || reply != nil {
+		t.Fatalf("taken: %x %v", reply, err)
+	}
+	got := tasks.results[id]
+	if len(got) != 1 || got[0].Named == nil {
+		t.Fatalf("results %+v", got)
+	}
+	named, err := got[0].Named(protocol.ResultDirWalk, got[0].Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w, err := protocol.ReadDirWalk(0, named); err != nil || w.Root != "/etc" || w.Folders != 1 {
+		t.Fatalf("named walk: %+v %v", w, err)
+	}
+	l, err := protocol.ReadDirListing(0, got[0].Compose(protocol.ResultDirListing))
+	if err != nil || len(l.Entries) != 1 || l.Entries[0].Mode != "-rw-r--r--" || l.Entries[0].Owner != "root" ||
+		l.Entries[0].Type != protocol.DirEntryFile {
+		t.Fatalf("listing: %+v %v", l, err)
 	}
 }

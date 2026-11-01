@@ -134,7 +134,7 @@ func TestUploadPull(t *testing.T) {
 
 	// Its end, with the last ack saying the minion has it all: taken, no
 	// chunk, no err. Data of another SHA-256 is a problem; the file let go.
-	data, _ := protocol.ResultData(protocol.FileUpload{Xfer: xfer, Path: "/tmp/a.bin", Size: uint64(len(body)), SHA256: make([]byte, 32)})
+	data, _ := protocol.WireResultData(protocol.FileUpload{Xfer: xfer, Path: "/tmp/a.bin", Size: uint64(len(body)), SHA256: make([]byte, 32)})
 	ok := true
 	all := uint64(len(body))
 	msg := send(protocol.ResultItem{T: protocol.ItemResult, Task: taskID[:], Seq: 0, Done: true, OK: &ok, Data: data},

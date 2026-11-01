@@ -263,12 +263,15 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if err != nil {
 		return nil, err
 	}
-	wireBytes, err := protocol.MarshalCBOR(wire)
-	if err != nil {
-		return nil, fmt.Errorf("encode the args: %w", err)
+	// On the wire the args go by their params' numbers.
+	var wireBytes []byte
+	if numbered := protocol.WireArgs(commands[i].Params, wire); len(numbered) > 0 {
+		if wireBytes, err = protocol.MarshalCBOR(numbered); err != nil {
+			return nil, fmt.Errorf("encode the args: %w", err)
+		}
 	}
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
-		Args: values, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action, IssuedBy: uid, State: models.MinionTaskQueued,
+		Op: commands[i].Op, Args: values, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action, IssuedBy: uid, State: models.MinionTaskQueued,
 		QueuedAt: time.Now().UTC(), Upload: upload}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)

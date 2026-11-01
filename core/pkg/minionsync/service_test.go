@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -241,7 +242,7 @@ func (r *rig) send(t *testing.T, id []byte, items ...any) ([]byte, error) {
 // sendUnder seals a minion message with items under another id and keys.
 func (r *rig) sendUnder(t *testing.T, under uuid.UUID, keys protocol.AES256CBCHMACSHA256Material, id []byte, items ...any) ([]byte, error) {
 	t.Helper()
-	msg := protocol.MinionMessage{V: protocol.MinionMessageV2, ID: id}
+	msg := protocol.MinionMessage{V: protocol.MinionMessageV3, ID: id}
 	for _, it := range items {
 		raw, err := protocol.MarshalCBOR(it)
 		if err != nil {
@@ -510,7 +511,7 @@ func TestUnderSession(t *testing.T) {
 func TestSessionAddress(t *testing.T) {
 	r := newRig(t)
 	h := hello("web01")
-	h.Addrs = []string{"172.17.0.1", "10.0.0.5", "10.0.0.6"}
+	h.Addrs = ipsOf("172.17.0.1", "10.0.0.5", "10.0.0.6")
 	reply, _ := r.send(t, protocol.NewMessageID(), h)
 	sid := sessionID(t, r.open(t, reply))
 	if s := r.sessions.rows[0]; s.Address != "10.0.0.5" || s.AddressPicked {
@@ -518,14 +519,14 @@ func TestSessionAddress(t *testing.T) {
 	}
 	r.sessions.rows[0].Address, r.sessions.rows[0].AddressPicked = "10.0.0.6", true
 
-	h.Addrs = []string{"10.0.0.6", "10.0.0.7"}
+	h.Addrs = ipsOf("10.0.0.6", "10.0.0.7")
 	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), h); err != nil {
 		t.Fatal(err)
 	}
 	if s := r.sessions.rows[0]; s.Address != "10.0.0.6" || !s.AddressPicked {
 		t.Fatalf("kept pick %q picked=%v", s.Address, s.AddressPicked)
 	}
-	h.Addrs = []string{"10.0.0.7"}
+	h.Addrs = ipsOf("10.0.0.7")
 	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), h); err != nil {
 		t.Fatal(err)
 	}
@@ -775,4 +776,16 @@ func TestHelloAfterBuildDeleted(t *testing.T) {
 	if len(r.sessions.rows) != 0 {
 		t.Fatal("a session was opened")
 	}
+}
+
+// ipsOf are addresses as a hello carries them.
+func ipsOf(addrs ...string) []net.IP {
+	out := make([]net.IP, len(addrs))
+	for i, a := range addrs {
+		out[i] = net.ParseIP(a)
+		if v4 := out[i].To4(); v4 != nil {
+			out[i] = v4
+		}
+	}
+	return out
 }

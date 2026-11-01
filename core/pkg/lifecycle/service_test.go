@@ -706,7 +706,7 @@ func TestBlockUnblockDelete(t *testing.T) {
 func TestHandleRegister_CryptoSuite(t *testing.T) {
 	schema := func(suite string) *protocol.BuildSchema {
 		return &protocol.BuildSchema{
-			SchemaVersion: protocol.BuildSchemaV1, Version: 1, Crypto: suite,
+			SchemaVersion: protocol.BuildSchemaV2, Version: 1, Crypto: suite,
 			Channels: []protocol.BuildChannel{{ChannelVersions: protocol.ChannelVersions{ModuleName: "http", Versions: []int{2}}}},
 			Targets:  []protocol.BuildTarget{{ID: "linux-elf", Label: "Linux binary", Format: "elf", Platforms: []string{"linux/amd64"}}},
 		}

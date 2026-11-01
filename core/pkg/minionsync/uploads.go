@@ -157,10 +157,14 @@ func (s *Service) endUpload(ctx context.Context, task *models.MinionTask, res pr
 	}
 }
 
-// uploadProblem is why a file_upload's data is not the file core sent; ""
-// when it is.
+// uploadProblem is why a file_upload's data, as the minion sent it, is not
+// the file core sent; "" when it is.
 func uploadProblem(up models.MinionTaskUpload, res protocol.ResultItem) string {
-	f, err := protocol.ReadFileUpload(res.Seq, res.Data)
+	data, err := protocol.NamedResultData(protocol.ResultFileUpload, res.Data)
+	if err != nil {
+		return "" // taskdata's check says it
+	}
+	f, err := protocol.ReadFileUpload(res.Seq, data)
 	switch {
 	case err != nil:
 		return "" // taskdata's check says it

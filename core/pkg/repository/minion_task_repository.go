@@ -33,6 +33,10 @@ type MinionTaskResult struct {
 	// Data is the part's data, the CBOR map as it came.
 	Data []byte
 	At   time.Time
+	// Named turns Data, as it came, into its result's named shape
+	// (protocol.NamedResultData), before anything else reads it; nil: kept
+	// as it came.
+	Named func(result string, data []byte) ([]byte, error)
 	// Check checks Data against the task's result (taskdata.Check); nil:
 	// no check.
 	Check func(result string, seq uint64, data []byte) error
@@ -261,6 +265,14 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	// (whole or none: a CBOR map is not cut) dropped.
 	room := max(int64(models.MaxMinionTaskOutput)-t.OutSize-t.DataSize, 0)
 	out, data := res.Out, res.Data
+	var namedErr error
+	if len(data) > 0 && res.Named != nil {
+		if named, err := res.Named(t.Result, data); err != nil {
+			namedErr = err
+		} else {
+			data = named
+		}
+	}
 	if len(data) == 0 && res.Compose != nil {
 		data = res.Compose(t.Result)
 	}
@@ -279,9 +291,14 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 		data, dataCut = nil, true
 	}
 	problem := ""
-	if len(data) > 0 && t.DataProblem == "" && res.Check != nil {
-		if err := res.Check(t.Result, res.Seq, data); err != nil {
-			problem = fmt.Sprintf("part %d: %v", res.Seq, err)
+	if len(data) > 0 && t.DataProblem == "" {
+		switch {
+		case namedErr != nil:
+			problem = fmt.Sprintf("part %d: %v", res.Seq, namedErr)
+		case res.Check != nil:
+			if err := res.Check(t.Result, res.Seq, data); err != nil {
+				problem = fmt.Sprintf("part %d: %v", res.Seq, err)
+			}
 		}
 	}
 

@@ -79,8 +79,16 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, "the result's task id does not read", i)
 	}
+	// Listings as core keeps them: names, and modes read by the host's OS.
+	ls := make([]protocol.ListingPiece, len(res.Ls))
+	for j, p := range res.Ls {
+		ls[j] = p.Named(session.Hello.OS)
+	}
 	task, fresh, err := s.tasks.AddResult(ctx, session.SessionID, id, repository.MinionTaskResult{
 		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(),
+		Named: func(result string, data []byte) ([]byte, error) {
+			return protocol.NamedResultData(result, data)
+		},
 		Check:  taskdata.Check,
 		Latest: taskdata.Latest,
 		// A dir_listing command's data is its listing, made by core.
@@ -88,7 +96,7 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 			if result != protocol.ResultDirListing {
 				return nil
 			}
-			return taskdata.ListingData(res.Ls)
+			return taskdata.ListingData(ls)
 		},
 	})
 	if repository.IsNotFound(err) {
@@ -108,8 +116,8 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		// What it saw of its machine's files, into the snapshot as it comes
 		// (any command's): before the task is told changed, so a listing
 		// shown from it is there.
-		if s.fileBrowser != nil && len(res.Ls) > 0 {
-			s.fileBrowser.Listings(ctx, task, session, res.Ls, s.now())
+		if s.fileBrowser != nil && len(ls) > 0 {
+			s.fileBrowser.Listings(ctx, task, session, ls, s.now())
 		}
 		s.publishTask(task)
 		if res.Done {
@@ -153,7 +161,7 @@ func (s *Service) deliver(ctx context.Context, session *models.MinionSession, ma
 				return nil, fmt.Errorf("the args of task %s: %w", t.TaskID, err)
 			}
 		}
-		item, err := protocol.MarshalCBOR(protocol.TaskItem{T: protocol.ItemTask, Task: t.TaskID[:], Cmd: t.Command, Args: args})
+		item, err := protocol.MarshalCBOR(protocol.TaskItem{T: protocol.ItemTask, Task: t.TaskID[:], Cmd: uint64(t.Op), Args: args})
 		if err != nil {
 			return nil, fmt.Errorf("a task item: %w", err)
 		}

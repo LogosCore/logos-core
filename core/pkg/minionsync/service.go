@@ -155,7 +155,7 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 	if err != nil || len(items) == 0 {
 		return nil, err
 	}
-	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV2, Re: msg.ID, Items: items})
+	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		SessionID: id, OperationID: b.OperationID, BuildID: b.BuildID, BuildDescription: b.Description, Persisted: persisted,
 		Description: b.Description, DescriptionSet: true,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
-		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.Addrs),
+		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.AddrStrings()),
 		CreatedAt: now, PurgeAt: &purge,
 	}
 	if peer != "" {
@@ -320,8 +320,8 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 		return refuse("the session is closed")
 	}
 	// An operator's pick of address stays while the host still has it.
-	address, picked := models.DefaultAddress(hello.Addrs), false
-	if sess.AddressPicked && slices.Contains(hello.Addrs, sess.Address) {
+	address, picked := models.DefaultAddress(hello.AddrStrings()), false
+	if sess.AddressPicked && slices.Contains(hello.AddrStrings(), sess.Address) {
 		address, picked = sess.Address, true
 	}
 	err = s.sessions.Claim(ctx, sid, repository.MinionSessionClaim{
@@ -417,8 +417,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				break
 			}
 			// An operator's pick stays while the host still has it.
-			address, picked := models.DefaultAddress(hello.Addrs), false
-			if session.AddressPicked && slices.Contains(hello.Addrs, session.Address) {
+			address, picked := models.DefaultAddress(hello.AddrStrings()), false
+			if session.AddressPicked && slices.Contains(hello.AddrStrings(), session.Address) {
 				address, picked = session.Address, true
 			}
 			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello), address, picked); err != nil {

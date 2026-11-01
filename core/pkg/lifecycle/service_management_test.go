@@ -175,7 +175,7 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 }
 
 func TestHandleRegister_BuildSchema(t *testing.T) {
-	const schema = `{"schema_version": "1", "version": 3,
+	const schema = `{"schema_version": "2", "version": 3,
 	  "channels": [{"module_name": "http", "versions": [2]}],
 	  "targets": [{"id": "dummy", "format": "json", "platforms": ["any/any"]}]}`
 	svc, repo, _ := newTestService()

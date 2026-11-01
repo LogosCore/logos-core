@@ -31,7 +31,7 @@ const bobQueue = "logos.factory.rpc.bob-1"
 // bobSchema is BOB's build schema.
 func bobSchema() protocol.BuildSchema {
 	return protocol.BuildSchema{
-		SchemaVersion: protocol.BuildSchemaV1, Version: 1,
+		SchemaVersion: protocol.BuildSchemaV2, Version: 1,
 		Channels: []protocol.BuildChannel{{
 			ChannelVersions: protocol.ChannelVersions{ModuleName: "http", Versions: []int{2}},
 			Fields: []protocol.FieldSpec{

@@ -27,8 +27,11 @@ type MinionTask struct {
 	// Command is one of the session's build's commands, Args its params'
 	// values as the operator gave them (JSON values: a duration "30s"); the
 	// task carries them in their CBOR forms, defaults filled in.
-	Command string  `bson:"command" json:"command"`
-	Args    JSONMap `bson:"args,omitempty" json:"args,omitempty"`
+	Command string `bson:"command" json:"command"`
+	// Op is the command's number when it was queued
+	// (protocol.BuildCommand.Op): what the task names it by on the wire.
+	Op   int     `bson:"op,omitempty" json:"-"`
+	Args JSONMap `bson:"args,omitempty" json:"args,omitempty"`
 	// Result is the command's result when it was queued
 	// (protocol.BuildCommand.Result): the shape its data is checked
 	// against and joined by. Empty: no declared shape.
@@ -37,8 +40,8 @@ type MinionTask struct {
 	// (protocol.BuildCommand.Action): what the file browser reads a task
 	// without a result by (a delete_path's rm).
 	Action string `bson:"action,omitempty" json:"action,omitempty"`
-	// WireArgs are the args as the task carries them (protocol.Args),
-	// CBOR-encoded: checked against the command's params when queued, so
+	// WireArgs are the args as the task carries them (protocol.Args, by
+	// their params' numbers), CBOR-encoded: checked against the command's params when queued, so
 	// delivery needs no schema; kept as bytes, so a duration's milliseconds
 	// stay an unsigned integer (a document's numbers come back as floats).
 	WireArgs []byte `bson:"wire_args,omitempty" json:"-"`
