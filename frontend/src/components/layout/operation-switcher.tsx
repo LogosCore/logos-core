@@ -1,166 +1,30 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useConnectionNodes } from "@/hooks/use-connection-nodes";
-import { useRecentOperations } from "@/hooks/use-picker-history";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useState } from "react";
 import {
-  CheckIcon,
   SwordsIcon,
   LoaderIcon,
-  SearchIcon,
   TerminalSquareIcon,
   XIcon,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import { useInfiniteOperations } from "@/graphql/hooks/operations";
 import { useScopedOperationStore } from "@/stores/scoped-operation";
-import { buildPickerRows } from "@/components/layout/operation-picker-rows";
+import { OperationTooltipBody } from "@/components/layout/operation-tooltip-body";
+import { preloadable, useLoaded } from "@/lib/preloadable";
 
-interface OperationTooltipBodyProps {
-  name: string;
-  description?: string | null;
-}
-
-// Shared tooltip body for the trigger and the list rows, so both read the same
-// way. Stacked rather than inline because a description is a sentence, not a
-// label — the tooltip wraps at its own max-width and the name stays scannable
-// as the first line.
-function OperationTooltipBody({
-  name,
-  description,
-}: OperationTooltipBodyProps) {
-  return (
-    <span className="flex flex-col gap-0.5 text-left">
-      <span className="font-medium">{name}</span>
-      {description ? (
-        <span className="text-background/70">{description}</span>
-      ) : null}
-    </span>
-  );
-}
+// The panel (search and the virtualized list) loads when the switcher is
+// first hovered, focused or opened: the shell renders this button on every
+// page, and the list's code belongs to the moment someone picks.
+const panelCode = preloadable(() => import("@/components/layout/operation-switcher-panel"));
+const warmPanel = () => void panelCode.load().catch(() => undefined);
 
 export function OperationSwitcher() {
   const scopedOperation = useScopedOperationStore((s) => s.scopedOperation);
-  const recentOperations = useRecentOperations();
-  const scopeOperation = useScopedOperationStore((s) => s.scopeOperation);
   const unscopeOperation = useScopedOperationStore((s) => s.unscopeOperation);
-
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-  // Tracks what moved the highlight. Only keyboard navigation should
-  // programmatically scroll; mouse hover must not (the item is already under
-  // the cursor, and scrolling would yank the viewport out from under it,
-  // producing a self-scrolling loop as new items slide under the pointer).
-  const scrollOnHighlight = useRef(false);
-
-  // Callback ref — focuses the search input when the popover mounts it.
-  const inputCallbackRef = useCallback((node: HTMLInputElement | null) => {
-    if (node) node.focus();
-  }, []);
-
-  // Debounce search — fires query 300ms after the user stops typing.
-  useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(timeout);
-  }, [search]);
-
-  // Gated on popover open: the switcher's primary trigger renders the
-  // currently-scoped op from localStorage/Zustand, so the list isn't needed
-  // until the user actually opens the picker. Saves one round trip per page
-  // load across the entire app.
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
-    useInfiniteOperations(
-      {
-        search: debouncedSearch || null,
-        first: 20,
-      },
-      { enabled: open },
-    );
-
-  const loadedOperations = useConnectionNodes(data, (p) => p.operations);
-  const rows = useMemo(
-    () =>
-      buildPickerRows(recentOperations, loadedOperations, !!debouncedSearch),
-    [recentOperations, loadedOperations, debouncedSearch],
-  );
-  const operations = useMemo(() => rows.map((r) => r.op), [rows]);
-
-  // Reset search and highlight when popover transitions to open, and reset
-  // highlight when operations list reference changes. Done during render via
-  // the prev-value pattern (react.dev/.../storing-information-from-previous-renders)
-  // rather than setState-in-effect.
-  const [lastOpen, setLastOpen] = useState(open);
-  if (lastOpen !== open) {
-    setLastOpen(open);
-    if (open) {
-      setSearch("");
-      setDebouncedSearch("");
-      setHighlightedIndex(-1);
-    }
-  }
-  const [lastOperations, setLastOperations] = useState(operations);
-  if (lastOperations !== operations) {
-    setLastOperations(operations);
-    setHighlightedIndex(-1);
-  }
-
-  // Scroll highlighted item into view via Virtuoso — keyboard navigation only.
-  useEffect(() => {
-    if (highlightedIndex >= 0 && scrollOnHighlight.current) {
-      virtuosoRef.current?.scrollIntoView({
-        index: highlightedIndex,
-        behavior: "auto",
-      });
-    }
-    scrollOnHighlight.current = false;
-  }, [highlightedIndex]);
-
-  function selectOperation(op: (typeof operations)[number]) {
-    scopeOperation({
-      id: op.id,
-      name: op.name,
-      description: op.description ?? "",
-    });
-    setOpen(false);
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      scrollOnHighlight.current = true;
-      setHighlightedIndex((prev) =>
-        prev < operations.length - 1 ? prev + 1 : 0,
-      );
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      scrollOnHighlight.current = true;
-      setHighlightedIndex((prev) =>
-        prev > 0 ? prev - 1 : operations.length - 1,
-      );
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setOpen(false);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && highlightedIndex < operations.length) {
-        selectOperation(operations[highlightedIndex]);
-      }
-    }
-  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -169,6 +33,8 @@ export function OperationSwitcher() {
         // its targets by this attribute rather than by class or structure, so
         // restyling the sidebar cannot silently unhook the guide.
         data-tour="operation-switcher"
+        onPointerEnter={warmPanel}
+        onFocus={warmPanel}
         render={
           <SidebarMenuButton
             size="lg"
@@ -257,123 +123,21 @@ export function OperationSwitcher() {
         align="start"
         sideOffset={4}
       >
-        {/* Search input */}
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={inputCallbackRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Search operations..."
-            className="h-7 pl-7 text-xs"
-          />
-        </div>
-
-        {/* Operations list */}
-        {isLoading && (
-          <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
-            <LoaderIcon className="size-3.5 animate-spin" />
-          </div>
-        )}
-
-        {!isLoading && operations.length === 0 && (
-          <div className="py-4 text-center text-sm text-muted-foreground">
-            No operations found
-          </div>
-        )}
-
-        {!isLoading && operations.length > 0 && (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={rows}
-            style={{ height: "256px" }}
-            endReached={() => {
-              if (hasNextPage && !isFetchingNextPage) fetchNextPage();
-            }}
-            overscan={100}
-            role="listbox"
-            itemContent={(index, row) => {
-              const op = row.op;
-              const isActive = scopedOperation?.id === op.id;
-
-              return (
-                // Widening the popover shortens the truncation but cannot end
-                // it — operation descriptions are free text. The tooltip is
-                // what guarantees the full value is always reachable.
-                // Only the rows Virtuoso has mounted carry one, so the cost
-                // tracks the viewport rather than the size of the result set.
-                <div key={op.id}>
-                  {row.section && (
-                    <div className="px-1.5 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                      {row.section}
-                    </div>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <button
-                          role="option"
-                          aria-selected={index === highlightedIndex}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm",
-                            index === highlightedIndex
-                              ? "bg-accent text-accent-foreground"
-                              : "hover:bg-accent/50",
-                          )}
-                          onMouseEnter={() => {
-                            scrollOnHighlight.current = false;
-                            setHighlightedIndex(index);
-                          }}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            selectOperation(op);
-                          }}
-                        />
-                      }
-                    >
-                      <SwordsIcon className="size-5 shrink-0 text-muted-foreground" />
-                      <div className="grid flex-1 min-w-0 leading-tight">
-                        <span className="truncate text-sm font-medium">
-                          {op.name}
-                        </span>
-                        {op.description && (
-                          <span className="truncate text-xs text-muted-foreground">
-                            {op.description}
-                          </span>
-                        )}
-                      </div>
-                      {isActive && (
-                        <CheckIcon className="size-3.5 shrink-0 text-primary" />
-                      )}
-                    </TooltipTrigger>
-                    {/* To the right of the popover, so it never covers the rows
-                      above and below the one being read. */}
-                    <TooltipContent side="right" align="center">
-                      <OperationTooltipBody
-                        name={op.name}
-                        description={op.description}
-                      />
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              );
-            }}
-            components={{
-              Footer: () => {
-                if (isFetchingNextPage) {
-                  return (
-                    <div className="flex items-center justify-center py-2">
-                      <LoaderIcon className="size-3.5 animate-spin" />
-                    </div>
-                  );
-                }
-                return null;
-              },
-            }}
-          />
-        )}
+        <SwitcherPanel onClose={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   );
+}
+
+/** The panel once its code is here; a spinner the first time it loads. */
+function SwitcherPanel({ onClose }: { onClose: () => void }) {
+  const code = useLoaded(panelCode);
+  if (!code) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+        <LoaderIcon className="size-3.5 animate-spin" />
+      </div>
+    );
+  }
+  return <code.default onClose={onClose} />;
 }

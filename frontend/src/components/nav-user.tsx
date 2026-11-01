@@ -29,9 +29,19 @@ import { BotIcon, ChevronsUpDownIcon, KeyIcon, LogOutIcon, MonitorIcon, MonitorS
 import { useAuthStore } from "@/stores/auth"
 import { useSessionStore } from "@/stores/sessions"
 import { useAPIKeyStore } from "@/stores/api-keys"
-import { MySessionsDialog } from "@/components/sessions/my-sessions-dialog"
-import { MyAPIKeyDialog } from "@/components/api-keys/my-api-key-dialog"
+import { LazyMount } from "@/components/layout/lazy-mount"
+import { preloadable } from "@/lib/preloadable"
 import { avatarLabel } from "@/lib/avatar-label"
+
+// The user menu's dialogs load when one is first opened (or the menu is): the
+// shell renders this menu on every page, the dialogs only when asked for. My
+// sessions brings a virtualized list with it.
+const mySessionsDialogCode = preloadable(() => import("@/components/sessions/my-sessions-dialog"))
+const myAPIKeyDialogCode = preloadable(() => import("@/components/api-keys/my-api-key-dialog"))
+const warmDialogs = () => {
+  void mySessionsDialogCode.load().catch(() => undefined)
+  void myAPIKeyDialogCode.load().catch(() => undefined)
+}
 
 export function NavUser({
   user,
@@ -47,6 +57,8 @@ export function NavUser({
   const logout = useAuthStore((s) => s.logout)
   const openMySessionsDialog = useSessionStore((s) => s.openMySessionsDialog)
   const openAPIKeysDialog = useAPIKeyStore((s) => s.openAPIKeysDialog)
+  const mySessionsOpen = useSessionStore((s) => s.mySessionsDialogOpen)
+  const apiKeysOpen = useAPIKeyStore((s) => s.apiKeysDialogOpen)
   const { setTheme } = useTheme()
 
   async function handleLogout() {
@@ -58,11 +70,15 @@ export function NavUser({
 
   return (
     <>
-    <MySessionsDialog />
-    <MyAPIKeyDialog />
+    <LazyMount code={mySessionsDialogCode} when={mySessionsOpen}>
+      {(m) => <m.MySessionsDialog />}
+    </LazyMount>
+    <LazyMount code={myAPIKeyDialogCode} when={apiKeysOpen}>
+      {(m) => <m.MyAPIKeyDialog />}
+    </LazyMount>
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => open && warmDialogs()}>
           <DropdownMenuTrigger
             render={
               <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />

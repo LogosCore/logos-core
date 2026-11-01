@@ -38,8 +38,12 @@ import zlib from "node:zlib"
 // Raw was raised from 1 100 KB with the file browser and the file view's
 // rework, at 1 100.3 / 302.5: the same two, growth by features (the file
 // browser's GraphQL documents, and the classes the new views use).
-const BUDGET_RAW_KB = 1_110
-const BUDGET_SERVED_KB = 305
+// Lowered from 1 110 / 305 at 1 103.3 / 303.0 → 1 012.1 / 273.0: the
+// operation switcher's list and the user menu's two dialogs load when first
+// opened (react-virtuoso, 58 KB, and the dialog primitives' chunk, 51 KB, came
+// to first paint through them); room for ordinary feature work kept.
+const BUDGET_RAW_KB = 1_030
+const BUDGET_SERVED_KB = 280
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
 const indexHtml = path.join(dist, "index.html")
