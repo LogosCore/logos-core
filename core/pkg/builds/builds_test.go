@@ -31,13 +31,13 @@ const bobQueue = "logos.factory.rpc.bob-1"
 // bobSchema is BOB's build schema.
 func bobSchema() protocol.BuildSchema {
 	return protocol.BuildSchema{
-		SchemaVersion: protocol.BuildSchemaV2, Version: 1,
+		SchemaVersion: protocol.BuildSchemaV3, Version: 1,
 		Channels: []protocol.BuildChannel{{
-			ChannelVersions: protocol.ChannelVersions{ModuleName: "http", Versions: []int{2}},
-			Fields: []protocol.FieldSpec{
+			ModuleName: "http", Versions: []int{2},
+			Kinds: []protocol.BuildKind{{Kind: protocol.KindReverseCall, Fields: []protocol.FieldSpec{
 				{Key: "method", Type: protocol.FieldEnum, Default: "POST", Options: []protocol.EnumOption{{Value: "GET"}, {Value: "POST"}}},
-				{Key: "path_prefix", Type: protocol.FieldString, Default: "/", Pattern: `^/`},
-			},
+				pathPrefix,
+			}}},
 		}},
 		Fields: []protocol.FieldSpec{
 			{Key: "greeting", Type: protocol.FieldString, Default: "hello from BOB"},
@@ -67,12 +67,16 @@ func bobInstance(name string, version int) models.Module {
 		RPCQueue: "logos.factory.rpc." + name, Status: models.ModuleStatusRegistered, Build: &models.ModuleBuildSchema{BuildSchema: sc}}
 }
 
+var pathPrefix = protocol.FieldSpec{Key: "path_prefix", Type: protocol.FieldString, Default: "/", Pattern: `^/`}
+
 // httpSchema is the HTTP channel's connection schema, which BOB's minions
-// read.
+// read: reverse-call only.
 func httpSchema() *protocol.ConnectionSchema {
-	return &protocol.ConnectionSchema{SchemaVersion: "1", Version: 2, Fields: []protocol.FieldSpec{
-		{Key: "base_url", Type: protocol.FieldURL, Required: true},
-		{Key: "request_timeout", Type: protocol.FieldDuration, Default: "40s"},
+	return &protocol.ConnectionSchema{SchemaVersion: protocol.ConnectionSchemaV2, Version: 2, Kinds: map[string]protocol.ConnectionKind{
+		protocol.KindReverseCall: {Fields: []protocol.FieldSpec{
+			{Key: "base_url", Type: protocol.FieldURL, Required: true},
+			{Key: "request_timeout", Type: protocol.FieldDuration, Default: "40s"},
+		}},
 	}}
 }
 
@@ -93,7 +97,9 @@ type rig struct {
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	sc := bobSchema()
-	dns := &protocol.ConnectionSchema{SchemaVersion: "1", Version: 1, Fields: []protocol.FieldSpec{{Key: "zone", Type: protocol.FieldString}}}
+	dns := &protocol.ConnectionSchema{SchemaVersion: protocol.ConnectionSchemaV2, Version: 1, Kinds: map[string]protocol.ConnectionKind{
+		protocol.KindReverseCall: {Fields: []protocol.FieldSpec{{Key: "zone", Type: protocol.FieldString}}},
+	}}
 	r := &rig{
 		reg: &fakeRegistry{schemas: map[string]*models.ModuleBuildSchema{"bob": {BuildSchema: sc}}},
 		// BOB's minions do not speak dns.
@@ -222,7 +228,7 @@ func TestCreateBuildQueues(t *testing.T) {
 	}
 	// Each connection's settings as an endpoint export, defaults filled in.
 	conn := b.Connections.Items[0]
-	if conn.Endpoint.Format != protocol.ChannelEndpointExportV1 || conn.Endpoint.Name != "edge" ||
+	if conn.Endpoint.Format != protocol.ChannelEndpointExportV2 || conn.Endpoint.Name != "edge" || conn.Endpoint.Kind != protocol.KindReverseCall ||
 		conn.Endpoint.Channel != (protocol.ExportChannel{ModuleName: "http", SchemaVersion: 2}) ||
 		conn.Endpoint.Params["base_url"] != "https://edge.example.com" || conn.Endpoint.Params["request_timeout"] != "40s" ||
 		conn.Values["method"] != "POST" || conn.Values["path_prefix"] != "/cdn/" {
@@ -1112,34 +1118,50 @@ func TestCreateBuildNewPersistedSession(t *testing.T) {
 }
 
 // A connection's kind is one both the target and the channel support: the
-// first of them in the factory's order when the build names none.
+// first of them in the factory's order when the build names none. Its
+// settings and values follow that kind's fields, the channel's and the
+// factory's.
 func TestConnectionKinds(t *testing.T) {
 	r := newRig(t)
-	// A channel without kinds carries reverse-call only: the default.
 	b := r.queue(t, nil)
-	if k := b.Connections.Items[0].ConnectionKind(); k != protocol.KindReverseCall || b.Connections.Items[0].Kind != "" {
-		t.Fatalf("kind %q (%q)", k, b.Connections.Items[0].Kind)
+	if k := b.Connections.Items[0].ConnectionKind(); k != protocol.KindReverseCall {
+		t.Fatalf("kind %q", k)
 	}
 	// BOB lists WebSockets first, the channel carries both.
 	inst := bobInstance("bob-1", 1)
-	inst.Build.Channels[0].Kinds = []string{protocol.KindReversePersistent, protocol.KindReverseCall}
+	inst.Build.Channels[0].Kinds = append([]protocol.BuildKind{
+		{Kind: protocol.KindReversePersistent, Fields: []protocol.FieldSpec{pathPrefix}},
+	}, inst.Build.Channels[0].Kinds...)
 	r.reg.setActive(inst)
 	r.reg.mu.Lock()
 	r.reg.schemas["bob"] = inst.Build
 	r.reg.mu.Unlock()
 	hs := httpSchema()
-	hs.SchemaVersion = protocol.ConnectionSchemaV2
-	hs.Kinds = map[string]protocol.ConnectionKind{protocol.KindReverseCall: {}, protocol.KindReversePersistent: {}}
+	hs.Kinds[protocol.KindReversePersistent] = protocol.ConnectionKind{Fields: []protocol.FieldSpec{
+		{Key: "base_url", Type: protocol.FieldURL, Required: true},
+		{Key: "ws_reconnect_backoff", Type: protocol.FieldDuration, Default: "1m"},
+	}}
 	r.chs.schemas["http"] = hs
 	b = r.queue(t, nil)
-	if k := b.Connections.Items[0].Kind; k != protocol.KindReversePersistent {
-		t.Fatalf("default kind %q", k)
+	conn := b.Connections.Items[0]
+	if conn.ConnectionKind() != protocol.KindReversePersistent || conn.Endpoint.Params["ws_reconnect_backoff"] != "1m" ||
+		conn.Endpoint.Params["request_timeout"] != nil || conn.Values["method"] != nil || conn.Values["path_prefix"] != "/cdn/" {
+		t.Fatalf("default kind: %+v", conn)
 	}
 	b = r.queue(t, func(in *BuildInput) { in.Connections[0].Kind = protocol.KindReverseCall })
-	if k := b.Connections.Items[0].ConnectionKind(); k != protocol.KindReverseCall {
-		t.Fatalf("picked kind %q", k)
+	if conn := b.Connections.Items[0]; conn.ConnectionKind() != protocol.KindReverseCall || conn.Values["method"] != "POST" ||
+		conn.Endpoint.Params["ws_reconnect_backoff"] != nil {
+		t.Fatalf("picked kind: %+v", conn)
 	}
-	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Connections[0].Kind = protocol.KindBindCall }))
+	// Another kind's fields are not this one's.
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) {
+		in.Connections[0].Values["method"] = "GET"
+		in.Connections[0].Settings["request_timeout"] = "10s"
+	}))
+	if p := problemsOf(err); p["connections[0].values.method"] == "" || p["connections[0].settings.request_timeout"] == "" {
+		t.Fatalf("reverse-call fields on a reverse-persistent connection: %v %v", err, p)
+	}
+	_, err = r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Connections[0].Kind = protocol.KindBindCall }))
 	if p := problemsOf(err); !strings.Contains(p["connections[0].kind"], "is not a kind") {
 		t.Fatalf("a kind neither supports: %v %v", err, p)
 	}

@@ -99,11 +99,13 @@ func NewChannelEndpointRepository(db database.Database) IChannelEndpointReposito
 }
 
 // ChannelEndpointFilter narrows an operation's endpoints list. Search is the
-// app's search (searchPattern) over the name, description, channel kind and
-// values (search_text: models.EndpointSearchText).
+// app's search (searchPattern) over the name, description, channel kind,
+// connection kind and values (search_text: models.EndpointSearchText). Kinds
+// are connection kinds.
 type ChannelEndpointFilter struct {
 	Search      string
 	ModuleNames []string
+	Kinds       []string
 }
 
 // channelEndpointListSort orders the endpoints list: by name, case aside.
@@ -119,6 +121,9 @@ func channelEndpointListFilter(operationID uuid.UUID, f ChannelEndpointFilter) b
 	if len(f.ModuleNames) > 0 {
 		q["module_name"] = bson.M{"$in": f.ModuleNames}
 	}
+	if len(f.Kinds) > 0 {
+		q["kind"] = bson.M{"$in": f.Kinds}
+	}
 	if f.Search != "" {
 		rx := bson.M{"$regex": searchPattern(f.Search), "$options": "i"}
 		q["$or"] = bson.A{
@@ -126,6 +131,7 @@ func channelEndpointListFilter(operationID uuid.UUID, f ChannelEndpointFilter) b
 			bson.M{"slug": rx},
 			bson.M{"description": rx},
 			bson.M{"module_name": rx},
+			bson.M{"kind": rx},
 			bson.M{"search_text": rx},
 		}
 	}

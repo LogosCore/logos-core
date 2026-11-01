@@ -17,8 +17,10 @@ import { BuildStateBadge } from "@/components/builds/build-state-badge"
 import {
   buildElapsed,
   factoryKindsByName,
+  paramFields,
   platformLabel,
   recordedConnections,
+  settingFields,
   targetFields,
   type Command,
 } from "@/components/builds/build-values"
@@ -151,8 +153,8 @@ export function BuildOverview({
         </InfoCard>
 
         {connections.map((c, i) => {
-          const settings = valueRows(channels.get(c.moduleName)?.fields ?? [], c.params)
-          const own = valueRows(kind?.channelFields.get(c.moduleName) ?? [], c.values)
+          const settings = valueRows(settingFields(channels.get(c.moduleName), c.kind), c.params)
+          const own = valueRows(kind ? paramFields(kind, c.moduleName, c.kind) : [], c.values)
           // Headed only when the factory has values for the channel too.
           const parts = own.length > 0
           return (
@@ -164,7 +166,7 @@ export function BuildOverview({
                   <span className="truncate font-mono">{c.name}</span>
                 </span>
               }
-              note={`${c.moduleName} · connection ${i + 1} of ${connections.length}`}
+              note={`${c.moduleName} · ${c.kind} · connection ${i + 1} of ${connections.length}`}
             >
               {c.description && <NoteRow>{c.description}</NoteRow>}
               {parts && <SectionRow title="Settings" note={c.moduleName} />}

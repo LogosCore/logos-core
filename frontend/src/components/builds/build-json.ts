@@ -19,6 +19,9 @@ import {
   connectionDraft,
   defaultCommands,
   draftsFor,
+  effectiveKind,
+  paramFields,
+  settingFields,
   pickedCommands,
   targetCommands,
   targetFields,
@@ -84,8 +87,21 @@ export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "persisted_session"]
 const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values"]
 
-const channelFields = (channels: ReadonlyMap<string, ChannelKind>, moduleName: string) =>
-  channels.get(moduleName)?.fields ?? []
+/**
+ * A connection's settings and the factory's values for it: those of its
+ * kind, or of the first the target and the channel both support when it
+ * names none.
+ */
+function connectionFields(
+  kind: FactoryKind,
+  channels: ReadonlyMap<string, ChannelKind>,
+  target: Target | undefined,
+  c: { moduleName: string; kind: string },
+) {
+  const ch = channels.get(c.moduleName)
+  const connKind = effectiveKind(c, target, ch)
+  return { settings: settingFields(ch, connKind), values: paramFields(kind, c.moduleName, connKind) }
+}
 
 /** The JSON tab's text for a build of kind. */
 export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, ChannelKind>, doc: BuildDocument): string {
@@ -97,14 +113,17 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
     platform: doc.platform,
     commands: doc.commands,
     values: jsonFieldValues(targetFields(kind, target), doc.values),
-    connections: doc.connections.map((c) => ({
-      channel: c.moduleName,
-      ...(c.kind ? { kind: c.kind } : {}),
-      name: c.name,
-      description: c.description,
-      settings: jsonFieldValues(channelFields(channels, c.moduleName), c.settings),
-      values: jsonFieldValues(kind.channelFields.get(c.moduleName) ?? [], c.values),
-    })),
+    connections: doc.connections.map((c) => {
+      const fields = connectionFields(kind, channels, target, c)
+      return {
+        channel: c.moduleName,
+        ...(c.kind ? { kind: c.kind } : {}),
+        name: c.name,
+        description: c.description,
+        settings: jsonFieldValues(fields.settings, c.settings),
+        values: jsonFieldValues(fields.values, c.values),
+      }
+    }),
     ...(doc.persisted ? { persisted_session: persistedJson(doc.persisted) } : {}),
   })
 }
@@ -134,14 +153,17 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
     platform: form.platform,
     commands: form.commands,
     values: formValues(targetFields(kind, target), form.drafts),
-    connections: form.connections.map((c) => ({
-      moduleName: c.moduleName,
-      kind: c.kind,
-      name: c.name,
-      description: c.description,
-      settings: formValues(channelFields(channels, c.moduleName), c.settings),
-      values: formValues(kind.channelFields.get(c.moduleName) ?? [], c.drafts),
-    })),
+    connections: form.connections.map((c) => {
+      const fields = connectionFields(kind, channels, target, c)
+      return {
+        moduleName: c.moduleName,
+        kind: c.kind,
+        name: c.name,
+        description: c.description,
+        settings: formValues(fields.settings, c.settings),
+        values: formValues(fields.values, c.drafts),
+      }
+    }),
   }
 }
 
@@ -155,14 +177,19 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
     drafts: draftsFor(targetFields(kind, target), doc.values),
     commands: pickedCommands(kind, target, doc.commands),
     connections: doc.connections.map((c) =>
-      connectionDraft(kind, channels.get(c.moduleName), {
-        moduleName: c.moduleName,
-        kind: c.kind || null,
-        name: c.name || null,
-        description: c.description || null,
-        settings: c.settings,
-        values: c.values,
-      }),
+      connectionDraft(
+        kind,
+        channels.get(c.moduleName),
+        {
+          moduleName: c.moduleName,
+          kind: c.kind || null,
+          name: c.name || null,
+          description: c.description || null,
+          settings: c.settings,
+          values: c.values,
+        },
+        target,
+      ),
     ),
   }
 }
@@ -239,24 +266,30 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
         }
       }
       const moduleName = textOf(raw.channel, childPointer(here, "channel"), at)
+      const connKind = textOf(raw.kind, childPointer(here, "kind"), at)
+      const fields = connectionFields(kind, channels, target, { moduleName, kind: connKind })
+      const kindText = effectiveKind({ moduleName, kind: connKind }, target, channels.get(moduleName))
       connections.push({
         moduleName,
-        kind: textOf(raw.kind, childPointer(here, "kind"), at),
+        kind: connKind,
         name: textOf(raw.name, childPointer(here, "name"), at),
         description: textOf(raw.description, childPointer(here, "description"), at),
         settings: readFieldValues(
-          channelFields(channels, moduleName),
+          fields.settings,
           raw.settings,
           childPointer(here, "settings"),
-          { unknown: `Not a setting of ${moduleName || "this channel"}`, notObject: "Must be an object of settings" },
+          {
+            unknown: `Not a ${kindText || "connection"} setting of ${moduleName || "this channel"}`,
+            notObject: "Must be an object of settings",
+          },
           problems,
         ),
         values: readFieldValues(
-          kind.channelFields.get(moduleName) ?? [],
+          fields.values,
           raw.values,
           childPointer(here, "values"),
           {
-            unknown: `Not one of ${kind.name}'s values for ${moduleName || "this channel"}`,
+            unknown: `Not one of ${kind.name}'s ${kindText || "connection"} values for ${moduleName || "this channel"}`,
             notObject: "Must be an object of values",
           },
           problems,
@@ -345,14 +378,14 @@ export function buildProblemPointer(key: string): string {
 
 /**
  * What the JSON tab offers as you type, and says on hover: the build's own
- * keys, the target's values, and for each connection, by its channel, the
- * channel's settings and the factory's values for it.
+ * keys, the target's values, and for each connection, by its channel and
+ * connection kind, the channel's settings and the factory's values for it.
  */
 export function buildJsonHints(
   kind: FactoryKind,
   channels: ReadonlyMap<string, ChannelKind>,
   targetId: string,
-  connectionChannels: readonly string[],
+  connections: readonly { moduleName: string; kind: string }[],
 ): JsonHints {
   const target = kind.targets.find((t) => t.id === targetId)
   const hints: Record<string, readonly JsonKeyHint[]> = {
@@ -398,17 +431,18 @@ export function buildJsonHints(
         key: "kind",
         detail: "text",
         info: "The connection kind; left out: the first the target and the channel both support.",
-        values: ["reverse-call", "reverse-persistent"],
+        values: [...new Set(target?.channels.flatMap((c) => c.kinds) ?? [])],
       },
       { key: "name", detail: "text", info: 'What the minion calls the connection; "" for <channel>-<position>.' },
       { key: "description", detail: "text", info: "A note for the team. Core keeps it; the factory never gets it." },
-      { key: "settings", detail: "object", info: "The channel's connection settings." },
-      { key: "values", detail: "object", info: `${kind.name}'s parameters for the channel.` },
+      { key: "settings", detail: "object", info: "The channel's settings for the connection kind." },
+      { key: "values", detail: "object", info: `${kind.name}'s parameters for the channel and connection kind.` },
     ],
   }
-  connectionChannels.forEach((moduleName, i) => {
-    hints[`/connections/${i}/settings`] = fieldHints(channelFields(channels, moduleName))
-    hints[`/connections/${i}/values`] = fieldHints(kind.channelFields.get(moduleName) ?? [])
+  connections.forEach((c, i) => {
+    const fields = connectionFields(kind, channels, target, c)
+    hints[`/connections/${i}/settings`] = fieldHints(fields.settings)
+    hints[`/connections/${i}/values`] = fieldHints(fields.values)
   })
   return hints
 }

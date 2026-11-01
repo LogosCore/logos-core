@@ -37,14 +37,14 @@ type ChannelEndpointManager interface {
 	Create(ctx context.Context, operationID uuid.UUID, moduleName string, in channelendpoints.Input) (channelendpoints.View, error)
 	Update(ctx context.Context, id string, expectedRevision int64, in channelendpoints.Input) (channelendpoints.View, error)
 	Delete(ctx context.Context, id string) error
-	Export(ctx context.Context, id string) (map[string]any, error)
+	Export(ctx context.Context, id string) (protocol.ChannelEndpointExport, error)
 }
 
 // IChannelEndpointResolver is the business logic behind
 // channel_endpoints.graphql.
 type IChannelEndpointResolver interface {
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
-	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
+	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, kinds []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
 	FreeChannelEndpointSlug(ctx context.Context, operationID string, text string, tag *string) (string, error)
 	ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error)
 	ChannelEndpointExport(ctx context.Context, id string) (any, error)
@@ -97,7 +97,7 @@ func (r *channelEndpointResolver) ChannelKinds(ctx context.Context) ([]*model.Ch
 	return out, nil
 }
 
-func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error) {
+func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, kinds []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error) {
 	opID, err := uuid.Parse(operationID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid operation ID: %w", err)
@@ -109,7 +109,7 @@ func (r *channelEndpointResolver) ChannelEndpoints(ctx context.Context, operatio
 	if err != nil {
 		return nil, fmt.Errorf("invalid pagination args: %w", err)
 	}
-	filter := repository.ChannelEndpointFilter{ModuleNames: moduleNames}
+	filter := repository.ChannelEndpointFilter{ModuleNames: moduleNames, Kinds: kinds}
 	if search != nil {
 		filter.Search = strings.TrimSpace(*search)
 	}
@@ -223,6 +223,7 @@ func endpointInput(ctx context.Context, input model.ChannelEndpointInput) (chann
 	in := channelendpoints.Input{
 		Name:   input.Name,
 		Slug:   deref(input.Slug),
+		Kind:   input.Kind,
 		Values: values,
 		Actor:  managementActor(gqlctx.AuthFromContext(ctx)),
 	}
@@ -268,16 +269,21 @@ func toConnectionModel(s *protocol.ConnectionSchema) *model.ModuleConnectionSche
 	if s == nil {
 		return nil
 	}
-	fields := make([]*model.ModuleField, len(s.Fields))
-	for i, f := range s.Fields {
-		fields[i] = toFieldModel(f)
-		// Endpoint values are operation data shown in clear, so a secret
-		// field's default is too.
-		if f.Type == protocol.FieldSecret {
-			fields[i].Default = f.Default
+	out := &model.ModuleConnectionSchema{Version: s.Version, Kinds: []*model.ModuleConnectionKind{}}
+	for _, kind := range s.SupportedKinds() {
+		k := s.Kinds[kind]
+		fields := make([]*model.ModuleField, len(k.Fields))
+		for i, f := range k.Fields {
+			fields[i] = toFieldModel(f)
+			// Endpoint values are operation data shown in clear, so a secret
+			// field's default is too.
+			if f.Type == protocol.FieldSecret {
+				fields[i].Default = f.Default
+			}
 		}
+		out.Kinds = append(out.Kinds, &model.ModuleConnectionKind{Kind: kind, Fields: fields})
 	}
-	return &model.ModuleConnectionSchema{Version: s.Version, Fields: fields, Kinds: s.SupportedKinds()}
+	return out
 }
 
 func toEndpointModel(v channelendpoints.View) *model.ChannelEndpoint {
@@ -296,6 +302,7 @@ func toEndpointModel(v channelendpoints.View) *model.ChannelEndpoint {
 		Slug:          v.Slug,
 		Description:   strPtr(v.Description),
 		ModuleName:    v.ModuleName,
+		Kind:          v.Kind,
 		SchemaVersion: v.SchemaVersion,
 		SchemaChanged: v.SchemaChanged(),
 		Values:        values,

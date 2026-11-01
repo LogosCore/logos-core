@@ -34,7 +34,12 @@ const schema: BuildSchemaFieldsFragment = {
     {
       moduleName: "http",
       versions: [2],
-      fields: [field({ key: "method", type: "enum", default: "POST", options: [{ value: "GET" }, { value: "POST" }] })],
+      kinds: [
+        {
+          kind: "reverse-call",
+          fields: [field({ key: "method", type: "enum", default: "POST", options: [{ value: "GET" }, { value: "POST" }] })],
+        },
+      ],
     },
   ],
   targets: [
@@ -61,13 +66,18 @@ const channels = kindsByName([
     moduleName: "http",
     schema: {
       version: 2,
-      fields: [
-        field({ key: "base_url", type: "url", required: true, order: 1 }),
-        field({ key: "request_timeout", type: "duration", default: "40s", order: 2 }),
+      kinds: [
+        {
+          kind: "reverse-call",
+          fields: [
+            field({ key: "base_url", type: "url", required: true, order: 1 }),
+            field({ key: "request_timeout", type: "duration", default: "40s", order: 2 }),
+          ],
+        },
       ],
     },
   },
-  { moduleName: "dns", schema: { version: 1, fields: [field({ key: "zone", type: "string" })] } },
+  { moduleName: "dns", schema: { version: 1, kinds: [{ kind: "reverse-call", fields: [field({ key: "zone", type: "string" })] }] } },
 ])
 
 const good: BuildDocument = {
@@ -341,7 +351,7 @@ describe("buildProblemPointer", () => {
 })
 
 describe("buildJsonHints", () => {
-  const hints = buildJsonHints(kind, channels, "dummy", ["http"])
+  const hints = buildJsonHints(kind, channels, "dummy", [{ moduleName: "http", kind: "" }])
 
   it("offers the build's keys, its targets and the target's platforms", () => {
     expect(hints[""].map((h) => h.key)).toEqual(["description", "target", "platform", "commands", "values", "connections"])

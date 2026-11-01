@@ -446,7 +446,7 @@ func plainJSON(v any) any {
 
 // Connection is the Module.connection field (channel_endpoints.graphql).
 func (r *moduleResolver) Connection(_ context.Context, obj *models.Module) (*model.ModuleConnectionSchema, error) {
-	if obj.Connection == nil {
+	if !obj.Connection.Current() {
 		return nil, nil
 	}
 	return toConnectionModel(&obj.Connection.ConnectionSchema), nil

@@ -2,24 +2,37 @@ import { describe, expect, it } from "vitest"
 import { endpointDrafts, ENDPOINT_EXPORT_FORMAT, type Kind } from "./endpoint-values"
 import { endpointJson, endpointJsonHints, formValues, readEndpointJson } from "./endpoint-json"
 
+const RC = "reverse-call"
+const RP = "reverse-persistent"
+
+const callFields: Kind["kinds"][number]["fields"] = [
+  { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
+  { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },
+  { key: "retries", type: "int", label: "Retries", order: 3, required: false, min: 0, max: 5 },
+  {
+    key: "mode",
+    type: "enum",
+    label: "Mode",
+    order: 4,
+    required: false,
+    options: [
+      { value: "fast", label: "Fast" },
+      { value: "safe", label: "Safe" },
+    ],
+  },
+]
+
 const kind: Kind = {
   name: "http",
   icon: { icon: "", iconLight: "" },
   version: 2,
-  kinds: ["reverse-call"],
-  fields: [
-    { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
-    { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },
-    { key: "retries", type: "int", label: "Retries", order: 3, required: false, min: 0, max: 5 },
+  kinds: [
+    { kind: RC, fields: callFields },
     {
-      key: "mode",
-      type: "enum",
-      label: "Mode",
-      order: 4,
-      required: false,
-      options: [
-        { value: "fast", label: "Fast" },
-        { value: "safe", label: "Safe" },
+      kind: RP,
+      fields: [
+        { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
+        { key: "backoff", type: "duration", label: "Back-off", order: 2, required: false, default: "1m" },
       ],
     },
   ],
@@ -31,18 +44,25 @@ const doc = (over: Record<string, unknown> = {}) =>
     name: "edge",
     description: "",
     channel: { module_name: "http", schema_version: 2 },
+    kind: RC,
     params: { base_url: "https://a.example.com", tls_verify: null, retries: null, mode: null },
     ...over,
   })
 
 describe("endpointJson", () => {
   it("lists every setting with the value it uses, its default where none is set, in the export's shape", () => {
-    const text = endpointJson(kind, { name: "Edge", description: "CDN", values: { base_url: "https://a.example.com", retries: 3 } })
+    const text = endpointJson(kind, {
+      name: "Edge",
+      description: "CDN",
+      kind: RC,
+      values: { base_url: "https://a.example.com", retries: 3 },
+    })
     expect(JSON.parse(text)).toEqual({
       format: ENDPOINT_EXPORT_FORMAT,
       name: "Edge",
       description: "CDN",
       channel: { module_name: "http", schema_version: 2 },
+      kind: RC,
       params: { base_url: "https://a.example.com", tls_verify: false, retries: 3, mode: "" },
     })
     expect(text).toContain('\n  "params": {\n    "base_url"') // indented two spaces
@@ -52,19 +72,20 @@ describe("endpointJson", () => {
 describe("readEndpointJson", () => {
   it("reads what it wrote back", () => {
     const values = { base_url: "https://a.example.com", tls_verify: true, mode: "safe" }
-    const read = readEndpointJson(endpointJson(kind, { name: "Edge (EU)", description: "CDN", values }), kind)
-    expect(read).toEqual({ ok: true, doc: { name: "Edge (EU)", description: "CDN", values }, problems: [] })
+    const read = readEndpointJson(endpointJson(kind, { name: "Edge (EU)", description: "CDN", kind: RC, values }), kind, RC)
+    expect(read).toEqual({ ok: true, doc: { name: "Edge (EU)", description: "CDN", kind: RC, values }, problems: [] })
   })
 
   it("is not an endpoint when it is not a JSON object", () => {
-    expect(readEndpointJson('{"name": ', kind).ok).toBe(false)
-    expect(readEndpointJson("[1]", kind)).toEqual({ ok: false, message: "An endpoint is a JSON object." })
+    expect(readEndpointJson('{"name": ', kind, RC).ok).toBe(false)
+    expect(readEndpointJson("[1]", kind, RC)).toEqual({ ok: false, message: "An endpoint is a JSON object." })
   })
 
   it("marks what the form would, by place", () => {
     const read = readEndpointJson(
       doc({ name: "two\nlines", params: { base_url: "nope", tls_verify: "yes", retries: 9, mode: "slow" } }),
       kind,
+      RC,
     )
     if (!read.ok) throw new Error(read.message)
     expect(Object.fromEntries(read.problems.map((p) => [p.path, p.message]))).toEqual({
@@ -80,41 +101,42 @@ describe("readEndpointJson", () => {
     const read = readEndpointJson(
       doc({ params: { base_url: "https://a.example.com", tls_verify: false, retries: null, mode: "fast" } }),
       kind,
+      RC,
     )
     expect(read.ok && read.doc.values).toEqual({ base_url: "https://a.example.com", mode: "fast" })
   })
 
   it("reads empty text as not set, as a cleared field in the form", () => {
-    const read = readEndpointJson(doc({ params: { base_url: "", tls_verify: null, retries: null, mode: "" } }), kind)
+    const read = readEndpointJson(doc({ params: { base_url: "", tls_verify: null, retries: null, mode: "" } }), kind, RC)
     if (!read.ok) throw new Error(read.message)
     expect(read.doc.values).toEqual({})
     expect(read.problems).toEqual([{ path: "/params/base_url", message: "Required" }])
   })
 
   it("asks for a required setting left null, and for a name", () => {
-    const read = readEndpointJson(doc({ name: null, params: { base_url: null } }), kind)
+    const read = readEndpointJson(doc({ name: null, params: { base_url: null } }), kind, RC)
     if (!read.ok) throw new Error(read.message)
     expect(read.problems.map((p) => p.path).sort()).toEqual(["/name", "/params/base_url"])
   })
 
   it("refuses keys an endpoint or its channel does not have", () => {
-    const read = readEndpointJson(doc({ id: "x", params: { base_url: "https://a.example.com", proxy: "p" } }), kind)
+    const read = readEndpointJson(doc({ id: "x", params: { base_url: "https://a.example.com", proxy: "p" } }), kind, RC)
     if (!read.ok) throw new Error(read.message)
     expect(read.problems.map((p) => p.path).sort()).toEqual(["/id", "/params/proxy"])
     expect(read.doc.values).toEqual({ base_url: "https://a.example.com" })
   })
 
   it("keeps format and channel as they are", () => {
-    const read = readEndpointJson(doc({ format: "other", channel: { module_name: "dns", schema_version: 2 } }), kind)
+    const read = readEndpointJson(doc({ format: "other", channel: { module_name: "dns", schema_version: 2 } }), kind, RC)
     if (!read.ok) throw new Error(read.message)
     expect(read.problems.map((p) => p.path).sort()).toEqual(["/channel", "/format"])
     // Left out, they are not missed: a hand-written document need not carry them.
-    const bare = readEndpointJson(JSON.stringify({ name: "edge", params: { base_url: "https://a.example.com" } }), kind)
+    const bare = readEndpointJson(JSON.stringify({ name: "edge", params: { base_url: "https://a.example.com" } }), kind, RC)
     expect(bare.ok && bare.problems).toEqual([])
   })
 
   it("bounds the description", () => {
-    const read = readEndpointJson(doc({ description: "x".repeat(501) }), kind)
+    const read = readEndpointJson(doc({ description: "x".repeat(501) }), kind, RC)
     expect(read.ok && read.problems.map((p) => p.path)).toEqual(["/description"])
   })
 })
@@ -122,16 +144,21 @@ describe("readEndpointJson", () => {
 describe("empty lists and maps", () => {
   const withLists: Kind = {
     ...kind,
-    fields: [
-      ...kind.fields,
-      { key: "extra", type: "string_list", label: "Extra", order: 5, required: false },
-      { key: "tags", type: "string_list", label: "Tags", order: 6, required: false, default: ["a"] },
-      { key: "headers", type: "string_map", label: "Headers", order: 7, required: false },
+    kinds: [
+      {
+        kind: RC,
+        fields: [
+          ...callFields,
+          { key: "extra", type: "string_list", label: "Extra", order: 5, required: false },
+          { key: "tags", type: "string_list", label: "Tags", order: 6, required: false, default: ["a"] },
+          { key: "headers", type: "string_map", label: "Headers", order: 7, required: false },
+        ],
+      },
     ],
   }
 
   it("shows one with no default as empty when not set, one with a default as its default", () => {
-    const params = JSON.parse(endpointJson(withLists, { name: "e", description: "", values: {} })).params
+    const params = JSON.parse(endpointJson(withLists, { name: "e", description: "", kind: RC, values: {} })).params
     expect(params.extra).toEqual([])
     expect(params.headers).toEqual({})
     expect(params.tags).toEqual(["a"])
@@ -142,7 +169,7 @@ describe("empty lists and maps", () => {
       name: "edge",
       params: { base_url: "https://a.example.com", extra: [], headers: {}, tags: [] },
     })
-    const read = readEndpointJson(text, withLists)
+    const read = readEndpointJson(text, withLists, RC)
     if (!read.ok) throw new Error(read.message)
     expect(read.doc.values).toEqual({ base_url: "https://a.example.com", tags: [] })
     expect(read.problems).toEqual([])
@@ -151,18 +178,38 @@ describe("empty lists and maps", () => {
 
 describe("formValues", () => {
   it("is the form's settings as JSON, with text that does not parse kept as typed", () => {
-    const drafts = endpointDrafts(kind.fields, { base_url: "https://a.example.com", tls_verify: true })
+    const drafts = endpointDrafts(callFields, { base_url: "https://a.example.com", tls_verify: true })
     drafts.retries = { kind: "text", text: "abc" }
-    expect(formValues(kind.fields, drafts)).toEqual({ base_url: "https://a.example.com", tls_verify: true, retries: "abc" })
+    expect(formValues(callFields, drafts)).toEqual({ base_url: "https://a.example.com", tls_verify: true, retries: "abc" })
   })
 })
 
 describe("endpointJsonHints", () => {
   it("offers the channel's settings, with an enum's and a switch's values", () => {
-    const params = endpointJsonHints(kind)["/params"]
+    const params = endpointJsonHints(kind, RC)["/params"]
     expect(params.map((h) => h.key)).toEqual(["base_url", "tls_verify", "retries", "mode"])
     expect(params.find((h) => h.key === "mode")!.values).toEqual(["fast", "safe", ""])
     expect(params.find((h) => h.key === "tls_verify")!.values).toEqual([true, false, null])
     expect(params.find((h) => h.key === "base_url")!.detail).toBe("url, required")
+    expect(endpointJsonHints(kind, RP)["/params"].map((h) => h.key)).toEqual(["base_url", "backoff"])
+    expect(endpointJsonHints(kind, RC)[""].find((h) => h.key === "kind")!.values).toEqual([RC, RP])
+  })
+})
+
+describe("connection kinds", () => {
+  it("reads params by the kind the document names, and a kind the channel lacks as a problem", () => {
+    const read = readEndpointJson(doc({ kind: RP, params: { base_url: "https://a.example.com", retries: 2 } }), kind, RC)
+    if (!read.ok) throw new Error(read.message)
+    expect(read.doc.kind).toBe(RP)
+    expect(read.problems.map((p) => p.path)).toEqual(["/params/retries"])
+    const lacking = readEndpointJson(doc({ kind: "bind-call" }), kind, RC)
+    expect(lacking.ok && lacking.doc.kind).toBe(RC)
+    expect(lacking.ok && lacking.problems.map((p) => p.path)).toEqual(["/kind"])
+  })
+
+  it("writes the kind and its settings", () => {
+    const out = JSON.parse(endpointJson(kind, { name: "ws", description: "", kind: RP, values: {} }))
+    expect(out.kind).toBe(RP)
+    expect(out.params).toEqual({ base_url: "", backoff: "1m" })
   })
 })

@@ -13,11 +13,11 @@ import (
 // creating minions. The values are copied into a minion, so nothing depends
 // on an endpoint afterwards, and channels never see them.
 //
-// An endpoint belongs to one operation and one channel kind (ModuleName), not
-// to an instance: one address often fronts several instances, and instances
-// come and go. Values are validated against the kind's latest schema when
-// saved and again when read, since a newer release may declare a different
-// one. They are operation data, shown to members in clear text (secret
+// An endpoint belongs to one operation, one channel kind (ModuleName) and one
+// connection kind (Kind), not to an instance: one address often fronts
+// several instances, and instances come and go. Values are validated against
+// the connection kind's fields in the channel kind's latest schema when saved
+// and again when read, since a newer release may declare different ones. They are operation data, shown to members in clear text (secret
 // fields included).
 type ChannelEndpoint struct {
 	field.DefaultField `bson:",inline"`
@@ -35,6 +35,9 @@ type ChannelEndpoint struct {
 	Description string `bson:"description,omitempty" json:"description,omitempty"`
 	// ModuleName is the channel kind (Module.Name, e.g. "http").
 	ModuleName string `bson:"module_name" json:"module_name"`
+	// Kind is the connection kind the values are for (protocol.KindReverseCall,
+	// ...): each kind of a channel declares its own fields.
+	Kind string `bson:"kind" json:"kind"`
 	// SchemaVersion is the connection schema version Values were saved
 	// against.
 	SchemaVersion int     `bson:"schema_version" json:"schema_version"`

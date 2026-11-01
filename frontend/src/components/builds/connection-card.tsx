@@ -13,6 +13,8 @@ import { FieldRow } from "./build-field-row"
 import {
   defaultConnectionName,
   kindLabels,
+  paramFields,
+  settingFields,
   settingsSummary,
   type ChannelKind,
   type ConnectionDraft,
@@ -27,14 +29,16 @@ export interface EndpointOption {
   slug: string
   description?: string | null
   moduleName: string
+  /** The connection kind its settings are for. */
+  kind: string
   values?: unknown
   problems: readonly unknown[]
 }
 
 /**
- * One connection of the build form: its channel's settings, filled in or from
- * an endpoint, and the factory's parameters for it. It folds to a line; one
- * with errors stays open.
+ * One connection of the build form: its kind, its channel's settings for
+ * that kind, filled in or from an endpoint, and the factory's parameters for
+ * it. It folds to a line; one with errors stays open.
  */
 export function ConnectionCard({
   operationId,
@@ -86,18 +90,24 @@ export function ConnectionCard({
   onMove: (by: -1 | 1) => void
   onRemove: () => void
 }) {
-  // How many of the operation's endpoints the connection can be filled from.
-  const endpointCount = useChannelEndpointCount(operationId, [c.moduleName])
+  // How many of the operation's endpoints the connection can be filled from:
+  // the channel's, of a kind it can use.
+  const endpointCount = useChannelEndpointCount(operationId, [c.moduleName], kinds)
   const [folded, setFolded] = useState(false)
   const at = `connections[${index}]`
   const hasError = Object.keys(errors).some((k) => k === at || k.startsWith(`${at}.`))
   const open = !folded || hasError
   const defaultName = defaultConnectionName(c.moduleName, index)
-  const params = kind.channelFields.get(c.moduleName) ?? []
-  const summary = settingsSummary(channel, settings)
   const idPrefix = `connection-${c.key}`
   // The kind the build gets: the one picked, or the first both support.
   const effectiveKind = c.kind || kinds[0] || ""
+  const params = paramFields(kind, c.moduleName, effectiveKind)
+  const fields = settingFields(channel, effectiveKind)
+  const summary = settingsSummary(channel, effectiveKind, settings)
+  // The kind is asked for when there is a choice, or when the one it has is
+  // no longer usable (another target, a channel that dropped it).
+  const kindOptions = effectiveKind && !kinds.includes(effectiveKind) ? [effectiveKind, ...kinds] : kinds
+  const askKind = kindOptions.length > 1
 
   return (
     <div className="rounded-xl border bg-card" aria-label={`Connection ${index + 1}`} role="group">
@@ -117,7 +127,7 @@ export function ConnectionCard({
           <span className={cn("truncate font-mono text-sm font-medium", !c.name.trim() && "text-muted-foreground")}>
             {c.name.trim() || defaultName}
           </span>
-          {kinds.length > 1 && effectiveKind && (
+          {askKind && effectiveKind && (
             <span className="shrink-0 rounded border px-1.5 font-mono text-xs text-muted-foreground" title={kindLabels[effectiveKind]}>
               {effectiveKind}
             </span>
@@ -132,7 +142,11 @@ export function ConnectionCard({
             variant="outline"
             size="sm"
             disabled={disabled || !channel || endpointCount === 0}
-            title={endpointCount === 0 ? `No ${c.moduleName} endpoints in this operation` : "Replace the settings with an endpoint's"}
+            title={
+              endpointCount === 0
+                ? `No ${c.moduleName} endpoints of a kind this connection can use in this operation`
+                : "Replace the kind and settings with an endpoint's"
+            }
             onClick={onFill}
           >
             <CopyIcon />
@@ -187,7 +201,7 @@ export function ConnectionCard({
               aria-invalid={!!errors[`${at}.name`] || undefined}
             />
           </SettingRow>
-          {kinds.length > 1 && (
+          {askKind && (
             <SettingRow
               id={`${idPrefix}-kind`}
               label="Kind"
@@ -203,7 +217,7 @@ export function ConnectionCard({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {kinds.map((k) => (
+                  {kindOptions.map((k) => (
                     <SelectItem key={k} value={k} description={k}>
                       {kindLabels[k] ?? k}
                     </SelectItem>
@@ -229,7 +243,7 @@ export function ConnectionCard({
             />
           </SettingRow>
           {channel &&
-            groupByField(channel.fields, (f) => f).map((g) => (
+            groupByField(fields, (f) => f).map((g) => (
               <Group key={g.group} title={g.group}>
                 {g.items.map((f) => (
                   <FieldRow

@@ -11,11 +11,11 @@ import { fetchChannelEndpointExport } from "@/graphql/hooks/channel-endpoints"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { ModuleIconCell } from "@/components/modules/module-icon"
-import { exportFileName, settingRows, type Kind } from "./endpoint-values"
+import { connectionKind, exportFileName, kindLabels, settingRows, type Kind } from "./endpoint-values"
 
 type Endpoint = ChannelEndpointFieldsFragment
 
-const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,0.5fr)_minmax(0,2.1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_48px]"
+const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_48px]"
 
 const AMBER = "border-amber-600/40 text-amber-700 dark:text-amber-400"
 
@@ -92,6 +92,9 @@ export function EndpointsTable({
               />
               <div className="flex min-w-0 items-baseline gap-1.5">
                 <span className="truncate font-mono">{ep.moduleName}</span>
+                <span className="truncate font-mono text-xs text-muted-foreground" title={kindLabels[ep.kind]}>
+                  {ep.kind}
+                </span>
                 <span className="text-xs text-muted-foreground">v{ep.schemaVersion}</span>
               </div>
               <SettingsCell endpoint={ep} kind={kinds.get(ep.moduleName) ?? null} />
@@ -109,7 +112,7 @@ export function EndpointsTable({
 }
 
 function SettingsCell({ endpoint, kind }: { endpoint: Endpoint; kind: Kind | null }) {
-  const rows = settingRows(kind, (endpoint.values ?? {}) as Record<string, unknown>)
+  const rows = settingRows(connectionKind(kind, endpoint.kind)?.fields, (endpoint.values ?? {}) as Record<string, unknown>)
   if (rows.length === 0) {
     return <div className="truncate text-sm text-muted-foreground">Channel defaults</div>
   }

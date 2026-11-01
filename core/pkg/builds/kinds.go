@@ -70,7 +70,7 @@ func (s *Service) instances(ctx context.Context, moduleName string, version int)
 func declaring(mods []models.Module, moduleName string, version int) []models.Module {
 	var out []models.Module
 	for _, m := range mods {
-		if m.Type == protocol.ServiceFactory && m.Name == moduleName && m.Build != nil && m.Build.Version == version && m.RPCQueue != "" {
+		if m.Type == protocol.ServiceFactory && m.Name == moduleName && m.Build.Current() && m.Build.Version == version && m.RPCQueue != "" {
 			out = append(out, m)
 		}
 	}

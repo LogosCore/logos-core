@@ -179,7 +179,7 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			return c, out, err
 		}
 		ch, _ := schema.Channel(conn.ModuleName)
-		if err := s.checkValues(ctx, op, key+".values.", ch.Fields, conn.Values, out, files); err != nil {
+		if err := s.checkValues(ctx, op, key+".values.", ch.KindFields(kind), conn.Values, out, files); err != nil {
 			return c, out, err
 		}
 	}

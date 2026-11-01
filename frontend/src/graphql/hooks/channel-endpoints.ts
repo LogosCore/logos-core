@@ -18,8 +18,8 @@ export const channelEndpointKeys = {
   all: ["channel-endpoints"] as const,
   list: (operationId: string) => [...channelEndpointKeys.all, "list", operationId] as const,
   infiniteList: (params: EndpointListParams) => [...channelEndpointKeys.list(params.operationId), params] as const,
-  count: (operationId: string, moduleNames: readonly string[]) =>
-    [...channelEndpointKeys.list(operationId), "count", moduleNames] as const,
+  count: (operationId: string, moduleNames: readonly string[], kinds: readonly string[] | null) =>
+    [...channelEndpointKeys.list(operationId), "count", moduleNames, kinds] as const,
   detail: (id: string) => [...channelEndpointKeys.all, "detail", id] as const,
   kinds: () => [...channelEndpointKeys.all, "kinds"] as const,
 }
@@ -47,6 +47,8 @@ export interface EndpointListParams {
   search: string | null
   /** Channel kinds to list; all when null. */
   moduleNames: string[] | null
+  /** Connection kinds to list ("reverse-call", ...); all when null or absent. */
+  kinds?: string[] | null
 }
 
 /** An operation's endpoints by name, a page at a time as the list scrolls. */
@@ -64,13 +66,25 @@ export function useInfiniteChannelEndpoints(params: EndpointListParams, options?
   })
 }
 
-/** How many endpoints of these channel kinds the operation has. */
-export function useChannelEndpointCount(operationId: string, moduleNames: readonly string[]) {
+/**
+ * How many endpoints of these channel kinds the operation has; of these
+ * connection kinds too, unless kinds is null.
+ */
+export function useChannelEndpointCount(
+  operationId: string,
+  moduleNames: readonly string[],
+  kinds: readonly string[] | null = null,
+) {
   const query = useQuery({
-    queryKey: channelEndpointKeys.count(operationId, moduleNames),
+    queryKey: channelEndpointKeys.count(operationId, moduleNames, kinds),
     queryFn: () =>
-      graphqlClient(ChannelEndpointsDocument, { operationId, moduleNames: [...moduleNames], first: 1 }),
-    enabled: operationId !== "" && moduleNames.length > 0,
+      graphqlClient(ChannelEndpointsDocument, {
+        operationId,
+        moduleNames: [...moduleNames],
+        kinds: kinds && [...kinds],
+        first: 1,
+      }),
+    enabled: operationId !== "" && moduleNames.length > 0 && (kinds === null || kinds.length > 0),
   })
   return query.data?.channelEndpoints.totalCount ?? null
 }

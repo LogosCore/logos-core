@@ -146,12 +146,13 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 	svc, repo, _ := newTestService()
 	_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,
 		`{"module_type": "channel", "module_name": "http", "instance": "http-1", "rpc_queue": "q",
-		  "connection": {"schema_version": "1", "version": 2, "fields": [{"key": "base_url", "type": "url", "required": true}]}}`))
+		  "connection": {"schema_version": "2", "version": 2,
+		    "kinds": {"reverse-call": {"fields": [{"key": "base_url", "type": "url", "required": true}]}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	c := repo.rows["http-1"].Connection
-	if c == nil || c.Version != 2 || len(c.Fields) != 1 || c.Fields[0].Key != "base_url" {
+	if f := c.KindFields(protocol.KindReverseCall); c == nil || c.Version != 2 || len(f) != 1 || f[0].Key != "base_url" {
 		t.Fatalf("connection = %+v", c)
 	}
 
@@ -167,7 +168,7 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 	delete(repo.rows, "http-1")
 	_, err = svc.HandleRegister(context.Background(), rawEnv(OpRegister,
 		`{"module_type": "channel", "module_name": "http", "instance": "http-1", "rpc_queue": "q",
-		  "connection": {"schema_version": "1", "version": 0, "fields": []}}`))
+		  "connection": {"schema_version": "2", "version": 0, "kinds": {}}}`))
 	assertRPCCode(t, err, messaging.CodeValidationFailed)
 	if _, stored := repo.rows["http-1"]; stored {
 		t.Error("invalid registration was persisted")
@@ -175,8 +176,8 @@ func TestHandleRegister_ConnectionSchema(t *testing.T) {
 }
 
 func TestHandleRegister_BuildSchema(t *testing.T) {
-	const schema = `{"schema_version": "2", "version": 3,
-	  "channels": [{"module_name": "http", "versions": [2]}],
+	const schema = `{"schema_version": "3", "version": 3,
+	  "channels": [{"module_name": "http", "versions": [2], "kinds": [{"kind": "reverse-call"}]}],
 	  "targets": [{"id": "dummy", "format": "json", "platforms": ["any/any"]}]}`
 	svc, repo, _ := newTestService()
 	_, err := svc.HandleRegister(context.Background(), rawEnv(OpRegister,

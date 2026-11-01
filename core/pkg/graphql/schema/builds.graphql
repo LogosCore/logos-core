@@ -75,8 +75,15 @@ type BuildChannel {
   moduleName: String!
   # Connection schema versions the minions read.
   versions: [Int!]!
-  # The factory's connection parameters for this channel kind, set per
-  # connection of a build.
+  # The connection kinds the minions support through the channel, in the
+  # factory's order, each with the factory's own connection parameters, set
+  # per connection of a build.
+  kinds: [BuildChannelKind!]!
+}
+
+type BuildChannelKind {
+  # "reverse-call", "reverse-persistent", ...
+  kind: String!
   fields: [ModuleField!]!
 }
 
@@ -155,10 +162,12 @@ input BuildConnectionInput {
   # characters. Core keeps it with the build record and never sends it to the
   # factory, so it cannot end up in an artifact.
   description: String
-  # Connection settings by the channel's connection schema field key. null, ""
-  # and [] leave a setting unset (its default applies).
+  # Connection settings by the field key of the connection kind in the
+  # channel's connection schema. null, "" and [] leave a setting unset (its
+  # default applies).
   settings: JSON
-  # The factory's connection parameter values by key, the same way.
+  # The factory's connection parameter values for the connection kind by
+  # key, the same way.
   values: JSON
 }
 

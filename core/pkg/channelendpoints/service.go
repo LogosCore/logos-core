@@ -5,8 +5,9 @@
 // endpoint affects nothing already built, and channels never see endpoints.
 //
 // Channels declare the schema at module.register and core stores it with each
-// instance's registration. An endpoint belongs to one operation and one
-// channel kind (module name), and is validated against the kind's latest
+// instance's registration. An endpoint belongs to one operation, one channel
+// kind (module name) and one connection kind (reverse-call, ...), and is
+// validated against that connection kind's fields in the channel kind's latest
 // schema (the highest version any instance declared): when saved, and again
 // whenever it is read or exported.
 //
@@ -33,7 +34,7 @@ import (
 )
 
 // ExportFormat identifies the export document's layout.
-const ExportFormat = "logos.channel-endpoint.v1"
+const ExportFormat = protocol.ChannelEndpointExportV2
 
 // MaxDescriptionLength bounds an endpoint's description.
 const MaxDescriptionLength = 500
@@ -160,8 +161,11 @@ type Input struct {
 	// create, and keeps the stored one on update.
 	Slug        string
 	Description string
-	// Values by schema field key, replacing the stored ones. Null, "" and []
-	// leave a field unset (its default applies).
+	// Kind is the connection kind (protocol.KindReverseCall, ...): one the
+	// channel kind carries. Its fields are the ones Values follow.
+	Kind string
+	// Values by the kind's field key, replacing the stored ones. Null, "" and
+	// [] leave a field unset (its default applies).
 	Values map[string]any
 	Actor  models.ModuleActor
 }
@@ -285,14 +289,14 @@ func (s *Service) Create(ctx context.Context, operationID uuid.UUID, moduleName 
 	if err != nil {
 		return View{}, err
 	}
-	values, err := checkValues(*schema, in.Values)
+	kind, values, err := checkValues(*schema, moduleName, in)
 	if err != nil {
 		return View{}, err
 	}
 	now := s.now()
 	ep := &models.ChannelEndpoint{
 		OperationID: operationID, Name: name, Slug: slug, Description: desc, ModuleName: moduleName,
-		SchemaVersion: schema.Version, Values: values,
+		Kind: kind, SchemaVersion: schema.Version, Values: values,
 		CreatedBy: in.Actor, UpdatedBy: in.Actor, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repo.Insert(ctx, ep); err != nil {
@@ -301,7 +305,7 @@ func (s *Service) Create(ctx context.Context, operationID uuid.UUID, moduleName 
 	return view(*ep, schema), nil
 }
 
-// Update replaces an endpoint's name, description and values. Its slug is
+// Update replaces an endpoint's name, description, connection kind and values. Its slug is
 // Input.Slug when set; otherwise it follows the name: kept while the name
 // makes the same slug, a free one made from a new name. expectedRevision
 // is the revision the caller read; a mismatch is a ConflictError.
@@ -327,11 +331,11 @@ func (s *Service) Update(ctx context.Context, id string, expectedRevision int64,
 			return View{}, err
 		}
 	}
-	values, err := checkValues(*schema, in.Values)
+	kind, values, err := checkValues(*schema, ep.ModuleName, in)
 	if err != nil {
 		return View{}, err
 	}
-	ep.Name, ep.Slug, ep.Description, ep.Values, ep.SchemaVersion = name, slug, desc, values, schema.Version
+	ep.Name, ep.Slug, ep.Description, ep.Kind, ep.Values, ep.SchemaVersion = name, slug, desc, kind, values, schema.Version
 	ep.UpdatedBy, ep.UpdatedAt = in.Actor, s.now()
 	if err := s.repo.Update(ctx, ep); err != nil {
 		return View{}, s.writeErr(err, slug)
@@ -356,24 +360,22 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 }
 
 // Export is the endpoint as a minion's connection settings: its values over
-// the schema's defaults. An endpoint with problems is
-// refused, so values the channel's schema rejects never reach a minion.
-func (s *Service) Export(ctx context.Context, id string) (map[string]any, error) {
+// its connection kind's defaults. An endpoint with problems is refused, so
+// values the channel's schema rejects never reach a minion.
+func (s *Service) Export(ctx context.Context, id string) (protocol.ChannelEndpointExport, error) {
 	v, err := s.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		return protocol.ChannelEndpointExport{}, err
 	}
 	if len(v.Problems) > 0 {
-		return nil, &ValidationError{Message: "the endpoint does not fit the channel's connection schema", Problems: v.Problems}
+		return protocol.ChannelEndpointExport{}, &ValidationError{Message: "the endpoint does not fit the channel's connection schema", Problems: v.Problems}
 	}
-	return map[string]any{
-		"format": ExportFormat,
-		"name":   v.Slug,
-		"channel": map[string]any{
-			"module_name":    v.ModuleName,
-			"schema_version": v.Schema.Version,
-		},
-		"params": protocol.ResolveConnectionValues(*v.Schema, v.Values),
+	return protocol.ChannelEndpointExport{
+		Format:  ExportFormat,
+		Name:    v.Slug,
+		Channel: protocol.ExportChannel{ModuleName: v.ModuleName, SchemaVersion: v.Schema.Version},
+		Kind:    v.Kind,
+		Params:  protocol.ResolveConnectionValues(*v.Schema, v.Kind, v.Values),
 	}, nil
 }
 
@@ -385,7 +387,7 @@ func view(ep models.ChannelEndpoint, schema *protocol.ConnectionSchema) View {
 		v.Problems = map[string]string{"": fmt.Sprintf("no %q channel has declared a minion connection schema", ep.ModuleName)}
 		return v
 	}
-	v.Problems = protocol.ValidateConnectionValues(*schema, ep.Values)
+	v.Problems = protocol.ValidateConnectionValues(*schema, ep.Kind, ep.Values)
 	return v
 }
 
@@ -454,22 +456,30 @@ func checkMeta(in Input) (name, desc string, err error) {
 	return name, desc, nil
 }
 
-// checkValues normalizes and validates submitted values.
-func checkValues(schema protocol.ConnectionSchema, submitted map[string]any) (models.JSONMap, error) {
+// checkValues checks the submitted connection kind, one the channel kind
+// carries, and normalizes and validates the values against its fields.
+func checkValues(schema protocol.ConnectionSchema, moduleName string, in Input) (string, models.JSONMap, error) {
+	kind := strings.TrimSpace(in.Kind)
+	if _, ok := schema.Kinds[kind]; !ok {
+		return "", nil, &ValidationError{
+			Message:  fmt.Sprintf("the %q channel carries %s connections, not %q", moduleName, strings.Join(schema.SupportedKinds(), ", "), kind),
+			Problems: map[string]string{"kind": "not a connection kind of the channel"},
+		}
+	}
 	values := models.JSONMap{}
-	for k, v := range submitted {
+	for k, v := range in.Values {
 		if !empty(v) {
 			values[k] = v
 		}
 	}
-	if problems := protocol.ValidateConnectionValues(schema, values); problems != nil {
+	if problems := protocol.ValidateConnectionValues(schema, kind, values); problems != nil {
 		keys := protocol.SortedProblemKeys(problems)
-		return nil, &ValidationError{
+		return "", nil, &ValidationError{
 			Message:  fmt.Sprintf("%s: %s", keys[0], problems[keys[0]]),
 			Problems: problems,
 		}
 	}
-	return values, nil
+	return kind, values, nil
 }
 
 func empty(v any) bool {

@@ -402,7 +402,7 @@ func (r *moduleRegistryRepository) LatestConnectionSchemas(ctx context.Context) 
 	// One row per instance that declared a schema: few, so the newest per
 	// kind is picked here rather than in an aggregation.
 	var mods []models.Module
-	err := r.coll.Find(ctx, bson.M{"connection": bson.M{"$exists": true}}).
+	err := r.coll.Find(ctx, bson.M{"connection.schema_version": protocol.ConnectionSchemaV2}).
 		Sort("module_name", "-connection.version", "-registered_at").
 		Select(bson.M{"module_name": 1, "connection": 1}).
 		All(&mods)
@@ -425,7 +425,8 @@ func latestPerKind(mods []models.Module) map[string]*models.ModuleConnectionSche
 }
 
 func latestConnectionFilter(moduleName string) bson.M {
-	return bson.M{"module_name": moduleName, "connection": bson.M{"$exists": true}}
+	// Only schemas in the format core reads (models.ModuleConnectionSchema).
+	return bson.M{"module_name": moduleName, "connection.schema_version": protocol.ConnectionSchemaV2}
 }
 
 func (r *moduleRegistryRepository) LatestIcons(ctx context.Context, moduleType string) (map[string]models.ModuleIcon, error) {
@@ -456,7 +457,7 @@ func latestIconPerKind(mods []models.Module) map[string]models.ModuleIcon {
 
 func (r *moduleRegistryRepository) LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error) {
 	var mod models.Module
-	err := r.coll.Find(ctx, bson.M{"module_name": moduleName, "build": bson.M{"$exists": true}}).
+	err := r.coll.Find(ctx, bson.M{"module_name": moduleName, "build.schema_version": protocol.BuildSchemaV3}).
 		Sort("-build.version", "-registered_at").
 		Select(bson.M{"build": 1}).
 		One(&mod)
@@ -471,7 +472,7 @@ func (r *moduleRegistryRepository) LatestBuildSchema(ctx context.Context, module
 
 func (r *moduleRegistryRepository) LatestBuildSchemas(ctx context.Context) (map[string]*models.ModuleBuildSchema, error) {
 	var mods []models.Module
-	err := r.coll.Find(ctx, bson.M{"build": bson.M{"$exists": true}}).
+	err := r.coll.Find(ctx, bson.M{"build.schema_version": protocol.BuildSchemaV3}).
 		Sort("module_name", "-build.version", "-registered_at").
 		Select(bson.M{"module_name": 1, "build": 1}).
 		All(&mods)

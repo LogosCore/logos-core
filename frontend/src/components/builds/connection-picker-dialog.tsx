@@ -20,7 +20,7 @@ export interface BlankChannel {
 
 /**
  * Picks what a connection starts from: one of the operation's endpoints of
- * the offered channel kinds, which the server searches by name, description,
+ * the offered channel kinds and connection kinds, which the server searches by name, description,
  * channel or settings and sends a page at a time as the list scrolls; or
  * (blank) nothing but a channel. Arrow keys and Enter pick from the list
  * without the mouse.
@@ -32,6 +32,7 @@ export function ConnectionPickerDialog({
   description,
   operationId,
   kinds,
+  connectionKinds,
   channels,
   channelIcons,
   blank = [],
@@ -45,6 +46,8 @@ export function ConnectionPickerDialog({
   operationId: string
   /** The channel kinds whose endpoints are offered. */
   kinds: readonly string[]
+  /** The connection kinds whose endpoints are offered ("reverse-call", ...). */
+  connectionKinds: readonly string[]
   channels: ReadonlyMap<string, ChannelKind>
   channelIcons: ReadonlyMap<string, ModuleIconSvgs>
   /** Channels to start a blank connection through; none offers no blank one. */
@@ -67,6 +70,7 @@ export function ConnectionPickerDialog({
             search={search}
             operationId={operationId}
             kinds={kinds}
+            connectionKinds={connectionKinds}
             blank={blank.length > 0}
             channels={channels}
             channelIcons={channelIcons}
@@ -106,6 +110,7 @@ function PickerBody({
   search,
   operationId,
   kinds,
+  connectionKinds,
   blank,
   channels,
   channelIcons,
@@ -114,6 +119,7 @@ function PickerBody({
   search: RefObject<HTMLInputElement | null>
   operationId: string
   kinds: readonly string[]
+  connectionKinds: readonly string[]
   /** A blank connection is offered too. */
   blank: boolean
   channels: ReadonlyMap<string, ChannelKind>
@@ -125,14 +131,14 @@ function PickerBody({
   const debounced = useDebounced(query.trim(), 300)
   const [active, setActive] = useState(0)
   const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteChannelEndpoints(
-    { operationId, search: debounced || null, moduleNames: [...kinds] },
-    { enabled: kinds.length > 0 },
+    { operationId, search: debounced || null, moduleNames: [...kinds], kinds: [...connectionKinds] },
+    { enabled: kinds.length > 0 && connectionKinds.length > 0 },
   )
   const matches = useConnectionNodes(data, (p) => p.channelEndpoints)
   const total = data?.pages[0]?.channelEndpoints.totalCount ?? 0
   const current = Math.min(active, matches.length - 1)
 
-  if (kinds.length === 0 || (!isLoading && debounced === "" && total === 0)) {
+  if (kinds.length === 0 || connectionKinds.length === 0 || (!isLoading && debounced === "" && total === 0)) {
     return (
       <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
         No {kinds.join(" or ")} endpoints in this operation yet. {blank ? "Start a blank connection below, or make" : "Make"}{" "}
@@ -193,7 +199,7 @@ function PickerBody({
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">No endpoint matches.</p>
         )}
         {matches.map((ep, i) => {
-          const summary = settingsSummary(channels.get(ep.moduleName), ep.values)
+          const summary = settingsSummary(channels.get(ep.moduleName), ep.kind, ep.values)
           return (
             <div
               key={ep.id}
@@ -211,7 +217,9 @@ function PickerBody({
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <div className="flex min-w-0 items-baseline gap-2">
                   <span className="truncate text-sm font-medium">{ep.name}</span>
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground">{ep.moduleName}</span>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {ep.moduleName} · {ep.kind}
+                  </span>
                 </div>
                 {ep.description && <span className="truncate text-xs text-muted-foreground">{ep.description}</span>}
                 {summary && <span className="truncate font-mono text-xs text-muted-foreground">{summary}</span>}

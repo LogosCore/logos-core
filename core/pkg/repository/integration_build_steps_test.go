@@ -101,7 +101,7 @@ func TestIntegrationBuildsList(t *testing.T) {
 	op, now := uuid.New(), time.Now().UTC().Truncate(time.Millisecond)
 	conn := func(baseURL string) models.BuildConnections {
 		return models.BuildConnections{Items: []protocol.BuildConnection{{
-			Endpoint: protocol.ChannelEndpointExport{Format: protocol.ChannelEndpointExportV1, Name: "edge",
+			Endpoint: protocol.ChannelEndpointExport{Format: protocol.ChannelEndpointExportV2, Name: "edge", Kind: protocol.KindReverseCall,
 				Channel: protocol.ExportChannel{ModuleName: "http", SchemaVersion: 2}, Params: map[string]any{"base_url": baseURL}},
 			Values: map[string]any{"path_prefix": "/cdn/"},
 		}}}

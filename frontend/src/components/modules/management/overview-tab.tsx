@@ -7,6 +7,7 @@ import { ModuleStatusIndicator } from "@/components/modules/module-status-indica
 import { ModuleHealthIndicator } from "@/components/modules/module-health-indicator"
 import { cn } from "@/lib/utils"
 import { platformLabel } from "@/components/builds/build-values"
+import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { compareFields, formatValue, type FieldDef } from "./field-values"
 import { channelsText, fieldNotes, versionsText } from "./schema-notes"
 
@@ -15,29 +16,29 @@ type Connection = NonNullable<ModuleDetailFieldsFragment["connection"]>
 type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
 
 /**
- * The minion connection settings this instance declared (read-only). Operators
- * fill them in for each connection of a build, or keep them as endpoints on an
+ * The minion connection settings this instance declared (read-only), per
+ * connection kind it carries, each under a row saying which. Operators fill
+ * them in for each connection of a build, or keep them as endpoints on an
  * operation's Endpoints page.
  */
 export function ConnectionSchema({ connection }: { connection: Connection }) {
   return (
-    <section className="rounded-xl border bg-card">
-      <h3 className="flex items-baseline gap-2 border-b px-4 py-2 text-sm font-semibold">
-        Minion connection settings
-        <span className="text-xs font-normal text-muted-foreground">schema v{connection.version}</span>
-      </h3>
-      <dl className="divide-y">
-        <FieldRows fields={connection.fields} />
-      </dl>
-    </section>
+    <InfoCard title="Minion connection settings" note={`schema v${connection.version}`}>
+      {connection.kinds.map((k) => (
+        <Fragment key={k.kind}>
+          <SectionRow title={kindLabels[k.kind] ?? k.kind} note={k.kind} />
+          {k.fields.length > 0 ? <IdRows rows={fieldRows(k.fields)} /> : <NoteRow>None.</NoteRow>}
+        </Fragment>
+      ))}
+    </InfoCard>
   )
 }
 
 /**
  * The build parameters this factory instance declared (read-only), as a table
  * of each field's key and what it is: those every target takes, each
- * target's own, and the connection parameters per channel kind, each under
- * a row saying which. The header says the schema version and the payload
+ * target's own, and the connection parameters per channel kind and connection
+ * kind, each under a row saying which. The header says the schema version and the payload
  * crypto. Operators fill them in on an operation's Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
@@ -58,16 +59,18 @@ export function BuildParameters({ build }: { build: Build }) {
             <IdRows rows={fieldRows(t.fields)} />
           </Fragment>
         ))}
-      {build.channels.map((c) => (
-        <Fragment key={c.moduleName}>
-          <SectionRow title={`${c.moduleName} connection`} note={`schema ${versionsText(c.versions)}`} />
-          {c.fields.length > 0 ? (
-            <IdRows rows={fieldRows(c.fields)} />
-          ) : (
-            <NoteRow>None: the connection settings are used as they are.</NoteRow>
-          )}
-        </Fragment>
-      ))}
+      {build.channels.flatMap((c) =>
+        c.kinds.map((k) => (
+          <Fragment key={`${c.moduleName}:${k.kind}`}>
+            <SectionRow title={`${c.moduleName} ${k.kind} connection`} note={`schema ${versionsText(c.versions)}`} />
+            {k.fields.length > 0 ? (
+              <IdRows rows={fieldRows(k.fields)} />
+            ) : (
+              <NoteRow>None: the connection settings are used as they are.</NoteRow>
+            )}
+          </Fragment>
+        )),
+      )}
     </InfoCard>
   )
 }
@@ -138,27 +141,6 @@ export function BuildCommands({ build }: { build: Build }) {
       />
     </InfoCard>
   )
-}
-
-/** A schema's fields in their declared order, as read-only rows. */
-function FieldRows({ fields }: { fields: readonly FieldDef[] }) {
-  return [...fields].sort(compareFields).map((f) => (
-    <div key={f.key} className="grid grid-cols-[10rem_1fr] gap-3 px-4 py-2 text-sm">
-      <dt className="min-w-0 truncate text-muted-foreground" title={f.description ?? undefined}>
-        {f.label}
-        {f.required && <span className="text-destructive">*</span>}
-      </dt>
-      <dd className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-        <code className="font-mono text-xs">{f.key}</code>
-        <span className="text-xs text-muted-foreground">{f.type}</span>
-        {fieldNotes(f).map((n) => (
-          <span key={n} className="text-xs text-muted-foreground">
-            {n}
-          </span>
-        ))}
-      </dd>
-    </div>
-  ))
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {

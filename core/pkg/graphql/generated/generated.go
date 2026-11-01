@@ -176,9 +176,14 @@ type ComplexityRoot struct {
 	}
 
 	BuildChannel struct {
-		Fields     func(childComplexity int) int
+		Kinds      func(childComplexity int) int
 		ModuleName func(childComplexity int) int
 		Versions   func(childComplexity int) int
+	}
+
+	BuildChannelKind struct {
+		Fields func(childComplexity int) int
+		Kind   func(childComplexity int) int
 	}
 
 	BuildChannelVersions struct {
@@ -272,6 +277,7 @@ type ComplexityRoot struct {
 		CreatedBy     func(childComplexity int) int
 		Description   func(childComplexity int) int
 		ID            func(childComplexity int) int
+		Kind          func(childComplexity int) int
 		ModuleName    func(childComplexity int) int
 		Name          func(childComplexity int) int
 		OperationID   func(childComplexity int) int
@@ -825,8 +831,12 @@ type ComplexityRoot struct {
 		TotalCount func(childComplexity int) int
 	}
 
+	ModuleConnectionKind struct {
+		Fields func(childComplexity int) int
+		Kind   func(childComplexity int) int
+	}
+
 	ModuleConnectionSchema struct {
-		Fields  func(childComplexity int) int
 		Kinds   func(childComplexity int) int
 		Version func(childComplexity int) int
 	}
@@ -1095,7 +1105,7 @@ type ComplexityRoot struct {
 		Builds                             func(childComplexity int, operationID string, search *string, states []string, moduleNames []string, first *int, after *string, last *int, before *string) int
 		ChannelEndpoint                    func(childComplexity int, id string) int
 		ChannelEndpointExport              func(childComplexity int, id string) int
-		ChannelEndpoints                   func(childComplexity int, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) int
+		ChannelEndpoints                   func(childComplexity int, operationID string, search *string, moduleNames []string, kinds []string, first *int, after *string, last *int, before *string) int
 		ChannelKinds                       func(childComplexity int) int
 		Credential                         func(childComplexity int, id string) int
 		CredentialTags                     func(childComplexity int, operationID string) int
@@ -1797,7 +1807,7 @@ type QueryResolver interface {
 	Build(ctx context.Context, id string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 	ChannelKinds(ctx context.Context) ([]*model.ChannelKind, error)
-	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
+	ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, kinds []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error)
 	FreeChannelEndpointSlug(ctx context.Context, operationID string, text string, tag *string) (string, error)
 	ChannelEndpoint(ctx context.Context, id string) (*model.ChannelEndpoint, error)
 	ChannelEndpointExport(ctx context.Context, id string) (any, error)
@@ -2511,12 +2521,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BuildArtifact.Size(childComplexity), true
 
-	case "BuildChannel.fields":
-		if e.ComplexityRoot.BuildChannel.Fields == nil {
+	case "BuildChannel.kinds":
+		if e.ComplexityRoot.BuildChannel.Kinds == nil {
 			break
 		}
 
-		return e.ComplexityRoot.BuildChannel.Fields(childComplexity), true
+		return e.ComplexityRoot.BuildChannel.Kinds(childComplexity), true
 	case "BuildChannel.moduleName":
 		if e.ComplexityRoot.BuildChannel.ModuleName == nil {
 			break
@@ -2529,6 +2539,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildChannel.Versions(childComplexity), true
+
+	case "BuildChannelKind.fields":
+		if e.ComplexityRoot.BuildChannelKind.Fields == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildChannelKind.Fields(childComplexity), true
+	case "BuildChannelKind.kind":
+		if e.ComplexityRoot.BuildChannelKind.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildChannelKind.Kind(childComplexity), true
 
 	case "BuildChannelVersions.kinds":
 		if e.ComplexityRoot.BuildChannelVersions.Kinds == nil {
@@ -2883,6 +2906,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ChannelEndpoint.ID(childComplexity), true
+	case "ChannelEndpoint.kind":
+		if e.ComplexityRoot.ChannelEndpoint.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChannelEndpoint.Kind(childComplexity), true
 	case "ChannelEndpoint.moduleName":
 		if e.ComplexityRoot.ChannelEndpoint.ModuleName == nil {
 			break
@@ -5272,12 +5301,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleConnection.TotalCount(childComplexity), true
 
-	case "ModuleConnectionSchema.fields":
-		if e.ComplexityRoot.ModuleConnectionSchema.Fields == nil {
+	case "ModuleConnectionKind.fields":
+		if e.ComplexityRoot.ModuleConnectionKind.Fields == nil {
 			break
 		}
 
-		return e.ComplexityRoot.ModuleConnectionSchema.Fields(childComplexity), true
+		return e.ComplexityRoot.ModuleConnectionKind.Fields(childComplexity), true
+	case "ModuleConnectionKind.kind":
+		if e.ComplexityRoot.ModuleConnectionKind.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnectionKind.Kind(childComplexity), true
+
 	case "ModuleConnectionSchema.kinds":
 		if e.ComplexityRoot.ModuleConnectionSchema.Kinds == nil {
 			break
@@ -7046,7 +7082,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.ChannelEndpoints(childComplexity, args["operationId"].(string), args["search"].(*string), args["moduleNames"].([]string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.ChannelEndpoints(childComplexity, args["operationId"].(string), args["search"].(*string), args["moduleNames"].([]string), args["kinds"].([]string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.channelKinds":
 		if e.ComplexityRoot.Query.ChannelKinds == nil {
 			break
@@ -10076,8 +10112,15 @@ type BuildChannel {
   moduleName: String!
   # Connection schema versions the minions read.
   versions: [Int!]!
-  # The factory's connection parameters for this channel kind, set per
-  # connection of a build.
+  # The connection kinds the minions support through the channel, in the
+  # factory's order, each with the factory's own connection parameters, set
+  # per connection of a build.
+  kinds: [BuildChannelKind!]!
+}
+
+type BuildChannelKind {
+  # "reverse-call", "reverse-persistent", ...
+  kind: String!
   fields: [ModuleField!]!
 }
 
@@ -10156,10 +10199,12 @@ input BuildConnectionInput {
   # characters. Core keeps it with the build record and never sends it to the
   # factory, so it cannot end up in an artifact.
   description: String
-  # Connection settings by the channel's connection schema field key. null, ""
+  # Connection settings by the field key of the connection kind in the
+  # channel's connection schema. null, ""
   # and [] leave a setting unset (its default applies).
   settings: JSON
-  # The factory's connection parameter values by key, the same way.
+  # The factory's connection parameter values for the connection kind by
+  # key, the same way.
   values: JSON
 }
 
@@ -10372,15 +10417,18 @@ extend type Mutation {
 #
 # A channel declares a minion connection schema at module.register (see
 # logos-golang-protocol/protocol/connection.go): the parameters a minion needs
-# to reach it, e.g. an HTTP channel's base URL and TLS settings. The schema
-# belongs to the channel kind (module name, e.g. "http"); a kind's current
-# schema is the highest version any of its instances declared.
+# to reach it, e.g. an HTTP channel's base URL and TLS settings, declared per
+# connection kind it carries (reverse-call, reverse-persistent, ...): each kind
+# has its own fields. The schema belongs to the channel kind (module name, e.g.
+# "http"); a channel kind's current schema is the highest version any of its
+# instances declared.
 #
-# An endpoint is a ready-to-use set of values for a kind's schema (e.g. "EU
-# CDN"), kept by an operation so its operators can reuse it when creating
-# minions. The values are copied into a minion, so nothing depends on an
-# endpoint afterwards; channels never see endpoints. Endpoints are validated
-# against the kind's current schema when saved, and again on every read.
+# An endpoint is a ready-to-use set of values for one connection kind of a
+# channel kind (e.g. "EU CDN", reverse-call over http), kept by an operation so
+# its operators can reuse it when creating minions. The values are copied into
+# a minion, so nothing depends on an endpoint afterwards; channels never see
+# endpoints. Endpoints are validated against their connection kind's fields in
+# the current schema when saved, and again on every read.
 #
 # Viewers of an operation read its endpoints; operators and admins change
 # them. Agent API keys have no access: they reach only the MCP routes, never
@@ -10396,10 +10444,16 @@ type ModuleConnectionSchema {
   # Version of the channel kind's parameter set; raised when values for an
   # earlier one would be read wrongly.
   version: Int!
+  # The connection kinds the channel carries, in the protocol's order, each
+  # with its own fields.
+  kinds: [ModuleConnectionKind!]!
+}
+
+type ModuleConnectionKind {
+  # "reverse-call", "reverse-persistent", "bind-call" or "bind-persistent".
+  kind: String!
+  # What a minion is given to connect this way.
   fields: [ModuleField!]!
-  # The connection kinds the channel carries ("reverse-call",
-  # "reverse-persistent", ...).
-  kinds: [String!]!
 }
 
 # A channel kind minions can be given endpoints for.
@@ -10446,6 +10500,8 @@ type ChannelEndpoint {
   description: String
   # The channel kind, e.g. "http".
   moduleName: String!
+  # The connection kind the values are for, e.g. "reverse-call".
+  kind: String!
   # Connection schema version the values were saved against.
   schemaVersion: Int!
   # The kind now declares another schema version: the values may need a look.
@@ -10470,8 +10526,11 @@ input ChannelEndpointInput {
   # the name changes. The app leaves it to core.
   slug: String
   description: String
-  # Values by field key, replacing the stored ones. null, "" and [] leave a
-  # field unset (its default applies).
+  # The connection kind: one the channel kind carries. Its fields are the
+  # ones values follow.
+  kind: String!
+  # Values by the kind's field key, replacing the stored ones. null, "" and []
+  # leave a field unset (its default applies).
   values: JSON!
 }
 
@@ -10482,12 +10541,14 @@ extend type Query {
 
   # An operation's endpoints by name, case aside, a page at a time. search is
   # the app's search (a substring, case aside; "quotes" for whole words) over
-  # the name, slug, description, channel kind and values; moduleNames (channel
-  # kinds) narrow the list. Needs at least viewer in the operation.
+  # the name, slug, description, channel kind, connection kind and values;
+  # moduleNames (channel kinds) and kinds (connection kinds) narrow the list.
+  # Needs at least viewer in the operation.
   channelEndpoints(
     operationId: ID!
     search: String
     moduleNames: [String!]
+    kinds: [String!]
     first: Int = 20
     after: String
     last: Int
@@ -10508,15 +10569,17 @@ extend type Query {
   channelEndpoint(id: ID!): ChannelEndpoint
     @hasPermission(permission: "operation:member")
 
-  # The endpoint as a minion's connection settings: its values over the
-  # schema's defaults. Fails with BAD_USER_INPUT while the endpoint has
+  # The endpoint as a minion's connection settings (logos.channel-endpoint.v2:
+  # format, name, channel, kind, params): its values over its connection
+  # kind's defaults. Fails with BAD_USER_INPUT while the endpoint has
   # problems. Needs at least viewer in its operation.
   channelEndpointExport(id: ID!): JSON!
     @hasPermission(permission: "operation:member")
 }
 
 extend type Mutation {
-  # Validated against the kind's current schema; field problems are in the
+  # Validated against the connection kind's fields in the channel kind's
+  # current schema; field problems are in the
   # error's extensions.problems. Needs at least operator in the operation;
   # agent API keys are rejected.
   createChannelEndpoint(operationId: ID!, moduleName: String!, input: ChannelEndpointInput!): ChannelEndpoint!
@@ -15896,26 +15959,31 @@ func (ec *executionContext) field_Query_channelEndpoints_args(ctx context.Contex
 		return nil, err
 	}
 	args["moduleNames"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "kinds", ec.unmarshalOString2ᚕstringᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["first"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	args["kinds"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	args["first"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["last"] = arg5
-	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	args["after"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["before"] = arg6
+	args["last"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg7
 	return args, nil
 }
 
@@ -20374,12 +20442,76 @@ func (ec *executionContext) fieldContext_BuildChannel_versions(_ context.Context
 	return fc, nil
 }
 
-func (ec *executionContext) _BuildChannel_fields(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannel) (ret graphql.Marshaler) {
+func (ec *executionContext) _BuildChannel_kinds(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannel) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_BuildChannel_fields,
+		ec.fieldContext_BuildChannel_kinds,
+		func(ctx context.Context) (any, error) {
+			return obj.Kinds, nil
+		},
+		nil,
+		ec.marshalNBuildChannelKind2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildChannelKindᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildChannel_kinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildChannel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "kind":
+				return ec.fieldContext_BuildChannelKind_kind(ctx, field)
+			case "fields":
+				return ec.fieldContext_BuildChannelKind_fields(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BuildChannelKind", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildChannelKind_kind(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannelKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildChannelKind_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildChannelKind_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildChannelKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildChannelKind_fields(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannelKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildChannelKind_fields,
 		func(ctx context.Context) (any, error) {
 			return obj.Fields, nil
 		},
@@ -20390,9 +20522,9 @@ func (ec *executionContext) _BuildChannel_fields(ctx context.Context, field grap
 	)
 }
 
-func (ec *executionContext) fieldContext_BuildChannel_fields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_BuildChannelKind_fields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "BuildChannel",
+		Object:     "BuildChannelKind",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -21465,8 +21597,8 @@ func (ec *executionContext) fieldContext_BuildSchema_channels(_ context.Context,
 				return ec.fieldContext_BuildChannel_moduleName(ctx, field)
 			case "versions":
 				return ec.fieldContext_BuildChannel_versions(ctx, field)
-			case "fields":
-				return ec.fieldContext_BuildChannel_fields(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildChannel_kinds(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildChannel", field.Name)
 		},
@@ -22446,6 +22578,35 @@ func (ec *executionContext) fieldContext_ChannelEndpoint_moduleName(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _ChannelEndpoint_kind(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ChannelEndpoint_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ChannelEndpoint_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ChannelEndpoint",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ChannelEndpoint_schemaVersion(ctx context.Context, field graphql.CollectedField, obj *model.ChannelEndpoint) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22868,6 +23029,8 @@ func (ec *executionContext) fieldContext_ChannelEndpointEdge_node(_ context.Cont
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_ChannelEndpoint_kind(ctx, field)
 			case "schemaVersion":
 				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
 			case "schemaChanged":
@@ -23035,8 +23198,6 @@ func (ec *executionContext) fieldContext_ChannelKind_schema(_ context.Context, f
 			switch field.Name {
 			case "version":
 				return ec.fieldContext_ModuleConnectionSchema_version(ctx, field)
-			case "fields":
-				return ec.fieldContext_ModuleConnectionSchema_fields(ctx, field)
 			case "kinds":
 				return ec.fieldContext_ModuleConnectionSchema_kinds(ctx, field)
 			}
@@ -34105,8 +34266,6 @@ func (ec *executionContext) fieldContext_Module_connection(_ context.Context, fi
 			switch field.Name {
 			case "version":
 				return ec.fieldContext_ModuleConnectionSchema_version(ctx, field)
-			case "fields":
-				return ec.fieldContext_ModuleConnectionSchema_fields(ctx, field)
 			case "kinds":
 				return ec.fieldContext_ModuleConnectionSchema_kinds(ctx, field)
 			}
@@ -35233,41 +35392,41 @@ func (ec *executionContext) fieldContext_ModuleConnection_totalCount(_ context.C
 	return fc, nil
 }
 
-func (ec *executionContext) _ModuleConnectionSchema_version(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
+func (ec *executionContext) _ModuleConnectionKind_kind(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionKind) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_ModuleConnectionSchema_version,
+		ec.fieldContext_ModuleConnectionKind_kind,
 		func(ctx context.Context) (any, error) {
-			return obj.Version, nil
+			return obj.Kind, nil
 		},
 		nil,
-		ec.marshalNInt2int,
+		ec.marshalNString2string,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_ModuleConnectionSchema_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ModuleConnectionKind_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "ModuleConnectionSchema",
+		Object:     "ModuleConnectionKind",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _ModuleConnectionSchema_fields(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
+func (ec *executionContext) _ModuleConnectionKind_fields(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionKind) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_ModuleConnectionSchema_fields,
+		ec.fieldContext_ModuleConnectionKind_fields,
 		func(ctx context.Context) (any, error) {
 			return obj.Fields, nil
 		},
@@ -35278,9 +35437,9 @@ func (ec *executionContext) _ModuleConnectionSchema_fields(ctx context.Context, 
 	)
 }
 
-func (ec *executionContext) fieldContext_ModuleConnectionSchema_fields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ModuleConnectionKind_fields(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "ModuleConnectionSchema",
+		Object:     "ModuleConnectionKind",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -35333,6 +35492,35 @@ func (ec *executionContext) fieldContext_ModuleConnectionSchema_fields(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleConnectionSchema_version(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnectionSchema_version,
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnectionSchema_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnectionSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleConnectionSchema_kinds(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -35343,7 +35531,7 @@ func (ec *executionContext) _ModuleConnectionSchema_kinds(ctx context.Context, f
 			return obj.Kinds, nil
 		},
 		nil,
-		ec.marshalNString2ᚕstringᚄ,
+		ec.marshalNModuleConnectionKind2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionKindᚄ,
 		true,
 		true,
 	)
@@ -35356,7 +35544,13 @@ func (ec *executionContext) fieldContext_ModuleConnectionSchema_kinds(_ context.
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			switch field.Name {
+			case "kind":
+				return ec.fieldContext_ModuleConnectionKind_kind(ctx, field)
+			case "fields":
+				return ec.fieldContext_ModuleConnectionKind_fields(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionKind", field.Name)
 		},
 	}
 	return fc, nil
@@ -39677,6 +39871,8 @@ func (ec *executionContext) fieldContext_Mutation_createChannelEndpoint(ctx cont
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_ChannelEndpoint_kind(ctx, field)
 			case "schemaVersion":
 				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
 			case "schemaChanged":
@@ -39768,6 +39964,8 @@ func (ec *executionContext) fieldContext_Mutation_updateChannelEndpoint(ctx cont
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_ChannelEndpoint_kind(ctx, field)
 			case "schemaVersion":
 				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
 			case "schemaChanged":
@@ -48350,7 +48548,7 @@ func (ec *executionContext) _Query_channelEndpoints(ctx context.Context, field g
 		ec.fieldContext_Query_channelEndpoints,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().ChannelEndpoints(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["moduleNames"].([]string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().ChannelEndpoints(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["moduleNames"].([]string), fc.Args["kinds"].([]string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -48523,6 +48721,8 @@ func (ec *executionContext) fieldContext_Query_channelEndpoint(ctx context.Conte
 				return ec.fieldContext_ChannelEndpoint_description(ctx, field)
 			case "moduleName":
 				return ec.fieldContext_ChannelEndpoint_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_ChannelEndpoint_kind(ctx, field)
 			case "schemaVersion":
 				return ec.fieldContext_ChannelEndpoint_schemaVersion(ctx, field)
 			case "schemaChanged":
@@ -65250,7 +65450,7 @@ func (ec *executionContext) unmarshalInputChannelEndpointInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "slug", "description", "values"}
+	fieldsInOrder := [...]string{"name", "slug", "description", "kind", "values"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -65278,6 +65478,13 @@ func (ec *executionContext) unmarshalInputChannelEndpointInput(ctx context.Conte
 				return it, err
 			}
 			it.Description = data
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
 		case "values":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("values"))
 			data, err := ec.unmarshalNJSON2interface(ctx, v)
@@ -68630,8 +68837,52 @@ func (ec *executionContext) _BuildChannel(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "kinds":
+			out.Values[i] = ec._BuildChannel_kinds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var buildChannelKindImplementors = []string{"BuildChannelKind"}
+
+func (ec *executionContext) _BuildChannelKind(ctx context.Context, sel ast.SelectionSet, obj *model.BuildChannelKind) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, buildChannelKindImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BuildChannelKind")
+		case "kind":
+			out.Values[i] = ec._BuildChannelKind_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "fields":
-			out.Values[i] = ec._BuildChannel_fields(ctx, field, obj)
+			out.Values[i] = ec._BuildChannelKind_fields(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -69302,6 +69553,11 @@ func (ec *executionContext) _ChannelEndpoint(ctx context.Context, sel ast.Select
 			out.Values[i] = ec._ChannelEndpoint_description(ctx, field, obj)
 		case "moduleName":
 			out.Values[i] = ec._ChannelEndpoint_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._ChannelEndpoint_kind(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -74208,6 +74464,50 @@ func (ec *executionContext) _ModuleConnection(ctx context.Context, sel ast.Selec
 	return out
 }
 
+var moduleConnectionKindImplementors = []string{"ModuleConnectionKind"}
+
+func (ec *executionContext) _ModuleConnectionKind(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConnectionKind) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, moduleConnectionKindImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModuleConnectionKind")
+		case "kind":
+			out.Values[i] = ec._ModuleConnectionKind_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fields":
+			out.Values[i] = ec._ModuleConnectionKind_fields(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var moduleConnectionSchemaImplementors = []string{"ModuleConnectionSchema"}
 
 func (ec *executionContext) _ModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, obj *model.ModuleConnectionSchema) graphql.Marshaler {
@@ -74221,11 +74521,6 @@ func (ec *executionContext) _ModuleConnectionSchema(ctx context.Context, sel ast
 			out.Values[i] = graphql.MarshalString("ModuleConnectionSchema")
 		case "version":
 			out.Values[i] = ec._ModuleConnectionSchema_version(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "fields":
-			out.Values[i] = ec._ModuleConnectionSchema_fields(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -83349,6 +83644,32 @@ func (ec *executionContext) marshalNBuildChannel2ᚖgithubᚗcomᚋlogoscoreᚋl
 	return ec._BuildChannel(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNBuildChannelKind2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildChannelKindᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildChannelKind) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBuildChannelKind2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildChannelKind(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBuildChannelKind2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildChannelKind(ctx context.Context, sel ast.SelectionSet, v *model.BuildChannelKind) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BuildChannelKind(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNBuildChannelVersions2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildChannelVersionsᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.BuildChannelVersions) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -84922,6 +85243,32 @@ func (ec *executionContext) marshalNModuleConnection2ᚖgithubᚗcomᚋlogoscore
 		return graphql.Null
 	}
 	return ec._ModuleConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNModuleConnectionKind2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionKindᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModuleConnectionKind) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNModuleConnectionKind2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionKind(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModuleConnectionKind2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionKind(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConnectionKind) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModuleConnectionKind(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNModuleConnectionSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐModuleConnectionSchema(ctx context.Context, sel ast.SelectionSet, v *model.ModuleConnectionSchema) graphql.Marshaler {

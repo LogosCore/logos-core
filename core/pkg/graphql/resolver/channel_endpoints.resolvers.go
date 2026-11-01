@@ -38,8 +38,8 @@ func (r *queryResolver) ChannelKinds(ctx context.Context) ([]*model.ChannelKind,
 }
 
 // ChannelEndpoints is the resolver for the channelEndpoints field.
-func (r *queryResolver) ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error) {
-	return r.ChannelEndpointResolver.ChannelEndpoints(ctx, operationID, search, moduleNames, first, after, last, before)
+func (r *queryResolver) ChannelEndpoints(ctx context.Context, operationID string, search *string, moduleNames []string, kinds []string, first *int, after *string, last *int, before *string) (*model.ChannelEndpointConnection, error) {
+	return r.ChannelEndpointResolver.ChannelEndpoints(ctx, operationID, search, moduleNames, kinds, first, after, last, before)
 }
 
 // FreeChannelEndpointSlug is the resolver for the freeChannelEndpointSlug field.

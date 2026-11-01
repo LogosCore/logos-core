@@ -56,6 +56,8 @@ import {
   pickedCommands,
   platformLabel,
   sourceFromBuild,
+  withKind,
+  effectiveKind,
   targetCommands,
   targetFields,
   usableKinds,
@@ -202,10 +204,22 @@ function Editor({
   )
   const [leavingJson, setLeavingJson] = useState(false)
   const read = tab === "json" ? readBuildJson(jsonText, kind, channels) : null
-  const connectionChannels = form.connections.map((c) => c.moduleName).join(",")
+  // The connections' channels and kinds, as text so the hints keep while they hold.
+  const connectionKinds = form.connections.map((c) => `${c.moduleName}:${c.kind}`).join(",")
   const hints = useMemo(
-    () => buildJsonHints(kind, channels, form.target, connectionChannels === "" ? [] : connectionChannels.split(",")),
-    [kind, channels, form.target, connectionChannels],
+    () =>
+      buildJsonHints(
+        kind,
+        channels,
+        form.target,
+        connectionKinds === ""
+          ? []
+          : connectionKinds.split(",").map((s) => {
+              const [moduleName, connKind] = s.split(":")
+              return { moduleName, kind: connKind }
+            }),
+      ),
+    [kind, channels, form.target, connectionKinds],
   )
   // Fetched once the modal has settled, so the JSON tab opens at once.
   useEffect(() => whenIdle(preloadJsonEditor), [])
@@ -329,8 +343,8 @@ function Editor({
     setPicker((p) => ({ ...p, open: false }))
     const ch = channels.get(moduleName)
     if (!ch) return
-    const c = connectionDraft(kind, ch, { moduleName })
-    setConnections((cs) => [...cs, ep ? fillFromEndpoint(c, ch, ep, connectionNames(cs)) : c])
+    const c = connectionDraft(kind, ch, { moduleName }, target)
+    setConnections((cs) => [...cs, ep ? fillFromEndpoint(c, ch, kind, ep, connectionNames(cs)) : c])
   }
 
   function fillConnection(key: string, ep: EndpointOption) {
@@ -339,7 +353,14 @@ function Editor({
     const ch = channels.get(ep.moduleName)
     if (i < 0 || !ch) return
     const taken = connectionNames(form.connections).filter((_, j) => j !== i)
-    updateConnection(i, (c) => fillFromEndpoint(c, ch, ep, taken), `connections[${i}].settings.`, `connections[${i}].name`)
+    updateConnection(
+      i,
+      (c) => fillFromEndpoint(c, ch, kind, ep, taken),
+      `connections[${i}].settings.`,
+      `connections[${i}].values.`,
+      `connections[${i}].kind`,
+      `connections[${i}].name`,
+    )
   }
 
   async function submit() {
@@ -387,6 +408,8 @@ function Editor({
   // The channels the target speaks, for a new connection, and their endpoints.
   const speaks = (target?.channels ?? []).map((c) => ({ name: c.moduleName, why: channelUnusable(target, c.moduleName, channels) }))
   const usable = speaks.filter((c) => c.why === null).map((c) => c.name)
+  // The connection kinds those channels can be used with, for their endpoints.
+  const usableConnKinds = [...new Set(usable.flatMap((m) => usableKinds(target, channels.get(m), m)))]
   const filling = form.connections.findIndex((c) => c.key === picker.fill)
   const savingIndex = form.connections.findIndex((c) => c.key === saving.key)
   const savingConnection = savingIndex < 0 ? undefined : form.connections[savingIndex]
@@ -399,14 +422,20 @@ function Editor({
           title: "Add connection",
           description: "Pick an endpoint to copy its settings, then change what you need, or start a blank connection.",
           kinds: usable,
+          connectionKinds: usableConnKinds,
           blank: speaks,
           onEndpoint: (ep) => addConnection(ep.moduleName, ep),
           onBlank: (moduleName) => addConnection(moduleName, null),
         }
       : {
           title: `Fill connection ${filling + 1} from an endpoint`,
-          description: `Its settings become a copy of the endpoint's, and its name and description the endpoint's unless you wrote your own. The ${kind.name} parameters stay as they are.`,
+          description: `Its kind and settings become the endpoint's, and its name and description too unless you wrote your own. The ${kind.name} parameters stay as they are where the kind keeps them.`,
           kinds: [form.connections[filling].moduleName],
+          connectionKinds: usableKinds(
+            target,
+            channels.get(form.connections[filling].moduleName),
+            form.connections[filling].moduleName,
+          ),
           onEndpoint: (ep) => fillConnection(form.connections[filling].key, ep),
         }
 
@@ -654,7 +683,9 @@ function Editor({
                     settings={input.connections[i]?.settings ?? {}}
                     errors={shown}
                     disabled={disabled}
-                    onKind={(k) => updateConnection(i, (x) => ({ ...x, kind: k }), `${at}.kind`)}
+                    onKind={(k) =>
+                      updateConnection(i, (x) => withKind(x, k, ch, kind), `${at}.kind`, `${at}.settings.`, `${at}.values.`)
+                    }
                     onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
                     onDescription={(description) =>
                       updateConnection(i, (x) => ({ ...x, description, described: description.trim() !== "" }), `${at}.description`)
@@ -698,6 +729,11 @@ function Editor({
             channel={savingConnection && channels.get(savingConnection.moduleName)}
             channelIcon={savingConnection && channelIcons.get(savingConnection.moduleName)}
             connection={savingConnection}
+            connectionKind={
+              savingConnection
+                ? effectiveKind(savingConnection, target, channels.get(savingConnection.moduleName))
+                : ""
+            }
             index={savingIndex}
           />
         </div>

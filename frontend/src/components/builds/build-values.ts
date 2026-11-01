@@ -16,9 +16,11 @@ import {
   type FieldDef,
 } from "@/components/modules/management/field-values"
 import {
+  connectionKind,
   evaluateEndpoint,
   freeSlug,
   isRecord,
+  kindNames,
   slugError,
   sameJSON,
   settingRows,
@@ -118,8 +120,8 @@ export interface FactoryKind {
   persistedSessions?: boolean
   /** Fields every target shares, sorted. */
   fields: FieldDef[]
-  /** The factory's connection parameters per channel kind, sorted. */
-  channelFields: Map<string, FieldDef[]>
+  /** The factory's connection parameters by channel kind, then connection kind, sorted. */
+  channelFields: Map<string, Map<string, FieldDef[]>>
   targets: Target[]
   /** What the minions can do, in the factory's order. */
   commands: Command[]
@@ -148,7 +150,9 @@ export function factoryKindsByName(
       crypto: k.schema.crypto,
       persistedSessions: k.schema.persistedSessions,
       fields: sorted(k.schema.fields),
-      channelFields: new Map(k.schema.channels.map((c) => [c.moduleName, sorted(c.fields)])),
+      channelFields: new Map(
+        k.schema.channels.map((c) => [c.moduleName, new Map(c.kinds.map((ck) => [ck.kind, sorted(ck.fields)]))]),
+      ),
       targets: k.schema.targets.map((t) => ({
         id: t.id,
         label: t.label,
@@ -208,8 +212,30 @@ export function pickedCommands(kind: FactoryKind, target: Target | undefined, pi
 // Channels a target can connect through
 // ---------------------------------------------------------------------------
 
-/** A channel kind as the build form uses it: its connection settings, sorted. */
+/** A channel kind as the build form uses it: its connection kinds, each with its settings, sorted. */
 export type ChannelKind = Kind
+
+/** The channel's settings for a connection of kind (connection kind); none when it does not carry it. */
+export function settingFields(ch: ChannelKind | null | undefined, kind: string): FieldDef[] {
+  return connectionKind(ch, kind)?.fields ?? []
+}
+
+/** The factory's parameters for a connection through channel moduleName of kind. */
+export function paramFields(factory: FactoryKind, moduleName: string, kind: string): FieldDef[] {
+  return factory.channelFields.get(moduleName)?.get(kind) ?? []
+}
+
+/**
+ * The connection kind connection c uses: its own, or "" for the first the
+ * target and the channel both support (what core picks).
+ */
+export function effectiveKind(
+  c: { moduleName: string; kind: string },
+  target: Target | undefined,
+  ch: ChannelKind | undefined,
+): string {
+  return c.kind || usableKinds(target, ch, c.moduleName)[0] || ""
+}
 
 /**
  * Why target cannot connect through the channel kind moduleName, or null when
@@ -241,7 +267,7 @@ export interface ConnectionDraft {
   /** Tells connections apart while they move and go. */
   key: string
   moduleName: string
-  /** The connection kind; "" for the first the target and the channel both support. */
+  /** The connection kind; "" for the first the target and the channel both support. Its settings and parameters are the ones below. */
   kind: string
   /** What the minion calls the connection; "" for "<channel>-<position>". */
   name: string
@@ -311,12 +337,23 @@ export function draftsFor(
 
 let lastKey = 0
 
-/** A connection through ch (undefined: the channel declares no settings now), from source. */
-export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, source: ConnectionSource): ConnectionDraft {
+/**
+ * A connection of target through ch (undefined: the channel declares no
+ * settings now), from source: its kind is the source's ("" none), its
+ * settings and parameters those of that kind, or of the first the target and
+ * the channel both support.
+ */
+export function connectionDraft(
+  kind: FactoryKind,
+  ch: ChannelKind | undefined,
+  source: ConnectionSource,
+  target: Target | undefined,
+): ConnectionDraft {
   const notes = [...(source.notes ?? [])]
   if (ch && typeof source.schemaVersion === "number" && source.schemaVersion !== ch.version) {
     notes.unshift(`Saved for ${ch.name} settings v${source.schemaVersion}; the channel is at v${ch.version}. Check the settings.`)
   }
+  const connKind = source.kind || usableKinds(target, ch, source.moduleName)[0] || ""
   return {
     key: `connection-${++lastKey}`,
     moduleName: source.moduleName,
@@ -326,30 +363,55 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
     description: source.description ?? "",
     described: !!source.description?.trim(),
     filledFrom: null,
-    settings: draftsFor(ch?.fields ?? [], source.settings),
-    drafts: draftsFor(kind.channelFields.get(source.moduleName) ?? [], source.values),
+    settings: draftsFor(settingFields(ch, connKind), source.settings),
+    drafts: draftsFor(paramFields(kind, source.moduleName, connKind), source.values),
     notes,
   }
 }
 
 /**
- * The connection with its settings replaced by an endpoint's values. It takes
- * the endpoint's slug and description too, unless the operator wrote their
- * own: the connection named the first of slug, slug-2, -3… no other
- * connection is called (taken).
+ * The connection with another kind: the settings and the factory's
+ * parameters of that kind, each keeping what it had where a field of the same
+ * key carries over.
+ */
+export function withKind(
+  c: ConnectionDraft,
+  connKind: string,
+  ch: ChannelKind | undefined,
+  factory: FactoryKind,
+): ConnectionDraft {
+  const carry = (fields: readonly FieldDef[], had: Record<string, Draft>) => {
+    const out = draftsFor(fields, null)
+    for (const f of fields) if (had[f.key]) out[f.key] = had[f.key]
+    return out
+  }
+  return {
+    ...c,
+    kind: connKind,
+    settings: carry(settingFields(ch, connKind), c.settings),
+    drafts: carry(paramFields(factory, c.moduleName, connKind), c.drafts),
+  }
+}
+
+/**
+ * The connection with its kind and settings replaced by an endpoint's (the
+ * factory's parameters follow the kind). It takes the endpoint's slug and
+ * description too, unless the operator wrote their own: the connection named
+ * the first of slug, slug-2, -3… no other connection is called (taken).
  */
 export function fillFromEndpoint(
   c: ConnectionDraft,
   ch: ChannelKind,
-  ep: { name: string; slug: string; description?: string | null; values?: unknown },
+  factory: FactoryKind,
+  ep: { name: string; slug: string; kind: string; description?: string | null; values?: unknown },
   taken: Iterable<string> = [],
 ): ConnectionDraft {
   return {
-    ...c,
+    ...withKind(c, ep.kind, ch, factory),
     name: c.named ? c.name : freeSlug(ep.slug, taken, ""),
     description: c.described ? c.description : (ep.description ?? ""),
     filledFrom: ep.name,
-    settings: draftsFor(ch.fields, isRecord(ep.values) ? ep.values : null),
+    settings: draftsFor(settingFields(ch, ep.kind), isRecord(ep.values) ? ep.values : null),
     notes: [],
   }
 }
@@ -359,6 +421,8 @@ export interface EndpointDraft {
   /** The connection's name, or its default, made free of taken. */
   name: string
   description: string
+  /** The connection kind, the endpoint's. */
+  kind: string
   /** The settings set, as an endpoint stores them; the factory's parameters are no endpoint's. */
   values: Record<string, unknown>
   /** Settings an endpoint cannot take as they are: it needs every required one, valid. */
@@ -366,16 +430,24 @@ export interface EndpointDraft {
 }
 
 /**
- * What saving connection i (c) as an endpoint makes. Its name is the
- * connection's; the form asks the server for a free one like it.
+ * What saving connection i (c) of kind connKind (its effective kind) as an
+ * endpoint makes. Its name is the connection's; the form asks the server for
+ * a free one like it.
  */
-export function endpointFromConnection(c: ConnectionDraft, i: number, channel: ChannelKind): EndpointDraft {
-  const { values, errors } = evaluateEndpoint(channel.fields, c.settings)
+export function endpointFromConnection(
+  c: ConnectionDraft,
+  i: number,
+  channel: ChannelKind,
+  connKind: string,
+): EndpointDraft {
+  const fields = settingFields(channel, connKind)
+  const { values, errors } = evaluateEndpoint(fields, c.settings)
   return {
     name: c.name.trim() || defaultConnectionName(c.moduleName, i),
     description: c.description.trim(),
+    kind: connKind,
     values,
-    problems: channel.fields.filter((f) => errors[f.key]).map((f) => ({ label: f.label, message: errors[f.key] })),
+    problems: fields.filter((f) => errors[f.key]).map((f) => ({ label: f.label, message: errors[f.key] })),
   }
 }
 
@@ -384,9 +456,9 @@ export function connectionNames(connections: readonly Pick<ConnectionDraft, "mod
   return connections.map((c, i) => c.name.trim() || defaultConnectionName(c.moduleName, i))
 }
 
-/** The first count settings with a value, for one line: "https://edge.example.com · 10s". */
-export function settingsSummary(channel: ChannelKind | undefined, values: unknown, count = 2): string {
-  return settingRows(channel ?? null, isRecord(values) ? values : {})
+/** The first count settings of connection kind connKind with a value, for one line: "https://edge.example.com · 10s". */
+export function settingsSummary(channel: ChannelKind | undefined, connKind: string, values: unknown, count = 2): string {
+  return settingRows(connectionKind(channel, connKind)?.fields, isRecord(values) ? values : {})
     .slice(0, count)
     .map((r) => r.text)
     .join(" · ")
@@ -416,7 +488,7 @@ export function initialForm(
     platform,
     drafts: draftsFor(targetFields(kind, target), source?.values),
     commands: source?.commands ? pickedCommands(kind, target, source.commands) : defaultCommands(kind, target),
-    connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c)),
+    connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c, target)),
   }
 }
 
@@ -441,8 +513,8 @@ function recordedConnection(raw: unknown) {
   const channel = isRecord(ep.channel) ? ep.channel : {}
   return {
     moduleName: typeof channel.module_name === "string" ? channel.module_name : "",
-    /** The connection kind; "" for reverse-call, as a build without kinds has it. */
-    kind: typeof rec.kind === "string" ? rec.kind : "",
+    /** The connection kind, the endpoint's. */
+    kind: typeof ep.kind === "string" ? ep.kind : "",
     name: typeof ep.name === "string" ? ep.name : "",
     schemaVersion: typeof channel.schema_version === "number" ? channel.schema_version : null,
     params: isRecord(ep.params) ? ep.params : {},
@@ -469,10 +541,10 @@ export function buildConnectionRows(
     const c = recordedConnection(raw)
     return {
       moduleName: c.moduleName,
-      kind: c.kind || "reverse-call",
+      kind: c.kind,
       name: c.name,
       // The channel's first setting, usually where the minion connects.
-      address: settingsSummary(channels.get(c.moduleName), c.params, 1),
+      address: settingsSummary(channels.get(c.moduleName), c.kind, c.params, 1),
       description: build.connectionDescriptions?.[i] ?? "",
     }
   })
@@ -496,9 +568,10 @@ export function sourceFromBuild(
     const { moduleName, kind: connKind, name, schemaVersion, params, values } = recordedConnection(raw)
     const ch = channels.get(moduleName)
     const notes: string[] = []
-    const dropped = ch ? Object.keys(params).filter((k) => !ch.fields.some((f) => f.key === k)) : []
+    const fields = settingFields(ch, connKind)
+    const dropped = ch ? Object.keys(params).filter((k) => !fields.some((f) => f.key === k)) : []
     if (ch && dropped.length > 0) {
-      notes.push(`Left out, not settings of ${moduleName} v${ch.version}: ${dropped.sort().join(", ")}.`)
+      notes.push(`Left out, not ${connKind} settings of ${moduleName} v${ch.version}: ${dropped.sort().join(", ")}.`)
     }
     return {
       moduleName,
@@ -506,8 +579,8 @@ export function sourceFromBuild(
       name: name !== "" && name !== defaultConnectionName(moduleName, i) ? name : null,
       description: build.connectionDescriptions?.[i] || null,
       schemaVersion,
-      settings: withoutDefaults(ch?.fields ?? [], params),
-      values: withoutDefaults(kind.channelFields.get(moduleName) ?? [], values),
+      settings: withoutDefaults(fields, params),
+      values: withoutDefaults(paramFields(kind, moduleName, connKind), values),
       notes,
     }
   })
@@ -583,7 +656,7 @@ export interface BuildShape {
   target: string
   platform: string
   commands: readonly string[]
-  connections: readonly { moduleName: string; name: string; description: string }[]
+  connections: readonly { moduleName: string; kind: string; name: string; description: string }[]
 }
 
 /**
@@ -619,6 +692,9 @@ export function checkBuild(
     const at = `connections[${i}]`
     const why = channelUnusable(target, c.moduleName, channels)
     if (why) errors[at] = why
+    else if (c.kind && !usableKinds(target, channels.get(c.moduleName), c.moduleName).includes(c.kind)) {
+      errors[`${at}.kind`] = `Not a kind both this target and the ${c.moduleName} channel support`
+    }
     const name = c.name.trim()
     const resolved = name || defaultConnectionName(c.moduleName, i)
     const nameErr = name === "" ? null : slugError(name)
@@ -645,13 +721,15 @@ export function evaluateForm(
   const values = evaluateFields("values.", targetFields(kind, target), form.drafts, errors)
   const connections = form.connections.map((c, i): ConnectionInput => {
     const at = `connections[${i}]`
+    const ch = channels.get(c.moduleName)
+    const connKind = effectiveKind(c, target, ch)
     return {
       moduleName: c.moduleName,
       kind: c.kind || null,
       name: c.name.trim() || null,
       description: c.description.trim() || null,
-      settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, errors),
-      values: evaluateFields(`${at}.values.`, kind.channelFields.get(c.moduleName) ?? [], c.drafts, errors),
+      settings: evaluateFields(`${at}.settings.`, settingFields(ch, connKind), c.settings, errors),
+      values: evaluateFields(`${at}.values.`, paramFields(kind, c.moduleName, connKind), c.drafts, errors),
     }
   })
   const input = {
@@ -768,14 +846,8 @@ export function persistedInput(c: PersistedChoice): { persistedSession?: string;
  */
 export function usableKinds(target: Target | undefined, ch: ChannelKind | undefined, moduleName: string): string[] {
   const own = target?.channels.find((c) => c.moduleName === moduleName)?.kinds ?? []
-  const carried = ch?.kinds ?? ["reverse-call"]
+  const carried = kindNames(ch)
   return own.filter((k) => carried.includes(k))
 }
 
-/** What a connection kind is, for people. */
-export const kindLabels: Record<string, string> = {
-  "reverse-call": "Calls in: a request each exchange",
-  "reverse-persistent": "Stays connected: core sends at once",
-  "bind-call": "Called: core calls the minion",
-  "bind-persistent": "Reached: core opens the connection",
-}
+export { kindLabels } from "@/components/endpoints/endpoint-values"

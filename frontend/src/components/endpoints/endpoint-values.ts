@@ -19,15 +19,42 @@ import {
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { isRecord, sameJSON } from "@/lib/json-edit"
 
-/** A channel kind as the endpoint UI uses it: its schema's fields, sorted. */
+/** A connection kind a channel carries, with its own fields, sorted. */
+export interface ConnectionKindDef {
+  /** "reverse-call", "reverse-persistent", ... */
+  kind: string
+  fields: FieldDef[]
+}
+
+/**
+ * A channel kind as the endpoint UI uses it: the connection kinds its schema
+ * declares, each with its own fields.
+ */
 export interface Kind {
   name: string
   /** The kind's own icon; its SVGs are "" for the default. */
   icon: ModuleIconSvgs
   version: number
-  fields: FieldDef[]
-  /** The connection kinds the channel carries ("reverse-call", ...). */
-  kinds: string[]
+  /** The connection kinds the channel carries, in the protocol's order. */
+  kinds: ConnectionKindDef[]
+}
+
+/** What a connection kind is, for people. */
+export const kindLabels: Record<string, string> = {
+  "reverse-call": "Calls in: a request each exchange",
+  "reverse-persistent": "Stays connected: core sends at once",
+  "bind-call": "Called: core calls the minion",
+  "bind-persistent": "Reached: core opens the connection",
+}
+
+/** The connection kind of channel ch called kind; undefined when ch does not carry it. */
+export function connectionKind(ch: Kind | null | undefined, kind: string): ConnectionKindDef | undefined {
+  return ch?.kinds.find((k) => k.kind === kind)
+}
+
+/** The names of the connection kinds channel ch carries, in its order. */
+export function kindNames(ch: Kind | null | undefined): string[] {
+  return ch?.kinds.map((k) => k.kind) ?? []
 }
 
 /**
@@ -39,7 +66,7 @@ export function kindsByName(
     moduleName: string
     icon?: string
     iconLight?: string
-    schema: { version: number; fields: readonly FieldDef[]; kinds?: readonly string[] }
+    schema: { version: number; kinds: readonly { kind: string; fields: readonly FieldDef[] }[] }
   }[],
 ): Map<string, Kind> {
   const out = new Map<string, Kind>()
@@ -48,10 +75,10 @@ export function kindsByName(
       name: k.moduleName,
       icon: { icon: k.icon ?? "", iconLight: k.iconLight ?? "" },
       version: k.schema.version,
-      kinds: [...(k.schema.kinds ?? ["reverse-call"])],
-      fields: k.schema.fields
-        .map((f) => (f.type === "secret" ? { ...f, type: "string" } : f))
-        .sort(compareFields),
+      kinds: k.schema.kinds.map((c) => ({
+        kind: c.kind,
+        fields: c.fields.map((f) => (f.type === "secret" ? { ...f, type: "string" } : f)).sort(compareFields),
+      })),
     })
   }
   return out
@@ -110,24 +137,28 @@ export function slugify(text: string): string {
 }
 
 /** The export format of an endpoint (Copy / Download as JSON), as imports take it. */
-export const ENDPOINT_EXPORT_FORMAT = "logos.channel-endpoint.v1"
+export const ENDPOINT_EXPORT_FORMAT = "logos.channel-endpoint.v2"
 
 /** The router state with which an import opens the New endpoint form. */
 export interface EndpointImportState {
-  endpointImport: { name: string; values: Record<string, unknown>; notes: string[] }
+  endpointImport: { name: string; connectionKind: string; values: Record<string, unknown>; notes: string[] }
 }
 
 /** The import a location's state carries, if any. */
 export function endpointImportFrom(state: unknown): EndpointImportState["endpointImport"] | null {
   if (!isRecord(state) || !isRecord(state.endpointImport)) return null
-  const { name, values, notes } = state.endpointImport
-  if (typeof name !== "string" || !isRecord(values) || !Array.isArray(notes)) return null
-  return { name, values, notes: notes.filter((n): n is string => typeof n === "string") }
+  const { name, connectionKind, values, notes } = state.endpointImport
+  if (typeof name !== "string" || typeof connectionKind !== "string" || !isRecord(values) || !Array.isArray(notes)) {
+    return null
+  }
+  return { name, connectionKind, values, notes: notes.filter((n): n is string => typeof n === "string") }
 }
 
 /** What an endpoint export becomes: a new endpoint's form, filled in. */
 export interface EndpointImport {
   kind: Kind
+  /** The connection kind, one the channel carries. */
+  connectionKind: string
   name: string
   values: Record<string, unknown>
   /** What the form should say about it: settings left out, another version. */
@@ -136,10 +167,11 @@ export interface EndpointImport {
 
 /**
  * Reads an endpoint export (Copy / Download as JSON) for a new endpoint of
- * the same channel kind. Its name becomes a valid one (the form then asks the
- * server for a free one like it); settings the kind does not declare are left
- * out, and values equal to the kind's defaults too, so those fields keep
- * following the defaults (an export fills every default in).
+ * the same channel kind and connection kind. Its name becomes a valid one
+ * (the form then asks the server for a free one like it); settings the
+ * connection kind does not declare are left out, and values equal to its
+ * defaults too, so those fields keep following the defaults (an export fills
+ * every default in).
  */
 export function parseEndpointImport(
   text: string,
@@ -159,6 +191,15 @@ export function parseEndpointImport(
   if (moduleName === "") return { ok: false, error: 'The export names no channel ("channel.module_name").' }
   const kind = kinds.get(moduleName)
   if (!kind) return { ok: false, error: `No "${moduleName}" channel declares connection settings here.` }
+  const connKind = typeof doc.kind === "string" ? doc.kind : ""
+  if (connKind === "") return { ok: false, error: 'The export names no connection kind ("kind").' }
+  const conn = connectionKind(kind, connKind)
+  if (!conn) {
+    return {
+      ok: false,
+      error: `The ${moduleName} channel carries ${kindNames(kind).join(", ") || "no"} connections here, not ${connKind}.`,
+    }
+  }
   if (doc.params !== undefined && !isRecord(doc.params)) {
     return { ok: false, error: 'Its "params" must be an object of settings.' }
   }
@@ -169,7 +210,7 @@ export function parseEndpointImport(
       `Exported for ${moduleName} schema v${channel.schema_version}; this channel is at v${kind.version}. Check the values.`,
     )
   }
-  const fields = new Map(kind.fields.map((f) => [f.key, f]))
+  const fields = new Map(conn.fields.map((f) => [f.key, f]))
   const values: Record<string, unknown> = {}
   const unknown: string[] = []
   for (const [key, value] of Object.entries(doc.params ?? {})) {
@@ -178,11 +219,11 @@ export function parseEndpointImport(
     else if (value !== null && !sameJSON(value, field.default)) values[key] = value
   }
   if (unknown.length > 0) {
-    notes.push(`Left out, not settings of ${moduleName} v${kind.version}: ${unknown.sort().join(", ")}.`)
+    notes.push(`Left out, not ${connKind} settings of ${moduleName} v${kind.version}: ${unknown.sort().join(", ")}.`)
   }
   // An export names the endpoint by its slug: the name to start from.
   const name = typeof doc.name === "string" ? doc.name.trim().slice(0, MAX_ENDPOINT_NAME_LENGTH) : ""
-  return { ok: true, value: { kind, name: name || "imported", values, notes } }
+  return { ok: true, value: { kind, connectionKind: connKind, name: name || "imported", values, notes } }
 }
 
 // Generic JSON helpers, kept importable from here for the code that always did.
@@ -284,14 +325,15 @@ export interface SettingRow {
 }
 
 /**
- * An endpoint's set values in its kind's field order, formatted for display.
- * Without a kind (the channel no longer declares one), its raw keys.
+ * An endpoint's set values in its connection kind's field order, formatted
+ * for display. Without its fields (the channel no longer declares the kind),
+ * its raw keys.
  */
-export function settingRows(kind: Kind | null, values: Record<string, unknown>): SettingRow[] {
-  if (!kind) {
+export function settingRows(fields: readonly FieldDef[] | null | undefined, values: Record<string, unknown>): SettingRow[] {
+  if (!fields) {
     return Object.entries(values).map(([key, v]) => ({ key, label: key, text: formatValue("string", v) }))
   }
-  return kind.fields
+  return fields
     .filter((f) => values[f.key] !== undefined && values[f.key] !== null)
     .map((f) => ({ key: f.key, label: f.label, text: formatValue(f.type, values[f.key], f.unit) }))
 }

@@ -49,8 +49,8 @@ function ImportBody({ kinds, onClose }: { kinds: ReadonlyMap<string, Kind>; onCl
       setError(r.error)
       return
     }
-    const { kind, name, values, notes } = r.value
-    const state: EndpointImportState = { endpointImport: { name, values, notes } }
+    const { kind, connectionKind, name, values, notes } = r.value
+    const state: EndpointImportState = { endpointImport: { name, connectionKind, values, notes } }
     onClose()
     modals.open({ kind: "new-endpoint", channel: kind.name, from: null }, state)
   }

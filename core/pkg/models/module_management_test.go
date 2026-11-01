@@ -166,3 +166,50 @@ func TestInvocationIDFromULID(t *testing.T) {
 		}
 	}
 }
+
+// A schema stored in a format core no longer reads (an instance registered
+// before a protocol change) decodes to none instead of failing the whole
+// module: otherwise the instance could not even register again over it.
+func TestStaleSchemaFormats(t *testing.T) {
+	type row struct {
+		Connection *ModuleConnectionSchema `bson:"connection"`
+		Build      *ModuleBuildSchema      `bson:"build"`
+	}
+	old, err := bson.Marshal(bson.M{
+		"connection": bson.M{"schema_version": "1", "version": 2, "fields": bson.A{bson.M{"key": "base_url", "type": "url"}}},
+		"build":      bson.M{"schema_version": "2", "version": 2, "channels": bson.A{bson.M{"module_name": "http", "kinds": bson.A{"reverse-call"}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got row
+	if err := bson.Unmarshal(old, &got); err != nil {
+		t.Fatalf("stale formats: %v", err)
+	}
+	if got.Connection.Current() || got.Build.Current() {
+		t.Fatalf("stale formats read as current: %+v %+v", got.Connection, got.Build)
+	}
+
+	cur := row{
+		Connection: &ModuleConnectionSchema{protocol.ConnectionSchema{SchemaVersion: protocol.ConnectionSchemaV2, Version: 3,
+			Kinds: map[string]protocol.ConnectionKind{protocol.KindReverseCall: {Fields: []protocol.FieldSpec{{Key: "base_url", Type: protocol.FieldURL}}}}}},
+		Build: &ModuleBuildSchema{protocol.BuildSchema{SchemaVersion: protocol.BuildSchemaV3, Version: 3,
+			Channels: []protocol.BuildChannel{{ModuleName: "http", Versions: []int{3}, Kinds: []protocol.BuildKind{{Kind: protocol.KindReverseCall}}}}}},
+	}
+	raw, err := bson.Marshal(cur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back row
+	if err := bson.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if !back.Connection.Current() || len(back.Connection.KindFields(protocol.KindReverseCall)) != 1 ||
+		!back.Build.Current() || back.Build.Channels[0].Kinds[0].Kind != protocol.KindReverseCall {
+		t.Fatalf("current formats: %+v %+v", back.Connection, back.Build)
+	}
+	var none *ModuleBuildSchema
+	if none.Current() {
+		t.Fatal("nil is current")
+	}
+}

@@ -159,6 +159,11 @@ func (m *ModuleManifest) UnmarshalBSON(data []byte) error {
 
 // ModuleConnectionSchema is the stored minion connection schema, JSON-encoded
 // for the same reason as ModuleManifest.
+//
+// One stored in a format core no longer reads (another schema_version, from
+// an instance that registered before a protocol change) is left undecoded:
+// Current reports false and it counts as none, so it neither blocks the
+// instance registering again nor reaches a form.
 type ModuleConnectionSchema struct {
 	protocol.ConnectionSchema
 }
@@ -168,11 +173,20 @@ func (m ModuleConnectionSchema) MarshalBSON() ([]byte, error) {
 }
 
 func (m *ModuleConnectionSchema) UnmarshalBSON(data []byte) error {
+	if storedFormat(data) != protocol.ConnectionSchemaV2 {
+		return nil
+	}
 	return bsonDocToJSON(data, &m.ConnectionSchema)
 }
 
+// Current reports whether the schema is in the format core reads.
+func (m *ModuleConnectionSchema) Current() bool {
+	return m != nil && m.SchemaVersion == protocol.ConnectionSchemaV2
+}
+
 // ModuleBuildSchema is the stored build schema of a factory, JSON-encoded
-// like the manifest so it round-trips exactly.
+// like the manifest so it round-trips exactly. One in a format core no longer
+// reads counts as none, as a ModuleConnectionSchema's.
 type ModuleBuildSchema struct {
 	protocol.BuildSchema
 }
@@ -182,7 +196,26 @@ func (m ModuleBuildSchema) MarshalBSON() ([]byte, error) {
 }
 
 func (m *ModuleBuildSchema) UnmarshalBSON(data []byte) error {
+	if storedFormat(data) != protocol.BuildSchemaV3 {
+		return nil
+	}
 	return bsonDocToJSON(data, &m.BuildSchema)
+}
+
+// Current reports whether the schema is in the format core reads.
+func (m *ModuleBuildSchema) Current() bool {
+	return m != nil && m.SchemaVersion == protocol.BuildSchemaV3
+}
+
+// storedFormat is a stored schema document's schema_version; "" when it has
+// none.
+func storedFormat(data []byte) string {
+	v, err := bson.Raw(data).LookupErr("schema_version")
+	if err != nil {
+		return ""
+	}
+	s, _ := v.StringValueOK()
+	return s
 }
 
 // JSONMap is a string-keyed map of JSON values with the same JSON-faithful BSON

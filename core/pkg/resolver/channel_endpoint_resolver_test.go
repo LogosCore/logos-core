@@ -15,12 +15,15 @@ import (
 )
 
 func TestToEndpointModel(t *testing.T) {
-	schema := &protocol.ConnectionSchema{SchemaVersion: "1", Version: 2, Fields: []protocol.FieldSpec{
-		{Key: "base_url", Type: protocol.FieldURL},
-		{Key: "token", Type: protocol.FieldSecret},
+	schema := &protocol.ConnectionSchema{SchemaVersion: protocol.ConnectionSchemaV2, Version: 2, Kinds: map[string]protocol.ConnectionKind{
+		protocol.KindReversePersistent: {Fields: []protocol.FieldSpec{{Key: "base_url", Type: protocol.FieldURL}}},
+		protocol.KindReverseCall: {Fields: []protocol.FieldSpec{
+			{Key: "base_url", Type: protocol.FieldURL},
+			{Key: "token", Type: protocol.FieldSecret, Default: "dflt"},
+		}},
 	}}
 	op := uuid.New()
-	ep := models.ChannelEndpoint{OperationID: op, Name: "edge", SchemaVersion: 1, Values: models.JSONMap{"base_url": "https://a.example.com", "token": "s3cret"}}
+	ep := models.ChannelEndpoint{OperationID: op, Name: "edge", Kind: protocol.KindReverseCall, SchemaVersion: 1, Values: models.JSONMap{"base_url": "https://a.example.com", "token": "s3cret"}}
 
 	m := toEndpointModel(channelendpoints.View{ChannelEndpoint: ep, Schema: schema, Problems: map[string]string{"": "gone", "base_url": "bad"}})
 	values := m.Values.(map[string]any)
@@ -28,11 +31,26 @@ func TestToEndpointModel(t *testing.T) {
 	if values["token"] != "s3cret" || values["base_url"] != "https://a.example.com" {
 		t.Errorf("values = %v", values)
 	}
-	if m.OperationID != op.String() || !m.SchemaChanged {
+	if m.OperationID != op.String() || !m.SchemaChanged || m.Kind != protocol.KindReverseCall {
 		t.Errorf("operationId = %s schemaChanged = %v", m.OperationID, m.SchemaChanged)
 	}
 	if len(m.Problems) != 2 || m.Problems[0].Key != nil || *m.Problems[1].Key != "base_url" {
 		t.Errorf("problems = %+v", m.Problems)
+	}
+}
+
+// Each kind keeps its own fields, in the protocol's kind order; a secret's
+// default is shown, endpoint values being operation data.
+func TestToConnectionModel(t *testing.T) {
+	m := toConnectionModel(&protocol.ConnectionSchema{SchemaVersion: protocol.ConnectionSchemaV2, Version: 3, Kinds: map[string]protocol.ConnectionKind{
+		protocol.KindReversePersistent: {Fields: []protocol.FieldSpec{{Key: "base_url", Type: protocol.FieldURL}, {Key: "backoff", Type: protocol.FieldDuration}}},
+		protocol.KindReverseCall:       {Fields: []protocol.FieldSpec{{Key: "token", Type: protocol.FieldSecret, Default: "dflt"}}},
+	}})
+	if m.Version != 3 || len(m.Kinds) != 2 || m.Kinds[0].Kind != protocol.KindReverseCall || m.Kinds[1].Kind != protocol.KindReversePersistent {
+		t.Fatalf("kinds = %+v", m.Kinds)
+	}
+	if len(m.Kinds[0].Fields) != 1 || m.Kinds[0].Fields[0].Default != "dflt" || len(m.Kinds[1].Fields) != 2 {
+		t.Errorf("fields = %+v / %+v", m.Kinds[0].Fields, m.Kinds[1].Fields)
 	}
 }
 
@@ -65,8 +83,8 @@ func (f *fakeEndpoints) Update(context.Context, string, int64, channelendpoints.
 	return channelendpoints.View{}, nil
 }
 func (f *fakeEndpoints) Delete(context.Context, string) error { f.writes++; return nil }
-func (f *fakeEndpoints) Export(context.Context, string) (map[string]any, error) {
-	return map[string]any{}, nil
+func (f *fakeEndpoints) Export(context.Context, string) (protocol.ChannelEndpointExport, error) {
+	return protocol.ChannelEndpointExport{}, nil
 }
 
 func TestChannelEndpointRoles(t *testing.T) {
@@ -83,7 +101,7 @@ func TestChannelEndpointRoles(t *testing.T) {
 
 	// A viewer reads and exports, but cannot change anything.
 	r, eps := newResolver(models.OperationRoleViewer)
-	if _, err := r.ChannelEndpoints(ctx, opID.String(), nil, nil, nil, nil, nil, nil); err != nil {
+	if _, err := r.ChannelEndpoints(ctx, opID.String(), nil, nil, nil, nil, nil, nil, nil); err != nil {
 		t.Errorf("viewer list: %v", err)
 	}
 	if _, err := r.ChannelEndpointExport(ctx, "x"); err != nil {

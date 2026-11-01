@@ -139,14 +139,24 @@ func (f *fakeRepo) BackfillEndpointIDs(context.Context) (int64, error) { return 
 
 var opA, opB = uuid.New(), uuid.New()
 
+const rc, rp = protocol.KindReverseCall, protocol.KindReversePersistent
+
+var callFields = []protocol.FieldSpec{
+	{Key: "base_url", Type: protocol.FieldURL, Required: true, Pattern: `^https?://[^/?#\s]+$`},
+	{Key: "tls_verify", Type: protocol.FieldBool, Default: false},
+	{Key: "token", Type: protocol.FieldSecret},
+	{Key: "user_agent", Type: protocol.FieldString},
+}
+
 var schema = protocol.ConnectionSchema{
-	SchemaVersion: protocol.ConnectionSchemaV1,
+	SchemaVersion: protocol.ConnectionSchemaV2,
 	Version:       1,
-	Fields: []protocol.FieldSpec{
-		{Key: "base_url", Type: protocol.FieldURL, Required: true, Pattern: `^https?://[^/?#\s]+$`},
-		{Key: "tls_verify", Type: protocol.FieldBool, Default: false},
-		{Key: "token", Type: protocol.FieldSecret},
-		{Key: "user_agent", Type: protocol.FieldString},
+	Kinds: map[string]protocol.ConnectionKind{
+		rc: {Fields: callFields},
+		rp: {Fields: []protocol.FieldSpec{
+			{Key: "base_url", Type: protocol.FieldURL, Required: true},
+			{Key: "backoff", Type: protocol.FieldDuration, Default: "1m"},
+		}},
 	},
 }
 
@@ -159,7 +169,7 @@ func newService() (*Service, *fakeRepo, fakeRegistry) {
 func TestCreateValidatesAndNormalizes(t *testing.T) {
 	svc, _, _ := newService()
 	ctx := context.Background()
-	v, err := svc.Create(ctx, opA, "http", Input{Name: "edge-eu", Values: map[string]any{
+	v, err := svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "edge-eu", Values: map[string]any{
 		"base_url": "https://edge.example.com", "user_agent": "", "token": "s3cret",
 	}})
 	if err != nil {
@@ -173,22 +183,22 @@ func TestCreateValidatesAndNormalizes(t *testing.T) {
 	}
 
 	var ve *ValidationError
-	_, err = svc.Create(ctx, opA, "http", Input{Name: "bad", Values: map[string]any{"base_url": "https://x.example.com/path"}})
+	_, err = svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "bad", Values: map[string]any{"base_url": "https://x.example.com/path"}})
 	if !errors.As(err, &ve) || ve.Problems["base_url"] == "" {
 		t.Errorf("path in base_url: %v", err)
 	}
-	if _, err = svc.Create(ctx, opA, "http", Input{Name: "edge-eu", Slug: "edge-eu", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
+	if _, err = svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "edge-eu", Slug: "edge-eu", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
 		t.Errorf("duplicate slug: %v", err)
 	}
-	if _, err = svc.Create(ctx, opA, "http", Input{Name: "Edge", Slug: "Edge EU", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
+	if _, err = svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "Edge", Slug: "Edge EU", Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
 		t.Errorf("bad slug: %v", err)
 	}
 	for _, name := range []string{"", "  ", "two\nlines", strings.Repeat("é", MaxNameLength+1)} {
-		if _, err = svc.Create(ctx, opA, "http", Input{Name: name, Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
+		if _, err = svc.Create(ctx, opA, "http", Input{Kind: rc, Name: name, Values: map[string]any{"base_url": "https://b.example.com"}}); !errors.As(err, &ve) {
 			t.Errorf("name %q: %v", name, err)
 		}
 	}
-	if _, err = svc.Create(ctx, opA, "telegram", Input{Name: "tg", Values: map[string]any{}}); !errors.As(err, &ve) {
+	if _, err = svc.Create(ctx, opA, "telegram", Input{Kind: rc, Name: "tg", Values: map[string]any{}}); !errors.As(err, &ve) {
 		t.Errorf("kind without schema: %v", err)
 	}
 }
@@ -198,11 +208,11 @@ func TestDescriptionLengthCountsCharacters(t *testing.T) {
 	ctx := context.Background()
 	// Two bytes each: a byte count would refuse the first.
 	fits := strings.Repeat("é", MaxDescriptionLength)
-	if _, err := svc.Create(ctx, opA, "http", Input{Name: "fits", Description: fits, Values: map[string]any{"base_url": "https://a.example.com"}}); err != nil {
+	if _, err := svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "fits", Description: fits, Values: map[string]any{"base_url": "https://a.example.com"}}); err != nil {
 		t.Errorf("a description of %d characters: %v", MaxDescriptionLength, err)
 	}
 	var ve *ValidationError
-	if _, err := svc.Create(ctx, opA, "http", Input{Name: "over", Description: fits + "é", Values: map[string]any{"base_url": "https://a.example.com"}}); !errors.As(err, &ve) {
+	if _, err := svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "over", Description: fits + "é", Values: map[string]any{"base_url": "https://a.example.com"}}); !errors.As(err, &ve) {
 		t.Errorf("a description of %d characters: %v", MaxDescriptionLength+1, err)
 	}
 }
@@ -210,12 +220,12 @@ func TestDescriptionLengthCountsCharacters(t *testing.T) {
 func TestUpdateReplacesValuesAndChecksRevision(t *testing.T) {
 	svc, _, _ := newService()
 	ctx := context.Background()
-	v, err := svc.Create(ctx, opA, "http", Input{Name: "edge", Values: map[string]any{"base_url": "https://a.example.com", "token": "s3cret"}})
+	v, err := svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "edge", Values: map[string]any{"base_url": "https://a.example.com", "token": "s3cret"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id := v.EndpointID.String()
-	v, err = svc.Update(ctx, id, 1, Input{Name: "edge", Values: map[string]any{"base_url": "https://b.example.com"}})
+	v, err = svc.Update(ctx, id, 1, Input{Kind: rc, Name: "edge", Values: map[string]any{"base_url": "https://b.example.com"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +233,7 @@ func TestUpdateReplacesValuesAndChecksRevision(t *testing.T) {
 		t.Errorf("after update = %+v", v.ChannelEndpoint)
 	}
 	var conflict *ConflictError
-	if _, err = svc.Update(ctx, id, 1, Input{Name: "edge", Values: map[string]any{"base_url": "https://c.example.com"}}); !errors.As(err, &conflict) {
+	if _, err = svc.Update(ctx, id, 1, Input{Kind: rc, Name: "edge", Values: map[string]any{"base_url": "https://c.example.com"}}); !errors.As(err, &conflict) {
 		t.Errorf("stale revision: %v", err)
 	}
 }
@@ -233,7 +243,7 @@ func TestUpdateReplacesValuesAndChecksRevision(t *testing.T) {
 func TestNamesAndSlugs(t *testing.T) {
 	svc, _, _ := newService()
 	ctx := context.Background()
-	in := Input{Name: "localhost:8090 (dev)", Values: map[string]any{"base_url": "https://a.example.com"}}
+	in := Input{Kind: rc, Name: "localhost:8090 (dev)", Values: map[string]any{"base_url": "https://a.example.com"}}
 	first, err := svc.Create(ctx, opA, "http", in)
 	if err != nil || first.Name != "localhost:8090 (dev)" || first.Slug != "localhost-8090-dev" {
 		t.Fatalf("first: %+v %v", first.ChannelEndpoint, err)
@@ -246,22 +256,22 @@ func TestNamesAndSlugs(t *testing.T) {
 		t.Errorf("another operation: %+v %v", other.ChannelEndpoint, err)
 	}
 	var ve *ValidationError
-	if _, err := svc.Create(ctx, opA, "http", Input{Name: "x", Slug: first.Slug, Values: in.Values}); !errors.As(err, &ve) {
+	if _, err := svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "x", Slug: first.Slug, Values: in.Values}); !errors.As(err, &ve) {
 		t.Errorf("a taken slug given: %v", err)
 	}
-	same, err := svc.Update(ctx, first.EndpointID.String(), first.Revision, Input{Name: "LOCALHOST 8090 dev", Values: in.Values})
+	same, err := svc.Update(ctx, first.EndpointID.String(), first.Revision, Input{Kind: rc, Name: "LOCALHOST 8090 dev", Values: in.Values})
 	if err != nil || same.Slug != first.Slug {
 		t.Errorf("a name making the same slug keeps it: %+v %v", same.ChannelEndpoint, err)
 	}
-	renamed, err := svc.Update(ctx, first.EndpointID.String(), same.Revision, Input{Name: "Dev box", Values: in.Values})
+	renamed, err := svc.Update(ctx, first.EndpointID.String(), same.Revision, Input{Kind: rc, Name: "Dev box", Values: in.Values})
 	if err != nil || renamed.Name != "Dev box" || renamed.Slug != "dev-box" {
 		t.Errorf("a rename makes a new slug: %+v %v", renamed.ChannelEndpoint, err)
 	}
-	reslugged, err := svc.Update(ctx, first.EndpointID.String(), renamed.Revision, Input{Name: "Dev box", Slug: "box", Values: in.Values})
+	reslugged, err := svc.Update(ctx, first.EndpointID.String(), renamed.Revision, Input{Kind: rc, Name: "Dev box", Slug: "box", Values: in.Values})
 	if err != nil || reslugged.Slug != "box" {
 		t.Errorf("a new slug: %+v %v", reslugged.ChannelEndpoint, err)
 	}
-	if _, err := svc.Update(ctx, first.EndpointID.String(), reslugged.Revision, Input{Name: "Dev box", Slug: second.Slug, Values: in.Values}); !errors.As(err, &ve) {
+	if _, err := svc.Update(ctx, first.EndpointID.String(), reslugged.Revision, Input{Kind: rc, Name: "Dev box", Slug: second.Slug, Values: in.Values}); !errors.As(err, &ve) {
 		t.Errorf("another endpoint's slug: %v", err)
 	}
 	if list, _ := svc.List(ctx, opB, repository.ChannelEndpointFilter{}, nil, 20, true); len(list) != 1 {
@@ -294,7 +304,7 @@ func TestSlugify(t *testing.T) {
 func TestExportAndProblems(t *testing.T) {
 	svc, _, reg := newService()
 	ctx := context.Background()
-	v, err := svc.Create(ctx, opA, "http", Input{Name: "edge", Values: map[string]any{"base_url": "https://a.example.com", "token": "s3cret"}})
+	v, err := svc.Create(ctx, opA, "http", Input{Kind: rc, Name: "edge", Values: map[string]any{"base_url": "https://a.example.com", "token": "s3cret"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,15 +312,19 @@ func TestExportAndProblems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	params := doc["params"].(map[string]any)
-	if doc["format"] != ExportFormat || doc["name"] != v.Slug || params["base_url"] != "https://a.example.com" || params["tls_verify"] != false || params["token"] != "s3cret" {
-		t.Errorf("export = %v", doc)
+	params := doc.Params
+	if doc.Format != protocol.ChannelEndpointExportV2 || doc.Name != v.Slug || doc.Kind != rc || doc.Channel.SchemaVersion != 1 ||
+		params["base_url"] != "https://a.example.com" || params["tls_verify"] != false || params["token"] != "s3cret" {
+		t.Errorf("export = %+v", doc)
 	}
 
-	// The channel declares a new schema version that requires another field.
+	// The channel declares a new schema version whose reverse-call requires
+	// another field.
 	next := schema
 	next.Version = 2
-	next.Fields = append([]protocol.FieldSpec{{Key: "region", Type: protocol.FieldString, Required: true}}, schema.Fields...)
+	next.Kinds = map[string]protocol.ConnectionKind{
+		rc: {Fields: append([]protocol.FieldSpec{{Key: "region", Type: protocol.FieldString, Required: true}}, callFields...)},
+	}
 	reg["http"] = next
 
 	got, err := svc.Get(ctx, v.EndpointID.String())
@@ -361,5 +375,35 @@ func TestFreeSlug(t *testing.T) {
 	}
 	if got, _ := svc.FreeSlug(ctx, opB, "edge", ""); got != "edge" {
 		t.Errorf("another operation's slugs count: %q", got)
+	}
+}
+
+// Each connection kind has its own fields: an endpoint is checked, stored and
+// exported by its kind's, and a kind the channel does not carry is refused.
+func TestKinds(t *testing.T) {
+	svc, _, _ := newService()
+	ctx := context.Background()
+	v, err := svc.Create(ctx, opA, "http", Input{Kind: rp, Name: "ws", Values: map[string]any{"base_url": "https://a.example.com"}})
+	if err != nil || v.Kind != rp || len(v.Problems) != 0 {
+		t.Fatalf("reverse-persistent: %v %+v", err, v)
+	}
+	doc, err := svc.Export(ctx, v.EndpointID.String())
+	if err != nil || doc.Kind != rp || doc.Params["backoff"] != "1m" {
+		t.Fatalf("export %+v: %v", doc, err)
+	}
+	var ve *ValidationError
+	if _, err := svc.Update(ctx, v.EndpointID.String(), v.Revision, Input{Kind: rc, Name: "ws", Values: map[string]any{
+		"base_url": "https://a.example.com", "backoff": "2m",
+	}}); !errors.As(err, &ve) || ve.Problems["backoff"] == "" {
+		t.Errorf("reverse-call took the persistent kind's field: %v", err)
+	}
+	for _, kind := range []string{"", protocol.KindBindCall, "carrier-pigeon"} {
+		if _, err := svc.Create(ctx, opA, "http", Input{Kind: kind, Name: "x", Values: map[string]any{"base_url": "https://a.example.com"}}); !errors.As(err, &ve) || ve.Problems["kind"] == "" {
+			t.Errorf("kind %q: %v", kind, err)
+		}
+	}
+	moved, err := svc.Update(ctx, v.EndpointID.String(), v.Revision, Input{Kind: rc, Name: "ws", Values: map[string]any{"base_url": "https://a.example.com"}})
+	if err != nil || moved.Kind != rc {
+		t.Errorf("kind change: %v %+v", err, moved)
 	}
 }

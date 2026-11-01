@@ -9,7 +9,13 @@ import { KindName } from "@/components/modules/module-icon"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { MAX_ENDPOINT_NAME_LENGTH, endpointNameError, problemsFromError } from "@/components/endpoints/endpoint-values"
 import { useCreateChannelEndpoint } from "@/graphql/hooks/channel-endpoints"
-import { endpointFromConnection, type ChannelKind, type ConnectionDraft } from "./build-values"
+import {
+  endpointFromConnection,
+  kindLabels,
+  settingFields,
+  type ChannelKind,
+  type ConnectionDraft,
+} from "./build-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 /**
@@ -25,6 +31,7 @@ export function SaveEndpointDialog({
   channel,
   channelIcon,
   connection,
+  connectionKind,
   index,
 }: {
   open: boolean
@@ -35,6 +42,8 @@ export function SaveEndpointDialog({
   channel: ChannelKind | undefined
   channelIcon?: ModuleIconSvgs
   connection: ConnectionDraft | undefined
+  /** The connection's kind as the build gets it: the endpoint's. */
+  connectionKind: string
   index: number
 }) {
   return (
@@ -49,6 +58,7 @@ export function SaveEndpointDialog({
             channel={channel}
             channelIcon={channelIcon}
             connection={connection}
+            connectionKind={connectionKind}
             index={index}
             onClose={onClose}
           />
@@ -64,6 +74,7 @@ interface SaveBodyProps {
   channel: ChannelKind
   channelIcon?: ModuleIconSvgs
   connection: ConnectionDraft
+  connectionKind: string
   index: number
   onClose: () => void
 }
@@ -73,8 +84,8 @@ interface SaveBodyProps {
  * connection's name when free (the server takes the next free one when not),
  * so builds keep calling the connection what they called it.
  */
-function SaveBody({ operationId, factory, channel, channelIcon, connection, index, onClose }: SaveBodyProps) {
-  const [draft] = useState(() => endpointFromConnection(connection, index, channel))
+function SaveBody({ operationId, factory, channel, channelIcon, connection, connectionKind, index, onClose }: SaveBodyProps) {
+  const [draft] = useState(() => endpointFromConnection(connection, index, channel, connectionKind))
   const create = useCreateChannelEndpoint()
   const [name, setName] = useState(draft.name)
   const [description, setDescription] = useState(draft.description)
@@ -91,7 +102,7 @@ function SaveBody({ operationId, factory, channel, channelIcon, connection, inde
       await create.mutateAsync({
         operationId,
         moduleName: channel.name,
-        input: { name: name.trim(), description: description.trim() || null, values: draft.values },
+        input: { name: name.trim(), description: description.trim() || null, kind: draft.kind, values: draft.values },
       })
       toast.success(`Saved as endpoint ${name.trim()}`)
       onClose()
@@ -99,7 +110,7 @@ function SaveBody({ operationId, factory, channel, channelIcon, connection, inde
       const problems = problemsFromError(err)
       const fields = Object.entries(problems)
         .filter(([key]) => key !== "")
-        .map(([key, message]) => `${channel.fields.find((f) => f.key === key)?.label ?? key}: ${message}`)
+        .map(([key, message]) => `${settingFields(channel, draft.kind).find((f) => f.key === key)?.label ?? key}: ${message}`)
       setError(problems[""] ?? (fields.length > 0 ? fields.join("; ") : errorMessage(err, "Failed to save the endpoint")))
     }
   }
@@ -113,7 +124,12 @@ function SaveBody({ operationId, factory, channel, channelIcon, connection, inde
           the endpoint later changes nothing here. The {factory} parameters stay with the build.
         </DialogDescription>
       </DialogHeader>
-      <KindName type="channel" name={channel.name} icon={channelIcon} className="text-sm" />
+      <div className="flex items-baseline gap-2">
+        <KindName type="channel" name={channel.name} icon={channelIcon} className="text-sm" />
+        <span className="font-mono text-xs text-muted-foreground" title={kindLabels[draft.kind]}>
+          {draft.kind}
+        </span>
+      </div>
       {blocked && (
         <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
           <p>An endpoint needs every required setting, valid. Fix these in the connection first:</p>

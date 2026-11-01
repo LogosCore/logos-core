@@ -4,15 +4,18 @@
 #
 # A channel declares a minion connection schema at module.register (see
 # logos-golang-protocol/protocol/connection.go): the parameters a minion needs
-# to reach it, e.g. an HTTP channel's base URL and TLS settings. The schema
-# belongs to the channel kind (module name, e.g. "http"); a kind's current
-# schema is the highest version any of its instances declared.
+# to reach it, e.g. an HTTP channel's base URL and TLS settings, declared per
+# connection kind it carries (reverse-call, reverse-persistent, ...): each kind
+# has its own fields. The schema belongs to the channel kind (module name, e.g.
+# "http"); a channel kind's current schema is the highest version any of its
+# instances declared.
 #
-# An endpoint is a ready-to-use set of values for a kind's schema (e.g. "EU
-# CDN"), kept by an operation so its operators can reuse it when creating
-# minions. The values are copied into a minion, so nothing depends on an
-# endpoint afterwards; channels never see endpoints. Endpoints are validated
-# against the kind's current schema when saved, and again on every read.
+# An endpoint is a ready-to-use set of values for one connection kind of a
+# channel kind (e.g. "EU CDN", reverse-call over http), kept by an operation so
+# its operators can reuse it when creating minions. The values are copied into
+# a minion, so nothing depends on an endpoint afterwards; channels never see
+# endpoints. Endpoints are validated against their connection kind's fields in
+# the current schema when saved, and again on every read.
 #
 # Viewers of an operation read its endpoints; operators and admins change
 # them. Agent API keys have no access: they reach only the MCP routes, never
@@ -28,10 +31,16 @@ type ModuleConnectionSchema {
   # Version of the channel kind's parameter set; raised when values for an
   # earlier one would be read wrongly.
   version: Int!
+  # The connection kinds the channel carries, in the protocol's order, each
+  # with its own fields.
+  kinds: [ModuleConnectionKind!]!
+}
+
+type ModuleConnectionKind {
+  # "reverse-call", "reverse-persistent", "bind-call" or "bind-persistent".
+  kind: String!
+  # What a minion is given to connect this way.
   fields: [ModuleField!]!
-  # The connection kinds the channel carries ("reverse-call",
-  # "reverse-persistent", ...).
-  kinds: [String!]!
 }
 
 # A channel kind minions can be given endpoints for.
@@ -78,6 +87,8 @@ type ChannelEndpoint {
   description: String
   # The channel kind, e.g. "http".
   moduleName: String!
+  # The connection kind the values are for, e.g. "reverse-call".
+  kind: String!
   # Connection schema version the values were saved against.
   schemaVersion: Int!
   # The kind now declares another schema version: the values may need a look.
@@ -102,8 +113,11 @@ input ChannelEndpointInput {
   # the name changes. The app leaves it to core.
   slug: String
   description: String
-  # Values by field key, replacing the stored ones. null, "" and [] leave a
-  # field unset (its default applies).
+  # The connection kind: one the channel kind carries. Its fields are the
+  # ones values follow.
+  kind: String!
+  # Values by the kind's field key, replacing the stored ones. null, "" and []
+  # leave a field unset (its default applies).
   values: JSON!
 }
 
@@ -114,12 +128,14 @@ extend type Query {
 
   # An operation's endpoints by name, case aside, a page at a time. search is
   # the app's search (a substring, case aside; "quotes" for whole words) over
-  # the name, slug, description, channel kind and values; moduleNames (channel
-  # kinds) narrow the list. Needs at least viewer in the operation.
+  # the name, slug, description, channel kind, connection kind and values;
+  # moduleNames (channel kinds) and kinds (connection kinds) narrow the list.
+  # Needs at least viewer in the operation.
   channelEndpoints(
     operationId: ID!
     search: String
     moduleNames: [String!]
+    kinds: [String!]
     first: Int = 20
     after: String
     last: Int
@@ -140,15 +156,17 @@ extend type Query {
   channelEndpoint(id: ID!): ChannelEndpoint
     @hasPermission(permission: "operation:member")
 
-  # The endpoint as a minion's connection settings: its values over the
-  # schema's defaults. Fails with BAD_USER_INPUT while the endpoint has
+  # The endpoint as a minion's connection settings (logos.channel-endpoint.v2:
+  # format, name, channel, kind, params): its values over its connection
+  # kind's defaults. Fails with BAD_USER_INPUT while the endpoint has
   # problems. Needs at least viewer in its operation.
   channelEndpointExport(id: ID!): JSON!
     @hasPermission(permission: "operation:member")
 }
 
 extend type Mutation {
-  # Validated against the kind's current schema; field problems are in the
+  # Validated against the connection kind's fields in the channel kind's
+  # current schema; field problems are in the
   # error's extensions.problems. Needs at least operator in the operation;
   # agent API keys are rejected.
   createChannelEndpoint(operationId: ID!, moduleName: String!, input: ChannelEndpointInput!): ChannelEndpoint!

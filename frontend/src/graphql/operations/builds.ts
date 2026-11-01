@@ -11,8 +11,11 @@ export const BuildSchemaFields = graphql(`
     channels {
       moduleName
       versions
-      fields {
-        ...ModuleFieldDefFields
+      kinds {
+        kind
+        fields {
+          ...ModuleFieldDefFields
+        }
       }
     }
     targets {

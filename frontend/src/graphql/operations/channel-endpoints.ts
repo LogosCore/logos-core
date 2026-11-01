@@ -8,6 +8,7 @@ export const ChannelEndpointFields = graphql(`
     slug
     description
     moduleName
+    kind
     schemaVersion
     schemaChanged
     values
@@ -34,9 +35,11 @@ export const ChannelKindsQuery = graphql(`
       iconLight
       schema {
         version
-        kinds
-        fields {
-          ...ModuleFieldDefFields
+        kinds {
+          kind
+          fields {
+            ...ModuleFieldDefFields
+          }
         }
       }
     }
@@ -44,11 +47,19 @@ export const ChannelKindsQuery = graphql(`
 `)
 
 export const ChannelEndpointsQuery = graphql(`
-  query ChannelEndpoints($operationId: ID!, $search: String, $moduleNames: [String!], $first: Int, $after: String) {
+  query ChannelEndpoints(
+    $operationId: ID!
+    $search: String
+    $moduleNames: [String!]
+    $kinds: [String!]
+    $first: Int
+    $after: String
+  ) {
     channelEndpoints(
       operationId: $operationId
       search: $search
       moduleNames: $moduleNames
+      kinds: $kinds
       first: $first
       after: $after
     ) {

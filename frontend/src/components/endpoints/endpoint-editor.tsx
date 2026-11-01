@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
@@ -39,10 +40,13 @@ import { errorMessage, graphqlErrorCode } from "@/components/modules/management/
 import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import {
+  connectionKind,
   endpointDrafts,
   endpointImportFrom,
   evaluateEndpoint,
   exportFileName,
+  kindLabels,
+  kindNames,
   kindsByName,
   MAX_DESCRIPTION_LENGTH,
   MAX_ENDPOINT_NAME_LENGTH,
@@ -67,6 +71,8 @@ interface EditorSource {
   label: React.ReactNode
   name: string
   description: string
+  /** The connection kind; "" for the channel's first. */
+  kind: string
   values: Record<string, unknown>
   /** Shown above the form, e.g. what an import left out. */
   notes: string[]
@@ -104,6 +110,7 @@ export function NewEndpoint({ channel, from: fromId }: { channel: string; from: 
         ),
         name: `${from.name} (copy)`.slice(0, MAX_ENDPOINT_NAME_LENGTH),
         description: from.description ?? "",
+        kind: from.kind,
         values: (from.values ?? {}) as Record<string, unknown>,
         notes: [],
       }
@@ -111,6 +118,7 @@ export function NewEndpoint({ channel, from: fromId }: { channel: string; from: 
         label: "imported from JSON",
         name: imported.name,
         description: "",
+        kind: imported.connectionKind,
         values: imported.values,
         notes: imported.notes,
       }
@@ -179,7 +187,15 @@ function EndpointEditor({
   const canWrite = role === "ADMIN" || role === "OPERATOR" || hasPermission(Permissions.OPERATION_DELETE)
   const readOnly = !roleLoading && !canWrite
 
-  const fields = kind.fields
+  // The connection kind, whose fields the values are: the endpoint's (one the
+  // channel no longer carries reads as its first, with a note), the source's,
+  // or the channel's first.
+  const [connKind, setConnKind] = useState(() => {
+    const want = endpoint?.kind ?? source?.kind ?? ""
+    return connectionKind(kind, want) ? want : (kindNames(kind)[0] ?? "")
+  })
+  const lostKind = endpoint && endpoint.kind !== connKind ? endpoint.kind : null
+  const fields = useMemo(() => connectionKind(kind, connKind)?.fields ?? [], [kind, connKind])
   const [name, setName] = useState(endpoint?.name ?? source?.name ?? "")
   const [description, setDescription] = useState(endpoint?.description ?? source?.description ?? "")
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
@@ -193,17 +209,17 @@ function EndpointEditor({
   const setPreferred = useEditorModeStore((s) => s.setMode)
   const [tab, setTab] = useState(preferred)
   const [jsonText, setJsonText] = useState(() =>
-    preferred === "json" ? endpointJson(kind, { name, description, values: formValues(fields, drafts) }) : "",
+    preferred === "json" ? endpointJson(kind, { name, description, kind: connKind, values: formValues(fields, drafts) }) : "",
   )
   const [leavingJson, setLeavingJson] = useState(false)
-  const read = tab === "json" ? readEndpointJson(jsonText, kind) : null
-  const hints = useMemo(() => endpointJsonHints(kind), [kind])
+  const read = tab === "json" ? readEndpointJson(jsonText, kind, connKind) : null
+  const hints = useMemo(() => endpointJsonHints(kind, connKind), [kind, connKind])
   // Fetched once the modal has settled, so the JSON tab opens at once.
   useEffect(() => whenIdle(preloadJsonEditor), [])
 
   // Changed from how it opened, or JSON that no longer reads: closing then
   // asks before throwing it away.
-  const snapshot = JSON.stringify({ name, description, drafts })
+  const snapshot = JSON.stringify({ name, description, connKind, drafts })
   const [initial] = useState(snapshot)
   const saved = useCloseGuard(snapshot !== initial || (read !== null && !read.ok))
   const body = useRef<HTMLDivElement>(null)
@@ -228,12 +244,12 @@ function EndpointEditor({
         ...read.problems,
         ...Object.entries(serverErrors)
           .filter(([key]) => key !== "")
-          .map(([key, message]) => ({ path: childPointer("/params", key), message })),
+          .map(([key, message]) => ({ path: key === "kind" ? "/kind" : childPointer("/params", key), message })),
       ]
     : []
 
   function showJson() {
-    setJsonText(endpointJson(kind, { name, description, values: formValues(fields, drafts) }))
+    setJsonText(endpointJson(kind, { name, description, kind: connKind, values: formValues(fields, drafts) }))
     setTab("json")
     setPreferred("json")
   }
@@ -252,12 +268,26 @@ function EndpointEditor({
   function editJson(text: string) {
     setJsonText(text)
     setServerErrors({})
-    const next = readEndpointJson(text, kind)
+    const next = readEndpointJson(text, kind, connKind)
     if (next.ok) {
       setName(next.doc.name)
       setDescription(next.doc.description)
-      setDrafts(endpointDrafts(fields, next.doc.values))
+      setConnKind(next.doc.kind)
+      setDrafts(endpointDrafts(connectionKind(kind, next.doc.kind)?.fields ?? [], next.doc.values))
     }
+  }
+
+  /**
+   * Another connection kind: its fields, each keeping what it had where a
+   * field of the same key carries over, the rest at their defaults.
+   */
+  function changeKind(next: string) {
+    const nextFields = connectionKind(kind, next)?.fields ?? []
+    const fresh = endpointDrafts(nextFields, null)
+    for (const f of nextFields) if (drafts[f.key]) fresh[f.key] = drafts[f.key]
+    setConnKind(next)
+    setDrafts(fresh)
+    setServerErrors({})
   }
 
   const sections: Section[] = useMemo(
@@ -290,8 +320,13 @@ function EndpointEditor({
     // From the JSON tab, what it holds as it reads, without a trip through
     // the form's fields.
     const input = read?.ok
-      ? { name: read.doc.name.trim(), description: read.doc.description.trim() || null, values: read.doc.values }
-      : { name: name.trim(), description: description.trim() || null, values }
+      ? {
+          name: read.doc.name.trim(),
+          description: read.doc.description.trim() || null,
+          kind: read.doc.kind,
+          values: read.doc.values,
+        }
+      : { name: name.trim(), description: description.trim() || null, kind: connKind, values }
     try {
       if (endpoint) {
         await update.mutateAsync({ id: endpoint.id, input, expectedRevision: endpoint.revision })
@@ -347,7 +382,8 @@ function EndpointEditor({
           <div className="flex min-w-0 flex-col">
             <RecordModalTitle>{endpoint ? endpoint.name : "New endpoint"}</RecordModalTitle>
             <span className="truncate text-sm text-muted-foreground">
-              <span className="font-mono">{kind.name}</span> · schema v{kind.version}
+              <span className="font-mono">{kind.name}</span> · <span className="font-mono">{connKind}</span> · schema v
+              {kind.version}
               {source && <> · {source.label}</>}
             </span>
           </div>
@@ -398,6 +434,12 @@ function EndpointEditor({
               ))}
             </div>
           )}
+          {lostKind && (
+            <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+              The {kind.name} channel no longer carries {lostKind} connections. Pick a kind it carries and check the
+              settings.
+            </div>
+          )}
 
           <SettingsSection id={sectionId(GENERAL)} title={GENERAL}>
             <SettingRow
@@ -417,6 +459,26 @@ function EndpointEditor({
                 disabled={disabled}
                 aria-invalid={(submitted && !!nameErr) || undefined}
               />
+            </SettingRow>
+            <SettingRow
+              id="endpoint-kind"
+              label="Kind"
+              required
+              help="How minions given this endpoint keep in touch through the channel. Each kind has its own settings."
+              error={serverErrors.kind}
+            >
+              <Select value={connKind} onValueChange={(v) => typeof v === "string" && changeKind(v)} disabled={disabled}>
+                <SelectTrigger id="endpoint-kind" className="w-full max-w-80" aria-invalid={!!serverErrors.kind || undefined}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {kindNames(kind).map((k) => (
+                    <SelectItem key={k} value={k} description={k}>
+                      {kindLabels[k] ?? k}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </SettingRow>
             <SettingRow id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
               <Textarea
@@ -487,7 +549,9 @@ function EndpointEditor({
         <p className="text-xs text-muted-foreground">
           Settings show the channel&apos;s defaults; one left at its default is not stored and follows the channel&apos;s
           default (<code className="font-mono">null</code> sets it back). Empty text, lists and maps are not set.{" "}
-          <code className="font-mono">format</code> and <code className="font-mono">channel</code> are locked.
+          <code className="font-mono">format</code> and <code className="font-mono">channel</code> are locked;{" "}
+          <code className="font-mono">kind</code> picks the connection kind, whose settings{" "}
+          <code className="font-mono">params</code> holds.
           Settings and their values are suggested as you type; Ctrl+Space (⌥I on a Mac) asks for them.
         </p>
       </TabsContent>

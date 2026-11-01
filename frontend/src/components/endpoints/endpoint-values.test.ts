@@ -105,20 +105,14 @@ describe("evaluateEndpoint", () => {
 })
 
 describe("settingRows", () => {
-  const kind: Kind = {
-    name: "http",
-    icon: { icon: "", iconLight: "" },
-    version: 2,
-    kinds: ["reverse-call"],
-    fields: [
-      { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
-      { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },
-      { key: "request_timeout", type: "duration", label: "Request timeout", order: 3, required: false },
-    ] as Kind["fields"],
-  }
+  const fields = [
+    { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
+    { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },
+    { key: "request_timeout", type: "duration", label: "Request timeout", order: 3, required: false },
+  ] as FieldDef[]
 
   it("lists set values in field order, formatted", () => {
-    const rows = settingRows(kind, { request_timeout: "40s", base_url: "https://edge.example.com", tls_verify: true, gone: 1 })
+    const rows = settingRows(fields, { request_timeout: "40s", base_url: "https://edge.example.com", tls_verify: true, gone: 1 })
     expect(rows).toEqual([
       { key: "base_url", label: "Base URL", text: "https://edge.example.com" },
       { key: "tls_verify", label: "Verify TLS certificate", text: "true" },
@@ -126,7 +120,7 @@ describe("settingRows", () => {
     ])
   })
 
-  it("shows raw keys without a kind", () => {
+  it("shows raw keys without the kind's fields", () => {
     expect(settingRows(null, { base_url: "https://edge.example.com", retries: 3 })).toEqual([
       { key: "base_url", label: "base_url", text: "https://edge.example.com" },
       { key: "retries", label: "retries", text: "3" },
@@ -170,17 +164,28 @@ describe("parseEndpointImport", () => {
     name: "http",
     icon: { icon: "", iconLight: "" },
     version: 2,
-    kinds: ["reverse-call"],
-    fields: [
-      { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
-      { key: "tls_verify", type: "bool", label: "Verify TLS", order: 2, required: false, default: false },
-      { key: "request_timeout", type: "duration", label: "Request timeout", order: 3, required: false, default: "40s" },
-      { key: "headers", type: "string_map", label: "Headers", order: 4, required: false },
-    ] as Kind["fields"],
+    kinds: [
+      {
+        kind: "reverse-call",
+        fields: [
+          { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
+          { key: "tls_verify", type: "bool", label: "Verify TLS", order: 2, required: false, default: false },
+          { key: "request_timeout", type: "duration", label: "Request timeout", order: 3, required: false, default: "40s" },
+          { key: "headers", type: "string_map", label: "Headers", order: 4, required: false },
+        ] as FieldDef[],
+      },
+      { kind: "reverse-persistent", fields: [{ key: "base_url", type: "url", label: "Base URL", order: 1, required: true }] },
+    ],
   }
   const kinds = new Map([["http", http]])
   const exported = (doc: Record<string, unknown>) =>
-    JSON.stringify({ format: ENDPOINT_EXPORT_FORMAT, name: "edge", channel: { module_name: "http", schema_version: 2 }, ...doc })
+    JSON.stringify({
+      format: ENDPOINT_EXPORT_FORMAT,
+      name: "edge",
+      channel: { module_name: "http", schema_version: 2 },
+      kind: "reverse-call",
+      ...doc,
+    })
 
   it("reads an export back: the values that are not defaults", () => {
     const r = parseEndpointImport(
@@ -193,6 +198,7 @@ describe("parseEndpointImport", () => {
       ok: true,
       value: {
         kind: http,
+        connectionKind: "reverse-call",
         name: "edge",
         values: { base_url: "https://edge.example.com", request_timeout: "60s", headers: { "X-A": "1" } },
         notes: [],
@@ -218,7 +224,7 @@ describe("parseEndpointImport", () => {
     )
     expect(r.ok && r.value.notes).toEqual([
       "Exported for http schema v1; this channel is at v2. Check the values.",
-      "Left out, not settings of http v2: proxy_auth, zz.",
+      "Left out, not reverse-call settings of http v2: proxy_auth, zz.",
     ])
     expect(r.ok && r.value.values).toEqual({ base_url: "https://a.example" })
   })
@@ -234,13 +240,20 @@ describe("parseEndpointImport", () => {
     expect(error(JSON.stringify({ format: ENDPOINT_EXPORT_FORMAT }))).toMatch(/names no channel/)
     expect(error(exported({ channel: { module_name: "dns" } }))).toMatch(/No "dns" channel/)
     expect(error(exported({ params: ["a"] }))).toMatch(/must be an object/)
+    expect(error(exported({ kind: undefined }))).toMatch(/names no connection kind/)
+    expect(error(exported({ kind: "bind-call" }))).toMatch(/carries reverse-call, reverse-persistent connections here, not bind-call/)
   })
 })
 
 describe("endpointImportFrom", () => {
   it("reads the import a location carries, and nothing else", () => {
-    const imp = { name: "edge", values: { base_url: "https://a.example" }, notes: ["x", 3] }
-    expect(endpointImportFrom({ endpointImport: imp })).toEqual({ name: "edge", values: imp.values, notes: ["x"] })
+    const imp = { name: "edge", connectionKind: "reverse-call", values: { base_url: "https://a.example" }, notes: ["x", 3] }
+    expect(endpointImportFrom({ endpointImport: imp })).toEqual({
+      name: "edge",
+      connectionKind: "reverse-call",
+      values: imp.values,
+      notes: ["x"],
+    })
     expect(endpointImportFrom(null)).toBeNull()
     expect(endpointImportFrom({ endpointImport: { name: "edge" } })).toBeNull()
     expect(endpointImportFrom({ other: 1 })).toBeNull()

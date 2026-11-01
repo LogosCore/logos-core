@@ -160,8 +160,11 @@ export const ModuleDetailFields = graphql(`
     }
     connection {
       version
-      fields {
-        ...ModuleFieldDefFields
+      kinds {
+        kind
+        fields {
+          ...ModuleFieldDefFields
+        }
       }
     }
     build {

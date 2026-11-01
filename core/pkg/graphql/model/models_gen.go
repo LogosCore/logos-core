@@ -92,9 +92,14 @@ type BuildArtifact struct {
 }
 
 type BuildChannel struct {
-	ModuleName string         `json:"moduleName"`
-	Versions   []int          `json:"versions"`
-	Fields     []*ModuleField `json:"fields"`
+	ModuleName string              `json:"moduleName"`
+	Versions   []int               `json:"versions"`
+	Kinds      []*BuildChannelKind `json:"kinds"`
+}
+
+type BuildChannelKind struct {
+	Kind   string         `json:"kind"`
+	Fields []*ModuleField `json:"fields"`
 }
 
 type BuildChannelVersions struct {
@@ -224,6 +229,7 @@ type ChannelEndpoint struct {
 	Slug          string                    `json:"slug"`
 	Description   *string                   `json:"description,omitempty"`
 	ModuleName    string                    `json:"moduleName"`
+	Kind          string                    `json:"kind"`
 	SchemaVersion int                       `json:"schemaVersion"`
 	SchemaChanged bool                      `json:"schemaChanged"`
 	Values        any                       `json:"values"`
@@ -250,6 +256,7 @@ type ChannelEndpointInput struct {
 	Name        string  `json:"name"`
 	Slug        *string `json:"slug,omitempty"`
 	Description *string `json:"description,omitempty"`
+	Kind        string  `json:"kind"`
 	Values      any     `json:"values"`
 }
 
@@ -839,10 +846,14 @@ type ModuleConnection struct {
 	TotalCount int                  `json:"totalCount"`
 }
 
+type ModuleConnectionKind struct {
+	Kind   string         `json:"kind"`
+	Fields []*ModuleField `json:"fields"`
+}
+
 type ModuleConnectionSchema struct {
-	Version int            `json:"version"`
-	Fields  []*ModuleField `json:"fields"`
-	Kinds   []string       `json:"kinds"`
+	Version int                     `json:"version"`
+	Kinds   []*ModuleConnectionKind `json:"kinds"`
 }
 
 type ModuleEdge struct {

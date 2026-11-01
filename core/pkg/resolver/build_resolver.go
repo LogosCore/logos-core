@@ -90,7 +90,7 @@ func (r *buildResolver) authorizeID(ctx context.Context, operationID string, min
 }
 
 func (r *buildResolver) ModuleBuild(_ context.Context, obj *models.Module) (*model.BuildSchema, error) {
-	if obj.Build == nil {
+	if !obj.Build.Current() {
 		return nil, nil
 	}
 	return toBuildSchemaModel(&obj.Build.BuildSchema), nil
@@ -330,9 +330,11 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields),
 		PersistedSessions: s.PersistedSessions}
 	for _, c := range s.Channels {
-		out.Channels = append(out.Channels, &model.BuildChannel{
-			ModuleName: c.ModuleName, Versions: c.Versions, Fields: toBuildFieldModels(c.Fields),
-		})
+		ch := &model.BuildChannel{ModuleName: c.ModuleName, Versions: c.Versions, Kinds: []*model.BuildChannelKind{}}
+		for _, k := range c.Kinds {
+			ch.Kinds = append(ch.Kinds, &model.BuildChannelKind{Kind: k.Kind, Fields: toBuildFieldModels(k.Fields)})
+		}
+		out.Channels = append(out.Channels, ch)
 	}
 	for _, t := range s.Targets {
 		mt := &model.BuildTarget{

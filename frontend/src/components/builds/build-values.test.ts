@@ -22,6 +22,7 @@ import {
   sourceFromBuild,
   stageDuration,
   targetCommands,
+  withKind,
   withTarget,
   type BuildForm,
 } from "./build-values"
@@ -47,14 +48,28 @@ const schema: BuildSchemaFieldsFragment = {
     {
       moduleName: "http",
       versions: [2],
-      fields: [
-        field({ key: "method", type: "enum", default: "POST", options: [{ value: "GET" }, { value: "POST" }] }),
-        field({ key: "path_prefix", type: "string", default: "/", pattern: "^/" }),
+      kinds: [
+        {
+          kind: "reverse-call",
+          fields: [
+            field({ key: "method", type: "enum", default: "POST", options: [{ value: "GET" }, { value: "POST" }] }),
+            field({ key: "path_prefix", type: "string", default: "/", pattern: "^/" }),
+          ],
+        },
+        { kind: "reverse-persistent", fields: [field({ key: "path_prefix", type: "string", default: "/ws", pattern: "^/" })] },
       ],
     },
   ],
   targets: [
-    { id: "dummy", label: "Dummy minion", description: null, format: "json", platforms: ["any/any"], fields: [], channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call"] }] },
+    {
+      id: "dummy",
+      label: "Dummy minion",
+      description: null,
+      format: "json",
+      platforms: ["any/any"],
+      fields: [],
+      channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call", "reverse-persistent"] }],
+    },
     {
       id: "service",
       label: "Service",
@@ -91,14 +106,26 @@ const channels = kindsByName([
     moduleName: "http",
     schema: {
       version: 2,
-      fields: [
-        field({ key: "base_url", type: "url", required: true, order: 1 }),
-        field({ key: "request_timeout", type: "duration", default: "40s", order: 2 }),
-        field({ key: "token", type: "secret", order: 3 }),
+      kinds: [
+        {
+          kind: "reverse-call",
+          fields: [
+            field({ key: "base_url", type: "url", required: true, order: 1 }),
+            field({ key: "request_timeout", type: "duration", default: "40s", order: 2 }),
+            field({ key: "token", type: "secret", order: 3 }),
+          ],
+        },
+        {
+          kind: "reverse-persistent",
+          fields: [
+            field({ key: "base_url", type: "url", required: true, order: 1 }),
+            field({ key: "ws_reconnect_backoff", type: "duration", default: "1m", order: 2 }),
+          ],
+        },
       ],
     },
   },
-  { moduleName: "dns", schema: { version: 1, fields: [field({ key: "zone", type: "string" })] } },
+  { moduleName: "dns", schema: { version: 1, kinds: [{ kind: "reverse-call", fields: [field({ key: "zone", type: "string" })] }] } },
 ])
 const http = channels.get("http")!
 
@@ -107,7 +134,12 @@ function connection(
   moduleName: string,
   typed: { name?: string; description?: string; settings?: Record<string, string>; params?: Record<string, string> } = {},
 ) {
-  const c = connectionDraft(kind, channels.get(moduleName), { moduleName, name: typed.name, description: typed.description })
+  const c = connectionDraft(
+    kind,
+    channels.get(moduleName),
+    { moduleName, name: typed.name, description: typed.description },
+    kind.targets[0],
+  )
   for (const [k, text] of Object.entries(typed.settings ?? {})) c.settings[k] = { kind: "text", text }
   for (const [k, text] of Object.entries(typed.params ?? {})) c.drafts[k] = { kind: "text", text }
   return c
@@ -134,7 +166,8 @@ describe("factoryKindsByName", () => {
   it("sorts fields and edits secrets as text", () => {
     expect(kind.fields.map((f) => f.key)).toEqual(["greeting", "kill_date", "punches", "badge", "token"])
     expect(kind.fields.find((f) => f.key === "token")?.type).toBe("string")
-    expect(kind.channelFields.get("http")?.map((f) => f.key)).toEqual(["method", "path_prefix"])
+    expect(kind.channelFields.get("http")?.get("reverse-call")?.map((f) => f.key)).toEqual(["method", "path_prefix"])
+    expect(kind.channelFields.get("http")?.get("reverse-persistent")?.map((f) => f.key)).toEqual(["path_prefix"])
   })
 
   it("keeps the commands in the factory's order, their params sorted", () => {
@@ -331,11 +364,16 @@ describe("the build form", () => {
 })
 
 describe("fillFromEndpoint", () => {
-  const eu = { name: "EU front", slug: "eu", values: { base_url: "https://eu.example.com", request_timeout: "10s", gone: true } }
-  const us = { name: "US front", slug: "us", values: { base_url: "https://us.example.com" } }
+  const eu = {
+    name: "EU front",
+    slug: "eu",
+    kind: "reverse-call",
+    values: { base_url: "https://eu.example.com", request_timeout: "10s", gone: true },
+  }
+  const us = { name: "US front", slug: "us", kind: "reverse-call", values: { base_url: "https://us.example.com" } }
 
   it("names the connection after the endpoint's slug, until the operator names it, and copies its settings", () => {
-    const c = fillFromEndpoint(connection("http", { settings: { token: "typed" } }), http, eu)
+    const c = fillFromEndpoint(connection("http", { settings: { token: "typed" } }), http, kind, eu)
     expect(c.name).toBe("eu")
     expect(c.named).toBe(false)
     // What the card says it was filled from: the endpoint's name, any text.
@@ -345,16 +383,16 @@ describe("fillFromEndpoint", () => {
       request_timeout: { kind: "text", text: "10s" },
       token: { kind: "text", text: "" },
     })
-    expect(fillFromEndpoint(c, http, us).name).toBe("us")
-    expect(fillFromEndpoint({ ...c, name: "primary", named: true }, http, us).name).toBe("primary")
+    expect(fillFromEndpoint(c, http, kind, us).name).toBe("us")
+    expect(fillFromEndpoint({ ...c, name: "primary", named: true }, http, kind, us).name).toBe("primary")
     // An earlier build's own name counts as the operator's.
-    expect(fillFromEndpoint(connection("http", { name: "primary" }), http, us).name).toBe("primary")
+    expect(fillFromEndpoint(connection("http", { name: "primary" }), http, kind, us).name).toBe("primary")
   })
 
   it("gives the endpoint's name free of the other connections'", () => {
     const blank = connection("http")
-    expect(fillFromEndpoint(blank, http, eu, ["eu", "eu-2", "http-1"]).name).toBe("eu-3")
-    expect(fillFromEndpoint(blank, http, eu, ["us"]).name).toBe("eu")
+    expect(fillFromEndpoint(blank, http, kind, eu, ["eu", "eu-2", "http-1"]).name).toBe("eu-3")
+    expect(fillFromEndpoint(blank, http, kind, eu, ["us"]).name).toBe("eu")
     expect(connectionNames([connection("http", { name: " eu " }), connection("http"), connection("dns")])).toEqual([
       "eu",
       "http-2",
@@ -363,20 +401,50 @@ describe("fillFromEndpoint", () => {
   })
 
   it("copies the endpoint's description, until the operator writes one", () => {
-    const c = fillFromEndpoint(connection("http"), http, { ...eu, description: "EU front" })
+    const c = fillFromEndpoint(connection("http"), http, kind, { ...eu, description: "EU front" })
     expect(c.description).toBe("EU front")
     expect(c.described).toBe(false)
-    expect(fillFromEndpoint(c, http, us).description).toBe("")
-    expect(fillFromEndpoint({ ...c, description: "mine", described: true }, http, us).description).toBe("mine")
-    expect(fillFromEndpoint(connection("http", { description: "kept" }), http, eu).description).toBe("kept")
+    expect(fillFromEndpoint(c, http, kind, us).description).toBe("")
+    expect(fillFromEndpoint({ ...c, description: "mine", described: true }, http, kind, us).description).toBe("mine")
+    expect(fillFromEndpoint(connection("http", { description: "kept" }), http, kind, eu).description).toBe("kept")
   })
 
   it("leaves the factory's parameters and drops old notes", () => {
     const c = { ...connection("http", { params: { method: "GET" } }), notes: ["Saved for v1"] }
-    const filled = fillFromEndpoint(c, http, us)
+    const filled = fillFromEndpoint(c, http, kind, us)
     expect(filled.drafts.method).toEqual({ kind: "text", text: "GET" })
     expect(filled.notes).toEqual([])
     expect(filled.key).toBe(c.key)
+  })
+
+  it("takes the endpoint's kind, with that kind's settings and parameters", () => {
+    const c = connection("http", { params: { method: "GET", path_prefix: "/cdn/" } })
+    const ws = { name: "WS", slug: "ws", kind: "reverse-persistent", values: { base_url: "https://ws.example.com" } }
+    const filled = fillFromEndpoint(c, http, kind, ws)
+    expect(filled.kind).toBe("reverse-persistent")
+    expect(Object.keys(filled.settings)).toEqual(["base_url", "ws_reconnect_backoff"])
+    expect(filled.settings.ws_reconnect_backoff).toEqual({ kind: "text", text: "1m" })
+    // path_prefix carries over; method is reverse-call's alone.
+    expect(filled.drafts).toEqual({ path_prefix: { kind: "text", text: "/cdn/" } })
+  })
+})
+
+describe("withKind", () => {
+  it("swaps in the kind's settings and parameters, keeping what carries over", () => {
+    const c = connection("http", { settings: { base_url: "https://a.example.com", token: "t" }, params: { path_prefix: "/x/" } })
+    const ws = withKind(c, "reverse-persistent", http, kind)
+    expect(ws.kind).toBe("reverse-persistent")
+    expect(ws.settings).toEqual({ base_url: { kind: "text", text: "https://a.example.com" }, ws_reconnect_backoff: { kind: "text", text: "1m" } })
+    expect(ws.drafts).toEqual({ path_prefix: { kind: "text", text: "/x/" } })
+    const back = withKind(ws, "reverse-call", http, kind)
+    expect(back.drafts.method).toEqual({ kind: "text", text: "POST" })
+    expect(back.settings.token).toEqual({ kind: "text", text: "" })
+  })
+
+  it("checks a kind the target and the channel cannot both use", () => {
+    let form = initialForm(kind, null, channels)
+    form = { ...form, description: "x", connections: [withKind(connection("http", edge), "bind-call", http, kind)] }
+    expect(evaluateForm(kind, form, channels).errors["connections[0].kind"]).toMatch(/Not a kind/)
   })
 })
 
@@ -388,16 +456,17 @@ describe("endpointFromConnection", () => {
       settings: { base_url: "https://edge.example.com", request_timeout: "10s" },
       params: { path_prefix: "/cdn/" },
     })
-    expect(endpointFromConnection(c, 0, http)).toEqual({
+    expect(endpointFromConnection(c, 0, http, "reverse-call")).toEqual({
       name: "edge",
       description: "EU front",
+      kind: "reverse-call",
       values: { base_url: "https://edge.example.com", request_timeout: "10s" },
       problems: [],
     })
   })
 
   it("names an unnamed one as the build does, and says what an endpoint cannot take", () => {
-    const d = endpointFromConnection(connection("http", { settings: { request_timeout: "soon" } }), 2, http)
+    const d = endpointFromConnection(connection("http", { settings: { request_timeout: "soon" } }), 2, http, "reverse-call")
     expect(d.name).toBe("http-3")
     expect(d.problems).toEqual([
       { label: "base_url", message: "Required" },
@@ -415,9 +484,11 @@ describe("endpoint summaries", () => {
   }
 
   it("sums up the first settings", () => {
-    expect(settingsSummary(http, eu.values)).toBe("https://cdn.eu.example.com · 10s")
-    expect(settingsSummary(http, {})).toBe("")
-    expect(settingsSummary(http, null)).toBe("")
+    expect(settingsSummary(http, "reverse-call", eu.values)).toBe("https://cdn.eu.example.com · 10s")
+    expect(settingsSummary(http, "reverse-call", {})).toBe("")
+    expect(settingsSummary(http, "reverse-call", null)).toBe("")
+    // Another kind's fields: only base_url is one of reverse-persistent's.
+    expect(settingsSummary(http, "reverse-persistent", eu.values)).toBe("https://cdn.eu.example.com")
   })
 })
 
@@ -432,16 +503,22 @@ describe("sourceFromBuild", () => {
       connections: [
         {
           endpoint: {
-            format: "logos.channel-endpoint.v1",
+            format: "logos.channel-endpoint.v2",
             name: "http-1",
             channel: { module_name: "http", schema_version: 2 },
+            kind: "reverse-call",
             params: { base_url: "https://a.example.com", request_timeout: "40s", retired: "x" },
           },
           values: { method: "POST", path_prefix: "/cdn/" },
         },
         {
-          endpoint: { name: "edge", channel: { module_name: "http", schema_version: 1 }, params: { base_url: "https://b.example.com" } },
-          values: { method: "GET", path_prefix: "/" },
+          endpoint: {
+            name: "edge",
+            channel: { module_name: "http", schema_version: 1 },
+            kind: "reverse-persistent",
+            params: { base_url: "https://b.example.com" },
+          },
+          values: { path_prefix: "/" },
         },
       ],
     }
@@ -451,22 +528,22 @@ describe("sourceFromBuild", () => {
     expect(source.connections).toEqual([
       {
         moduleName: "http",
-        kind: null,
+        kind: "reverse-call",
         name: null,
         description: null,
         schemaVersion: 2,
         settings: { base_url: "https://a.example.com" },
         values: { path_prefix: "/cdn/" },
-        notes: ["Left out, not settings of http v2: retired."],
+        notes: ["Left out, not reverse-call settings of http v2: retired."],
       },
       {
         moduleName: "http",
-        kind: null,
+        kind: "reverse-persistent",
         name: "edge",
         description: "fallback",
         schemaVersion: 1,
         settings: { base_url: "https://b.example.com" },
-        values: { method: "GET" },
+        values: { path_prefix: "/" },
         notes: [],
       },
     ])
@@ -481,14 +558,28 @@ describe("sourceFromBuild", () => {
   it("lists the connections with their notes", () => {
     const build = {
       connections: [
-        { endpoint: { name: "http-1", channel: { module_name: "http" }, params: { request_timeout: "40s", base_url: "https://a.example.com" } } },
-        { endpoint: { name: "edge", channel: { module_name: "http" }, params: { base_url: "https://b.example.com" } } },
+        {
+          endpoint: {
+            name: "http-1",
+            channel: { module_name: "http" },
+            kind: "reverse-call",
+            params: { request_timeout: "40s", base_url: "https://a.example.com" },
+          },
+        },
+        {
+          endpoint: {
+            name: "edge",
+            channel: { module_name: "http" },
+            kind: "reverse-persistent",
+            params: { base_url: "https://b.example.com" },
+          },
+        },
       ],
       connectionDescriptions: ["EU front"],
     }
     expect(buildConnectionRows(build, channels)).toEqual([
       { moduleName: "http", kind: "reverse-call", name: "http-1", address: "https://a.example.com", description: "EU front" },
-      { moduleName: "http", kind: "reverse-call", name: "edge", address: "https://b.example.com", description: "" },
+      { moduleName: "http", kind: "reverse-persistent", name: "edge", address: "https://b.example.com", description: "" },
     ])
     expect(buildConnectionRows({ connections: null }, channels)).toEqual([])
   })
