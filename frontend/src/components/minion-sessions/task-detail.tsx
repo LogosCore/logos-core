@@ -82,6 +82,8 @@ export function TaskDetail({
   onStreamFile,
   streamCommands,
   onDeletePath,
+  onWalkPath,
+  walkCommands,
   onOpenInFileBrowser,
   deleteCommands,
   findSignal,
@@ -117,6 +119,11 @@ export function TaskDetail({
   onOpenInFileBrowser?: (path: string) => void
   /** The session's delete_path commands: what Delete offers. */
   deleteCommands?: readonly MenuCommand[]
+  /** Walks a listing's folder and those under it, with a walk_dir command;
+   *  absent where the viewer may not give tasks. */
+  onWalkPath?: (path: string, commandId: string) => void
+  /** The session's walk_dir commands: what Walk from here offers. */
+  walkCommands?: readonly MenuCommand[]
   /** The session's list_dir commands, the task's own first: what List
    *  directory offers. */
   listCommands?: readonly MenuCommand[]
@@ -301,6 +308,8 @@ export function TaskDetail({
               streamCommands={streamCommands}
               onDelete={onDeletePath}
               deleteCommands={deleteCommands}
+              onWalk={onWalkPath}
+              walkCommands={walkCommands}
               onOpenInFileBrowser={onOpenInFileBrowser}
             />
           ) : (

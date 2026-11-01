@@ -9,6 +9,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   FolderTreeIcon,
+  ListTreeIcon,
   Link2Icon,
   RadioTowerIcon,
   Trash2Icon,
@@ -31,8 +32,8 @@ import type { DeleteTarget } from "./delete-dialog"
 // contracts/task-results-and-actions.md, View): the path as crumbs, up, and
 // the entries, folders first. Up and a crumb list that folder with the
 // listing's own command; an entry's actions are in its context menu (a
-// right click): List directory on a folder or a link, Download and Stream
-// on a file, Upload here on a folder (and for the folder listed, by the
+// right click): List directory on a folder or a link, Walk from here on a
+// folder, Download and Stream on a file, Upload here on a folder (and for the folder listed, by the
 // crumbs), Delete on any (after a confirmation), with a submenu of commands
 // when the session has more than one, and copying its path or name. onOpen is absent where the viewer may not
 // give tasks, who then only reads what is listed. Open in File Browser shows
@@ -54,6 +55,8 @@ export function DirListingView({
   streamCommands = [],
   onDelete,
   deleteCommands = [],
+  onWalk,
+  walkCommands = [],
   onOpenInFileBrowser,
 }: {
   listing: DirListing
@@ -77,6 +80,10 @@ export function DirListingView({
   onDelete?: (target: DeleteTarget, commandId: string) => void
   /** The session's delete_path commands. */
   deleteCommands?: readonly MenuCommand[]
+  /** Walks a folder and those under it with a walk_dir command. */
+  onWalk?: (path: string, commandId: string) => void
+  /** The session's walk_dir commands. */
+  walkCommands?: readonly MenuCommand[]
   /** Opens the folder in the machine's file browser. */
   onOpenInFileBrowser?: (path: string) => void
 }) {
@@ -195,6 +202,12 @@ export function DirListingView({
                           onRun={(id) => onOpen!(path, id)}
                         />
                         {listCommands.length > 0 && <ContextMenuSeparator />}
+                      </>
+                    )}
+                    {onWalk && e.type === "dir" && walkCommands.length > 0 && (
+                      <>
+                        <ActionItem label="Walk from here" icon={<ListTreeIcon />} commands={walkCommands} onRun={(id) => onWalk(path, id)} />
+                        <ContextMenuSeparator />
                       </>
                     )}
                     {uploads && e.type === "dir" && (

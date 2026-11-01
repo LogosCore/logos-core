@@ -171,6 +171,8 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
                 streamCommands={commandsFor(commands, "stream_file")}
                 onDeletePath={writable ? (target, commandId) => setDeleting({ target, commandId }) : undefined}
                 deleteCommands={commandsFor(commands, "delete_path")}
+                onWalkPath={writable ? (path, commandId) => runAction(commandId, { path }) : undefined}
+                walkCommands={commandsFor(commands, "walk_dir")}
                 onOpenInFileBrowser={workspace ? (path) => workspace.openFileBrowser(sessionId, path) : undefined}
                 findSignal={findSignal}
               />
