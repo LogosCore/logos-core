@@ -147,7 +147,7 @@ func (s *Service) deliver(ctx context.Context, session *models.MinionSession, ma
 	items := make([]cbor.RawMessage, 0, len(waiting))
 	ids := make([]uuid.UUID, 0, len(waiting))
 	for _, t := range waiting {
-		var args map[string]any
+		var args protocol.Args
 		if len(t.WireArgs) > 0 {
 			if err := protocol.UnmarshalCBOR(t.WireArgs, &args); err != nil {
 				return nil, fmt.Errorf("the args of task %s: %w", t.TaskID, err)

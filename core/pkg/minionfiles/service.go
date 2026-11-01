@@ -87,11 +87,11 @@ func stagingKey(fileID uuid.UUID, off int64) string {
 // (an err item's code and message).
 type Reply struct {
 	Next int64
-	Code string
+	Code int
 	Msg  string
 }
 
-func refuse(code, msg string) Reply { return Reply{Code: code, Msg: msg} }
+func refuse(code int, msg string) Reply { return Reply{Code: code, Msg: msg} }
 
 // TakeChunk takes one chunk of a transfer under session. A chunk past where
 // the file is (one sent again, or out of order) is not kept: the answer says

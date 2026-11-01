@@ -131,7 +131,7 @@ func (s *Service) ack(st *models.MinionTaskStream) protocol.AckItem {
 // and message.
 type Reply struct {
 	Ack  *protocol.AckItem
-	Code string
+	Code int
 	Msg  string
 }
 

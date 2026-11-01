@@ -37,7 +37,7 @@ type MinionTask struct {
 	// (protocol.BuildCommand.Action): what the file browser reads a task
 	// without a result by (a delete_path's rm).
 	Action string `bson:"action,omitempty" json:"action,omitempty"`
-	// WireArgs are the args as the task carries them (protocol.TaskArgs),
+	// WireArgs are the args as the task carries them (protocol.Args),
 	// CBOR-encoded: checked against the command's params when queued, so
 	// delivery needs no schema; kept as bytes, so a duration's milliseconds
 	// stay an unsigned integer (a document's numbers come back as floats).

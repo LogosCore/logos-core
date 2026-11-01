@@ -155,7 +155,7 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 	if err != nil || len(items) == 0 {
 		return nil, err
 	}
-	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV1, Re: msg.ID, Items: items})
+	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV2, Re: msg.ID, Items: items})
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			// task it no longer has): noted, not answered.
 			var e protocol.ErrItem
 			if protocol.UnmarshalCBOR(raw, &e) == nil {
-				s.logger.Info("minion err", zap.String("session_id", session.SessionID.String()), zap.String("code", e.Code), zap.String("msg", e.Msg))
+				s.logger.Info("minion err", zap.String("session_id", session.SessionID.String()), zap.String("code", protocol.ErrCodeName(e.Code)), zap.String("msg", e.Msg))
 			}
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
@@ -632,7 +632,7 @@ func (f *sender) readKeys() error {
 }
 
 // errMessage is a reply's one err item about the whole message.
-func errMessage(code, msg string) ([]cbor.RawMessage, error) {
+func errMessage(code int, msg string) ([]cbor.RawMessage, error) {
 	data, err := protocol.MarshalCBOR(protocol.ErrItem{T: protocol.ItemErr, Code: code, Msg: msg})
 	if err != nil {
 		return nil, err
@@ -641,7 +641,7 @@ func errMessage(code, msg string) ([]cbor.RawMessage, error) {
 }
 
 // errItem is a reply's one err item.
-func errItem(code, msg string, item int) ([]cbor.RawMessage, error) {
+func errItem(code int, msg string, item int) ([]cbor.RawMessage, error) {
 	data, err := protocol.MarshalCBOR(protocol.ErrItem{T: protocol.ItemErr, Code: code, Msg: msg, Item: &item})
 	if err != nil {
 		return nil, err

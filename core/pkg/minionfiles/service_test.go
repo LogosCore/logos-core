@@ -240,7 +240,7 @@ func TestTransfer(t *testing.T) {
 	total := uint64(len(body))
 
 	first := protocol.ChunkItem{Xfer: xfer, Off: 0, Data: body[:10], Total: &total, Task: taskID[:], Name: "/etc/hello"}
-	if r, err := s.TakeChunk(ctx, session, first); err != nil || r.Code != "" || r.Next != 10 {
+	if r, err := s.TakeChunk(ctx, session, first); err != nil || r.Code != 0 || r.Next != 10 {
 		t.Fatalf("first: %+v %v", r, err)
 	}
 	// Sent again: not kept twice; where to go on from.

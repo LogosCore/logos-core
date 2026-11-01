@@ -1,6 +1,7 @@
 package minionsync
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -110,7 +111,7 @@ func openSession(t *testing.T, r *rig) (uuid.UUID, *fakeTasks) {
 	return sid, tasks
 }
 
-func itemsOf(msg protocol.CoreMessage, kind string) []cbor.RawMessage {
+func itemsOf(msg protocol.CoreMessage, kind int) []cbor.RawMessage {
 	var out []cbor.RawMessage
 	for _, it := range msg.Items {
 		if protocol.ItemType(it) == kind {
@@ -145,7 +146,8 @@ func TestTasksUnderSession(t *testing.T) {
 		return r.openUnder(t, sid, r.keys, reply)
 	}
 	one := uint64(1)
-	shell := queue("shell", map[string]any{"command": "whoami", "timeout": uint64(30000)})
+	offer := protocol.FileOffer{Xfer: bytes.Repeat([]byte{4}, 16), Name: "a.exe", Size: 1, SHA256: make([]byte, 32)}
+	shell := queue("shell", map[string]any{"command": "whoami", "timeout": uint64(30000), "file": offer})
 	ls := queue("ls", nil)
 
 	// No get_tasks, no task: an empty check-in gets nothing (204).
@@ -159,6 +161,9 @@ func TestTasksUnderSession(t *testing.T) {
 	if len(got) != 1 || protocol.UnmarshalCBOR(got[0], &task) != nil || task.Cmd != "shell" || task.Args["command"] != "whoami" ||
 		task.Args["timeout"] != uint64(30000) {
 		t.Fatalf("first delivery: %+v", task)
+	}
+	if f, err := protocol.ArgFile(task.Args, "file"); err != nil || f.Name != "a.exe" || !bytes.Equal(f.Xfer, offer.Xfer) {
+		t.Fatalf("the file offer: %+v %v", f, err)
 	}
 	if id, _ := uuid.FromBytes(task.Task); id != shell || tasks.find(shell).State != models.MinionTaskSent {
 		t.Fatalf("the shell task, sent: %s", tasks.find(shell).State)

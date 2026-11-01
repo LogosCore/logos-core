@@ -241,7 +241,7 @@ func (r *rig) send(t *testing.T, id []byte, items ...any) ([]byte, error) {
 // sendUnder seals a minion message with items under another id and keys.
 func (r *rig) sendUnder(t *testing.T, under uuid.UUID, keys protocol.AES256CBCHMACSHA256Material, id []byte, items ...any) ([]byte, error) {
 	t.Helper()
-	msg := protocol.MinionMessage{V: protocol.MinionMessageV1, ID: id}
+	msg := protocol.MinionMessage{V: protocol.MinionMessageV2, ID: id}
 	for _, it := range items {
 		raw, err := protocol.MarshalCBOR(it)
 		if err != nil {
@@ -468,10 +468,10 @@ func TestUnderSession(t *testing.T) {
 
 	// get_tasks: taken, and no task waits, so nothing to say; max 0 is
 	// refused.
-	if reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 1}); err != nil || reply != nil {
+	if reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: 1}); err != nil || reply != nil {
 		t.Fatalf("get_tasks: %x %v", reply, err)
 	}
-	reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 0})
+	reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: 0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +483,7 @@ func TestUnderSession(t *testing.T) {
 	// A rehello: new details, the same session id; an item not built yet
 	// gets unknown_item.
 	reply, err = r.sendUnder(t, sid, keys, protocol.NewMessageID(), hello("web01-renamed"),
-		map[string]any{"t": "result", "task": 1, "seq": 0})
+		map[int]any{0: protocol.ItemResult, 1: 1, 2: 0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,7 +561,7 @@ func TestClosedSession(t *testing.T) {
 	sid := sessionID(t, r.open(t, reply))
 	closedErr := func(name string) {
 		t.Helper()
-		reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 1})
+		reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: 1})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -634,7 +634,7 @@ func TestClaimPersistedSession(t *testing.T) {
 	// The process that held it, with the session's old keys: told, sealed
 	// with those, and not checked in.
 	seen := r.sessions.rows[0].LastSeenAt
-	reply, err = r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), map[string]any{"t": "get_tasks", "max": 1})
+	reply, err = r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

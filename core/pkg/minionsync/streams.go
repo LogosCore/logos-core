@@ -58,7 +58,7 @@ func (s *Service) streamChunk(ctx context.Context, session *models.MinionSession
 	if !handled {
 		return nil, false, nil
 	}
-	if reply.Code != "" {
+	if reply.Code != 0 {
 		out, err := errItem(reply.Code, reply.Msg, i)
 		return out, true, err
 	}

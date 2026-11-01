@@ -117,19 +117,19 @@ func TestUploadPull(t *testing.T) {
 	if !bytes.Equal(append(first.Data, last.Data...), body) || !bytes.Equal(last.SHA256, sum[:]) || last.Total != nil {
 		t.Fatalf("last: off %d, %d bytes", last.Off, len(last.Data))
 	}
-	errCode := func(msg protocol.CoreMessage) string {
+	errCode := func(msg protocol.CoreMessage) int {
 		var e protocol.ErrItem
 		got := itemsOf(msg, protocol.ItemErr)
 		if len(got) != 1 || protocol.UnmarshalCBOR(got[0], &e) != nil {
-			return ""
+			return 0
 		}
 		return e.Code
 	}
 	if c := errCode(pull(uint64(len(body))+1, xfer)); c != protocol.ErrItemBadMessage {
-		t.Fatalf("past the end: %q", c)
+		t.Fatalf("past the end: %d", c)
 	}
 	if c := errCode(pull(0, bytes.Repeat([]byte{8}, 16))); c != protocol.ErrItemUnknownTask {
-		t.Fatalf("another transfer: %q", c)
+		t.Fatalf("another transfer: %d", c)
 	}
 
 	// Its end, with the last ack saying the minion has it all: taken, no
@@ -150,6 +150,6 @@ func TestUploadPull(t *testing.T) {
 	}
 	// A task ended takes no more asks.
 	if c := errCode(pull(0, xfer)); c != protocol.ErrItemUnknownTask {
-		t.Fatalf("after its end: %q", c)
+		t.Fatalf("after its end: %d", c)
 	}
 }

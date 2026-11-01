@@ -53,7 +53,7 @@ func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, 
 	if err != nil {
 		return nil, fmt.Errorf("take a chunk: %w", err)
 	}
-	if reply.Code != "" {
+	if reply.Code != 0 {
 		return errItem(reply.Code, reply.Msg, i)
 	}
 	next := uint64(reply.Next)
