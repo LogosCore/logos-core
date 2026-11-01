@@ -11,7 +11,8 @@
 core:
   image:
     tag: "sha-REPLACEME"
-  replicaCount: 3
+  # One instance: see the chart README, "Core runs as a single replica".
+  replicaCount: 1
 
 frontend:
   image:

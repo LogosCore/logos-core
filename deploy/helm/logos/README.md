@@ -87,6 +87,17 @@ replica serves any stream.
 This keeps the password out of the ConfigMap while still letting
 operators override the host for an external Mongo.
 
+### Core runs as a single replica
+Core keeps its data in MongoDB and Redis, so any pod could answer any
+request, but its event bus (what feeds the web app's live views, the
+GraphQL subscriptions) lives in the process. With two replicas, a change
+one pod handles never reaches browsers connected to the other, and a
+minion connection held open by one pod could not be reached from the
+other. The chart sets `core.replicaCount: 1`. A rollout still runs the new
+pod beside the old one for a few seconds before the old one stops; that is
+harmless. Scaling core out is planned, not supported: see the docs'
+Architecture page, "One core instance".
+
 ### Hocuspocus runs as a single replica
 Hocuspocus holds Y.Doc state in process memory. Two replicas without
 sticky sessions cause split-brain editing. The chart pins
@@ -200,7 +211,8 @@ Credentials still come from `secrets.values` or `secrets.existingSecret`.
 | `ingress.tls.enabled` | Terminate TLS at the ingress (recommended for production) |
 | `ingress.tls.secretName` | Name of the TLS secret in the release namespace |
 | `core.image.tag` / `frontend.image.tag` / `hocuspocus.image.tag` | Pin to a specific build; defaults to chart `appVersion` |
-| `core.replicaCount` / `frontend.replicaCount` | Horizontal scale |
+| `frontend.replicaCount` | Horizontal scale of the web app's static pods |
+| `core.replicaCount` | Keep at 1: [core runs as a single replica](#core-runs-as-a-single-replica) |
 | `secrets.existingSecret` | Read all app secrets from a Secret you manage |
 | `core.config.oidc.*` | Optional OpenID Connect login (Keycloak etc.). Set `enabled` and `issuerUrl`, register `https://<ingress host>/api/v1/auth/oidc/callback` at the provider, and put the client secret in `secrets.values.oidcClientSecret` (key `oidcClientSecret` in an existing Secret) |
 | `core.config.auth.localLoginEnabled` | `false` hides the password form; only valid with `oidc.enabled=true` |

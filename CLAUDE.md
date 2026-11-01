@@ -238,6 +238,19 @@ After editing `schema.graphql`, run `make gqlgen` to regenerate.
 - Callback failures redirect to `<spa origin>/login?error=sso_*` (codes in `controller/oidc_controller.go`, messages in `frontend/src/lib/sso-errors.ts`); details only in the server log.
 - `/status` also returns `local_login_enabled` and `oidc{enabled, display_name, login_url, unavailable_reason}`; `login_url` is relative to the `/api/v1` base the SPA already prefixes.
 
+### One core instance
+
+Core runs as a single process (the Helm chart pins `core.replicaCount: 1`):
+the event bus that feeds GraphQL subscriptions is in process, and so will be
+minions' persistent connections. Scaling out is not built; keep it a
+contained change (docs: Architecture, "One core instance"):
+
+1. MongoDB and Redis hold the truth; memory only caches.
+2. Every push to a minion connection goes through one interface (send to a
+   session), never a socket held directly by its caller.
+3. A periodic job must be safe to run in two processes at once (a
+   conditional update, or a lease like the build scheduler's).
+
 ### Dependency Injection
 
 `App` in `app/app.go` constructs all services and passes them explicitly — no global singletons. Repositories, auth provider, cache, and logger are composed at startup and threaded through controllers/resolvers.

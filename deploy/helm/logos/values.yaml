@@ -89,7 +89,12 @@ core:
     tag: ""
     pullPolicy: IfNotPresent
 
-  replicaCount: 2
+  # Core runs as one instance. Its data is shared (MongoDB, Redis), but its
+  # event bus is in process: with two replicas, a change handled by one pod
+  # never reaches the live views (GraphQL subscriptions) of browsers
+  # connected to the other. Keep at 1 until core shares its events (see the
+  # chart README, "Core runs as a single replica").
+  replicaCount: 1
 
   # Container port the Go server listens on (matches Dockerfile EXPOSE 8002).
   containerPort: 8002
