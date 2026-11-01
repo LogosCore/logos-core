@@ -64,26 +64,30 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
       // Dim on the dark theme (index.css, .work-pad): read for hours.
       className="work-pad bg-background text-foreground"
       end={
+        // Icons at the tab row's size (its tabs' 16px), the size between them.
         <>
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             aria-label="Smaller text"
-            title={`Smaller text (${textSize}px now)`}
+            title="Smaller text"
             disabled={textSize <= PANE_TEXT_SIZES[0]}
             onClick={() => step(-1)}
           >
-            <AArrowDownIcon />
+            <AArrowDownIcon className="size-4" />
           </Button>
+          <span className="w-9 text-center text-xs text-muted-foreground tabular-nums" title="The text size in the tabs">
+            {textSize}px
+          </span>
           <Button
             variant="ghost"
-            size="icon-xs"
+            size="icon-sm"
             aria-label="Larger text"
-            title={`Larger text (${textSize}px now)`}
+            title="Larger text"
             disabled={textSize >= PANE_TEXT_SIZES[PANE_TEXT_SIZES.length - 1]}
             onClick={() => step(1)}
           >
-            <AArrowUpIcon />
+            <AArrowUpIcon className="size-4" />
           </Button>
         </>
       }
