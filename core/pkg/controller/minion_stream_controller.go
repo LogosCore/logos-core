@@ -141,10 +141,7 @@ func (sc *MinionStreamController) Download(c *gin.Context) {
 		}
 		ranged = true
 	}
-	name := unsafeFilename.ReplaceAllString(baseName(t.Stream.Name), "_")
-	if name == "" || name == "_" {
-		name = "stream-" + id.String()[:8]
-	}
+	name := downloadName(t.Stream.Name, "stream-"+id.String()[:8])
 	c.Header("Content-Type", "application/octet-stream")
 	c.Header("Content-Disposition", contentDispositionFor(name, "application/octet-stream", false))
 	c.Header("Content-Length", strconv.FormatInt(end-start, 10))

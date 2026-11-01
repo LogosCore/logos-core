@@ -176,10 +176,7 @@ func (mc *MinionTaskController) DownloadFile(c *gin.Context) {
 		return
 	}
 	defer body.Close()
-	name := unsafeFilename.ReplaceAllString(baseName(f.Name), "_")
-	if name == "" || name == "_" {
-		name = "file-" + id.String()[:8]
-	}
+	name := downloadName(f.Name, "file-"+id.String()[:8])
 	contentType := f.ContentType
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -205,6 +202,27 @@ func baseName(p string) string {
 	return p
 }
 
+// downloadName is what a minion's file is saved as: the last part of its
+// path on the host, as it is (Cyrillic, spaces and all), its control
+// characters dropped; fallback when nothing is left. The name is the host's
+// and untrusted: the path goes, and contentDispositionFor encodes the rest
+// (an ASCII fallback, and the UTF-8 name percent-encoded in filename*), so
+// nothing in it reaches the header raw. The web app's savedName follows it.
+func downloadName(p, fallback string) string {
+	name := strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, baseName(p))
+	if name == "" || name == "." || name == ".." {
+		return fallback
+	}
+	return name
+}
+
+// unsafeFilename is what a name made of the app's own words (a command)
+// keeps out of a download's name.
 var unsafeFilename = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // DownloadOutput handles GET /api/v1/minion-tasks/{id}/output.

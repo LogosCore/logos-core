@@ -8,13 +8,14 @@ export interface VerifyCommand {
 }
 
 /** The name a download is saved under: core's (minion_task_controller.go,
- *  unsafeFilename), the path's last part with each run of other
- *  characters than letters, digits, ".", "_" and "-" one "_"; fallback for
- *  none. */
+ *  downloadName), the path's last part as it is (Cyrillic, spaces and
+ *  all), its control characters dropped; fallback for none. A browser may
+ *  still swap what its file system forbids (on Windows : * ? " < > |). */
 export function savedName(path: string, fallback: string): string {
   const base = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1)
-  const name = base.replace(/[^A-Za-z0-9._-]+/g, "_")
-  return name === "" || name === "_" ? fallback : name
+  // eslint-disable-next-line no-control-regex -- the control characters are the point
+  const name = base.replace(/[\u0000-\u001f\u007f]/g, "")
+  return name === "" || name === "." || name === ".." ? fallback : name
 }
 
 /** A string for a POSIX shell, single-quoted. */

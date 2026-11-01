@@ -18,9 +18,24 @@ describe("verifyCommands", () => {
 })
 
 describe("savedName", () => {
-  it("is core's: the last part, other characters as _", () => {
-    expect(savedName("/home/u/Win10 22H2 (x64).iso", "f")).toBe("Win10_22H2_x64_.iso")
-    expect(savedName("C:\\Users\\a\\notes.txt", "f")).toBe("notes.txt")
+  it("is core's: the last part as it is, control characters dropped", () => {
+    expect(savedName("/home/u/Win10 22H2 (x64).iso", "f")).toBe("Win10 22H2 (x64).iso")
+    expect(savedName("/home/u/21.08.26 камери перевірені нові (із 1го списку).docx", "f")).toBe(
+      "21.08.26 камери перевірені нові (із 1го списку).docx",
+    )
+    expect(savedName("C:\\Users\\Анна\\звіт 2026.pdf", "f")).toBe("звіт 2026.pdf")
+    expect(savedName("/tmp/bad\r\nname", "f")).toBe("badname")
     expect(savedName("/tmp/", "file-1")).toBe("file-1")
+    expect(savedName("/tmp/..", "file-1")).toBe("file-1")
+  })
+})
+
+describe("verifyCommands with a name in any script", () => {
+  it("quotes Cyrillic, spaces, parentheses and quotes for each shell", () => {
+    const name = "звіт (it's 1го).docx"
+    const [linux, mac, win] = verifyCommands(name, "ab")
+    expect(linux.command).toBe(`echo 'ab  звіт (it'\\''s 1го).docx' | sha256sum -c -`)
+    expect(mac.command).toBe(`echo 'ab  звіт (it'\\''s 1го).docx' | shasum -a 256 -c -`)
+    expect(win.command).toContain(`-LiteralPath 'звіт (it''s 1го).docx'`)
   })
 })
