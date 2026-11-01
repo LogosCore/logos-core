@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -302,7 +303,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		Description: b.Description, DescriptionSet: true,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.AddrStrings()),
-		CreatedAt: now, PurgeAt: &purge,
+		Conn: connPlace(hello.Conn), CreatedAt: now, PurgeAt: &purge,
 	}
 	if peer != "" {
 		session.PeerAddress = peer
@@ -461,6 +462,13 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello), address, picked); err != nil {
 				return nil, fmt.Errorf("rehello: %w", err)
 			}
+			// The connection it says hello through, when it says.
+			if c := connPlace(hello.Conn); c > 0 && c != session.Conn {
+				if err = s.sessions.SetConn(ctx, session.SessionID, c, nil); err != nil {
+					return nil, fmt.Errorf("rehello: %w", err)
+				}
+				session.Conn = c
+			}
 			s.logger.Info("minion rehello", zap.String("session_id", session.SessionID.String()))
 			out, err = helloResponse(session.SessionID)
 		case protocol.ItemSleepUpdate:
@@ -468,6 +476,21 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if _, rErr := readSleepUpdate(raw); rErr != nil {
 				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
 			}
+		case protocol.ItemConnUpdate:
+			// Recorded; nothing to answer.
+			u, rErr := readConnUpdate(raw)
+			if rErr != nil {
+				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
+				break
+			}
+			to := connPlace(u.Conn)
+			change := &models.MinionSessionConnChange{At: s.now(), From: session.Conn, To: to, Reason: u.Reason}
+			if err = s.sessions.SetConn(ctx, session.SessionID, to, change); err != nil {
+				return nil, fmt.Errorf("record a conn_update: %w", err)
+			}
+			s.logger.Info("minion moved to another connection", zap.String("session_id", session.SessionID.String()),
+				zap.Int("from", session.Conn), zap.Int("to", to), zap.String("reason", u.Reason))
+			session.Conn = to
 		case protocol.ItemGetTasks:
 			// Answered after the other items (tasks.go): an ack or a result
 			// in the same message first stops those tasks being sent again.
@@ -559,6 +582,24 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	}
 	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
 	return items, nil
+}
+
+// readConnUpdate reads and checks a conn_update.
+func readConnUpdate(raw cbor.RawMessage) (protocol.ConnUpdateItem, error) {
+	var u protocol.ConnUpdateItem
+	if err := protocol.UnmarshalCBOR(raw, &u); err != nil {
+		return u, errors.New("the conn_update does not read")
+	}
+	return u, u.Validate()
+}
+
+// connPlace is a connection's place as core keeps it: 0 (not said) for one
+// past any build's connections.
+func connPlace(n uint64) int {
+	if n > math.MaxInt32 {
+		return 0
+	}
+	return int(n)
 }
 
 // readSleepUpdate reads and checks a sleep_update.

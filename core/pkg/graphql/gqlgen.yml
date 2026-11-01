@@ -95,6 +95,8 @@ models:
     fields:
       connected:
         resolver: true
+      connections:
+        resolver: true
 
   # Map the GraphQL "OperationRole" enum to our existing OperationRole type.
   # The Go type implements MarshalGQL/UnmarshalGQL for case conversion.

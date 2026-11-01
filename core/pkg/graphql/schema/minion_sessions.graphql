@@ -103,6 +103,41 @@ type MinionSession {
   # A persistent connection serving the session is open (docs:
   # contracts/channel-core-connections): its minion is reached at once.
   connected: Boolean!
+  # The connection the minion uses: its place in connections, from 1, as
+  # its hello or its last conn_update said. null when it never said.
+  conn: Int
+  # Its moves to another connection, as the minion reported them (whatever
+  # moved it: an operator's switch, a fallback), most recent first, at most
+  # 32.
+  connChanges: [MinionConnChange!]!
+  # The build's connections, in the build's order (the order the minion
+  # tries them); empty when the build is deleted.
+  connections: [MinionConnection!]!
+}
+
+# One of a session's build's connections.
+type MinionConnection {
+  # Its place in the build's connections, from 1: what a hello, a
+  # conn_update and switch_connection name it by.
+  place: Int!
+  # What the minion calls it (the endpoint export's name).
+  name: String!
+  # The channel kind, e.g. "http".
+  moduleName: String!
+  # The connection kind, e.g. "reverse-call".
+  kind: String!
+  # The channel's settings as the build gave them (the export's params).
+  params: JSON!
+}
+
+# A move to another connection a minion reported.
+type MinionConnChange {
+  at: String!
+  # The place it moved from; null when core did not know it.
+  from: Int
+  to: Int!
+  # Why, when the minion said ("fell back after 5 failures").
+  reason: String
 }
 
 # A process that claimed a persisted session.

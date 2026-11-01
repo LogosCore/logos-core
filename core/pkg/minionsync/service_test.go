@@ -115,6 +115,18 @@ func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.Minion
 	return nil
 }
 
+func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn int, change *models.MinionSessionConnChange) error {
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].Conn = conn
+			if change != nil {
+				f.rows[i].ConnChanges = append([]models.MinionSessionConnChange{*change}, f.rows[i].ConnChanges...)
+			}
+		}
+	}
+	return nil
+}
+
 func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
@@ -756,6 +768,50 @@ func TestSessionSchedule(t *testing.T) {
 	sessionID(t, r.open(t, reply))
 	if s := r.sessions.rows[1]; s.Sleep != nil || s.LateAt != nil || s.LostAt != nil {
 		t.Fatalf("without a schedule: %+v %v", s.Sleep, s.LateAt)
+	}
+}
+
+// The connection a minion uses: its hello's, then each conn_update, which
+// is kept with where it came from and why; a rehello through another one
+// moves it without a change recorded.
+func TestSessionConnection(t *testing.T) {
+	r := newRig(t)
+	h := hello("web01")
+	h.Conn = 1
+	reply, _ := r.send(t, protocol.NewMessageID(), h)
+	sid := sessionID(t, r.open(t, reply))
+	if c := r.sessions.rows[0].Conn; c != 1 {
+		t.Fatalf("at hello: conn %d", c)
+	}
+
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(),
+		protocol.ConnUpdateItem{T: protocol.ItemConnUpdate, Conn: 2, Reason: "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	s := r.sessions.rows[0]
+	if s.Conn != 2 || len(s.ConnChanges) != 1 || s.ConnChanges[0].From != 1 || s.ConnChanges[0].To != 2 || s.ConnChanges[0].Reason != "operator" {
+		t.Fatalf("after conn_update: %d %+v", s.Conn, s.ConnChanges)
+	}
+
+	// A bad one is refused, and changes nothing.
+	reply, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.ConnUpdateItem{T: protocol.ItemConnUpdate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var e protocol.ErrItem
+	if msg := r.openUnder(t, sid, r.keys, reply); len(msg.Items) != 1 || protocol.UnmarshalCBOR(msg.Items[0], &e) != nil || e.Code != protocol.ErrItemBadMessage {
+		t.Fatalf("bad conn_update: %+v", msg)
+	}
+	if s := r.sessions.rows[0]; s.Conn != 2 || len(s.ConnChanges) != 1 {
+		t.Fatalf("a bad conn_update was taken: %d %+v", s.Conn, s.ConnChanges)
+	}
+
+	h.Conn = 3
+	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), h); err != nil {
+		t.Fatal(err)
+	}
+	if s := r.sessions.rows[0]; s.Conn != 3 || len(s.ConnChanges) != 1 {
+		t.Fatalf("after a rehello: %d %+v", s.Conn, s.ConnChanges)
 	}
 }
 

@@ -22,6 +22,11 @@ func (r *minionSessionResolver) Connected(ctx context.Context, obj *model.Minion
 	return r.MinionConnections.Connected(id), nil
 }
 
+// Connections is the resolver for the connections field.
+func (r *minionSessionResolver) Connections(ctx context.Context, obj *model.MinionSession) ([]*model.MinionConnection, error) {
+	return r.MinionSessionResolver.Connections(ctx, obj)
+}
+
 // SetMinionSessionArchived is the resolver for the setMinionSessionArchived field.
 func (r *mutationResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionArchived(ctx, id, archived)

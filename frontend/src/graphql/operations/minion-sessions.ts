@@ -58,6 +58,13 @@ export const MinionSessionFields = graphql(`
     createdAt
     lastSeenAt
     connected
+    conn
+    connChanges {
+      at
+      from
+      to
+      reason
+    }
   }
 `)
 
@@ -167,6 +174,23 @@ export const MinionSessionQuery = graphql(`
   query MinionSession($id: ID!) {
     minionSession(id: $id) {
       ...MinionSessionFields
+    }
+  }
+`)
+
+// The session's build's connections: fixed with the build, so apart from
+// the fields live updates replace.
+export const MinionSessionConnectionsQuery = graphql(`
+  query MinionSessionConnections($id: ID!) {
+    minionSession(id: $id) {
+      id
+      connections {
+        place
+        name
+        moduleName
+        kind
+        params
+      }
     }
   }
 `)

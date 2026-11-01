@@ -537,6 +537,21 @@ type Minion struct {
 	CreatedAt   string       `json:"createdAt"`
 }
 
+type MinionConnChange struct {
+	At     string  `json:"at"`
+	From   *int    `json:"from,omitempty"`
+	To     int     `json:"to"`
+	Reason *string `json:"reason,omitempty"`
+}
+
+type MinionConnection struct {
+	Place      int    `json:"place"`
+	Name       string `json:"name"`
+	ModuleName string `json:"moduleName"`
+	Kind       string `json:"kind"`
+	Params     any    `json:"params"`
+}
+
 type MinionFile struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
@@ -604,6 +619,9 @@ type MinionSession struct {
 	LostAt           *string                 `json:"lostAt,omitempty"`
 	LastSeenAt       *string                 `json:"lastSeenAt,omitempty"`
 	Connected        bool                    `json:"connected"`
+	Conn             *int                    `json:"conn,omitempty"`
+	ConnChanges      []*MinionConnChange     `json:"connChanges"`
+	Connections      []*MinionConnection     `json:"connections"`
 }
 
 type MinionSessionConnection struct {

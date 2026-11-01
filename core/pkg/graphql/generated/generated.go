@@ -543,6 +543,21 @@ type ComplexityRoot struct {
 		Target      func(childComplexity int) int
 	}
 
+	MinionConnChange struct {
+		At     func(childComplexity int) int
+		From   func(childComplexity int) int
+		Reason func(childComplexity int) int
+		To     func(childComplexity int) int
+	}
+
+	MinionConnection struct {
+		Kind       func(childComplexity int) int
+		ModuleName func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Params     func(childComplexity int) int
+		Place      func(childComplexity int) int
+	}
+
 	MinionFile struct {
 		ContentType func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
@@ -577,7 +592,10 @@ type ComplexityRoot struct {
 		Archived         func(childComplexity int) int
 		BuildDescription func(childComplexity int) int
 		BuildID          func(childComplexity int) int
+		Conn             func(childComplexity int) int
+		ConnChanges      func(childComplexity int) int
 		Connected        func(childComplexity int) int
+		Connections      func(childComplexity int) int
 		CreatedAt        func(childComplexity int) int
 		Description      func(childComplexity int) int
 		Domain           func(childComplexity int) int
@@ -1655,6 +1673,8 @@ type HostResolver interface {
 }
 type MinionSessionResolver interface {
 	Connected(ctx context.Context, obj *model.MinionSession) (bool, error)
+
+	Connections(ctx context.Context, obj *model.MinionSession) ([]*model.MinionConnection, error)
 }
 type MinionTaskResolver interface {
 	Output(ctx context.Context, obj *model.MinionTask) (string, error)
@@ -3998,6 +4018,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Minion.Target(childComplexity), true
 
+	case "MinionConnChange.at":
+		if e.ComplexityRoot.MinionConnChange.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnChange.At(childComplexity), true
+	case "MinionConnChange.from":
+		if e.ComplexityRoot.MinionConnChange.From == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnChange.From(childComplexity), true
+	case "MinionConnChange.reason":
+		if e.ComplexityRoot.MinionConnChange.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnChange.Reason(childComplexity), true
+	case "MinionConnChange.to":
+		if e.ComplexityRoot.MinionConnChange.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnChange.To(childComplexity), true
+
+	case "MinionConnection.kind":
+		if e.ComplexityRoot.MinionConnection.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnection.Kind(childComplexity), true
+	case "MinionConnection.moduleName":
+		if e.ComplexityRoot.MinionConnection.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnection.ModuleName(childComplexity), true
+	case "MinionConnection.name":
+		if e.ComplexityRoot.MinionConnection.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnection.Name(childComplexity), true
+	case "MinionConnection.params":
+		if e.ComplexityRoot.MinionConnection.Params == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnection.Params(childComplexity), true
+	case "MinionConnection.place":
+		if e.ComplexityRoot.MinionConnection.Place == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionConnection.Place(childComplexity), true
+
 	case "MinionFile.contentType":
 		if e.ComplexityRoot.MinionFile.ContentType == nil {
 			break
@@ -4145,12 +4221,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.BuildID(childComplexity), true
+	case "MinionSession.conn":
+		if e.ComplexityRoot.MinionSession.Conn == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Conn(childComplexity), true
+	case "MinionSession.connChanges":
+		if e.ComplexityRoot.MinionSession.ConnChanges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.ConnChanges(childComplexity), true
 	case "MinionSession.connected":
 		if e.ComplexityRoot.MinionSession.Connected == nil {
 			break
 		}
 
 		return e.ComplexityRoot.MinionSession.Connected(childComplexity), true
+	case "MinionSession.connections":
+		if e.ComplexityRoot.MinionSession.Connections == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Connections(childComplexity), true
 	case "MinionSession.createdAt":
 		if e.ComplexityRoot.MinionSession.CreatedAt == nil {
 			break
@@ -10200,8 +10294,8 @@ input BuildConnectionInput {
   # factory, so it cannot end up in an artifact.
   description: String
   # Connection settings by the field key of the connection kind in the
-  # channel's connection schema. null, ""
-  # and [] leave a setting unset (its default applies).
+  # channel's connection schema. null, "" and [] leave a setting unset (its
+  # default applies).
   settings: JSON
   # The factory's connection parameter values for the connection kind by
   # key, the same way.
@@ -11642,6 +11736,41 @@ type MinionSession {
   # A persistent connection serving the session is open (docs:
   # contracts/channel-core-connections): its minion is reached at once.
   connected: Boolean!
+  # The connection the minion uses: its place in connections, from 1, as
+  # its hello or its last conn_update said. null when it never said.
+  conn: Int
+  # Its moves to another connection, as the minion reported them (whatever
+  # moved it: an operator's switch, a fallback), most recent first, at most
+  # 32.
+  connChanges: [MinionConnChange!]!
+  # The build's connections, in the build's order (the order the minion
+  # tries them); empty when the build is deleted.
+  connections: [MinionConnection!]!
+}
+
+# One of a session's build's connections.
+type MinionConnection {
+  # Its place in the build's connections, from 1: what a hello, a
+  # conn_update and switch_connection name it by.
+  place: Int!
+  # What the minion calls it (the endpoint export's name).
+  name: String!
+  # The channel kind, e.g. "http".
+  moduleName: String!
+  # The connection kind, e.g. "reverse-call".
+  kind: String!
+  # The channel's settings as the build gave them (the export's params).
+  params: JSON!
+}
+
+# A move to another connection a minion reported.
+type MinionConnChange {
+  at: String!
+  # The place it moved from; null when core did not know it.
+  from: Int
+  to: Int!
+  # Why, when the minion said ("fell back after 5 failures").
+  reason: String
 }
 
 # A process that claimed a persisted session.
@@ -28691,6 +28820,267 @@ func (ec *executionContext) fieldContext_Minion_createdAt(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionConnChange_at(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnChange_at,
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnChange_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnChange_from(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnChange_from,
+		func(ctx context.Context) (any, error) {
+			return obj.From, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnChange_from(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnChange_to(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnChange_to,
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnChange_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnChange_reason(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnChange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnChange_reason,
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnChange_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnChange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnection_place(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnection_place,
+		func(ctx context.Context) (any, error) {
+			return obj.Place, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnection_place(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnection_name(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnection_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnection_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnection_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnection_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnection_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnection_kind(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnection_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnection_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionConnection_params(ctx context.Context, field graphql.CollectedField, obj *model.MinionConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionConnection_params,
+		func(ctx context.Context) (any, error) {
+			return obj.Params, nil
+		},
+		nil,
+		ec.marshalNJSON2interface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionConnection_params(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionFile_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionFile) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30382,6 +30772,115 @@ func (ec *executionContext) fieldContext_MinionSession_connected(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_conn(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_conn,
+		func(ctx context.Context) (any, error) {
+			return obj.Conn, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_conn(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSession_connChanges(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_connChanges,
+		func(ctx context.Context) (any, error) {
+			return obj.ConnChanges, nil
+		},
+		nil,
+		ec.marshalNMinionConnChange2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnChangeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_connChanges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "at":
+				return ec.fieldContext_MinionConnChange_at(ctx, field)
+			case "from":
+				return ec.fieldContext_MinionConnChange_from(ctx, field)
+			case "to":
+				return ec.fieldContext_MinionConnChange_to(ctx, field)
+			case "reason":
+				return ec.fieldContext_MinionConnChange_reason(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionConnChange", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSession_connections(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_connections,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionSession().Connections(ctx, obj)
+		},
+		nil,
+		ec.marshalNMinionConnection2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnectionᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "place":
+				return ec.fieldContext_MinionConnection_place(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionConnection_name(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionConnection_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_MinionConnection_kind(ctx, field)
+			case "params":
+				return ec.fieldContext_MinionConnection_params(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionConnection", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSessionConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30589,6 +31088,12 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -30816,6 +31321,12 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -41461,6 +41972,12 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -41661,6 +42178,12 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -41802,6 +42325,12 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -42002,6 +42531,12 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -50199,6 +50734,12 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
 			case "connected":
 				return ec.fieldContext_MinionSession_connected(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionSession_conn(ctx, field)
+			case "connChanges":
+				return ec.fieldContext_MinionSession_connChanges(ctx, field)
+			case "connections":
+				return ec.fieldContext_MinionSession_connections(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -72324,6 +72865,113 @@ func (ec *executionContext) _Minion(ctx context.Context, sel ast.SelectionSet, o
 	return out
 }
 
+var minionConnChangeImplementors = []string{"MinionConnChange"}
+
+func (ec *executionContext) _MinionConnChange(ctx context.Context, sel ast.SelectionSet, obj *model.MinionConnChange) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionConnChangeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionConnChange")
+		case "at":
+			out.Values[i] = ec._MinionConnChange_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "from":
+			out.Values[i] = ec._MinionConnChange_from(ctx, field, obj)
+		case "to":
+			out.Values[i] = ec._MinionConnChange_to(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._MinionConnChange_reason(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionConnectionImplementors = []string{"MinionConnection"}
+
+func (ec *executionContext) _MinionConnection(ctx context.Context, sel ast.SelectionSet, obj *model.MinionConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionConnection")
+		case "place":
+			out.Values[i] = ec._MinionConnection_place(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._MinionConnection_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleName":
+			out.Values[i] = ec._MinionConnection_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._MinionConnection_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "params":
+			out.Values[i] = ec._MinionConnection_params(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionFileImplementors = []string{"MinionFile"}
 
 func (ec *executionContext) _MinionFile(ctx context.Context, sel ast.SelectionSet, obj *model.MinionFile) graphql.Marshaler {
@@ -72667,6 +73315,49 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 					}
 				}()
 				res = ec._MinionSession_connected(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "conn":
+			out.Values[i] = ec._MinionSession_conn(ctx, field, obj)
+		case "connChanges":
+			out.Values[i] = ec._MinionSession_connChanges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "connections":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionSession_connections(ctx, field, obj)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -84793,6 +85484,58 @@ func (ec *executionContext) marshalNMinion2ᚖgithubᚗcomᚋlogoscoreᚋlogos�
 		return graphql.Null
 	}
 	return ec._Minion(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionConnChange2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnChangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionConnChange) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionConnChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnChange(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionConnChange2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnChange(ctx context.Context, sel ast.SelectionSet, v *model.MinionConnChange) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionConnChange(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionConnection2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionConnection) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnection(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionConnection(ctx context.Context, sel ast.SelectionSet, v *model.MinionConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionConnection(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMinionFileString2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionFileStringᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionFileString) graphql.Marshaler {

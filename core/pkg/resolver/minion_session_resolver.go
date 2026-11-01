@@ -23,6 +23,9 @@ import (
 
 // IMinionSessionResolver is the business logic behind minion_sessions.graphql.
 type IMinionSessionResolver interface {
+	// Connections is MinionSession.connections: its build's, read when
+	// asked (the session was authorized with it).
+	Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error)
 	MinionSessions(ctx context.Context, operationID string, archived *bool, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
 	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
 	MinionSession(ctx context.Context, id string) (*model.MinionSession, error)
@@ -56,15 +59,43 @@ type minionSessionResolver struct {
 	preferences   repository.IUserPreferencesRepository
 	reservations  repository.IMinionSessionReservationRepository
 	marks         repository.IMinionSessionMarkRepository
+	builds        repository.IBuildRepository
 	bus           eventbus.IEventBus
 }
 
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,
 	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
 	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
-	bus eventbus.IEventBus) IMinionSessionResolver {
+	builds repository.IBuildRepository, bus eventbus.IEventBus) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
-		reservations: reservations, marks: marks, bus: bus}
+		reservations: reservations, marks: marks, builds: builds, bus: bus}
+}
+
+func (r *minionSessionResolver) Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error) {
+	out := []*model.MinionConnection{}
+	if r.builds == nil {
+		return out, nil
+	}
+	buildID, err := uuid.Parse(s.BuildID)
+	if err != nil {
+		return nil, fmt.Errorf("the session's build id: %w", err)
+	}
+	b, err := r.builds.FindByBuildID(ctx, buildID)
+	if repository.IsNotFound(err) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load the session's build: %w", err)
+	}
+	for i, c := range b.Connections.Items {
+		params := map[string]any{}
+		for k, v := range c.Endpoint.Params {
+			params[k] = v
+		}
+		out = append(out, &model.MinionConnection{Place: i + 1, Name: c.Endpoint.Name, ModuleName: c.Endpoint.Channel.ModuleName,
+			Kind: c.ConnectionKind(), Params: params})
+	}
+	return out, nil
 }
 
 // viewer authorizes a viewer of the operation.
@@ -598,6 +629,19 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	if s.Sleep != nil {
 		interval, jitter := int(s.Sleep.Interval), int(s.Sleep.Jitter)
 		out.SleepInterval, out.SleepJitter = &interval, &jitter
+	}
+	if s.Conn > 0 {
+		conn := s.Conn
+		out.Conn = &conn
+	}
+	out.ConnChanges = make([]*model.MinionConnChange, len(s.ConnChanges))
+	for i, c := range s.ConnChanges {
+		ch := &model.MinionConnChange{At: c.At.UTC().Format(time.RFC3339), To: c.To, Reason: strPtr(c.Reason)}
+		if c.From > 0 {
+			from := c.From
+			ch.From = &from
+		}
+		out.ConnChanges[i] = ch
 	}
 	return out
 }

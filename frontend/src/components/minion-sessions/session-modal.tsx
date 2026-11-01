@@ -27,6 +27,7 @@ import type { RecordModal as RecordModalTarget, SessionTab } from "@/lib/record-
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, formatInterval, lateness } from "./sessions-layout"
+import { ConnectionsCard } from "./session-connections"
 
 // One minion session (?session=<id>[&sessionTab=]), over any page: Overview,
 // what it is and where it runs, in cards; JSON, its record as the API gives
@@ -101,6 +102,8 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
             <SessionCard s={s} />
             <HostCard s={s} />
             <BuildCard s={s} onOpenBuild={() => open({ kind: "build", id: s.buildId })} icons={icons} />
+            <ConnectionsCard s={s} />
+            {s.connChanges.length > 0 && <ConnectionChangesCard s={s} />}
             <AddressesCard s={s} />
             <PeersCard s={s} />
             {s.restarts.length > 0 && <RestartsCard s={s} />}
@@ -301,6 +304,22 @@ function PeersCard({ s }: { s: Session }) {
           }))}
         />
       )}
+    </InfoCard>
+  )
+}
+
+/** The moves to another connection the minion reported, most recent first. */
+function ConnectionChangesCard({ s }: { s: Session }) {
+  const now = useNow(60_000)
+  return (
+    <InfoCard title="Connection changes" note={s.connChanges.length}>
+      {/* The same move may come again, so by place. */}
+      {s.connChanges.map((c, i) => (
+        <LabelRow key={i} label={`${c.from ?? "?"} → ${c.to}`}>
+          <When at={c.at} now={now} />
+          {c.reason && <span className="text-muted-foreground"> · {c.reason}</span>}
+        </LabelRow>
+      ))}
     </InfoCard>
   )
 }

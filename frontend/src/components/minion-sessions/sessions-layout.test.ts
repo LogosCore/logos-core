@@ -191,6 +191,8 @@ describe("live updates", () => {
     createdAt: "2026-10-30T10:00:00Z",
     lastSeenAt: "2026-10-30T10:00:00Z",
     connected: false,
+    conn: null,
+    connChanges: [],
     ...patch,
   })
   const listData = (...rows: MinionSessionFieldsFragment[]) => ({

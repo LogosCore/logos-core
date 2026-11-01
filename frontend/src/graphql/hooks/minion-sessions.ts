@@ -16,6 +16,7 @@ import {
   MinionSessionChangedDocument,
   MinionSessionValuesDocument,
   MinionSessionDocument,
+  MinionSessionConnectionsDocument,
   MinionSessionsLayoutDocument,
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
@@ -59,6 +60,7 @@ export const minionSessionKeys = {
   values: (operationId: string, column: string) => [...minionSessionKeys.all, "values", operationId, column] as const,
   layout: () => [...minionSessionKeys.all, "layout"] as const,
   detail: (id: string) => [...minionSessionKeys.all, "detail", id] as const,
+  connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
 }
 
 // How often a list with a filter on the clock ("seen within 5m") refetches:
@@ -251,6 +253,16 @@ const sessionQuery = (id: string) => ({
 /** One session (closed ones too). */
 export function useMinionSession(id: string) {
   return useQuery(sessionQuery(id))
+}
+
+/** A session's build's connections, in the build's order: they change only with the build. */
+export function useMinionSessionConnections(id: string) {
+  return useQuery({
+    queryKey: minionSessionKeys.connections(id),
+    queryFn: () => graphqlClient(MinionSessionConnectionsDocument, { id }),
+    enabled: id !== "",
+    staleTime: 5 * 60_000,
+  })
 }
 
 /** Several sessions, each its own query (shared with useMinionSession): undefined while loading, null when gone. */

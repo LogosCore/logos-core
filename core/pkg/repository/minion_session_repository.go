@@ -42,6 +42,10 @@ type IMinionSessionRepository interface {
 	// SetHello replaces what the session's hello said (a rehello), with the
 	// address the session shows now.
 	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error
+	// SetConn records the connection the minion uses (its place in the
+	// build's connections), and with change, the move it reported, first
+	// in the session's ConnChanges (capped at MaxSessionConnChanges).
+	SetConn(ctx context.Context, sessionID uuid.UUID, conn int, change *models.MinionSessionConnChange) error
 	// SetAddress sets the address the session shows, one of its hello's;
 	// IsNotFound when the session has no such address.
 	SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error
@@ -235,6 +239,16 @@ func checkInPipeline(at time.Time, peer string, set bson.M) bson.A {
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
 		withRev(bson.M{"$set": bson.M{"hello": hello, "address": address, "address_picked": picked}}))
+}
+
+func (r *minionSessionRepository) SetConn(ctx context.Context, sessionID uuid.UUID, conn int, change *models.MinionSessionConnChange) error {
+	update := bson.M{"$set": bson.M{"conn": conn}}
+	if change != nil {
+		update["$push"] = bson.M{"conn_changes": bson.M{
+			"$each": bson.A{change}, "$position": 0, "$slice": models.MaxSessionConnChanges,
+		}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
 }
 
 func (r *minionSessionRepository) SetAddress(ctx context.Context, sessionID uuid.UUID, address string, picked bool) error {

@@ -77,6 +77,12 @@ type MinionSession struct {
 	Sleep  *MinionSessionSleep `bson:"sleep,omitempty" json:"sleep,omitempty"`
 	LateAt *time.Time          `bson:"late_at,omitempty" json:"late_at,omitempty"`
 	LostAt *time.Time          `bson:"lost_at,omitempty" json:"lost_at,omitempty"`
+	// Conn is the connection the minion uses: its place in the build's
+	// connections, from 1, as its hello or its last conn_update said; 0
+	// when it never said. ConnChanges are the moves it reported, most
+	// recent first, at most MaxSessionConnChanges.
+	Conn        int                       `bson:"conn,omitempty" json:"conn,omitempty"`
+	ConnChanges []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
@@ -127,11 +133,23 @@ func (s *MinionSession) Closed(now time.Time) bool {
 // build's is.
 const MaxSessionDescription = 500
 
-// MaxSessionRestarts and MaxSessionReplacedKeys cap a session's lists.
+// MaxSessionRestarts, MaxSessionReplacedKeys and MaxSessionConnChanges cap
+// a session's lists.
 const (
 	MaxSessionRestarts     = 32
 	MaxSessionReplacedKeys = 4
+	MaxSessionConnChanges  = 32
 )
+
+// MinionSessionConnChange is a move to another connection a minion reported
+// (a conn_update): from the connection it used (0: unknown) to To, both
+// places in the build's connections, and why, when it said.
+type MinionSessionConnChange struct {
+	At     time.Time `bson:"at" json:"at"`
+	From   int       `bson:"from,omitempty" json:"from,omitempty"`
+	To     int       `bson:"to" json:"to"`
+	Reason string    `bson:"reason,omitempty" json:"reason,omitempty"`
+}
 
 // MinionSessionRestart is one claim of a persisted session: a process that
 // took it over.
