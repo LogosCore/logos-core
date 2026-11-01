@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch"
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
 import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
+import { CONNECTION_FORMAT, choiceDetail } from "@/components/minion-sessions/connection-choices"
+import { useConnectionChoices } from "@/components/minion-sessions/use-connection-choices"
 import { move } from "@/components/builds/build-values"
 import { FORMATS as GENERATED_FORMATS } from "@/lib/word-generator"
 import { UserAgentGenerator } from "./user-agent-generator"
@@ -59,6 +61,8 @@ export function FieldControl({
   defaultValue,
   secretSet,
 }: FieldControlProps) {
+  // A connection param's choices: the session's, in a session's command form.
+  const connections = useConnectionChoices()
   const defaultText =
     defaultValue === null || defaultValue === undefined
       ? undefined
@@ -240,6 +244,46 @@ export function FieldControl({
     }
 
     case "int":
+      // One of the session's connections, by name: the minion gets its place.
+      if (field.format === CONNECTION_FORMAT && connections.length > 0) {
+        return (
+          <Select value={text.trim() === "" ? null : text.trim()} onValueChange={(v) => typeof v === "string" && setText(v)} disabled={disabled}>
+            <SelectTrigger id={id} className="w-full" aria-invalid={invalid || undefined}>
+              <SelectValue placeholder="Pick a connection">
+                {(v: string | null) => {
+                  const c = connections.find((x) => String(x.place) === v)
+                  return c ? c.name : v ? `connection ${v}` : "Pick a connection"
+                }}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((c) => (
+                <SelectItem key={c.place} value={String(c.place)} disabled={c.inUse} description={choiceDetail(c)}>
+                  {c.name}
+                  {c.inUse && <span className="text-xs text-muted-foreground"> · in use</span>}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )
+      }
+      return (
+        <div className="flex items-center gap-2">
+          <Input
+            id={id}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            placeholder={placeholder}
+            inputMode="numeric"
+            className="w-full max-w-48"
+          />
+          {field.unit && (
+            <span className="text-sm text-muted-foreground">{field.unit}</span>
+          )}
+        </div>
+      )
     case "number":
       return (
         <div className="flex items-center gap-2">
@@ -250,7 +294,7 @@ export function FieldControl({
             disabled={disabled}
             aria-invalid={invalid || undefined}
             placeholder={placeholder}
-            inputMode={field.type === "int" ? "numeric" : "decimal"}
+            inputMode="decimal"
             className="w-full max-w-48"
           />
           {field.unit && (

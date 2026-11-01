@@ -20,6 +20,7 @@ import type { UploadTarget } from "./upload-target"
 import { commandsFor } from "./action-commands"
 import type { Task } from "./task-actions"
 import { useWorkspaceActions } from "./workspace-tabs"
+import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // A session's console, in its work pane tab: the tasks given its minion on
 // the left, the one picked on the right with what came back, and the
@@ -41,14 +42,16 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
   const { layout, setLayout } = useMinionSessionsLayout()
 
   const commands = commandsQ.commands
+  const connections = useSessionConnectionChoices(sessionId)
   const byId = useMemo(() => new Map(commands.map((c) => [c.id, c])), [commands])
   // Oldest first: the newest at the bottom, by the command line.
   const tasks = useMemo(() => (tasksQ.data?.pages ?? []).flatMap((p) => p.minionTasks.tasks).toReversed(), [tasksQ.data])
 
   // What ↑ and ↓ go through on the command line: the tasks as typed.
   const history = useMemo(
-    () => commandHistory(tasks.map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command)))),
-    [tasks, byId],
+    () =>
+      commandHistory(tasks.map((t) => lineOf(t.command, t.args as Record<string, unknown> | null, byId.get(t.command), connections))),
+    [tasks, byId, connections],
   )
 
   const [selection, setSelection] = useState<ConsoleSelection>(FOLLOWING)

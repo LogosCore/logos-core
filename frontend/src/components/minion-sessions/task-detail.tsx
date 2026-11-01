@@ -33,6 +33,7 @@ import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
+import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // The right of a session's console: the task picked in the list, whole
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
@@ -130,7 +131,8 @@ export function TaskDetail({
   /** Goes up when Ctrl+F is pressed in the console: the find bar opens. */
   findSignal: number
 }) {
-  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
+  const connections = useSessionConnectionChoices(t.sessionId)
+  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
   const actions = useTaskActions(t, line, { canWrite, onQueued })
   // Read again when they change: more output, a part with data, its end.
   // Not on every part: a walk sends parts with listings alone, many a

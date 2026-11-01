@@ -14,7 +14,7 @@ export function useConsoleCommands(sessionId: string) {
         result: c.result,
         action: c.action,
         fields: c.params,
-        params: c.params.map((p) => ({ key: p.key, type: p.type, label: p.label, required: p.required, default: p.default })),
+        params: c.params.map((p) => ({ key: p.key, type: p.type, label: p.label, required: p.required, default: p.default, format: p.format })),
       })),
     [q.data],
   )

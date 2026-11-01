@@ -9,7 +9,17 @@
 //                                 options at the end are read as options
 //
 // Words may be quoted ("a b" or 'a b'). Values are converted to the param's
-// type here (a number, a list split at commas); core checks them again.
+// type here (a number, a list split at commas); core checks them again. A
+// param of the connection format takes a session's connection by name or
+// place (connection-choices.ts).
+
+import {
+  CONNECTION_FORMAT,
+  connectionFromText,
+  connectionText,
+  matchConnections,
+  type ConnectionChoice,
+} from "./connection-choices"
 
 export interface CommandParam {
   key: string
@@ -17,6 +27,8 @@ export interface CommandParam {
   label: string
   required: boolean
   default?: unknown
+  /** What the value is beyond its type: "connection" takes a session's connection. */
+  format?: string | null
 }
 
 export interface CommandDef {
@@ -80,7 +92,12 @@ export function commandOf(line: string, commands: readonly CommandDef[]): Comman
 }
 
 /** A param's value from its text, in its type. */
-function convert(param: CommandParam, text: string): { ok: true; value: unknown } | { ok: false; error: string } {
+function convert(
+  param: CommandParam,
+  text: string,
+  connections: readonly ConnectionChoice[],
+): { ok: true; value: unknown } | { ok: false; error: string } {
+  if (param.format === CONNECTION_FORMAT) return connectionFromText(param.key, text, connections)
   switch (param.type) {
     case "int":
     case "bytes": {
@@ -187,8 +204,12 @@ export function lineTexts(line: string, commands: readonly CommandDef[]): LineTe
   return { command, texts, extra }
 }
 
-/** Reads a line as one of commands with its args. */
-export function parseCommandLine(line: string, commands: readonly CommandDef[]): ParsedLine {
+/** Reads a line as one of commands with its args; connections are the session's, for a connection param. */
+export function parseCommandLine(
+  line: string,
+  commands: readonly CommandDef[],
+  connections: readonly ConnectionChoice[] = [],
+): ParsedLine {
   const all = words(line)
   if (all.length === 0) return { ok: false, error: "Type a command" }
   const { command, texts, extra } = lineTexts(line, commands)
@@ -201,7 +222,7 @@ export function parseCommandLine(line: string, commands: readonly CommandDef[]):
   const byKey = new Map(command.params.map((p) => [p.key, p]))
   const args: Record<string, unknown> = {}
   for (const [key, text] of texts) {
-    const r = convert(byKey.get(key)!, text)
+    const r = convert(byKey.get(key)!, text, connections)
     if (!r.ok) return { ok: false, command, error: r.error }
     args[key] = r.value
   }
@@ -222,10 +243,21 @@ export function usage(command: CommandDef): string {
   return [command.id, ...parts].join(" ")
 }
 
-/** A task as a line again: its command and args, as typed. */
-export function lineOf(command: string, args: Record<string, unknown> | null | undefined, def?: CommandDef): string {
+/**
+ * A task as a line again: its command and args, as typed; a connection
+ * param by its name, given the session's connections.
+ */
+export function lineOf(
+  command: string,
+  args: Record<string, unknown> | null | undefined,
+  def?: CommandDef,
+  connections: readonly ConnectionChoice[] = [],
+): string {
   const parts = [command]
-  const entries = Object.entries(args ?? {})
+  const entries = Object.entries(args ?? {}).map(([k, v]): [string, unknown] => {
+    const p = def?.params.find((x) => x.key === k)
+    return [k, p?.format === CONNECTION_FORMAT && connections.length > 0 ? connectionText(v, connections) : v]
+  })
   const quote = (s: string) => (/[\s"']/.test(s) || s === "" ? JSON.stringify(s) : s)
   const show = (v: unknown) => (Array.isArray(v) ? v.join(",") : typeof v === "object" && v !== null ? Object.entries(v).map(([k, x]) => `${k}=${String(x)}`).join(",") : String(v))
   if (def && takesRest(def)) {
@@ -246,4 +278,59 @@ export function commandHistory(lines: readonly string[], max = 200): string[] {
   const last = new Map<string, number>()
   lines.forEach((l, i) => last.set(l, i))
   return lines.filter((l, i) => last.get(l) === i).slice(-max)
+}
+
+/** Values the word being typed could be, and where it starts in the line. */
+export interface ValueCompletion {
+  key: string
+  /** Where the word starts: a completion replaces the line from here. */
+  start: number
+  partial: string
+  options: ConnectionChoice[]
+}
+
+/**
+ * What the word at the end of the line could be, when it is a connection
+ * param's value (positional, --key=value or --key value): the session's
+ * connections it could name. Null for any other word.
+ */
+export function valueCompletion(
+  line: string,
+  commands: readonly CommandDef[],
+  connections: readonly ConnectionChoice[],
+): ValueCompletion | null {
+  if (connections.length === 0) return null
+  const command = commandOf(line, commands)
+  if (!command || takesRest(command)) return null
+  const all = words(line)
+  const trailing = /\s$/.test(line)
+  // Still typing the command.
+  if (all.length < 2 && !trailing) return null
+  const current: Word = trailing ? { text: "", start: line.length, end: line.length } : all[all.length - 1]
+  const before = trailing ? all.slice(1) : all.slice(1, -1)
+  const byKey = new Map(command.params.map((p) => [p.key, p]))
+  const offer = (param: CommandParam | undefined, start: number, partial: string): ValueCompletion | null =>
+    param?.format === CONNECTION_FORMAT ? { key: param.key, start, partial, options: matchConnections(partial, connections) } : null
+
+  const eq = /^--([A-Za-z0-9_.-]+)=(.*)$/.exec(current.text)
+  if (eq) return offer(byKey.get(eq[1]), current.start + eq[1].length + 3, eq[2])
+  if (current.text.startsWith("--")) return null
+  // --key value: the word before names the param.
+  const prev = before.length > 0 ? /^--([A-Za-z0-9_.-]+)$/.exec(before[before.length - 1].text) : null
+  if (prev && byKey.has(prev[1])) return offer(byKey.get(prev[1]), current.start, current.text)
+
+  const set = new Set<string>()
+  let positional = 0
+  for (let i = 0; i < before.length; ) {
+    const o = /^--([A-Za-z0-9_.-]+)(?:=(.*))?$/.exec(before[i].text)
+    if (o && byKey.has(o[1])) {
+      set.add(o[1])
+      i += o[2] !== undefined ? 1 : 2
+      continue
+    }
+    positional++
+    i++
+  }
+  const free = command.params.filter((p) => !set.has(p.key))
+  return offer(free[positional], current.start, current.text)
 }

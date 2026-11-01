@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
 import { clock, useTaskActions, type Task } from "./task-actions"
 import { StateIcon } from "./task-state"
+import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // The left of a session's console: its tasks, a row each, oldest at the
 // top and the newest at the bottom by the command line, under a heading
@@ -158,7 +159,8 @@ function TaskRow({
   onQueued: (t: Task) => void
   canWrite: boolean
 }) {
-  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
+  const connections = useSessionConnectionChoices(t.sessionId)
+  const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
   return (
     <ContextMenu>
       <ContextMenuTrigger

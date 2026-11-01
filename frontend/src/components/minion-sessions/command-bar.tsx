@@ -12,11 +12,15 @@ import { cn } from "@/lib/utils"
 import { BrowseButton } from "./browse-button"
 import { TaskFilesProvider } from "./task-files"
 import { startStreamUpload } from "@/lib/stream-upload"
-import { commandOf, lineOf, lineTexts, parseCommandLine, usage, words, type CommandDef } from "./command-line"
+import { commandOf, lineOf, lineTexts, parseCommandLine, usage, valueCompletion, words, type CommandDef } from "./command-line"
+import { CONNECTION_FORMAT, choiceDetail, connectionText, type ConnectionChoice } from "./connection-choices"
+import { ConnectionChoicesProvider } from "./session-connection-choices"
+import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // The console's command line: a command of the session's build typed as a
 // line (command-line.ts), with its commands offered as the first word is
-// typed and how the line reads shown under it. Enter runs the line;
+// typed, a connection param's values (the session's connections, by name)
+// as it is typed, and how the line reads shown under it. Enter runs the line;
 // Shift+Enter (or the form button) opens it in the command form, its params
 // filled from what was typed (an empty line opens it with a command to
 // pick). ↑ and ↓ go through what was run here (the session's tasks, as
@@ -53,6 +57,7 @@ export function CommandBar({
   onQueued?: (task: MinionTaskFieldsFragment) => void
 }) {
   const queue = useQueueMinionTask()
+  const connections = useSessionConnectionChoices(sessionId)
   const [line, setLine] = useState("")
   const [pick, setPick] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -103,8 +108,14 @@ export function CommandBar({
     () => (typingCommand ? commands.filter((c) => c.id.toLowerCase().startsWith(prefix)) : []),
     [typingCommand, prefix, commands],
   )
+  // The values the word being typed could be (a connection param's), past
+  // the command; not while going through the history.
+  const valueHint = useMemo(
+    () => (back === null && !typingCommand ? valueCompletion(line, commands, connections) : null),
+    [back, typingCommand, line, commands, connections],
+  )
   const command = commandOf(line, commands)
-  const parsed = line.trim() === "" ? null : parseCommandLine(line, commands)
+  const parsed = line.trim() === "" ? null : parseCommandLine(line, commands, connections)
 
   const run = (text: string) => {
     // A file is picked in the form: a line for a command that sends one,
@@ -117,7 +128,7 @@ export function CommandBar({
       openForm()
       return
     }
-    const p = parseCommandLine(text, commands)
+    const p = parseCommandLine(text, commands, connections)
     if (!p.ok) {
       setError(p.error)
       return
@@ -138,6 +149,16 @@ export function CommandBar({
 
   const complete = (c: CommandDef) => {
     setLine(`${c.id} `)
+    setPick(0)
+    input.current?.focus()
+  }
+
+  // A value picked: the word being typed becomes its name (its place when
+  // the name is not its alone).
+  const completeValue = (c: ConnectionChoice) => {
+    if (!valueHint) return
+    const text = connectionText(c.place, connections)
+    setLine(`${line.slice(0, valueHint.start)}${/\s/.test(text) ? JSON.stringify(text) : text} `)
     setPick(0)
     input.current?.focus()
   }
@@ -163,9 +184,16 @@ export function CommandBar({
 
   // The suggestions, while the first word could be more than one command.
   const suggesting = offered.length > 0 && prefix !== "" && !(offered.length === 1 && offered[0].id === prefix)
+  // A value's, while the word could be more than the one it names already.
+  const partial = valueHint?.partial.trim().toLowerCase() ?? ""
+  const suggestingValues =
+    !suggesting &&
+    valueHint !== null &&
+    valueHint.options.length > 0 &&
+    !(valueHint.options.length === 1 && (valueHint.options[0].name.toLowerCase() === partial || String(valueHint.options[0].place) === partial))
   // Nothing while the first word is no command yet: it is being typed.
   const message =
-    error ?? (!parsed || !command ? null : !parsed.ok ? parsed.error : readsAs(parsed.command, parsed.args))
+    error ?? (!parsed || !command ? null : !parsed.ok ? parsed.error : readsAs(parsed.command, parsed.args, connections))
   const problem = error !== null || (parsed !== null && !parsed.ok)
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -183,6 +211,19 @@ export function CommandBar({
       if (e.key === "Tab" || e.key === "Enter") {
         e.preventDefault()
         complete(offered[Math.min(pick, offered.length - 1)])
+        return
+      }
+    }
+    if (suggestingValues && valueHint) {
+      const n = valueHint.options.length
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault()
+        setPick((p) => (p + (e.key === "ArrowDown" ? 1 : n - 1)) % n)
+        return
+      }
+      if (e.key === "Tab" || e.key === "Enter") {
+        e.preventDefault()
+        completeValue(valueHint.options[Math.min(pick, n - 1)])
         return
       }
     }
@@ -223,7 +264,7 @@ export function CommandBar({
       {/* How the line reads, or why it does not: floating above the line,
           as the suggestions do (which it gives way to), so the line keeps
           its place. While it is being typed; an error from a run stays. */}
-      {!suggesting && message && (focused || error !== null) && (
+      {!suggesting && !suggestingValues && message && (focused || error !== null) && (
         <div
           role={problem ? "alert" : "status"}
           className={cn(
@@ -248,6 +289,25 @@ export function CommandBar({
             >
               <code className="font-mono text-xs">{usage(c)}</code>
               <span className="truncate text-xs text-muted-foreground">{c.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {suggestingValues && valueHint && (
+        <div className="absolute inset-x-2 bottom-full z-20 mb-1 overflow-hidden rounded-md border bg-popover shadow-md" role="listbox">
+          {valueHint.options.map((c, i) => (
+            <button
+              key={c.place}
+              type="button"
+              role="option"
+              aria-selected={i === pick}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => completeValue(c)}
+              className={cn("flex w-full cursor-pointer items-baseline gap-3 px-3 py-1.5 text-left text-sm", i === pick && "bg-muted")}
+            >
+              <code className="font-mono text-xs">{c.name}</code>
+              <span className="truncate text-xs text-muted-foreground">{choiceDetail(c)}</span>
+              {c.inUse && <span className="ml-auto shrink-0 text-xs text-muted-foreground">in use</span>}
             </button>
           ))}
         </div>
@@ -291,6 +351,7 @@ export function CommandBar({
         </Button>
       </div>
       <TaskFilesProvider key={`${form?.key}-${form?.id}`} operationId={operationId}>
+        <ConnectionChoicesProvider choices={connections}>
         <CommandFormDialog
           open={formOpen}
           onOpenChange={(o) => {
@@ -334,8 +395,11 @@ export function CommandBar({
           showErrorsFor={form?.typed}
           after={(values) =>
             formCommand && (
-              <p className="truncate font-mono text-xs text-muted-foreground" title={values ? lineOf(formCommand.id, values, formCommand) : undefined}>
-                Same as: {values ? lineOf(formCommand.id, values, formCommand) : "…"}
+              <p
+                className="truncate font-mono text-xs text-muted-foreground"
+                title={values ? lineOf(formCommand.id, values, formCommand, connections) : undefined}
+              >
+                Same as: {values ? lineOf(formCommand.id, values, formCommand, connections) : "…"}
               </p>
             )
           }
@@ -353,15 +417,20 @@ export function CommandBar({
           }}
           idPrefix={`task-${sessionId}`}
         />
+        </ConnectionChoicesProvider>
       </TaskFilesProvider>
 
     </div>
   )
 }
 
-/** How a parsed line reads: each param's value, defaults marked. */
-function readsAs(command: CommandDef, args: Record<string, unknown>): string {
+/** How a parsed line reads: each param's value, defaults marked; a connection's with its name. */
+function readsAs(command: CommandDef, args: Record<string, unknown>, connections: readonly ConnectionChoice[]): string {
   const parts = command.params.map((p) => {
+    if (p.key in args && p.format === CONNECTION_FORMAT) {
+      const c = connections.find((x) => x.place === args[p.key])
+      return `${p.key}=${JSON.stringify(args[p.key])}${c ? ` (${c.name}, ${choiceDetail(c)}${c.inUse ? ", in use" : ""})` : ""}`
+    }
     if (p.key in args) return `${p.key}=${JSON.stringify(args[p.key])}`
     if (p.default !== null && p.default !== undefined) return `${p.key}=${JSON.stringify(p.default)} (default)`
     return null
