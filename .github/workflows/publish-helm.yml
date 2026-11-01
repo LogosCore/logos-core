@@ -58,6 +58,8 @@ jobs:
             --set secrets.values.seaweedfsS3SecretKey=smoke-s3 \
             --set secrets.values.hocuspocusTicketSecret=smoke-ticket \
             --set secrets.values.hocuspocusWebhookSecret=smoke-webhook \
+            --set secrets.values.rabbitmqPassword=smoke-rabbitmq \
+            --set secrets.values.rabbitmqErlangCookie=smoke-erlang-cookie \
             > /tmp/render.yaml
           # Print resource kinds so any major omission shows up in CI logs.
           grep -E '^kind: ' /tmp/render.yaml | sort | uniq -c
