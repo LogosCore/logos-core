@@ -138,3 +138,22 @@ func TestListingData(t *testing.T) {
 		t.Fatal("no pieces made data")
 	}
 }
+
+// A walk's parts each say where it stands: checked, and joined to the
+// latest.
+func TestDirWalk(t *testing.T) {
+	first := data(t, protocol.DirWalk{Root: "/home", Folders: 3, Current: "/home/u"})
+	last := data(t, protocol.DirWalk{Root: "/home", Folders: 40, Entries: 900, Unread: 1})
+	if Check(protocol.ResultDirWalk, 0, first) != nil || Check(protocol.ResultDirWalk, 1, data(t, protocol.DirWalk{Folders: 1})) == nil {
+		t.Fatal("check")
+	}
+	joined, err := Join(models.MinionTask{Result: protocol.ResultDirWalk},
+		[]models.MinionTaskPart{{Seq: 0, DataCBOR: first}, {Seq: 1, DataCBOR: last}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := joined.(map[string]any)
+	if m["root"] != "/home" || m["folders"] != Value(uint64(40)) || m["current"] != nil {
+		t.Fatalf("joined %v", m)
+	}
+}

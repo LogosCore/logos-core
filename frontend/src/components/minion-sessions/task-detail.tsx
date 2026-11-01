@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
+import { readDirWalk } from "./dir-walk"
+import { WalkView } from "./walk-view"
 import { DirListingView } from "./dir-listing-view"
 import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
@@ -141,9 +143,10 @@ export function TaskDetail({
     (isFile && t.file != null) || isUpload || isStream || (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
   // The result's view, for data that fits it; the rest shows raw.
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
+  const walk = t.result === "dir_walk" && !t.dataProblem ? readDirWalk(data) : null
   const dataNotes = [
     t.dataProblem ? `The data does not fit ${t.result}: ${t.dataProblem}. It shows raw.` : null,
-    t.result && t.result !== "dir_listing" && !isFile && t.result !== "file_upload" && t.result !== "file_stream"
+    t.result && t.result !== "dir_listing" && t.result !== "dir_walk" && !isFile && t.result !== "file_upload" && t.result !== "file_stream"
       ? `Its result, ${t.result}, is not one this version shows: the data shows raw.`
       : null,
     t.missingParts > 0
@@ -209,7 +212,7 @@ export function TaskDetail({
               <WrapTextIcon />
             </Button>
           )}
-          {shown === "data" && (listing || (isFile && t.file && data) || (isUpload && data) || (isStream && data)) && (
+          {shown === "data" && (listing || walk || (isFile && t.file && data) || (isUpload && data) || (isStream && data)) && (
             <Button variant={rawData ? "secondary" : "ghost"} size="icon-xs" title={rawData ? "Raw JSON: show it rendered" : "Rendered: show the raw JSON"}
               aria-label="Show the data as raw JSON" aria-pressed={rawData}
               onClick={() => {
@@ -283,6 +286,8 @@ export function TaskDetail({
             <UploadView task={t} data={data} />
           ) : isStream && t.stream && !(rawData && data) ? (
             <StreamView task={t} stream={t.stream} />
+          ) : walk && !rawData ? (
+            <WalkView task={t} walk={walk} onOpenInFileBrowser={onOpenInFileBrowser} />
           ) : listing && !rawData ? (
             <DirListingView
               listing={listing}

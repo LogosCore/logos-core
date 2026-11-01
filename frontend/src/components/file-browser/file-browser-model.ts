@@ -28,6 +28,7 @@ const LABELS: Record<string, string> = {
   stream_file: "streaming…",
   upload_file: "uploading…",
   upload_stream: "uploading…",
+  walk_dir: "walking…",
 }
 
 const FINISHED = new Set(["DONE", "FAILED", "CANCELLED"])

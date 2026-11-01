@@ -32,6 +32,8 @@ func Check(result string, seq uint64, data []byte) error {
 		_, err = protocol.ReadFileUpload(seq, data)
 	case protocol.ResultFileStream:
 		_, err = protocol.ReadFileStream(seq, data)
+	case protocol.ResultDirWalk:
+		_, err = protocol.ReadDirWalk(seq, data)
 	}
 	return err
 }
@@ -44,7 +46,26 @@ func Join(t models.MinionTask, parts []models.MinionTaskPart) (any, error) {
 	if t.Result == protocol.ResultDirListing && t.DataProblem == "" {
 		return joinDirListing(parts)
 	}
+	if t.Result == protocol.ResultDirWalk && t.DataProblem == "" {
+		return joinLatest(parts)
+	}
 	return joinGeneric(parts)
+}
+
+// joinLatest is the latest part's data: a result whose every part says it
+// whole (a dir_walk, where it stands).
+func joinLatest(parts []models.MinionTaskPart) (any, error) {
+	for i := len(parts) - 1; i >= 0; i-- {
+		if len(parts[i].DataCBOR) == 0 {
+			continue
+		}
+		data, err := partData(parts[i])
+		if err != nil {
+			return nil, err
+		}
+		return Value(data), nil
+	}
+	return nil, nil
 }
 
 // joinGeneric joins parts with no declared shape: a key holding an array

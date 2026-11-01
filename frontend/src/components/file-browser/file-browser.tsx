@@ -14,6 +14,7 @@ import {
   FolderOpenIcon,
   HardDriveIcon,
   Link2Icon,
+  ListTreeIcon,
   LoaderIcon,
   RadioTowerIcon,
   RefreshCwIcon,
@@ -55,6 +56,7 @@ import { DeleteDialog, type DeleteTarget } from "@/components/minion-sessions/de
 import { UploadDialog } from "@/components/minion-sessions/upload-dialog"
 import type { UploadTarget } from "@/components/minion-sessions/upload-target"
 import { UploadHereButton } from "@/components/minion-sessions/upload-here-button"
+import { ActionButton } from "@/components/minion-sessions/action-button"
 import { useWorkspaceActions } from "@/components/minion-sessions/workspace-tabs"
 import { usePaneRow } from "@/components/minion-sessions/pane-text"
 import { FileNameIcon } from "@/components/file-preview/file-type-icon"
@@ -130,6 +132,7 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
   const streamCommands = writable ? commandsFor(commands, "stream_file") : []
   const uploadCommands = writable ? [...commandsFor(commands, "upload_file"), ...commandsFor(commands, "upload_stream")] : []
   const deleteCommands = writable ? commandsFor(commands, "delete_path") : []
+  const walkCommands = writable ? commandsFor(commands, "walk_dir") : []
   const refreshCommand = chooseActionCommand(listCommands, readPicked(actingId, "list_dir"))
 
   const queue = useQueueMinionTask()
@@ -179,6 +182,8 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
     uploadCommands,
     remove: (e, id) => setDeleting({ target: { path: e.path, name: e.name, type: e.type }, commandId: id }),
     deleteCommands,
+    walk: (path, id) => run(id, { path }, `Walk ${path}`),
+    walkCommands,
     view: (fileTaskId) => setViewing(fileTaskId),
   }
 
@@ -342,6 +347,9 @@ interface EntryActions {
   uploadCommands: readonly MenuCommand[]
   remove: (e: Entry, commandId: string) => void
   deleteCommands: readonly MenuCommand[]
+  /** Walks a folder and those under it (walk_dir), into the snapshot as it goes. */
+  walk: (path: string, commandId: string) => void
+  walkCommands: readonly MenuCommand[]
   /** Opens the kept file of a download task. */
   view: (taskId: string) => void
 }
@@ -471,6 +479,16 @@ function FolderView({
                 inputClassName={cn("h-6 pl-8 text-xs", search && "pr-7")}
               />
               {path && <UploadHereButton folder={path} commands={actions.uploadCommands} onRun={(id) => actions.upload(path, id, names)} />}
+              {path && (
+                <ActionButton
+                  icon={<ListTreeIcon className={cn(here?.action === "walk_dir" && "animate-pulse")} />}
+                  label="Walk from here"
+                  title={`List ${path} and the folders under it, into the browser as it goes`}
+                  commands={actions.walkCommands}
+                  disabled={here?.action === "walk_dir"}
+                  onRun={(id) => actions.walk(path, id)}
+                />
+              )}
               <Button
                 variant="ghost"
                 size="icon-xs"
@@ -784,6 +802,9 @@ function EntryRow({
         )}
         {(isDir || e.type === "link" || !e.parent) && actions.list && (
           <ActionItem label="List directory" icon={<RefreshCwIcon />} commands={actions.listCommands} onRun={(id) => actions.list!(e, id)} />
+        )}
+        {(isDir || !e.parent) && !gone && (
+          <ActionItem label="Walk from here" icon={<ListTreeIcon />} commands={actions.walkCommands} onRun={(id) => actions.walk(e.path, id)} />
         )}
         {(isDir || e.type === "link" || !e.parent) && <ContextMenuSeparator />}
         {kept && (
