@@ -4,10 +4,11 @@ import { ConnectionKindDiagram } from "./connection-kind-diagram"
 import { KIND_FLOWS, KNOWN_KINDS } from "./connection-kind-flows"
 import { kindLabels, kindNames, type Kind } from "./endpoint-values"
 
-// The endpoint's connection kind, above the rest of the form (it decides
-// which settings the form has): a segmented switch of the kinds, those the
-// channel does not carry shown and disabled; under it the picked kind's
-// flow, played, its steps lit in time with it.
+// A connection's kind, above the rest of its settings (it decides which
+// they are): a segmented switch of the kinds, those that cannot be picked
+// shown and disabled with the reason; under it the picked kind's flow,
+// played, its steps lit in time with it. The endpoint form and a build's
+// connection both use it (EndpointSettings).
 
 export function ConnectionKindPicker({
   channel,
@@ -15,17 +16,28 @@ export function ConnectionKindPicker({
   onChange,
   disabled,
   error,
+  usable: allowed,
+  why,
+  idPrefix = "endpoint",
 }: {
   channel: Kind
   value: string
   onChange: (kind: string) => void
   disabled: boolean
   error?: string
+  /** The kinds that may be picked; the channel's when absent. */
+  usable?: readonly string[]
+  /** Why a kind the channel carries cannot be picked (a build's target lacks it). */
+  why?: (kind: string) => string | undefined
+  idPrefix?: string
 }) {
   const carried = kindNames(channel)
   // The protocol's kinds, then any other the channel names.
   const options = [...KNOWN_KINDS, ...carried.filter((k) => !KNOWN_KINDS.includes(k))]
-  const usable = options.filter((k) => carried.includes(k))
+  const usable = options.filter((k) => carried.includes(k) && (!allowed || allowed.includes(k)))
+  const reason = (k: string) =>
+    !carried.includes(k) ? `The ${channel.name} channel does not carry it` : usable.includes(k) ? undefined : (why?.(k) ?? "Not usable here")
+  const titleId = `${idPrefix}-kind-title`
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const [step, setStep] = useState<number | null>(null)
   const flow = KIND_FLOWS[value]
@@ -40,19 +52,19 @@ export function ConnectionKindPicker({
   }
 
   return (
-    <section aria-labelledby="endpoint-kind-title" className="flex flex-col gap-3">
-      <h2 id="endpoint-kind-title" className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <section aria-labelledby={titleId} className="flex flex-col gap-3">
+      <h2 id={titleId} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Kind
       </h2>
       <div
         role="radiogroup"
-        aria-labelledby="endpoint-kind-title"
+        aria-labelledby={titleId}
         className="flex flex-wrap gap-1 self-start rounded-lg border bg-muted/40 p-1"
         onKeyDown={onKeyDown}
       >
         {options.map((k) => {
           const on = k === value
-          const off = !carried.includes(k)
+          const off = reason(k) !== undefined
           return (
             <button
               key={k}
@@ -65,7 +77,7 @@ export function ConnectionKindPicker({
               aria-checked={on}
               tabIndex={on ? 0 : -1}
               disabled={disabled || off}
-              title={off ? `The ${channel.name} channel does not carry it` : kindLabels[k]}
+              title={reason(k) ?? kindLabels[k]}
               onClick={() => !on && onChange(k)}
               className={cn(
                 "flex flex-col items-start rounded-md px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed",

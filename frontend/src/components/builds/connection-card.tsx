@@ -1,12 +1,12 @@
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 import { ArrowDownIcon, ArrowUpIcon, BookmarkPlusIcon, ChevronRightIcon, CopyIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { SettingRow } from "@/components/ui/settings-rows"
+import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
 import { KindName } from "@/components/modules/module-icon"
-import { groupByField, type Draft } from "@/components/modules/management/field-values"
+import type { Draft } from "@/components/modules/management/field-values"
+import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
 import { useChannelEndpointCount } from "@/graphql/hooks/channel-endpoints"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
@@ -14,7 +14,6 @@ import {
   defaultConnectionName,
   kindLabels,
   paramFields,
-  settingFields,
   settingsSummary,
   type ChannelKind,
   type ConnectionDraft,
@@ -102,12 +101,50 @@ export function ConnectionCard({
   // The kind the build gets: the one picked, or the first both support.
   const effectiveKind = c.kind || kinds[0] || ""
   const params = paramFields(kind, c.moduleName, effectiveKind)
-  const fields = settingFields(channel, effectiveKind)
   const summary = settingsSummary(channel, effectiveKind, settings)
-  // The kind is asked for when there is a choice, or when the one it has is
-  // no longer usable (another target, a channel that dropped it).
+  // The folded line names the kind when there is a choice, or when the one
+  // it has is no longer usable (another target, a channel that dropped it).
   const kindOptions = effectiveKind && !kinds.includes(effectiveKind) ? [effectiveKind, ...kinds] : kinds
   const askKind = kindOptions.length > 1
+
+  // The connection's own rows: what the minion calls it, the team's note.
+  const general = (
+    <SettingsSection title="General">
+      <SettingRow
+        id={`${idPrefix}-name`}
+        label="Name"
+        help={`What the minion calls this connection. Left empty, it is ${defaultName}.`}
+        error={errors[`${at}.name`]}
+      >
+        <Input
+          id={`${idPrefix}-name`}
+          value={c.name}
+          onChange={(e) => onName(e.target.value)}
+          placeholder={defaultName}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={disabled}
+          aria-invalid={!!errors[`${at}.name`] || undefined}
+        />
+      </SettingRow>
+      <SettingRow
+        id={`${idPrefix}-description`}
+        label="Description"
+        help="A note for your team on what this connection is for. Core keeps it with the build; the factory and the minion never get it."
+        error={errors[`${at}.description`]}
+      >
+        <Textarea
+          id={`${idPrefix}-description`}
+          value={c.description}
+          onChange={(e) => onDescription(e.target.value)}
+          rows={2}
+          maxLength={500}
+          disabled={disabled}
+          aria-invalid={!!errors[`${at}.description`] || undefined}
+        />
+      </SettingRow>
+    </SettingsSection>
+  )
 
   return (
     <div className="rounded-xl border bg-card" aria-label={`Connection ${index + 1}`} role="group">
@@ -183,83 +220,29 @@ export function ConnectionCard({
         </div>
       )}
       {open && (
-        <div className="divide-y border-t px-4">
-          <SettingRow
-            id={`${idPrefix}-name`}
-            label="Name"
-            help={`What the minion calls this connection. Left empty, it is ${defaultName}.`}
-            error={errors[`${at}.name`]}
-          >
-            <Input
-              id={`${idPrefix}-name`}
-              value={c.name}
-              onChange={(e) => onName(e.target.value)}
-              placeholder={defaultName}
-              autoComplete="off"
-              spellCheck={false}
+        <div className="flex flex-col gap-6 border-t p-4">
+          {channel ? (
+            // The connection's settings, as the endpoint form has them.
+            <EndpointSettings
+              channel={channel}
+              kind={effectiveKind}
+              onKind={onKind}
+              usable={kinds}
+              why={() => "This target's minions do not use it"}
+              kindError={errors[`${at}.kind`]}
+              drafts={c.settings}
+              onDraft={onSetting}
+              errorOf={(key) => errors[`${at}.settings.${key}`]}
               disabled={disabled}
-              aria-invalid={!!errors[`${at}.name`] || undefined}
-            />
-          </SettingRow>
-          {askKind && (
-            <SettingRow
-              id={`${idPrefix}-kind`}
-              label="Kind"
-              help="How the minion keeps in touch through this channel: a request at each exchange, or a connection it keeps open, over which core sends tasks at once."
-              error={errors[`${at}.kind`]}
+              idPrefix={`${idPrefix}-setting`}
             >
-              <Select
-                value={effectiveKind}
-                onValueChange={(v) => onKind(typeof v === "string" ? v : "")}
-                disabled={disabled}
-              >
-                <SelectTrigger id={`${idPrefix}-kind`} className="w-full max-w-80" aria-invalid={!!errors[`${at}.kind`] || undefined}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {kindOptions.map((k) => (
-                    <SelectItem key={k} value={k} description={k}>
-                      {kindLabels[k] ?? k}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SettingRow>
+              {general}
+            </EndpointSettings>
+          ) : (
+            general
           )}
-          <SettingRow
-            id={`${idPrefix}-description`}
-            label="Description"
-            help="A note for your team on what this connection is for. Core keeps it with the build; the factory and the minion never get it."
-            error={errors[`${at}.description`]}
-          >
-            <Textarea
-              id={`${idPrefix}-description`}
-              value={c.description}
-              onChange={(e) => onDescription(e.target.value)}
-              rows={2}
-              maxLength={500}
-              disabled={disabled}
-              aria-invalid={!!errors[`${at}.description`] || undefined}
-            />
-          </SettingRow>
-          {channel &&
-            groupByField(fields, (f) => f).map((g) => (
-              <Group key={g.group} title={g.group}>
-                {g.items.map((f) => (
-                  <FieldRow
-                    key={f.key}
-                    idPrefix={`${idPrefix}-setting`}
-                    field={f}
-                    draft={c.settings[f.key]}
-                    onChange={(d) => onSetting(f.key, d)}
-                    error={errors[`${at}.settings.${f.key}`]}
-                    disabled={disabled}
-                  />
-                ))}
-              </Group>
-            ))}
           {params.length > 0 && (
-            <Group title={`${kind.name} parameters`}>
+            <SettingsSection title={`${kind.name} parameters`}>
               {params.map((f) => (
                 <FieldRow
                   key={f.key}
@@ -271,19 +254,10 @@ export function ConnectionCard({
                   disabled={disabled}
                 />
               ))}
-            </Group>
+            </SettingsSection>
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="pt-3">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
-      <div className="divide-y">{children}</div>
     </div>
   )
 }

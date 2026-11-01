@@ -35,9 +35,8 @@ import {
   useUpdateChannelEndpoint,
 } from "@/graphql/hooks/channel-endpoints"
 import { ModuleIcon } from "@/components/modules/module-icon"
-import { ConnectionKindPicker } from "@/components/endpoints/connection-kind-picker"
+import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
 import { errorMessage, graphqlErrorCode } from "@/components/modules/management/api-errors"
-import { FieldControl } from "@/components/modules/management/field-control"
 import { groupByField, type Draft, type FieldDef } from "@/components/modules/management/field-values"
 import {
   connectionKind,
@@ -423,13 +422,18 @@ function EndpointEditor({
 
         <div className="@container/settings min-w-0 flex-1">
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
-          <ConnectionKindPicker
+          <EndpointSettings
             channel={kind}
-            value={connKind}
-            onChange={changeKind}
+            kind={connKind}
+            onKind={changeKind}
+            kindError={serverErrors.kind}
+            drafts={drafts}
+            onDraft={setDraft}
+            errorOf={(key) => shownErrors[key]}
             disabled={disabled}
-            error={serverErrors.kind}
-          />
+            idPrefix="endpoint"
+            sectionIdOf={sectionId}
+          >
           {saveError && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>
           )}
@@ -478,34 +482,7 @@ function EndpointEditor({
             </SettingRow>
           </SettingsSection>
 
-          {sections.slice(1).map((s) => (
-            <SettingsSection key={s.id} id={s.id} title={s.title}>
-              {s.fields.map((f) => {
-                const id = `endpoint-${f.key}`
-                return (
-                  <SettingRow
-                    key={f.key}
-                    id={id}
-                    label={f.label}
-                    fieldKey={f.key}
-                    required={f.required}
-                    help={f.description ?? undefined}
-                    error={shownErrors[f.key]}
-                  >
-                    <FieldControl
-                      field={f}
-                      id={id}
-                      draft={drafts[f.key]}
-                      onChange={(d) => setDraft(f.key, d)}
-                      disabled={disabled}
-                      invalid={!!shownErrors[f.key]}
-                      defaultValue={f.default}
-                    />
-                  </SettingRow>
-                )
-              })}
-            </SettingsSection>
-          ))}
+          </EndpointSettings>
         </div>
         </div>
       </div>
