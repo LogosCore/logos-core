@@ -166,6 +166,12 @@ type stream struct {
 	// (too many viewers). The stream then ends for good: recreating it would
 	// evict another viewer, who would do the same, forever.
 	replaced bool
+	// recreating is set when core asked for the stream again, with a
+	// backlog (after it ended, or core lost the module): the module's next
+	// batch is then seq 1 of a new stream, and the backlog covers the gap. A
+	// seq 1 core did not ask for is a module that came back on its own (a
+	// crash and restart): what it had not sent is lost.
+	recreating bool
 	// pending is a state change the viewer was too slow to take; it rides on
 	// the next event delivered, so the viewer never shows a stale state.
 	pending *Event
@@ -220,6 +226,9 @@ func (s *stream) run(ctx context.Context, cancel context.CancelFunc, batches <-c
 				backlog = backlogRecords
 			}
 			err := s.start(ctx, backlog)
+			if err == nil && backlog > 0 {
+				s.recreating = true
+			}
 			switch {
 			case err != nil && connected:
 				connected = false
@@ -257,9 +266,17 @@ func (s *stream) handle(body []byte) {
 		return
 	}
 	ev := &Event{Records: b.Records, Backlog: b.Backlog, Dropped: b.Dropped}
-	// Seq restarts at 1 when the module recreated the stream.
-	if b.Seq != 1 && s.lastSeq != 0 && b.Seq != s.lastSeq+1 {
+	// Seq restarts at 1 when the module recreated the stream: a gap unless
+	// core asked for it again (with a backlog).
+	switch {
+	case s.lastSeq == 0:
+	case b.Seq == 1:
+		ev.Lost = !s.recreating
+	case b.Seq != s.lastSeq+1:
 		ev.Lost = true
+	}
+	if b.Seq == 1 {
+		s.recreating = false
 	}
 	s.lastSeq = b.Seq
 	if b.End {

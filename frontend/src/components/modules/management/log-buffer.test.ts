@@ -3,6 +3,7 @@ import {
   applyEvent,
   clearLines,
   emptyBuffer,
+  endedStatus,
   findLine,
   formatAttrs,
   HARD_MAX_LINES,
@@ -105,5 +106,17 @@ describe("formatting and search", () => {
     expect(lineMatcher("FAILED unpack")(line)).toBe(true)
     expect(lineMatcher("info short")(line)).toBe(true)
     expect(lineMatcher("failed served")(line)).toBe(false)
+  })
+})
+
+describe("endedStatus", () => {
+  it("promises a reconnect only where core makes one", () => {
+    expect(endedStatus("replaced")).not.toContain("reconnecting")
+    expect(endedStatus("replaced")).toContain("another viewer")
+    expect(endedStatus("lease_expired")).toContain("reconnecting")
+    expect(endedStatus("stopped")).toContain("reconnecting")
+    expect(endedStatus("shutdown")).toContain("resumes when it is back")
+    expect(endedStatus("something_new")).toBe("Stream ended (something new) — reconnecting")
+    expect(endedStatus(null)).toBe("Stream ended — reconnecting")
   })
 })

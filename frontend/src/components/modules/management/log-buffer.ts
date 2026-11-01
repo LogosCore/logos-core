@@ -175,3 +175,24 @@ export function findLine(lines: LogLine[], id: number): LogLine | undefined {
 export function lineText(line: LogLine): string {
   return `${line.time} ${line.level.padEnd(5)} ${line.message}${line.attrsText ? " " + line.attrsText : ""}`
 }
+
+/**
+ * What the Logs tab says of a stream the module ended, by its reason
+ * (protocol LogEnd*). Core starts it again on its next lease renewal, but
+ * not one another viewer took the slot of: that one ends for good, as
+ * restarting it would evict that viewer, who would do the same.
+ */
+export function endedStatus(reason: string | null | undefined): string {
+  switch (reason) {
+    case "replaced":
+      return "Stream taken by another viewer (the module's limit): open the tab again to resume"
+    case "shutdown":
+      return "Module going away — resumes when it is back"
+    case "lease_expired":
+      return "Stream expired — reconnecting"
+    case "stopped":
+      return "Stream stopped — reconnecting"
+    default:
+      return reason ? `Stream ended (${reason.replace(/_/g, " ")}) — reconnecting` : "Stream ended — reconnecting"
+  }
+}

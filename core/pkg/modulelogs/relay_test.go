@@ -207,6 +207,12 @@ func TestStreamRecreatedAfterModuleEndedIt(t *testing.T) {
 	if ev := next(t, events); ev.State != StateStreaming {
 		t.Fatalf("after renewal = %+v", ev)
 	}
+	// Its first batch, seq 1 again, is what core asked for: no gap.
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 1, Backlog: true,
+		Records: []protocol.LogRecord{{Level: protocol.LogInfo, Message: "back"}}})
+	if ev := next(t, events); ev.Lost || len(ev.Records) != 1 {
+		t.Fatalf("the recreated stream's first batch = %+v", ev)
+	}
 	var backlogs []int
 	for _, c := range rpc.ops() {
 		if c.op == protocol.TypeMgmtLogsStart {
@@ -304,5 +310,33 @@ func TestEmitKeepsLatestStateForSlowViewer(t *testing.T) {
 	s.emit(&Event{Records: make([]protocol.LogRecord, 2)})
 	if ev := <-s.out; ev.State != StateDisconnected || ev.Reason != "unroutable" {
 		t.Errorf("state not carried on the next event: %+v", ev)
+	}
+}
+
+// A stream starting over at seq 1 that core did not ask for (the module
+// came back on its own) may have lost records: the viewer is told; one core
+// recreated with a backlog is not a gap.
+func TestUnaskedRestartIsAGap(t *testing.T) {
+	r, _, src := newRelay(fakeRegistry{"http-1": module(protocol.CapabilityLogs)})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := r.Stream(ctx, Request{Instance: "http-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next(t, events) // STREAMING
+	rec := []protocol.LogRecord{{Level: protocol.LogInfo, Message: "m"}}
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 1, Records: rec})
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 2, Records: rec})
+	if ev := next(t, events); ev.Lost {
+		t.Fatalf("the first batch: %+v", ev)
+	}
+	if ev := next(t, events); ev.Lost {
+		t.Fatalf("the next in order: %+v", ev)
+	}
+	// The module restarted on its own: seq 1 again, unasked.
+	src.send(t, protocol.LogBatch{StreamID: "S1", Seq: 1, Records: rec})
+	if ev := next(t, events); !ev.Lost {
+		t.Fatalf("an unasked restart is not marked: %+v", ev)
 	}
 }

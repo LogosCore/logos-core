@@ -23,6 +23,7 @@ import {
   applyEvent,
   clearLines,
   emptyBuffer,
+  endedStatus,
   findLine,
   formatTime,
   lineMatcher,
@@ -352,7 +353,7 @@ function StreamStatus({
     text = "Module unreachable — retrying"
   } else if (buf.state === "ENDED") {
     dot = "bg-amber-500"
-    text = `Stream ended${buf.reason ? ` (${buf.reason.replace(/_/g, " ")})` : ""} — reconnecting`
+    text = endedStatus(buf.reason)
   }
   return (
     <span className={cn("inline-flex items-center gap-2 text-sm text-muted-foreground", className)}>
