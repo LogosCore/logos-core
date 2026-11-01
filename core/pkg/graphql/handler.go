@@ -86,6 +86,7 @@ func NewHandler(
 	taskRepo repository.ITaskRepository,
 	moduleRepo repository.IModuleRegistryRepository,
 	presenceTracker *wiki.PresenceTracker,
+	minionConnections gqlresolver.MinionConnections,
 	allowedOrigins []string,
 ) gin.HandlerFunc {
 	// Create the resolver root with entity resolvers and subscription dependencies.
@@ -123,6 +124,7 @@ func NewHandler(
 		TaskRepo:                  taskRepo,
 		ModuleRepo:                moduleRepo,
 		PresenceTracker:           presenceTracker,
+		MinionConnections:         minionConnections,
 	}
 
 	// Build the gqlgen server with our schema, resolvers, and directive.

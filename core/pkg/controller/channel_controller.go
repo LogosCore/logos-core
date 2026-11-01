@@ -31,6 +31,7 @@ type RegistrationGate interface {
 
 type IChannelController interface {
 	Sync(c *gin.Context)
+	Connection(c *gin.Context)
 }
 
 // MinionHandler opens a minion's sealed message sent under id and returns
@@ -40,6 +41,12 @@ type MinionHandler interface {
 	// Handle takes a frame sent under id, from peer: the IP address the
 	// channel got it from, "" when it has none.
 	Handle(ctx context.Context, id, peer string, frame []byte) ([]byte, error)
+	// Exchange takes a frame that came over a persistent connection.
+	Exchange(ctx context.Context, via *minionsync.Conn, id, peer string, frame []byte) ([]byte, error)
+	// KeepAlive and Closed tell the sessions a connection serves that it is
+	// open, and that it closed.
+	KeepAlive(ctx context.Context, c *minionsync.Conn)
+	Closed(ctx context.Context, c *minionsync.Conn)
 }
 
 type channelController struct {

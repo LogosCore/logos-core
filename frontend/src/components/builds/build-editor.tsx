@@ -58,6 +58,7 @@ import {
   sourceFromBuild,
   targetCommands,
   targetFields,
+  usableKinds,
   withTarget,
   type BuildForm as Form,
   type BuildRecordLike,
@@ -647,11 +648,13 @@ function Editor({
                     count={form.connections.length}
                     connection={c}
                     kind={kind}
+                    kinds={usableKinds(target, ch, c.moduleName)}
                     channel={ch}
                     channelIcon={channelIcons.get(c.moduleName)}
                     settings={input.connections[i]?.settings ?? {}}
                     errors={shown}
                     disabled={disabled}
+                    onKind={(k) => updateConnection(i, (x) => ({ ...x, kind: k }), `${at}.kind`)}
                     onName={(name) => updateConnection(i, (x) => ({ ...x, name, named: name.trim() !== "" }), `${at}.name`)}
                     onDescription={(description) =>
                       updateConnection(i, (x) => ({ ...x, description, described: description.trim() !== "" }), `${at}.description`)
@@ -752,6 +755,7 @@ function snapshotOf(form: Form): string {
     ...form,
     connections: form.connections.map((c) => ({
       moduleName: c.moduleName,
+      kind: c.kind,
       name: c.name,
       description: c.description,
       settings: c.settings,

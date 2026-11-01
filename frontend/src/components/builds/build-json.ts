@@ -57,6 +57,8 @@ import {
 /** A connection as the JSON tab and the form share it; settings and values hold set ones only. */
 export interface ConnectionDocument {
   moduleName: string
+  /** The connection kind; "" for the default. */
+  kind: string
   name: string
   description: string
   settings: Record<string, unknown>
@@ -80,7 +82,7 @@ export interface BuildDocument {
 export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 
 const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "persisted_session"]
-const CONNECTION_KEYS = ["channel", "name", "description", "settings", "values"]
+const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values"]
 
 const channelFields = (channels: ReadonlyMap<string, ChannelKind>, moduleName: string) =>
   channels.get(moduleName)?.fields ?? []
@@ -97,6 +99,7 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
     values: jsonFieldValues(targetFields(kind, target), doc.values),
     connections: doc.connections.map((c) => ({
       channel: c.moduleName,
+      ...(c.kind ? { kind: c.kind } : {}),
       name: c.name,
       description: c.description,
       settings: jsonFieldValues(channelFields(channels, c.moduleName), c.settings),
@@ -133,6 +136,7 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
     values: formValues(targetFields(kind, target), form.drafts),
     connections: form.connections.map((c) => ({
       moduleName: c.moduleName,
+      kind: c.kind,
       name: c.name,
       description: c.description,
       settings: formValues(channelFields(channels, c.moduleName), c.settings),
@@ -153,6 +157,7 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
     connections: doc.connections.map((c) =>
       connectionDraft(kind, channels.get(c.moduleName), {
         moduleName: c.moduleName,
+        kind: c.kind || null,
         name: c.name || null,
         description: c.description || null,
         settings: c.settings,
@@ -172,6 +177,7 @@ export function documentInput(doc: BuildDocument): FormInput {
     commands: doc.commands,
     connections: doc.connections.map((c) => ({
       moduleName: c.moduleName,
+      kind: c.kind || null,
       name: c.name.trim() || null,
       description: c.description.trim() || null,
       settings: c.settings,
@@ -235,6 +241,7 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
       const moduleName = textOf(raw.channel, childPointer(here, "channel"), at)
       connections.push({
         moduleName,
+        kind: textOf(raw.kind, childPointer(here, "kind"), at),
         name: textOf(raw.name, childPointer(here, "name"), at),
         description: textOf(raw.description, childPointer(here, "description"), at),
         settings: readFieldValues(
@@ -386,6 +393,12 @@ export function buildJsonHints(
         detail: "text, required",
         info: "The channel the minion connects through.",
         values: target?.channels.map((c) => c.moduleName),
+      },
+      {
+        key: "kind",
+        detail: "text",
+        info: "The connection kind; left out: the first the target and the channel both support.",
+        values: ["reverse-call", "reverse-persistent"],
       },
       { key: "name", detail: "text", info: 'What the minion calls the connection; "" for <channel>-<position>.' },
       { key: "description", detail: "text", info: "A note for the team. Core keeps it; the factory never gets it." },

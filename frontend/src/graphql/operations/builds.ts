@@ -27,6 +27,7 @@ export const BuildSchemaFields = graphql(`
       channels {
         moduleName
         versions
+        kinds
       }
     }
     commands {

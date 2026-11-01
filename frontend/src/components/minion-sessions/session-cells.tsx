@@ -139,7 +139,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "lastSeen": {
       // Green while on time by its schedule, yellow once late, red once
       // lost; plain when the minion never said its schedule.
-      const state = lateness(s, ctx.now)
+      // A persistent connection open: the minion is there now.
+      const state = s.connected ? "live" : lateness(s, ctx.now)
       return (
         <div
           // A marked row's style recolors these (session-mark-styles.css).
@@ -152,7 +153,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
             state === null && "text-muted-foreground",
           )}
           title={[
-            state && scheduleNote(s, state, ctx.now),
+            s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, ctx.now),
             s.lastSeenAt &&
               `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(ctx.now - Date.parse(s.lastSeenAt))})`,
             `Opened ${formatAbsolute(s.createdAt)}`,
@@ -160,7 +161,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
             .filter(Boolean)
             .join("\n")}
         >
-          {s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
+          {s.connected ? "connected" : s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
         </div>
       )
     }

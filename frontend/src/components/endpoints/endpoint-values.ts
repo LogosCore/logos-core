@@ -26,6 +26,8 @@ export interface Kind {
   icon: ModuleIconSvgs
   version: number
   fields: FieldDef[]
+  /** The connection kinds the channel carries ("reverse-call", ...). */
+  kinds: string[]
 }
 
 /**
@@ -37,7 +39,7 @@ export function kindsByName(
     moduleName: string
     icon?: string
     iconLight?: string
-    schema: { version: number; fields: readonly FieldDef[] }
+    schema: { version: number; fields: readonly FieldDef[]; kinds?: readonly string[] }
   }[],
 ): Map<string, Kind> {
   const out = new Map<string, Kind>()
@@ -46,6 +48,7 @@ export function kindsByName(
       name: k.moduleName,
       icon: { icon: k.icon ?? "", iconLight: k.iconLight ?? "" },
       version: k.schema.version,
+      kinds: [...(k.schema.kinds ?? ["reverse-call"])],
       fields: k.schema.fields
         .map((f) => (f.type === "secret" ? { ...f, type: "string" } : f))
         .sort(compareFields),

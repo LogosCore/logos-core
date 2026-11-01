@@ -88,18 +88,32 @@ type Service struct {
 	bus         eventbus.IEventBus
 	logger      *zap.Logger
 	now         func() time.Time
+	// conns are the persistent connections open, by session
+	// (connections.go).
+	conns *connections
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
 	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
 	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
-		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() }}
+		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() },
+		conns: newConnections()}
 }
 
 // Handle opens a minion's sealed frame sent under id from peer (the IP
 // address its channel got it from, "" for unknown) and returns core's sealed
 // answer: nil when there is nothing to say (the sync call's 204).
 func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]byte, error) {
+	return s.Exchange(ctx, nil, id, peer, frame)
+}
+
+// Exchange is Handle for a message that came over via, a persistent
+// connection (nil: the sync call). Over one, a request always gets a reply,
+// empty when core has nothing to say, so the minion knows it arrived; and a
+// message may also answer one core sent there (re): its items are taken,
+// what core has to say back goes as a message of its own, and it gets no
+// reply.
+func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, frame []byte) ([]byte, error) {
 	sentUnder, err := uuid.Parse(id)
 	if err != nil {
 		return nil, ErrUnopened
@@ -123,17 +137,26 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 		s.logger.Info("minion message is not CBOR", zap.String("id", id), zap.Error(err))
 		return nil, ErrUnopened
 	}
-	if err := protocol.ValidateMessageHead(msg.V, msg.ID, msg.Re, len(msg.Items)); err != nil || msg.ID == nil {
+	if err := protocol.ValidateMessageHead(msg.V, msg.ID, msg.Re, len(msg.Items)); err != nil {
 		s.logger.Info("minion message head", zap.String("id", id), zap.Error(err))
 		return nil, ErrUnopened
 	}
-
-	fresh, err := s.cache.SetNX(ctx, replayKeyPrefix+hex.EncodeToString(msg.ID), "1", replayWindow)
-	if err != nil {
-		s.logger.Warn("minion replay check failed, handling the message anyway", zap.Error(err))
-	} else if !fresh {
-		s.logger.Info("minion message replayed, refused", zap.String("id", id))
-		return nil, ErrReplayed
+	// An answer is fresh when it answers a message core sent on this
+	// connection and still waits for: a replayed one answers nothing.
+	answer := msg.Re != nil
+	if answer {
+		if via == nil || from.session == nil || !via.takePending(msg.Re) {
+			s.logger.Info("minion answer to nothing core waits for", zap.String("id", id))
+			return nil, ErrUnopened
+		}
+	} else {
+		fresh, err := s.cache.SetNX(ctx, replayKeyPrefix+hex.EncodeToString(msg.ID), "1", replayWindow)
+		if err != nil {
+			s.logger.Warn("minion replay check failed, handling the message anyway", zap.Error(err))
+		} else if !fresh {
+			s.logger.Info("minion message replayed, refused", zap.String("id", id))
+			return nil, ErrReplayed
+		}
 	}
 
 	var items []cbor.RawMessage
@@ -146,14 +169,28 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 		s.logger.Info("minion message under a closed session", zap.String("session_id", id))
 		items, err = errMessage(protocol.ErrItemSessionClosed, "the session is closed: start over")
 	case from.session != nil:
-		items, err = s.underSession(ctx, from.session, peer, msg)
+		if via != nil {
+			s.seenOn(ctx, via, from.session)
+		}
+		items, err = s.underSession(ctx, from.session, peer, msg, via)
 	case from.staging != nil:
 		items, err = s.underStaging(ctx, from, peer, msg)
 	default:
 		items, err = s.underBuild(ctx, from, peer, msg)
 	}
-	if err != nil || len(items) == 0 {
+	if err != nil {
 		return nil, err
+	}
+	// Through a call, nothing to say is the sync call's 204. Over a
+	// connection socket a request always gets its reply, empty or not, so
+	// the minion knows its message arrived.
+	if len(items) == 0 && (via == nil || answer) {
+		return nil, nil
+	}
+	if answer {
+		// An answer gets no reply: what core has to say back goes as a
+		// message of its own.
+		return nil, s.push(ctx, via, from, items)
 	}
 	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
 	if err != nil {
@@ -377,7 +414,7 @@ func (s *Service) claimReserved(ctx context.Context, from *sender, peer string, 
 // check-in; a hello replaces what the session recorded (a rehello) and gets
 // the same session id back; acks and results are taken, a get_tasks gets the
 // tasks waiting, and cancels go with any reply (tasks.go).
-func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
+func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage, via *Conn) ([]cbor.RawMessage, error) {
 	// A schedule the message says (a sleep_update, or a rehello's) takes
 	// effect with this check-in: the last one that reads.
 	var said *models.MinionSessionSleep
@@ -486,7 +523,20 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		}
 		items = append(items, cancels...)
 		if wantTasks {
-			tasks, err := s.deliver(ctx, session, wantMax)
+			// Through a call get_tasks's max bounds this reply; on a
+			// persistent connection it is a standing allowance (Notify).
+			limit := models.MaxMinionTasksPerReply
+			if wantMax != nil && *wantMax < uint64(limit) {
+				limit = int(*wantMax)
+			}
+			if via != nil {
+				via.setAllowance(session.SessionID, wantMax)
+				var err error
+				if limit, err = s.room(ctx, session, wantMax); err != nil {
+					return nil, err
+				}
+			}
+			tasks, err := s.deliver(ctx, session, limit)
 			if err != nil {
 				return nil, err
 			}

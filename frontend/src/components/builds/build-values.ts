@@ -87,8 +87,8 @@ export interface Target {
   platforms: string[]
   /** The target's own fields; the kind's shared ones come first in a form. */
   fields: FieldDef[]
-  /** Channel kinds and connection schema versions the target can use. */
-  channels: { moduleName: string; versions: number[] }[]
+  /** Channel kinds and connection schema versions the target can use, and the connection kinds through each, in the factory's order. */
+  channels: { moduleName: string; versions: number[]; kinds: string[] }[]
 }
 
 /** A command a factory's minions can be built with. */
@@ -156,7 +156,7 @@ export function factoryKindsByName(
         format: t.format,
         platforms: t.platforms,
         fields: sorted(t.fields),
-        channels: t.channels.map((c) => ({ moduleName: c.moduleName, versions: c.versions })),
+        channels: t.channels.map((c) => ({ moduleName: c.moduleName, versions: c.versions, kinds: c.kinds })),
       })),
       commands: k.schema.commands.map((c) => ({
         id: c.id,
@@ -241,6 +241,8 @@ export interface ConnectionDraft {
   /** Tells connections apart while they move and go. */
   key: string
   moduleName: string
+  /** The connection kind; "" for the first the target and the channel both support. */
+  kind: string
   /** What the minion calls the connection; "" for "<channel>-<position>". */
   name: string
   /** The name is the operator's, not one a fill gave: the next fill keeps it. */
@@ -273,6 +275,7 @@ export interface BuildForm {
 /** A connection as an earlier build's turns into ("Build again"). */
 export interface ConnectionSource {
   moduleName: string
+  kind?: string | null
   name?: string | null
   description?: string | null
   /** The channel's settings version they were saved against. */
@@ -317,6 +320,7 @@ export function connectionDraft(kind: FactoryKind, ch: ChannelKind | undefined, 
   return {
     key: `connection-${++lastKey}`,
     moduleName: source.moduleName,
+    kind: source.kind ?? "",
     name: source.name ?? "",
     named: !!source.name?.trim(),
     description: source.description ?? "",
@@ -437,6 +441,8 @@ function recordedConnection(raw: unknown) {
   const channel = isRecord(ep.channel) ? ep.channel : {}
   return {
     moduleName: typeof channel.module_name === "string" ? channel.module_name : "",
+    /** The connection kind; "" for reverse-call, as a build without kinds has it. */
+    kind: typeof rec.kind === "string" ? rec.kind : "",
     name: typeof ep.name === "string" ? ep.name : "",
     schemaVersion: typeof channel.schema_version === "number" ? channel.schema_version : null,
     params: isRecord(ep.params) ? ep.params : {},
@@ -457,12 +463,13 @@ export function recordedConnections(build: Pick<BuildRecordLike, "connections" |
 export function buildConnectionRows(
   build: Pick<BuildRecordLike, "connections" | "connectionDescriptions">,
   channels: ReadonlyMap<string, ChannelKind>,
-): { moduleName: string; name: string; address: string; description: string }[] {
+): { moduleName: string; kind: string; name: string; address: string; description: string }[] {
   const records = Array.isArray(build.connections) ? build.connections : []
   return records.map((raw: unknown, i) => {
     const c = recordedConnection(raw)
     return {
       moduleName: c.moduleName,
+      kind: c.kind || "reverse-call",
       name: c.name,
       // The channel's first setting, usually where the minion connects.
       address: settingsSummary(channels.get(c.moduleName), c.params, 1),
@@ -486,7 +493,7 @@ export function sourceFromBuild(
   const target = kind.targets.find((t) => t.id === build.target)
   const records = Array.isArray(build.connections) ? build.connections : []
   const connections = records.map((raw: unknown, i): ConnectionSource => {
-    const { moduleName, name, schemaVersion, params, values } = recordedConnection(raw)
+    const { moduleName, kind: connKind, name, schemaVersion, params, values } = recordedConnection(raw)
     const ch = channels.get(moduleName)
     const notes: string[] = []
     const dropped = ch ? Object.keys(params).filter((k) => !ch.fields.some((f) => f.key === k)) : []
@@ -495,6 +502,7 @@ export function sourceFromBuild(
     }
     return {
       moduleName,
+      kind: connKind || null,
       name: name !== "" && name !== defaultConnectionName(moduleName, i) ? name : null,
       description: build.connectionDescriptions?.[i] || null,
       schemaVersion,
@@ -526,6 +534,8 @@ function withoutDefaults(fields: readonly FieldDef[], values: Record<string, unk
 /** One connection as createBuild takes it. */
 export interface ConnectionInput {
   moduleName: string
+  /** The connection kind; null for the first the target and the channel both support. */
+  kind?: string | null
   name: string | null
   description: string | null
   settings: Record<string, unknown>
@@ -637,6 +647,7 @@ export function evaluateForm(
     const at = `connections[${i}]`
     return {
       moduleName: c.moduleName,
+      kind: c.kind || null,
       name: c.name.trim() || null,
       description: c.description.trim() || null,
       settings: evaluateFields(`${at}.settings.`, channels.get(c.moduleName)?.fields ?? [], c.settings, errors),
@@ -749,4 +760,22 @@ export function persistedInput(c: PersistedChoice): { persistedSession?: string;
   if (c.kind === "new") return { newPersistedSession: true }
   if (c.kind === "same") return { persistedSession: c.id }
   return {}
+}
+
+/**
+ * The connection kinds a connection of target through ch can use: the
+ * target's (in the factory's order) the channel carries too.
+ */
+export function usableKinds(target: Target | undefined, ch: ChannelKind | undefined, moduleName: string): string[] {
+  const own = target?.channels.find((c) => c.moduleName === moduleName)?.kinds ?? []
+  const carried = ch?.kinds ?? ["reverse-call"]
+  return own.filter((k) => carried.includes(k))
+}
+
+/** What a connection kind is, for people. */
+export const kindLabels: Record<string, string> = {
+  "reverse-call": "Calls in: a request each exchange",
+  "reverse-persistent": "Stays connected: core sends at once",
+  "bind-call": "Called: core calls the minion",
+  "bind-persistent": "Reached: core opens the connection",
 }

@@ -6,6 +6,7 @@ const kind: Kind = {
   name: "http",
   icon: { icon: "", iconLight: "" },
   version: 2,
+  kinds: ["reverse-call"],
   fields: [
     { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
     { key: "tls_verify", type: "bool", label: "Verify TLS certificate", order: 2, required: false, default: false },

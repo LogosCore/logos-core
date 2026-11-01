@@ -24,7 +24,10 @@ import (
 // Description is the operators' note on it: core keeps it, and never puts it
 // in a build request, so it cannot end up in an artifact.
 type ConnectionInput struct {
-	ModuleName  string
+	ModuleName string
+	// Kind is the connection kind; empty: the first the target and the
+	// channel both support, in the factory's order.
+	Kind        string
 	Name        string
 	Description string
 	Settings    map[string]any
@@ -44,7 +47,7 @@ func compactConnections(in []ConnectionInput) []ConnectionInput {
 	out := make([]ConnectionInput, len(in))
 	for i, c := range in {
 		out[i] = ConnectionInput{
-			ModuleName: strings.TrimSpace(c.ModuleName), Name: strings.TrimSpace(c.Name),
+			ModuleName: strings.TrimSpace(c.ModuleName), Kind: strings.TrimSpace(c.Kind), Name: strings.TrimSpace(c.Name),
 			Description: strings.TrimSpace(c.Description), Settings: compact(c.Settings), Values: compact(c.Values),
 		}
 	}
@@ -78,6 +81,8 @@ type checked struct {
 	commands []string
 	// channels are the connections' channel schemas, by connection index.
 	channels []*protocol.ConnectionSchema
+	// kinds are the connections' kinds, by connection index.
+	kinds []string
 	// fileIDs are the build files the values and connection values name.
 	fileIDs []uuid.UUID
 }
@@ -121,6 +126,7 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 		out.add("connections", "at least one connection is required")
 	}
 	c.channels = make([]*protocol.ConnectionSchema, len(st.Connections))
+	c.kinds = make([]string, len(st.Connections))
 	named := map[string]int{} // connection index by name
 	for i, conn := range st.Connections {
 		key := fmt.Sprintf("connections[%d]", i)
@@ -154,7 +160,22 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			out.add(key, "target %q cannot connect through channel %q version %d", t.ID, conn.ModuleName, cs.Version)
 			continue
 		}
-		if err := s.checkValues(ctx, op, key+".settings.", cs.Fields, conn.Settings, out, files); err != nil {
+		// The kind: one the target and the channel both support.
+		usable := protocol.UsableKinds(schema.TargetKinds(t, conn.ModuleName), cs.SupportedKinds())
+		kind := conn.Kind
+		switch {
+		case kind == "" && len(usable) > 0:
+			kind = usable[0]
+		case kind == "":
+			out.add(key+".kind", "target %q and channel %q share no connection kind", t.ID, conn.ModuleName)
+			continue
+		case !slices.Contains(usable, kind):
+			out.add(key+".kind", "%q is not a kind target %q and channel %q both support (%s)", kind, t.ID,
+				conn.ModuleName, strings.Join(usable, ", "))
+			continue
+		}
+		c.kinds[i] = kind
+		if err := s.checkValues(ctx, op, key+".settings.", cs.KindFields(kind), conn.Settings, out, files); err != nil {
 			return c, out, err
 		}
 		ch, _ := schema.Channel(conn.ModuleName)

@@ -72,6 +72,11 @@ type IMinionTaskRepository interface {
 	// tasks sent before and not yet acked first, then queued ones, oldest
 	// first; none an operator asked to cancel.
 	ForDelivery(ctx context.Context, sessionID uuid.UUID, limit int) ([]models.MinionTask, error)
+	// CountRunning counts a session's tasks its minion has and has not
+	// ended: acknowledged, or with a result, and not finished. Tasks sent
+	// and not acknowledged are not counted: ForDelivery sends them again,
+	// within its limit.
+	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
 	// MarkSent records that these tasks went out at at.
 	MarkSent(ctx context.Context, taskIDs []uuid.UUID, at time.Time) error
 	// Ack records that the minion got these tasks of the session.
@@ -224,6 +229,14 @@ func uuidsIn(ids []uuid.UUID) bson.A {
 		in[i] = id
 	}
 	return in
+}
+
+func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error) {
+	n, err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "$or": bson.A{
+		bson.M{"state": models.MinionTaskRunning},
+		bson.M{"state": models.MinionTaskSent, "acked_at": bson.M{"$exists": true}},
+	}}).Count()
+	return int(n), err
 }
 
 func (r *minionTaskRepository) MarkSent(ctx context.Context, taskIDs []uuid.UUID, at time.Time) error {

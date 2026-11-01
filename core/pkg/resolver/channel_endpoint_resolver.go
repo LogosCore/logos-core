@@ -277,7 +277,7 @@ func toConnectionModel(s *protocol.ConnectionSchema) *model.ModuleConnectionSche
 			fields[i].Default = f.Default
 		}
 	}
-	return &model.ModuleConnectionSchema{Version: s.Version, Fields: fields}
+	return &model.ModuleConnectionSchema{Version: s.Version, Fields: fields, Kinds: s.SupportedKinds()}
 }
 
 func toEndpointModel(v channelendpoints.View) *model.ChannelEndpoint {

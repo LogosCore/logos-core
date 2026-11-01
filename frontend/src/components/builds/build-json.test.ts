@@ -38,7 +38,7 @@ const schema: BuildSchemaFieldsFragment = {
     },
   ],
   targets: [
-    { id: "dummy", label: "Dummy", description: null, format: "json", platforms: ["any/any"], fields: [], channels: [{ moduleName: "http", versions: [2] }] },
+    { id: "dummy", label: "Dummy", description: null, format: "json", platforms: ["any/any"], fields: [], channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call"] }] },
     {
       id: "service",
       label: "Service",
@@ -46,7 +46,7 @@ const schema: BuildSchemaFieldsFragment = {
       format: "exe",
       platforms: ["windows/amd64", "windows/arm64"],
       fields: [field({ key: "service_name", type: "string", required: true })],
-      channels: [{ moduleName: "http", versions: [2] }],
+      channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call"] }],
     },
   ],
   commands: [
@@ -77,7 +77,7 @@ const good: BuildDocument = {
   commands: ["sleep", "hello"],
   values: { punches: ["jab"] },
   connections: [
-    { moduleName: "http", name: "", description: "", settings: { base_url: "https://edge.example.com" }, values: {} },
+    { moduleName: "http", kind: "", name: "", description: "", settings: { base_url: "https://edge.example.com" }, values: {} },
   ],
 }
 const read = (doc: unknown) => readBuildJson(typeof doc === "string" ? doc : JSON.stringify(doc), kind, channels)
@@ -319,7 +319,7 @@ describe("documentInput", () => {
       values: { punches: ["jab"] },
       commands: ["sleep", "hello"],
       connections: [
-        { moduleName: "http", name: null, description: "note", settings: { base_url: "https://edge.example.com" }, values: {} },
+        { moduleName: "http", kind: null, name: null, description: "note", settings: { base_url: "https://edge.example.com" }, values: {} },
       ],
     })
   })
@@ -356,7 +356,7 @@ describe("buildJsonHints", () => {
   })
 
   it("offers any connection's keys, and each one's settings by its channel", () => {
-    expect(hintsAt(hints, "/connections/5")!.map((h) => h.key)).toEqual(["channel", "name", "description", "settings", "values"])
+    expect(hintsAt(hints, "/connections/5")!.map((h) => h.key)).toEqual(["channel", "kind", "name", "description", "settings", "values"])
     expect(hintsAt(hints, "/connections/0")!.find((h) => h.key === "channel")!.values).toEqual(["http"])
     expect(hints["/connections/0/settings"].map((h) => h.key)).toEqual(["base_url", "request_timeout"])
     expect(hints["/connections/0/values"].map((h) => h.key)).toEqual(["method"])

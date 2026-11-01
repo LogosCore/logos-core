@@ -98,7 +98,11 @@ type MinionSession {
   lateAt: String
   lostAt: String
   # The latest message under the session id; null before the first check-in.
+  # While the session is connected it is kept at now.
   lastSeenAt: String
+  # A persistent connection serving the session is open (docs:
+  # contracts/channel-core-connections): its minion is reached at once.
+  connected: Boolean!
 }
 
 # A process that claimed a persisted session.

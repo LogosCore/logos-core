@@ -18,6 +18,7 @@
 package resolver
 
 import (
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
@@ -66,4 +67,13 @@ type Resolver struct {
 	TaskRepo         repository.ITaskRepository
 	ModuleRepo       repository.IModuleRegistryRepository
 	PresenceTracker  *wiki.PresenceTracker
+	// MinionConnections says which sessions have a persistent connection
+	// open (minionsync).
+	MinionConnections MinionConnections
+}
+
+// MinionConnections reports whether a persistent connection serving a
+// session is open.
+type MinionConnections interface {
+	Connected(session uuid.UUID) bool
 }

@@ -138,12 +138,12 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 	return nil, nil
 }
 
-// deliver answers a get_tasks asking for at most max (nil: no limit of the
-// minion's): the tasks waiting, marked sent.
-func (s *Service) deliver(ctx context.Context, session *models.MinionSession, max *uint64) ([]cbor.RawMessage, error) {
-	limit := models.MaxMinionTasksPerReply
-	if max != nil && *max < uint64(limit) {
-		limit = int(*max)
+// deliver gives a minion at most limit of the tasks waiting for it, those
+// sent and not acknowledged first, and marks them sent.
+func (s *Service) deliver(ctx context.Context, session *models.MinionSession, limit int) ([]cbor.RawMessage, error) {
+	// ForDelivery takes 0 for no limit: none asked is none sent.
+	if limit <= 0 {
+		return nil, nil
 	}
 	waiting, err := s.tasks.ForDelivery(ctx, session.SessionID, limit)
 	if err != nil {

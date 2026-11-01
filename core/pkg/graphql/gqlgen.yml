@@ -90,6 +90,12 @@ models:
       recentOperations:
         resolver: true         # []uuid.UUID -> viewable Operations; empty unless it is the caller
 
+  # A session's connected is the sync service's: its open connections.
+  MinionSession:
+    fields:
+      connected:
+        resolver: true
+
   # Map the GraphQL "OperationRole" enum to our existing OperationRole type.
   # The Go type implements MarshalGQL/UnmarshalGQL for case conversion.
   OperationRole:

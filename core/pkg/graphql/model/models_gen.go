@@ -98,8 +98,9 @@ type BuildChannel struct {
 }
 
 type BuildChannelVersions struct {
-	ModuleName string `json:"moduleName"`
-	Versions   []int  `json:"versions"`
+	ModuleName string   `json:"moduleName"`
+	Versions   []int    `json:"versions"`
+	Kinds      []string `json:"kinds"`
 }
 
 type BuildCommand struct {
@@ -122,6 +123,7 @@ type BuildConnection struct {
 
 type BuildConnectionInput struct {
 	ModuleName  string  `json:"moduleName"`
+	Kind        *string `json:"kind,omitempty"`
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Settings    any     `json:"settings,omitempty"`
@@ -594,6 +596,7 @@ type MinionSession struct {
 	LateAt           *string                 `json:"lateAt,omitempty"`
 	LostAt           *string                 `json:"lostAt,omitempty"`
 	LastSeenAt       *string                 `json:"lastSeenAt,omitempty"`
+	Connected        bool                    `json:"connected"`
 }
 
 type MinionSessionConnection struct {
@@ -839,6 +842,7 @@ type ModuleConnection struct {
 type ModuleConnectionSchema struct {
 	Version int            `json:"version"`
 	Fields  []*ModuleField `json:"fields"`
+	Kinds   []string       `json:"kinds"`
 }
 
 type ModuleEdge struct {

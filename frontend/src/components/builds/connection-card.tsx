@@ -3,13 +3,21 @@ import { ArrowDownIcon, ArrowUpIcon, BookmarkPlusIcon, ChevronRightIcon, CopyIco
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { SettingRow } from "@/components/ui/settings-rows"
 import { KindName } from "@/components/modules/module-icon"
 import { groupByField, type Draft } from "@/components/modules/management/field-values"
 import { useChannelEndpointCount } from "@/graphql/hooks/channel-endpoints"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
-import { defaultConnectionName, settingsSummary, type ChannelKind, type ConnectionDraft, type FactoryKind } from "./build-values"
+import {
+  defaultConnectionName,
+  kindLabels,
+  settingsSummary,
+  type ChannelKind,
+  type ConnectionDraft,
+  type FactoryKind,
+} from "./build-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 /** An operation's endpoint, as a connection is filled from it. */
@@ -34,11 +42,13 @@ export function ConnectionCard({
   count,
   connection: c,
   kind,
+  kinds,
   channel,
   channelIcon,
   settings,
   errors,
   disabled,
+  onKind,
   onName,
   onDescription,
   onSetting,
@@ -54,6 +64,8 @@ export function ConnectionCard({
   count: number
   connection: ConnectionDraft
   kind: FactoryKind
+  /** The connection kinds the target and the channel both support, in the factory's order. */
+  kinds: readonly string[]
   /** The channel kind; undefined when it declares no settings now. */
   channel: ChannelKind | undefined
   channelIcon?: ModuleIconSvgs
@@ -62,6 +74,7 @@ export function ConnectionCard({
   /** The form's errors, keyed like the server's problems. */
   errors: Record<string, string>
   disabled: boolean
+  onKind: (kind: string) => void
   onName: (name: string) => void
   onDescription: (description: string) => void
   onSetting: (key: string, d: Draft) => void
@@ -83,6 +96,8 @@ export function ConnectionCard({
   const params = kind.channelFields.get(c.moduleName) ?? []
   const summary = settingsSummary(channel, settings)
   const idPrefix = `connection-${c.key}`
+  // The kind the build gets: the one picked, or the first both support.
+  const effectiveKind = c.kind || kinds[0] || ""
 
   return (
     <div className="rounded-xl border bg-card" aria-label={`Connection ${index + 1}`} role="group">
@@ -102,6 +117,11 @@ export function ConnectionCard({
           <span className={cn("truncate font-mono text-sm font-medium", !c.name.trim() && "text-muted-foreground")}>
             {c.name.trim() || defaultName}
           </span>
+          {kinds.length > 1 && effectiveKind && (
+            <span className="shrink-0 rounded border px-1.5 font-mono text-xs text-muted-foreground" title={kindLabels[effectiveKind]}>
+              {effectiveKind}
+            </span>
+          )}
           {open
             ? c.filledFrom && <span className="truncate text-xs text-muted-foreground">filled from {c.filledFrom}</span>
             : summary && <span className="truncate font-mono text-xs text-muted-foreground">{summary}</span>}
@@ -167,6 +187,31 @@ export function ConnectionCard({
               aria-invalid={!!errors[`${at}.name`] || undefined}
             />
           </SettingRow>
+          {kinds.length > 1 && (
+            <SettingRow
+              id={`${idPrefix}-kind`}
+              label="Kind"
+              help="How the minion keeps in touch through this channel: a request at each exchange, or a connection it keeps open, over which core sends tasks at once."
+              error={errors[`${at}.kind`]}
+            >
+              <Select
+                value={effectiveKind}
+                onValueChange={(v) => onKind(typeof v === "string" ? v : "")}
+                disabled={disabled}
+              >
+                <SelectTrigger id={`${idPrefix}-kind`} className="w-full max-w-80" aria-invalid={!!errors[`${at}.kind`] || undefined}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {kinds.map((k) => (
+                    <SelectItem key={k} value={k} description={k}>
+                      {kindLabels[k] ?? k}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingRow>
+          )}
           <SettingRow
             id={`${idPrefix}-description`}
             label="Description"

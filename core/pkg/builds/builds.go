@@ -140,9 +140,10 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 				Format:  protocol.ChannelEndpointExportV1,
 				Name:    connectionName(conn, i),
 				Channel: protocol.ExportChannel{ModuleName: conn.ModuleName, SchemaVersion: cs.Version},
-				Params:  protocol.ResolveConnectionValues(*cs, conn.Settings),
+				Params:  protocol.ResolveFieldValues(cs.KindFields(c.kinds[i]), conn.Settings),
 			},
 			Values: protocol.ResolveFieldValues(ch.Fields, conn.Values),
+			Kind:   connKind(c.kinds[i]),
 		})
 	}
 
@@ -406,4 +407,14 @@ func (s *Service) checkPersistedSession(ctx context.Context, op uuid.UUID, id uu
 		probs.add(key, "the session is closed")
 	}
 	return nil
+}
+
+// connKind is how a build connection says its kind: reverse-call, the kind
+// every connection was before kinds, as no kind, so builds of factories that
+// list none read as before.
+func connKind(kind string) string {
+	if kind == protocol.KindReverseCall {
+		return ""
+	}
+	return kind
 }

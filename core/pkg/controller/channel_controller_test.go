@@ -116,6 +116,14 @@ func (f *fakeMinions) Handle(_ context.Context, id, _ string, frame []byte) ([]b
 	return f.reply, f.err
 }
 
+func (f *fakeMinions) Exchange(ctx context.Context, _ *minionsync.Conn, id, peer string, frame []byte) ([]byte, error) {
+	return f.Handle(ctx, id, peer, frame)
+}
+
+func (f *fakeMinions) KeepAlive(context.Context, *minionsync.Conn) {}
+
+func (f *fakeMinions) Closed(context.Context, *minionsync.Conn) {}
+
 func newCtrl(gate RegistrationGate) IChannelController {
 	return newCtrlWith(gate, &fakeMinions{})
 }

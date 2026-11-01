@@ -8,8 +8,19 @@ package resolver
 import (
 	"context"
 
+	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 )
+
+// Connected is the resolver for the connected field.
+func (r *minionSessionResolver) Connected(ctx context.Context, obj *model.MinionSession) (bool, error) {
+	id, err := uuid.Parse(obj.ID)
+	if err != nil || r.MinionConnections == nil {
+		return false, nil
+	}
+	return r.MinionConnections.Connected(id), nil
+}
 
 // SetMinionSessionArchived is the resolver for the setMinionSessionArchived field.
 func (r *mutationResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
@@ -78,3 +89,8 @@ func (r *subscriptionResolver) MinionSessionChanged(ctx context.Context, operati
 	}
 	return stream(ctx, r.EventBus, minionSessionTopics, filter, r.minionSessionEvent), nil
 }
+
+// MinionSession returns generated.MinionSessionResolver implementation.
+func (r *Resolver) MinionSession() generated.MinionSessionResolver { return &minionSessionResolver{r} }
+
+type minionSessionResolver struct{ *Resolver }

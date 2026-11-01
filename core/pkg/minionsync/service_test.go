@@ -467,23 +467,17 @@ func TestUnderSession(t *testing.T) {
 		t.Fatalf("after check-in %+v", s)
 	}
 
-	// get_tasks: taken, and no task waits, so nothing to say; max 0 is
-	// refused.
-	if reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: 1}); err != nil || reply != nil {
-		t.Fatalf("get_tasks: %x %v", reply, err)
-	}
-	reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: 0})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var bad protocol.ErrItem
-	if msg := r.openUnder(t, sid, keys, reply); len(msg.Items) != 1 || protocol.UnmarshalCBOR(msg.Items[0], &bad) != nil || bad.Code != protocol.ErrItemBadMessage {
-		t.Fatalf("get_tasks max 0: %+v", msg)
+	// get_tasks: taken, and no task waits, so nothing to say; max 0 (a
+	// pause) is taken too, and brings none.
+	for _, max := range []int{1, 0} {
+		if reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), map[int]any{0: protocol.ItemGetTasks, 1: max}); err != nil || reply != nil {
+			t.Fatalf("get_tasks max %d: %x %v", max, reply, err)
+		}
 	}
 
 	// A rehello: new details, the same session id; an item not built yet
 	// gets unknown_item.
-	reply, err = r.sendUnder(t, sid, keys, protocol.NewMessageID(), hello("web01-renamed"),
+	reply, err := r.sendUnder(t, sid, keys, protocol.NewMessageID(), hello("web01-renamed"),
 		map[int]any{0: protocol.ItemResult, 1: 1, 2: 0})
 	if err != nil {
 		t.Fatal(err)

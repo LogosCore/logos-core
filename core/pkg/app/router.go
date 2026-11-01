@@ -42,6 +42,7 @@ func (a *App) NewRouter() *gin.Engine {
 	// cryptographic channel auth (shared secret / mTLS) is still a follow-up.
 	channel := r.Group("/api/channel")
 	channel.POST("/sync", c.channel.Sync)
+	channel.GET("/connection", c.channel.Connection)
 
 	v1 := r.Group("/api/v1")
 

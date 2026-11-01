@@ -47,6 +47,7 @@ func routeTable(t *testing.T) []string {
 func TestRouteTable(t *testing.T) {
 	want := []string{
 		"DELETE /api/v1/mcp",
+		"GET /api/channel/connection",
 		"GET /api/v1/",
 		"GET /api/v1/builds/:id/artifact",
 		"GET /api/v1/graphql/ws",
@@ -161,6 +162,7 @@ func TestRouteAuthTiers(t *testing.T) {
 		"POST /api/v1/login":                 403,
 		"POST /api/v1/internal/wiki/webhook": 400,
 		"POST /api/channel/sync":             415,
+		"GET /api/channel/connection":        400,
 	}
 
 	r := testRouter(t).NewRouter()

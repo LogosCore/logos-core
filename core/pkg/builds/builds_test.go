@@ -1110,3 +1110,43 @@ func TestCreateBuildNewPersistedSession(t *testing.T) {
 		t.Fatal("the reservation outlived its build")
 	}
 }
+
+// A connection's kind is one both the target and the channel support: the
+// first of them in the factory's order when the build names none.
+func TestConnectionKinds(t *testing.T) {
+	r := newRig(t)
+	// A channel without kinds carries reverse-call only: the default.
+	b := r.queue(t, nil)
+	if k := b.Connections.Items[0].ConnectionKind(); k != protocol.KindReverseCall || b.Connections.Items[0].Kind != "" {
+		t.Fatalf("kind %q (%q)", k, b.Connections.Items[0].Kind)
+	}
+	// BOB lists WebSockets first, the channel carries both.
+	inst := bobInstance("bob-1", 1)
+	inst.Build.Channels[0].Kinds = []string{protocol.KindReversePersistent, protocol.KindReverseCall}
+	r.reg.setActive(inst)
+	r.reg.mu.Lock()
+	r.reg.schemas["bob"] = inst.Build
+	r.reg.mu.Unlock()
+	hs := httpSchema()
+	hs.SchemaVersion = protocol.ConnectionSchemaV2
+	hs.Kinds = map[string]protocol.ConnectionKind{protocol.KindReverseCall: {}, protocol.KindReversePersistent: {}}
+	r.chs.schemas["http"] = hs
+	b = r.queue(t, nil)
+	if k := b.Connections.Items[0].Kind; k != protocol.KindReversePersistent {
+		t.Fatalf("default kind %q", k)
+	}
+	b = r.queue(t, func(in *BuildInput) { in.Connections[0].Kind = protocol.KindReverseCall })
+	if k := b.Connections.Items[0].ConnectionKind(); k != protocol.KindReverseCall {
+		t.Fatalf("picked kind %q", k)
+	}
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Connections[0].Kind = protocol.KindBindCall }))
+	if p := problemsOf(err); !strings.Contains(p["connections[0].kind"], "is not a kind") {
+		t.Fatalf("a kind neither supports: %v %v", err, p)
+	}
+	// The channel carries reverse-call only again: WebSockets are not usable.
+	r.chs.schemas["http"] = httpSchema()
+	_, err = r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Connections[0].Kind = protocol.KindReversePersistent }))
+	if p := problemsOf(err); !strings.Contains(p["connections[0].kind"], "reverse-call") {
+		t.Fatalf("a kind the channel lacks: %v %v", err, p)
+	}
+}

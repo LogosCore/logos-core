@@ -278,6 +278,9 @@ func connectionInputs(ctx context.Context, in []*model.BuildConnectionInput) ([]
 	out := make([]builds.ConnectionInput, len(in))
 	for i, c := range in {
 		out[i].ModuleName = c.ModuleName
+		if c.Kind != nil {
+			out[i].Kind = *c.Kind
+		}
 		if c.Name != nil {
 			out[i].Name = *c.Name
 		}
@@ -337,7 +340,8 @@ func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 			Platforms: t.Platforms, Fields: toBuildFieldModels(t.Fields),
 		}
 		for _, c := range s.TargetChannels(t) {
-			mt.Channels = append(mt.Channels, &model.BuildChannelVersions{ModuleName: c.ModuleName, Versions: c.Versions})
+			mt.Channels = append(mt.Channels, &model.BuildChannelVersions{ModuleName: c.ModuleName, Versions: c.Versions,
+				Kinds: s.TargetKinds(t, c.ModuleName)})
 		}
 		out.Targets = append(out.Targets, mt)
 	}

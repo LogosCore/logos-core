@@ -148,7 +148,7 @@ const STATE_LABEL: Record<string, string> = { OPEN: "Open", CLOSED: "Closed", RE
 function SessionCard({ s }: { s: Session }) {
   // Ticks, as the table does: Last seen counts a silent minion's seconds.
   const now = useNow(1_000)
-  const state = lateness(s, now)
+  const state = s.connected ? "live" : lateness(s, now)
   return (
     <InfoCard title="Session" note={s.persisted ? "persisted" : undefined}>
       <LabelRow label="Description">{s.description || none}</LabelRow>
@@ -168,7 +168,7 @@ function SessionCard({ s }: { s: Session }) {
           >
             <FormattedDateTimeText date={s.lastSeenAt} />
             {formatAgo(now - Date.parse(s.lastSeenAt)) !== null && <> · {formatAgo(now - Date.parse(s.lastSeenAt))}</>}
-            {state && <> · {state}</>}
+            {s.connected ? <> · connected</> : state && <> · {state}</>}
           </span>
         ) : (
           <span className="text-muted-foreground">not yet</span>

@@ -26,6 +26,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/messaging"
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/minionstreams"
+	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
@@ -155,6 +156,11 @@ type App struct {
 	minionStreams *minionstreams.Service
 	// fileBrowser keeps the snapshots of machines' file systems.
 	fileBrowser *filebrowser.Service
+	// minionSync takes minions' messages, through the sync call and
+	// persistent connections, and pushes to the connections.
+	minionSync *minionsync.Service
+	// stopTaskWatch stops minionSync's watch on task changes.
+	stopTaskWatch func()
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -231,6 +237,8 @@ func NewApp() (*App, error) {
 	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.FsListing, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
 	minionStreams := minionstreams.NewService(repos.MinionTask, infra.cache, bus, auth.DeriveKey(e.JWTSecretKey, "minion-stream"),
 		minionstreams.DefaultConfig(), l)
+	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
+		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
@@ -288,6 +296,7 @@ func NewApp() (*App, error) {
 		minionFiles:     minionFiles,
 		minionStreams:   minionStreams,
 		fileBrowser:     fileBrowser,
+		minionSync:      minionSync,
 	}, nil
 }
 
@@ -387,6 +396,7 @@ func (a *App) startLifecycle() {
 	a.builds.Start()
 	a.minionFiles.Start()
 	a.minionStreams.Start()
+	a.stopTaskWatch = a.minionSync.WatchTasks()
 }
 
 // stopLifecycle tears down the reaper, RPC server, and broker connection. All
@@ -407,6 +417,9 @@ func (a *App) stopLifecycle() {
 	}
 	if a.minionStreams != nil {
 		a.minionStreams.Stop()
+	}
+	if a.stopTaskWatch != nil {
+		a.stopTaskWatch()
 	}
 	// Pushes in flight use the RPC client: cancel and drain them first.
 	if a.moduleMgmt != nil {

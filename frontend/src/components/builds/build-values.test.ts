@@ -54,7 +54,7 @@ const schema: BuildSchemaFieldsFragment = {
     },
   ],
   targets: [
-    { id: "dummy", label: "Dummy minion", description: null, format: "json", platforms: ["any/any"], fields: [], channels: [{ moduleName: "http", versions: [2] }] },
+    { id: "dummy", label: "Dummy minion", description: null, format: "json", platforms: ["any/any"], fields: [], channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call"] }] },
     {
       id: "service",
       label: "Service",
@@ -62,7 +62,7 @@ const schema: BuildSchemaFieldsFragment = {
       format: "exe",
       platforms: ["windows/amd64", "windows/arm64"],
       fields: [field({ key: "service_name", type: "string", required: true })],
-      channels: [{ moduleName: "http", versions: [2] }],
+      channels: [{ moduleName: "http", versions: [2], kinds: ["reverse-call"] }],
     },
   ],
   commands: [
@@ -225,12 +225,13 @@ describe("the build form", () => {
       connections: [
         {
           moduleName: "http",
+          kind: null,
           name: "edge",
           description: "EU front",
           settings: { base_url: "https://edge.example.com", token: "s3cret" },
           values: { path_prefix: "/cdn/" },
         },
-        { moduleName: "http", name: null, description: null, settings: { base_url: "https://edge.example.com" }, values: {} },
+        { moduleName: "http", kind: null, name: null, description: null, settings: { base_url: "https://edge.example.com" }, values: {} },
       ],
     })
   })
@@ -320,6 +321,7 @@ describe("the build form", () => {
     expect(c.described).toBe(true)
     expect(input.connections[0]).toEqual({
       moduleName: "http",
+      kind: null,
       name: "edge",
       description: "EU front",
       settings: { base_url: "https://edge.example.com" },
@@ -449,6 +451,7 @@ describe("sourceFromBuild", () => {
     expect(source.connections).toEqual([
       {
         moduleName: "http",
+        kind: null,
         name: null,
         description: null,
         schemaVersion: 2,
@@ -458,6 +461,7 @@ describe("sourceFromBuild", () => {
       },
       {
         moduleName: "http",
+        kind: null,
         name: "edge",
         description: "fallback",
         schemaVersion: 1,
@@ -483,8 +487,8 @@ describe("sourceFromBuild", () => {
       connectionDescriptions: ["EU front"],
     }
     expect(buildConnectionRows(build, channels)).toEqual([
-      { moduleName: "http", name: "http-1", address: "https://a.example.com", description: "EU front" },
-      { moduleName: "http", name: "edge", address: "https://b.example.com", description: "" },
+      { moduleName: "http", kind: "reverse-call", name: "http-1", address: "https://a.example.com", description: "EU front" },
+      { moduleName: "http", kind: "reverse-call", name: "edge", address: "https://b.example.com", description: "" },
     ])
     expect(buildConnectionRows({ connections: null }, channels)).toEqual([])
   })

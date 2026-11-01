@@ -43,6 +43,7 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
     values: b.values,
     connections: recordedConnections(b).map((c) => ({
       channel: c.moduleName,
+      ...(c.kind ? { kind: c.kind } : {}),
       name: c.name,
       description: c.description,
       settings: c.params,

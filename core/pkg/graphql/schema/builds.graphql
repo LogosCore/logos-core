@@ -83,6 +83,9 @@ type BuildChannel {
 type BuildChannelVersions {
   moduleName: String!
   versions: [Int!]!
+  # The connection kinds the target's minions support through the channel,
+  # in the factory's order ("reverse-call", "reverse-persistent", ...).
+  kinds: [String!]!
 }
 
 type BuildTarget {
@@ -141,6 +144,10 @@ type BuildProblem {
 input BuildConnectionInput {
   # The channel kind; the target must connect through it.
   moduleName: String!
+  # The connection kind (docs: contracts/channel-core-connections):
+  # "reverse-call", "reverse-persistent", ... One the target and the channel
+  # both support; null: the first of those, in the factory's order.
+  kind: String
   # What the minion calls the connection, a slug like an endpoint name, unique
   # among the connections; empty: "<channel>-<position>".
   name: String

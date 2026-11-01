@@ -37,6 +37,7 @@ type ResolverRoot interface {
 	CredentialComment() CredentialCommentResolver
 	Hash() HashResolver
 	Host() HostResolver
+	MinionSession() MinionSessionResolver
 	MinionTask() MinionTaskResolver
 	Module() ModuleResolver
 	Mutation() MutationResolver
@@ -181,6 +182,7 @@ type ComplexityRoot struct {
 	}
 
 	BuildChannelVersions struct {
+		Kinds      func(childComplexity int) int
 		ModuleName func(childComplexity int) int
 		Versions   func(childComplexity int) int
 	}
@@ -569,6 +571,7 @@ type ComplexityRoot struct {
 		Archived         func(childComplexity int) int
 		BuildDescription func(childComplexity int) int
 		BuildID          func(childComplexity int) int
+		Connected        func(childComplexity int) int
 		CreatedAt        func(childComplexity int) int
 		Description      func(childComplexity int) int
 		Domain           func(childComplexity int) int
@@ -824,6 +827,7 @@ type ComplexityRoot struct {
 
 	ModuleConnectionSchema struct {
 		Fields  func(childComplexity int) int
+		Kinds   func(childComplexity int) int
 		Version func(childComplexity int) int
 	}
 
@@ -1638,6 +1642,9 @@ type HostResolver interface {
 	CreatedBy(ctx context.Context, obj *models.Host) (*models.User, error)
 	CreatedAt(ctx context.Context, obj *models.Host) (string, error)
 	UpdatedAt(ctx context.Context, obj *models.Host) (string, error)
+}
+type MinionSessionResolver interface {
+	Connected(ctx context.Context, obj *model.MinionSession) (bool, error)
 }
 type MinionTaskResolver interface {
 	Output(ctx context.Context, obj *model.MinionTask) (string, error)
@@ -2523,6 +2530,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BuildChannel.Versions(childComplexity), true
 
+	case "BuildChannelVersions.kinds":
+		if e.ComplexityRoot.BuildChannelVersions.Kinds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildChannelVersions.Kinds(childComplexity), true
 	case "BuildChannelVersions.moduleName":
 		if e.ComplexityRoot.BuildChannelVersions.ModuleName == nil {
 			break
@@ -4103,6 +4116,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.BuildID(childComplexity), true
+	case "MinionSession.connected":
+		if e.ComplexityRoot.MinionSession.Connected == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Connected(childComplexity), true
 	case "MinionSession.createdAt":
 		if e.ComplexityRoot.MinionSession.CreatedAt == nil {
 			break
@@ -5259,6 +5278,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ModuleConnectionSchema.Fields(childComplexity), true
+	case "ModuleConnectionSchema.kinds":
+		if e.ComplexityRoot.ModuleConnectionSchema.Kinds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnectionSchema.Kinds(childComplexity), true
 	case "ModuleConnectionSchema.version":
 		if e.ComplexityRoot.ModuleConnectionSchema.Version == nil {
 			break
@@ -10059,6 +10084,9 @@ type BuildChannel {
 type BuildChannelVersions {
   moduleName: String!
   versions: [Int!]!
+  # The connection kinds the target's minions support through the channel,
+  # in the factory's order ("reverse-call", "reverse-persistent", ...).
+  kinds: [String!]!
 }
 
 type BuildTarget {
@@ -10117,6 +10145,10 @@ type BuildProblem {
 input BuildConnectionInput {
   # The channel kind; the target must connect through it.
   moduleName: String!
+  # The connection kind (docs: contracts/channel-core-connections):
+  # "reverse-call", "reverse-persistent", ... One the target and the channel
+  # both support; null: the first of those, in the factory's order.
+  kind: String
   # What the minion calls the connection, a slug like an endpoint name, unique
   # among the connections; empty: "<channel>-<position>".
   name: String
@@ -10365,6 +10397,9 @@ type ModuleConnectionSchema {
   # earlier one would be read wrongly.
   version: Int!
   fields: [ModuleField!]!
+  # The connection kinds the channel carries ("reverse-call",
+  # "reverse-persistent", ...).
+  kinds: [String!]!
 }
 
 # A channel kind minions can be given endpoints for.
@@ -11539,7 +11574,11 @@ type MinionSession {
   lateAt: String
   lostAt: String
   # The latest message under the session id; null before the first check-in.
+  # While the session is connected it is kept at now.
   lastSeenAt: String
+  # A persistent connection serving the session is open (docs:
+  # contracts/channel-core-connections): its minion is reached at once.
+  connected: Boolean!
 }
 
 # A process that claimed a persisted session.
@@ -20464,6 +20503,35 @@ func (ec *executionContext) fieldContext_BuildChannelVersions_versions(_ context
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildChannelVersions_kinds(ctx context.Context, field graphql.CollectedField, obj *model.BuildChannelVersions) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildChannelVersions_kinds,
+		func(ctx context.Context) (any, error) {
+			return obj.Kinds, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildChannelVersions_kinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildChannelVersions",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildCommand_id(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22076,6 +22144,8 @@ func (ec *executionContext) fieldContext_BuildTarget_channels(_ context.Context,
 				return ec.fieldContext_BuildChannelVersions_moduleName(ctx, field)
 			case "versions":
 				return ec.fieldContext_BuildChannelVersions_versions(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildChannelVersions_kinds(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildChannelVersions", field.Name)
 		},
@@ -22967,6 +23037,8 @@ func (ec *executionContext) fieldContext_ChannelKind_schema(_ context.Context, f
 				return ec.fieldContext_ModuleConnectionSchema_version(ctx, field)
 			case "fields":
 				return ec.fieldContext_ModuleConnectionSchema_fields(ctx, field)
+			case "kinds":
+				return ec.fieldContext_ModuleConnectionSchema_kinds(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionSchema", field.Name)
 		},
@@ -30120,6 +30192,35 @@ func (ec *executionContext) fieldContext_MinionSession_lastSeenAt(_ context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_connected(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_connected,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionSession().Connected(ctx, obj)
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_connected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSessionConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30325,6 +30426,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -30550,6 +30653,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -34002,6 +34107,8 @@ func (ec *executionContext) fieldContext_Module_connection(_ context.Context, fi
 				return ec.fieldContext_ModuleConnectionSchema_version(ctx, field)
 			case "fields":
 				return ec.fieldContext_ModuleConnectionSchema_fields(ctx, field)
+			case "kinds":
+				return ec.fieldContext_ModuleConnectionSchema_kinds(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionSchema", field.Name)
 		},
@@ -35221,6 +35328,35 @@ func (ec *executionContext) fieldContext_ModuleConnectionSchema_fields(_ context
 				return ec.fieldContext_ModuleField_maxSize(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleField", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModuleConnectionSchema_kinds(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnectionSchema_kinds,
+		func(ctx context.Context) (any, error) {
+			return obj.Kinds, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnectionSchema_kinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnectionSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -41125,6 +41261,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -41323,6 +41461,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -41462,6 +41602,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -41660,6 +41802,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -49853,6 +49997,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_lostAt(ctx, field)
 			case "lastSeenAt":
 				return ec.fieldContext_MinionSession_lastSeenAt(ctx, field)
+			case "connected":
+				return ec.fieldContext_MinionSession_connected(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSession", field.Name)
 		},
@@ -64858,7 +65004,7 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"moduleName", "name", "description", "settings", "values"}
+	fieldsInOrder := [...]string{"moduleName", "kind", "name", "description", "settings", "values"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -64872,6 +65018,13 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 				return it, err
 			}
 			it.ModuleName = data
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
 		case "name":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -68526,6 +68679,11 @@ func (ec *executionContext) _BuildChannelVersions(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "kinds":
+			out.Values[i] = ec._BuildChannelVersions_kinds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -72099,77 +72257,77 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 		case "id":
 			out.Values[i] = ec._MinionSession_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "rev":
 			out.Values[i] = ec._MinionSession_rev(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "state":
 			out.Values[i] = ec._MinionSession_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "number":
 			out.Values[i] = ec._MinionSession_number(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "operationId":
 			out.Values[i] = ec._MinionSession_operationId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "buildId":
 			out.Values[i] = ec._MinionSession_buildId(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "buildDescription":
 			out.Values[i] = ec._MinionSession_buildDescription(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "description":
 			out.Values[i] = ec._MinionSession_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "moduleName":
 			out.Values[i] = ec._MinionSession_moduleName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "target":
 			out.Values[i] = ec._MinionSession_target(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "platform":
 			out.Values[i] = ec._MinionSession_platform(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "staged":
 			out.Values[i] = ec._MinionSession_staged(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "pid":
 			out.Values[i] = ec._MinionSession_pid(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "os":
 			out.Values[i] = ec._MinionSession_os(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "arch":
 			out.Values[i] = ec._MinionSession_arch(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "host":
 			out.Values[i] = ec._MinionSession_host(ctx, field, obj)
@@ -72186,21 +72344,21 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 		case "addrs":
 			out.Values[i] = ec._MinionSession_addrs(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "address":
 			out.Values[i] = ec._MinionSession_address(ctx, field, obj)
 		case "addressPicked":
 			out.Values[i] = ec._MinionSession_addressPicked(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "peerAddress":
 			out.Values[i] = ec._MinionSession_peerAddress(ctx, field, obj)
 		case "peers":
 			out.Values[i] = ec._MinionSession_peers(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "version":
 			out.Values[i] = ec._MinionSession_version(ctx, field, obj)
@@ -72209,29 +72367,29 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 		case "createdAt":
 			out.Values[i] = ec._MinionSession_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "archived":
 			out.Values[i] = ec._MinionSession_archived(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "mark":
 			out.Values[i] = ec._MinionSession_mark(ctx, field, obj)
 		case "persisted":
 			out.Values[i] = ec._MinionSession_persisted(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "restarts":
 			out.Values[i] = ec._MinionSession_restarts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "restartCount":
 			out.Values[i] = ec._MinionSession_restartCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "sleepInterval":
 			out.Values[i] = ec._MinionSession_sleepInterval(ctx, field, obj)
@@ -72243,6 +72401,42 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			out.Values[i] = ec._MinionSession_lostAt(ctx, field, obj)
 		case "lastSeenAt":
 			out.Values[i] = ec._MinionSession_lastSeenAt(ctx, field, obj)
+		case "connected":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionSession_connected(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -74032,6 +74226,11 @@ func (ec *executionContext) _ModuleConnectionSchema(ctx context.Context, sel ast
 			}
 		case "fields":
 			out.Values[i] = ec._ModuleConnectionSchema_fields(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kinds":
+			out.Values[i] = ec._ModuleConnectionSchema_kinds(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

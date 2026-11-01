@@ -29,6 +29,9 @@ type ModuleConnectionSchema {
   # earlier one would be read wrongly.
   version: Int!
   fields: [ModuleField!]!
+  # The connection kinds the channel carries ("reverse-call",
+  # "reverse-persistent", ...).
+  kinds: [String!]!
 }
 
 # A channel kind minions can be given endpoints for.

@@ -230,7 +230,7 @@ func (a *App) mountGraphQLRoutes(v1 *gin.RouterGroup, res *resolvers) {
 		a.eventBus,
 		a.repos.User, a.repos.Operation, a.repos.Session, a.repos.WikiDocument,
 		a.repos.Credential, a.repos.Hash, a.repos.Host, a.repos.Task, a.repos.ModuleRegistry,
-		a.presenceTracker,
+		a.presenceTracker, a.minionSync,
 		a.env.CORSAllowedOrigins,
 	)
 	v1.POST("/graphql", gqlHandler)

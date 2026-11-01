@@ -61,6 +61,16 @@ func (f *fakeTasks) MarkSent(_ context.Context, ids []uuid.UUID, at time.Time) e
 	return nil
 }
 
+func (f *fakeTasks) CountRunning(_ context.Context, sid uuid.UUID) (int, error) {
+	n := 0
+	for _, t := range f.rows {
+		if t.SessionID == sid && (t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeTasks) Ack(_ context.Context, _ uuid.UUID, ids []uuid.UUID, at time.Time) error {
 	for _, id := range ids {
 		if t := f.find(id); t != nil && t.AckedAt == nil {

@@ -57,6 +57,7 @@ export const MinionSessionFields = graphql(`
     x
     createdAt
     lastSeenAt
+    connected
   }
 `)
 
