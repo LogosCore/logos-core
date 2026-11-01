@@ -83,6 +83,20 @@ export const LISTED_FOLDER = "text-amber-600 dark:text-amber-400"
 export const UNLISTED_FOLDER = "text-muted-foreground [stroke-dasharray:3_2]"
 /** A folder a task could not read: its lock. */
 export const UNREADABLE_FOLDER = "text-red-600 dark:text-red-400"
+/** A file core has a download of (or streamed): its icon. */
+export const DOWNLOADED_FILE = "text-sky-600 dark:text-sky-400"
+
+/**
+ * Whether an entry is one a task has taken in: a folder listed, a file
+ * downloaded (or streamed); a root always. Its name shows bright, and the
+ * rest dimmed: what is known only by name, or as the way to something else.
+ */
+export function takenIn(e: { type: string; parent?: string | null; listedAt?: string | null; downloaded: readonly unknown[] }): boolean {
+  if (!e.parent) return true
+  if (e.type === "dir") return !!e.listedAt
+  if (e.type === "file") return e.downloaded.length > 0
+  return false
+}
 
 /** What a folder's hover says of its listings: listed, never, or not read and why. */
 export function listedSays(e: {

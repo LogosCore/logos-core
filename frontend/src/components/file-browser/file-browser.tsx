@@ -66,11 +66,13 @@ import {
   byWhom,
   inFlight,
   inFlightAt,
+  DOWNLOADED_FILE,
   LISTED_FOLDER,
   listedSays,
   parentOf,
   pathsTo,
   sepOf,
+  takenIn,
   UNLISTED_FOLDER,
   UNREADABLE_FOLDER,
   when,
@@ -732,8 +734,6 @@ function EntryRow({
           <div
             className={cn(
               `grid ${GRID} cursor-default items-center gap-3 border-b px-3 text-sm hover:bg-muted/40`,
-              (e.hidden || !e.known) && "text-muted-foreground",
-              gone && "text-muted-foreground",
               marked && "bg-muted",
               onClick && "cursor-pointer",
             )}
@@ -745,7 +745,10 @@ function EntryRow({
         <span className="flex min-w-0 items-baseline gap-1.5" title={title}>
           {/* A file's icon says its kind, by its name: the snapshot has no content types. */}
           {isFile && e.parent ? (
-            <FileNameIcon name={e.name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
+            <FileNameIcon
+              name={e.name}
+              className={cn("size-3.5 shrink-0 self-center", !gone && e.downloaded.length > 0 ? DOWNLOADED_FILE : "text-muted-foreground")}
+            />
           ) : (
             <Icon
               className={cn(
@@ -755,7 +758,16 @@ function EntryRow({
             />
           )}
           {/* A name as a name (the sessions table's hosts); a search's whole path as a path. */}
-          <span className={cn("truncate", fullPath && "font-mono text-xs", gone && "line-through", !e.known && "italic")}>
+          {/* Bright: a folder listed, a file downloaded; dimmed: the rest, and the gone. */}
+          <span
+            className={cn(
+              "truncate",
+              fullPath && "font-mono text-xs",
+              !gone && takenIn(e) ? "text-foreground" : "text-muted-foreground",
+              gone && "line-through",
+              !e.known && "italic",
+            )}
+          >
             {fullPath ? e.path : e.name}
           </span>
           {e.target && <span className="truncate text-muted-foreground">→ {e.target}</span>}

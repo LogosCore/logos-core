@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { byWhom, inFlight, inFlightAt, listedSays, parentOf, pathsTo } from "./file-browser-model"
+import { byWhom, inFlight, inFlightAt, listedSays, parentOf, pathsTo, takenIn } from "./file-browser-model"
 
 describe("inFlight", () => {
   const actions: Record<string, string> = { ls: "list_dir", rm: "delete_path", up: "upload_file", ps: "" }
@@ -50,5 +50,16 @@ describe("listedSays", () => {
     const denied = listedSays({ listErr: "permission denied", listErrAt: "2026-11-01T10:00:00Z", listErrBy: { number: 6 } })
     expect(denied).toMatch(/^Could not be read .* by #6: permission denied$/)
     expect(listedSays({ listErr: "denied", listedAt: "2026-10-01T10:00:00Z", listedBy: { number: 1 } }).split("\n")).toHaveLength(2)
+  })
+})
+
+describe("takenIn", () => {
+  it("is a folder listed, a file downloaded, a root", () => {
+    expect(takenIn({ type: "dir", parent: "/", listedAt: "2026-11-01T10:00:00Z", downloaded: [] })).toBe(true)
+    expect(takenIn({ type: "dir", parent: "/", listedAt: null, downloaded: [] })).toBe(false)
+    expect(takenIn({ type: "file", parent: "/etc", downloaded: [{}] })).toBe(true)
+    expect(takenIn({ type: "file", parent: "/etc", downloaded: [] })).toBe(false)
+    expect(takenIn({ type: "link", parent: "/etc", downloaded: [] })).toBe(false)
+    expect(takenIn({ type: "dir", parent: null, downloaded: [] })).toBe(true)
   })
 })

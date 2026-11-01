@@ -2,7 +2,7 @@ import { ChevronRightIcon, FolderIcon, FolderLockIcon, HardDriveIcon, LoaderIcon
 import { samePath, useFileBrowserEntries, type FsEntriesFilter } from "@/graphql/hooks/file-browser"
 import type { FsEntryFieldsFragment } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
-import { LISTED_FOLDER, listedSays, UNLISTED_FOLDER, UNREADABLE_FOLDER } from "./file-browser-model"
+import { LISTED_FOLDER, listedSays, takenIn, UNLISTED_FOLDER, UNREADABLE_FOLDER } from "./file-browser-model"
 
 // The file browser's folder tree: the machine's roots, and each folder's
 // sub-folders as it is opened, read from core (foldersOnly) a page at a
@@ -159,7 +159,7 @@ function FolderNode({
           <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         </button>
         <Icon className={cn("size-3.5 shrink-0", !f.parent ? "text-muted-foreground" : f.listErr ? UNREADABLE_FOLDER : f.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER)} />
-        <span className="whitespace-nowrap">{f.name}</span>
+        <span className={cn("whitespace-nowrap", !f.goneAt && takenIn(f) ? "text-foreground" : "text-muted-foreground")}>{f.name}</span>
       </div>
       {open && (
         <Folders
