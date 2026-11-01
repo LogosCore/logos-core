@@ -303,8 +303,10 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		Description: b.Description, DescriptionSet: true,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.AddrStrings()),
-		Conn: connPlace(hello.Conn), CreatedAt: now, PurgeAt: &purge,
+		CreatedAt: now, PurgeAt: &purge,
 	}
+	conn := connOf(b, connPlace(hello.Conn))
+	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
 	if peer != "" {
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
@@ -464,7 +466,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			// The connection it says hello through, when it says.
 			if c := connPlace(hello.Conn); c > 0 && c != session.Conn {
-				if err = s.sessions.SetConn(ctx, session.SessionID, c, nil); err != nil {
+				if err = s.sessions.SetConn(ctx, session.SessionID, s.sessionConn(ctx, session, c), nil); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
 				}
 				session.Conn = c
@@ -485,7 +487,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			to := connPlace(u.Conn)
 			change := &models.MinionSessionConnChange{At: s.now(), From: session.Conn, To: to, Reason: u.Reason}
-			if err = s.sessions.SetConn(ctx, session.SessionID, to, change); err != nil {
+			if err = s.sessions.SetConn(ctx, session.SessionID, s.sessionConn(ctx, session, to), change); err != nil {
 				return nil, fmt.Errorf("record a conn_update: %w", err)
 			}
 			s.logger.Info("minion moved to another connection", zap.String("session_id", session.SessionID.String()),
@@ -591,6 +593,30 @@ func readConnUpdate(raw cbor.RawMessage) (protocol.ConnUpdateItem, error) {
 		return u, errors.New("the conn_update does not read")
 	}
 	return u, u.Validate()
+}
+
+// connOf is the connection at place in b's connections: its kind and
+// name, empty when b has no such one (nil: the build is gone).
+func connOf(b *models.Build, place int) models.MinionSessionConn {
+	c := models.MinionSessionConn{Place: place}
+	if b != nil && place >= 1 && place <= len(b.Connections.Items) {
+		bc := b.Connections.Items[place-1]
+		c.Kind, c.Name = bc.ConnectionKind(), bc.Endpoint.Name
+	}
+	return c
+}
+
+// sessionConn is the session's connection at place, from its build; a build
+// that cannot be read leaves its kind and name empty.
+func (s *Service) sessionConn(ctx context.Context, session *models.MinionSession, place int) models.MinionSessionConn {
+	b, err := s.builds.FindByBuildID(ctx, session.BuildID)
+	if err != nil {
+		if !repository.IsNotFound(err) {
+			s.logger.Warn("read the session's build for its connection", zap.String("session_id", session.SessionID.String()), zap.Error(err))
+		}
+		return connOf(nil, place)
+	}
+	return connOf(b, place)
 }
 
 // connPlace is a connection's place as core keeps it: 0 (not said) for one

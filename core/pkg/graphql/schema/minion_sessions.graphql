@@ -106,6 +106,13 @@ type MinionSession {
   # The connection the minion uses: its place in connections, from 1, as
   # its hello or its last conn_update said. null when it never said.
   conn: Int
+  # That connection's kind ("reverse-call", ...) and name, from the build
+  # when the minion said it; null when it never said, or the build does not
+  # have it.
+  connKind: String
+  connName: String
+  # How many connections the build has.
+  connCount: Int!
   # Its moves to another connection, as the minion reported them (whatever
   # moved it: an operator's switch, a fallback), most recent first, at most
   # 32.

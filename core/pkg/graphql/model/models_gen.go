@@ -620,6 +620,9 @@ type MinionSession struct {
 	LastSeenAt       *string                 `json:"lastSeenAt,omitempty"`
 	Connected        bool                    `json:"connected"`
 	Conn             *int                    `json:"conn,omitempty"`
+	ConnKind         *string                 `json:"connKind,omitempty"`
+	ConnName         *string                 `json:"connName,omitempty"`
+	ConnCount        int                     `json:"connCount"`
 	ConnChanges      []*MinionConnChange     `json:"connChanges"`
 	Connections      []*MinionConnection     `json:"connections"`
 }

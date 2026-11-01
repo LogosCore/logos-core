@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { PinIcon } from "lucide-react"
+import { CableIcon, PhoneIncomingIcon, PinIcon, PlugZapIcon, RefreshCwIcon, type LucideIcon } from "lucide-react"
+import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
@@ -60,6 +61,31 @@ function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late" | "
   return `${label}: ${[every, when].filter(Boolean).join(", ")}`
 }
 
+
+/**
+ * What each connection kind shows before Last seen, in the cell's color:
+ * polling repeats, a persistent connection stays plugged in; the bind kinds,
+ * where core reaches the minion, a call coming in and a plug core opens.
+ */
+const CONN_KIND_ICONS: Record<string, LucideIcon> = {
+  "reverse-call": RefreshCwIcon,
+  "reverse-persistent": CableIcon,
+  "bind-call": PhoneIncomingIcon,
+  "bind-persistent": PlugZapIcon,
+}
+
+/** The connection a session uses, for Last seen's hover: "Connection 2 of 2: ws · reverse-persistent (…)". */
+function connNote(s: MinionSessionFieldsFragment, now: number): string[] {
+  if (!s.conn) return []
+  const kind = s.connKind ? ` · ${s.connKind}${kindLabels[s.connKind] ? ` (${kindLabels[s.connKind]})` : ""}` : ""
+  const lines = [`Connection ${s.conn} of ${s.connCount}: ${s.connName ?? "?"}${kind}`]
+  const last = s.connChanges[0]
+  if (last) {
+    const ago = formatAgo(now - Date.parse(last.at)) ?? formatAbsolute(last.at)
+    lines.push(`Moved ${last.from ?? "?"} → ${last.to}${last.reason ? ` · ${last.reason}` : ""} · ${ago}`)
+  }
+  return lines
+}
 
 /** When an external address was last seen, and how many messages came from it. */
 function PeerSeen({ lastSeen, count, now }: { lastSeen: string; count: number; now: number }) {
@@ -141,12 +167,13 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       // lost; plain when the minion never said its schedule.
       // A persistent connection open: the minion is there now.
       const state = s.connected ? "live" : lateness(s, ctx.now)
+      const KindIcon = s.connKind ? CONN_KIND_ICONS[s.connKind] : undefined
       return (
         <div
           // A marked row's style recolors these (session-mark-styles.css).
           data-seen={state ?? undefined}
           className={cn(
-            "truncate",
+            "flex min-w-0 items-baseline gap-1",
             state === "live" && "text-emerald-600 dark:text-emerald-400",
             state === "late" && "text-amber-600 dark:text-amber-400",
             state === "lost" && "text-red-600 dark:text-red-400",
@@ -156,12 +183,16 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
             s.connected ? "Connected: a connection to the minion is open, and core sends to it at once" : state && scheduleNote(s, state, ctx.now),
             s.lastSeenAt &&
               `Last seen ${formatAbsolute(s.lastSeenAt)} (${formatAgoExact(ctx.now - Date.parse(s.lastSeenAt))})`,
+            ...connNote(s, ctx.now),
             `Opened ${formatAbsolute(s.createdAt)}`,
           ]
             .filter(Boolean)
             .join("\n")}
         >
-          {s.connected ? "connected" : s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
+          {KindIcon && <KindIcon className="size-3.5 shrink-0 self-center" aria-label={s.connKind ?? undefined} />}
+          <span className="truncate">
+            {s.connected ? "connected" : s.lastSeenAt ? <Ago at={s.lastSeenAt} now={ctx.now} /> : "not yet"}
+          </span>
         </div>
       )
     }

@@ -59,6 +59,9 @@ export const MinionSessionFields = graphql(`
     lastSeenAt
     connected
     conn
+    connKind
+    connName
+    connCount
     connChanges {
       at
       from

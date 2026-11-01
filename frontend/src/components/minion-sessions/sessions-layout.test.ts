@@ -192,6 +192,9 @@ describe("live updates", () => {
     lastSeenAt: "2026-10-30T10:00:00Z",
     connected: false,
     conn: null,
+    connKind: null,
+    connName: null,
+    connCount: 0,
     connChanges: [],
     ...patch,
   })

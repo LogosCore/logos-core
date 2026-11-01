@@ -634,6 +634,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		conn := s.Conn
 		out.Conn = &conn
 	}
+	out.ConnKind, out.ConnName, out.ConnCount = strPtr(s.ConnKind), strPtr(s.ConnName), s.ConnCount
 	out.ConnChanges = make([]*model.MinionConnChange, len(s.ConnChanges))
 	for i, c := range s.ConnChanges {
 		ch := &model.MinionConnChange{At: c.At.UTC().Format(time.RFC3339), To: c.To, Reason: strPtr(c.Reason)}

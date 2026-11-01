@@ -79,9 +79,15 @@ type MinionSession struct {
 	LostAt *time.Time          `bson:"lost_at,omitempty" json:"lost_at,omitempty"`
 	// Conn is the connection the minion uses: its place in the build's
 	// connections, from 1, as its hello or its last conn_update said; 0
-	// when it never said. ConnChanges are the moves it reported, most
-	// recent first, at most MaxSessionConnChanges.
+	// when it never said. ConnKind and ConnName are that connection's kind
+	// and name, copied from the build when it is said (empty when the build
+	// does not have it), so a list shows them without the build; ConnCount
+	// is how many connections the build has. ConnChanges are the moves it
+	// reported, most recent first, at most MaxSessionConnChanges.
 	Conn        int                       `bson:"conn,omitempty" json:"conn,omitempty"`
+	ConnKind    string                    `bson:"conn_kind,omitempty" json:"conn_kind,omitempty"`
+	ConnName    string                    `bson:"conn_name,omitempty" json:"conn_name,omitempty"`
+	ConnCount   int                       `bson:"conn_count,omitempty" json:"conn_count,omitempty"`
 	ConnChanges []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
@@ -140,6 +146,14 @@ const (
 	MaxSessionReplacedKeys = 4
 	MaxSessionConnChanges  = 32
 )
+
+// MinionSessionConn is the connection a minion uses: its place in the
+// build's connections, its kind and its name.
+type MinionSessionConn struct {
+	Place int
+	Kind  string
+	Name  string
+}
 
 // MinionSessionConnChange is a move to another connection a minion reported
 // (a conn_update): from the connection it used (0: unknown) to To, both

@@ -115,10 +115,10 @@ func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.Minion
 	return nil
 }
 
-func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn int, change *models.MinionSessionConnChange) error {
+func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error {
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
-			f.rows[i].Conn = conn
+			f.rows[i].Conn, f.rows[i].ConnKind, f.rows[i].ConnName = conn.Place, conn.Kind, conn.Name
 			if change != nil {
 				f.rows[i].ConnChanges = append([]models.MinionSessionConnChange{*change}, f.rows[i].ConnChanges...)
 			}
@@ -776,12 +776,19 @@ func TestSessionSchedule(t *testing.T) {
 // moves it without a change recorded.
 func TestSessionConnection(t *testing.T) {
 	r := newRig(t)
+	conn := func(name, kind string) protocol.BuildConnection {
+		return protocol.BuildConnection{Endpoint: protocol.ChannelEndpointExport{Name: name, Kind: kind,
+			Channel: protocol.ExportChannel{ModuleName: "http"}}}
+	}
+	r.build.Connections.Items = []protocol.BuildConnection{
+		conn("poll", protocol.KindReverseCall), conn("ws", protocol.KindReversePersistent),
+	}
 	h := hello("web01")
 	h.Conn = 1
 	reply, _ := r.send(t, protocol.NewMessageID(), h)
 	sid := sessionID(t, r.open(t, reply))
-	if c := r.sessions.rows[0].Conn; c != 1 {
-		t.Fatalf("at hello: conn %d", c)
+	if s := r.sessions.rows[0]; s.Conn != 1 || s.ConnKind != protocol.KindReverseCall || s.ConnName != "poll" || s.ConnCount != 2 {
+		t.Fatalf("at hello: %d %q %q of %d", s.Conn, s.ConnKind, s.ConnName, s.ConnCount)
 	}
 
 	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(),
@@ -789,7 +796,8 @@ func TestSessionConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := r.sessions.rows[0]
-	if s.Conn != 2 || len(s.ConnChanges) != 1 || s.ConnChanges[0].From != 1 || s.ConnChanges[0].To != 2 || s.ConnChanges[0].Reason != "operator" {
+	if s.Conn != 2 || s.ConnKind != protocol.KindReversePersistent || s.ConnName != "ws" || len(s.ConnChanges) != 1 ||
+		s.ConnChanges[0].From != 1 || s.ConnChanges[0].To != 2 || s.ConnChanges[0].Reason != "operator" {
 		t.Fatalf("after conn_update: %d %+v", s.Conn, s.ConnChanges)
 	}
 
@@ -810,8 +818,9 @@ func TestSessionConnection(t *testing.T) {
 	if _, err := r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), h); err != nil {
 		t.Fatal(err)
 	}
-	if s := r.sessions.rows[0]; s.Conn != 3 || len(s.ConnChanges) != 1 {
-		t.Fatalf("after a rehello: %d %+v", s.Conn, s.ConnChanges)
+	// A place past the build's: no kind or name known.
+	if s := r.sessions.rows[0]; s.Conn != 3 || s.ConnKind != "" || s.ConnName != "" || len(s.ConnChanges) != 1 {
+		t.Fatalf("after a rehello: %d %q %q %+v", s.Conn, s.ConnKind, s.ConnName, s.ConnChanges)
 	}
 }
 
