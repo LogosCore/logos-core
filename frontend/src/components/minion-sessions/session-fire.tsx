@@ -5,8 +5,13 @@ import { ROWS, burnFrame, newFire, type Fire } from "./session-fire-model"
 // burns, painted FPS times a second on a canvas ROWS pixels tall whatever
 // the row's height, as wide as square pixels make it, scaled up crisp (as
 // in the "CSS Pixel Fire Animation" pen, https://codepen.io/anon/pen/REKKEM).
+//
+// The fire burns STEPS frames a second, slower than it is painted: each
+// painted frame blends the last two burnt ones, so it moves slowly without
+// stepping (burnt 20 times a second and painted as burnt, it flickered).
 
-const FPS = 20
+const FPS = 30
+const STEPS = 12
 
 type Rgba = readonly [number, number, number, number]
 
@@ -60,6 +65,10 @@ const SPREAD = 512
 
 interface Shared {
   fire: Fire
+  /** The heats a frame before the fire's: blended into them as it is painted. */
+  before: Uint8Array
+  /** How far from before to the fire's heats the screen is: 0 to 1. */
+  at: number
   image: ImageData
   /** The fire painted, once a frame, for the rows to copy their windows of. */
   screen: HTMLCanvasElement
@@ -83,29 +92,47 @@ function sharedFire(): Shared | null {
     screen.width = width
     screen.height = ROWS
     // Lit already burning, here and when a row grows past it.
-    shared = { fire: newFire(width), image: new ImageData(width, ROWS), screen, dark: null }
+    const fire = newFire(width)
+    shared = { fire, before: fire.heat.slice(), at: 1, image: new ImageData(width, ROWS), screen, dark: null }
   }
   return shared
 }
 
-/** Paints the fire's heats in the rows' theme, onto its screen. */
+// Each palette in BLEND steps a heat level, from none (its coolest color,
+// see-through) to the hottest: a heat between two levels, as blending two
+// frames makes it, gets the color between theirs.
+const BLEND = 8
+
+function blended(colors: readonly Rgba[]): Uint8ClampedArray {
+  const ramp = [[colors[0][0], colors[0][1], colors[0][2], 0] as Rgba, ...colors]
+  const out = new Uint8ClampedArray(((ramp.length - 1) * BLEND + 1) * 4)
+  for (let i = 0; i <= (ramp.length - 1) * BLEND; i++) {
+    const k = Math.floor(i / BLEND)
+    const u = (i % BLEND) / BLEND
+    const c0 = ramp[k]
+    const c1 = ramp[Math.min(k + 1, ramp.length - 1)]
+    for (let j = 0; j < 4; j++) out[i * 4 + j] = Math.round(c0[j] + (c1[j] - c0[j]) * u)
+  }
+  return out
+}
+
+const DARK_BLEND = blended(DARK)
+const LIGHT_BLEND = blended(LIGHT)
+
+/** Paints the fire's heats in the rows' theme, onto its screen: the frame before blended into the fire's by at. */
 function paint(s: Shared) {
   const dark = !!fires.values().next().value?.closest(".dark")
-  const colors = dark ? DARK : LIGHT
+  const colors = dark ? DARK_BLEND : LIGHT_BLEND
   const { heat, width } = s.fire
+  const { before, at } = s
   const px = s.image.data
   for (let p = 0; p < width * ROWS; p++) {
-    const h = heat[p]
+    const i = Math.round((before[p] + (heat[p] - before[p]) * at) * BLEND) * 4
     const o = p * 4
-    if (h === 0) {
-      px[o + 3] = 0
-      continue
-    }
-    const c = colors[h - 1]
-    px[o] = c[0]
-    px[o + 1] = c[1]
-    px[o + 2] = c[2]
-    px[o + 3] = c[3]
+    px[o] = colors[i]
+    px[o + 1] = colors[i + 1]
+    px[o + 2] = colors[i + 2]
+    px[o + 3] = colors[i + 3]
   }
   s.screen.getContext("2d")?.putImageData(s.image, 0, 0)
   s.dark = dark
@@ -119,11 +146,16 @@ function show(canvas: HTMLCanvasElement, s: Shared) {
   ctx.drawImage(s.screen, offsets.get(canvas) ?? 0, 0, canvas.width, ROWS, 0, 0, canvas.width, ROWS)
 }
 
-/** A frame on: the fire burns, is painted, and every row shows its window. */
+/** A painted frame on: the fire burns when a step is due, is painted, and every row shows its window. */
 function tick() {
   const s = sharedFire()
   if (!s) return
-  burnFrame(s.fire)
+  s.at += STEPS / FPS
+  if (s.at >= 1) {
+    s.at -= 1
+    s.before.set(s.fire.heat)
+    burnFrame(s.fire)
+  }
   paint(s)
   fires.forEach((canvas) => show(canvas, s))
 }

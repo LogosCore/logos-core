@@ -46,20 +46,29 @@ describe("the fire behind an On Fire row", () => {
     expect(Math.abs(left - right) / still).toBeLessThan(0.03)
   })
 
-  test("burns low, its tall flames rare", () => {
+  test("burns low, its flames reaching half way now and then, the top all but never", () => {
     const fire = newFire(WIDTH)
     let low = 0
+    let half = 0
     let tall = 0
+    const peaks: number[] = []
     for (let frame = 0; frame < 200; frame++) {
       burnFrame(fire)
-      for (const h of flameHeights(fire)) {
+      const heights = flameHeights(fire)
+      for (const h of heights) {
         if (h <= ROWS / 2) low++
-        if (h >= ROWS * 0.8) tall++
+        else half++
+        if (h >= ROWS * 0.9) tall++
       }
+      peaks.push(Math.max(...heights))
     }
     const all = 200 * WIDTH
-    expect(low / all).toBeGreaterThan(0.6)
-    expect(tall / all).toBeGreaterThan(0)
-    expect(tall / all).toBeLessThan(0.1)
+    expect(low / all).toBeGreaterThan(0.9)
+    // Hot spots still throw flames up past the middle…
+    expect(half).toBeGreaterThan(0)
+    // …but a frame's tallest stops well short of the top (it was 16 of 20).
+    peaks.sort((a, b) => a - b)
+    expect(peaks[peaks.length / 2]).toBeLessThanOrEqual(ROWS * 0.7)
+    expect(tall / all).toBeLessThan(0.0005)
   })
 })

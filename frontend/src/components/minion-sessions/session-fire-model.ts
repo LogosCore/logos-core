@@ -38,6 +38,13 @@ const COOL_0 = 0.2
 const COOL_1 = 0.45
 const DRIFT = 0.4
 
+// In the top UPPER rows heat cools a degree more UPPER_COOL of the time:
+// the hot spots' flames stop short of the row's top instead of licking it
+// (a frame's tallest at about 12 rows, not 16; the top reached no more),
+// and keep their hot hearts; the bed under them burns as before.
+const UPPER = 14
+const UPPER_COOL = 0.7
+
 const between = (lo: number, hi: number) => Math.floor(Math.random() * (hi - lo + 1)) + lo
 
 interface Spot {
@@ -106,7 +113,7 @@ export function burnFrame(fire: Fire): void {
     for (let y = 1; y <= ROWS; y++) {
       const h = heat[y * width + x]
       const r = Math.random()
-      const cool = r < COOL_0 ? 0 : r < COOL_0 + COOL_1 ? 1 : 2
+      const cool = (r < COOL_0 ? 0 : r < COOL_0 + COOL_1 ? 1 : 2) + (y <= UPPER && Math.random() < UPPER_COOL ? 1 : 0)
       const d = Math.random()
       const to = d < DRIFT / 2 ? Math.max(0, x - 1) : d < DRIFT ? Math.min(width - 1, x + 1) : x
       if (h === 0) heat[(y - 1) * width + x] = 0
