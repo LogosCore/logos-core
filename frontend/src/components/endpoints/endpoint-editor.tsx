@@ -5,7 +5,6 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
@@ -22,6 +21,7 @@ import { SettingsNav } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { childPointer, type JsonProblem } from "@/lib/json-edit"
 import { whenIdle } from "@/lib/preloadable"
+import { cn } from "@/lib/utils"
 import { Permissions } from "@/constants/permissions"
 import { useAuthStore } from "@/stores/auth"
 import { useEditorModeStore } from "@/stores/editor-mode"
@@ -145,6 +145,58 @@ export function EditEndpoint({ id }: { id: string }) {
     )
   }
   return <EndpointEditor operationId={endpoint.operationId} kind={kind} endpoint={endpoint} />
+}
+
+/**
+ * The endpoint's connection kind, above the rest of the form: it decides
+ * which settings the form has. One card per kind the channel carries.
+ */
+function KindPicker({
+  channel,
+  value,
+  onChange,
+  disabled,
+  error,
+}: {
+  channel: Kind
+  value: string
+  onChange: (kind: string) => void
+  disabled: boolean
+  error?: string
+}) {
+  return (
+    <section aria-labelledby="endpoint-kind-title">
+      <h2 id="endpoint-kind-title" className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Kind
+      </h2>
+      <div role="radiogroup" aria-labelledby="endpoint-kind-title" className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
+        {kindNames(channel).map((k) => {
+          const on = k === value
+          return (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={disabled}
+              onClick={() => !on && onChange(k)}
+              className={cn(
+                "flex flex-col gap-0.5 rounded-xl border bg-card px-4 py-3 text-left transition-colors disabled:cursor-default",
+                on ? "border-foreground ring-1 ring-foreground" : "hover:bg-accent/50 disabled:hover:bg-card",
+              )}
+            >
+              <span className="text-sm font-medium">{kindLabels[k] ?? k}</span>
+              <span className="font-mono text-xs text-muted-foreground">{k}</span>
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-1.5 text-xs text-muted-foreground">
+        How minions given this endpoint keep in touch through the channel. Each kind has its own settings.
+      </p>
+      {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
+    </section>
+  )
 }
 
 function NotFound({ title, text }: { title: string; text: string }) {
@@ -424,6 +476,13 @@ function EndpointEditor({
 
         <div className="@container/settings min-w-0 flex-1">
         <div className="flex max-w-3xl flex-col gap-8 @6xl/settings:max-w-[80rem]">
+          <KindPicker
+            channel={kind}
+            value={connKind}
+            onChange={changeKind}
+            disabled={disabled}
+            error={serverErrors.kind}
+          />
           {saveError && (
             <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">{saveError}</div>
           )}
@@ -459,26 +518,6 @@ function EndpointEditor({
                 disabled={disabled}
                 aria-invalid={(submitted && !!nameErr) || undefined}
               />
-            </SettingRow>
-            <SettingRow
-              id="endpoint-kind"
-              label="Kind"
-              required
-              help="How minions given this endpoint keep in touch through the channel. Each kind has its own settings."
-              error={serverErrors.kind}
-            >
-              <Select value={connKind} onValueChange={(v) => typeof v === "string" && changeKind(v)} disabled={disabled}>
-                <SelectTrigger id="endpoint-kind" className="w-full max-w-80" aria-invalid={!!serverErrors.kind || undefined}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {kindNames(kind).map((k) => (
-                    <SelectItem key={k} value={k} description={k}>
-                      {kindLabels[k] ?? k}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </SettingRow>
             <SettingRow id="endpoint-description" label="Description" help="What this endpoint is for, for the rest of the team.">
               <Textarea
