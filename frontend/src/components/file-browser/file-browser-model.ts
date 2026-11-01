@@ -77,6 +77,10 @@ export function byWhom(r: TaskRefLike | null | undefined): string {
   return r.user ? `#${r.number} (${r.user})` : `#${r.number}`
 }
 
+/** How a folder's icon looks: amber once listed; grey and dashed while only what other tasks put there is known. */
+export const LISTED_FOLDER = "text-amber-600 dark:text-amber-400"
+export const UNLISTED_FOLDER = "text-muted-foreground [stroke-dasharray:3_2]"
+
 /** "3h ago", or the date and time from a day on. */
 export function when(at: string, now = Date.now()): string {
   return formatAgo(now - Date.parse(at)) ?? formatDateTime(at)

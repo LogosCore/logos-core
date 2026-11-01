@@ -2,6 +2,8 @@ import { ChevronRightIcon, FolderIcon, HardDriveIcon, LoaderIcon } from "lucide-
 import { samePath, useFileBrowserEntries, type FsEntriesFilter } from "@/graphql/hooks/file-browser"
 import type { FsEntryFieldsFragment } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
+import { formatDateTime } from "@/lib/date-format"
+import { byWhom, LISTED_FOLDER, UNLISTED_FOLDER } from "./file-browser-model"
 
 // The file browser's folder tree: the machine's roots, and each folder's
 // sub-folders as it is opened, read from core (foldersOnly) a page at a
@@ -143,7 +145,7 @@ function FolderNode({
           f.goneAt && "text-muted-foreground line-through",
         )}
         style={{ paddingLeft: 6 + depth * 12 }}
-        title={f.path}
+        title={[f.path, f.listedAt ? `Listed ${formatDateTime(f.listedAt)} by ${byWhom(f.listedBy)}` : "Never listed"].join("\n")}
         onClick={() => onOpen(f.path)}
       >
         <button
@@ -157,7 +159,7 @@ function FolderNode({
         >
           <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         </button>
-        <Icon className={cn("size-3.5 shrink-0", f.parent ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+        <Icon className={cn("size-3.5 shrink-0", !f.parent ? "text-muted-foreground" : f.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER)} />
         <span className="font-mono whitespace-nowrap">{f.name}</span>
       </div>
       {open && (

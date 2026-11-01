@@ -58,7 +58,18 @@ import { useWorkspaceActions } from "@/components/minion-sessions/workspace-tabs
 import { FileNameIcon } from "@/components/file-preview/file-type-icon"
 import { DownloadedFileDialog } from "./downloaded-file-dialog"
 import { FolderTree } from "./file-browser-tree"
-import { byWhom, inFlight, inFlightAt, parentOf, pathsTo, sepOf, when, type InFlight } from "./file-browser-model"
+import {
+  byWhom,
+  inFlight,
+  inFlightAt,
+  LISTED_FOLDER,
+  parentOf,
+  pathsTo,
+  sepOf,
+  UNLISTED_FOLDER,
+  when,
+  type InFlight,
+} from "./file-browser-model"
 import { useFileBrowserState } from "./file-browser-state"
 
 // The file browser of a session's machine (docs: contracts/file-browser.md):
@@ -646,6 +657,7 @@ function EntryRow({
     e.path,
     gone ? goneSays(e) : null,
     !e.known ? "Known only as a folder on the way to another entry" : null,
+    isDir ? (e.listedAt ? `Listed ${formatDateTime(e.listedAt)} by ${byWhom(e.listedBy)}` : "Never listed") : null,
     e.seenAt ? `Seen ${formatDateTime(e.seenAt)} by ${byWhom(e.seenBy)}` : null,
   ]
     .filter(Boolean)
@@ -671,7 +683,12 @@ function EntryRow({
           {isFile && e.parent ? (
             <FileNameIcon name={e.name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
           ) : (
-            <Icon className={cn("size-3.5 shrink-0 self-center", isDir && !gone ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+            <Icon
+              className={cn(
+                "size-3.5 shrink-0 self-center",
+                isDir && !gone ? (e.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER) : "text-muted-foreground",
+              )}
+            />
           )}
           <span className={cn("truncate", gone && "line-through", !e.known && "italic")}>{fullPath ? e.path : e.name}</span>
           {e.target && <span className="truncate text-muted-foreground">→ {e.target}</span>}
