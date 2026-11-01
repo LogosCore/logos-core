@@ -32,7 +32,7 @@ export function FilePreviewPane({
 }): ReactElement {
   const inlineUrl = `${url}${url.includes("?") ? "&" : "?"}preview=1`
   const { resolvedTheme } = useTheme()
-  const rendered = useRenderedPreview(url, kind.renderedKind, kind.renderedKind !== null, resolvedTheme === "dark" ? "dark" : "light", filename)
+  const rendered = useRenderedPreview(url, kind.renderedKind, kind.renderedKind !== null, resolvedTheme === "dark" ? "dim" : "light", filename)
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLDivElement>(null)
   const decoded = useDecodedImage(

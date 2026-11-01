@@ -51,6 +51,8 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
     <WorkspaceActionsContext value={actions}>
     <WorkPane
       label="Sessions being worked with"
+      // Dim on the dark theme (index.css, .work-pad): read for hours.
+      className="work-pad bg-background text-foreground"
       tabs={tabs.ids.map((id) => {
         // A tab looks as its session's row: the caller's mark, color or style.
         const color = sessionOf(id)?.mark?.color

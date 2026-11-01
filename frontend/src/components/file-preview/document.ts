@@ -32,9 +32,23 @@ const THEME_COLORS = {
     codeLiteral: "#a21caf",
     codeComment: "#71717a",
   },
-  // The app's dim dark (index.css): the page as its cards, text a few
-  // steps below white.
   dark: {
+    bg: "#18181b",
+    fg: "#e4e4e7",
+    muted: "#a1a1aa",
+    border: "#3f3f46",
+    headerBg: "#27272a",
+    stripe: "#1f1f23",
+    accent: "#d4d4d8",
+    codeKey: "#93c5fd",
+    codeString: "#86efac",
+    codeNumber: "#fcd34d",
+    codeLiteral: "#f0abfc",
+    codeComment: "#a1a1aa",
+  },
+  // The session work pane's dim dark (index.css, .work-pad): the page as its
+  // cards, text a few steps below white.
+  dim: {
     bg: "#222222",
     fg: "#c9c9c9",
     muted: "#9e9e9e",
@@ -46,7 +60,7 @@ const THEME_COLORS = {
     codeString: "#86efac",
     codeNumber: "#fcd34d",
     codeLiteral: "#f0abfc",
-    codeComment: "#a1a1aa",
+    codeComment: "#9e9e9e",
   },
 } as const
 
@@ -99,7 +113,7 @@ export function escapeHtml(value: string): string {
 function stylesheet(theme: PreviewTheme): string {
   const c = THEME_COLORS[theme]
   return `
-:root { color-scheme: ${theme}; }
+:root { color-scheme: ${theme === "light" ? "light" : "dark"}; }
 * { box-sizing: border-box; }
 body {
   margin: 0;
