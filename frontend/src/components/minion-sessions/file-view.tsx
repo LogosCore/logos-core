@@ -46,7 +46,14 @@ function baseName(path: string): string {
   return path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1) || path
 }
 
-export function FileView({ file: f }: { file: File }) {
+export function FileView({
+  file: f,
+  end,
+}: {
+  file: File
+  /** At the tab row's end, after every view's tools: a dialog's close. */
+  end?: ReactNode
+}) {
   const url = `${API_URL}/minion-files/${encodeURIComponent(f.id)}`
   const name = baseName(f.name)
   const contentType = canonicalContentType(f.contentType) || "application/octet-stream"
@@ -85,7 +92,12 @@ export function FileView({ file: f }: { file: File }) {
         <span className="truncate font-mono text-xs font-medium">{name}</span>
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatBytes(f.size)}</span>
       </span>
-      {tools && <div className="ml-auto flex items-center gap-1">{tools}</div>}
+      {(tools || end) && (
+        <div className="ml-auto flex items-center gap-1">
+          {tools}
+          {end}
+        </div>
+      )}
     </div>
   )
   const download = (
