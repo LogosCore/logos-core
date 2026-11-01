@@ -32,14 +32,16 @@ const THEME_COLORS = {
     codeLiteral: "#a21caf",
     codeComment: "#71717a",
   },
+  // The app's dim dark (index.css): the page as its cards, text a few
+  // steps below white.
   dark: {
-    bg: "#18181b",
-    fg: "#e4e4e7",
-    muted: "#a1a1aa",
-    border: "#3f3f46",
-    headerBg: "#27272a",
-    stripe: "#1f1f23",
-    accent: "#d4d4d8",
+    bg: "#222222",
+    fg: "#c9c9c9",
+    muted: "#9e9e9e",
+    border: "#3a3a3a",
+    headerBg: "#2c2c2c",
+    stripe: "#272727",
+    accent: "#d4d4d4",
     codeKey: "#93c5fd",
     codeString: "#86efac",
     codeNumber: "#fcd34d",

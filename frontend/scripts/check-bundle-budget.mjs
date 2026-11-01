@@ -35,7 +35,10 @@ import zlib from "node:zlib"
 // carries every generated GraphQL document (the client preset's one map, on
 // first paint by design: +2.7 KB raw for six task operations), and the CSS
 // the new Tailwind classes (+1 KB).
-const BUDGET_RAW_KB = 1_100
+// Raw was raised from 1 100 KB with the file browser and the file view's
+// rework, at 1 100.3 / 302.5: the same two, growth by features (the file
+// browser's GraphQL documents, and the classes the new views use).
+const BUDGET_RAW_KB = 1_110
 const BUDGET_SERVED_KB = 305
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
