@@ -1,20 +1,20 @@
 import { createContext, useContext, type CSSProperties } from "react"
 
 // The session work pane's text size (docs: its layout's paneTextSize): the
-// operator's, from 12px (the app's text-xs, a terminal's density) up. The
-// pane redefines Tailwind's text sizes for everything in it (paneTextStyle),
+// operator's, from 12px, the app's own (the sessions table's: text-xs for
+// toolbars, headings and mono values, text-sm for rows), up. The pane's
+// tabs redefine Tailwind's two sizes for everything in them (paneTextStyle),
 // so a view sizes its text as anywhere else; the few that lay rows out in
 // pixels (a virtual list, the hex view) scale them (usePaneRow).
 
 export const PANE_TEXT_SIZES: readonly number[] = [12, 13, 14]
-export const DEFAULT_PANE_TEXT = 13
+export const DEFAULT_PANE_TEXT = 12
 
-/** text-xs at the size, text-sm two pixels up, text-2xs one down. */
+/** text-xs at the size, text-sm two pixels up: 12 and 14 by default, as the app's. */
 export function paneTextStyle(size: number): CSSProperties {
   return {
     "--text-xs": `${size}px`,
     "--text-sm": `${size + 2}px`,
-    "--text-2xs": `${size - 1}px`,
   } as CSSProperties
 }
 

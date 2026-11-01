@@ -80,7 +80,7 @@ export function UploadView({ task: t, data }: { task: Task; data: Record<string,
                 <FileTypeIcon contentType="" filename={up.name} size={26} />
               </div>
               <div className="flex min-w-0 flex-col gap-0.5">
-                <h3 className="font-mono text-base font-medium break-all">{up.name}</h3>
+                <h3 className="font-mono text-sm font-medium break-all">{up.name}</h3>
                 <p className="text-xs text-muted-foreground tabular-nums">
                   {up.sized ? formatBytes(up.size) : "size not known yet"}
                   {typeName && <> · {typeName}</>}

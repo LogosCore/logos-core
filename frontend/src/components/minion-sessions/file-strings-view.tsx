@@ -130,7 +130,7 @@ export function FileStringsView({
                   >
                     <span className="shrink-0 text-muted-foreground tabular-nums">{formatOffset(s.offset, digits)}</span>
                     <span
-                      className="w-[4.5em] shrink-0 text-2xs tracking-wide text-muted-foreground uppercase"
+                      className="w-[4.5em] shrink-0 text-xs tracking-wide text-muted-foreground uppercase"
                       title={s.encoding === "utf16le" ? "UTF-16LE: each character followed by a zero byte" : "ASCII: a byte a character"}
                     >
                       {s.encoding === "utf16le" ? "utf16" : "ascii"}

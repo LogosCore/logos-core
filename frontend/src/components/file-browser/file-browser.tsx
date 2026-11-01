@@ -83,10 +83,10 @@ import { useFileBrowserState } from "./file-browser-state"
 type Entry = FsEntryFieldsFragment
 
 const ICONS = { dir: FolderIcon, file: FileIcon, link: Link2Icon, other: CircleHelpIcon } as const
-// Columns as wide as the pane's text makes them (pane-text.ts): 76, 136, 88
-// and 110px at 12px.
+// Columns as wide as the rows' text makes them (text-sm, pane-text.ts):
+// 84, 154, 84 and 112px at 14px.
 const GRID =
-  "grid-cols-[minmax(0,1fr)_calc(var(--text-xs)*6.4)_calc(var(--text-xs)*11.4)_calc(var(--text-xs)*7.4)_minmax(0,calc(var(--text-xs)*9.2))]"
+  "grid-cols-[minmax(0,1fr)_calc(var(--text-sm)*6)_calc(var(--text-sm)*11)_calc(var(--text-sm)*6)_minmax(0,calc(var(--text-sm)*8))]"
 
 export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: string }) {
   const [state, set] = useFileBrowserState(tabId)
@@ -477,7 +477,7 @@ function FolderView({
             toolsSlot,
           )}
       </div>
-      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase`}>
+      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase`}>
         <SortableHeader label="Name" field="name" sort={sort} onSortChange={(s) => onSort(s.field, s.direction === "DESC")} />
         <SortableHeader
           label="Size"
@@ -550,7 +550,7 @@ function SearchResults({
           {q.hasNextPage ? "+" : ""} found
         </span>
       </div>
-      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase`}>
+      <div className={`grid ${GRID} gap-3 border-b bg-muted/50 px-3 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase`}>
         <div>Path</div>
         <div className="text-right">Size</div>
         <div>Modified</div>
@@ -604,8 +604,8 @@ function Rows({
 }) {
   // The entry whose menu is open, marked while it is.
   const [menuFor, setMenuFor] = useState<string | null>(null)
-  // 26px at 12px text: as tall as the pane's text makes it.
-  const rowH = usePaneRow(26)
+  // 30px at the app's size (14px rows): as tall as the pane's text makes it.
+  const rowH = usePaneRow(30)
   if (error) return <p className="p-4 text-sm text-red-600 dark:text-red-400">{error}</p>
   if (loading)
     return (
@@ -705,7 +705,7 @@ function EntryRow({
         render={
           <div
             className={cn(
-              `grid ${GRID} cursor-default items-center gap-3 border-b px-3 text-xs hover:bg-muted/40`,
+              `grid ${GRID} cursor-default items-center gap-3 border-b px-3 text-sm hover:bg-muted/40`,
               (e.hidden || !e.known) && "text-muted-foreground",
               gone && "text-muted-foreground",
               marked && "bg-muted",
@@ -716,7 +716,7 @@ function EntryRow({
           />
         }
       >
-        <span className="flex min-w-0 items-baseline gap-1.5 font-mono" title={title}>
+        <span className="flex min-w-0 items-baseline gap-1.5" title={title}>
           {/* A file's icon says its kind, by its name: the snapshot has no content types. */}
           {isFile && e.parent ? (
             <FileNameIcon name={e.name} className="size-3.5 shrink-0 self-center text-muted-foreground" />
@@ -728,7 +728,10 @@ function EntryRow({
               )}
             />
           )}
-          <span className={cn("truncate", gone && "line-through", !e.known && "italic")}>{fullPath ? e.path : e.name}</span>
+          {/* A name as a name (the sessions table's hosts); a search's whole path as a path. */}
+          <span className={cn("truncate", fullPath && "font-mono text-xs", gone && "line-through", !e.known && "italic")}>
+            {fullPath ? e.path : e.name}
+          </span>
           {e.target && <span className="truncate text-muted-foreground">→ {e.target}</span>}
           {lastDownload && (
             <button
@@ -753,7 +756,7 @@ function EntryRow({
             </span>
           )}
           {running && (
-            <span className="flex shrink-0 items-center gap-1 self-center font-sans text-muted-foreground">
+            <span className="flex shrink-0 items-center gap-1 self-center text-xs text-muted-foreground">
               <LoaderIcon className="size-3 animate-spin" />
               {running.label}
             </span>
@@ -761,7 +764,7 @@ function EntryRow({
         </span>
         <span className="text-right whitespace-nowrap text-muted-foreground tabular-nums">{isFile && e.size != null ? formatBytes(e.size) : ""}</span>
         <span className="whitespace-nowrap text-muted-foreground tabular-nums">{e.modified != null ? formatDateTime(e.modified * 1000) : ""}</span>
-        <span className="truncate font-mono text-muted-foreground">{e.mode}</span>
+        <span className="truncate font-mono text-xs text-muted-foreground">{e.mode}</span>
         <span className="truncate text-muted-foreground">{[e.owner, e.group].filter(Boolean).join(":")}</span>
       </ContextMenuTrigger>
       <ContextMenuContent>

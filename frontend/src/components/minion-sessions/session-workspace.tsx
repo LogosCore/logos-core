@@ -63,7 +63,6 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
       label="Sessions being worked with"
       // Dim on the dark theme (index.css, .work-pad): read for hours.
       className="work-pad bg-background text-foreground"
-      style={paneTextStyle(textSize)}
       end={
         <>
           <Button
@@ -101,7 +100,12 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
       })}
       state={tabs}
       onChange={change}
-      panel={(id) => <SessionPanel id={id} />}
+      // The text size is the tabs' contents', not the tab row's.
+      panel={(id) => (
+        <div className="flex min-h-0 flex-1 flex-col" style={paneTextStyle(textSize)}>
+          <SessionPanel id={id} />
+        </div>
+      )}
       empty={
         <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
           <SquareTerminalIcon className="size-6 opacity-50" />

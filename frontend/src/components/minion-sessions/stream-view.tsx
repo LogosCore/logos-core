@@ -92,7 +92,7 @@ export function StreamView({ task: t, stream: st }: { task: Task; stream: Stream
                 <FileTypeIcon contentType="" filename={name} size={26} />
               </div>
               <div className="flex min-w-0 flex-col gap-0.5">
-                <h3 className="font-mono text-base font-medium break-all">{name}</h3>
+                <h3 className="font-mono text-sm font-medium break-all">{name}</h3>
                 <p className="text-xs text-muted-foreground tabular-nums">
                   {formatBytes(st.size)}
                   {typeName && <> · {typeName}</>}

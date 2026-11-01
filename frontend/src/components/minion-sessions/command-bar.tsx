@@ -246,7 +246,7 @@ export function CommandBar({
               onClick={() => complete(c)}
               className={cn("flex w-full cursor-pointer items-baseline gap-3 px-3 py-1.5 text-left text-sm", i === pick && "bg-muted")}
             >
-              <code className="font-mono">{usage(c)}</code>
+              <code className="font-mono text-xs">{usage(c)}</code>
               <span className="truncate text-xs text-muted-foreground">{c.label}</span>
             </button>
           ))}
@@ -271,12 +271,12 @@ export function CommandBar({
           aria-label="Command"
           placeholder={commands.length > 0 ? `${commands.map((c) => c.id).join(", ")}` : "No commands"}
           title="The command line (/)"
-          className="peer min-w-0 flex-1 bg-transparent font-mono text-sm outline-none placeholder:text-muted-foreground/60"
+          className="peer min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/60"
         />
-        <kbd className="rounded border px-1.5 font-mono text-2xs text-muted-foreground peer-focus:hidden" title="Press / to type a command">
+        <kbd className="rounded border px-1.5 font-mono text-xs text-muted-foreground peer-focus:hidden" title="Press / to type a command">
           /
         </kbd>
-        <span className="hidden shrink-0 items-center gap-1 text-2xs text-muted-foreground peer-focus:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground peer-focus:inline-flex">
           <kbd className="rounded border px-1 font-mono">↵</kbd> run
           <kbd className="ml-1 rounded border px-1 font-mono">⇧↵</kbd> form
         </span>

@@ -28,7 +28,7 @@ export function FolderTree({
   onOpen: (path: string) => void
 }) {
   return (
-    <nav aria-label="Folders" className="min-h-0 flex-1 overflow-auto py-1 text-xs [scrollbar-width:thin]">
+    <nav aria-label="Folders" className="min-h-0 flex-1 overflow-auto py-1 text-sm [scrollbar-width:thin]">
       {/* As wide as its widest row: a deep or long name scrolls sideways
           rather than being cut. */}
       <div className="w-max min-w-full">
@@ -160,7 +160,7 @@ function FolderNode({
           <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         </button>
         <Icon className={cn("size-3.5 shrink-0", !f.parent ? "text-muted-foreground" : f.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER)} />
-        <span className="font-mono whitespace-nowrap">{f.name}</span>
+        <span className="whitespace-nowrap">{f.name}</span>
       </div>
       {open && (
         <Folders

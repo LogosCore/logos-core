@@ -139,7 +139,7 @@ export function DirListingView({
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-sm">
           <tbody>
             {shown.map((e) => {
               const Icon = ICONS[e.type]
@@ -157,7 +157,7 @@ export function DirListingView({
                       />
                     }
                   >
-                    <td className="w-full max-w-0 truncate px-3 py-1 font-mono">
+                    <td className="w-full max-w-0 truncate px-3 py-1">
                       <span className="inline-flex max-w-full items-baseline gap-1.5">
                         {/* A file's icon says its kind, by its name. */}
                         {e.type === "file" ? (
@@ -182,7 +182,7 @@ export function DirListingView({
                     <td className="px-3 py-1 whitespace-nowrap text-muted-foreground tabular-nums">
                       {e.modified !== undefined ? formatDateTime(e.modified * 1000) : ""}
                     </td>
-                    <td className="px-3 py-1 font-mono whitespace-nowrap text-muted-foreground">{e.mode}</td>
+                    <td className="px-3 py-1 font-mono text-xs whitespace-nowrap text-muted-foreground">{e.mode}</td>
                     <td className="px-3 py-1 whitespace-nowrap text-muted-foreground">{[e.owner, e.group].filter(Boolean).join(":")}</td>
                   </ContextMenuTrigger>
                   <ContextMenuContent>
@@ -246,7 +246,7 @@ export function DirListingView({
             })}
           </tbody>
         </table>
-        {listing.entries.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">The directory is empty.</p>}
+        {listing.entries.length === 0 && <p className="px-3 py-2 text-sm text-muted-foreground">The directory is empty.</p>}
         {!all && sorted.length > shown.length && (
           <button type="button" className="w-full cursor-pointer border-t px-3 py-1 text-xs text-muted-foreground hover:bg-muted/40" onClick={() => setAll(true)}>
             Show all {sorted.length}

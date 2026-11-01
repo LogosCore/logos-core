@@ -99,7 +99,7 @@ export function TaskList({
             </Button>
           </div>
         )}
-        {tasks.length === 0 && !loading && <p className="px-3 py-2 text-xs text-muted-foreground">No tasks yet.</p>}
+        {tasks.length === 0 && !loading && <p className="px-3 py-2 text-sm text-muted-foreground">No tasks yet.</p>}
         {tasks.map((t, i) => {
           const day = dayGroup(t.queuedAt, now)
           const newDay = i === 0 || dayGroup(tasks[i - 1].queuedAt, now).key !== day.key
@@ -138,7 +138,7 @@ export function TaskList({
 function DaySeparator({ label }: { label: string }) {
   return (
     <div role="presentation" className="sticky top-0 z-10 flex justify-center bg-background/90 py-1 backdrop-blur-sm">
-      <span className="text-2xs font-medium text-muted-foreground tabular-nums">{label}</span>
+      <span className="text-xs font-medium text-muted-foreground tabular-nums">{label}</span>
     </div>
   )
 }
