@@ -436,3 +436,57 @@ func TestIntegrationMinionUploadStreams(t *testing.T) {
 		t.Fatalf("active %d, idle %d", len(active), len(idle))
 	}
 }
+
+// A walk's progress, whose every part says it whole, is kept on the task:
+// the newest by seq (a late part does not take it back), out of the parts
+// and the budget; parts with listings alone count, but not as data. Output
+// is read from the parts that have it.
+func TestIntegrationMinionTaskLatestData(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	session, t0 := uuid.New(), time.Now().UTC().Truncate(time.Millisecond)
+	id := uuid.New()
+	if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: uuid.New(), SessionID: session, Command: "walk",
+		Result: protocol.ResultDirWalk, State: models.MinionTaskSent, QueuedAt: t0}); err != nil {
+		t.Fatal(err)
+	}
+	add := func(r MinionTaskResult) *models.MinionTask {
+		t.Helper()
+		r.At, r.Check, r.Latest = t0, taskdata.Check, taskdata.Latest
+		task, _, err := repo.AddResult(ctx, session, id, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return task
+	}
+	walk := func(folders uint64) []byte { return cborData(t, protocol.DirWalk{Root: "/home", Folders: folders}) }
+
+	add(MinionTaskResult{Seq: 0, Out: []byte("walking\n")}) // output only
+	add(MinionTaskResult{Seq: 1})                           // listings alone
+	add(MinionTaskResult{Seq: 3, Data: walk(30)})
+	task := add(MinionTaskResult{Seq: 2, Data: walk(20)}) // late: older
+	if task.Parts != 4 || task.DataParts != 2 || task.LatestDataSeq == nil || *task.LatestDataSeq != 3 {
+		t.Fatalf("parts %d, data parts %d, latest seq %v", task.Parts, task.DataParts, task.LatestDataSeq)
+	}
+	if task.DataSize != int64(len(walk(30))) {
+		t.Fatalf("data size %d, want the newest's %d", task.DataSize, len(walk(30)))
+	}
+	joined, err := taskdata.Join(*task, nil)
+	if err != nil || joined.(map[string]any)["folders"] != taskdata.Value(uint64(30)) {
+		t.Fatalf("the data: %v %v", joined, err)
+	}
+	parts, err := repo.Parts(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range parts {
+		if len(p.DataCBOR) > 0 {
+			t.Fatalf("part %d kept its data", p.Seq)
+		}
+	}
+	out, err := repo.OutParts(ctx, id)
+	if err != nil || len(out) != 1 || out[0].Seq != 0 || string(out[0].Out) != "walking\n" {
+		t.Fatalf("output parts: %+v %v", out, err)
+	}
+}

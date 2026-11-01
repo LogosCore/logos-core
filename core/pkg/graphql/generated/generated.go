@@ -679,6 +679,7 @@ type ComplexityRoot struct {
 		CancelRequestedAt func(childComplexity int) int
 		Command           func(childComplexity int) int
 		Data              func(childComplexity int) int
+		DataParts         func(childComplexity int) int
 		DataProblem       func(childComplexity int) int
 		DataSize          func(childComplexity int) int
 		DataTruncated     func(childComplexity int) int
@@ -4575,6 +4576,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Data(childComplexity), true
+	case "MinionTask.dataParts":
+		if e.ComplexityRoot.MinionTask.DataParts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.DataParts(childComplexity), true
 	case "MinionTask.dataProblem":
 		if e.ComplexityRoot.MinionTask.DataProblem == nil {
 			break
@@ -11844,9 +11851,12 @@ type MinionTask {
   outputSize: Int!
   outputUtf8: Boolean!
   outputTruncated: Boolean!
-  # How many result parts came: it grows with each, output or data, so a
-  # client showing a task's output knows when to read it again.
+  # How many result parts came: it grows with each, output, data or
+  # listings alone (a walk sends thousands).
   parts: Int!
+  # How many parts came with data: with outputSize and state, what tells a
+  # client showing a task's output and data to read them again.
+  dataParts: Int!
   # What its data is (dir_listing), as its command said when it was queued;
   # null: no declared shape.
   result: String
@@ -32166,6 +32176,35 @@ func (ec *executionContext) fieldContext_MinionTask_parts(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_dataParts(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_dataParts,
+		func(ctx context.Context) (any, error) {
+			return obj.DataParts, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_dataParts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_result(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32604,6 +32643,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
 			case "data":
@@ -41807,6 +41848,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
 			case "data":
@@ -41936,6 +41979,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
 			case "data":
@@ -50037,6 +50082,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
 			case "data":
@@ -56222,6 +56269,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_outputTruncated(ctx, field)
 			case "parts":
 				return ec.fieldContext_MinionTask_parts(ctx, field)
+			case "dataParts":
+				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
 			case "data":
@@ -72864,6 +72913,11 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 		case "parts":
 			out.Values[i] = ec._MinionTask_parts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "dataParts":
+			out.Values[i] = ec._MinionTask_dataParts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

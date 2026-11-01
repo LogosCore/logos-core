@@ -40,6 +40,9 @@ type MinionTaskResult struct {
 	// it carries for the task's result (a dir_listing from its listing:
 	// taskdata.ListingData); nil, or nil data: none.
 	Compose func(result string) []byte
+	// Latest: the task's result has every part say its data whole
+	// (taskdata.Latest): the newest is kept on the task, not on its part.
+	Latest func(result string) bool
 }
 
 // ErrMinionTaskEnded is AddResult's answer to a part for a task that
@@ -88,6 +91,8 @@ type IMinionTaskRepository interface {
 	ListBySession(ctx context.Context, sessionID uuid.UUID, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error)
 	// Parts returns a task's output parts in seq order.
 	Parts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error)
+	// OutParts are the parts with output, in seq order, their output only.
+	OutParts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error)
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
 	// FindByUploadXfer is the session's task whose file goes in transfer
 	// xfer.
@@ -160,6 +165,9 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
 		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
+		// The parts with output, for reading it (OutParts).
+		{Key: []string{"task_id", "seq"}, IndexOptions: new(options.IndexOptions).SetName("task_id_1_seq_1_out").
+			SetPartialFilterExpression(bson.M{"out": bson.M{"$exists": true}})},
 	})
 	return &minionTaskRepository{tasks: db.Collection(minionTaskCollection), parts: db.Collection(minionTaskPartCollection)}
 }
@@ -256,6 +264,12 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	if len(data) == 0 && res.Compose != nil {
 		data = res.Compose(t.Result)
 	}
+	// A result whose parts each say it whole keeps only the newest, on the
+	// task: it takes the budget once, its size, not each part's.
+	latest := len(data) > 0 && res.Latest != nil && res.Latest(t.Result)
+	if latest {
+		room += t.DataSize
+	}
 	outCut, dataCut := false, false
 	if int64(len(out)) > room {
 		out, outCut = out[:room], true
@@ -272,6 +286,9 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	}
 
 	part := models.MinionTaskPart{TaskID: taskID, Seq: res.Seq, Out: out, DataCBOR: data, At: res.At}
+	if latest {
+		part.DataCBOR = nil
+	}
 	if _, err := r.parts.InsertOne(ctx, &part); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
 			return &t, false, nil
@@ -320,7 +337,18 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 			set["state"] = models.MinionTaskFailed
 		}
 	}
-	update := bson.M{"$inc": bson.M{"parts": 1, "out_size": len(out), "data_size": len(data), "rev": 1}}
+	inc := bson.M{"parts": 1, "out_size": len(out), "data_size": len(data), "rev": 1}
+	if len(data) > 0 {
+		inc["data_parts"] = 1
+	}
+	if latest {
+		delete(inc, "data_size")
+		// The newest by seq: a late part does not take an earlier one back.
+		if t.LatestDataSeq == nil || res.Seq > *t.LatestDataSeq {
+			set["latest_data"], set["latest_data_seq"], set["data_size"] = data, res.Seq, len(data)
+		}
+	}
+	update := bson.M{"$inc": inc}
 	if len(set) > 0 {
 		update["$set"] = set
 	}
@@ -413,6 +441,15 @@ func (r *minionTaskRepository) ListBySession(ctx context.Context, sessionID uuid
 func (r *minionTaskRepository) Parts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error) {
 	var out []models.MinionTaskPart
 	err := r.parts.Find(ctx, bson.M{"task_id": taskID}).Sort("seq").All(&out)
+	return out, err
+}
+
+func (r *minionTaskRepository) OutParts(ctx context.Context, taskID uuid.UUID) ([]models.MinionTaskPart, error) {
+	var out []models.MinionTaskPart
+	// The partial index of the parts with output: a walk's thousands of
+	// parts without are not read.
+	err := r.parts.Find(ctx, bson.M{"task_id": taskID, "out": bson.M{"$exists": true}}).Sort("seq").
+		Select(bson.M{"seq": 1, "out": 1}).All(&out)
 	return out, err
 }
 

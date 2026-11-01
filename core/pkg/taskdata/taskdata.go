@@ -46,14 +46,27 @@ func Join(t models.MinionTask, parts []models.MinionTaskPart) (any, error) {
 	if t.Result == protocol.ResultDirListing && t.DataProblem == "" {
 		return joinDirListing(parts)
 	}
-	if t.Result == protocol.ResultDirWalk && t.DataProblem == "" {
+	if Latest(t.Result) && t.DataProblem == "" {
+		if len(t.LatestData) > 0 {
+			data, err := partData(models.MinionTaskPart{Seq: 0, DataCBOR: t.LatestData})
+			if err != nil {
+				return nil, err
+			}
+			return Value(data), nil
+		}
+		// A task kept before LatestData: its parts have it.
 		return joinLatest(parts)
 	}
 	return joinGeneric(parts)
 }
 
+// Latest: a result whose every part says its data whole (a dir_walk, where
+// it stands), so the newest is the data: core keeps it on the task
+// (models.MinionTask.LatestData), not on each part.
+func Latest(result string) bool { return result == protocol.ResultDirWalk }
+
 // joinLatest is the latest part's data: a result whose every part says it
-// whole (a dir_walk, where it stands).
+// whole (a dir_walk, where it stands), as kept before LatestData.
 func joinLatest(parts []models.MinionTaskPart) (any, error) {
 	for i := len(parts) - 1; i >= 0; i-- {
 		if len(parts[i].DataCBOR) == 0 {

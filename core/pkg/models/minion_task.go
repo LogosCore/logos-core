@@ -77,6 +77,15 @@ type MinionTask struct {
 	// DataProblem is the first part whose data does not fit the result's
 	// shape, and why: the data is then shown raw.
 	DataProblem string `bson:"data_problem,omitempty" json:"data_problem,omitempty"`
+	// DataParts counts the parts with data: a client showing the data
+	// reads it again when it grows (Parts grows with listing pieces too).
+	DataParts int `bson:"data_parts,omitempty" json:"data_parts,omitempty"`
+	// LatestData is the data of a result whose every part says it whole (a
+	// dir_walk's progress: taskdata.Latest): the newest part's, by
+	// LatestDataSeq, kept here instead of on its part, so reading it is one
+	// row however many parts came, and it is not cut by the 4 MiB budget.
+	LatestData    []byte  `bson:"latest_data,omitempty" json:"-"`
+	LatestDataSeq *uint64 `bson:"latest_data_seq,omitempty" json:"-"`
 
 	// Upload is the task file core sends the minion for the task's file
 	// param (docs: contracts/minion-messages.md, Core sending a file); nil

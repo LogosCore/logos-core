@@ -730,6 +730,7 @@ type MinionTask struct {
 	OutputUtf8        bool              `json:"outputUtf8"`
 	OutputTruncated   bool              `json:"outputTruncated"`
 	Parts             int               `json:"parts"`
+	DataParts         int               `json:"dataParts"`
 	Result            *string           `json:"result,omitempty"`
 	Data              any               `json:"data,omitempty"`
 	DataSize          int               `json:"dataSize"`

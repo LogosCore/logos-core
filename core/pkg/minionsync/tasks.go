@@ -81,7 +81,8 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 	}
 	task, fresh, err := s.tasks.AddResult(ctx, session.SessionID, id, repository.MinionTaskResult{
 		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(),
-		Check: taskdata.Check,
+		Check:  taskdata.Check,
+		Latest: taskdata.Latest,
 		// A dir_listing command's data is its listing, made by core.
 		Compose: func(result string) []byte {
 			if result != protocol.ResultDirListing {

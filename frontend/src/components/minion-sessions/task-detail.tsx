@@ -132,8 +132,10 @@ export function TaskDetail({
 }) {
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command)
   const actions = useTaskActions(t, line, { canWrite, onQueued })
-  // Read again as parts come and when it ends.
-  const outputQ = useMinionTaskOutput(t.id, `${t.parts}:${t.state}`, FINISHED.has(t.state))
+  // Read again when they change: more output, a part with data, its end.
+  // Not on every part: a walk sends parts with listings alone, many a
+  // second, and its progress (its data) every 2 seconds.
+  const outputQ = useMinionTaskOutput(t.id, `${t.outputSize}:${t.dataParts}:${t.state}`, FINISHED.has(t.state))
   const detail = outputQ.data?.minionTask
   const output = detail?.output ?? ""
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null

@@ -428,9 +428,14 @@ func (r *minionTaskResolver) parts(ctx context.Context, taskID string) ([]models
 }
 
 func (r *minionTaskResolver) Output(ctx context.Context, taskID string) ([]byte, error) {
-	parts, err := r.parts(ctx, taskID)
+	tid, err := uuid.Parse(taskID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid task ID")
+	}
+	// Only the parts with output: a walk sends thousands without.
+	parts, err := r.tasks.OutParts(ctx, tid)
+	if err != nil {
+		return nil, fmt.Errorf("load the output: %w", err)
 	}
 	var out []byte
 	for _, p := range parts {
@@ -448,9 +453,12 @@ func (r *minionTaskResolver) Data(ctx context.Context, taskID string) (any, erro
 	if err != nil {
 		return nil, fmt.Errorf("load the task: %w", err)
 	}
-	parts, err := r.parts(ctx, taskID)
-	if err != nil {
-		return nil, err
+	// A result kept whole on the task needs none of its parts.
+	var parts []models.MinionTaskPart
+	if !taskdata.Latest(t.Result) || len(t.LatestData) == 0 {
+		if parts, err = r.parts(ctx, taskID); err != nil {
+			return nil, err
+		}
 	}
 	data, err := taskdata.Join(*t, parts)
 	if err != nil {
@@ -634,7 +642,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		IssuedBy: t.IssuedBy.String(), State: t.State, QueuedAt: t.QueuedAt.UTC().Format(time.RFC3339Nano),
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),
-		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts,
+		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
 		Result: strPtr(t.Result), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
 	}

@@ -28,6 +28,7 @@ export const MinionTaskFields = graphql(`
     outputSize
     outputTruncated
     parts
+    dataParts
     result
     dataSize
     dataTruncated

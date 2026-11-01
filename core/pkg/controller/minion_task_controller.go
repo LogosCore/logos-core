@@ -266,6 +266,10 @@ func (mc *MinionTaskController) DownloadData(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// A result kept whole on the task (a walk's progress): its newest.
+	if len(t.LatestData) > 0 {
+		parts = []models.MinionTaskPart{{Seq: 0, DataCBOR: t.LatestData}}
+	}
 	data, err := taskdata.Sequence(parts)
 	if err != nil {
 		mc.logger.Error("Failed to encode a minion task's data", zap.String("task_id", t.TaskID.String()), zap.Error(err))
