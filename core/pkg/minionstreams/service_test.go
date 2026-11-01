@@ -224,8 +224,20 @@ func announce(t *testing.T, s *Service, tasks *memTasks, session *models.MinionS
 // Announced, a stream holds until a downloader comes; then the downloader
 // gets the file, the minion paced by it, and the last ack, once it has
 // every byte, is the whole without hold.
+// wakes counts the sessions a Waker was told of.
+type wakes struct {
+	mu sync.Mutex
+	of []uuid.UUID
+}
+
+func (w *wakes) WakeStreams(id uuid.UUID) { w.mu.Lock(); w.of = append(w.of, id); w.mu.Unlock() }
+
+func (w *wakes) count() int { w.mu.Lock(); defer w.mu.Unlock(); return len(w.of) }
+
 func TestStream(t *testing.T) {
 	s, tasks, session, body, xfer := setup(t, 3*protocol.MaxChunkData+77)
+	w := &wakes{}
+	s.WithWaker(w)
 	a := announce(t, s, tasks, session, body, xfer)
 	// A chunk with no downloader: not kept, held.
 	if r, _, _ := s.TakeChunk(context.Background(), session, protocol.ChunkItem{Xfer: xfer, Off: 0, Data: body[:10]}); !r.Ack.Hold {
@@ -242,6 +254,11 @@ func TestStream(t *testing.T) {
 		done <- n
 	}()
 	waitFor(t, "downloader", func() bool { st := tasks.get().Stream; return st.Reader != "" })
+	// The minion, holding the stream, is woken to send it.
+	waitFor(t, "a wake", func() bool { return w.count() == 1 })
+	if w.of[0] != session.SessionID {
+		t.Fatalf("woke %v, not the stream's session", w.of)
+	}
 	a = minion(t, s, session, body, xfer, a, 40)
 	if n := <-done; n != int64(len(body)) || !bytes.Equal(got.Bytes(), body) {
 		t.Fatalf("read %d, equal %v", n, bytes.Equal(got.Bytes(), body))

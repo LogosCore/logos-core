@@ -239,6 +239,9 @@ func NewApp() (*App, error) {
 		minionstreams.DefaultConfig(), l)
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser)
+	// A downloader or an uploader coming wakes a stream the minion holds,
+	// over its persistent connection.
+	minionStreams.WithWaker(minionSync)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 

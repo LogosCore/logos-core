@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/minionstreams"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
@@ -213,5 +214,50 @@ func TestSessionConnectionsCap(t *testing.T) {
 	}
 	if !conns[0].closed || conns[1].closed || len(r.svc.conns.of(sid)) != maxSessionConns {
 		t.Fatalf("the oldest closed: %v, the next: %v, open %d", conns[0].closed, conns[1].closed, len(r.svc.conns.of(sid)))
+	}
+}
+
+// fakeStreams answers Acks with acks; the rest is not used here.
+type fakeStreams struct{ acks []protocol.AckItem }
+
+func (f *fakeStreams) TakeChunk(context.Context, *models.MinionSession, protocol.ChunkItem) (minionstreams.Reply, bool, error) {
+	return minionstreams.Reply{}, false, nil
+}
+
+func (f *fakeStreams) Acks(context.Context, *models.MinionSession, map[string]bool) ([]protocol.AckItem, error) {
+	return f.acks, nil
+}
+
+func (f *fakeStreams) Pull(context.Context, *models.MinionTask, int64, int) (*protocol.ChunkItem, *protocol.AckItem, error) {
+	return nil, nil, nil
+}
+
+// A downloader comes for a stream the minion holds: the stream's ack goes
+// over the persistent connection at once, without waiting for a message.
+func TestWakeStreams(t *testing.T) {
+	r := newRig(t)
+	sid, _ := openSession(t, r)
+	next, xfer := uint64(0), bytes.Repeat([]byte{7}, 16)
+	r.svc.WithStreams(&fakeStreams{acks: []protocol.AckItem{{T: protocol.ItemAck, Xfer: xfer, Next: &next}}})
+	c := newConnRig(t, r, sid, "c1")
+
+	// Not connected: nothing to push it on.
+	r.svc.wakeStreams(context.Background(), sid)
+	if p := c.pushes(t); len(p) != 0 {
+		t.Fatalf("a push with no connection: %+v", p)
+	}
+
+	if _, err := c.exchange(t, protocol.NewMessageID(), nil, protocol.GetTasksItem{T: protocol.ItemGetTasks}); err != nil {
+		t.Fatal(err)
+	}
+	r.svc.wakeStreams(context.Background(), sid)
+	p := c.pushes(t)
+	if len(p) != 1 {
+		t.Fatalf("pushes %+v", p)
+	}
+	acks := itemsOf(p[0], protocol.ItemAck)
+	var a protocol.AckItem
+	if len(acks) != 1 || protocol.UnmarshalCBOR(acks[0], &a) != nil || !bytes.Equal(a.Xfer, xfer) || a.Hold || a.Next == nil || *a.Next != 0 {
+		t.Fatalf("the pushed ack %+v", a)
 	}
 }

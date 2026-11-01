@@ -71,6 +71,14 @@ func pullAll(s *Service, tasks *memTasks, want int) ([]byte, error) {
 // ahead at most; the last chunk says the SHA-256 core hashed.
 func TestUpstream(t *testing.T) {
 	s, tasks, body := setupUp(t, 5*protocol.MaxChunkData+11)
+	// The minion, holding with all core had, is woken as bytes come.
+	w := &wakes{}
+	s.WithWaker(w)
+	defer func() {
+		if w.count() == 0 {
+			t.Error("the minion was never woken for the uploader's bytes")
+		}
+	}()
 	done := make(chan error)
 	go func() {
 		_, err := s.Write(context.Background(), tasks.t.TaskID, 0, int64(len(body)), bytes.NewReader(body))

@@ -288,6 +288,47 @@ func (s *Service) Notify(ctx context.Context, session uuid.UUID) {
 	}
 }
 
+// WakeStreams pushes the session's stream acks to its minion now, over a
+// persistent connection serving it: a stream it holds goes as soon as a
+// downloader (or an uploader) comes, instead of with the minion's next
+// message, which on a persistent connection may be long in coming. The
+// minion holds such a stream, sending nothing, so the ack cannot cross its
+// chunks. Nothing goes without a connection open. It returns at once.
+func (s *Service) WakeStreams(session uuid.UUID) {
+	if !s.Connected(session) {
+		return
+	}
+	go s.wakeStreams(context.Background(), session)
+}
+
+func (s *Service) wakeStreams(ctx context.Context, session uuid.UUID) {
+	conns := s.conns.of(session)
+	if len(conns) == 0 {
+		return
+	}
+	defer s.conns.lock(session)()
+	from, err := s.sender(ctx, session)
+	if err != nil || from.session == nil || from.session.Closed(s.now()) {
+		return
+	}
+	items, err := s.streamAcks(ctx, from.session, nil)
+	if err != nil {
+		s.logger.Error("minion push: streams' acks", zap.String("session_id", session.String()), zap.Error(err))
+		return
+	}
+	if len(items) == 0 {
+		return
+	}
+	for _, c := range conns {
+		if err := s.push(ctx, c, from, items); err == nil {
+			return
+		} else {
+			s.logger.Info("minion push failed, trying another connection", zap.String("session_id", session.String()),
+				zap.String("conn", c.ID), zap.Error(err))
+		}
+	}
+}
+
 // pushItems is what goes to the session on c: its cancels, and its tasks
 // within c's allowance.
 func (s *Service) pushItems(ctx context.Context, session *models.MinionSession, c *Conn) ([]cbor.RawMessage, error) {

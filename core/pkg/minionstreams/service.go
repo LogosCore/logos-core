@@ -88,9 +88,12 @@ func DefaultConfig() Config {
 }
 
 type Service struct {
-	tasks  Tasks
-	buf    Buffer
-	bus    eventbus.IEventBus
+	tasks Tasks
+	buf   Buffer
+	bus   eventbus.IEventBus
+	// waker pushes a session's stream acks to its minion at once; nil:
+	// they go with its next message.
+	waker  Waker
 	key    []byte
 	cfg    Config
 	logger *zap.Logger
@@ -100,6 +103,28 @@ type Service struct {
 }
 
 // NewService: key signs the links streams download from.
+// Waker tells a minion over a persistent connection serving its session,
+// at once, what its streams may do now (minionsync): a stream it holds goes
+// when a downloader comes, and one it receives when bytes it has not got
+// arrive from the uploader, without waiting for the minion's next message.
+type Waker interface {
+	WakeStreams(sessionID uuid.UUID)
+}
+
+// WithWaker gives the service a Waker, told when a downloader attaches and
+// when an uploader's bytes reach a minion that has all the others.
+func (s *Service) WithWaker(w Waker) *Service {
+	s.waker = w
+	return s
+}
+
+// wake tells the waker, if any, that t's stream may go.
+func (s *Service) wake(t *models.MinionTask) {
+	if s.waker != nil {
+		s.waker.WakeStreams(t.SessionID)
+	}
+}
+
 func NewService(tasks Tasks, buf Buffer, bus eventbus.IEventBus, key []byte, cfg Config, logger *zap.Logger) *Service {
 	return &Service{tasks: tasks, buf: buf, bus: bus, key: key, cfg: cfg, logger: logger.Named("minionstreams"),
 		now: func() time.Time { return time.Now().UTC() }, stop: make(chan struct{}), done: make(chan struct{})}
@@ -256,6 +281,7 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 	wctx := context.WithoutCancel(ctx)
 	s.logger.Info("minion stream downloader attached", zap.String("task_id", taskID.String()), zap.Int64("from", from), zap.Int64("gen", gen))
 	s.publish(t)
+	s.wake(t)
 	pos := from
 	defer func() {
 		// Its own context may be over: let go regardless.

@@ -135,6 +135,8 @@ func (s *Service) Write(ctx context.Context, taskID uuid.UUID, start, total int6
 			}
 			continue
 		}
+		// The minion has all core had: it holds, and these bytes are news.
+		held := pos <= cur.Upload.Acked
 		n, rerr := io.ReadFull(body, buf[:min(int64(len(buf)), size-pos)])
 		if n > 0 {
 			if err := s.buf.Set(wctx, upKey(taskID, pos), string(buf[:n]), s.cfg.ChunkTTL); err != nil {
@@ -154,6 +156,9 @@ func (s *Service) Write(ctx context.Context, taskID uuid.UUID, start, total int6
 				return pos, err
 			}
 			pos += int64(n)
+			if held {
+				s.wake(cur)
+			}
 			if s.now().Sub(lastPublish) >= time.Second || pos == size {
 				if after, err := up.FindByTaskID(wctx, taskID); err == nil {
 					s.publish(after)
