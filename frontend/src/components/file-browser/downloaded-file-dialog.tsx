@@ -19,9 +19,10 @@ export function DownloadedFileDialog({ taskId, onClose }: { taskId: string | nul
   )
   return (
     <Dialog open={taskId !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex h-[80vh] flex-col gap-2 sm:max-w-5xl" showCloseButton={false}>
+      {/* The view fills the dialog to its edges: the dialog is its frame. */}
+      <DialogContent className="flex h-[80vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl" showCloseButton={false}>
         <DialogTitle className="sr-only">{file?.name ?? "Downloaded file"}</DialogTitle>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
+        <div className="flex min-h-0 flex-1 flex-col">
           {!file && <div className="flex justify-end border-b px-2 py-1">{close}</div>}
           {q.isLoading ? (
             <div className="flex flex-1 items-center justify-center text-muted-foreground">
