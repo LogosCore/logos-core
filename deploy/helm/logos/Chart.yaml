@@ -42,6 +42,10 @@ dependencies:
     version: "20.6.2"
     repository: https://charts.bitnami.com/bitnami
     condition: redis.enabled
+  - name: rabbitmq
+    version: "16.0.13"
+    repository: https://charts.bitnami.com/bitnami
+    condition: rabbitmq.enabled
   - name: seaweedfs
     version: "4.0.385"
     repository: https://seaweedfs.github.io/seaweedfs/helm

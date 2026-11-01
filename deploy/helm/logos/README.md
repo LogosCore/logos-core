@@ -1,8 +1,9 @@
 # logos Helm chart
 
 Deploys the entire Logos stack — Go API, React frontend, Hocuspocus
-collab sidecar, plus MongoDB, Redis, and SeaweedFS — into a single
-Kubernetes namespace.
+collab sidecar, plus MongoDB, Redis, RabbitMQ and SeaweedFS — into a
+single Kubernetes namespace. Factories and channels (modules) are
+deployed on their own and join through RabbitMQ.
 
 ```
 ingress (host: logos.example.com)
@@ -12,7 +13,8 @@ ingress (host: logos.example.com)
   └── /swagger/           → core (Swagger UI)
 
 cluster-internal
-  ├── core ←→ mongodb, redis, seaweedfs-s3
+  ├── core ←→ mongodb, redis, rabbitmq, seaweedfs-s3
+  ├── modules (factories, channels; not in this chart) ←→ rabbitmq
   ├── hocuspocus ←→ mongodb (Y.Doc snapshots)
   └── core → hocuspocus:1235 (disconnect / markdown-to-yjs)
      hocuspocus → core:8002 (onConnect/onDisconnect webhooks)
@@ -38,6 +40,8 @@ helm install logos ./deploy/helm/logos \
   --set secrets.values.jwtSecretKey="$(openssl rand -hex 32)" \
   --set secrets.values.mongoPassword="$(openssl rand -hex 24)" \
   --set secrets.values.redisPassword="$(openssl rand -hex 24)" \
+  --set secrets.values.rabbitmqPassword="$(openssl rand -hex 24)" \
+  --set secrets.values.rabbitmqErlangCookie="$(openssl rand -hex 32)" \
   --set secrets.values.seaweedfsS3SecretKey="$(openssl rand -hex 24)" \
   --set secrets.values.hocuspocusTicketSecret="$(openssl rand -hex 32)" \
   --set secrets.values.hocuspocusWebhookSecret="$(openssl rand -hex 32)"
@@ -106,21 +110,33 @@ after fixing the cause with `kubectl delete job ...-bucket-bootstrap`
 followed by `helm upgrade`.
 
 ### App Secret is the source of truth
-The bitnami MongoDB and Redis subcharts read passwords from the same
-Secret the app uses (`mongodb-root-password`, `mongodb-passwords`,
-`redis-password` keys are duplicated in `templates/secret.yaml` to match
-their conventions). One rotation point.
+The bitnami MongoDB, Redis and RabbitMQ subcharts read passwords from the
+same Secret the app uses (`mongodb-root-password`, `mongodb-passwords`,
+`redis-password`, `rabbitmq-password`, `rabbitmq-erlang-cookie` keys are
+written in `templates/secret.yaml` to match their conventions). One
+rotation point. Keep `rabbitmqErlangCookie` the same across upgrades: the
+broker's node is tied to it.
 
-### RabbitMQ is not deployed
-The compose file ships RabbitMQ, but the Go core does not consume it —
-the import sites in `core/pkg/app/app.go` are commented out. When wiring
-RabbitMQ in, add it as another subchart dependency here.
+### RabbitMQ is core's control plane
+Core does not start without it: module registration, management RPCs and
+live module logs go through it, and factories and channels join it to be
+seen at all. The bundled broker (bitnami `rabbitmq`, RabbitMQ 4.1) runs one
+node with the user `rabbitmq.auth.username` (`logos`) and the
+`rabbitmqPassword`; core joins as that user on vhost `/`.
+
+Modules are not in this chart. Run them where they can reach the broker
+(`<release>-rabbitmq:5672` in the cluster) with that user, or one you add
+in its management UI (port 15672; `kubectl port-forward
+svc/<release>-rabbitmq 15672`). Modules outside the cluster need it
+exposed: `rabbitmq.service.type: LoadBalancer`, or a broker of your own
+(below). Each module's README names the settings it takes
+(`RABBITMQ_HOST`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, …).
 
 ### Bitnami images come from `bitnamilegacy/*`
 In August 2025 Bitnami restricted public access to `docker.io/bitnami/*`
 ([bitnami/charts#35164](https://github.com/bitnami/charts/issues/35164)).
 The freely-pullable images now live at `docker.io/bitnamilegacy/*`. Our
-`mongodb:` and `redis:` value blocks override `image.repository` and
+`mongodb:`, `redis:` and `rabbitmq:` value blocks override `image.repository` and
 `volumePermissions.image.repository` to the legacy mirror. We also set
 `global.security.allowInsecureImages: true` because the bitnami chart
 NOTES.txt aborts rendering when the image registry isn't on its hardcoded
@@ -141,7 +157,7 @@ long as those two files are committed.
 
 ## Bring-your-own infrastructure
 
-To use an existing MongoDB / Redis / SeaweedFS:
+To use an existing MongoDB / Redis / RabbitMQ / SeaweedFS:
 
 ```yaml
 mongodb:
@@ -157,6 +173,15 @@ external:
   redis:
     host: redis.shared.svc.cluster.local
     port: 6379
+
+rabbitmq:
+  enabled: false
+external:
+  rabbitmq:
+    host: rabbitmq.shared.svc.cluster.local
+    port: 5672
+    vhost: /
+    username: logos      # its password: secrets.values.rabbitmqPassword
 
 seaweedfs:
   enabled: false
@@ -183,7 +208,8 @@ Credentials still come from `secrets.values` or `secrets.existingSecret`.
 | `ingress.minionTransfers.enabled` / `.annotations` | The minion transfer Ingresses (above), and annotations for them only |
 | `secrets.values.*` | Inline secret values (development only) |
 | `global.storageClass` | StorageClass applied to all PVCs |
-| `mongodb.persistence.size` / `redis.master.persistence.size` / `seaweedfs.*.data.size` | PVC sizing |
+| `mongodb.persistence.size` / `redis.master.persistence.size` / `rabbitmq.persistence.size` / `seaweedfs.*.data.size` | PVC sizing |
+| `rabbitmq.auth.username` / `rabbitmq.service.type` | The bundled broker's user (core's and the modules'), and how it is exposed |
 | `external.*` | Connection details when subcharts are disabled |
 
 The full surface lives in [`values.yaml`](./values.yaml).

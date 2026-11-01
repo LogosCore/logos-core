@@ -54,6 +54,12 @@ secrets:
     # ONLY appropriate for cluster-internal-only Redis without exposure.
     redisPassword: ""
 
+    # RabbitMQ password for core (and for the bundled broker's user,
+    # rabbitmq.auth.username), and the bundled broker's Erlang cookie
+    # (any long random string; only needed with rabbitmq.enabled).
+    rabbitmqPassword: ""
+    rabbitmqErlangCookie: ""
+
     # SeaweedFS S3 credentials. The same pair is consumed by core (writes
     # to the S3 endpoint) and by the bucket-bootstrap Job.
     seaweedfsS3AccessKey: "logos"
@@ -443,6 +449,13 @@ external:
   redis:
     host: ""
     port: 6379
+  # A broker of your own: core joins it as username (password from the app
+  # Secret, rabbitmqPassword), on vhost.
+  rabbitmq:
+    host: ""
+    port: 5672
+    vhost: "/"
+    username: ""
   seaweedfs:
     s3Endpoint: ""
 
@@ -516,6 +529,38 @@ redis:
         memory: 512Mi
   replica:
     replicaCount: 0   # standalone
+
+# RabbitMQ: core's control plane, which every module joins (factories and
+# channels connect to it with their own users; see the README). Core alone
+# needs it to start.
+rabbitmq:
+  enabled: true
+  # Bitnami DockerHub deprecation — see comment in mongodb section above.
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/rabbitmq
+  volumePermissions:
+    image:
+      registry: docker.io
+      repository: bitnamilegacy/os-shell
+  auth:
+    username: logos
+    # Both evaluated through `tpl`: the app Secret (see the mongodb note).
+    existingPasswordSecret: '{{ printf "%s-logos-secrets" .Release.Name }}'
+    existingSecretPasswordKey: rabbitmq-password
+    existingErlangSecret: '{{ printf "%s-logos-secrets" .Release.Name }}'
+    existingSecretErlangKey: rabbitmq-erlang-cookie
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 8Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
 
 seaweedfs:
   enabled: true

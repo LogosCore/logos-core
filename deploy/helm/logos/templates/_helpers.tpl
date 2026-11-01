@@ -149,6 +149,32 @@ we point at its in-cluster Service; otherwise we trust external.* values.
 {{- end -}}
 
 {{/*
+RabbitMQ: core's control plane (module registration, management RPCs, live
+logs) and the bus factories and channels join. The bundled chart's Service
+is <release>-rabbitmq; its user is rabbitmq.auth.username, with the
+password from the app Secret.
+*/}}
+{{- define "logos.rabbitmq.host" -}}
+{{- if .Values.rabbitmq.enabled -}}
+{{- printf "%s-rabbitmq" .Release.Name -}}
+{{- else -}}
+{{- required "external.rabbitmq.host is required when rabbitmq.enabled=false" .Values.external.rabbitmq.host -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "logos.rabbitmq.port" -}}
+{{- if .Values.rabbitmq.enabled -}}5672{{- else -}}{{ .Values.external.rabbitmq.port | default 5672 }}{{- end -}}
+{{- end -}}
+
+{{- define "logos.rabbitmq.username" -}}
+{{- if .Values.rabbitmq.enabled -}}{{ .Values.rabbitmq.auth.username }}{{- else -}}{{ required "external.rabbitmq.username is required when rabbitmq.enabled=false" .Values.external.rabbitmq.username }}{{- end -}}
+{{- end -}}
+
+{{- define "logos.rabbitmq.vhost" -}}
+{{- if .Values.rabbitmq.enabled -}}/{{- else -}}{{ .Values.external.rabbitmq.vhost | default "/" }}{{- end -}}
+{{- end -}}
+
+{{/*
 SeaweedFS S3 endpoint URL. The bundled chart hardcodes the Service name
 to `seaweedfs-s3` (NOT release-prefixed) — see
 charts/seaweedfs/templates/s3-service.yaml. As a side-effect, two

@@ -5,8 +5,11 @@ dependencies:
 - name: redis
   repository: https://charts.bitnami.com/bitnami
   version: 20.6.2
+- name: rabbitmq
+  repository: https://charts.bitnami.com/bitnami
+  version: 16.0.13
 - name: seaweedfs
   repository: https://seaweedfs.github.io/seaweedfs/helm
   version: 4.0.385
-digest: sha256:2bd138b6c52f323d81298f7fc04b36bb6f5a95da6d3cd63ed756e38bbbf31a81
-generated: "2026-05-09T12:25:01.053948874+03:00"
+digest: sha256:f92f6442dbdcf36a3a4f7483cf17c4274c2e40353c97999660b082a98b4309bf
+generated: "2026-11-01T13:28:03.225393969+02:00"

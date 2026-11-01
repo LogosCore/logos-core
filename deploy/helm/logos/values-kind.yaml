@@ -20,6 +20,8 @@
 #     --set secrets.values.jwtSecretKey=$(openssl rand -hex 32) \
 #     --set secrets.values.mongoPassword=$(openssl rand -hex 16) \
 #     --set secrets.values.redisPassword=$(openssl rand -hex 16) \
+#     --set secrets.values.rabbitmqPassword=$(openssl rand -hex 16) \
+#     --set secrets.values.rabbitmqErlangCookie=$(openssl rand -hex 32) \
 #     --set secrets.values.seaweedfsS3SecretKey=$(openssl rand -hex 16) \
 #     --set secrets.values.hocuspocusTicketSecret=$(openssl rand -hex 32) \
 #     --set secrets.values.hocuspocusWebhookSecret=$(openssl rand -hex 32)
@@ -130,6 +132,19 @@ redis:
         memory: 192Mi
     pdb:
       create: false
+
+rabbitmq:
+  persistence:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  pdb:
+    create: false
 
 seaweedfs:
   master:

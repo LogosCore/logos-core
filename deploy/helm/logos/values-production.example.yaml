@@ -67,6 +67,11 @@ redis:
       size: 10Gi
       storageClass: standard-rwo
 
+rabbitmq:
+  persistence:
+    size: 10Gi
+    storageClass: standard-rwo
+
 seaweedfs:
   master:
     data:

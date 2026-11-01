@@ -67,6 +67,12 @@ spec:
                   name: {{ $secretName }}
                   key: redis-password
 
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: rabbitmq-password
+
             - name: JWT_SECRET_KEY
               valueFrom:
                 secretKeyRef:

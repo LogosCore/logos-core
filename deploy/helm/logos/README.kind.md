@@ -130,13 +130,15 @@ helm install logos . \
   --set secrets.values.jwtSecretKey="$(openssl rand -hex 32)" \
   --set secrets.values.mongoPassword="$(openssl rand -hex 16)" \
   --set secrets.values.redisPassword="$(openssl rand -hex 16)" \
+  --set secrets.values.rabbitmqPassword="$(openssl rand -hex 16)" \
+  --set secrets.values.rabbitmqErlangCookie="$(openssl rand -hex 32)" \
   --set secrets.values.seaweedfsS3SecretKey="$(openssl rand -hex 16)" \
   --set secrets.values.hocuspocusTicketSecret="$(openssl rand -hex 32)" \
   --set secrets.values.hocuspocusWebhookSecret="$(openssl rand -hex 32)"
 ```
 
 `helm dependency build` resolves `Chart.lock` and pulls the bundled
-MongoDB, Redis, and SeaweedFS subcharts into `./charts/`. You only need
+MongoDB, Redis, RabbitMQ and SeaweedFS subcharts into `./charts/`. You only need
 to rerun it when `Chart.lock` changes.
 
 `values-kind.yaml` overrides:
@@ -158,6 +160,7 @@ You'll see roughly this order:
 
 1. `logos-mongodb-0`         — StatefulSet, ~30 s
 2. `logos-redis-master-0`    — StatefulSet, ~10 s
+   `logos-rabbitmq-0`        — StatefulSet, ~30 s; core restarts until it answers
 3. `seaweedfs-master-0`        — StatefulSet, ~15 s
 4. `seaweedfs-volume-0`        — depends on master
 5. `seaweedfs-filer-0`         — depends on master + volume; this is the slow one (~60 s)
@@ -264,7 +267,7 @@ Secrets — gone. No leftover state on the host.
 A green smoke test on `kind` confirms:
 
 - The chart renders without missing values
-- Inter-pod DNS resolves (`<release>-mongodb`, `<release>-redis-master`, `seaweedfs-s3`)
+- Inter-pod DNS resolves (`<release>-mongodb`, `<release>-redis-master`, `<release>-rabbitmq`, `seaweedfs-s3`)
 - The shared Secret is wired correctly to both subcharts and our pods
 - Ingress path order routes WebSocket → hocuspocus, REST → core, SPA → frontend
 - The bucket bootstrap Job reaches `Completed`

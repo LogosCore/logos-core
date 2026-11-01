@@ -31,6 +31,12 @@ data:
   REDIS_PORT: {{ include "logos.redis.port" . | quote }}
   CACHE_ENABLED: {{ .Values.core.config.cacheEnabled | quote }}
 
+  # ----- RabbitMQ (the password comes from the app Secret) -----
+  APP_RABBITMQ_HOST: {{ include "logos.rabbitmq.host" . | quote }}
+  APP_RABBITMQ_PORT: {{ include "logos.rabbitmq.port" . | quote }}
+  APP_RABBITMQ_VHOST: {{ include "logos.rabbitmq.vhost" . | quote }}
+  RABBITMQ_DEFAULT_USER: {{ include "logos.rabbitmq.username" . | quote }}
+
   # ----- SeaweedFS S3 -----
   SEAWEEDFS_S3_ENDPOINT: {{ include "logos.seaweedfs.s3Endpoint" . | quote }}
 
