@@ -123,7 +123,7 @@ export function FileView({ file: f }: { file: File }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {toolbar(null)}
-      <div className="flex min-h-0 flex-1 overflow-auto">
+      <div className="flex min-h-0 flex-1 items-start overflow-auto">
         <FileOverview
           file={f}
           name={name}
@@ -137,10 +137,11 @@ export function FileView({ file: f }: { file: File }) {
   )
 }
 
-// What the file is and where it stands, in the middle of the pane, in two
-// columns where it is wide: its kind's icon, name, size and kind in words,
-// the download once kept (or how much came, or why it ended); its details
-// beside them. One column, the details under, where it is narrow.
+// What the file is and where it stands, from the pane's top left (its name
+// is in the tab row above): what can be done with it (or how much came, or
+// why it ended), then its details and, once kept, the commands that verify
+// a download, side by side where the pane is wide. Nothing is cut: the path,
+// the hash and the commands wrap.
 function FileOverview({
   file: f,
   name,
@@ -153,7 +154,7 @@ function FileOverview({
   name: string
   contentType: string | null
   url: string
-  /** A picture or a video's first frame in place of the kind's icon. */
+  /** A picture or a video's first frame, beside the actions. */
   thumbnail: "image" | "video" | null
   /** Shows the Preview tab; absent when the file has none. */
   onPreview?: () => void
@@ -163,96 +164,82 @@ function FileOverview({
   const pct = f.size > 0 ? Math.min(100, Math.round((f.received / f.size) * 100)) : 100
   const Icon = f.state === "COMPLETE" ? CheckIcon : f.state === "FAILED" || f.state === "CANCELLED" ? XIcon : LoaderIcon
   const typeName = fileTypeName(contentType ?? "", name)
+  const sha256 = f.sha256 ?? null
   return (
-    // m-auto centres it both ways, and lets it scroll from its top when the
-    // pane is the shorter. Columns follow the pane's width, not the window's.
-    <div className="@container m-auto w-full max-w-5xl px-6 py-6">
-      <div className="grid items-center gap-6 @2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] @2xl:gap-10">
-        <div className="flex min-w-0 flex-col gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Thumbnail url={url} kind={thumbnail} contentType={contentType ?? ""} name={name} onClick={onPreview} />
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <h3 className="font-mono text-base font-medium break-all">{name}</h3>
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {formatBytes(f.size)}
-                {typeName && <> · {typeName}</>}
-              </p>
-            </div>
-          </div>
-
-          {f.state === "COMPLETE" ? (
-            <div className="flex flex-wrap gap-2">
-              <Button nativeButton={false} render={<a href={url} download />}>
-                <DownloadIcon />
-                Download
-              </Button>
-              {onPreview && (
-                <Button variant="outline" onClick={onPreview}>
-                  <EyeIcon />
-                  Preview
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="flex w-full max-w-sm flex-col gap-2">
-              <div className={cn("inline-flex items-center gap-1.5 text-sm", state.className)}>
-                <Icon className={cn("size-4", coming && "animate-spin")} />
-                {state.label}
-                {coming && (
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {formatBytes(f.received)} of {formatBytes(f.size)} ({pct}%)
-                  </span>
-                )}
-              </div>
-              {coming && (
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-                  <div className="h-full bg-sky-500 transition-[width]" style={{ width: `${pct}%` }} />
-                </div>
-              )}
-              {f.err && <p className="text-xs text-red-600 dark:text-red-400">{f.err}</p>}
-            </div>
+    // Columns follow the pane's width, not the window's.
+    <div className="@container flex w-full max-w-6xl flex-col gap-4 p-4">
+      {f.state === "COMPLETE" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {thumbnail && <Thumbnail url={url} kind={thumbnail} onClick={onPreview} />}
+          <Button nativeButton={false} render={<a href={url} download />}>
+            <DownloadIcon />
+            Download
+          </Button>
+          {onPreview && (
+            <Button variant="outline" onClick={onPreview}>
+              <EyeIcon />
+              Preview
+            </Button>
+          )}
+          {sha256 && (
+            <Button variant="outline" onClick={() => void copyToClipboard(sha256, "SHA-256")}>
+              <CopyIcon />
+              Copy SHA-256
+            </Button>
           )}
         </div>
-
-        <div className="flex min-w-0 flex-col gap-4">
-          <InfoCard labelWidth="w-24">
-            <LabelRow label="Path">
-              <span className="font-mono text-xs break-all">{f.name}</span>
-            </LabelRow>
-            <LabelRow label="Size">
-              <span className="tabular-nums">{f.size.toLocaleString("en-US")} bytes</span>
-            </LabelRow>
-            <LabelRow label="Type">
-              {contentType ? (
-                <span className="block truncate" title={contentType}>
-                  {contentType}
-                </span>
-              ) : (
-                <span className="text-muted-foreground">{f.state === "COMPLETE" ? "not detected" : "known once kept"}</span>
-              )}
-            </LabelRow>
-            <LabelRow label="SHA-256">
-              {f.sha256 ? (
-                <span className="flex min-w-0 items-center gap-1">
-                  <code className="min-w-0 flex-1 truncate font-mono text-xs" title={f.sha256}>
-                    {f.sha256}
-                  </code>
-                  <Button variant="ghost" size="icon-xs" className="-my-1" title="Copy the SHA-256" aria-label="Copy the SHA-256"
-                    onClick={() => void copyToClipboard(f.sha256!, "SHA-256")}>
-                    <CopyIcon />
-                  </Button>
-                </span>
-              ) : (
-                <span className="text-muted-foreground">said with the last chunk</span>
-              )}
-            </LabelRow>
-            <LabelRow label="State">
-              <span className={state.className}>{state.label}</span>
-              {f.doneAt && <span className="text-muted-foreground tabular-nums"> · {formatDateTime(f.doneAt)}</span>}
-            </LabelRow>
-          </InfoCard>
-          {f.state === "COMPLETE" && f.sha256 && <VerifyHashCard name={savedName(f.name, `file-${f.id.slice(0, 8)}`)} sha256={f.sha256} />}
+      ) : (
+        <div className="flex w-full max-w-md flex-col gap-2">
+          <div className={cn("inline-flex items-center gap-1.5 text-sm", state.className)}>
+            <Icon className={cn("size-4", coming && "animate-spin")} />
+            {state.label}
+            {coming && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {formatBytes(f.received)} of {formatBytes(f.size)} ({pct}%)
+              </span>
+            )}
+          </div>
+          {coming && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+              <div className="h-full bg-sky-500 transition-[width]" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+          {f.err && <p className="text-xs text-red-600 dark:text-red-400">{f.err}</p>}
         </div>
+      )}
+
+      <div className="grid items-start gap-4 @3xl:grid-cols-2">
+        <InfoCard labelWidth="w-24">
+          <LabelRow label="Path">
+            <span className="font-mono text-xs break-all">{f.name}</span>
+          </LabelRow>
+          <LabelRow label="Size">
+            <span className="tabular-nums">{f.size.toLocaleString("en-US")} bytes</span>
+            {f.size >= 1024 && <span className="text-muted-foreground tabular-nums"> · {formatBytes(f.size)}</span>}
+          </LabelRow>
+          <LabelRow label="Type">
+            {contentType ? (
+              <>
+                <span className="break-all">{contentType}</span>
+                {typeName && <span className="text-muted-foreground"> · {typeName}</span>}
+              </>
+            ) : (
+              <span className="text-muted-foreground">{f.state === "COMPLETE" ? "not detected" : "known once kept"}</span>
+            )}
+          </LabelRow>
+          <LabelRow label="SHA-256">
+            {sha256 ? (
+              <code className="font-mono text-xs break-all">{sha256}</code>
+            ) : (
+              <span className="text-muted-foreground">said with the last chunk</span>
+            )}
+          </LabelRow>
+          <LabelRow label="State">
+            <span className={state.className}>{state.label}</span>
+            {f.doneAt && <span className="text-muted-foreground tabular-nums"> · {formatDateTime(f.doneAt)}</span>}
+          </LabelRow>
+        </InfoCard>
+        {f.state === "COMPLETE" && sha256 && <VerifyHashCard name={savedName(f.name, `file-${f.id.slice(0, 8)}`)} sha256={sha256} />}
       </div>
     </div>
   )
@@ -269,33 +256,19 @@ function thumbnailOf(kind: FilePreviewKind): "image" | "video" | null {
   return null
 }
 
-/** The overview's picture of the file: a thumbnail of a picture or video, else its kind's icon; a click previews it. */
-function Thumbnail({
-  url,
-  kind,
-  contentType,
-  name,
-  onClick,
-}: {
-  url: string
-  kind: "image" | "video" | null
-  contentType: string
-  name: string
-  onClick?: () => void
-}) {
+/** A picture's or video's thumbnail beside the overview's actions; a click previews it. */
+function Thumbnail({ url, kind, onClick }: { url: string; kind: "image" | "video"; onClick?: () => void }) {
   const [failed, setFailed] = useState(false)
   const inline = `${url}?preview=1`
-  const shown = !failed ? kind : null
-  const box = "flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-muted text-muted-foreground"
-  if (shown === null)
-    return (
-      <div className={cn(box, "size-14")}>
-        <FileTypeIcon contentType={contentType} filename={name} size={26} />
-      </div>
-    )
+  if (failed) return null
   return (
-    <button type="button" className={cn(box, "size-20 cursor-pointer ring-foreground/10 hover:ring-2")} title="Preview" onClick={onClick}>
-      {shown === "image" ? (
+    <button
+      type="button"
+      className="size-9 shrink-0 cursor-pointer overflow-hidden rounded-md bg-muted ring-foreground/10 hover:ring-2"
+      title="Preview"
+      onClick={onClick}
+    >
+      {kind === "image" ? (
         <img src={inline} alt="" className="size-full object-cover" draggable={false} onError={() => setFailed(true)} />
       ) : (
         // The first frame, a moment in: at 0 some videos are still black.
