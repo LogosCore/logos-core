@@ -34,7 +34,10 @@ func (s *Service) WithFiles(files Files) *Service {
 }
 
 // takeChunk takes one chunk of a file the minion sends: a stream's
-// (streams.go), answered[xfer] then set, or a download's.
+// (streams.go), answered[xfer] then set, or a download's. The ack that
+// answers it echoes its ctx (protocol.MaxTransferCtx): a minion that keeps
+// nothing between messages (a bind-call page) finds there what it needs to
+// send the next chunk.
 func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int, answered map[string]bool) ([]cbor.RawMessage, error) {
 	var c protocol.ChunkItem
 	if protocol.UnmarshalCBOR(raw, &c) != nil {
@@ -57,7 +60,7 @@ func (s *Service) takeChunk(ctx context.Context, session *models.MinionSession, 
 		return errItem(reply.Code, reply.Msg, i)
 	}
 	next := uint64(reply.Next)
-	data, err := protocol.MarshalCBOR(protocol.AckItem{T: protocol.ItemAck, Xfer: c.Xfer, Next: &next})
+	data, err := protocol.MarshalCBOR(protocol.AckItem{T: protocol.ItemAck, Xfer: c.Xfer, Next: &next, Ctx: c.Ctx})
 	if err != nil {
 		return nil, err
 	}

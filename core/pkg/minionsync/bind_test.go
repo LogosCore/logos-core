@@ -1,6 +1,7 @@
 package minionsync
 
 import (
+	"bytes"
 	"context"
 	"sync"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
+	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -99,6 +101,9 @@ type fakePage struct {
 	answer *protocol.LinkFrame
 	// noTasks: the page asks for no tasks.
 	noTasks bool
+	// more, when set, are items the page adds to its answer to msg (a
+	// file's next chunk, say).
+	more func(msg protocol.CoreMessage) []any
 
 	mu       sync.Mutex
 	calls    []protocol.CoreMessage
@@ -145,6 +150,9 @@ func (p *fakePage) Call(_ context.Context, module string, c channellink.Call) (p
 	}
 	if len(acked) > 0 {
 		out = append([]any{protocol.AckItem{T: protocol.ItemAck, Tasks: acked}}, out...)
+	}
+	if p.more != nil {
+		out = append(out, p.more(msg)...)
 	}
 	if !p.noTasks {
 		max := p.maxTasks
@@ -415,4 +423,234 @@ func TestBindNeedsEditing(t *testing.T) {
 	if tg, _ = b.svc.CheckTarget(context.Background(), b.target); tg.State != models.TargetConnected || b.page.callCount() != 1 {
 		t.Fatalf("target %+v after %d calls", tg, b.page.callCount())
 	}
+}
+
+// chunkFiles keeps a download's chunks in order: next moves on by each one
+// that starts where it has the file; stuck, it never does.
+type chunkFiles struct {
+	fakeFiles
+	mu    sync.Mutex
+	next  uint64
+	stuck bool
+}
+
+func (f *chunkFiles) TakeChunk(_ context.Context, _ *models.MinionSession, c protocol.ChunkItem) (minionfiles.Reply, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.stuck && c.Off == f.next {
+		f.next += uint64(len(c.Data))
+	}
+	return minionfiles.Reply{Next: int64(f.next)}, nil
+}
+
+// A page sends a file a chunk a call, keeping nothing: core's ack echoes
+// the ctx its chunk set, and says where to go on from. The calls go on for
+// as long as the file takes, past any count.
+func TestBindDownloadTakesAsManyCallsAsItNeeds(t *testing.T) {
+	b := newBindRig(t, true)
+	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+		t.Fatal(err)
+	}
+	files := &chunkFiles{}
+	b.svc.WithFiles(files)
+	const total = 40
+	xfer, task, ctx := bytes.Repeat([]byte{7}, 16), bytes.Repeat([]byte{8}, 16), []byte("path=/var/www/big.bin")
+	var badCtx []string
+	b.page.more = func(msg protocol.CoreMessage) []any {
+		next := uint64(0)
+		started := false
+		for _, raw := range itemsOfCore(msg, protocol.ItemAck) {
+			var a protocol.AckItem
+			_ = protocol.UnmarshalCBOR(raw, &a)
+			if a.Xfer == nil {
+				continue
+			}
+			started, next = true, *a.Next
+			if !bytes.Equal(a.Ctx, ctx) {
+				badCtx = append(badCtx, string(a.Ctx))
+			}
+		}
+		if started && next >= total {
+			return nil // all there: the page would end its task
+		}
+		c := protocol.ChunkItem{T: protocol.ItemChunk, Xfer: xfer, Off: next, Data: []byte{byte(next)}, Ctx: ctx}
+		if next == 0 {
+			sz := uint64(total)
+			c.Total, c.Task, c.Name = &sz, task, "/var/www/big.bin"
+		}
+		return []any{c}
+	}
+	before := b.page.callCount()
+	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+		t.Fatal(err)
+	}
+	if files.next != total {
+		t.Fatalf("core has %d of %d bytes after %d calls", files.next, total, b.page.callCount()-before)
+	}
+	if n := b.page.callCount() - before; n != total+1 {
+		t.Fatalf("%d calls for %d chunks", n, total)
+	}
+	if len(badCtx) > 0 {
+		t.Fatalf("acks without the chunk's ctx: %q", badCtx)
+	}
+}
+
+// A page that answers the same thing over and over (a chunk core never
+// takes) ends the exchange: two calls that would carry the same items.
+func TestBindSameAnswerEndsTheExchange(t *testing.T) {
+	b := newBindRig(t, true)
+	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+		t.Fatal(err)
+	}
+	b.svc.WithFiles(&chunkFiles{stuck: true})
+	xfer := bytes.Repeat([]byte{7}, 16)
+	b.page.more = func(protocol.CoreMessage) []any {
+		sz := uint64(10)
+		return []any{protocol.ChunkItem{T: protocol.ItemChunk, Xfer: xfer, Off: 0, Data: []byte{1}, Total: &sz, Task: xfer}}
+	}
+	before := b.page.callCount()
+	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+		t.Fatal(err)
+	}
+	// The check, and the call with core's ack; the next would carry the
+	// same ack again, and is not made.
+	if n := b.page.callCount() - before; n != 2 {
+		t.Fatalf("%d calls", n)
+	}
+}
+
+// A stream of a bind session may go on (a downloader came, or took a
+// chunk): its page is called, with the stream's ack; while every stream
+// holds, a wake calls nothing.
+func TestBindWakeCallsWhenAStreamMayGo(t *testing.T) {
+	b := newBindRig(t, true)
+	tg, err := b.svc.CheckTarget(context.Background(), b.target)
+	if err != nil || tg.SessionID == nil {
+		t.Fatalf("%+v %v", tg, err)
+	}
+	next, xfer := uint64(0), bytes.Repeat([]byte{7}, 16)
+	streams := &lockedStreams{ack: protocol.AckItem{T: protocol.ItemAck, Xfer: xfer, Next: &next, Hold: true, Ctx: []byte("c")}}
+	b.svc.WithStreams(streams)
+	before := b.page.callCount()
+	b.svc.StreamRoom(*tg.SessionID)
+	time.Sleep(4 * bindWakeDelay)
+	if n := b.page.callCount() - before; n != 0 {
+		t.Fatalf("%d calls while the stream holds", n)
+	}
+	streams.set(false)
+	b.svc.WakeStreams(*tg.SessionID)
+	deadline := time.Now().Add(2 * time.Second)
+	for b.page.callCount() == before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if b.page.callCount() == before {
+		t.Fatal("no call once the stream may go")
+	}
+	b.page.mu.Lock()
+	last := b.page.calls[len(b.page.calls)-1]
+	b.page.mu.Unlock()
+	var a protocol.AckItem
+	acks := itemsOfCore(last, protocol.ItemAck)
+	if len(acks) != 1 || protocol.UnmarshalCBOR(acks[0], &a) != nil || a.Hold || string(a.Ctx) != "c" {
+		t.Fatalf("the call's ack %+v", a)
+	}
+}
+
+// lockedStreams has one stream, holding or not, read while calls run.
+type lockedStreams struct {
+	fakeStreams
+	mu  sync.Mutex
+	ack protocol.AckItem
+}
+
+func (l *lockedStreams) set(hold bool) { l.mu.Lock(); l.ack.Hold = hold; l.mu.Unlock() }
+
+func (l *lockedStreams) Acks(context.Context, *models.MinionSession, map[string]bool) ([]protocol.AckItem, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return []protocol.AckItem{l.ack}, nil
+}
+
+// A long task (a walk) carried across calls: each part says where the
+// page stands (ctx), core answers with a resume giving it back, and the
+// calls go on until a part says done. A resume lost with a failed call is
+// sent again by the next call core makes; a cancel carries the ctx too.
+func TestBindResumeCarriesALongTaskAcrossCalls(t *testing.T) {
+	b := newBindRig(t, true)
+	tg, err := b.svc.CheckTarget(context.Background(), b.target)
+	if err != nil || tg.SessionID == nil {
+		t.Fatalf("%+v %v", tg, err)
+	}
+	task := uuid.New()
+	b.tasks.rows = append(b.tasks.rows, models.MinionTask{TaskID: task, SessionID: *tg.SessionID, OperationID: b.build.OperationID,
+		Command: "walk", State: models.MinionTaskRunning})
+	const parts = 6
+	var resumed []string
+	started := false
+	b.page.more = func(msg protocol.CoreMessage) []any {
+		at := -1
+		for _, raw := range itemsOfCore(msg, protocol.ItemResume) {
+			var r protocol.ResumeItem
+			if protocol.UnmarshalCBOR(raw, &r) != nil || r.Validate() != nil || !bytes.Equal(r.Task, task[:]) {
+				t.Errorf("a resume that does not read: %x", raw)
+				continue
+			}
+			resumed = append(resumed, string(r.Ctx))
+			at = int(r.Ctx[0])
+		}
+		switch {
+		case at < 0 && started:
+			return nil
+		case at < 0:
+			started, at = true, 0
+		}
+		part := protocol.ResultItem{T: protocol.ItemResult, Task: task[:], Seq: uint64(at), Out: []byte{byte(at)}}
+		if at == parts-1 {
+			ok := true
+			part.Done, part.OK = true, &ok
+		} else {
+			part.Ctx = []byte{byte(at + 1)}
+		}
+		return []any{part}
+	}
+	before := b.page.callCount()
+	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(b.tasks.results[task]); got != parts {
+		t.Fatalf("%d parts of %d after %d calls (resumed %q)", got, parts, b.page.callCount()-before, resumed)
+	}
+	if n := b.page.callCount() - before; n != parts {
+		t.Fatalf("%d calls for %d parts", n, parts)
+	}
+	if st := b.tasks.find(task).State; st != models.MinionTaskDone {
+		t.Fatalf("state %s", st)
+	}
+
+	// A walk whose resume was lost: the next call core makes brings it.
+	other := uuid.New()
+	seq := uint64(2)
+	b.tasks.rows = append(b.tasks.rows, models.MinionTask{TaskID: other, SessionID: *tg.SessionID, OperationID: b.build.OperationID,
+		Command: "walk", State: models.MinionTaskRunning, ResumeCtx: []byte{3}, ResumeSeq: &seq})
+	items, fresh, _, err := b.svc.bindItems(context.Background(), b.get(t), b.sessionOf(t, *tg.SessionID))
+	if err != nil || !fresh || len(items) != 1 || protocol.ItemType(items[0]) != protocol.ItemResume {
+		t.Fatalf("a lost resume: %d items, fresh %v, %v", len(items), fresh, err)
+	}
+	// Asked to stop: no resume; the cancel says where it stood.
+	now := time.Now()
+	b.tasks.find(other).CancelRequestedAt = &now
+	items, _, _, _ = b.svc.bindItems(context.Background(), b.get(t), b.sessionOf(t, *tg.SessionID))
+	var c protocol.CancelItem
+	if len(items) != 1 || protocol.UnmarshalCBOR(items[0], &c) != nil || !bytes.Equal(c.Task, other[:]) || !bytes.Equal(c.Ctx, []byte{3}) {
+		t.Fatalf("the cancel %+v of %d items", c, len(items))
+	}
+}
+
+func (b *bindRig) sessionOf(t *testing.T, id uuid.UUID) *models.MinionSession {
+	t.Helper()
+	s, err := b.sessions.FindBySessionID(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
 }

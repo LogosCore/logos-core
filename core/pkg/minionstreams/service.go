@@ -107,8 +107,13 @@ type Service struct {
 // at once, what its streams may do now (minionsync): a stream it holds goes
 // when a downloader comes, and one it receives when bytes it has not got
 // arrive from the uploader, without waiting for the minion's next message.
+//
+// StreamRoom says a downloader took a chunk, which leaves room for the
+// next: a minion that polls finds it on its own, but one that only answers
+// (a bind-call page) hears it only when core calls.
 type Waker interface {
 	WakeStreams(sessionID uuid.UUID)
+	StreamRoom(sessionID uuid.UUID)
 }
 
 // WithWaker gives the service a Waker, told when a downloader attaches and
@@ -149,7 +154,7 @@ func (s *Service) ack(st *models.MinionTaskStream) protocol.AckItem {
 	if st.Delivered >= st.Size && st.Ran {
 		next, hold = uint64(st.Size), false
 	}
-	return protocol.AckItem{T: protocol.ItemAck, Xfer: st.Xfer, Next: &next, Hold: hold}
+	return protocol.AckItem{T: protocol.ItemAck, Xfer: st.Xfer, Next: &next, Hold: hold, Ctx: st.Ctx}
 }
 
 // Reply is the service's answer to a chunk: an ack, or an err item's code
@@ -173,7 +178,7 @@ func (s *Service) TakeChunk(ctx context.Context, session *models.MinionSession, 
 			return Reply{}, true, err
 		}
 		after, err := s.tasks.StreamAnnounce(ctx, session.SessionID, taskID, models.MinionTaskStream{Xfer: c.Xfer, Name: c.Name,
-			Size: int64(*c.Total), AnnouncedAt: s.now(), IdleSince: ptr(s.now())})
+			Size: int64(*c.Total), AnnouncedAt: s.now(), IdleSince: ptr(s.now()), Ctx: c.Ctx})
 		if repository.IsNotFound(err) {
 			return Reply{Code: protocol.ErrItemUnknownTask, Msg: "no such task to stream under this session"}, true, nil
 		}
@@ -314,6 +319,9 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 			}
 			if !ours {
 				return pos, nil
+			}
+			if s.waker != nil {
+				s.waker.StreamRoom(t.SessionID)
 			}
 			beat = s.now()
 			if s.now().Sub(lastPublish) >= time.Second || pos >= end {

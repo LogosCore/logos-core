@@ -33,7 +33,10 @@ import (
 //     session's schedule when its hello said one, and on Check now. The
 //     page's answer is taken as any message under the session (underSession),
 //     and what core has to say back goes in another call at once, while
-//     there is any.
+//     there is any and the calls make progress: a file moves a chunk a
+//     call, for as many calls as it takes. Two calls in a row that would
+//     carry the same items (a page answering the same thing over and over)
+//     end the exchange.
 //   - A call that reaches nothing leaves the session open and the target
 //     unreachable, retried after 1 minute, 5, 30, then hourly, for a day.
 
@@ -47,8 +50,6 @@ const (
 	// bindCoalesce is how long news for a bind session waits, so what is
 	// queued together goes in one call.
 	bindCoalesce = time.Second
-	// bindMaxRounds bounds the calls one exchange makes back to back.
-	bindMaxRounds = 16
 	// bindTick is how often the scheduler looks for calls due.
 	bindTick = 5 * time.Second
 	// bindDefaultAllowance is how many tasks a call core starts brings when
@@ -67,17 +68,25 @@ const (
 	bindScheduled
 	// bindCheck: an operator's Check now, or a target just added.
 	bindCheck
+	// bindWake: a stream of the session may go on (a downloader came or
+	// made room, an uploader's bytes came): the call goes only when one of
+	// its acks says go.
+	bindWake
 )
 
-// binds are the targets being called, and the news waiting.
+// bindWakeDelay coalesces a session's stream wakes: a downloader taking
+// chunk after chunk is one call, as soon as it can be.
+const bindWakeDelay = 100 * time.Millisecond
+
+// binds are the targets being called, and the calls waiting.
 type binds struct {
 	mu      sync.Mutex
 	locks   map[uuid.UUID]*sync.Mutex
-	waiting map[uuid.UUID]bool
+	waiting map[waitKey]bool
 }
 
 func newBinds() *binds {
-	return &binds{locks: map[uuid.UUID]*sync.Mutex{}, waiting: map[uuid.UUID]bool{}}
+	return &binds{locks: map[uuid.UUID]*sync.Mutex{}, waiting: map[waitKey]bool{}}
 }
 
 // lock serializes a target's calls: one at a time.
@@ -160,19 +169,45 @@ func (s *Service) notifyBind(session uuid.UUID) {
 	if err != nil {
 		return
 	}
+	s.callSoon(t.TargetID, bindNews, bindCoalesce)
+}
+
+// wakeBind calls the target of a bind session soon, when one of its
+// streams may go on; nothing for a session no target opened.
+func (s *Service) wakeBind(session uuid.UUID) {
+	if s.targets == nil {
+		return
+	}
+	t, err := s.targets.FindBySessionID(context.Background(), session)
+	if err != nil {
+		return
+	}
+	s.callSoon(t.TargetID, bindWake, bindWakeDelay)
+}
+
+// callSoon calls a target after delay, once for what comes meanwhile (of
+// one trigger).
+func (s *Service) callSoon(target uuid.UUID, why bindTrigger, delay time.Duration) {
+	key := waitKey{target, why}
 	s.binds.mu.Lock()
-	if s.binds.waiting[t.TargetID] {
+	if s.binds.waiting[key] {
 		s.binds.mu.Unlock()
 		return
 	}
-	s.binds.waiting[t.TargetID] = true
+	s.binds.waiting[key] = true
 	s.binds.mu.Unlock()
-	time.AfterFunc(bindCoalesce, func() {
+	time.AfterFunc(delay, func() {
 		s.binds.mu.Lock()
-		delete(s.binds.waiting, t.TargetID)
+		delete(s.binds.waiting, key)
 		s.binds.mu.Unlock()
-		s.callTarget(context.Background(), t.TargetID, bindNews)
+		s.callTarget(context.Background(), target, why)
 	})
+}
+
+// waitKey is a call waiting: its target and why.
+type waitKey struct {
+	target uuid.UUID
+	why    bindTrigger
 }
 
 // callTarget makes a target's call: the first one, or one under its
@@ -219,7 +254,7 @@ func (s *Service) callTarget(ctx context.Context, targetID uuid.UUID, why bindTr
 		}
 	}
 	if session == nil {
-		if why == bindNews {
+		if why == bindNews || why == bindWake {
 			return
 		}
 		err = s.firstCall(ctx, t)
@@ -333,26 +368,31 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 	if err := from.readKeys(); err != nil {
 		return s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "core does not implement the session's crypto"))
 	}
-	items, fresh, err := s.bindItems(ctx, t, session)
+	items, fresh, going, err := s.bindItems(ctx, t, session)
 	if err != nil {
 		return err
 	}
-	if why == bindNews && !fresh {
+	if (why == bindNews && !fresh) || (why == bindWake && !going) {
 		return nil
 	}
-	for round := 0; ; round++ {
+	// Calls go on while core has something to say back and it moves things
+	// on; no count bounds them, as a file takes a call a chunk.
+	var last []cbor.RawMessage
+	for {
 		msg, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, session.SessionID, items)
 		if err != nil || done {
 			return err
 		}
+		last = items
 		if items, err = s.underSession(ctx, session, "", *msg, nil); err != nil {
 			return err
 		}
 		s.allowanceOf(t, msg)
-		if len(items) == 0 || round+1 >= bindMaxRounds {
-			if round+1 >= bindMaxRounds && len(items) > 0 {
-				s.logger.Info("targets: calls back to back stopped, the rest waits", zap.String("target_id", t.TargetID.String()))
-			}
+		if len(items) == 0 {
+			break
+		}
+		if sameItems(items, last) {
+			s.logger.Info("targets: the page answers the same thing again, the exchange ends", zap.String("target_id", t.TargetID.String()))
 			break
 		}
 	}
@@ -363,17 +403,31 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 	return s.saveCall(ctx, s.reached(t, session))
 }
 
+// sameItems reports whether two calls would carry the same items: nothing
+// moved on between them.
+func sameItems(a, b []cbor.RawMessage) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !bytes.Equal(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // bindItems are what a call core starts carries: the session's cancels, its
 // tasks within the allowance (those sent and not acknowledged first), and
 // its streams' acks. fresh says whether any of it is news: a cancel, or a
-// task never sent.
-func (s *Service) bindItems(ctx context.Context, t *models.MinionTarget, session *models.MinionSession) ([]cbor.RawMessage, bool, error) {
+// task never sent; going, whether a stream's ack lets it go on.
+func (s *Service) bindItems(ctx context.Context, t *models.MinionTarget, session *models.MinionSession) ([]cbor.RawMessage, bool, bool, error) {
 	if s.tasks == nil {
-		return nil, false, nil
+		return nil, false, false, nil
 	}
 	items, err := s.cancels(ctx, session)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	fresh := len(items) > 0
 	limit := bindDefaultAllowance
@@ -383,22 +437,36 @@ func (s *Service) bindItems(ctx context.Context, t *models.MinionTarget, session
 	if limit > 0 {
 		waiting, err := s.tasks.ForDelivery(ctx, session.SessionID, limit)
 		if err != nil {
-			return nil, false, fmt.Errorf("tasks to deliver: %w", err)
+			return nil, false, false, fmt.Errorf("tasks to deliver: %w", err)
 		}
 		for _, w := range waiting {
 			fresh = fresh || w.State == models.MinionTaskQueued
 		}
 		tasks, err := s.send(ctx, waiting)
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 		items = append(items, tasks...)
 	}
+	resumes, err := s.resumes(ctx, session)
+	if err != nil {
+		return nil, false, false, err
+	}
+	// A task to go on with is news: the call goes.
+	fresh = fresh || len(resumes) > 0
+	items = append(items, resumes...)
 	acks, err := s.streamAcks(ctx, session, nil)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
-	return append(items, acks...), fresh, nil
+	going := false
+	for _, raw := range acks {
+		var a protocol.AckItem
+		if protocol.UnmarshalCBOR(raw, &a) == nil && !a.Hold {
+			going = true
+		}
+	}
+	return append(items, acks...), fresh, going, nil
 }
 
 // allowanceOf takes the get_tasks of the page's answer as the target's

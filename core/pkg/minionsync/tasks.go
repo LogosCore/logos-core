@@ -61,7 +61,7 @@ func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, ra
 		}
 	}
 	if ack.Xfer != nil {
-		return nil, &pull{xfer: ack.Xfer, next: *ack.Next, i: i}, nil
+		return nil, &pull{xfer: ack.Xfer, next: *ack.Next, ctx: ack.Ctx, i: i}, nil
 	}
 	return nil, nil, nil
 }
@@ -85,7 +85,7 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		ls[j] = p.Named(session.Hello.OS)
 	}
 	task, fresh, err := s.tasks.AddResult(ctx, session.SessionID, id, repository.MinionTaskResult{
-		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(),
+		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(), Ctx: res.Ctx,
 		Named: func(result string, data []byte) ([]byte, error) {
 			return protocol.NamedResultData(result, data)
 		},
@@ -135,7 +135,42 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 			}
 		}
 	}
+	// A part that says where the minion stands is answered with a resume
+	// giving it back (a sent-again part too: the resume may have been
+	// lost): a minion that keeps nothing goes on with the task from there.
+	// Not once an operator asked to stop it: the cancel carries the ctx.
+	if !res.Done && res.Ctx != nil && task.CancelRequestedAt == nil && !task.Finished() {
+		return resumeItem(task.TaskID, res.Ctx)
+	}
 	return nil, nil
+}
+
+// resumeItem is a resume of the task from ctx.
+func resumeItem(task uuid.UUID, ctx []byte) ([]cbor.RawMessage, error) {
+	item, err := protocol.MarshalCBOR(protocol.ResumeItem{T: protocol.ItemResume, Task: task[:], Ctx: ctx})
+	if err != nil {
+		return nil, err
+	}
+	return []cbor.RawMessage{item}, nil
+}
+
+// resumes are resumes of the session's tasks under way whose newest part
+// said a ctx: what a call core starts to a bind-call page carries, so a
+// walk goes on after a call that failed.
+func (s *Service) resumes(ctx context.Context, session *models.MinionSession) ([]cbor.RawMessage, error) {
+	tasks, err := s.tasks.Resumable(ctx, session.SessionID)
+	if err != nil {
+		return nil, fmt.Errorf("tasks to resume: %w", err)
+	}
+	var out []cbor.RawMessage
+	for _, t := range tasks {
+		item, err := resumeItem(t.TaskID, t.ResumeCtx)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item...)
+	}
+	return out, nil
 }
 
 // deliver gives a minion at most limit of the tasks waiting for it, those
@@ -194,7 +229,9 @@ func (s *Service) cancels(ctx context.Context, session *models.MinionSession) ([
 	}
 	items := make([]cbor.RawMessage, 0, len(send))
 	for _, t := range send {
-		item, err := protocol.MarshalCBOR(protocol.CancelItem{T: protocol.ItemCancel, Task: t.TaskID[:]})
+		// With where the task stands, when the minion said: one that keeps
+		// nothing ends the task from there.
+		item, err := protocol.MarshalCBOR(protocol.CancelItem{T: protocol.ItemCancel, Task: t.TaskID[:], Ctx: t.ResumeCtx})
 		if err != nil {
 			return nil, err
 		}

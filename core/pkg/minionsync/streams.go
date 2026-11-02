@@ -63,7 +63,10 @@ func (s *Service) streamChunk(ctx context.Context, session *models.MinionSession
 		return out, true, err
 	}
 	answered[string(c.Xfer)] = true
-	item, err := protocol.MarshalCBOR(*reply.Ack)
+	// The minion's ctx goes back on the ack that answers its chunk.
+	ack := *reply.Ack
+	ack.Ctx = c.Ctx
+	item, err := protocol.MarshalCBOR(ack)
 	if err != nil {
 		return nil, true, err
 	}

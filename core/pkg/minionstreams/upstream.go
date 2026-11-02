@@ -231,7 +231,7 @@ func (s *Service) Pull(ctx context.Context, t *models.MinionTask, next int64, ro
 // hold while core has nothing past that.
 func (s *Service) upAck(u *models.MinionTaskUpload, at int64) protocol.AckItem {
 	next := uint64(at)
-	return protocol.AckItem{T: protocol.ItemAck, Xfer: u.Xfer, Next: &next, Hold: u.Received <= at && !(u.Sized && at >= u.Size)}
+	return protocol.AckItem{T: protocol.ItemAck, Xfer: u.Xfer, Next: &next, Hold: u.Received <= at && !(u.Sized && at >= u.Size), Ctx: u.Ctx}
 }
 
 // uploaderAlive: the stream has an uploader that sent lately.

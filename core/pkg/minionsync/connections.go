@@ -295,11 +295,24 @@ func (s *Service) Notify(ctx context.Context, session uuid.UUID) {
 // message, which on a persistent connection may be long in coming. The
 // minion holds such a stream, sending nothing, so the ack cannot cross its
 // chunks. Nothing goes without a connection open. It returns at once.
+//
+// A session no persistent connection serves may be a bind-call page's: its
+// target is called, if a stream of its may go on (bind.go).
 func (s *Service) WakeStreams(session uuid.UUID) {
 	if !s.Connected(session) {
+		s.wakeBind(session)
 		return
 	}
 	go s.wakeStreams(context.Background(), session)
+}
+
+// StreamRoom: a downloader took a chunk of one of the session's streams.
+// Only a bind-call page is told, by a call: a minion that polls, or holds a
+// persistent connection, asks on its own.
+func (s *Service) StreamRoom(session uuid.UUID) {
+	if !s.Connected(session) {
+		s.wakeBind(session)
+	}
 }
 
 func (s *Service) wakeStreams(ctx context.Context, session uuid.UUID) {

@@ -90,7 +90,21 @@ func (f *fakeTasks) AddResult(_ context.Context, sid, id uuid.UUID, r repository
 	if r.Done {
 		t.State = models.MinionTaskDone
 	}
+	if !r.Done && r.Ctx != nil && (t.ResumeSeq == nil || r.Seq > *t.ResumeSeq) {
+		seq := r.Seq
+		t.ResumeCtx, t.ResumeSeq = r.Ctx, &seq
+	}
 	return t, true, nil
+}
+
+func (f *fakeTasks) Resumable(_ context.Context, sid uuid.UUID) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	for _, t := range f.rows {
+		if t.SessionID == sid && t.ResumeCtx != nil && t.CancelRequestedAt == nil && !t.Finished() {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeTasks) CancelsToSend(_ context.Context, sid uuid.UUID, _ time.Time) ([]models.MinionTask, []models.MinionTask, error) {

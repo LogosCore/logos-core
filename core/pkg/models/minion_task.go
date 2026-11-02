@@ -60,7 +60,13 @@ type MinionTask struct {
 	// cancel goes with every reply until its last part comes. CancelSends
 	// counts them.
 	CancelRequestedAt *time.Time `bson:"cancel_requested_at,omitempty" json:"cancel_requested_at,omitempty"`
-	CancelSends       int        `bson:"cancel_sends,omitempty" json:"cancel_sends,omitempty"`
+	// ResumeCtx is the ctx of the task's newest part that said one (its
+	// ResumeSeq): where a minion that keeps nothing stands with it (a
+	// bind-call page's walk). Core gives it back with a resume, and with a
+	// cancel.
+	ResumeCtx   []byte  `bson:"resume_ctx,omitempty" json:"-"`
+	ResumeSeq   *uint64 `bson:"resume_seq,omitempty" json:"-"`
+	CancelSends int     `bson:"cancel_sends,omitempty" json:"cancel_sends,omitempty"`
 
 	// What the last part said: OK, the process's Exit code, Err.
 	OK   *bool  `bson:"ok,omitempty" json:"ok,omitempty"`
@@ -132,6 +138,11 @@ type MinionTaskStream struct {
 	AnnouncedAt time.Time  `bson:"announced_at" json:"announced_at"`
 	// SHA256 is the whole's, when the minion read it in order once.
 	SHA256 []byte `bson:"sha256,omitempty" json:"sha256,omitempty"`
+	// Ctx is the transfer's ctx, as the minion's announcement set it: every
+	// ack of the stream carries it, those core sends unasked too (a
+	// downloader came, or made room), so a minion that keeps nothing (a
+	// bind-call page) finds there what it streams.
+	Ctx []byte `bson:"ctx,omitempty" json:"-"`
 }
 
 // MinionTaskUpload is a task's file going to its minion: the file as it
@@ -166,6 +177,9 @@ type MinionTaskUpload struct {
 	From       int64      `bson:"from,omitempty" json:"from,omitempty"`
 	AttachedAt *time.Time `bson:"attached_at,omitempty" json:"attached_at,omitempty"`
 	IdleSince  *time.Time `bson:"idle_since,omitempty" json:"idle_since,omitempty"`
+	// Ctx is a stream's ctx, as the minion's latest ask set it: the acks
+	// core sends unasked (its uploader's bytes came) carry it.
+	Ctx []byte `bson:"ctx,omitempty" json:"-"`
 }
 
 // MissingParts is how many parts before the done part never came: parts

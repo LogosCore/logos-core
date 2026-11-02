@@ -113,6 +113,13 @@ func TestUploadPull(t *testing.T) {
 	if up := tasks.find(taskID).Upload; up.FirstAckAt == nil || up.Acked != 0 {
 		t.Fatalf("after the first ask: %+v", up)
 	}
+	// An ask with a ctx gets it back on its chunk: a page that keeps
+	// nothing finds there where the file goes.
+	next := uint64(len(first.Data))
+	withCtx := chunk(send(protocol.AckItem{T: protocol.ItemAck, Xfer: xfer, Next: &next, Ctx: []byte("dest=/var/www/a.bin")}))
+	if string(withCtx.Ctx) != "dest=/var/www/a.bin" || first.Ctx != nil {
+		t.Fatalf("ctx: first %q, then %q", first.Ctx, withCtx.Ctx)
+	}
 	last := chunk(pull(uint64(len(first.Data)), xfer))
 	if !bytes.Equal(append(first.Data, last.Data...), body) || !bytes.Equal(last.SHA256, sum[:]) || last.Total != nil {
 		t.Fatalf("last: off %d, %d bytes", last.Off, len(last.Data))

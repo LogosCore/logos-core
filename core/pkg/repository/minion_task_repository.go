@@ -47,6 +47,9 @@ type MinionTaskResult struct {
 	// Latest: the task's result has every part say its data whole
 	// (taskdata.Latest): the newest is kept on the task, not on its part.
 	Latest func(result string) bool
+	// Ctx is a part's ctx (not done): where the minion stands with the task,
+	// kept on it (ResumeCtx) when the part is the newest to say one.
+	Ctx []byte
 }
 
 // ErrMinionTaskEnded is AddResult's answer to a part for a task that
@@ -108,6 +111,9 @@ type IMinionTaskRepository interface {
 	FindByUploadXfer(ctx context.Context, sessionID uuid.UUID, xfer []byte) (*models.MinionTask, error)
 	// UploadAcked records how far the minion has its task's file.
 	UploadAcked(ctx context.Context, taskID uuid.UUID, next int64, at time.Time) (*models.MinionTask, error)
+	// UploadCtx records the ctx of the minion's latest ask for a stream's
+	// chunk: the acks core sends it unasked carry it.
+	UploadCtx(ctx context.Context, taskID uuid.UUID, c []byte) error
 	// UploadFileUse says whether a task file is named by a task that has not
 	// ended (open), and by any task at all (named).
 	UploadFileUse(ctx context.Context, fileID uuid.UUID) (open, named bool, err error)
@@ -136,6 +142,9 @@ type IMinionTaskRepository interface {
 	StreamTook(ctx context.Context, taskID uuid.UUID, gen, off, n int64, sha256 []byte) (bool, error)
 	// ActiveStreams are a session's streams whose tasks have not ended.
 	ActiveStreams(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error)
+	// Resumable are a session's tasks under way whose newest part said a
+	// ctx, but those an operator asked to stop: what core resumes.
+	Resumable(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error)
 	// IdleStreams are streams whose tasks have not ended with no
 	// downloader (or uploader) since before, or one that stopped saying it
 	// is there.
@@ -345,6 +354,10 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 		}
 		set["state"] = models.MinionTaskRunning
 	}
+	if !res.Done && !late && res.Ctx != nil && (t.ResumeSeq == nil || res.Seq > *t.ResumeSeq) {
+		set["resume_ctx"] = res.Ctx
+		set["resume_seq"] = res.Seq
+	}
 	if res.Done && !late {
 		set["done_at"] = res.At
 		set["done_seq"] = res.Seq
@@ -528,6 +541,11 @@ func (r *minionTaskRepository) UploadAcked(ctx context.Context, taskID uuid.UUID
 	return &after, nil
 }
 
+func (r *minionTaskRepository) UploadCtx(ctx context.Context, taskID uuid.UUID, c []byte) error {
+	return r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID, "upload": bson.M{"$exists": true}},
+		bson.M{"$set": bson.M{"upload.ctx": c}})
+}
+
 func (r *minionTaskRepository) UploadFileUse(ctx context.Context, fileID uuid.UUID) (bool, bool, error) {
 	named, err := r.tasks.Find(ctx, bson.M{"upload.file_id": fileID}).Count()
 	if err != nil || named == 0 {
@@ -634,6 +652,13 @@ func (r *minionTaskRepository) ActiveStreams(ctx context.Context, sessionID uuid
 	var out []models.MinionTask
 	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "state": bson.M{"$in": openStates},
 		"$or": bson.A{bson.M{"stream": bson.M{"$exists": true}}, bson.M{"upload.stream": true}}}).All(&out)
+	return out, err
+}
+
+func (r *minionTaskRepository) Resumable(ctx context.Context, sessionID uuid.UUID) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "state": bson.M{"$in": openStates},
+		"resume_ctx": bson.M{"$exists": true}, "cancel_requested_at": nil}).All(&out)
 	return out, err
 }
 

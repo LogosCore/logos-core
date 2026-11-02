@@ -19,10 +19,13 @@ import (
 // once its other items are in. An ack the reply has no room for is answered
 // by none: the minion asks again.
 
-// pull is an ack asking for a chunk: item i of the message.
+// pull is an ack asking for a chunk: item i of the message. Its ctx goes
+// back on what answers it (the chunk, or a stream's hold), so a minion that
+// keeps nothing between messages finds there where the file goes.
 type pull struct {
 	xfer []byte
 	next uint64
+	ctx  []byte
 	i    int
 }
 
@@ -42,7 +45,8 @@ func (s *Service) serveUploads(ctx context.Context, session *models.MinionSessio
 	}
 	var out []cbor.RawMessage
 	for _, p := range pulls {
-		item, err := s.serveUpload(ctx, session, p, protocol.MaxMinionMessageSize-used-chunkOverhead)
+		// The chunk carries the pull's ctx back: its room too.
+		item, err := s.serveUpload(ctx, session, p, protocol.MaxMinionMessageSize-used-chunkOverhead-len(p.ctx))
 		if err != nil {
 			return nil, err
 		}
@@ -90,6 +94,13 @@ func (s *Service) serveUpload(ctx context.Context, session *models.MinionSession
 		}
 		s.publishTask(after)
 	}
+	if up.Stream && p.ctx != nil && !bytes.Equal(p.ctx, up.Ctx) {
+		// Kept for the acks core sends it unasked: its uploader's bytes came.
+		if err := s.tasks.UploadCtx(ctx, t.TaskID, p.ctx); err != nil {
+			return nil, fmt.Errorf("record the stream's ctx: %w", err)
+		}
+		up.Ctx = p.ctx
+	}
 	if up.Stream {
 		// From the uploader's buffer: the chunk, or hold (minionstreams).
 		c, a, err := s.streams.Pull(ctx, t, next, room)
@@ -99,8 +110,10 @@ func (s *Service) serveUpload(ctx context.Context, session *models.MinionSession
 		var item []byte
 		switch {
 		case c != nil:
+			c.Ctx = p.ctx
 			item, err = protocol.MarshalCBOR(*c)
 		case a != nil:
+			a.Ctx = p.ctx
 			item, err = protocol.MarshalCBOR(*a)
 		default:
 			return nil, nil
@@ -121,7 +134,7 @@ func (s *Service) serveUpload(ctx context.Context, session *models.MinionSession
 			zap.String("file_id", up.FileID.String()), zap.Error(err))
 		return errItem(protocol.ErrItemBadMessage, "the file is gone from core", p.i)
 	}
-	c := protocol.ChunkItem{T: protocol.ItemChunk, Xfer: p.xfer, Off: p.next, Data: data}
+	c := protocol.ChunkItem{T: protocol.ItemChunk, Xfer: p.xfer, Off: p.next, Data: data, Ctx: p.ctx}
 	if next == 0 {
 		total := uint64(up.Size)
 		c.Total, c.Task = &total, t.TaskID[:]

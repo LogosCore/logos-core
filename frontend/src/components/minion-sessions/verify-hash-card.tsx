@@ -4,12 +4,23 @@ import { InfoCard, LabelRow } from "@/components/ui/info-card"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { verifyCommands } from "./verify-commands"
 
-// Commands that check a downloaded file against its SHA-256, one for each
-// system, ready to copy and run where the file was saved.
+// Commands that check a file against its SHA-256, one for each system,
+// ready to copy and run: by default a download, where it was saved; title
+// and note say where else (an upload, on the minion's host).
 
-export function VerifyHashCard({ name, sha256 }: { name: string; sha256: string }) {
+export function VerifyHashCard({
+  name,
+  sha256,
+  title = "Verify the download",
+  note = "run where the file was saved",
+}: {
+  name: string
+  sha256: string
+  title?: string
+  note?: string
+}) {
   return (
-    <InfoCard title="Verify the download" note="run where the file was saved" labelWidth="w-24">
+    <InfoCard title={title} note={note} labelWidth="w-24">
       {verifyCommands(name, sha256).map((c) => (
         <LabelRow key={c.label} label={c.label}>
           {/* Whole, wrapped: a command is read before it is run. */}

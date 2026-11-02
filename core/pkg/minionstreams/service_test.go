@@ -214,9 +214,13 @@ func announce(t *testing.T, s *Service, tasks *memTasks, session *models.MinionS
 	t.Helper()
 	total := uint64(len(body))
 	r, handled, err := s.TakeChunk(context.Background(), session, protocol.ChunkItem{Xfer: xfer, Total: &total,
-		Task: tasks.t.TaskID[:], Name: "/var/big.iso", Data: []byte{}})
+		Task: tasks.t.TaskID[:], Name: "/var/big.iso", Data: []byte{}, Ctx: []byte("path=/var/big.iso")})
 	if err != nil || !handled || r.Ack == nil || !r.Ack.Hold || *r.Ack.Next != 0 {
 		t.Fatalf("announce: %+v %v %v", r, handled, err)
+	}
+	// The announcement's ctx is the stream's: its acks carry it.
+	if string(r.Ack.Ctx) != "path=/var/big.iso" {
+		t.Fatalf("announce's ack ctx %q", r.Ack.Ctx)
 	}
 	return *r.Ack
 }
@@ -226,11 +230,16 @@ func announce(t *testing.T, s *Service, tasks *memTasks, session *models.MinionS
 // every byte, is the whole without hold.
 // wakes counts the sessions a Waker was told of.
 type wakes struct {
-	mu sync.Mutex
-	of []uuid.UUID
+	mu   sync.Mutex
+	of   []uuid.UUID
+	room int
 }
 
 func (w *wakes) WakeStreams(id uuid.UUID) { w.mu.Lock(); w.of = append(w.of, id); w.mu.Unlock() }
+
+func (w *wakes) StreamRoom(uuid.UUID) { w.mu.Lock(); w.room++; w.mu.Unlock() }
+
+func (w *wakes) rooms() int { w.mu.Lock(); defer w.mu.Unlock(); return w.room }
 
 func (w *wakes) count() int { w.mu.Lock(); defer w.mu.Unlock(); return len(w.of) }
 
@@ -264,8 +273,13 @@ func TestStream(t *testing.T) {
 		t.Fatalf("read %d, equal %v", n, bytes.Equal(got.Bytes(), body))
 	}
 	acks, _ := s.Acks(context.Background(), session, map[string]bool{})
-	if len(acks) != 1 || acks[0].Hold || *acks[0].Next != uint64(len(body)) {
+	if len(acks) != 1 || acks[0].Hold || *acks[0].Next != uint64(len(body)) || string(acks[0].Ctx) != "path=/var/big.iso" {
 		t.Fatalf("the end: %+v (last %+v)", acks, a)
+	}
+	// Each chunk the downloader took said there is room (a bind-call page
+	// is called for it).
+	if w.rooms() < 4 {
+		t.Fatalf("%d rooms for 4 chunks", w.rooms())
 	}
 }
 
