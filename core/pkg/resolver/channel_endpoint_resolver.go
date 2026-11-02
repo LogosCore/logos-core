@@ -281,7 +281,20 @@ func toConnectionModel(s *protocol.ConnectionSchema) *model.ModuleConnectionSche
 				fields[i].Default = f.Default
 			}
 		}
-		out.Kinds = append(out.Kinds, &model.ModuleConnectionKind{Kind: kind, Fields: fields})
+		out.Kinds = append(out.Kinds, &model.ModuleConnectionKind{Kind: kind, Fields: fields, Target: fieldModels(k.Target)})
+	}
+	return out
+}
+
+// fieldModels are specs as GraphQL fields; a secret's default shows, as
+// target values are operation data shown in clear.
+func fieldModels(specs []protocol.FieldSpec) []*model.ModuleField {
+	out := make([]*model.ModuleField, len(specs))
+	for i, f := range specs {
+		out[i] = toFieldModel(f)
+		if f.Type == protocol.FieldSecret {
+			out[i].Default = f.Default
+		}
 	}
 	return out
 }

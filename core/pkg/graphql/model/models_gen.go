@@ -53,34 +53,44 @@ type AgentKeyWithSecret struct {
 	Token    string           `json:"token"`
 }
 
+type BindConnection struct {
+	Place      int            `json:"place"`
+	Name       string         `json:"name"`
+	ModuleName string         `json:"moduleName"`
+	Kind       string         `json:"kind"`
+	Fields     []*ModuleField `json:"fields"`
+	Problem    *string        `json:"problem,omitempty"`
+}
+
 type Build struct {
-	ID                     string         `json:"id"`
-	OperationID            string         `json:"operationId"`
-	Description            string         `json:"description"`
-	ModuleName             string         `json:"moduleName"`
-	Target                 string         `json:"target"`
-	Platform               string         `json:"platform"`
-	SchemaVersion          int            `json:"schemaVersion"`
-	Values                 any            `json:"values"`
-	Commands               []string       `json:"commands"`
-	Connections            any            `json:"connections"`
-	ConnectionDescriptions []string       `json:"connectionDescriptions"`
-	Crypto                 any            `json:"crypto,omitempty"`
-	PersistedSession       *string        `json:"persistedSession,omitempty"`
-	State                  string         `json:"state"`
-	Instance               *string        `json:"instance,omitempty"`
-	FactoryVersion         *string        `json:"factoryVersion,omitempty"`
-	Stages                 []*BuildStage  `json:"stages"`
-	Artifact               *BuildArtifact `json:"artifact,omitempty"`
-	Warnings               []string       `json:"warnings"`
-	Log                    *string        `json:"log,omitempty"`
-	Error                  *BuildError    `json:"error,omitempty"`
-	CreatedBy              *ModuleActor   `json:"createdBy"`
-	CancelledBy            *ModuleActor   `json:"cancelledBy,omitempty"`
-	CreatedAt              string         `json:"createdAt"`
-	StartedAt              *string        `json:"startedAt,omitempty"`
-	FinishedAt             *string        `json:"finishedAt,omitempty"`
-	Deadline               string         `json:"deadline"`
+	ID                     string            `json:"id"`
+	OperationID            string            `json:"operationId"`
+	Description            string            `json:"description"`
+	ModuleName             string            `json:"moduleName"`
+	Target                 string            `json:"target"`
+	Platform               string            `json:"platform"`
+	SchemaVersion          int               `json:"schemaVersion"`
+	Values                 any               `json:"values"`
+	Commands               []string          `json:"commands"`
+	Connections            any               `json:"connections"`
+	ConnectionDescriptions []string          `json:"connectionDescriptions"`
+	Crypto                 any               `json:"crypto,omitempty"`
+	PersistedSession       *string           `json:"persistedSession,omitempty"`
+	State                  string            `json:"state"`
+	Instance               *string           `json:"instance,omitempty"`
+	FactoryVersion         *string           `json:"factoryVersion,omitempty"`
+	Stages                 []*BuildStage     `json:"stages"`
+	Artifact               *BuildArtifact    `json:"artifact,omitempty"`
+	Warnings               []string          `json:"warnings"`
+	Log                    *string           `json:"log,omitempty"`
+	Error                  *BuildError       `json:"error,omitempty"`
+	CreatedBy              *ModuleActor      `json:"createdBy"`
+	CancelledBy            *ModuleActor      `json:"cancelledBy,omitempty"`
+	CreatedAt              string            `json:"createdAt"`
+	StartedAt              *string           `json:"startedAt,omitempty"`
+	FinishedAt             *string           `json:"finishedAt,omitempty"`
+	Deadline               string            `json:"deadline"`
+	BindConnections        []*BindConnection `json:"bindConnections"`
 }
 
 type BuildArtifact struct {
@@ -625,6 +635,7 @@ type MinionSession struct {
 	ConnCount        int                     `json:"connCount"`
 	ConnChanges      []*MinionConnChange     `json:"connChanges"`
 	Connections      []*MinionConnection     `json:"connections"`
+	BindTarget       *MinionTarget           `json:"bindTarget,omitempty"`
 }
 
 type MinionSessionConnection struct {
@@ -734,6 +745,58 @@ type MinionSessionsLayoutInput struct {
 type MinionStreamLink struct {
 	Path      string `json:"path"`
 	ExpiresAt string `json:"expiresAt"`
+}
+
+type MinionTarget struct {
+	ID               string                    `json:"id"`
+	OperationID      string                    `json:"operationId"`
+	BuildID          string                    `json:"buildId"`
+	BuildDescription *string                   `json:"buildDescription,omitempty"`
+	Conn             int                       `json:"conn"`
+	ConnName         *string                   `json:"connName,omitempty"`
+	ModuleName       string                    `json:"moduleName"`
+	Kind             string                    `json:"kind"`
+	Values           any                       `json:"values"`
+	Name             string                    `json:"name"`
+	Retries          bool                      `json:"retries"`
+	State            string                    `json:"state"`
+	Problems         []*ChannelEndpointProblem `json:"problems"`
+	StateDetail      *string                   `json:"stateDetail,omitempty"`
+	StateAt          string                    `json:"stateAt"`
+	SessionID        *string                   `json:"sessionId,omitempty"`
+	Session          *MinionSession            `json:"session,omitempty"`
+	Failures         int                       `json:"failures"`
+	UnreachableSince *string                   `json:"unreachableSince,omitempty"`
+	NextCallAt       *string                   `json:"nextCallAt,omitempty"`
+	LastCallAt       *string                   `json:"lastCallAt,omitempty"`
+	LastOkAt         *string                   `json:"lastOkAt,omitempty"`
+	Calls            int                       `json:"calls"`
+	CreatedBy        *ModuleActor              `json:"createdBy"`
+	CreatedAt        string                    `json:"createdAt"`
+	UpdatedAt        string                    `json:"updatedAt"`
+}
+
+type MinionTargetConnection struct {
+	Edges      []*MinionTargetEdge  `json:"edges"`
+	PageInfo   *pagination.PageInfo `json:"pageInfo"`
+	TotalCount int                  `json:"totalCount"`
+}
+
+type MinionTargetEdge struct {
+	Node   *MinionTarget `json:"node"`
+	Cursor string        `json:"cursor"`
+}
+
+type MinionTargetEvent struct {
+	Action      EventAction   `json:"action"`
+	TargetID    string        `json:"targetId"`
+	OperationID string        `json:"operationId"`
+	Target      *MinionTarget `json:"target,omitempty"`
+}
+
+type MinionTargetInput struct {
+	Values  any   `json:"values"`
+	Retries *bool `json:"retries,omitempty"`
 }
 
 type MinionTask struct {
@@ -870,6 +933,7 @@ type ModuleConnection struct {
 type ModuleConnectionKind struct {
 	Kind   string         `json:"kind"`
 	Fields []*ModuleField `json:"fields"`
+	Target []*ModuleField `json:"target"`
 }
 
 type ModuleConnectionSchema struct {

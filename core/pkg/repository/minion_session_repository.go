@@ -92,6 +92,9 @@ type IMinionSessionRepository interface {
 	// CloseByOperationID closes an operation's sessions (a tombstone each)
 	// and forgets its session numbers.
 	CloseByOperationID(ctx context.Context, operationID uuid.UUID, reason string, at time.Time) error
+	// Close closes one session (a tombstone); nothing when it is closed
+	// already or gone.
+	Close(ctx context.Context, sessionID uuid.UUID, reason string, at time.Time) error
 }
 
 type minionSessionRepository struct{ coll, counters database.Collection }
@@ -341,6 +344,13 @@ func (r *minionSessionRepository) CloseByOperationID(ctx context.Context, operat
 		return err
 	}
 	_, err := r.counters.RemoveAll(ctx, bson.M{"operation_id": operationID})
+	return err
+}
+
+func (r *minionSessionRepository) Close(ctx context.Context, sessionID uuid.UUID, reason string, at time.Time) error {
+	_, err := r.coll.UpdateAll(ctx, bson.M{"session_id": sessionID, "closed_at": nil}, withRev(bson.M{"$set": bson.M{
+		"closed_at": at, "close_reason": reason, "purge_at": at.Add(models.MinionSessionTombstone),
+	}}))
 	return err
 }
 

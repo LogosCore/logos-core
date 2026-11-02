@@ -97,6 +97,18 @@ models:
         resolver: true
       connections:
         resolver: true
+      bindTarget:
+        resolver: true
+
+  Build:
+    fields:
+      bindConnections:
+        resolver: true
+
+  MinionTarget:
+    fields:
+      session:
+        resolver: true
 
   # Map the GraphQL "OperationRole" enum to our existing OperationRole type.
   # The Go type implements MarshalGQL/UnmarshalGQL for case conversion.

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
 import { clock, useTaskActions, type Task } from "./task-actions"
 import { StateIcon } from "./task-state"
+import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // The left of a session's console: its tasks, a row each, oldest at the
@@ -160,6 +161,7 @@ function TaskRow({
   canWrite: boolean
 }) {
   const connections = useSessionConnectionChoices(t.sessionId)
+  const held = useTaskWaiting(t.sessionId)
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
   return (
     <ContextMenu>
@@ -180,7 +182,7 @@ function TaskRow({
           />
         }
       >
-        <StateIcon t={t} className="self-center" />
+        <StateIcon t={t} held={held} className="self-center" />
         <span className="shrink-0 font-mono text-muted-foreground tabular-nums">{clock(t.queuedAt)}</span>
         <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
       </ContextMenuTrigger>

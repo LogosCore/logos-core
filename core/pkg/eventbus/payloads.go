@@ -309,6 +309,18 @@ func NewMinionTaskChangedEvent(p MinionTaskEventPayload) Event {
 	return NewEvent(TopicMinionTaskChanged, SystemActor(), p)
 }
 
+// MinionTargetEventPayload is the payload for minion target events;
+// Deleted when the target is gone.
+type MinionTargetEventPayload struct {
+	TargetID    string
+	OperationID string
+	Deleted     bool
+}
+
+func NewMinionTargetChangedEvent(p MinionTargetEventPayload) Event {
+	return NewEvent(TopicMinionTargetChanged, SystemActor(), p)
+}
+
 // FileBrowserEventPayload is a machine's snapshot changing: its operation,
 // its key (models.FsMachineKey), and the folder that changed most.
 type FileBrowserEventPayload struct {

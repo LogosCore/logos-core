@@ -70,6 +70,12 @@ type TaskSchemas interface {
 	LatestBuildSchema(ctx context.Context, moduleName string) (*models.ModuleBuildSchema, error)
 }
 
+// TaskTargets finds a bind-call session's target (the minion target
+// repository): a page core reaches only by calling it.
+type TaskTargets interface {
+	FindBySessionID(ctx context.Context, sessionID uuid.UUID) (*models.MinionTarget, error)
+}
+
 // TaskStreams signs the links streams download from
 // (minionstreams.Service).
 type TaskStreams interface {
@@ -88,6 +94,9 @@ type minionTaskResolver struct {
 	files         TaskFiles
 	streams       TaskStreams
 	fileBrowser   TaskFileBrowser
+	// targets: a bind-call session without one takes no tasks; nil, every
+	// session takes them.
+	targets TaskTargets
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -102,9 +111,9 @@ type TaskFiles interface {
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
-	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser) IMinionTaskResolver {
+	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
-		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser}
+		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets}
 }
 
 const (
@@ -259,6 +268,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if s.Closed(time.Now().UTC()) {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the session is closed: its minion takes no tasks")
 	}
+	if err := r.reachable(ctx, s); err != nil {
+		return nil, err
+	}
 	upload, err := r.offerFile(ctx, s, commands[i].Params, wire)
 	if err != nil {
 		return nil, err
@@ -278,6 +290,26 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	r.publish(t)
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// reachable refuses a task core could never deliver: a bind-call session
+// (a page core calls) with no target. Nothing would call the page, so the
+// task would wait for good; tasks queued while it had one wait, for a
+// target added to the session to deliver. One whose target is unreachable
+// takes tasks: core retries it, and Check now may reach it.
+func (r *minionTaskResolver) reachable(ctx context.Context, s *models.MinionSession) error {
+	if r.targets == nil || s.ConnKind != protocol.KindBindCall {
+		return nil
+	}
+	_, err := r.targets.FindBySessionID(ctx, s.SessionID)
+	switch {
+	case repository.IsNotFound(err):
+		return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf(
+			"session #%d has no target: core cannot reach its page. Add a target first (the session's Connections, or its build's Targets)", s.Number))
+	case err != nil:
+		return fmt.Errorf("look for the session's target: %w", err)
+	}
+	return nil
 }
 
 // offerFile turns a file param's value, a task file's id, into the file

@@ -12,9 +12,9 @@
 // The rest of the query belongs to the page underneath and is kept.
 
 /** A build modal's tabs (?buildTab=). Without one, the modal picks by the build's state. */
-export type BuildTab = "overview" | "json" | "pipeline"
+export type BuildTab = "overview" | "json" | "pipeline" | "targets"
 
-const BUILD_TABS: readonly BuildTab[] = ["overview", "json", "pipeline"]
+const BUILD_TABS: readonly BuildTab[] = ["overview", "json", "pipeline", "targets"]
 
 /** A session modal's tabs (?sessionTab=); without one, its overview. */
 export type SessionTab = "overview" | "json"

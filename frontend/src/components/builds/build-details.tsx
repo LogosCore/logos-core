@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
+import { CrosshairIcon, DownloadIcon, HammerIcon, RotateCcwIcon, SquareIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,10 +32,13 @@ import { StageIcon } from "@/components/builds/build-pipeline"
 import { buildRecordJson, defaultBuildTab, type BuildRecord as Build } from "@/components/builds/build-record"
 import { ModuleIcon } from "@/components/modules/module-icon"
 import { DeleteBuildDialog } from "@/components/builds/delete-build-dialog"
+import { BuildTargets } from "@/components/targets/build-targets"
+import { useBindConnections } from "@/graphql/hooks/minion-targets"
 
 /**
  * One build (the build modal, ?build=<id>[&buildTab=]): Overview, what it is;
- * JSON, its record as the API gives it; Pipeline, how it went. Without a tab
+ * JSON, its record as the API gives it; Pipeline, how it went; Targets, for a
+ * build with a bind connection, where its pages are. Without a tab
  * in the URL it opens on its pipeline while that is where to look, on its
  * overview once it has succeeded.
  */
@@ -80,6 +83,10 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
   const [firstTab] = useState(() => defaultBuildTab(b.state))
   const tab = urlTab ?? firstTab
   const json = useMemo(() => formatJson(buildRecordJson(b)), [b])
+  // A build whose minion only answers (a bind connection) has targets.
+  const bind = useBindConnections(b.id)
+  const bindConnections = bind.data ?? []
+  const hasTargets = bindConnections.length > 0
   // Fetched once the modal has settled, so the JSON tab opens at once.
   useEffect(() => whenIdle(preloadJsonEditor), [])
 
@@ -97,7 +104,7 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
       <Tabs
         value={tab}
         onValueChange={(v) => {
-          if (v === "overview" || v === "json" || v === "pipeline") open({ kind: "build", id: b.id, tab: v })
+          if (v === "overview" || v === "json" || v === "pipeline" || v === "targets") open({ kind: "build", id: b.id, tab: v })
         }}
         className="min-h-0 flex-1 gap-0"
       >
@@ -128,6 +135,12 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
                 <StageIcon state={STAGE_OF_STATE[b.state] ?? "PENDING"} className="size-3.5" />
                 Pipeline
               </TabsTrigger>
+              {hasTargets && (
+                <TabsTrigger value="targets">
+                  <CrosshairIcon className="size-3.5" />
+                  Targets
+                </TabsTrigger>
+              )}
             </TabsList>
             {canWrite && running && (
               <Button variant="outline" onClick={stop} disabled={cancel.isPending}>
@@ -184,6 +197,14 @@ function BuildDetail({ build: b, tab: urlTab }: { build: Build; tab: BuildTab | 
             <BuildRun build={b} />
           </RecordModalBody>
         </TabsContent>
+
+        {hasTargets && (
+          // Padded as the JSON tab is, and no scrolling body: the table
+          // scrolls itself, filling the tab's height.
+          <TabsContent value="targets" className="flex min-h-0 flex-col px-4 py-4">
+            <BuildTargets operationId={b.operationId} buildId={b.id} connections={bindConnections} canWrite={canWrite} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <DeleteArtifactDialog build={deleting ? b : null} onClose={() => setDeleting(false)} />

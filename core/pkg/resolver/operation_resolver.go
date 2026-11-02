@@ -64,6 +64,7 @@ type operationResolver struct {
 	credRepo       repository.ICredentialRepository         // needed for cascade delete
 	hostRepo       repository.IHostRepository               // needed for cascade delete
 	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
+	targetRepo     repository.IMinionTargetRepository       // needed for cascade delete
 	buildCleanup   BuildCleanup                             // needed for cascade delete
 	sessionRepo    repository.IMinionSessionRepository      // needed for cascade delete
 	markRepo       repository.IMinionSessionMarkRepository  // needed for cascade delete
@@ -126,6 +127,13 @@ func WithHostRepo(repo repository.IHostRepository) OperationResolverOption {
 func WithChannelEndpointRepo(repo repository.IChannelEndpointRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.endpointRepo = repo
+	}
+}
+
+// WithMinionTargetRepo adds the targets of bind minions for cascade delete.
+func WithMinionTargetRepo(repo repository.IMinionTargetRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.targetRepo = repo
 	}
 }
 
@@ -330,6 +338,13 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.endpointRepo != nil {
 		if err := r.endpointRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's channel endpoints: %w", err)
+		}
+	}
+
+	// Cascade delete: the targets of its bind minions; their calls stop.
+	if r.targetRepo != nil {
+		if err := r.targetRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's minion targets: %w", err)
 		}
 	}
 

@@ -149,6 +149,11 @@ func (s *Service) deliver(ctx context.Context, session *models.MinionSession, li
 	if err != nil {
 		return nil, fmt.Errorf("tasks to deliver: %w", err)
 	}
+	return s.send(ctx, waiting)
+}
+
+// send makes task items of waiting and marks the tasks sent.
+func (s *Service) send(ctx context.Context, waiting []models.MinionTask) ([]cbor.RawMessage, error) {
 	if len(waiting) == 0 {
 		return nil, nil
 	}

@@ -27,7 +27,9 @@ import {
   EyeOffIcon,
   FilterIcon,
   FilterXIcon,
+  HammerIcon,
   InfoIcon,
+  MonitorDotIcon,
   CopyIcon,
   ListRestartIcon,
   ListChecksIcon,
@@ -875,10 +877,23 @@ function SessionMenu({
         File Browser
       </ContextMenuItem>
       <SwitchConnectionMenu s={s} canWrite={canWrite} />
-      <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
-        <InfoIcon />
-        Details
-      </ContextMenuItem>
+      {/* The session's own record, and the build its minion came from. */}
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <InfoIcon />
+          Details
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuItem onClick={() => modals.open({ kind: "session", id: s.id })}>
+            <MonitorDotIcon />
+            Session details
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => modals.open({ kind: "build", id: s.buildId })}>
+            <HammerIcon />
+            Build details
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
       <ContextMenuSeparator />
       {/* Any member selects: marking many is theirs too (archiving, in the
           bar, stays an operator's). */}

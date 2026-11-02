@@ -98,6 +98,10 @@ const (
 	// was asked to stop (pkg/minionsync and the MinionTaskResolver). Power a
 	// session's work pane tab; subscribers refetch the task.
 	TopicMinionTaskChanged Topic = "minion_task.changed"
+	// TopicMinionTargetChanged: a bind minion's target was added, changed,
+	// called or removed (pkg/minionsync and the MinionTargetResolver).
+	// Powers the Targets list; subscribers refetch the target.
+	TopicMinionTargetChanged Topic = "minion_target.changed"
 	// TopicFileBrowserChanged: a machine's file system snapshot changed
 	// (docs: contracts/file-browser.md); subscribers re-read its folders.
 	TopicFileBrowserChanged Topic = "file_browser.changed"

@@ -236,6 +236,8 @@ func extractOperationID(event eventbus.Event) string {
 		return p.OperationID
 	case eventbus.MinionSessionEventPayload:
 		return p.OperationID
+	case eventbus.MinionTargetEventPayload:
+		return p.OperationID
 	case eventbus.MinionTaskEventPayload:
 		return p.OperationID
 	case eventbus.FileBrowserEventPayload:
@@ -906,4 +908,20 @@ func applySessionStatusFromTopic(sess *models.Session, topic eventbus.Topic) {
 	case eventbus.TopicSessionTerminated:
 		sess.Status = models.SessionStatusInactive
 	}
+}
+
+func (r *subscriptionResolver) minionTargetEvent(ctx context.Context, event eventbus.Event) *model.MinionTargetEvent {
+	p, ok := event.Payload.(eventbus.MinionTargetEventPayload)
+	if !ok {
+		return nil
+	}
+	evt := &model.MinionTargetEvent{Action: model.EventActionUpdated, TargetID: p.TargetID, OperationID: p.OperationID}
+	if p.Deleted {
+		evt.Action = model.EventActionDeleted
+		return evt
+	}
+	if r.MinionTargetResolver != nil {
+		evt.Target = r.MinionTargetResolver.Load(ctx, p.TargetID)
+	}
+	return evt
 }

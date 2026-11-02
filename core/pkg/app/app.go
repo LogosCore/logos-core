@@ -15,6 +15,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/builds"
 	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
+	"github.com/logoscore/logos-core/core/pkg/channellink"
 	"github.com/logoscore/logos-core/core/pkg/controller"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
@@ -27,6 +28,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/minionstreams"
 	"github.com/logoscore/logos-core/core/pkg/minionsync"
+	"github.com/logoscore/logos-core/core/pkg/miniontargets"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
@@ -81,6 +83,7 @@ type Repositories struct {
 	Minion             repository.IMinionRepository
 	MinionStaging      repository.IMinionStagingRepository
 	MinionSession      repository.IMinionSessionRepository
+	MinionTarget       repository.IMinionTargetRepository
 	MinionReservation  repository.IMinionSessionReservationRepository
 	MinionMark         repository.IMinionSessionMarkRepository
 	MinionTask         repository.IMinionTaskRepository
@@ -161,6 +164,12 @@ type App struct {
 	minionSync *minionsync.Service
 	// stopTaskWatch stops minionSync's watch on task changes.
 	stopTaskWatch func()
+	// links are the channels' control links; minionTargets the targets of
+	// bind minions, which minionSync calls through them. stopTargets stops
+	// the calls' scheduler.
+	links         *channellink.Hub
+	minionTargets *miniontargets.Service
+	stopTargets   context.CancelFunc
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -242,6 +251,12 @@ func NewApp() (*App, error) {
 	// A downloader or an uploader coming wakes a stream the minion holds,
 	// over its persistent connection.
 	minionStreams.WithWaker(minionSync)
+	// Bind minions: core calls their targets over the channels' control
+	// links.
+	links := channellink.New(l)
+	minionSync.WithTargets(repos.MinionTarget, links)
+	minionTargets := miniontargets.NewService(repos.MinionTarget, repos.MinionSession, repos.Build, endpoints, minionSync, bus)
+	minionSync.WithTargetChecker(minionTargets, miniontargets.ProblemsText)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 
@@ -300,6 +315,8 @@ func NewApp() (*App, error) {
 		minionStreams:   minionStreams,
 		fileBrowser:     fileBrowser,
 		minionSync:      minionSync,
+		links:           links,
+		minionTargets:   minionTargets,
 	}, nil
 }
 
@@ -400,6 +417,9 @@ func (a *App) startLifecycle() {
 	a.minionFiles.Start()
 	a.minionStreams.Start()
 	a.stopTaskWatch = a.minionSync.WatchTasks()
+	targetsCtx, stopTargets := context.WithCancel(context.Background())
+	a.stopTargets = stopTargets
+	go a.minionSync.RunTargets(targetsCtx)
 }
 
 // stopLifecycle tears down the reaper, RPC server, and broker connection. All
@@ -423,6 +443,9 @@ func (a *App) stopLifecycle() {
 	}
 	if a.stopTaskWatch != nil {
 		a.stopTaskWatch()
+	}
+	if a.stopTargets != nil {
+		a.stopTargets()
 	}
 	// Pushes in flight use the RPC client: cancel and drain them first.
 	if a.moduleMgmt != nil {

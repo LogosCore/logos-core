@@ -92,13 +92,23 @@ type Service struct {
 	// conns are the persistent connections open, by session
 	// (connections.go).
 	conns *connections
+	// targets are bind minions' targets, and link reaches their channels
+	// (bind.go); nil calls none.
+	targets repository.IMinionTargetRepository
+	link    Linker
+	binds   *binds
+	// targetChecker checks a target's values before each call, and
+	// problemsText says its problems in its state detail; nil calls every
+	// target.
+	targetChecker TargetChecker
+	problemsText  func(map[string]string) string
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,
 	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
 	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() },
-		conns: newConnections()}
+		conns: newConnections(), binds: newBinds()}
 }
 
 // Handle opens a minion's sealed frame sent under id from peer (the IP

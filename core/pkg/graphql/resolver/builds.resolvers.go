@@ -8,6 +8,7 @@ package resolver
 import (
 	"context"
 
+	"github.com/logoscore/logos-core/core/pkg/graphql/generated"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -66,3 +67,8 @@ func (r *queryResolver) Build(ctx context.Context, id string) (*model.Build, err
 func (r *queryResolver) Minions(ctx context.Context, operationID string) ([]*model.Minion, error) {
 	return r.BuildResolver.Minions(ctx, operationID)
 }
+
+// Build returns generated.BuildResolver implementation.
+func (r *Resolver) Build() generated.BuildResolver { return &buildResolver{r} }
+
+type buildResolver struct{ *Resolver }

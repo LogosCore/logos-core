@@ -15,24 +15,56 @@ const STATE: Record<string, { icon: typeof CheckIcon; className: string; spin?: 
   CANCELLED: { icon: BanIcon, className: "text-muted-foreground" },
 }
 
-/** A task's state as an icon: a list row's. A command that exited non-zero is marked as failed. */
-export function StateIcon({ t, className }: { t: Task; className?: string }) {
-  const s = t.state === "DONE" && t.exit != null && t.exit !== 0 ? STATE.FAILED : (STATE[t.state] ?? STATE.QUEUED)
-  const Icon = s.icon
-  return <Icon aria-label={t.state.toLowerCase()} className={cn("size-3.5 shrink-0", s.className, s.spin && "animate-spin", className)} />
+/** Waiting tasks that cannot reach their minion now (useTaskWaiting): amber. */
+const HELD = "text-amber-600 dark:text-amber-400"
+
+/** Whether a task in state waits on its minion being reached. */
+function waits(state: string): boolean {
+  return state === "QUEUED" || state === "SENT"
 }
 
-/** A task's state in words, with its exit code and how long it ran. */
-export function StateLabel({ t }: { t: Task }) {
+/**
+ * A task's state as an icon: a list row's. A command that exited non-zero
+ * is marked as failed; a waiting task that cannot reach its minion (held,
+ * the reason) in amber, the reason on hover.
+ */
+export function StateIcon({ t, className, held }: { t: Task; className?: string; held?: string | null }) {
+  const s = t.state === "DONE" && t.exit != null && t.exit !== 0 ? STATE.FAILED : (STATE[t.state] ?? STATE.QUEUED)
+  const Icon = s.icon
+  const blocked = held && waits(t.state)
+  return (
+    <Icon
+      aria-label={t.state.toLowerCase()}
+      className={cn("size-3.5 shrink-0", blocked ? HELD : s.className, s.spin && "animate-spin", className)}
+    >
+      {blocked && <title>{`Waiting: ${held}`}</title>}
+    </Icon>
+  )
+}
+
+/**
+ * A task's state in words, with its exit code and how long it ran; for a
+ * waiting one that cannot reach its minion (held), why.
+ */
+export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
   const stopping = t.cancelRequestedAt && !FINISHED.has(t.state)
   const muted = "text-muted-foreground"
   let text: React.ReactNode
   switch (t.state) {
     case "QUEUED":
-      text = <span title="It goes out when the minion next checks in and asks for tasks">waits for the next check-in</span>
+      text = held ? (
+        <span className={HELD}>waits: {held}</span>
+      ) : (
+        <span title="It goes out when the minion next checks in and asks for tasks">waits for the next check-in</span>
+      )
       break
     case "SENT":
-      text = <span>sent{t.sendCount > 1 ? ` ×${t.sendCount}` : ""}, not acked yet</span>
+      text = (
+        <span>
+          sent{t.sendCount > 1 ? ` ×${t.sendCount}` : ""}, not acked yet
+          {held && <span className={HELD}> · {held}</span>}
+        </span>
+      )
       break
     case "RUNNING":
       text = <span>running</span>

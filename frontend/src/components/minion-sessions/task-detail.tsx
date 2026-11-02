@@ -33,6 +33,7 @@ import type { MenuCommand } from "./action-menu"
 import { findMatches, MAX_MATCHES, segments } from "./output-find"
 import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
+import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 
 // The right of a session's console: the task picked in the list, whole
@@ -132,6 +133,7 @@ export function TaskDetail({
   findSignal: number
 }) {
   const connections = useSessionConnectionChoices(t.sessionId)
+  const held = useTaskWaiting(t.sessionId, { live: true })
   const line = lineOf(t.command, t.args as Record<string, unknown> | null, command, connections)
   const actions = useTaskActions(t, line, { canWrite, onQueued })
   // Read again when they change: more output, a part with data, its end.
@@ -207,7 +209,7 @@ export function TaskDetail({
           </TabButton>
         </div>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 border-l pl-2">
-          <StateLabel t={t} />
+          <StateLabel t={t} held={held} />
           <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
             by {t.issuedByName ?? "someone gone"}
           </span>

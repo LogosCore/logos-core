@@ -230,6 +230,7 @@ func (s *Service) WatchTasks() func() {
 		}
 		if id, err := uuid.Parse(p.SessionID); err == nil {
 			s.notifySoon(id)
+			s.notifyBind(id)
 		}
 	})
 }

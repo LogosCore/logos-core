@@ -1,0 +1,163 @@
+# =============================================================================
+# Minion targets — where bind minions are reached
+# =============================================================================
+#
+# A bind-call minion (a page on a web server) only answers: core calls it
+# through its build connection's channel (docs:
+# contracts/channel-core-connections, bind-call minions). An operator puts
+# the page on a server, then adds a target with what the channel needs to
+# call it (its URL, a host header, a proxy: the channel's target fields).
+# Core calls it at once: the page's hello opens a session, linked to the
+# target from then on. Viewers of an operation read targets; operators and
+# admins change them.
+
+type MinionTarget {
+  id: ID!
+  operationId: ID!
+  buildId: ID!
+  # The build's description; null when the build is gone.
+  buildDescription: String
+  # The build connection it is of: its place, from 1, and its name.
+  conn: Int!
+  connName: String
+  # The connection's channel kind ("dumbo") and connection kind
+  # ("bind-call").
+  moduleName: String!
+  kind: String!
+  # The operator's values for the channel's target fields (url, ...), with
+  # the fields' defaults.
+  values: JSON!
+  # What it is shown as: its URL, or host.
+  name: String!
+  # An unreachable target is called again: 1 minute, 5, 30, then hourly,
+  # for a day. Off where every request in a server's log counts.
+  retries: Boolean!
+  # new | connected | unreachable | not_the_minion | refused | stopped |
+  # no_channel | needs_editing
+  state: String!
+  # Why its values no longer fit the channel's current target fields (one
+  # it now requires is missing, one is gone or changed), by field; empty
+  # when they fit. Core does not call a target with problems: it shows
+  # needs_editing until an operator edits it.
+  problems: [ChannelEndpointProblem!]!
+  # More of the state: why a call failed, what answered instead of the page.
+  stateDetail: String
+  stateAt: String!
+  # The session the page's hello opened; null until then.
+  sessionId: ID
+  session: MinionSession
+  # Calls that failed in a row, and when the first of them was.
+  failures: Int!
+  unreachableSince: String
+  # When core calls next by itself: a retry, or the session's schedule.
+  nextCallAt: String
+  lastCallAt: String
+  # When a call last reached the page.
+  lastOkAt: String
+  calls: Int!
+  createdBy: ModuleActor!
+  createdAt: String!
+  updatedAt: String!
+}
+
+type MinionTargetEdge {
+  node: MinionTarget!
+  cursor: String!
+}
+
+type MinionTargetConnection {
+  edges: [MinionTargetEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# A connection of a build that targets can be added to (a bind kind).
+type BindConnection {
+  # Its place in the build's connections, from 1, and its name.
+  place: Int!
+  name: String!
+  moduleName: String!
+  kind: String!
+  # The channel's target fields for its kind: what a target fills in.
+  fields: [ModuleField!]!
+  # Why no target can be added to it now; null when one can.
+  problem: String
+}
+
+input MinionTargetInput {
+  # Values by the channel's target field keys. null, "" and [] leave a field
+  # unset (its default applies).
+  values: JSON!
+  retries: Boolean = true
+}
+
+type MinionTargetEvent {
+  action: EventAction!
+  targetId: ID!
+  operationId: ID!
+  # null once deleted.
+  target: MinionTarget
+}
+
+extend type Build {
+  # Its connections of a bind kind: what targets can be added to.
+  bindConnections: [BindConnection!]!
+}
+
+extend type MinionSession {
+  # The target whose page the session is (a bind-call minion's); null for
+  # any other session.
+  bindTarget: MinionTarget
+}
+
+extend type Query {
+  # An operation's targets, newest first, a page at a time. search is the
+  # app's search over the name, the channel and the state; buildId and
+  # states narrow the list. Needs at least viewer.
+  minionTargets(
+    operationId: ID!
+    search: String
+    buildId: ID
+    states: [String!]
+    first: Int = 20
+    after: String
+    last: Int
+    before: String
+  ): MinionTargetConnection!
+    @hasPermission(permission: "operation:member")
+
+  minionTarget(id: ID!): MinionTarget
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Mutation {
+  # Adds a target to a build's bind connection (its place) and calls it at
+  # once, in the background: it comes back new. With sessionId (one of the
+  # build's, open, whose target was removed) it takes that session over:
+  # core calls the page under the session's id and the session goes on.
+  # Needs operator.
+  addMinionTarget(buildId: ID!, conn: Int!, input: MinionTargetInput!, sessionId: ID): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Replaces a target's values and retries; one not connected is called
+  # again at once. Needs operator.
+  updateMinionTarget(id: ID!, input: MinionTargetInput!): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Calls a target now (Check now) and returns it as the call left it.
+  # Needs operator.
+  checkMinionTarget(id: ID!): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Removes a target: its calls stop. Its session stays, with no target,
+  # until archived or deleted; a target added to it takes it over. Needs
+  # operator.
+  removeMinionTarget(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Subscription {
+  # An operation's targets as they change: added, called, edited, removed.
+  minionTargetChanged(operationId: ID!): MinionTargetEvent!
+    @hasPermission(permission: "operation:member")
+}

@@ -1,9 +1,13 @@
 package app
 
 import (
+	"context"
+
 	"github.com/logoscore/logos-core/core/pkg/controller"
+	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
 // The HTTP surface's dependencies, built once per router.
@@ -20,6 +24,7 @@ type controllers struct {
 	enroll   controller.IEnrollController
 	status   controller.IStatusController
 	channel  controller.IChannelController
+	link     controller.IChannelLinkController
 	skill    *controller.SkillController
 	build    *controller.BuildController
 	task     *controller.MinionTaskController
@@ -64,6 +69,9 @@ type resolvers struct {
 	// minionTasks: operators give sessions' minions commands; pkg/minionsync
 	// delivers them.
 	minionTasks resolver.IMinionTaskResolver
+	// minionTargets: where bind minions are reached; pkg/minionsync calls
+	// them.
+	minionTargets resolver.IMinionTargetResolver
 }
 
 // buildControllers constructs every REST handler. Order is not significant
@@ -88,6 +96,7 @@ func (a *App) buildControllers() *controllers {
 			OIDCStatus:        a.oidcStatus,
 		}),
 		channel: controller.NewChannelController(a.cache, a.moduleGate, a.minionSync, a.logger, a.env.ChannelSyncMaxSize),
+		link:    controller.NewChannelLinkController(a.moduleGate, a.channelModule, a.links),
 		skill:   controller.NewSkillController(a.skillService, a.logger),
 		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
 		task:    controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
@@ -177,6 +186,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithCredentialRepo(a.repos.Credential),
 			resolver.WithHostRepo(a.repos.Host),
 			resolver.WithChannelEndpointRepo(a.repos.ChannelEndpoint),
+			resolver.WithMinionTargetRepo(a.repos.MinionTarget),
 			resolver.WithBuildCleanup(a.builds),
 			resolver.WithMinionSessionRepo(a.repos.MinionSession),
 			resolver.WithMinionSessionMarkRepo(a.repos.MinionMark),
@@ -212,6 +222,23 @@ func (a *App) buildResolvers() *resolvers {
 		builds:         resolver.NewBuildResolver(a.builds, a.repos.Operation),
 		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
-			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser),
+			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget),
+		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
+}
+
+// channelModule is a registered channel instance's module name, for the
+// control link's handshake: "" for an instance that is not a channel.
+func (a *App) channelModule(ctx context.Context, instance string) (string, error) {
+	m, err := a.repos.ModuleRegistry.FindByInstance(ctx, instance)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	if m.Type != protocol.ServiceChannel {
+		return "", nil
+	}
+	return m.Name, nil
 }

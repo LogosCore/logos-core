@@ -43,6 +43,7 @@ func (a *App) NewRouter() *gin.Engine {
 	channel := r.Group("/api/channel")
 	channel.POST("/sync", c.channel.Sync)
 	channel.GET("/connection", c.channel.Connection)
+	channel.GET("/link", c.link.Link)
 
 	v1 := r.Group("/api/v1")
 
