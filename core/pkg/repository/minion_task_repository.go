@@ -99,6 +99,11 @@ type IMinionTaskRepository interface {
 	// that are not over, and counts a cancel sent for each; one never acked
 	// that has had MinionCancelGiveUp is counted cancelled instead.
 	CancelsToSend(ctx context.Context, sessionID uuid.UUID, at time.Time) (send, gaveUp []models.MinionTask, err error)
+	// EndUnknown ends a task of the session its minion says it does not
+	// have (unknown_task): cancelled when an operator asked to stop it,
+	// failed otherwise, with why. IsNotFound for one that is not sent and
+	// unfinished (ended already, or never sent).
+	EndUnknown(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error)
 	// ListBySession returns a page of the session's tasks, newest first.
 	ListBySession(ctx context.Context, sessionID uuid.UUID, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error)
 	// Parts returns a task's output parts in seq order.
@@ -468,6 +473,23 @@ func (r *minionTaskRepository) CancelsToSend(ctx context.Context, sessionID uuid
 	return send, gaveUp, nil
 }
 
+func (r *minionTaskRepository) EndUnknown(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "state": bson.M{"$in": openStates}}).Apply(qmgo.Change{
+		Update: []bson.M{{"$set": bson.M{
+			"state": bson.M{"$cond": bson.A{bson.M{"$gt": bson.A{"$cancel_requested_at", nil}},
+				models.MinionTaskCancelled, models.MinionTaskFailed}},
+			"done_at": at, "ok": false, "err": why,
+			"rev": bson.M{"$add": bson.A{"$rev", 1}},
+		}}},
+		ReturnNew: true,
+	}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
 func (r *minionTaskRepository) ListBySession(ctx context.Context, sessionID uuid.UUID, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error) {
 	filter := bson.M{"session_id": sessionID}
 	if before != nil {
@@ -664,7 +686,9 @@ func (r *minionTaskRepository) Resumable(ctx context.Context, sessionID uuid.UUI
 
 func (r *minionTaskRepository) IdleStreams(ctx context.Context, before time.Time) ([]models.MinionTask, error) {
 	var out []models.MinionTask
-	err := r.tasks.Find(ctx, bson.M{"state": bson.M{"$in": openStates},
+	// One asked to stop already is not stopped again (its cancel goes with
+	// every message until it ends).
+	err := r.tasks.Find(ctx, bson.M{"state": bson.M{"$in": openStates}, "cancel_requested_at": bson.M{"$exists": false},
 		"$or": bson.A{
 			bson.M{"stream": bson.M{"$exists": true}, "stream.idle_since": bson.M{"$lt": before}},
 			bson.M{"stream": bson.M{"$exists": true}, "stream.reader": bson.M{"$ne": ""}, "stream.reader_at": bson.M{"$lt": before}},

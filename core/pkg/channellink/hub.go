@@ -147,6 +147,61 @@ func (h *Hub) Call(ctx context.Context, module string, c Call) (protocol.LinkFra
 	}
 }
 
+// Open asks an instance of module to open a bind-persistent connection to
+// the target values say, and waits for its answer: as Call, deadline 30
+// seconds when it says none. sent is told the instance and the request
+// before the open goes out: the connection's socket names them, and may
+// come before the answer.
+func (h *Hub) Open(ctx context.Context, module string, values map[string]any, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error) {
+	l := h.pick(module)
+	if l == nil {
+		return protocol.LinkFrame{}, ErrNoLink
+	}
+	if deadline <= 0 {
+		deadline = 30 * time.Second
+	}
+	req := h.next.Add(1)
+	b, err := protocol.EncodeLinkFrame(protocol.LinkFrame{Type: protocol.LinkOpen, Request: req, Values: values,
+		Deadline: uint64(deadline / time.Millisecond)})
+	if err != nil {
+		return protocol.LinkFrame{}, err
+	}
+	return h.ask(ctx, l, req, b, deadline, func() {
+		if sent != nil {
+			sent(l.instance, req)
+		}
+	})
+}
+
+// ask writes b, request req, on l and waits for its answer (the deadline
+// and answerSlack), first telling before.
+func (h *Hub) ask(ctx context.Context, l *link, req uint64, b []byte, deadline time.Duration, before func()) (protocol.LinkFrame, error) {
+	ch := make(chan protocol.LinkFrame, 1)
+	if !l.wait(req, ch) {
+		return protocol.LinkFrame{}, ErrLinkDropped
+	}
+	defer l.forget(req)
+	before()
+	if err := l.write(websocket.BinaryMessage, b); err != nil {
+		_ = l.ws.Close()
+		return protocol.LinkFrame{}, fmt.Errorf("%w: %v", ErrLinkDropped, err)
+	}
+	timer := time.NewTimer(deadline + answerSlack)
+	defer timer.Stop()
+	select {
+	case a, ok := <-ch:
+		if !ok {
+			return protocol.LinkFrame{}, ErrLinkDropped
+		}
+		return a, nil
+	case <-timer.C:
+		return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: req,
+			Failure: &protocol.LinkFailure{Kind: protocol.LinkFailTimeout, Msg: "the channel did not answer in time"}}, nil
+	case <-ctx.Done():
+		return protocol.LinkFrame{}, ctx.Err()
+	}
+}
+
 // pick is the link of module with the fewest calls waiting.
 func (h *Hub) pick(module string) *link {
 	h.mu.Lock()

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { CableIcon, PhoneIncomingIcon, PinIcon, PlugZapIcon, RefreshCwIcon, type LucideIcon } from "lucide-react"
+import { CableIcon, PhoneIncomingIcon, PinIcon, PlugIcon, RefreshCwIcon, UnplugIcon, type LucideIcon } from "lucide-react"
 import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
@@ -65,13 +65,21 @@ function scheduleNote(s: MinionSessionFieldsFragment, state: "live" | "late" | "
 /**
  * What each connection kind shows before Last seen, in the cell's color:
  * polling repeats, a persistent connection stays plugged in; the bind kinds,
- * where core reaches the minion, a call coming in and a plug core opens.
+ * where core reaches the minion, a call coming in and a plug core opens:
+ * plugged in while connected, unplugged while not (the session menu's
+ * Connect and Disconnect use the same two).
  */
 const CONN_KIND_ICONS: Record<string, LucideIcon> = {
   "reverse-call": RefreshCwIcon,
   "reverse-persistent": CableIcon,
   "bind-call": PhoneIncomingIcon,
-  "bind-persistent": PlugZapIcon,
+  "bind-persistent": PlugIcon,
+  "bind-persistent:off": UnplugIcon,
+}
+
+/** The kind's key in CONN_KIND_ICONS: a bind-persistent one follows its connection. */
+function connKindKey(s: MinionSessionFieldsFragment): string {
+  return s.connKind === "bind-persistent" && !s.connected ? "bind-persistent:off" : (s.connKind ?? "")
 }
 
 /** The connection a session uses, for Last seen's hover: "Connection 2 of 2: ws · reverse-persistent (…)". */
@@ -167,7 +175,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       // lost; plain when the minion never said its schedule.
       // A persistent connection open: the minion is there now.
       const state = s.connected ? "live" : lateness(s, ctx.now)
-      const KindIcon = s.connKind ? CONN_KIND_ICONS[s.connKind] : undefined
+      const KindIcon = CONN_KIND_ICONS[connKindKey(s)]
       return (
         <div
           // A marked row's style recolors these (session-mark-styles.css).

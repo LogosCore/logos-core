@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { ExternalLinkIcon, PencilIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
+import { ExternalLinkIcon, PencilIcon, PlugIcon, RefreshCwIcon, Trash2Icon, UnplugIcon } from "lucide-react"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -8,7 +8,7 @@ import { useNow } from "@/hooks/use-now"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatAgo } from "@/components/minion-sessions/sessions-layout"
 import { TargetStateBadge } from "./target-state-badge"
-import { problemsText, shownState, type Target } from "./target-values"
+import { TARGET_POLICY_LABEL, isPersistent, problemsText, shownState, type Target } from "./target-values"
 
 const GRID_COLS = "grid-cols-[minmax(0,1.8fr)_minmax(0,1.4fr)_minmax(0,0.6fr)_minmax(0,1fr)_48px]"
 
@@ -26,6 +26,7 @@ export function TargetsTable({
   canWrite,
   checking,
   onCheck,
+  onConnect,
   onEdit,
   onRemove,
   emptyState,
@@ -39,6 +40,8 @@ export function TargetsTable({
   /** The targets a Check now is waiting on. */
   checking: ReadonlySet<string>
   onCheck: (t: Target) => void
+  /** Connect (true) or Disconnect a bind-persistent target. */
+  onConnect: (t: Target, connect: boolean) => void
   onEdit: (t: Target) => void
   onRemove: (t: Target) => void
   emptyState: ReactNode
@@ -81,10 +84,24 @@ export function TargetsTable({
               )}
               {canWrite && (
                 <>
-                  <ContextMenuItem onClick={() => onCheck(t)} disabled={checking.has(t.id)}>
-                    <RefreshCwIcon className="size-4" />
-                    Check now
-                  </ContextMenuItem>
+                  {isPersistent(t) ? (
+                    t.state === "connected" ? (
+                      <ContextMenuItem onClick={() => onConnect(t, false)} disabled={checking.has(t.id)}>
+                        <UnplugIcon className="size-4" />
+                        Disconnect
+                      </ContextMenuItem>
+                    ) : (
+                      <ContextMenuItem onClick={() => onConnect(t, true)} disabled={checking.has(t.id)}>
+                        <PlugIcon className="size-4" />
+                        Connect
+                      </ContextMenuItem>
+                    )
+                  ) : (
+                    <ContextMenuItem onClick={() => onCheck(t)} disabled={checking.has(t.id)}>
+                      <RefreshCwIcon className="size-4" />
+                      Check now
+                    </ContextMenuItem>
+                  )}
                   <ContextMenuItem onClick={() => onEdit(t)}>
                     <PencilIcon className="size-4" />
                     Edit
@@ -108,6 +125,7 @@ export function TargetsTable({
                 <span className="truncate text-xs text-muted-foreground">
                   Connection {t.conn}
                   {t.connName && <> · {t.connName}</>} · <span className="font-mono">{t.moduleName}</span>
+                  {t.policy && <> · {(TARGET_POLICY_LABEL[t.policy] ?? t.policy).toLowerCase()}</>}
                   {!t.retries && <> · no retries</>}
                 </span>
               </div>

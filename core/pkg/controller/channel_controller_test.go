@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -109,6 +110,10 @@ type fakeMinions struct {
 	id    string
 	frame []byte
 }
+
+func (f *fakeMinions) OpenedFor(string, uint64) (uuid.UUID, string, bool) { return uuid.Nil, "", false }
+
+func (f *fakeMinions) ForTarget(*minionsync.Conn, uuid.UUID, string) {}
 
 func (f *fakeMinions) Handle(_ context.Context, id, _ string, frame []byte) ([]byte, error) {
 	f.calls++

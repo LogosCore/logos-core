@@ -375,6 +375,75 @@ paths:
       summary: Download a build's artifact
       tags:
       - Builds
+  /channel/connection:
+    get:
+      description: 'A channel opens one per persistent minion connection: a WebSocket
+        whose binary frames carry the connection''s messages both ways.'
+      parameters:
+      - description: The channel's registered instance id
+        in: header
+        name: Logos-Channel-Instance
+        required: true
+        type: string
+      - description: reverse-persistent or bind-persistent
+        in: header
+        name: Logos-Connection-Kind
+        required: true
+        type: string
+      - description: 'bind-persistent: the control link''s open it answers'
+        in: header
+        name: Logos-Open-Request
+        type: string
+      - description: The minion's address, as the channel saw it
+        in: header
+        name: Logos-Peer-Address
+        type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: instance is not a registered module
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "503":
+          description: module registry unavailable
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Channel connection socket (data plane)
+      tags:
+      - Channels
+  /channel/link:
+    get:
+      description: 'A channel instance opens one: a WebSocket over which core asks
+        it to call bind minions, and it answers each request by its id.'
+      parameters:
+      - description: The channel's registered instance id
+        in: header
+        name: Logos-Channel-Instance
+        required: true
+        type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "403":
+          description: instance is not a registered channel
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+        "503":
+          description: module registry unavailable
+          schema:
+            $ref: '#/definitions/responses.ErrorResponse'
+      summary: Channel control link (data plane)
+      tags:
+      - Channels
   /channel/sync:
     post:
       consumes:

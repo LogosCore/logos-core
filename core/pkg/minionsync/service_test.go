@@ -176,10 +176,15 @@ func (f *fakeReservations) Delete(_ context.Context, id uuid.UUID) error {
 // fakeBus keeps what is published.
 type fakeBus struct {
 	eventbus.NopEventBus
+	mu     sync.Mutex
 	topics []eventbus.Topic
 }
 
-func (f *fakeBus) Publish(e eventbus.Event) { f.topics = append(f.topics, e.Topic) }
+func (f *fakeBus) Publish(e eventbus.Event) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.topics = append(f.topics, e.Topic)
+}
 
 // fakeCache keeps SetNX's keys; the rest of cache.Cache is unused here.
 type fakeCache struct {

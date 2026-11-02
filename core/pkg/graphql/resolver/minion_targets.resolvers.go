@@ -46,6 +46,16 @@ func (r *mutationResolver) CheckMinionTarget(ctx context.Context, id string) (*m
 	return r.MinionTargetResolver.CheckMinionTarget(ctx, id)
 }
 
+// ConnectMinionTarget is the resolver for the connectMinionTarget field.
+func (r *mutationResolver) ConnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error) {
+	return r.MinionTargetResolver.ConnectMinionTarget(ctx, id)
+}
+
+// DisconnectMinionTarget is the resolver for the disconnectMinionTarget field.
+func (r *mutationResolver) DisconnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error) {
+	return r.MinionTargetResolver.DisconnectMinionTarget(ctx, id)
+}
+
 // RemoveMinionTarget is the resolver for the removeMinionTarget field.
 func (r *mutationResolver) RemoveMinionTarget(ctx context.Context, id string) (bool, error) {
 	return r.MinionTargetResolver.RemoveMinionTarget(ctx, id)

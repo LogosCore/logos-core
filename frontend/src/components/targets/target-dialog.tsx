@@ -18,7 +18,7 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { problemsFromError } from "@/components/endpoints/endpoint-values"
 import type { BuildBindConnectionsQuery } from "@/graphql/gql/graphql"
 import { useAddMinionTarget, useUpdateMinionTarget } from "@/graphql/hooks/minion-targets"
-import { targetValues, type Target } from "./target-values"
+import { TARGET_POLICIES, TARGET_POLICY_HELP, TARGET_POLICY_LABEL, targetValues, type Target } from "./target-values"
 
 export type BindConnection = NonNullable<BuildBindConnectionsQuery["build"]>["bindConnections"][number]
 
@@ -99,6 +99,7 @@ function TargetForm({
   const fields = conn?.fields ?? []
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => draftsFor(fields, target ? targetValues(target) : {}))
   const [retries, setRetries] = useState(target?.retries ?? true)
+  const [policy, setPolicy] = useState<string>(target?.policy ?? "on-demand")
   const [submitted, setSubmitted] = useState(false)
   // A target that needs editing opens with what no longer fits, on its fields.
   const [serverProblems, setServerProblems] = useState<Record<string, string>>(() =>
@@ -115,6 +116,8 @@ function TargetForm({
   const pending = add.isPending || update.isPending
 
   const { values, errors } = evaluateParams(fields, drafts)
+  // A minion core keeps a connection to (bind-persistent): who opens it.
+  const persistent = conn?.kind === "bind-persistent"
   const errorOf = (key: string) => (submitted ? errors[key] : undefined) ?? serverProblems[key]
 
   function pick(next: number) {
@@ -131,10 +134,15 @@ function TargetForm({
     if (!conn || conn.problem || Object.keys(errors).length > 0 || pending) return
     try {
       if (target) {
-        await update.mutateAsync({ id: target.id, input: { values, retries } })
+        await update.mutateAsync({ id: target.id, input: { values, retries, policy: persistent ? policy : null } })
         toast.success("Target saved", { description: target.state === "connected" ? undefined : "Core calls it again now." })
       } else {
-        await add.mutateAsync({ buildId, conn: conn.place, input: { values, retries }, sessionId: session?.id ?? null })
+        await add.mutateAsync({
+          buildId,
+          conn: conn.place,
+          input: { values, retries, policy: persistent ? policy : null },
+          sessionId: session?.id ?? null,
+        })
         toast.success("Target added", {
           description: session
             ? `Core calls it now, under session #${session.number}: once the page answers, the session goes on.`
@@ -235,7 +243,23 @@ function TargetForm({
           </SettingsSection>
         ))}
 
-        <SettingsSection title="Calls">
+        <SettingsSection title={persistent ? "Connection" : "Calls"}>
+          {persistent && (
+            <SettingRow id="target-policy" label="Opened by" help={TARGET_POLICY_HELP[policy]}>
+              <Select value={policy} onValueChange={(v) => v && setPolicy(v)} disabled={pending}>
+                <SelectTrigger id="target-policy" className="w-full">
+                  <SelectValue>{TARGET_POLICY_LABEL[policy] ?? policy}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {TARGET_POLICIES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {TARGET_POLICY_LABEL[p]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingRow>
+          )}
           <SettingRow
             id="target-retries"
             label="Retry when unreachable"
@@ -252,7 +276,17 @@ function TargetForm({
           Cancel
         </Button>
         <Button onClick={save} disabled={pending || !conn || !!conn.problem}>
-          {pending ? "Saving..." : target ? "Save and call" : "Add and call"}
+          {pending
+            ? "Saving..."
+            : persistent
+              ? target
+                ? "Save"
+                : policy === "manual"
+                  ? "Add"
+                  : "Add and connect"
+              : target
+                ? "Save and call"
+                : "Add and call"}
         </Button>
       </DialogFooter>
     </>

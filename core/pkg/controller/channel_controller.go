@@ -10,6 +10,7 @@ import (
 	"regexp"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/logger"
 	"github.com/logoscore/logos-core/core/pkg/minionsync"
@@ -47,6 +48,11 @@ type MinionHandler interface {
 	// open, and that it closed.
 	KeepAlive(ctx context.Context, c *minionsync.Conn)
 	Closed(ctx context.Context, c *minionsync.Conn)
+	// OpenedFor is the target an open a bind-persistent connection's socket
+	// names is for (taken: ok false for one core is not waiting for), and
+	// ForTarget makes a connection that target's.
+	OpenedFor(instance string, request uint64) (target uuid.UUID, policy string, ok bool)
+	ForTarget(c *minionsync.Conn, target uuid.UUID, policy string)
 }
 
 type channelController struct {

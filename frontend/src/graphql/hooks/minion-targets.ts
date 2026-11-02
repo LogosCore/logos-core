@@ -5,6 +5,8 @@ import {
   AddMinionTargetDocument,
   BuildBindConnectionsDocument,
   CheckMinionTargetDocument,
+  ConnectMinionTargetDocument,
+  DisconnectMinionTargetDocument,
   MinionTargetChangedDocument,
   MinionSessionTargetDocument,
   MinionTargetsDocument,
@@ -118,6 +120,24 @@ export function useCheckMinionTarget() {
   const invalidate = useInvalidateTargets()
   return useMutation({
     mutationFn: (id: string) => graphqlClient(CheckMinionTargetDocument, { id }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Connect: a bind-persistent target's connection opens now, whatever its policy. */
+export function useConnectMinionTarget() {
+  const invalidate = useInvalidateTargets()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(ConnectMinionTargetDocument, { id }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Disconnect: a bind-persistent target's connection closes (one of policy always opens again). */
+export function useDisconnectMinionTarget() {
+  const invalidate = useInvalidateTargets()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(DisconnectMinionTargetDocument, { id }),
     onSuccess: invalidate,
   })
 }

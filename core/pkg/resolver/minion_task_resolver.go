@@ -97,6 +97,9 @@ type minionTaskResolver struct {
 	// targets: a bind-call session without one takes no tasks; nil, every
 	// session takes them.
 	targets TaskTargets
+	// connector opens and closes bind-persistent targets' connections, for
+	// connect and disconnect; nil, sessions have neither.
+	connector TaskConnector
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -111,9 +114,9 @@ type TaskFiles interface {
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
-	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets) IMinionTaskResolver {
+	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
-		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets}
+		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector}
 }
 
 const (
@@ -207,11 +210,14 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	}
 	var out []protocol.BuildCommand
 	for _, c := range sc.Commands {
-		// help is core's own: a schema from before it was reserved does not
-		// shadow it.
-		if slices.Contains(b.Commands, c.ID) && c.ID != protocol.CommandHelp {
+		// help, connect and disconnect are core's own: a schema from before
+		// they were reserved does not shadow them.
+		if slices.Contains(b.Commands, c.ID) && !protocol.IsCoreCommand(c.ID) {
 			out = append(out, c)
 		}
+	}
+	if r.offersConnect(s) {
+		out = append(out, connectCommands()...)
 	}
 	return &sc.BuildSchema, append(out, helpCommand(out)), nil
 }
@@ -268,6 +274,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if s.Closed(time.Now().UTC()) {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, "the session is closed: its minion takes no tasks")
 	}
+	if command == protocol.CommandConnect || command == protocol.CommandDisconnect {
+		return r.runConnect(ctx, s, uid, values, command)
+	}
 	if err := r.reachable(ctx, s); err != nil {
 		return nil, err
 	}
@@ -292,13 +301,13 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
-// reachable refuses a task core could never deliver: a bind-call session
-// (a page core calls) with no target. Nothing would call the page, so the
+// reachable refuses a task core could never deliver: a bind session (a
+// page core calls, a process core connects to) with no target. Nothing would call the page, so the
 // task would wait for good; tasks queued while it had one wait, for a
 // target added to the session to deliver. One whose target is unreachable
 // takes tasks: core retries it, and Check now may reach it.
 func (r *minionTaskResolver) reachable(ctx context.Context, s *models.MinionSession) error {
-	if r.targets == nil || s.ConnKind != protocol.KindBindCall {
+	if r.targets == nil || !protocol.IsBindKind(s.ConnKind) {
 		return nil
 	}
 	_, err := r.targets.FindBySessionID(ctx, s.SessionID)
@@ -424,6 +433,9 @@ func (r *minionTaskResolver) CancelMinionTask(ctx context.Context, id string) (*
 	}
 	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleOperator); err != nil {
 		return nil, err
+	}
+	if protocol.IsCoreCommand(t.Command) && !t.Finished() {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("core runs %s itself: it ends on its own", t.Command))
 	}
 	if t, err = r.tasks.RequestCancel(ctx, tid, time.Now().UTC()); err != nil {
 		return nil, fmt.Errorf("cancel the task: %w", err)

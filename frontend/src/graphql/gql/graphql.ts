@@ -955,6 +955,7 @@ export type MinionTarget = {
   name: Scalars['String']['output'];
   nextCallAt?: Maybe<Scalars['String']['output']>;
   operationId: Scalars['ID']['output'];
+  policy?: Maybe<Scalars['String']['output']>;
   problems: Array<ChannelEndpointProblem>;
   retries: Scalars['Boolean']['output'];
   session?: Maybe<MinionSession>;
@@ -986,6 +987,7 @@ export type MinionTargetEvent = {
 };
 
 export type MinionTargetInput = {
+  policy?: InputMaybe<Scalars['String']['input']>;
   retries?: InputMaybe<Scalars['Boolean']['input']>;
   values: Scalars['JSON']['input'];
 };
@@ -1291,6 +1293,7 @@ export type Mutation = {
   changeTaskStage: Task;
   checkMinionTarget: MinionTarget;
   completeGuide: User;
+  connectMinionTarget: MinionTarget;
   createAgentKey: AgentKeyWithSecret;
   createBuild: Build;
   createChannelEndpoint: ChannelEndpoint;
@@ -1321,6 +1324,7 @@ export type Mutation = {
   deleteUser: Scalars['Boolean']['output'];
   deleteWikiDocument: Scalars['Boolean']['output'];
   deleteWikiDocumentBackup: Scalars['Boolean']['output'];
+  disconnectMinionTarget: MinionTarget;
   duplicateWikiDocument: WikiDocument;
   emptyWikiDocumentTrash: Scalars['Boolean']['output'];
   importLocalPreferences: User;
@@ -1453,6 +1457,11 @@ export type MutationCheckMinionTargetArgs = {
 
 export type MutationCompleteGuideArgs = {
   guide: Scalars['String']['input'];
+};
+
+
+export type MutationConnectMinionTargetArgs = {
+  id: Scalars['ID']['input'];
 };
 
 
@@ -1602,6 +1611,11 @@ export type MutationDeleteWikiDocumentArgs = {
 
 
 export type MutationDeleteWikiDocumentBackupArgs = {
+  id: Scalars['ID']['input'];
+};
+
+
+export type MutationDisconnectMinionTargetArgs = {
   id: Scalars['ID']['input'];
 };
 
@@ -4047,7 +4061,7 @@ export type SetMinionSessionsMarkMutationVariables = Exact<{
 
 export type SetMinionSessionsMarkMutation = { setMinionSessionsMark: number };
 
-export type MinionTargetFieldsFragment = { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } };
+export type MinionTargetFieldsFragment = { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } };
 
 export type MinionTargetsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4059,7 +4073,7 @@ export type MinionTargetsQueryVariables = Exact<{
 }>;
 
 
-export type MinionTargetsQuery = { minionTargets: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionTargetsQuery = { minionTargets: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type BuildBindConnectionsQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4076,7 +4090,7 @@ export type AddMinionTargetMutationVariables = Exact<{
 }>;
 
 
-export type AddMinionTargetMutation = { addMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type AddMinionTargetMutation = { addMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type UpdateMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4084,14 +4098,28 @@ export type UpdateMinionTargetMutationVariables = Exact<{
 }>;
 
 
-export type UpdateMinionTargetMutation = { updateMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type UpdateMinionTargetMutation = { updateMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type CheckMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CheckMinionTargetMutation = { checkMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+export type CheckMinionTargetMutation = { checkMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+
+export type ConnectMinionTargetMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type ConnectMinionTargetMutation = { connectMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
+
+export type DisconnectMinionTargetMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type DisconnectMinionTargetMutation = { disconnectMinionTarget: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } };
 
 export type RemoveMinionTargetMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4112,7 +4140,7 @@ export type MinionSessionTargetQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
+export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
 
 export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null };
 
@@ -5638,6 +5666,7 @@ export const MinionTargetFieldsFragmentDoc = new TypedDocumentString(`
   values
   name
   retries
+  policy
   state
   stateDetail
   stateAt
@@ -9245,6 +9274,7 @@ export const MinionTargetsDocument = new TypedDocumentString(`
   values
   name
   retries
+  policy
   state
   stateDetail
   stateAt
@@ -9336,6 +9366,7 @@ export const AddMinionTargetDocument = new TypedDocumentString(`
   values
   name
   retries
+  policy
   state
   stateDetail
   stateAt
@@ -9380,6 +9411,7 @@ export const UpdateMinionTargetDocument = new TypedDocumentString(`
   values
   name
   retries
+  policy
   state
   stateDetail
   stateAt
@@ -9424,6 +9456,7 @@ export const CheckMinionTargetDocument = new TypedDocumentString(`
   values
   name
   retries
+  policy
   state
   stateDetail
   stateAt
@@ -9450,6 +9483,96 @@ export const CheckMinionTargetDocument = new TypedDocumentString(`
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<CheckMinionTargetMutation, CheckMinionTargetMutationVariables>;
+export const ConnectMinionTargetDocument = new TypedDocumentString(`
+    mutation ConnectMinionTarget($id: ID!) {
+  connectMinionTarget(id: $id) {
+    ...MinionTargetFields
+  }
+}
+    fragment MinionTargetFields on MinionTarget {
+  id
+  operationId
+  buildId
+  buildDescription
+  conn
+  connName
+  moduleName
+  kind
+  values
+  name
+  retries
+  policy
+  state
+  stateDetail
+  stateAt
+  problems {
+    key
+    message
+  }
+  sessionId
+  session {
+    id
+    number
+  }
+  failures
+  unreachableSince
+  nextCallAt
+  lastCallAt
+  lastOkAt
+  calls
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<ConnectMinionTargetMutation, ConnectMinionTargetMutationVariables>;
+export const DisconnectMinionTargetDocument = new TypedDocumentString(`
+    mutation DisconnectMinionTarget($id: ID!) {
+  disconnectMinionTarget(id: $id) {
+    ...MinionTargetFields
+  }
+}
+    fragment MinionTargetFields on MinionTarget {
+  id
+  operationId
+  buildId
+  buildDescription
+  conn
+  connName
+  moduleName
+  kind
+  values
+  name
+  retries
+  policy
+  state
+  stateDetail
+  stateAt
+  problems {
+    key
+    message
+  }
+  sessionId
+  session {
+    id
+    number
+  }
+  failures
+  unreachableSince
+  nextCallAt
+  lastCallAt
+  lastOkAt
+  calls
+  createdBy {
+    type
+    id
+    name
+  }
+  createdAt
+  updatedAt
+}`) as unknown as TypedDocumentString<DisconnectMinionTargetMutation, DisconnectMinionTargetMutationVariables>;
 export const RemoveMinionTargetDocument = new TypedDocumentString(`
     mutation RemoveMinionTarget($id: ID!) {
   removeMinionTarget(id: $id)
@@ -9487,6 +9610,7 @@ export const MinionSessionTargetDocument = new TypedDocumentString(`
   values
   name
   retries
+  policy
   state
   stateDetail
   stateAt

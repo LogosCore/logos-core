@@ -117,6 +117,19 @@ func (f *fakeTasks) CancelsToSend(_ context.Context, sid uuid.UUID, _ time.Time)
 	return send, nil, nil
 }
 
+func (f *fakeTasks) EndUnknown(_ context.Context, sid, id uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
+	t := f.find(id)
+	if t == nil || t.SessionID != sid || (t.State != models.MinionTaskSent && t.State != models.MinionTaskRunning) {
+		return nil, qmgo.ErrNoSuchDocuments
+	}
+	t.State, t.DoneAt, t.Err = models.MinionTaskFailed, &at, why
+	if t.CancelRequestedAt != nil {
+		t.State = models.MinionTaskCancelled
+	}
+	after := *t
+	return &after, nil
+}
+
 // openSession opens a session with a hello straight under the build id, and
 // gives the service a task store.
 func openSession(t *testing.T, r *rig) (uuid.UUID, *fakeTasks) {
@@ -225,6 +238,21 @@ func TestTasksUnderSession(t *testing.T) {
 	}
 	if id, _ := uuid.FromBytes(c.Task); id != ls {
 		t.Fatalf("cancelled %s", id)
+	}
+	// A task without parts' ctx: its cancel carries its transfer's.
+	tasks.find(ls).Upload = &models.MinionTaskUpload{Ctx: []byte{0xa1, 1, 0x61, 0x76}}
+	msg = send()
+	if cancels := itemsOf(msg, protocol.ItemCancel); len(cancels) != 1 || protocol.UnmarshalCBOR(cancels[0], &c) != nil ||
+		!bytes.Equal(c.Ctx, []byte{0xa1, 1, 0x61, 0x76}) {
+		t.Fatalf("cancel with the transfer's ctx: %+v", c)
+	}
+	// The minion does not have it: it ends cancelled, and no cancel goes.
+	send(protocol.ErrItem{T: protocol.ItemErr, Code: protocol.ErrItemUnknownTask, Msg: "no such task", Task: ls[:]})
+	if got := tasks.find(ls); got.State != models.MinionTaskCancelled || got.Err != "the minion does not have the task: no such task" {
+		t.Fatalf("an unknown task: %s %q", got.State, got.Err)
+	}
+	if msg = send(); len(itemsOf(msg, protocol.ItemCancel)) != 0 {
+		t.Fatal("a cancel for a task that ended")
 	}
 	// Two get_tasks in one message: the second is refused.
 	msg = send(protocol.GetTasksItem{T: protocol.ItemGetTasks}, protocol.GetTasksItem{T: protocol.ItemGetTasks})

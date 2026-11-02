@@ -3,6 +3,7 @@ package minionsync
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -63,7 +64,7 @@ func (f *fakeTargets) CountByOperationID(context.Context, uuid.UUID, repository.
 	return 0, nil
 }
 
-func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, string, bool, time.Time) error {
+func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, string, bool, string, time.Time) error {
 	return nil
 }
 
@@ -87,6 +88,18 @@ func (f *fakeTargets) ClaimDue(_ context.Context, now time.Time) (*models.Minion
 	return nil, qmgo.ErrNoSuchDocuments
 }
 
+func (f *fakeTargets) FindByKindAndStates(_ context.Context, kind string, states []string) ([]models.MinionTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []models.MinionTarget
+	for _, t := range f.rows {
+		if t.Kind == kind && slices.Contains(states, t.State) {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeTargets) Delete(context.Context, uuid.UUID) (bool, error)      { return false, nil }
 func (f *fakeTargets) DeleteByOperationID(context.Context, uuid.UUID) error { return nil }
 
@@ -101,6 +114,8 @@ type fakePage struct {
 	answer *protocol.LinkFrame
 	// noTasks: the page asks for no tasks.
 	noTasks bool
+	// peer is the address the channel says it reached the page at.
+	peer string
 	// more, when set, are items the page adds to its answer to msg (a
 	// file's next chunk, say).
 	more func(msg protocol.CoreMessage) []any
@@ -168,7 +183,12 @@ func (p *fakePage) Call(_ context.Context, module string, c channellink.Call) (p
 	if err != nil {
 		p.t.Fatal(err)
 	}
-	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, ID: c.ID[:], Data: sealed, Status: 200}, nil
+	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, ID: c.ID[:], Data: sealed, Status: 200, Peer: p.peer}, nil
+}
+
+// Open: a page is reached by calls, not connections.
+func (p *fakePage) Open(context.Context, string, map[string]any, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: &protocol.LinkFailure{Kind: protocol.LinkFailOther, Msg: "a page"}}, nil
 }
 
 func (p *fakePage) callCount() int {
@@ -215,6 +235,7 @@ func (b *bindRig) get(t *testing.T) *models.MinionTarget {
 
 func TestBindFirstCallOpensSession(t *testing.T) {
 	b := newBindRig(t, true)
+	b.page.peer = "::ffff:203.0.113.7"
 	tg, err := b.svc.CheckTarget(context.Background(), b.target)
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +259,8 @@ func TestBindFirstCallOpensSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Staged || s.ConnKind != protocol.KindBindCall || s.Hello.Host != "www01" || s.LastSeenAt != nil && s.LastSeenAt.IsZero() {
+	if s.Staged || s.ConnKind != protocol.KindBindCall || s.Hello.Host != "www01" || s.LastSeenAt != nil && s.LastSeenAt.IsZero() ||
+		s.PeerAddress != "203.0.113.7" {
 		t.Fatalf("session %+v", s)
 	}
 	// Nothing waited: no call under the session yet.
@@ -362,6 +384,10 @@ func TestBindNoChannel(t *testing.T) {
 type noLink struct{}
 
 func (noLink) Call(context.Context, string, channellink.Call) (protocol.LinkFrame, error) {
+	return protocol.LinkFrame{}, channellink.ErrNoLink
+}
+
+func (noLink) Open(context.Context, string, map[string]any, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 
@@ -653,4 +679,24 @@ func (b *bindRig) sessionOf(t *testing.T, id uuid.UUID) *models.MinionSession {
 		t.Fatal(err)
 	}
 	return s
+}
+
+// An unknown_task that names only the item it answers (an older page) is
+// given the task of the cancel core sent there.
+func TestNameUnknownTasks(t *testing.T) {
+	task := uuid.New()
+	cancel, _ := protocol.MarshalCBOR(protocol.CancelItem{T: protocol.ItemCancel, Task: task[:]})
+	ack, _ := protocol.MarshalCBOR(protocol.AckItem{T: protocol.ItemAck})
+	at := func(i int) cbor.RawMessage {
+		b, _ := protocol.MarshalCBOR(protocol.ErrItem{T: protocol.ItemErr, Code: protocol.ErrItemUnknownTask, Item: &i})
+		return b
+	}
+	msg := &protocol.MinionMessage{Items: []cbor.RawMessage{at(1), at(0), at(7)}}
+	nameUnknownTasks(msg, []cbor.RawMessage{ack, cancel})
+	for i, want := range [][]byte{task[:], nil, nil} {
+		var e protocol.ErrItem
+		if protocol.UnmarshalCBOR(msg.Items[i], &e) != nil || !bytes.Equal(e.Task, want) {
+			t.Errorf("err %d: task %x, want %x", i, e.Task, want)
+		}
+	}
 }

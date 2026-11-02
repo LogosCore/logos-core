@@ -50,7 +50,7 @@ type IMinionTargetRepository interface {
 	CountByOperationID(ctx context.Context, operationID uuid.UUID, filter MinionTargetFilter) (int64, error)
 	// SetValues replaces what the operator gave: the values, the name and
 	// retries.
-	SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, name string, retries bool, at time.Time) error
+	SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, name string, retries bool, policy string, at time.Time) error
 	// SetCallState writes what calls left: the state and its detail, the
 	// session, the allowance, the failures in a row, when it was unreachable
 	// since, when core calls next, the last call and the last good one, and
@@ -59,6 +59,9 @@ type IMinionTargetRepository interface {
 	// ClaimDue takes one target whose next call is due at now, clearing its
 	// next call, so that one caller makes it; IsNotFound when none is due.
 	ClaimDue(ctx context.Context, now time.Time) (*models.MinionTarget, error)
+	// FindByKindAndStates returns every target of a connection kind in one
+	// of states (bind-persistent ones left connected when core stopped).
+	FindByKindAndStates(ctx context.Context, kind string, states []string) ([]models.MinionTarget, error)
 	// Delete removes one target; false when there was none.
 	Delete(ctx context.Context, targetID uuid.UUID) (bool, error)
 	// DeleteByOperationID removes an operation's targets (operation delete
@@ -145,10 +148,12 @@ func (r *minionTargetRepository) CountByOperationID(ctx context.Context, operati
 	return r.coll.Count(ctx, minionTargetListFilter(operationID, filter))
 }
 
-func (r *minionTargetRepository) SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, name string, retries bool, at time.Time) error {
-	return r.coll.UpdateOne(ctx, bson.M{"target_id": targetID}, bson.M{"$set": bson.M{
-		"values": values, "name": name, "retries": retries, "updated_at": at, "updateAt": at,
-	}})
+func (r *minionTargetRepository) SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, name string, retries bool, policy string, at time.Time) error {
+	set := bson.M{"values": values, "name": name, "retries": retries, "updated_at": at, "updateAt": at}
+	if policy != "" {
+		set["policy"] = policy
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"target_id": targetID}, bson.M{"$set": set})
 }
 
 func (r *minionTargetRepository) SetCallState(ctx context.Context, t *models.MinionTarget) error {
@@ -185,6 +190,12 @@ func (r *minionTargetRepository) ClaimDue(ctx context.Context, now time.Time) (*
 	}
 	t.NextCallAt = nil
 	return &t, nil
+}
+
+func (r *minionTargetRepository) FindByKindAndStates(ctx context.Context, kind string, states []string) ([]models.MinionTarget, error) {
+	var out []models.MinionTarget
+	err := r.coll.Find(ctx, bson.M{"kind": kind, "state": bson.M{"$in": states}}).All(&out)
+	return out, err
 }
 
 func (r *minionTargetRepository) Delete(ctx context.Context, targetID uuid.UUID) (bool, error) {

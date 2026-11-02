@@ -97,6 +97,9 @@ type Service struct {
 	targets repository.IMinionTargetRepository
 	link    Linker
 	binds   *binds
+	// persist are bind-persistent targets' opens and connections
+	// (bind_persistent.go).
+	persist *persistent
 	// targetChecker checks a target's values before each call, and
 	// problemsText says its problems in its state detail; nil calls every
 	// target.
@@ -108,7 +111,7 @@ func NewService(builds Builds, stagings repository.IMinionStagingRepository, ses
 	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
 	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() },
-		conns: newConnections(), binds: newBinds()}
+		conns: newConnections(), binds: newBinds(), persist: newPersistent()}
 }
 
 // Handle opens a minion's sealed frame sent under id from peer (the IP
@@ -125,6 +128,9 @@ func (s *Service) Handle(ctx context.Context, id, peer string, frame []byte) ([]
 // what core has to say back goes as a message of its own, and it gets no
 // reply.
 func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, frame []byte) ([]byte, error) {
+	if via != nil {
+		via.touch(s.now())
+	}
 	sentUnder, err := uuid.Parse(id)
 	if err != nil {
 		return nil, ErrUnopened
@@ -192,6 +198,12 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	if err != nil {
 		return nil, err
 	}
+	if via != nil && from.session == nil {
+		// A hello over a persistent connection opened a session: the
+		// connection serves it from now on (pushes can go at once), and a
+		// bind-persistent target's is linked to it.
+		s.seenOnHello(ctx, via, items)
+	}
 	// Through a call, nothing to say is the sync call's 204. Over a
 	// connection socket a request always gets its reply, empty or not, so
 	// the minion knows its message arrived.
@@ -208,6 +220,28 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		return nil, err
 	}
 	return protocol.SealFrame(from.keys, sentUnder, protocol.FrameCoreToMinion, reply)
+}
+
+// seenOnHello records that via serves the session a hello_response among
+// items names.
+func (s *Service) seenOnHello(ctx context.Context, via *Conn, items []cbor.RawMessage) {
+	for _, raw := range items {
+		if protocol.ItemType(raw) != protocol.ItemHelloResponse {
+			continue
+		}
+		var r protocol.HelloResponseItem
+		if protocol.UnmarshalCBOR(raw, &r) != nil {
+			return
+		}
+		sid, err := uuid.FromBytes(r.SID)
+		if err != nil {
+			return
+		}
+		if session, err := s.sessions.FindBySessionID(ctx, sid); err == nil {
+			s.seenOn(ctx, via, session)
+		}
+		return
+	}
 }
 
 // underBuild answers a message sent under a build id: one stage, or one
@@ -541,6 +575,9 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			var e protocol.ErrItem
 			if protocol.UnmarshalCBOR(raw, &e) == nil {
 				s.logger.Info("minion err", zap.String("session_id", session.SessionID.String()), zap.String("code", protocol.ErrCodeName(e.Code)), zap.String("msg", e.Msg))
+				if e.Code == protocol.ErrItemUnknownTask && len(e.Task) == 16 {
+					err = s.endUnknown(ctx, session, e)
+				}
 			}
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)

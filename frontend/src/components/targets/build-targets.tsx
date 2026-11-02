@@ -8,6 +8,8 @@ import { errorMessage } from "@/components/modules/management/api-errors"
 import { useConnectionNodes } from "@/hooks/use-connection-nodes"
 import {
   useCheckMinionTarget,
+  useConnectMinionTarget,
+  useDisconnectMinionTarget,
   useInfiniteMinionTargets,
   useMinionTargetChangedSubscription,
   useRemoveMinionTarget,
@@ -40,6 +42,8 @@ export function BuildTargets({
   useMinionTargetChangedSubscription(operationId)
   const targets = useConnectionNodes(data, (p) => p.minionTargets)
   const check = useCheckMinionTarget()
+  const connect = useConnectMinionTarget()
+  const disconnect = useDisconnectMinionTarget()
   const [checking, setChecking] = useState<ReadonlySet<string>>(new Set())
   const [editing, setEditing] = useState<Target | null>(null)
   const [adding, setAdding] = useState(false)
@@ -56,6 +60,26 @@ export function BuildTargets({
       else toast.warning(`${after.name}: ${label}`, { description: after.stateDetail ?? undefined })
     } catch (err) {
       toast.error("Could not call the target", { description: errorMessage(err, "Request failed") })
+    } finally {
+      setChecking((s) => {
+        const next = new Set(s)
+        next.delete(t.id)
+        return next
+      })
+    }
+  }
+
+  async function connectOrNot(t: Target, open: boolean) {
+    setChecking((s) => new Set(s).add(t.id))
+    try {
+      const after = open
+        ? (await connect.mutateAsync(t.id)).connectMinionTarget
+        : (await disconnect.mutateAsync(t.id)).disconnectMinionTarget
+      const label = TARGET_STATE_LABEL[after.state] ?? after.state
+      if (after.state === (open ? "connected" : "not_connected")) toast.success(`${after.name}: ${label}`)
+      else toast.warning(`${after.name}: ${label}`, { description: after.stateDetail ?? undefined })
+    } catch (err) {
+      toast.error(open ? "Could not connect" : "Could not disconnect", { description: errorMessage(err, "Request failed") })
     } finally {
       setChecking((s) => {
         const next = new Set(s)
@@ -93,6 +117,7 @@ export function BuildTargets({
           canWrite={canWrite}
           checking={checking}
           onCheck={checkNow}
+          onConnect={(t, open) => void connectOrNot(t, open)}
           onEdit={setEditing}
           onRemove={setRemoving}
           emptyState={
@@ -101,8 +126,8 @@ export function BuildTargets({
                 <CrosshairIcon className="size-8 opacity-50" />
                 <p className="text-sm">No targets yet.</p>
                 <p className="max-w-md text-center text-xs">
-                  This build's minion only answers: put it on a server, then add a target with where it is. Core calls
-                  it at once, and its hello opens a session.
+                  This build's minion is reached by core, through its channel: put it in place, then add a target
+                  with where it is. Core calls it (or connects to it) and its hello opens a session.
                 </p>
               </>
             ) : (

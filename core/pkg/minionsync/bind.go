@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"math/rand/v2"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -44,6 +45,8 @@ import (
 // *channellink.Hub.
 type Linker interface {
 	Call(ctx context.Context, module string, c channellink.Call) (protocol.LinkFrame, error)
+	Open(ctx context.Context, module string, values map[string]any, deadline time.Duration,
+		sent func(instance string, request uint64)) (protocol.LinkFrame, error)
 }
 
 const (
@@ -72,6 +75,8 @@ const (
 	// made room, an uploader's bytes came): the call goes only when one of
 	// its acks says go.
 	bindWake
+	// bindConnect: an operator's Connect (a bind-persistent target's).
+	bindConnect
 )
 
 // bindWakeDelay coalesces a session's stream wakes: a downloader taking
@@ -138,9 +143,11 @@ func (s *Service) RunTargets(ctx context.Context) {
 	if s.targets == nil {
 		return
 	}
+	s.resetPersistent(ctx)
 	t := time.NewTicker(bindTick)
 	defer t.Stop()
 	for {
+		s.closeIdle()
 		for {
 			due, err := s.targets.ClaimDue(ctx, s.now())
 			if err != nil {
@@ -238,6 +245,13 @@ func (s *Service) callTarget(ctx context.Context, targetID uuid.UUID, why bindTr
 			return
 		}
 	}
+	if t.Kind == protocol.KindBindPersistent {
+		// Its minion is reached by a connection kept open, not by calls.
+		if err := s.openTarget(ctx, t, why); err != nil {
+			s.logger.Error("targets: an open", zap.String("target_id", targetID.String()), zap.Error(err))
+		}
+		return
+	}
 	var session *models.MinionSession
 	if t.SessionID != nil {
 		session, err = s.sessions.FindBySessionID(ctx, *t.SessionID)
@@ -304,7 +318,7 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	if err != nil {
 		return err
 	}
-	msg, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, b.BuildID, []cbor.RawMessage{rehello})
+	msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, b.BuildID, []cbor.RawMessage{rehello})
 	if err != nil || done {
 		return err
 	}
@@ -322,7 +336,7 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	if hello == nil {
 		return s.saveCall(ctx, s.answered(t, models.TargetRefused, "the page answered without a hello"))
 	}
-	items, err := s.openSession(ctx, from, "", hello)
+	items, err := s.openSession(ctx, from, peer, hello)
 	if err != nil {
 		return err
 	}
@@ -379,12 +393,13 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 	// on; no count bounds them, as a file takes a call a chunk.
 	var last []cbor.RawMessage
 	for {
-		msg, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, session.SessionID, items)
+		msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, session.SessionID, items)
 		if err != nil || done {
 			return err
 		}
 		last = items
-		if items, err = s.underSession(ctx, session, "", *msg, nil); err != nil {
+		nameUnknownTasks(msg, items)
+		if items, err = s.underSession(ctx, session, peer, *msg, nil); err != nil {
 			return err
 		}
 		s.allowanceOf(t, msg)
@@ -492,49 +507,84 @@ func (s *Service) allowanceOf(t *models.MinionTarget, msg *protocol.MinionMessag
 // through its channel. It returns the page's answer, opened; or done, when
 // the call reached nothing or not the page, which it recorded.
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
-	keys protocol.AES256CBCHMACSHA256Material, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, bool, error) {
+	keys protocol.AES256CBCHMACSHA256Material, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, string, bool, error) {
 	msgID := protocol.NewMessageID()
 	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items})
 	if err != nil {
-		return nil, false, err
+		return nil, "", false, err
 	}
 	sealed, err := protocol.SealFrame(keys, id, protocol.FrameCoreToMinion, plain)
 	if err != nil {
-		return nil, false, err
+		return nil, "", false, err
 	}
 	if s.link == nil {
-		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, "core keeps no control links"))
+		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, "core keeps no control links"))
 	}
 	t.Calls++
 	a, err := s.link.Call(ctx, t.ModuleName, channellink.Call{Values: callValues(conn, t), ID: id, Data: sealed})
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
-		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
+		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
 	case errors.Is(err, channellink.ErrLinkDropped):
-		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable, "the channel's control link dropped during the call"))
+		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable, "the channel's control link dropped during the call"))
 	case err != nil:
-		return nil, false, err
+		return nil, "", false, err
 	case a.Failure != nil:
-		return nil, true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable,
+		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable,
 			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
 	case a.ID == nil:
-		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, a.Excerpt)))
+		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, a.Excerpt)))
 	}
 	// The page answers under the id it was called under, sealed with the
 	// same keys, and answers this message: anything else is not it.
 	if !bytes.Equal(a.ID, id[:]) {
-		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
+		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
 	}
 	opened, err := protocol.OpenFrame(keys, id, protocol.FrameMinionToCore, a.Data)
 	if err != nil {
-		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, nil)+": an answer that does not open"))
+		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, nil)+": an answer that does not open"))
 	}
 	var msg protocol.MinionMessage
 	if err := protocol.UnmarshalCBOR(opened, &msg); err != nil || protocol.ValidateMessageHead(msg.V, msg.ID, msg.Re, len(msg.Items)) != nil ||
 		!bytes.Equal(msg.Re, msgID) {
-		return nil, true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
+		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
 	}
-	return &msg, false, nil
+	// The address the channel reached the page at: its external one.
+	return &msg, peerAddress(a.Peer), false, nil
+}
+
+// peerAddress is a channel's peer as sessions keep it: an IP address,
+// unmapped; "" for none or one that does not read.
+func peerAddress(p string) string {
+	a, err := netip.ParseAddr(p)
+	if err != nil {
+		return ""
+	}
+	return a.Unmap().WithZone("").String()
+}
+
+// nameUnknownTasks names the task of each unknown_task in msg that says
+// only which of sent, the items core called with, it is about (a page from
+// before the err's task): a cancel's. Core then ends the task.
+func nameUnknownTasks(msg *protocol.MinionMessage, sent []cbor.RawMessage) {
+	for i, raw := range msg.Items {
+		if protocol.ItemType(raw) != protocol.ItemErr {
+			continue
+		}
+		var e protocol.ErrItem
+		if protocol.UnmarshalCBOR(raw, &e) != nil || e.Code != protocol.ErrItemUnknownTask || e.Task != nil ||
+			e.Item == nil || *e.Item < 0 || *e.Item >= len(sent) || protocol.ItemType(sent[*e.Item]) != protocol.ItemCancel {
+			continue
+		}
+		var c protocol.CancelItem
+		if protocol.UnmarshalCBOR(sent[*e.Item], &c) != nil {
+			continue
+		}
+		e.Task = c.Task
+		if named, err := protocol.MarshalCBOR(e); err == nil {
+			msg.Items[i] = named
+		}
+	}
 }
 
 // notTheMinion says what answered instead of the page.

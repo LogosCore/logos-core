@@ -13,6 +13,7 @@ export const MinionTargetFields = graphql(`
     values
     name
     retries
+    policy
     state
     stateDetail
     stateAt
@@ -110,6 +111,22 @@ export const UpdateMinionTargetMutation = graphql(`
 export const CheckMinionTargetMutation = graphql(`
   mutation CheckMinionTarget($id: ID!) {
     checkMinionTarget(id: $id) {
+      ...MinionTargetFields
+    }
+  }
+`)
+
+export const ConnectMinionTargetMutation = graphql(`
+  mutation ConnectMinionTarget($id: ID!) {
+    connectMinionTarget(id: $id) {
+      ...MinionTargetFields
+    }
+  }
+`)
+
+export const DisconnectMinionTargetMutation = graphql(`
+  mutation DisconnectMinionTarget($id: ID!) {
+    disconnectMinionTarget(id: $id) {
       ...MinionTargetFields
     }
   }

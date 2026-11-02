@@ -733,6 +733,7 @@ type ComplexityRoot struct {
 		Name             func(childComplexity int) int
 		NextCallAt       func(childComplexity int) int
 		OperationID      func(childComplexity int) int
+		Policy           func(childComplexity int) int
 		Problems         func(childComplexity int) int
 		Retries          func(childComplexity int) int
 		Session          func(childComplexity int) int
@@ -1027,6 +1028,7 @@ type ComplexityRoot struct {
 		ChangeTaskStage               func(childComplexity int, input model.ChangeTaskStageInput) int
 		CheckMinionTarget             func(childComplexity int, id string) int
 		CompleteGuide                 func(childComplexity int, guide string) int
+		ConnectMinionTarget           func(childComplexity int, id string) int
 		CreateAgentKey                func(childComplexity int, input model.CreateAgentKeyInput) int
 		CreateBuild                   func(childComplexity int, operationID string, input model.BuildInput) int
 		CreateChannelEndpoint         func(childComplexity int, operationID string, moduleName string, input model.ChannelEndpointInput) int
@@ -1057,6 +1059,7 @@ type ComplexityRoot struct {
 		DeleteUser                    func(childComplexity int, id string) int
 		DeleteWikiDocument            func(childComplexity int, id string) int
 		DeleteWikiDocumentBackup      func(childComplexity int, id string) int
+		DisconnectMinionTarget        func(childComplexity int, id string) int
 		DuplicateWikiDocument         func(childComplexity int, id string, withChildren *bool) int
 		EmptyWikiDocumentTrash        func(childComplexity int, operationID string) int
 		ImportLocalPreferences        func(childComplexity int, input model.ImportLocalPreferencesInput) int
@@ -1836,6 +1839,8 @@ type MutationResolver interface {
 	AddMinionTarget(ctx context.Context, buildID string, conn int, input model.MinionTargetInput, sessionID *string) (*model.MinionTarget, error)
 	UpdateMinionTarget(ctx context.Context, id string, input model.MinionTargetInput) (*model.MinionTarget, error)
 	CheckMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
+	ConnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
+	DisconnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
 	RemoveMinionTarget(ctx context.Context, id string) (bool, error)
 	QueueMinionTask(ctx context.Context, sessionID string, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
@@ -4936,6 +4941,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTarget.OperationID(childComplexity), true
+	case "MinionTarget.policy":
+		if e.ComplexityRoot.MinionTarget.Policy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTarget.Policy(childComplexity), true
 	case "MinionTarget.problems":
 		if e.ComplexityRoot.MinionTarget.Problems == nil {
 			break
@@ -6323,6 +6334,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CompleteGuide(childComplexity, args["guide"].(string)), true
+	case "Mutation.connectMinionTarget":
+		if e.ComplexityRoot.Mutation.ConnectMinionTarget == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_connectMinionTarget_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ConnectMinionTarget(childComplexity, args["id"].(string)), true
 	case "Mutation.createAgentKey":
 		if e.ComplexityRoot.Mutation.CreateAgentKey == nil {
 			break
@@ -6643,6 +6665,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteWikiDocumentBackup(childComplexity, args["id"].(string)), true
+	case "Mutation.disconnectMinionTarget":
+		if e.ComplexityRoot.Mutation.DisconnectMinionTarget == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_disconnectMinionTarget_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DisconnectMinionTarget(childComplexity, args["id"].(string)), true
 	case "Mutation.duplicateWikiDocument":
 		if e.ComplexityRoot.Mutation.DuplicateWikiDocument == nil {
 			break
@@ -12530,8 +12563,14 @@ type MinionTarget {
   # An unreachable target is called again: 1 minute, 5, 30, then hourly,
   # for a day. Off where every request in a server's log counts.
   retries: Boolean!
+  # A bind-persistent target's: who opens its connection. on-demand (core,
+  # when the session has something to send; closed after 10 minutes idle),
+  # manual (an operator: Connect, Disconnect; closed after an hour idle),
+  # always (core, again whenever it drops). Null for a bind-call target.
+  policy: String
   # new | connected | unreachable | not_the_minion | refused | stopped |
-  # no_channel | needs_editing
+  # no_channel | needs_editing; a bind-persistent target's also
+  # connecting | not_connected
   state: String!
   # Why its values no longer fit the channel's current target fields (one
   # it now requires is missing, one is gone or changed), by field; empty
@@ -12587,6 +12626,9 @@ input MinionTargetInput {
   # unset (its default applies).
   values: JSON!
   retries: Boolean = true
+  # A bind-persistent target's policy (on-demand, manual, always); null
+  # keeps a target's, on-demand for a new one.
+  policy: String
 }
 
 type MinionTargetEvent {
@@ -12642,9 +12684,20 @@ extend type Mutation {
   updateMinionTarget(id: ID!, input: MinionTargetInput!): MinionTarget!
     @hasPermission(permission: "operation:member")
 
-  # Calls a target now (Check now) and returns it as the call left it.
+  # Calls a target now (Check now) and returns it as the call left it; a
+  # bind-persistent target's connection opens, unless open or manual.
   # Needs operator.
   checkMinionTarget(id: ID!): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Opens a bind-persistent target's connection now, whatever its policy,
+  # and returns the target as the open left it. Needs operator.
+  connectMinionTarget(id: ID!): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Closes a bind-persistent target's connection; one of policy always is
+  # opened again (set it manual to keep it closed). Needs operator.
+  disconnectMinionTarget(id: ID!): MinionTarget!
     @hasPermission(permission: "operation:member")
 
   # Removes a target: its calls stop. Its session stays, with no target,
@@ -15433,6 +15486,17 @@ func (ec *executionContext) field_Mutation_completeGuide_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_connectMinionTarget_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createAgentKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -15781,6 +15845,17 @@ func (ec *executionContext) field_Mutation_deleteWikiDocumentBackup_args(ctx con
 }
 
 func (ec *executionContext) field_Mutation_deleteWikiDocument_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_disconnectMinionTarget_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNID2string)
@@ -32031,6 +32106,8 @@ func (ec *executionContext) fieldContext_MinionSession_bindTarget(_ context.Cont
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -33781,6 +33858,35 @@ func (ec *executionContext) fieldContext_MinionTarget_retries(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTarget_policy(ctx context.Context, field graphql.CollectedField, obj *model.MinionTarget) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTarget_policy,
+		func(ctx context.Context) (any, error) {
+			return obj.Policy, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTarget_policy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTarget",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTarget_state(ctx context.Context, field graphql.CollectedField, obj *model.MinionTarget) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34475,6 +34581,8 @@ func (ec *executionContext) fieldContext_MinionTargetEdge_node(_ context.Context
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -34674,6 +34782,8 @@ func (ec *executionContext) fieldContext_MinionTargetEvent_target(_ context.Cont
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -45258,6 +45368,8 @@ func (ec *executionContext) fieldContext_Mutation_addMinionTarget(ctx context.Co
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -45371,6 +45483,8 @@ func (ec *executionContext) fieldContext_Mutation_updateMinionTarget(ctx context
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -45484,6 +45598,8 @@ func (ec *executionContext) fieldContext_Mutation_checkMinionTarget(ctx context.
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -45526,6 +45642,236 @@ func (ec *executionContext) fieldContext_Mutation_checkMinionTarget(ctx context.
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_checkMinionTarget_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_connectMinionTarget(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_connectMinionTarget,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ConnectMinionTarget(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTarget
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTarget
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTarget2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTarget,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_connectMinionTarget(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionTarget_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionTarget_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionTarget_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionTarget_buildDescription(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionTarget_conn(ctx, field)
+			case "connName":
+				return ec.fieldContext_MinionTarget_connName(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionTarget_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_MinionTarget_kind(ctx, field)
+			case "values":
+				return ec.fieldContext_MinionTarget_values(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionTarget_name(ctx, field)
+			case "retries":
+				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTarget_state(ctx, field)
+			case "problems":
+				return ec.fieldContext_MinionTarget_problems(ctx, field)
+			case "stateDetail":
+				return ec.fieldContext_MinionTarget_stateDetail(ctx, field)
+			case "stateAt":
+				return ec.fieldContext_MinionTarget_stateAt(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
+			case "session":
+				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "failures":
+				return ec.fieldContext_MinionTarget_failures(ctx, field)
+			case "unreachableSince":
+				return ec.fieldContext_MinionTarget_unreachableSince(ctx, field)
+			case "nextCallAt":
+				return ec.fieldContext_MinionTarget_nextCallAt(ctx, field)
+			case "lastCallAt":
+				return ec.fieldContext_MinionTarget_lastCallAt(ctx, field)
+			case "lastOkAt":
+				return ec.fieldContext_MinionTarget_lastOkAt(ctx, field)
+			case "calls":
+				return ec.fieldContext_MinionTarget_calls(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_MinionTarget_createdBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionTarget_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_MinionTarget_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTarget", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_connectMinionTarget_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_disconnectMinionTarget(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_disconnectMinionTarget,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DisconnectMinionTarget(ctx, fc.Args["id"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTarget
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTarget
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTarget2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTarget,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_disconnectMinionTarget(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionTarget_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionTarget_operationId(ctx, field)
+			case "buildId":
+				return ec.fieldContext_MinionTarget_buildId(ctx, field)
+			case "buildDescription":
+				return ec.fieldContext_MinionTarget_buildDescription(ctx, field)
+			case "conn":
+				return ec.fieldContext_MinionTarget_conn(ctx, field)
+			case "connName":
+				return ec.fieldContext_MinionTarget_connName(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_MinionTarget_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_MinionTarget_kind(ctx, field)
+			case "values":
+				return ec.fieldContext_MinionTarget_values(ctx, field)
+			case "name":
+				return ec.fieldContext_MinionTarget_name(ctx, field)
+			case "retries":
+				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTarget_state(ctx, field)
+			case "problems":
+				return ec.fieldContext_MinionTarget_problems(ctx, field)
+			case "stateDetail":
+				return ec.fieldContext_MinionTarget_stateDetail(ctx, field)
+			case "stateAt":
+				return ec.fieldContext_MinionTarget_stateAt(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionTarget_sessionId(ctx, field)
+			case "session":
+				return ec.fieldContext_MinionTarget_session(ctx, field)
+			case "failures":
+				return ec.fieldContext_MinionTarget_failures(ctx, field)
+			case "unreachableSince":
+				return ec.fieldContext_MinionTarget_unreachableSince(ctx, field)
+			case "nextCallAt":
+				return ec.fieldContext_MinionTarget_nextCallAt(ctx, field)
+			case "lastCallAt":
+				return ec.fieldContext_MinionTarget_lastCallAt(ctx, field)
+			case "lastOkAt":
+				return ec.fieldContext_MinionTarget_lastOkAt(ctx, field)
+			case "calls":
+				return ec.fieldContext_MinionTarget_calls(ctx, field)
+			case "createdBy":
+				return ec.fieldContext_MinionTarget_createdBy(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_MinionTarget_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_MinionTarget_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTarget", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_disconnectMinionTarget_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -53983,6 +54329,8 @@ func (ec *executionContext) fieldContext_Query_minionTarget(ctx context.Context,
 				return ec.fieldContext_MinionTarget_name(ctx, field)
 			case "retries":
 				return ec.fieldContext_MinionTarget_retries(ctx, field)
+			case "policy":
+				return ec.fieldContext_MinionTarget_policy(ctx, field)
 			case "state":
 				return ec.fieldContext_MinionTarget_state(ctx, field)
 			case "problems":
@@ -70455,7 +70803,7 @@ func (ec *executionContext) unmarshalInputMinionTargetInput(ctx context.Context,
 		asMap["retries"] = true
 	}
 
-	fieldsInOrder := [...]string{"values", "retries"}
+	fieldsInOrder := [...]string{"values", "retries", "policy"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -70476,6 +70824,13 @@ func (ec *executionContext) unmarshalInputMinionTargetInput(ctx context.Context,
 				return it, err
 			}
 			it.Retries = data
+		case "policy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("policy"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Policy = data
 		}
 	}
 	return it, nil
@@ -77356,6 +77711,8 @@ func (ec *executionContext) _MinionTarget(ctx context.Context, sel ast.Selection
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "policy":
+			out.Values[i] = ec._MinionTarget_policy(ctx, field, obj)
 		case "state":
 			out.Values[i] = ec._MinionTarget_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -79905,6 +80262,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "checkMinionTarget":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_checkMinionTarget(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "connectMinionTarget":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_connectMinionTarget(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "disconnectMinionTarget":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_disconnectMinionTarget(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

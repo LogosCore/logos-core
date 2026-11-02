@@ -759,6 +759,7 @@ type MinionTarget struct {
 	Values           any                       `json:"values"`
 	Name             string                    `json:"name"`
 	Retries          bool                      `json:"retries"`
+	Policy           *string                   `json:"policy,omitempty"`
 	State            string                    `json:"state"`
 	Problems         []*ChannelEndpointProblem `json:"problems"`
 	StateDetail      *string                   `json:"stateDetail,omitempty"`
@@ -795,8 +796,9 @@ type MinionTargetEvent struct {
 }
 
 type MinionTargetInput struct {
-	Values  any   `json:"values"`
-	Retries *bool `json:"retries,omitempty"`
+	Values  any     `json:"values"`
+	Retries *bool   `json:"retries,omitempty"`
+	Policy  *string `json:"policy,omitempty"`
 }
 
 type MinionTask struct {

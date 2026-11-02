@@ -39,11 +39,14 @@ func (f *fakeTargets) FindByTargetID(_ context.Context, id uuid.UUID) (*models.M
 	return &t, nil
 }
 
-func (f *fakeTargets) SetValues(_ context.Context, id uuid.UUID, v models.JSONMap, name string, retries bool, _ time.Time) error {
+func (f *fakeTargets) SetValues(_ context.Context, id uuid.UUID, v models.JSONMap, name string, retries bool, policy string, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.rows[id]
 	t.Values, t.Name, t.Retries = v, name, retries
+	if policy != "" {
+		t.Policy = policy
+	}
 	f.rows[id] = t
 	return nil
 }
@@ -102,10 +105,20 @@ func (s schemas) Schema(_ context.Context, m string) (*protocol.ConnectionSchema
 	return s[m], nil
 }
 
-type caller struct{ calls chan uuid.UUID }
+type caller struct{ calls, disconnects chan uuid.UUID }
 
 func (c caller) CheckTarget(_ context.Context, id uuid.UUID) (*models.MinionTarget, error) {
 	c.calls <- id
+	return nil, nil
+}
+
+func (c caller) ConnectTarget(_ context.Context, id uuid.UUID) (*models.MinionTarget, error) {
+	c.calls <- id
+	return nil, nil
+}
+
+func (c caller) DisconnectTarget(_ context.Context, id uuid.UUID) (*models.MinionTarget, error) {
+	c.disconnects <- id
 	return nil, nil
 }
 
@@ -126,7 +139,7 @@ func setup() (*Service, *fakeTargets, *fakeSessions, *models.Build, caller) {
 		}}}
 	targets := &fakeTargets{rows: map[uuid.UUID]models.MinionTarget{}}
 	sessions := &fakeSessions{rows: map[uuid.UUID]*models.MinionSession{}}
-	c := caller{calls: make(chan uuid.UUID, 4)}
+	c := caller{calls: make(chan uuid.UUID, 4), disconnects: make(chan uuid.UUID, 4)}
 	return NewService(targets, sessions, fakeBuilds{b.BuildID: b}, schemas{"dumbo": dumbo}, c, eventbus.NopEventBus{}), targets, sessions, b, c
 }
 
@@ -200,6 +213,18 @@ func TestUpdateAndRemove(t *testing.T) {
 	}
 	if err := s.Remove(ctx, tg.TargetID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("again: %v", err)
+	}
+	if len(c.disconnects) != 0 {
+		t.Fatal("a bind-call target disconnected")
+	}
+	// A bind-persistent target's connection closes with it.
+	tg, _ = s.Add(ctx, b, 2, nil, Input{Values: map[string]any{"url": "https://h/a.php"}})
+	<-c.calls
+	row = targets.rows[tg.TargetID]
+	row.Kind = protocol.KindBindPersistent
+	targets.rows[tg.TargetID] = row
+	if err := s.Remove(ctx, tg.TargetID); err != nil || len(c.disconnects) != 1 || <-c.disconnects != tg.TargetID {
+		t.Fatalf("a persistent target removed: %v", err)
 	}
 }
 

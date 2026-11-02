@@ -158,3 +158,43 @@ func TestCallDeadline(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// An open goes to the channel with its values; sent hears of it (the
+// instance and request a socket will name) before the answer comes.
+func TestOpen(t *testing.T) {
+	h := New(zap.NewNop())
+	srv := serve(h)
+	defer srv.Close()
+	ws, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = ws.Close() }()
+	waitUp(t, h, "dumbo", true)
+	go func() {
+		_, b, err := ws.ReadMessage()
+		if err != nil {
+			return
+		}
+		f, _ := protocol.DecodeLinkFrame(b)
+		if f.Type != protocol.LinkOpen || f.Values["host"] != "10.0.0.5" || f.Deadline != 30000 {
+			t.Errorf("open %+v", f)
+		}
+		a, _ := protocol.EncodeLinkFrame(protocol.LinkFrame{Type: protocol.LinkAnswer, Request: f.Request})
+		_ = ws.WriteMessage(websocket.BinaryMessage, a)
+	}()
+	var gotInstance string
+	var gotReq uint64
+	a, err := h.Open(context.Background(), "dumbo", map[string]any{"host": "10.0.0.5"}, 0, func(instance string, req uint64) {
+		gotInstance, gotReq = instance, req
+	})
+	if err != nil || a.Failure != nil || gotInstance != "dumbo-1" || gotReq == 0 || a.Request != gotReq {
+		t.Fatalf("open: %+v %v (sent %s %d)", a, err, gotInstance, gotReq)
+	}
+	if _, err := h.Open(context.Background(), "nope", nil, 0, nil); !errors.Is(err, ErrNoLink) {
+		t.Fatalf("no link: %v", err)
+	}
+}

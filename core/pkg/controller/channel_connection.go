@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"sync"
 	"time"
 
@@ -47,7 +48,8 @@ var connUpgrader = websocket.Upgrader{
 //	@Description	A channel opens one per persistent minion connection: a WebSocket whose binary frames carry the connection's messages both ways.
 //	@Tags			Channels
 //	@Param			Logos-Channel-Instance	header	string	true	"The channel's registered instance id"
-//	@Param			Logos-Connection-Kind	header	string	true	"reverse-persistent"
+//	@Param			Logos-Connection-Kind	header	string	true	"reverse-persistent or bind-persistent"
+//	@Param			Logos-Open-Request		header	string	false	"bind-persistent: the control link's open it answers"
 //	@Param			Logos-Peer-Address		header	string	false	"The minion's address, as the channel saw it"
 //	@Success		101
 //	@Failure		400	{object}	responses.ErrorResponse
@@ -63,13 +65,17 @@ func (ctrl *channelController) Connection(c *gin.Context) {
 	if a, err := netip.ParseAddr(h.Get(protocol.HeaderPeerAddress)); err == nil {
 		peer = a.Unmap().WithZone("").String()
 	}
+	request, _ := strconv.ParseUint(h.Get(protocol.HeaderOpenRequest), 10, 64)
 	switch {
 	case instance == "":
 		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: %s is required", protocol.HeaderChannelInstance))
 		return
-	case kind != protocol.KindReversePersistent:
-		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: %s must be %s", protocol.HeaderConnectionKind,
-			protocol.KindReversePersistent))
+	case kind != protocol.KindReversePersistent && kind != protocol.KindBindPersistent:
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: %s must be %s or %s", protocol.HeaderConnectionKind,
+			protocol.KindReversePersistent, protocol.KindBindPersistent))
+		return
+	case kind == protocol.KindBindPersistent && request == 0:
+		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: a %s socket names its open (%s)", kind, protocol.HeaderOpenRequest))
 		return
 	}
 	registered, err := ctrl.gate.IsRegistered(ctx, instance)
@@ -83,16 +89,28 @@ func (ctrl *channelController) Connection(c *gin.Context) {
 		c.JSON(http.StatusForbidden, responses.ErrChannelNotRegistered)
 		return
 	}
+	// A bind-persistent socket answers an open core is waiting for: its
+	// target's connection.
+	var target uuid.UUID
+	var policy string
+	if kind == protocol.KindBindPersistent {
+		var ok bool
+		if target, policy, ok = ctrl.minions.OpenedFor(instance, request); !ok {
+			log.Info("channel connection: an open core is not waiting for", zap.String("instance", instance), zap.Uint64("request", request))
+			c.JSON(http.StatusConflict, responses.NewErrorResponse("no open %d of this instance waits for its socket", request))
+			return
+		}
+	}
 	ws, err := connUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		return // the upgrader answered the client
 	}
-	ctrl.serveConnection(ws, instance, kind, peer)
+	ctrl.serveConnection(ws, instance, kind, peer, target, policy)
 }
 
 // serveConnection reads the socket's frames into the sync service until it
 // closes, pinging it, and keeps the sessions it serves checked in.
-func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kind, peer string) {
+func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kind, peer string, target uuid.UUID, policy string) {
 	// The socket outlives the handshake's request: its context is its own.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -114,7 +132,11 @@ func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kin
 		return write(websocket.BinaryMessage, b)
 	}, func() { _ = ws.Close() })
 	log = log.With(zap.String("conn", conn.ID))
-	log.Info("channel connection opened")
+	if target != uuid.Nil {
+		ctrl.minions.ForTarget(conn, target, policy)
+		log = log.With(zap.String("target_id", target.String()))
+	}
+	log.Info("channel connection opened", zap.String("kind", kind))
 	defer func() {
 		_ = ws.Close()
 		ctrl.minions.Closed(context.Background(), conn)

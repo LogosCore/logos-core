@@ -22,6 +22,14 @@ export function useTaskWaiting(sessionId: string, { live = false }: { live?: boo
   if (!t) return "no target: core cannot reach the page until one is added to the session"
   if (t.problems.length > 0) return "the target needs editing: its values no longer fit the channel's fields"
   if (t.state === "connected" || t.state === "new") return null
+  if (t.kind === "bind-persistent") {
+    if (t.state === "connecting") return "the connection is opening"
+    if (t.state === "not_connected") {
+      return t.policy === "manual"
+        ? "no connection open: Connect the target (its policy is manual)"
+        : "no connection open: core opens it now"
+    }
+  }
   // "for 5m", "for 3h"; past a day formatAgo has no short form, left out.
   const ago = t.unreachableSince ? formatAgo(now - Date.parse(t.unreachableSince)) : null
   const since = ago && ago !== "just now" ? ago.replace(/ ago$/, "") : null

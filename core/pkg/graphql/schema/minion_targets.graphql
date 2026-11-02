@@ -32,8 +32,14 @@ type MinionTarget {
   # An unreachable target is called again: 1 minute, 5, 30, then hourly,
   # for a day. Off where every request in a server's log counts.
   retries: Boolean!
+  # A bind-persistent target's: who opens its connection. on-demand (core,
+  # when the session has something to send; closed after 10 minutes idle),
+  # manual (an operator: Connect, Disconnect; closed after an hour idle),
+  # always (core, again whenever it drops). Null for a bind-call target.
+  policy: String
   # new | connected | unreachable | not_the_minion | refused | stopped |
-  # no_channel | needs_editing
+  # no_channel | needs_editing; a bind-persistent target's also
+  # connecting | not_connected
   state: String!
   # Why its values no longer fit the channel's current target fields (one
   # it now requires is missing, one is gone or changed), by field; empty
@@ -89,6 +95,9 @@ input MinionTargetInput {
   # unset (its default applies).
   values: JSON!
   retries: Boolean = true
+  # A bind-persistent target's policy (on-demand, manual, always); null
+  # keeps a target's, on-demand for a new one.
+  policy: String
 }
 
 type MinionTargetEvent {
@@ -144,9 +153,20 @@ extend type Mutation {
   updateMinionTarget(id: ID!, input: MinionTargetInput!): MinionTarget!
     @hasPermission(permission: "operation:member")
 
-  # Calls a target now (Check now) and returns it as the call left it.
+  # Calls a target now (Check now) and returns it as the call left it; a
+  # bind-persistent target's connection opens, unless open or manual.
   # Needs operator.
   checkMinionTarget(id: ID!): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Opens a bind-persistent target's connection now, whatever its policy,
+  # and returns the target as the open left it. Needs operator.
+  connectMinionTarget(id: ID!): MinionTarget!
+    @hasPermission(permission: "operation:member")
+
+  # Closes a bind-persistent target's connection; one of policy always is
+  # opened again (set it manual to keep it closed). Needs operator.
+  disconnectMinionTarget(id: ID!): MinionTarget!
     @hasPermission(permission: "operation:member")
 
   # Removes a target: its calls stop. Its session stays, with no target,

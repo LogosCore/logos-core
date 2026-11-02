@@ -47,9 +47,12 @@ type Schemas interface {
 	Schema(ctx context.Context, moduleName string) (*protocol.ConnectionSchema, error)
 }
 
-// Caller calls targets. Satisfied by *minionsync.Service.
+// Caller calls targets, and opens and closes bind-persistent targets'
+// connections. Satisfied by *minionsync.Service.
 type Caller interface {
 	CheckTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error)
+	ConnectTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error)
+	DisconnectTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error)
 }
 
 // Service manages targets.
@@ -74,7 +77,30 @@ func NewService(targets repository.IMinionTargetRepository, sessions repository.
 type Input struct {
 	Values  map[string]any
 	Retries bool
-	Actor   models.ModuleActor
+	// Policy is who opens a bind-persistent target's connection
+	// (models.PolicyOnDemand, ...); "" keeps a target's, on-demand for a new
+	// one. A bind-call target has none.
+	Policy string
+	Actor  models.ModuleActor
+}
+
+// policyFor is the policy a target of kind takes from in (keeping had).
+func policyFor(kind string, in Input, had string) (string, error) {
+	if kind != protocol.KindBindPersistent {
+		if in.Policy != "" {
+			return "", invalid("a %s target has no policy: core calls it when there is something to send", kind)
+		}
+		return "", nil
+	}
+	switch {
+	case in.Policy == "" && had != "":
+		return had, nil
+	case in.Policy == "":
+		return models.PolicyOnDemand, nil
+	case !models.KnownPolicy(in.Policy):
+		return "", &ValidationError{Message: "policy is on-demand, manual or always", Problems: map[string]string{"policy": "on-demand, manual or always"}}
+	}
+	return in.Policy, nil
 }
 
 // BindConnection is a build connection targets can be added to: its
@@ -103,7 +129,7 @@ func (s *Service) BindConnections(ctx context.Context, b *models.Build) ([]BindC
 			return nil, err
 		}
 		switch {
-		case kind != protocol.KindBindCall:
+		case kind != protocol.KindBindCall && kind != protocol.KindBindPersistent:
 			bc.Problem = "core does not reach " + kind + " minions yet"
 		case schema == nil || !hasKind(schema, kind):
 			bc.Problem = fmt.Sprintf("no %s channel declares %s connections now", bc.ModuleName, kind)
@@ -143,9 +169,13 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 	if err != nil {
 		return nil, err
 	}
+	policy, err := policyFor(kind, in, "")
+	if err != nil {
+		return nil, err
+	}
 	now := s.now()
 	t := &models.MinionTarget{
-		OperationID: b.OperationID, BuildID: b.BuildID, Conn: conn, ModuleName: module, Kind: kind,
+		OperationID: b.OperationID, BuildID: b.BuildID, Conn: conn, ModuleName: module, Kind: kind, Policy: policy,
 		Values: values, Name: targetName(values), Retries: in.Retries, SessionID: session,
 		State: models.TargetNew, StateAt: now, CreatedBy: in.Actor, CreatedAt: now, UpdatedAt: now,
 	}
@@ -153,7 +183,10 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 		return nil, fmt.Errorf("store the target: %w", err)
 	}
 	s.publish(t, false)
-	s.callSoon(t.TargetID)
+	// A manual target waits for an operator's Connect.
+	if t.Policy != models.PolicyManual {
+		s.callSoon(t.TargetID)
+	}
 	return t, nil
 }
 
@@ -195,14 +228,44 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (*models.M
 	if err != nil {
 		return nil, err
 	}
-	if err := s.targets.SetValues(ctx, id, values, targetName(values), in.Retries, s.now()); err != nil {
+	policy, err := policyFor(t.Kind, in, t.Policy)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.targets.SetValues(ctx, id, values, targetName(values), in.Retries, policy, s.now()); err != nil {
 		return nil, fmt.Errorf("store the target: %w", err)
 	}
 	s.publish(t, false)
-	if t.State != models.TargetConnected {
+	if t.State != models.TargetConnected && policy != models.PolicyManual {
 		s.callSoon(id)
 	}
 	return s.Get(ctx, id)
+}
+
+// Connect opens a bind-persistent target's connection now (an operator's
+// Connect, whatever its policy) and returns the target as the open left it.
+func (s *Service) Connect(ctx context.Context, id uuid.UUID) (*models.MinionTarget, error) {
+	t, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if t.Kind != protocol.KindBindPersistent {
+		return nil, invalid("a %s target has no connection to open: Check now calls it", t.Kind)
+	}
+	return s.caller.ConnectTarget(ctx, id)
+}
+
+// Disconnect closes a bind-persistent target's connection. One of policy
+// always is opened again by core: set it manual to keep it closed.
+func (s *Service) Disconnect(ctx context.Context, id uuid.UUID) (*models.MinionTarget, error) {
+	t, err := s.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if t.Kind != protocol.KindBindPersistent {
+		return nil, invalid("a %s target has no connection to close", t.Kind)
+	}
+	return s.caller.DisconnectTarget(ctx, id)
 }
 
 // Check calls a target now and returns it as the call left it.
@@ -220,6 +283,12 @@ func (s *Service) Remove(ctx context.Context, id uuid.UUID) error {
 	t, err := s.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+	if t.Kind == protocol.KindBindPersistent && s.caller != nil {
+		// Its connection closes with it.
+		if _, err := s.caller.DisconnectTarget(ctx, id); err != nil {
+			return fmt.Errorf("close the target's connection: %w", err)
+		}
 	}
 	if _, err := s.targets.Delete(ctx, id); err != nil {
 		return fmt.Errorf("remove the target: %w", err)
@@ -300,7 +369,7 @@ func ProblemsText(problems map[string]string) string {
 // check validates values against the channel's target fields for kind and
 // returns them over the fields' defaults.
 func (s *Service) check(ctx context.Context, module, kind string, values map[string]any) (models.JSONMap, error) {
-	if kind != protocol.KindBindCall {
+	if kind != protocol.KindBindCall && kind != protocol.KindBindPersistent {
 		return nil, invalid("core does not reach %s minions yet", kind)
 	}
 	schema, err := s.schemas.Schema(ctx, module)

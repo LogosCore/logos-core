@@ -55,13 +55,37 @@ type Conn struct {
 	// pending are the ids of the messages core sent on it, waiting for
 	// their answers.
 	pending map[string]time.Time
+	// active is when a message last went over it, either way: a
+	// bind-persistent connection closes after its policy's idle time.
+	active time.Time
+
+	// target is the bind-persistent target the connection was opened for
+	// (uuid.Nil for a reverse one), policy its policy then; linked once
+	// its first session is linked to the target; why why it is closing.
+	target uuid.UUID
+	policy string
+	linked bool
+	why    string
 }
 
 // NewConn is a connection whose frames go out through send, and which
 // close closes (the socket).
 func NewConn(id, kind, instance, peer string, send func(ctx context.Context, f protocol.ConnFrame) error, close func()) *Conn {
 	return &Conn{ID: id, Kind: kind, Instance: instance, Peer: peer, send: send, close: close,
-		allowance: map[uuid.UUID]*uint64{}, pending: map[string]time.Time{}}
+		allowance: map[uuid.UUID]*uint64{}, pending: map[string]time.Time{}, active: time.Now()}
+}
+
+// touch records an exchange on c now: its idle time starts over.
+func (c *Conn) touch(now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.active = now
+}
+
+func (c *Conn) lastActive() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.active
 }
 
 func (c *Conn) setAllowance(session uuid.UUID, max *uint64) {
@@ -382,6 +406,7 @@ func (s *Service) room(ctx context.Context, session *models.MinionSession, allow
 // push sends items on c as a message core starts, under the session's id,
 // and waits for its answer.
 func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.RawMessage) error {
+	c.touch(s.now())
 	id := protocol.NewMessageID()
 	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: id, Items: items})
 	if err != nil {
@@ -404,6 +429,10 @@ func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.
 // no connection open is now connected, and a connection a full list let
 // go is closed.
 func (s *Service) seenOn(ctx context.Context, via *Conn, session *models.MinionSession) {
+	if via.target != uuid.Nil && !via.linked {
+		via.linked = true
+		s.linkTarget(ctx, via.target, session)
+	}
 	first, evicted := s.conns.seen(session.SessionID, via, s.now())
 	if evicted != nil && evicted.close != nil {
 		s.logger.Info("minion connection: a session's oldest let go", zap.String("session_id", session.SessionID.String()),
@@ -427,6 +456,9 @@ func (s *Service) KeepAlive(ctx context.Context, c *Conn) {
 // Closed forgets c once its socket closed: the sessions it served are seen
 // a last time now, and those it leaves with no connection are told of.
 func (s *Service) Closed(ctx context.Context, c *Conn) {
+	if c.target != uuid.Nil {
+		s.persistentClosed(ctx, c)
+	}
 	served, nowNone := s.conns.remove(c)
 	for _, session := range served {
 		s.touch(ctx, session, c.Peer)

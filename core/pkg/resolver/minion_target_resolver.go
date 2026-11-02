@@ -31,6 +31,8 @@ type MinionTargets interface {
 	Add(ctx context.Context, b *models.Build, conn int, session *uuid.UUID, in miniontargets.Input) (*models.MinionTarget, error)
 	Update(ctx context.Context, id uuid.UUID, in miniontargets.Input) (*models.MinionTarget, error)
 	Check(ctx context.Context, id uuid.UUID) (*models.MinionTarget, error)
+	Connect(ctx context.Context, id uuid.UUID) (*models.MinionTarget, error)
+	Disconnect(ctx context.Context, id uuid.UUID) (*models.MinionTarget, error)
 	Remove(ctx context.Context, id uuid.UUID) error
 	Get(ctx context.Context, id uuid.UUID) (*models.MinionTarget, error)
 	OfSession(ctx context.Context, sessionID uuid.UUID) (*models.MinionTarget, error)
@@ -53,6 +55,8 @@ type IMinionTargetResolver interface {
 	BindTarget(ctx context.Context, s *model.MinionSession) (*model.MinionTarget, error)
 	// Load is one target for an event, nil when it is gone or unreadable.
 	Load(ctx context.Context, id string) *model.MinionTarget
+	ConnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
+	DisconnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
 }
 
 type minionTargetResolver struct {
@@ -198,6 +202,28 @@ func (r *minionTargetResolver) CheckMinionTarget(ctx context.Context, id string)
 	return r.toModel(ctx, t, nil), nil
 }
 
+func (r *minionTargetResolver) ConnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error) {
+	t, err := r.authorizeTarget(ctx, id, models.OperationRoleOperator, true)
+	if err != nil {
+		return nil, err
+	}
+	if t, err = r.targets.Connect(ctx, t.TargetID); err != nil {
+		return nil, mapTargetError(ctx, err)
+	}
+	return r.toModel(ctx, t, nil), nil
+}
+
+func (r *minionTargetResolver) DisconnectMinionTarget(ctx context.Context, id string) (*model.MinionTarget, error) {
+	t, err := r.authorizeTarget(ctx, id, models.OperationRoleOperator, true)
+	if err != nil {
+		return nil, err
+	}
+	if t, err = r.targets.Disconnect(ctx, t.TargetID); err != nil {
+		return nil, mapTargetError(ctx, err)
+	}
+	return r.toModel(ctx, t, nil), nil
+}
+
 func (r *minionTargetResolver) RemoveMinionTarget(ctx context.Context, id string) (bool, error) {
 	t, err := r.authorizeTarget(ctx, id, models.OperationRoleOperator, true)
 	if err != nil {
@@ -266,7 +292,7 @@ func (r *minionTargetResolver) toModel(ctx context.Context, t *models.MinionTarg
 	}
 	out := &model.MinionTarget{
 		ID: t.TargetID.String(), OperationID: t.OperationID.String(), BuildID: t.BuildID.String(),
-		Conn: t.Conn, ModuleName: t.ModuleName, Kind: t.Kind, Values: values, Name: t.Name, Retries: t.Retries,
+		Conn: t.Conn, ModuleName: t.ModuleName, Kind: t.Kind, Values: values, Name: t.Name, Retries: t.Retries, Policy: strPtr(t.Policy),
 		State: t.State, StateDetail: strPtr(t.StateDetail), StateAt: t.StateAt.Format(time.RFC3339),
 		Failures: t.Failures, UnreachableSince: timePtr(t.UnreachableSince), NextCallAt: timePtr(t.NextCallAt),
 		LastCallAt: timePtr(t.LastCallAt), LastOkAt: timePtr(t.LastOKAt), Calls: int(t.Calls),
@@ -316,6 +342,9 @@ func targetInput(ctx context.Context, input model.MinionTargetInput) (miniontarg
 	in := miniontargets.Input{Values: values, Retries: true, Actor: managementActor(gqlctx.AuthFromContext(ctx))}
 	if input.Retries != nil {
 		in.Retries = *input.Retries
+	}
+	if input.Policy != nil {
+		in.Policy = *input.Policy
 	}
 	return in, nil
 }

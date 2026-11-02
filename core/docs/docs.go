@@ -165,6 +165,107 @@ const docTemplate = `{
                 "responses": {}
             }
         },
+        "/channel/connection": {
+            "get": {
+                "description": "A channel opens one per persistent minion connection: a WebSocket whose binary frames carry the connection's messages both ways.",
+                "tags": [
+                    "Channels"
+                ],
+                "summary": "Channel connection socket (data plane)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The channel's registered instance id",
+                        "name": "Logos-Channel-Instance",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "reverse-persistent or bind-persistent",
+                        "name": "Logos-Connection-Kind",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "bind-persistent: the control link's open it answers",
+                        "name": "Logos-Open-Request",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "The minion's address, as the channel saw it",
+                        "name": "Logos-Peer-Address",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "instance is not a registered module",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "module registry unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/channel/link": {
+            "get": {
+                "description": "A channel instance opens one: a WebSocket over which core asks it to call bind minions, and it answers each request by its id.",
+                "tags": [
+                    "Channels"
+                ],
+                "summary": "Channel control link (data plane)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "The channel's registered instance id",
+                        "name": "Logos-Channel-Instance",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "instance is not a registered channel",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "module registry unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/responses.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/channel/sync": {
             "post": {
                 "description": "A channel relays one minion message: the ciphertext as an application/octet-stream body, its ids in Logos-* headers. Core answers 200 with ciphertext for the minion, or 204 when it has nothing for it (today, always).",

@@ -231,13 +231,54 @@ func (s *Service) cancels(ctx context.Context, session *models.MinionSession) ([
 	for _, t := range send {
 		// With where the task stands, when the minion said: one that keeps
 		// nothing ends the task from there.
-		item, err := protocol.MarshalCBOR(protocol.CancelItem{T: protocol.ItemCancel, Task: t.TaskID[:], Ctx: t.ResumeCtx})
+		item, err := protocol.MarshalCBOR(protocol.CancelItem{T: protocol.ItemCancel, Task: t.TaskID[:], Ctx: cancelCtx(t)})
 		if err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+// cancelCtx is the ctx a task's cancel carries: its parts' newest, else its
+// transfer's (a file core sends, or a stream the minion sends), where a
+// minion that keeps nothing finds what it holds for the task (a page, its
+// partial upload).
+func cancelCtx(t models.MinionTask) []byte {
+	switch {
+	case t.ResumeCtx != nil:
+		return t.ResumeCtx
+	case t.Upload != nil && t.Upload.Ctx != nil:
+		return t.Upload.Ctx
+	case t.Stream != nil:
+		return t.Stream.Ctx
+	}
+	return nil
+}
+
+// endUnknown ends a task the minion says it does not have (an err
+// unknown_task naming it, as an answer to a cancel): cancelled when it was
+// asked to stop, failed otherwise. A task that ended already is left.
+func (s *Service) endUnknown(ctx context.Context, session *models.MinionSession, e protocol.ErrItem) error {
+	if s.tasks == nil || len(e.Task) != 16 {
+		return nil
+	}
+	id := uuid.UUID(e.Task)
+	why := "the minion does not have the task"
+	if e.Msg != "" {
+		why += ": " + e.Msg
+	}
+	t, err := s.tasks.EndUnknown(ctx, session.SessionID, id, why, s.now())
+	switch {
+	case repository.IsNotFound(err):
+		return nil
+	case err != nil:
+		return fmt.Errorf("end a task the minion does not have: %w", err)
+	}
+	s.logger.Info("minion task ended: the minion does not have it", zap.String("session_id", session.SessionID.String()),
+		zap.String("task_id", id.String()), zap.String("state", t.State))
+	s.publishTask(t)
+	return nil
 }
 
 // readGetTasks reads and checks a get_tasks.

@@ -10,13 +10,15 @@ import { useMinionSessionConnections } from "@/graphql/hooks/minion-sessions"
 import {
   useBindConnections,
   useCheckMinionTarget,
+  useConnectMinionTarget,
+  useDisconnectMinionTarget,
   useMinionTargetChangedSubscription,
   useSessionTarget,
 } from "@/graphql/hooks/minion-targets"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { TargetStateBadge } from "@/components/targets/target-state-badge"
-import { TARGET_STATE_LABEL, problemsText, shownState, type Target } from "@/components/targets/target-values"
+import { TARGET_STATE_LABEL, isPersistent, problemsText, shownState, type Target } from "@/components/targets/target-values"
 import { TargetDialog } from "@/components/targets/target-dialog"
 import { useSwitchConnection } from "./use-connection-choices"
 
@@ -42,7 +44,7 @@ export function ConnectionsCard({ s }: { s: Session }) {
   const open = s.state === "OPEN"
   const targetQuery = useSessionTarget(s.id)
   const target = targetQuery.data ?? null
-  const bind = s.connKind === "bind-call"
+  const bind = s.connKind === "bind-call" || s.connKind === "bind-persistent"
   useMinionTargetChangedSubscription(target || bind ? s.operationId : "")
 
   return (
@@ -100,14 +102,23 @@ export function ConnectionsCard({ s }: { s: Session }) {
 /** The page's target under its connection: its URL, state, and Check now. */
 function TargetLine({ target: t }: { target: Target }) {
   const check = useCheckMinionTarget()
+  const connect = useConnectMinionTarget()
+  const disconnect = useDisconnectMinionTarget()
   const modals = useRecordModals()
   const [busy, setBusy] = useState(false)
+  // A connection kept open: Connect or Disconnect it; a page: Check now.
+  const persistent = isPersistent(t)
+  const connected = t.state === "connected"
   async function checkNow() {
     setBusy(true)
     try {
-      const after = (await check.mutateAsync(t.id)).checkMinionTarget
+      const after = !persistent
+        ? (await check.mutateAsync(t.id)).checkMinionTarget
+        : connected
+          ? (await disconnect.mutateAsync(t.id)).disconnectMinionTarget
+          : (await connect.mutateAsync(t.id)).connectMinionTarget
       const label = TARGET_STATE_LABEL[after.state] ?? after.state
-      if (after.state === "connected") toast.success(`${after.name}: ${label}`)
+      if (after.state === "connected" || (persistent && connected && after.state === "not_connected")) toast.success(`${after.name}: ${label}`)
       else toast.warning(`${after.name}: ${label}`, { description: after.stateDetail ?? undefined })
     } catch (err) {
       toast.error("Could not call the target", { description: errorMessage(err, "Request failed") })
@@ -128,7 +139,7 @@ function TargetLine({ target: t }: { target: Target }) {
         </span>
       )}
       <Button type="button" variant="outline" size="xs" disabled={busy} onClick={checkNow}>
-        Check now
+        {persistent ? (connected ? "Disconnect" : "Connect") : "Check now"}
       </Button>
       <Button
         type="button"

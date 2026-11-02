@@ -117,6 +117,7 @@ import {
   type SessionsLayout,
 } from "./sessions-layout"
 import { SwitchConnectionMenu } from "./switch-connection-menu"
+import { ConnectTargetMenu } from "./connect-target-menu"
 
 // The Sessions table: the operators' main view. Unlike the app's other
 // tables, its columns are the operator's: any property of a session, in any
@@ -876,6 +877,7 @@ function SessionMenu({
         <FolderTreeIcon />
         File Browser
       </ContextMenuItem>
+      <ConnectTargetMenu s={s} canWrite={canWrite} onInteract={onInteract} />
       <SwitchConnectionMenu s={s} canWrite={canWrite} />
       {/* The session's own record, and the build its minion came from. */}
       <ContextMenuSub>

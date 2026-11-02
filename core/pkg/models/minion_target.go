@@ -40,7 +40,57 @@ const (
 	// fields (one it now requires is missing, one is gone or changed); core
 	// does not call it until an operator edits it.
 	TargetNeedsEditing = "needs_editing"
+	// A bind-persistent target's connection: TargetConnecting while core
+	// waits for its open, TargetConnected while it is open (as for a call
+	// that reached the page), TargetNotConnected once closed on purpose
+	// (idle, an operator, the minion); an open that fails leaves it
+	// unreachable.
+	TargetConnecting   = "connecting"
+	TargetNotConnected = "not_connected"
 )
+
+// Who opens a bind-persistent target's connection, and when it closes
+// idle (docs: contracts/channel-core-connections/, bind-persistent
+// connections).
+const (
+	// PolicyOnDemand: core opens it when the session has something to
+	// send; it closes after TargetIdleOnDemand without an exchange.
+	PolicyOnDemand = "on-demand"
+	// PolicyManual: an operator opens it (Connect) and closes it
+	// (Disconnect); it closes after TargetIdleManual, as a safety net.
+	PolicyManual = "manual"
+	// PolicyAlways: core keeps it open, opening it again whenever it drops.
+	PolicyAlways = "always"
+
+	TargetIdleOnDemand = 10 * time.Minute
+	TargetIdleManual   = time.Hour
+)
+
+// PolicyOf is who opens t's connection: its policy, on-demand when it says
+// none.
+func (t MinionTarget) PolicyOf() string {
+	if t.Policy == "" {
+		return PolicyOnDemand
+	}
+	return t.Policy
+}
+
+// KnownPolicy reports whether p is a policy.
+func KnownPolicy(p string) bool {
+	return p == PolicyOnDemand || p == PolicyManual || p == PolicyAlways
+}
+
+// IdleClose is how long a connection of policy p stays open without an
+// exchange; 0 for no limit.
+func IdleClose(p string) time.Duration {
+	switch p {
+	case PolicyManual:
+		return TargetIdleManual
+	case PolicyAlways:
+		return 0
+	}
+	return TargetIdleOnDemand
+}
 
 // TargetRetryFor is how long an unreachable target is retried.
 const TargetRetryFor = 24 * time.Hour
@@ -78,6 +128,10 @@ type MinionTarget struct {
 	// Retries says whether an unreachable target is called again on its
 	// schedule; off where every request in a server's log counts.
 	Retries bool `bson:"retries" json:"retries"`
+	// Policy is who opens a bind-persistent target's connection
+	// (PolicyOnDemand, ...); "" for a bind-call target, and on-demand for
+	// one stored before it had one.
+	Policy string `bson:"policy,omitempty" json:"policy,omitempty"`
 
 	State string `bson:"state" json:"state"`
 	// StateDetail says more of the state: why a call failed, what answered.
