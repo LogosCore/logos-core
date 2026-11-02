@@ -419,6 +419,46 @@ func TestOfferAccepted(t *testing.T) {
 	}
 }
 
+// A build's failover policy: the defaults when the operator gives none,
+// theirs otherwise, with a connection's own overrides; the factory gets
+// them; a policy that does not hold is refused, by key.
+func TestBuildFailover(t *testing.T) {
+	r := newRig(t)
+	b := r.queue(t, nil)
+	if got := b.FailoverPolicy(); got != protocol.DefaultBuildFailover() || b.Connections.Items[0].Failover != nil {
+		t.Fatalf("defaults: %+v", got)
+	}
+	off := false
+	custom := protocol.BuildFailover{Enabled: true, FailAfter: 10, FailFor: "2m", Wrap: false, CyclePause: "1m", FailbackAfter: "0s"}
+	r.queue(t, func(in *BuildInput) {
+		in.Failover = &custom
+		in.Connections[0].Failover = &protocol.ConnectionFailover{Auto: &off, FailAfter: 3}
+	})
+	r.svc.Tick(context.Background())
+	var req *protocol.BuildRequest
+	for _, c := range r.rpc.recorded() {
+		if q, ok := c.payload.(protocol.BuildRequest); ok && q.Failover != nil && q.Failover.FailAfter == 10 {
+			req = &q
+		}
+	}
+	if req == nil || *req.Failover != custom || req.Connections[0].Failover == nil || req.Connections[0].Failover.FailAfter != 3 ||
+		req.Connections[0].FailoverAuto() {
+		t.Fatalf("the factory got %+v", req)
+	}
+	// Overrides that override nothing are none.
+	b = r.queue(t, func(in *BuildInput) { in.Connections[0].Failover = &protocol.ConnectionFailover{} })
+	if b.Connections.Items[0].Failover != nil {
+		t.Fatalf("an empty override kept: %+v", b.Connections.Items[0].Failover)
+	}
+	bad := custom
+	bad.FailFor = "a while"
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.Failover = &bad }))
+	var v *ValidationError
+	if !errors.As(err, &v) || v.Problems["failover.fail_for"] == "" {
+		t.Fatalf("a bad policy: %v", err)
+	}
+}
+
 func TestOfferWithCrypto(t *testing.T) {
 	r := newRig(t)
 	r.reg.schemas["bob"].Crypto = protocol.CryptoAES256CBCHMACSHA256
@@ -860,6 +900,36 @@ func TestDeleteBuild(t *testing.T) {
 	}
 	if err := r.svc.DeleteBuild(ctx, queued.BuildID.String(), alice); !errors.Is(err, ErrBuildNotFound) {
 		t.Fatalf("deleting a deleted build: %v", err)
+	}
+}
+
+// Many builds go in one call: by id (one of another operation, or gone,
+// skipped; at most MaxBulkBuilds), or every one a filter lets through.
+func TestDeleteBuilds(t *testing.T) {
+	r := newRig(t)
+	ctx := context.Background()
+	a, b, c := r.queue(t, nil), r.queue(t, nil), r.queue(t, nil)
+	n, err := r.svc.DeleteBuilds(ctx, opID, []string{a.BuildID.String(), uuid.NewString(), b.BuildID.String()}, nil, alice)
+	if err != nil || n != 2 || len(r.builds.rows) != 1 {
+		t.Fatalf("by id: %d (%v), %d left", n, err, len(r.builds.rows))
+	}
+	if n, err := r.svc.DeleteBuilds(ctx, uuid.New(), []string{c.BuildID.String()}, nil, alice); err != nil || n != 0 || len(r.builds.rows) != 1 {
+		t.Fatalf("another operation's build: %d (%v)", n, err)
+	}
+	if _, err := r.svc.DeleteBuilds(ctx, opID, make([]string, MaxBulkBuilds+1), nil, alice); err == nil {
+		t.Fatal("more than MaxBulkBuilds by id")
+	}
+	// Matching: only the filter's go, past one page.
+	for range 150 {
+		r.queue(t, nil)
+	}
+	n, err = r.svc.DeleteBuilds(ctx, opID, nil, &repository.BuildFilter{States: []string{models.BuildStateSucceeded}}, alice)
+	if err != nil || n != 0 || len(r.builds.rows) != 151 {
+		t.Fatalf("a filter none passes: %d (%v)", n, err)
+	}
+	n, err = r.svc.DeleteBuilds(ctx, opID, nil, &repository.BuildFilter{}, alice)
+	if err != nil || n != 151 || len(r.builds.rows) != 0 {
+		t.Fatalf("every build: %d (%v), %d left", n, err, len(r.builds.rows))
 	}
 }
 

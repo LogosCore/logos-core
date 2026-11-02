@@ -45,6 +45,11 @@ type BuildSchema {
   # The minions can claim a persisted session: a build can be made from a
   # session for them (BuildInput.persistedSession).
   persistedSessions: Boolean!
+  # The minions honor a build's failover settings (BuildInput.failover and
+  # each connection's): they move between their connections on their own as
+  # those say. Without it the settings still reach the factory, which may
+  # ignore them.
+  failover: Boolean!
 }
 
 # A command a factory's minions can be built with.
@@ -169,6 +174,11 @@ input BuildConnectionInput {
   # The factory's connection parameter values for the connection kind by
   # key, the same way.
   values: JSON
+  # The connection's own failover settings: {auto, fail_after}. auto: may
+  # failover move the minion here (default true, false for bind-persistent);
+  # fail_after: failures in a row before it moves off this one (default the
+  # build's). null: neither.
+  failover: JSON
 }
 
 input BuildInput {
@@ -194,6 +204,11 @@ input BuildInput {
   # Reserves a new session with the build for its minion to claim when it
   # first starts (a new persisted session); not with persistedSession.
   newPersistedSession: Boolean
+  # How the minion moves between its connections on its own: {enabled,
+  # fail_after, fail_for, wrap, cycle_pause, failback_after}, durations as
+  # "5m". Keys left out take the defaults (enabled, 5, "0s", true, "5m",
+  # "1h"); null: all defaults.
+  failover: JSON
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -267,6 +282,10 @@ type Build {
   # The operators' notes on the connections, by position ("" for none). Core's
   # own: the factory never got them, so they are not in connections.
   connectionDescriptions: [String!]!
+  # The failover policy as the factory got it: {enabled, fail_after,
+  # fail_for, wrap, cycle_pause, failback_after} (a build from before
+  # builds had one: the defaults).
+  failover: JSON!
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON
@@ -372,4 +391,19 @@ extend type Mutation {
   # operator; agent API keys are rejected.
   deleteBuild(id: ID!): Boolean!
     @hasPermission(permission: "operation:member")
+
+  # Deletes many of an operation's builds, each as deleteBuild does: those
+  # with ids (at most 500; one not of the operation or gone already is
+  # skipped), or every one matching (the search and filters the list shows).
+  # Exactly one of the two. Returns how many went. Needs at least operator;
+  # agent API keys are rejected.
+  deleteBuilds(operationId: ID!, ids: [ID!], matching: BuildMatchInput): Int!
+    @hasPermission(permission: "operation:member")
+}
+
+# The builds a list shows: its search and filters, as builds() takes them.
+input BuildMatchInput {
+  search: String
+  states: [String!]
+  moduleNames: [String!]
 }

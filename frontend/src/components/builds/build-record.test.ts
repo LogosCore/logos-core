@@ -1,3 +1,4 @@
+import { DEFAULT_FAILOVER } from "./failover-values"
 import { describe, expect, it } from "vitest"
 import type { FieldDef } from "@/components/modules/management/field-values"
 import { buildRecordJson, defaultBuildTab, valueRows, type BuildRecord } from "./build-record"
@@ -62,6 +63,8 @@ describe("buildRecordJson", () => {
           values: { method: "POST" },
         },
       ],
+      // A build from before builds had a policy: the defaults.
+      failover: DEFAULT_FAILOVER,
     })
   })
 

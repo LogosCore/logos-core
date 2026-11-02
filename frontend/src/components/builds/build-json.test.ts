@@ -1,3 +1,4 @@
+import { DEFAULT_FAILOVER } from "./failover-values"
 import { describe, expect, it } from "vitest"
 import type { FieldDef } from "@/components/modules/management/field-values"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
@@ -24,6 +25,7 @@ function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef 
 const schema: BuildSchemaFieldsFragment = {
   version: 1,
   crypto: null,
+  failover: false,
   persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -89,6 +91,7 @@ const good: BuildDocument = {
   connections: [
     { moduleName: "http", kind: "", name: "", description: "", settings: { base_url: "https://edge.example.com" }, values: {} },
   ],
+  failover: { ...DEFAULT_FAILOVER },
 }
 const read = (doc: unknown) => readBuildJson(typeof doc === "string" ? doc : JSON.stringify(doc), kind, channels)
 const problems = (doc: unknown) => {
@@ -116,6 +119,7 @@ describe("buildJson", () => {
           values: { method: "POST" },
         },
       ],
+      failover: DEFAULT_FAILOVER,
     })
   })
 
@@ -329,8 +333,17 @@ describe("documentInput", () => {
       values: { punches: ["jab"] },
       commands: ["sleep", "hello"],
       connections: [
-        { moduleName: "http", kind: null, name: null, description: "note", settings: { base_url: "https://edge.example.com" }, values: {} },
+        {
+          moduleName: "http",
+          kind: null,
+          name: null,
+          description: "note",
+          settings: { base_url: "https://edge.example.com" },
+          values: {},
+          failover: null,
+        },
       ],
+      failover: DEFAULT_FAILOVER,
     })
   })
 })
@@ -346,6 +359,8 @@ describe("buildProblemPointer", () => {
     expect(buildProblemPointer("connections[0].name")).toBe("/connections/0/name")
     expect(buildProblemPointer("connections[1].settings.base_url")).toBe("/connections/1/settings/base_url")
     expect(buildProblemPointer("connections[1].values.method")).toBe("/connections/1/values/method")
+    expect(buildProblemPointer("failover.fail_for")).toBe("/failover/fail_for")
+    expect(buildProblemPointer("connections[1].failover.fail_after")).toBe("/connections/1/failover/fail_after")
     expect(buildProblemPointer("")).toBe("")
   })
 })
@@ -354,7 +369,7 @@ describe("buildJsonHints", () => {
   const hints = buildJsonHints(kind, channels, "dummy", [{ moduleName: "http", kind: "" }])
 
   it("offers the build's keys, its targets and the target's platforms", () => {
-    expect(hints[""].map((h) => h.key)).toEqual(["description", "target", "platform", "commands", "values", "connections"])
+    expect(hints[""].map((h) => h.key)).toEqual(["description", "target", "platform", "commands", "values", "connections", "failover"])
     expect(hints[""].find((h) => h.key === "commands")!.items).toEqual([
       { value: "sleep", detail: "Sleep, required", info: undefined },
       { value: "hello", detail: "Say hello", info: "Answers." },
@@ -366,7 +381,15 @@ describe("buildJsonHints", () => {
   })
 
   it("offers any connection's keys, and each one's settings by its channel", () => {
-    expect(hintsAt(hints, "/connections/5")!.map((h) => h.key)).toEqual(["channel", "kind", "name", "description", "settings", "values"])
+    expect(hintsAt(hints, "/connections/5")!.map((h) => h.key)).toEqual([
+      "channel",
+      "kind",
+      "name",
+      "description",
+      "settings",
+      "values",
+      "failover",
+    ])
     expect(hintsAt(hints, "/connections/0")!.find((h) => h.key === "channel")!.values).toEqual(["http"])
     expect(hints["/connections/0/settings"].map((h) => h.key)).toEqual(["base_url", "request_timeout"])
     expect(hints["/connections/0/values"].map((h) => h.key)).toEqual(["method"])

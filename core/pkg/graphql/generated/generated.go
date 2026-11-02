@@ -162,6 +162,7 @@ type ComplexityRoot struct {
 		Description            func(childComplexity int) int
 		Error                  func(childComplexity int) int
 		FactoryVersion         func(childComplexity int) int
+		Failover               func(childComplexity int) int
 		FinishedAt             func(childComplexity int) int
 		ID                     func(childComplexity int) int
 		Instance               func(childComplexity int) int
@@ -252,6 +253,7 @@ type ComplexityRoot struct {
 		Channels          func(childComplexity int) int
 		Commands          func(childComplexity int) int
 		Crypto            func(childComplexity int) int
+		Failover          func(childComplexity int) int
 		Fields            func(childComplexity int) int
 		PersistedSessions func(childComplexity int) int
 		Targets           func(childComplexity int) int
@@ -1046,6 +1048,7 @@ type ComplexityRoot struct {
 		DeleteBuild                   func(childComplexity int, id string) int
 		DeleteBuildArtifact           func(childComplexity int, id string) int
 		DeleteBuildFile               func(childComplexity int, id string) int
+		DeleteBuilds                  func(childComplexity int, operationID string, ids []string, matching *model.BuildMatchInput) int
 		DeleteChannelEndpoint         func(childComplexity int, id string) int
 		DeleteCredential              func(childComplexity int, id string) int
 		DeleteCredentialComment       func(childComplexity int, credentialID string, commentID string) int
@@ -1811,6 +1814,7 @@ type MutationResolver interface {
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuild(ctx context.Context, id string) (bool, error)
+	DeleteBuilds(ctx context.Context, operationID string, ids []string, matching *model.BuildMatchInput) (int, error)
 	CreateChannelEndpoint(ctx context.Context, operationID string, moduleName string, input model.ChannelEndpointInput) (*model.ChannelEndpoint, error)
 	UpdateChannelEndpoint(ctx context.Context, id string, input model.ChannelEndpointInput, expectedRevision int) (*model.ChannelEndpoint, error)
 	DeleteChannelEndpoint(ctx context.Context, id string) (bool, error)
@@ -2552,6 +2556,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.FactoryVersion(childComplexity), true
+	case "Build.failover":
+		if e.ComplexityRoot.Build.Failover == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Failover(childComplexity), true
 	case "Build.finishedAt":
 		if e.ComplexityRoot.Build.FinishedAt == nil {
 			break
@@ -2905,6 +2915,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildSchema.Crypto(childComplexity), true
+	case "BuildSchema.failover":
+		if e.ComplexityRoot.BuildSchema.Failover == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildSchema.Failover(childComplexity), true
 	case "BuildSchema.fields":
 		if e.ComplexityRoot.BuildSchema.Fields == nil {
 			break
@@ -6527,6 +6543,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteBuildFile(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteBuilds":
+		if e.ComplexityRoot.Mutation.DeleteBuilds == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteBuilds_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteBuilds(childComplexity, args["operationId"].(string), args["ids"].([]string), args["matching"].(*model.BuildMatchInput)), true
 	case "Mutation.deleteChannelEndpoint":
 		if e.ComplexityRoot.Mutation.DeleteChannelEndpoint == nil {
 			break
@@ -10155,6 +10182,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputBuildConnectionInput,
 		ec.unmarshalInputBuildInput,
+		ec.unmarshalInputBuildMatchInput,
 		ec.unmarshalInputBulkImportHashesInput,
 		ec.unmarshalInputChangeTaskStageInput,
 		ec.unmarshalInputChannelEndpointInput,
@@ -10659,6 +10687,11 @@ type BuildSchema {
   # The minions can claim a persisted session: a build can be made from a
   # session for them (BuildInput.persistedSession).
   persistedSessions: Boolean!
+  # The minions honor a build's failover settings (BuildInput.failover and
+  # each connection's): they move between their connections on their own as
+  # those say. Without it the settings still reach the factory, which may
+  # ignore them.
+  failover: Boolean!
 }
 
 # A command a factory's minions can be built with.
@@ -10783,6 +10816,11 @@ input BuildConnectionInput {
   # The factory's connection parameter values for the connection kind by
   # key, the same way.
   values: JSON
+  # The connection's own failover settings: {auto, fail_after}. auto: may
+  # failover move the minion here (default true, false for bind-persistent);
+  # fail_after: failures in a row before it moves off this one (default the
+  # build's). null: neither.
+  failover: JSON
 }
 
 input BuildInput {
@@ -10808,6 +10846,11 @@ input BuildInput {
   # Reserves a new session with the build for its minion to claim when it
   # first starts (a new persisted session); not with persistedSession.
   newPersistedSession: Boolean
+  # How the minion moves between its connections on its own: {enabled,
+  # fail_after, fail_for, wrap, cycle_pause, failback_after}, durations as
+  # "5m". Keys left out take the defaults (enabled, 5, "0s", true, "5m",
+  # "1h"); null: all defaults.
+  failover: JSON
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -10881,6 +10924,10 @@ type Build {
   # The operators' notes on the connections, by position ("" for none). Core's
   # own: the factory never got them, so they are not in connections.
   connectionDescriptions: [String!]!
+  # The failover policy as the factory got it: {enabled, fail_after,
+  # fail_for, wrap, cycle_pause, failback_after} (a build from before
+  # builds had one: the defaults).
+  failover: JSON!
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON
@@ -10986,6 +11033,21 @@ extend type Mutation {
   # operator; agent API keys are rejected.
   deleteBuild(id: ID!): Boolean!
     @hasPermission(permission: "operation:member")
+
+  # Deletes many of an operation's builds, each as deleteBuild does: those
+  # with ids (at most 500; one not of the operation or gone already is
+  # skipped), or every one matching (the search and filters the list shows).
+  # Exactly one of the two. Returns how many went. Needs at least operator;
+  # agent API keys are rejected.
+  deleteBuilds(operationId: ID!, ids: [ID!], matching: BuildMatchInput): Int!
+    @hasPermission(permission: "operation:member")
+}
+
+# The builds a list shows: its search and filters, as builds() takes them.
+input BuildMatchInput {
+  search: String
+  states: [String!]
+  moduleNames: [String!]
 }
 `, BuiltIn: false},
 	{Name: "../schema/channel_endpoints.graphql", Input: `# =============================================================================
@@ -15715,6 +15777,27 @@ func (ec *executionContext) field_Mutation_deleteBuild_args(ctx context.Context,
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteBuilds_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "ids", ec.unmarshalOID2ᚕstringᚄ)
+	if err != nil {
+		return nil, err
+	}
+	args["ids"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "matching", ec.unmarshalOBuildMatchInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildMatchInput)
+	if err != nil {
+		return nil, err
+	}
+	args["matching"] = arg2
 	return args, nil
 }
 
@@ -20901,6 +20984,35 @@ func (ec *executionContext) fieldContext_Build_connectionDescriptions(_ context.
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_failover(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_failover,
+		func(ctx context.Context) (any, error) {
+			return obj.Failover, nil
+		},
+		nil,
+		ec.marshalNJSON2interface,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_failover(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type JSON does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_crypto(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22335,6 +22447,8 @@ func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "failover":
+				return ec.fieldContext_Build_failover(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -23038,6 +23152,35 @@ func (ec *executionContext) _BuildSchema_persistedSessions(ctx context.Context, 
 }
 
 func (ec *executionContext) fieldContext_BuildSchema_persistedSessions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildSchema",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BuildSchema_failover(ctx context.Context, field graphql.CollectedField, obj *model.BuildSchema) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildSchema_failover,
+		func(ctx context.Context) (any, error) {
+			return obj.Failover, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildSchema_failover(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "BuildSchema",
 		Field:      field,
@@ -26036,6 +26179,8 @@ func (ec *executionContext) fieldContext_FactoryKind_schema(_ context.Context, f
 				return ec.fieldContext_BuildSchema_commands(ctx, field)
 			case "persistedSessions":
 				return ec.fieldContext_BuildSchema_persistedSessions(ctx, field)
+			case "failover":
+				return ec.fieldContext_BuildSchema_failover(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildSchema", field.Name)
 		},
@@ -37306,6 +37451,8 @@ func (ec *executionContext) fieldContext_Module_build(_ context.Context, field g
 				return ec.fieldContext_BuildSchema_commands(ctx, field)
 			case "persistedSessions":
 				return ec.fieldContext_BuildSchema_persistedSessions(ctx, field)
+			case "failover":
+				return ec.fieldContext_BuildSchema_failover(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type BuildSchema", field.Name)
 		},
@@ -42623,6 +42770,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "failover":
+				return ec.fieldContext_Build_failover(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -42740,6 +42889,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "failover":
+				return ec.fieldContext_Build_failover(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -42857,6 +43008,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "failover":
+				return ec.fieldContext_Build_failover(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -42962,6 +43115,65 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuild(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteBuild_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteBuilds(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_deleteBuilds,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteBuilds(ctx, fc.Args["operationId"].(string), fc.Args["ids"].([]string), fc.Args["matching"].(*model.BuildMatchInput))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal int
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal int
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteBuilds(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteBuilds_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -52198,6 +52410,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_connections(ctx, field)
 			case "connectionDescriptions":
 				return ec.fieldContext_Build_connectionDescriptions(ctx, field)
+			case "failover":
+				return ec.fieldContext_Build_failover(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
 			case "persistedSession":
@@ -69313,7 +69527,7 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"moduleName", "kind", "name", "description", "settings", "values"}
+	fieldsInOrder := [...]string{"moduleName", "kind", "name", "description", "settings", "values", "failover"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -69362,6 +69576,13 @@ func (ec *executionContext) unmarshalInputBuildConnectionInput(ctx context.Conte
 				return it, err
 			}
 			it.Values = data
+		case "failover":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("failover"))
+			data, err := ec.unmarshalOJSON2interface(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Failover = data
 		}
 	}
 	return it, nil
@@ -69378,7 +69599,7 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "commands", "connections", "persistedSession", "newPersistedSession"}
+	fieldsInOrder := [...]string{"description", "moduleName", "target", "platform", "values", "commands", "connections", "persistedSession", "newPersistedSession", "failover"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -69448,6 +69669,57 @@ func (ec *executionContext) unmarshalInputBuildInput(ctx context.Context, obj an
 				return it, err
 			}
 			it.NewPersistedSession = data
+		case "failover":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("failover"))
+			data, err := ec.unmarshalOJSON2interface(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Failover = data
+		}
+	}
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputBuildMatchInput(ctx context.Context, obj any) (model.BuildMatchInput, error) {
+	var it model.BuildMatchInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"search", "states", "moduleNames"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "search":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("search"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Search = data
+		case "states":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("states"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.States = data
+		case "moduleNames":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("moduleNames"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ModuleNames = data
 		}
 	}
 	return it, nil
@@ -72905,6 +73177,11 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "failover":
+			out.Values[i] = ec._Build_failover(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "crypto":
 			out.Values[i] = ec._Build_crypto(ctx, field, obj)
 		case "persistedSession":
@@ -73571,6 +73848,11 @@ func (ec *executionContext) _BuildSchema(ctx context.Context, sel ast.SelectionS
 			}
 		case "persistedSessions":
 			out.Values[i] = ec._BuildSchema_persistedSessions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "failover":
+			out.Values[i] = ec._BuildSchema_failover(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -80069,6 +80351,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteBuild":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteBuild(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteBuilds":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteBuilds(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -92001,6 +92290,14 @@ func (ec *executionContext) marshalOBuildError2ᚖgithubᚗcomᚋlogoscoreᚋlog
 		return graphql.Null
 	}
 	return ec._BuildError(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOBuildMatchInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildMatchInput(ctx context.Context, v any) (*model.BuildMatchInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputBuildMatchInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalOBuildSchema2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐBuildSchema(ctx context.Context, sel ast.SelectionSet, v *model.BuildSchema) graphql.Marshaler {

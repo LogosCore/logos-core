@@ -1,7 +1,9 @@
 package resolver
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -40,6 +42,7 @@ type BuildManager interface {
 	CancelBuild(ctx context.Context, id string, actor models.ModuleActor) (*models.Build, error)
 	DeleteArtifact(ctx context.Context, id string) (*models.Build, error)
 	DeleteBuild(ctx context.Context, id string, actor models.ModuleActor) error
+	DeleteBuilds(ctx context.Context, op uuid.UUID, ids []string, filter *repository.BuildFilter, actor models.ModuleActor) (int, error)
 	Minions(ctx context.Context, op uuid.UUID) ([]models.Minion, error)
 }
 
@@ -54,6 +57,7 @@ type IBuildResolver interface {
 	CreateBuild(ctx context.Context, operationID string, input model.BuildInput) (*model.Build, error)
 	CancelBuild(ctx context.Context, id string) (*model.Build, error)
 	DeleteBuild(ctx context.Context, id string) (bool, error)
+	DeleteBuilds(ctx context.Context, operationID string, ids []string, matching *model.BuildMatchInput) (int, error)
 	DeleteBuildArtifact(ctx context.Context, id string) (*model.Build, error)
 	Minions(ctx context.Context, operationID string) ([]*model.Minion, error)
 }
@@ -198,6 +202,14 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 		Description: input.Description, ModuleName: input.ModuleName, Target: input.Target, Platform: input.Platform,
 		Values: values, Commands: input.Commands, Connections: conns, Actor: managementActor(gqlctx.AuthFromContext(ctx)),
 	}
+	if input.Failover != nil {
+		// Over the defaults: keys left out keep theirs.
+		f := protocol.DefaultBuildFailover()
+		if err := decodeStrict(input.Failover, &f); err != nil {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "failover: "+err.Error())
+		}
+		in.Failover = &f
+	}
 	in.NewPersistedSession = input.NewPersistedSession != nil && *input.NewPersistedSession
 	if input.PersistedSession != nil {
 		sid, err := uuid.Parse(*input.PersistedSession)
@@ -252,6 +264,25 @@ func (r *buildResolver) DeleteBuild(ctx context.Context, id string) (bool, error
 	return true, nil
 }
 
+func (r *buildResolver) DeleteBuilds(ctx context.Context, operationID string, ids []string, matching *model.BuildMatchInput) (int, error) {
+	op, err := r.authorizeID(ctx, operationID, models.OperationRoleOperator, true)
+	if err != nil {
+		return 0, err
+	}
+	if (ids == nil) == (matching == nil) {
+		return 0, moduleGQLError(ctx, errCodeBadUserInput, "give ids or matching, one of the two")
+	}
+	var filter *repository.BuildFilter
+	if matching != nil {
+		filter = &repository.BuildFilter{Search: strings.TrimSpace(deref(matching.Search)), States: matching.States, ModuleNames: matching.ModuleNames}
+	}
+	n, err := r.builds.DeleteBuilds(ctx, op, ids, filter, managementActor(gqlctx.AuthFromContext(ctx)))
+	if err != nil {
+		return n, mapBuildError(ctx, err)
+	}
+	return n, nil
+}
+
 func (r *buildResolver) Minions(ctx context.Context, operationID string) ([]*model.Minion, error) {
 	op, err := r.authorizeID(ctx, operationID, models.OperationRoleViewer, false)
 	if err != nil {
@@ -294,8 +325,27 @@ func connectionInputs(ctx context.Context, in []*model.BuildConnectionInput) ([]
 		if out[i].Values, ok = optionalObject(c.Values); !ok {
 			return nil, moduleGQLError(ctx, errCodeBadUserInput, "connection values must be an object")
 		}
+		if c.Failover != nil {
+			var f protocol.ConnectionFailover
+			if err := decodeStrict(c.Failover, &f); err != nil {
+				return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("connection %d failover: %v", i+1, err))
+			}
+			out[i].Failover = &f
+		}
 	}
 	return out, nil
+}
+
+// decodeStrict reads a JSON input into out (its JSON keys), refusing keys
+// out does not have.
+func decodeStrict(v any, out any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	return dec.Decode(out)
 }
 
 // optionalObject is a JSON input that may be null or an object.
@@ -328,7 +378,7 @@ func mapBuildError(ctx context.Context, err error) error {
 
 func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields),
-		PersistedSessions: s.PersistedSessions}
+		PersistedSessions: s.PersistedSessions, Failover: s.Failover}
 	for _, c := range s.Channels {
 		ch := &model.BuildChannel{ModuleName: c.ModuleName, Versions: c.Versions, Kinds: []*model.BuildChannelKind{}}
 		for _, k := range c.Kinds {
@@ -412,6 +462,7 @@ func toBuildModel(b *models.Build) *model.Build {
 	if out.Connections == nil {
 		out.Connections = []protocol.BuildConnection{}
 	}
+	out.Failover = b.FailoverPolicy()
 	out.ConnectionDescriptions = make([]string, len(b.Connections.Items))
 	copy(out.ConnectionDescriptions, b.ConnectionDescriptions)
 	for _, st := range builds.Pipeline(b) {

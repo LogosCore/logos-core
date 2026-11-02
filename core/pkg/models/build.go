@@ -92,6 +92,10 @@ type Build struct {
 	// (protocol.BuildRequest.SessionID); nil for a minion that opens new
 	// sessions. One per build.
 	PersistedSessionID *uuid.UUID `bson:"persisted_session_id,omitempty" json:"persisted_session_id,omitempty"`
+	// Failover is how the minion moves between its connections on its own
+	// (protocol.BuildFailover), as the factory gets it; nil for a build made
+	// before it existed (FailoverPolicy: the defaults).
+	Failover *BuildFailover `bson:"failover,omitempty" json:"failover,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
 	SearchText string `bson:"search_text" json:"-"`
@@ -160,6 +164,30 @@ func (c BuildConnections) MarshalBSON() ([]byte, error) {
 
 func (c *BuildConnections) UnmarshalBSON(data []byte) error {
 	return bsonDocToJSON(data, c)
+}
+
+// BuildFailover is a build's failover policy, stored JSON-faithfully like
+// its connections.
+type BuildFailover protocol.BuildFailover
+
+func (f BuildFailover) MarshalBSON() ([]byte, error) { return jsonToBSONDoc(protocol.BuildFailover(f)) }
+
+func (f *BuildFailover) UnmarshalBSON(data []byte) error {
+	var p protocol.BuildFailover
+	if err := bsonDocToJSON(data, &p); err != nil {
+		return err
+	}
+	*f = BuildFailover(p)
+	return nil
+}
+
+// FailoverPolicy is the build's failover policy: its own, or the defaults
+// for a build made before builds had one.
+func (b *Build) FailoverPolicy() protocol.BuildFailover {
+	if b.Failover == nil {
+		return protocol.DefaultBuildFailover()
+	}
+	return protocol.BuildFailover(*b.Failover)
 }
 
 // BuildPlanStep is one step of the factory's plan for a build. Its id is a

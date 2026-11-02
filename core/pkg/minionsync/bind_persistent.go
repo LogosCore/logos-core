@@ -160,10 +160,25 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 			return nil // an operator opens it
 		}
 	}
-	if why == bindNews && policy == models.PolicyOnDemand && !s.workWaits(ctx, t) {
-		// News with nothing to send (a task ended, core's own connect or
-		// disconnect kept): on demand opens for work only.
-		return nil
+	if (why == bindNews || why == bindScheduled) && policy != models.PolicyManual {
+		// A minion with other connections may be on one of them: core
+		// dials this one only when the minion is on it, is switching to it
+		// (listening for the dial), or has gone quiet where it is.
+		where, detail := s.minionOn(ctx, t)
+		if where == minionElsewhere {
+			if t.State == models.TargetNotConnected && t.StateDetail == detail && t.NextCallAt == nil {
+				return nil
+			}
+			now := s.now()
+			t.State, t.StateDetail, t.StateAt, t.NextCallAt = models.TargetNotConnected, detail, now, nil
+			return s.saveCall(ctx, t)
+		}
+		if where == minionHere && why == bindNews && policy == models.PolicyOnDemand && !s.workWaits(ctx, t) {
+			// News with nothing to send (a task ended, core's own connect
+			// or disconnect kept): on demand opens for work only. A switch
+			// to it opens it whatever waits.
+			return nil
+		}
 	}
 	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
 	if repository.IsNotFound(err) || (err == nil && buildConn(b, t) == nil) {
@@ -272,6 +287,44 @@ func (s *Service) persistentClosed(ctx context.Context, c *Conn) {
 		s.logger.Warn("targets: a connection's close", zap.String("target_id", t.TargetID.String()), zap.Error(err))
 	}
 	s.logger.Info("targets: a connection closed", zap.String("target_id", t.TargetID.String()), zap.String("why", why))
+}
+
+// Where a target's minion is, for an open core starts on its own.
+const (
+	// minionHere: on this connection, quiet where it is, or not known (no
+	// session yet): the open goes as its policy says.
+	minionHere = iota
+	// minionSwitching: a switch to this connection is under way: the
+	// minion listens for the dial.
+	minionSwitching
+	// minionElsewhere: on another of its connections, checking in there.
+	minionElsewhere
+)
+
+// minionOn is where the target's session's minion is, and for elsewhere
+// what the target says about it.
+func (s *Service) minionOn(ctx context.Context, t *models.MinionTarget) (int, string) {
+	if t.SessionID == nil {
+		return minionHere, ""
+	}
+	session, err := s.sessions.FindBySessionID(ctx, *t.SessionID)
+	if err != nil || session.Closed(s.now()) || session.Conn == 0 || session.Conn == t.Conn {
+		return minionHere, ""
+	}
+	if s.tasks != nil {
+		if open, err := s.tasks.OpenWithAction(ctx, session.SessionID, protocol.ActionSwitchConnection); err == nil {
+			for _, task := range open {
+				if n, ok := protocol.AsInt64(task.Args["conn"]); ok && int(n) == t.Conn {
+					return minionSwitching, ""
+				}
+			}
+		}
+	}
+	if session.LateAt != nil && !s.now().Before(*session.LateAt) {
+		// Late where it is: this connection may reach it.
+		return minionHere, ""
+	}
+	return minionElsewhere, fmt.Sprintf("the minion uses connection %d: a switch to this one opens it", session.Conn)
 }
 
 // workWaits reports whether the target's session has tasks to send.

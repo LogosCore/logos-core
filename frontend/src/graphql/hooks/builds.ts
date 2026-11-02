@@ -11,7 +11,9 @@ import {
   CancelBuildDocument,
   DeleteBuildArtifactDocument,
   DeleteBuildDocument,
+  DeleteBuildsDocument,
   type CreateBuildMutationVariables,
+  type DeleteBuildsMutationVariables,
 } from "@/graphql/gql/graphql"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
@@ -142,6 +144,18 @@ export function useDeleteBuild() {
   return useMutation({
     mutationFn: (id: string) => graphqlClient(DeleteBuildDocument, { id }),
     onSuccess: invalidate,
+  })
+}
+
+/**
+ * Deletes many builds in one go: the picked ids, or every build matching the
+ * list's search and filters. Resolves to how many went.
+ */
+export function useDeleteBuilds() {
+  const invalidate = useInvalidateBuilds()
+  return useMutation({
+    mutationFn: (vars: DeleteBuildsMutationVariables) => graphqlClient(DeleteBuildsDocument, vars),
+    onSettled: invalidate,
   })
 }
 

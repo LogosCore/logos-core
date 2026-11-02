@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { FieldDef } from "@/components/modules/management/field-values"
 import { kindsByName } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
+import { DEFAULT_FAILOVER } from "./failover-values"
 import {
   acceptText,
   buildConnectionRows,
@@ -36,6 +37,7 @@ function field(f: Partial<FieldDef> & Pick<FieldDef, "key" | "type">): FieldDef 
 const schema: BuildSchemaFieldsFragment = {
   version: 1,
   crypto: null,
+  failover: false,
   persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -263,9 +265,19 @@ describe("the build form", () => {
           description: "EU front",
           settings: { base_url: "https://edge.example.com", token: "s3cret" },
           values: { path_prefix: "/cdn/" },
+          failover: null,
         },
-        { moduleName: "http", kind: null, name: null, description: null, settings: { base_url: "https://edge.example.com" }, values: {} },
+        {
+          moduleName: "http",
+          kind: null,
+          name: null,
+          description: null,
+          settings: { base_url: "https://edge.example.com" },
+          values: {},
+          failover: null,
+        },
       ],
+      failover: DEFAULT_FAILOVER,
     })
   })
 
@@ -359,6 +371,7 @@ describe("the build form", () => {
       description: "EU front",
       settings: { base_url: "https://edge.example.com" },
       values: { method: "GET" },
+      failover: null,
     })
   })
 })

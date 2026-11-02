@@ -117,6 +117,16 @@ func (f *fakeTasks) CancelsToSend(_ context.Context, sid uuid.UUID, _ time.Time)
 	return send, nil, nil
 }
 
+func (f *fakeTasks) OpenWithAction(_ context.Context, sid uuid.UUID, action string) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	for _, t := range f.rows {
+		if t.SessionID == sid && t.Action == action && !t.Finished() {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeTasks) EndUnknown(_ context.Context, sid, id uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
 	t := f.find(id)
 	if t == nil || t.SessionID != sid || (t.State != models.MinionTaskSent && t.State != models.MinionTaskRunning) {

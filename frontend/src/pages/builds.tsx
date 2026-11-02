@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ChevronDownIcon, HammerIcon, PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchInput } from "@/components/ui/search-input"
@@ -19,6 +19,15 @@ import { GettingStartedPanel } from "@/components/onboarding/getting-started-pan
 import { useCanBuild } from "@/components/builds/build-access"
 import { BuildsTable } from "@/components/builds/builds-table"
 import { DeleteBuildDialog, type DeletableBuild } from "@/components/builds/delete-build-dialog"
+import { DeleteBuildsBar } from "@/components/builds/delete-builds-bar"
+import {
+  emptySelection,
+  selectedIds,
+  selectionIn,
+  selectLoaded,
+  toggleSelected,
+  type SessionSelection,
+} from "@/components/minion-sessions/session-selection"
 import { KindName } from "@/components/modules/module-icon"
 import { factoryKindsByName, STATE_LABEL, type FactoryKind } from "@/components/builds/build-values"
 
@@ -53,14 +62,36 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
   const setStateFilter = useBuildStore((s) => s.setStateFilter)
   const factoryFilter = useBuildStore((s) => s.factoryFilter)
   const setFactoryFilter = useBuildStore((s) => s.setFactoryFilter)
-  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } = useInfiniteBuilds({
-    operationId,
+  const matching = {
     search: search.trim() || null,
     states: stateFilter ? [stateFilter] : null,
     moduleNames: factoryFilter ? [factoryFilter] : null,
+  }
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } = useInfiniteBuilds({
+    operationId,
+    ...matching,
   })
   const builds = useConnectionNodes(data, (p) => p.builds)
+  const total = data?.pages[0]?.builds.totalCount ?? 0
   const filtered = search.trim() !== "" || stateFilter !== null || factoryFilter !== null
+
+  // The selection for bulk actions (as on Sessions: session-selection.ts),
+  // made under this search and these filters: a change to either empties it.
+  const scope = JSON.stringify([operationId, matching])
+  const [selectionState, setSelection] = useState<SessionSelection>(() => emptySelection(scope))
+  const selection = selectionIn(selectionState, scope)
+  const order = useMemo(() => builds.map((b) => b.id), [builds])
+  const picked = selectedIds(selection, order)
+  const selecting = selection.all || picked.length > 0
+  // Esc leaves selecting.
+  useEffect(() => {
+    if (!selecting) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelection(emptySelection(scope))
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [selecting, scope])
 
   return (
     <div className="flex flex-1 flex-col gap-2 p-2">
@@ -93,6 +124,18 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
             ))}
           </SelectContent>
         </Select>
+        {selecting && (
+          <DeleteBuildsBar
+            operationId={operationId}
+            all={selection.all}
+            picked={picked}
+            loaded={order.length}
+            total={total}
+            matching={matching}
+            onSelectAll={() => setSelection({ ...selection, all: true })}
+            onDone={() => setSelection(emptySelection(scope))}
+          />
+        )}
         {canWrite && (
           <div className="ml-auto">
             <NewBuildButton kinds={kinds} onPick={(k) => modals.open({ kind: "new-build", factory: k, from: null })} />
@@ -111,6 +154,13 @@ function BuildsPageInner({ operationId }: { operationId: string }) {
           fetchNextPage={fetchNextPage}
           canWrite={canWrite}
           onDelete={setDeleting}
+          selection={{
+            selecting,
+            picked: new Set(picked),
+            allPicked: selection.all || (order.length > 0 && picked.length === order.length),
+            onToggle: (id, shift) => setSelection(toggleSelected(selection, order, id, shift)),
+            onToggleAll: (on) => setSelection(selectLoaded(selection, order, on)),
+          }}
           emptyState={
             !filtered ? (
               <>

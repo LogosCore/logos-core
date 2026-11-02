@@ -32,6 +32,13 @@ import {
   type PersistedChoice,
   type Target,
 } from "./build-values"
+import {
+  DEFAULT_FAILOVER,
+  readConnectionFailover,
+  readFailover,
+  type ConnectionFailover,
+  type FailoverPolicy,
+} from "./failover-values"
 
 // A new build as the build modal's JSON tab edits it: what createBuild takes,
 // every value listed with the one the build will use, the factory's or the
@@ -46,6 +53,11 @@ import {
 //     "connections": [
 //       { "channel": "http", "name": "", "description": "",
 //         "settings": { "base_url": "https://…" }, "values": { "method": "POST" } } ] }
+//
+// "failover" is how the minion moves between its connections on its own
+// ({enabled, fail_after, fail_for, wrap, cycle_pause, failback_after}; keys
+// left out take the defaults), and a connection's "failover" its own
+// ({auto, fail_after}).
 //
 // "persisted_session", for a factory whose minions claim persisted sessions:
 // false (none), true (a new one, reserved with the build), or an existing
@@ -66,6 +78,7 @@ export interface ConnectionDocument {
   description: string
   settings: Record<string, unknown>
   values: Record<string, unknown>
+  failover?: ConnectionFailover
 }
 
 /** What the JSON tab and the form share; values hold set ones only. */
@@ -77,6 +90,7 @@ export interface BuildDocument {
   commands: string[]
   values: Record<string, unknown>
   connections: ConnectionDocument[]
+  failover: FailoverPolicy
   /** The persisted session; absent where the factory has none, or the JSON leaves it out. */
   persisted?: PersistedChoice
 }
@@ -84,8 +98,8 @@ export interface BuildDocument {
 /** The parts the JSON tab locks. */
 export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 
-const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "persisted_session"]
-const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values"]
+const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "failover", "persisted_session"]
+const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values", "failover"]
 
 /**
  * A connection's settings and the factory's values for it: those of its
@@ -122,8 +136,10 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
         description: c.description,
         settings: jsonFieldValues(fields.settings, c.settings),
         values: jsonFieldValues(fields.values, c.values),
+        ...(c.failover ? { failover: c.failover } : {}),
       }
     }),
+    failover: doc.failover,
     ...(doc.persisted ? { persisted_session: persistedJson(doc.persisted) } : {}),
   })
 }
@@ -162,8 +178,10 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
         description: c.description,
         settings: formValues(fields.settings, c.settings),
         values: formValues(fields.values, c.drafts),
+        ...(c.failover ? { failover: c.failover } : {}),
       }
     }),
+    failover: form.failover,
   }
 }
 
@@ -187,10 +205,12 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
           description: c.description || null,
           settings: c.settings,
           values: c.values,
+          failover: c.failover,
         },
         target,
       ),
     ),
+    failover: doc.failover,
   }
 }
 
@@ -209,7 +229,9 @@ export function documentInput(doc: BuildDocument): FormInput {
       description: c.description.trim() || null,
       settings: c.settings,
       values: c.values,
+      failover: c.failover ?? null,
     })),
+    failover: doc.failover,
   }
 }
 
@@ -294,13 +316,15 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
           },
           problems,
         ),
+        failover: readConnectionFailover(raw.failover, here, at),
       })
     }
   }
 
   // The checks the form makes on itself, said the JSON's way.
   const errors: Record<string, string> = {}
-  const doc: BuildDocument = { description, target: targetId, platform, commands, values, connections }
+  const failover = readFailover(root.failover, at)
+  const doc: BuildDocument = { description, target: targetId, platform, commands, values, connections, failover }
   if (root.persisted_session !== undefined) {
     if (!kind.persistedSessions) at("/persisted_session", `${kind.name}'s minions do not claim persisted sessions`)
     else doc.persisted = readPersisted(root.persisted_session, at)
@@ -366,6 +390,10 @@ export function buildProblemPointer(key: string): string {
   if (command) return childPointer("/commands", command[1])
   const value = /^values\.(.+)$/.exec(key)
   if (value) return childPointer("/values", value[1])
+  const failover = /^failover\.(.+)$/.exec(key)
+  if (failover) return childPointer("/failover", failover[1])
+  const connFailover = /^connections\[(\d+)\]\.failover\.(.+)$/.exec(key)
+  if (connFailover) return childPointer(childPointer(childPointer("/connections", connFailover[1]), "failover"), connFailover[2])
   const field = /^connections\[(\d+)\]\.(settings|values)\.(.+)$/.exec(key)
   if (field) return childPointer(childPointer(childPointer("/connections", field[1]), field[2]), field[3])
   const connection = /^connections\[(\d+)\](?:\.(.+))?$/.exec(key)
@@ -409,6 +437,13 @@ export function buildJsonHints(
       },
       { key: "values", detail: "object", info: `${kind.name}'s values for the target; empty or null leaves one at its default.` },
       { key: "connections", detail: "list, required", info: "How the minion reaches its channels, tried in this order." },
+      {
+        key: "failover",
+        detail: "object",
+        info: kind.failover
+          ? "How the minion moves between its connections on its own when the one in use keeps failing."
+          : `How the minion moves between its connections on its own. ${kind.name} does not say its minions apply it: it may ignore these.`,
+      },
       ...(kind.persistedSessions
         ? [
             {
@@ -437,6 +472,23 @@ export function buildJsonHints(
       { key: "description", detail: "text", info: "A note for the team. Core keeps it; the factory never gets it." },
       { key: "settings", detail: "object", info: "The channel's settings for the connection kind." },
       { key: "values", detail: "object", info: `${kind.name}'s parameters for the channel and connection kind.` },
+      {
+        key: "failover",
+        detail: "object",
+        info: "This connection's own failover settings: auto (may failover move here; default yes, no for bind-persistent), fail_after (default the build's).",
+      },
+    ],
+    "/failover": [
+      { key: "enabled", detail: "true or false", info: `The minion moves on its own; false: only an operator's switch. Default ${DEFAULT_FAILOVER.enabled}.` },
+      { key: "fail_after", detail: "number, 1 to 1000", info: `Failed exchanges in a row before moving off a connection. Default ${DEFAULT_FAILOVER.fail_after}.` },
+      { key: "fail_for", detail: "duration", info: `How long it must also have been failing; "0s": the count alone. Default "${DEFAULT_FAILOVER.fail_for}".` },
+      { key: "wrap", detail: "true or false", info: `After the last connection, the first again; false: stay on the last. Default ${DEFAULT_FAILOVER.wrap}.` },
+      { key: "cycle_pause", detail: "duration", info: `The wait after a round where every connection failed. Default "${DEFAULT_FAILOVER.cycle_pause}".` },
+      { key: "failback_after", detail: "duration", info: `How long away from the first connection before trying it again; "0s": never. Default "${DEFAULT_FAILOVER.failback_after}".` },
+    ],
+    "/connections/*/failover": [
+      { key: "auto", detail: "true or false", info: "Failover may move the minion here. Default true; false for bind-persistent (core has to dial it)." },
+      { key: "fail_after", detail: "number", info: "Failures in a row before the minion moves off this one; default the build's." },
     ],
   }
   connections.forEach((c, i) => {

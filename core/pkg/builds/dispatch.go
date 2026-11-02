@@ -208,6 +208,8 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 		SchemaVersion: b.SchemaVersion, Values: b.Values, Commands: b.Commands, Connections: b.Connections.Items,
 		Crypto: b.Crypto, Deadline: deadline, Actor: b.CreatedBy.Protocol(),
 	}
+	failover := b.FailoverPolicy()
+	req.Failover = &failover
 	if b.PersistedSessionID != nil {
 		req.SessionID = b.PersistedSessionID.String()
 	}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
-import { DownloadIcon, ExternalLinkIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { DownloadIcon, ExternalLinkIcon, ListChecksIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
@@ -16,11 +17,28 @@ import { currentStage, platformLabel } from "./build-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
+// While selecting: a checkbox column first (written out whole: Tailwind
+// reads class names as they are in the source).
+const GRID_COLS_SELECTING =
+  "grid-cols-[16px_minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
+
+/** The table's side of the page's selection for bulk actions. */
+export interface BuildsTableSelection {
+  /** Rows are being picked: a click picks one (shift: a range). */
+  selecting: boolean
+  picked: ReadonlySet<string>
+  /** Every loaded row picked (or all matching). */
+  allPicked: boolean
+  onToggle: (id: string, shift: boolean) => void
+  /** The header checkbox: every loaded row, or none. */
+  onToggleAll: (on: boolean) => void
+}
 
 /**
  * An operation's builds, newest first. A row opens the build; its menu
  * (right-click, or ⋯) also downloads the artifact and starts a new build from
- * the same settings, as the build's page does, and deletes the build.
+ * the same settings, as the build's page does, and deletes the build. Select
+ * there starts picking rows for bulk actions (selection, the page's).
  */
 export function BuildsTable({
   builds,
@@ -31,6 +49,7 @@ export function BuildsTable({
   fetchNextPage,
   canWrite,
   onDelete,
+  selection,
   emptyState,
 }: {
   builds: BuildFieldsFragment[]
@@ -41,6 +60,7 @@ export function BuildsTable({
   fetchNextPage: () => void
   canWrite: boolean
   onDelete: (build: BuildFieldsFragment) => void
+  selection: BuildsTableSelection
   emptyState: ReactNode
 }) {
   const modals = useRecordModals()
@@ -54,6 +74,9 @@ export function BuildsTable({
     a.click()
   }
 
+  const { selecting, picked } = selection
+  const cols = selecting ? GRID_COLS_SELECTING : GRID_COLS
+
   return (
     <VirtualizedDataTable
       items={builds}
@@ -61,10 +84,19 @@ export function BuildsTable({
       isFetchingNextPage={isFetchingNextPage}
       hasNextPage={hasNextPage}
       fetchNextPage={fetchNextPage}
-      gridCols={GRID_COLS}
+      gridCols={cols}
       entityNoun="builds"
       header={
         <>
+          {selecting && (
+            <Checkbox
+              aria-label="Select every loaded build"
+              className="self-center"
+              checked={selection.allPicked}
+              indeterminate={!selection.allPicked && picked.size > 0}
+              onCheckedChange={(on) => selection.onToggleAll(on)}
+            />
+          )}
           <div>Factory · target</div>
           <div>Description</div>
           <div>Pipeline</div>
@@ -78,8 +110,10 @@ export function BuildsTable({
         const at = currentStage(b.stages)
         return (
           <ContextMenuRow
-            gridCols={GRID_COLS}
-            onOpen={() => open(b)}
+            gridCols={cols}
+            // While selecting, a click picks the row (shift: a range).
+            onOpen={selecting ? (e) => selection.onToggle(b.id, e.shiftKey) : () => open(b)}
+            className={cn(picked.has(b.id) && "bg-muted/60")}
             menuLabel="Build actions"
             menu={
               <>
@@ -87,6 +121,12 @@ export function BuildsTable({
                   <ExternalLinkIcon className="size-4" />
                   Open
                 </ContextMenuItem>
+                {canWrite && (
+                  <ContextMenuItem onClick={() => selection.onToggle(b.id, false)}>
+                    <ListChecksIcon className="size-4" />
+                    {picked.has(b.id) ? "Unselect" : "Select"}
+                  </ContextMenuItem>
+                )}
                 {canWrite && b.artifact && !b.artifact.deleted && (
                   <ContextMenuItem onClick={() => download(b)}>
                     <DownloadIcon className="size-4" />
@@ -113,6 +153,14 @@ export function BuildsTable({
           >
             {(menuButton) => (
               <>
+                {selecting && (
+                  <Checkbox
+                    aria-label={`Select build ${b.id}`}
+                    className="pointer-events-none self-center bg-background"
+                    checked={picked.has(b.id)}
+                    tabIndex={-1}
+                  />
+                )}
                 <ModuleIconCell
                   type="factory"
                   icon={icons.get(b.moduleName)}

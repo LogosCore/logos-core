@@ -31,7 +31,9 @@ import { useSwitchConnection } from "./use-connection-choices"
 // calls) shows its target under its connection: where the page is, what
 // the latest call came to, and Check now; one whose target was removed
 // says core cannot reach it, and a target added there takes the session
-// over.
+// over. A connection the minion listens on (bind-persistent) offers a target
+// even while the minion uses another: core dials it once the minion
+// switches to it.
 
 type Session = MinionSessionFieldsFragment
 
@@ -72,7 +74,9 @@ export function ConnectionsCard({ s }: { s: Session }) {
                     {inUse && <span className="ml-2 rounded-md border px-1.5 py-0.5 text-xs">in use</span>}
                     {address && <div className="truncate font-mono text-xs text-muted-foreground">{address}</div>}
                     {target && target.conn === c.place && <TargetLine target={target} />}
-                    {!target && targetQuery.isSuccess && bind && inUse && <NoTargetLine s={s} place={c.place} open={open} />}
+                    {!target && targetQuery.isSuccess && ((bind && inUse) || c.kind === "bind-persistent") && (
+                      <NoTargetLine s={s} place={c.place} open={open} inUse={inUse} />
+                    )}
                   </div>
                   {command && open && !inUse && (
                     <Button
@@ -80,7 +84,11 @@ export function ConnectionsCard({ s }: { s: Session }) {
                       variant="outline"
                       size="xs"
                       disabled={pending}
-                      title={`Queue ${command.id} with conn ${c.place}: the minion moves once this connection answers`}
+                      title={
+                        c.kind === "bind-persistent"
+                          ? `Queue ${command.id} with conn ${c.place}: the minion opens its port, and moves once core dials it (its target)`
+                          : `Queue ${command.id} with conn ${c.place}: the minion moves once this connection answers`
+                      }
                       onClick={() => switchTo(c.place)}
                     >
                       Switch to
@@ -157,12 +165,16 @@ function TargetLine({ target: t }: { target: Target }) {
  * A bind-call session with no target (it was removed): core cannot reach
  * the page. A target added here takes the session over.
  */
-function NoTargetLine({ s, place, open }: { s: Session; place: number; open: boolean }) {
+function NoTargetLine({ s, place, open, inUse }: { s: Session; place: number; open: boolean; inUse: boolean }) {
   const [adding, setAdding] = useState(false)
   const conns = useBindConnections(adding ? s.buildId : "").data ?? []
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-      <span className="text-muted-foreground">No target: core cannot reach this page. Tasks queued for it wait.</span>
+      <span className="text-muted-foreground">
+        {inUse
+          ? "No target: core cannot reach this minion. Tasks queued for it wait."
+          : "No target: core cannot dial this connection, so a switch to it would wait in vain."}
+      </span>
       {open && (
         <Button type="button" variant="outline" size="xs" onClick={() => setAdding(true)}>
           Add target

@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from "react"
 import { CopyIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardColumns } from "@/components/ui/card-columns"
+import { failoverAuto, failoverSummary, recordFailover } from "./failover-values"
 import { IdRows, InfoCard, LabelRow, NoteRow, SectionRow, type IdRow } from "@/components/ui/info-card"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
 import { cn } from "@/lib/utils"
@@ -58,6 +59,7 @@ export function BuildOverview({
   const target = kind?.targets.find((t) => t.id === b.target)
   const values = valueRows(kind ? targetFields(kind, target) : [], b.values)
   const connections = recordedConnections(b)
+  const failover = recordFailover(b.failover)
   const a = b.artifact
 
   return (
@@ -152,6 +154,25 @@ export function BuildOverview({
           {values.length === 0 ? <NoteRow>None.</NoteRow> : <IdRows rows={rowsOf(values, fileNames)} />}
         </InfoCard>
 
+        {connections.length > 1 && (
+          <InfoCard title="Failover" note={failover.enabled ? "on" : "off"}>
+            <NoteRow>
+              {failoverSummary(failover)}
+              {kind && !kind.failover && `. ${b.moduleName} does not say its minions apply these.`}
+            </NoteRow>
+            <IdRows
+              rows={[
+                { id: "enabled", content: failover.enabled ? "yes" : "no" },
+                { id: "fail_after", content: `${failover.fail_after} failures in a row` },
+                { id: "fail_for", content: failover.fail_for },
+                { id: "wrap", content: failover.wrap ? "yes" : "no" },
+                { id: "cycle_pause", content: failover.cycle_pause },
+                { id: "failback_after", content: failover.failback_after },
+              ]}
+            />
+          </InfoCard>
+        )}
+
         {connections.map((c, i) => {
           const settings = valueRows(settingFields(channels.get(c.moduleName), c.kind), c.params)
           const own = valueRows(kind ? paramFields(kind, c.moduleName, c.kind) : [], c.values)
@@ -169,6 +190,16 @@ export function BuildOverview({
               note={`${c.moduleName} · ${c.kind} · connection ${i + 1} of ${connections.length}`}
             >
               {c.description && <NoteRow>{c.description}</NoteRow>}
+              {connections.length > 1 && (!failoverAuto(c.kind, c.failover) || c.failover?.fail_after !== undefined) && (
+                <NoteRow>
+                  {[
+                    !failoverAuto(c.kind, c.failover) && "Failover does not move the minion here (a switch does)",
+                    c.failover?.fail_after !== undefined && `moves off after ${c.failover.fail_after} failures`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </NoteRow>
+              )}
               {parts && <SectionRow title="Settings" note={c.moduleName} />}
               {settings.length === 0 ? <NoteRow>No settings.</NoteRow> : <IdRows rows={rowsOf(settings, fileNames)} />}
               {parts && (

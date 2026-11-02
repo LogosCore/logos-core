@@ -3,6 +3,7 @@ import type { BuildQuery } from "@/graphql/gql/graphql"
 import { isRecord, sameJSON } from "@/lib/json-edit"
 import type { BuildTab } from "@/lib/record-modals"
 import { recordedConnections } from "@/components/builds/build-values"
+import { recordFailover } from "@/components/builds/failover-values"
 
 // A finished or running build as its modal shows it (build-details.tsx):
 // which tab it opens on, the record its JSON tab shows, and its values as
@@ -48,7 +49,9 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
       description: c.description,
       settings: c.params,
       values: c.values,
+      ...(c.failover ? { failover: c.failover } : {}),
     })),
+    failover: recordFailover(b.failover),
     ...(b.crypto ? { crypto: b.crypto } : {}),
     ...(b.persistedSession ? { persisted_session: b.persistedSession } : {}),
   }

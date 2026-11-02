@@ -265,3 +265,39 @@ func TestPersistentResetOnStart(t *testing.T) {
 		t.Fatalf("on demand: %+v", got)
 	}
 }
+
+// A minion with other connections: core dials its listening one only when
+// the minion is on it, is switching to it, or has gone quiet where it is.
+func TestPersistentWhereTheMinionIs(t *testing.T) {
+	b, l := newPersistentRig(t, models.PolicyOnDemand)
+	sid := uuid.New()
+	seen := time.Now()
+	b.sessions.rows = append(b.sessions.rows, models.MinionSession{SessionID: sid, BuildID: b.build.BuildID, Conn: 2,
+		ConnKind: protocol.KindReverseCall, CreatedAt: seen, LastSeenAt: &seen})
+	row := b.targets.rows[b.target]
+	row.SessionID = &sid
+	b.targets.rows[b.target] = row
+	b.tasks.rows = append(b.tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: sid, State: models.MinionTaskQueued})
+	// On connection 2, checking in there: work waits, and still no dial.
+	b.svc.callTarget(context.Background(), b.target, bindNews)
+	if got := b.get(t); l.openCount() != 0 || got.State != models.TargetNotConnected || got.StateDetail == "" {
+		t.Fatalf("a minion on another connection was dialed: %d opens, %+v", l.openCount(), got)
+	}
+	// Switching to this one: dialed, though only the switch is under way.
+	b.tasks.rows = []models.MinionTask{{TaskID: uuid.New(), SessionID: sid, State: models.MinionTaskRunning,
+		Action: protocol.ActionSwitchConnection, Args: models.JSONMap{"conn": int64(1)}}}
+	b.svc.callTarget(context.Background(), b.target, bindNews)
+	if l.openCount() != 1 || b.get(t).State != models.TargetConnected {
+		t.Fatalf("a switch to it: %d opens", l.openCount())
+	}
+	l.conns[0].closeBecause("")
+	waitFor(t, "closed", func() bool { return b.get(t).State == models.TargetNotConnected })
+	// Quiet where it is (late): dialed for the work waiting.
+	b.tasks.rows = []models.MinionTask{{TaskID: uuid.New(), SessionID: sid, State: models.MinionTaskQueued}}
+	late := time.Now().Add(-time.Minute)
+	b.sessions.rows[len(b.sessions.rows)-1].LateAt = &late
+	b.svc.callTarget(context.Background(), b.target, bindNews)
+	if l.openCount() != 2 {
+		t.Fatalf("a late minion: %d opens", l.openCount())
+	}
+}

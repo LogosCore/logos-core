@@ -8,13 +8,27 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 // label | control, help behind an info icon. From 72rem, where a third column
 // has room to read: label | control | help, the control as wide as before.
 
-/** A titled card of setting rows; id lets a section list scroll to it. */
-export function SettingsSection({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
+/**
+ * A titled card of setting rows; id lets a section list scroll to it. intro,
+ * when given, is said between the title and the card.
+ */
+export function SettingsSection({
+  id,
+  title,
+  intro,
+  children,
+}: {
+  id?: string
+  title: string
+  intro?: ReactNode
+  children: ReactNode
+}) {
   return (
     <section id={id} className={id ? "scroll-mt-6" : undefined} aria-labelledby={id ? `${id}-title` : undefined}>
       <h2 id={id ? `${id}-title` : undefined} className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </h2>
+      {intro && <div className="mb-3 flex flex-col gap-2 text-sm text-muted-foreground">{intro}</div>}
       <div className="divide-y rounded-xl border bg-card px-4">{children}</div>
     </section>
   )

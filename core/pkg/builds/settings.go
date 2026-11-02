@@ -32,6 +32,9 @@ type ConnectionInput struct {
 	Description string
 	Settings    map[string]any
 	Values      map[string]any
+	// Failover is the connection's own failover settings; nil: the
+	// build's.
+	Failover *protocol.ConnectionFailover
 }
 
 // MaxDescriptionLength bounds a build's and a connection's description, in
@@ -49,6 +52,10 @@ func compactConnections(in []ConnectionInput) []ConnectionInput {
 		out[i] = ConnectionInput{
 			ModuleName: strings.TrimSpace(c.ModuleName), Kind: strings.TrimSpace(c.Kind), Name: strings.TrimSpace(c.Name),
 			Description: strings.TrimSpace(c.Description), Settings: compact(c.Settings), Values: compact(c.Values),
+		}
+		// Overrides that override nothing are none.
+		if f := c.Failover; f != nil && (f.Auto != nil || f.FailAfter != 0) {
+			out[i].Failover = f
 		}
 	}
 	return out

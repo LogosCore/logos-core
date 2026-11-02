@@ -10,6 +10,8 @@ import { EndpointSettings } from "@/components/endpoints/endpoint-settings"
 import { useChannelEndpointCount } from "@/graphql/hooks/channel-endpoints"
 import { cn } from "@/lib/utils"
 import { FieldRow } from "./build-field-row"
+import { ConnectionFailoverSettings } from "./failover-editor"
+import type { ConnectionFailover } from "./failover-values"
 import {
   defaultConnectionName,
   kindLabels,
@@ -60,6 +62,8 @@ export function ConnectionCard({
   onSave,
   onMove,
   onRemove,
+  buildFailAfter,
+  onFailover,
 }: {
   /** The operation whose endpoints the connection can be filled from. */
   operationId: string
@@ -88,6 +92,9 @@ export function ConnectionCard({
   onSave: () => void
   onMove: (by: -1 | 1) => void
   onRemove: () => void
+  /** The build's failures-in-a-row, what the connection's own replaces. */
+  buildFailAfter: number
+  onFailover: (f: ConnectionFailover | undefined) => void
 }) {
   // How many of the operation's endpoints the connection can be filled from:
   // the channel's, of a kind it can use.
@@ -255,6 +262,17 @@ export function ConnectionCard({
                 />
               ))}
             </SettingsSection>
+          )}
+          {count > 1 && (
+            <ConnectionFailoverSettings
+              idPrefix={`${idPrefix}-failover`}
+              connKind={effectiveKind}
+              value={c.failover}
+              onChange={onFailover}
+              error={errors[`${at}.failover.fail_after`]}
+              disabled={disabled}
+              buildFailAfter={buildFailAfter}
+            />
           )}
         </div>
       )}

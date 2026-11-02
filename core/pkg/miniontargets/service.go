@@ -161,7 +161,7 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 	c := b.Connections.Items[conn-1]
 	kind, module := c.ConnectionKind(), c.Endpoint.Channel.ModuleName
 	if session != nil {
-		if err := s.canTakeOver(ctx, b, conn, *session); err != nil {
+		if err := s.canTakeOver(ctx, b, conn, kind, *session); err != nil {
 			return nil, err
 		}
 	}
@@ -191,9 +191,10 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 }
 
 // canTakeOver checks that a new target of b's connection conn may take
-// session over: b's, open, the page's session through that connection, and
-// no target's now.
-func (s *Service) canTakeOver(ctx context.Context, b *models.Build, conn int, id uuid.UUID) error {
+// session over: b's, open, the page's session through that connection (a
+// minion that listens may be on another of its connections: it switches to
+// this one), and no target's now.
+func (s *Service) canTakeOver(ctx context.Context, b *models.Build, conn int, kind string, id uuid.UUID) error {
 	sess, err := s.sessions.FindBySessionID(ctx, id)
 	switch {
 	case repository.IsNotFound(err):
@@ -204,7 +205,7 @@ func (s *Service) canTakeOver(ctx context.Context, b *models.Build, conn int, id
 		return invalid("the session is not this build's")
 	case sess.Closed(s.now()):
 		return invalid("the session is closed")
-	case sess.Conn != 0 && sess.Conn != conn:
+	case sess.Conn != 0 && sess.Conn != conn && kind != protocol.KindBindPersistent:
 		return invalid("the session's page answers connection %d, not %d", sess.Conn, conn)
 	}
 	other, err := s.targets.FindBySessionID(ctx, id)

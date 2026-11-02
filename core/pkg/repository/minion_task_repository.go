@@ -75,6 +75,9 @@ type IMinionTaskRepository interface {
 	// tasks sent before and not yet acked first, then queued ones, oldest
 	// first; none an operator asked to cancel.
 	ForDelivery(ctx context.Context, sessionID uuid.UUID, limit int) ([]models.MinionTask, error)
+	// OpenWithAction returns the session's tasks of an action (a command's
+	// action when queued) that have not ended.
+	OpenWithAction(ctx context.Context, sessionID uuid.UUID, action string) ([]models.MinionTask, error)
 	// CountRunning counts a session's tasks its minion has and has not
 	// ended: acknowledged, or with a result, and not finished. Tasks sent
 	// and not acknowledged are not counted: ForDelivery sends them again,
@@ -218,6 +221,13 @@ func (r *minionTaskRepository) Document(ctx context.Context, taskID uuid.UUID) (
 		return nil, err
 	}
 	return d, nil
+}
+
+func (r *minionTaskRepository) OpenWithAction(ctx context.Context, sessionID uuid.UUID, action string) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "action": action,
+		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}}}).All(&out)
+	return out, err
 }
 
 func (r *minionTaskRepository) ForDelivery(ctx context.Context, sessionID uuid.UUID, limit int) ([]models.MinionTask, error) {

@@ -27,6 +27,16 @@ import {
   type Kind,
 } from "@/components/endpoints/endpoint-values"
 import type { BuildSchemaFieldsFragment } from "@/graphql/gql/graphql"
+import {
+  DEFAULT_FAILOVER,
+  connectionFailoverErrors,
+  connectionFailoverInput,
+  failoverErrors,
+  recordConnectionFailover,
+  recordFailover,
+  type ConnectionFailover,
+  type FailoverPolicy,
+} from "./failover-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 // Secrets in a build are operation data, edited as text like the rest.
@@ -118,6 +128,8 @@ export interface FactoryKind {
   crypto?: string | null
   /** The minions can claim a persisted session (a build made from a session). */
   persistedSessions?: boolean
+  /** The minions honor the build's failover settings; without it the factory may ignore them. */
+  failover?: boolean
   /** Fields every target shares, sorted. */
   fields: FieldDef[]
   /** The factory's connection parameters by channel kind, then connection kind, sorted. */
@@ -149,6 +161,7 @@ export function factoryKindsByName(
       instances: k.instances,
       crypto: k.schema.crypto,
       persistedSessions: k.schema.persistedSessions,
+      failover: k.schema.failover,
       fields: sorted(k.schema.fields),
       channelFields: new Map(
         k.schema.channels.map((c) => [c.moduleName, new Map(c.kinds.map((ck) => [ck.kind, sorted(ck.fields)]))]),
@@ -285,6 +298,8 @@ export interface ConnectionDraft {
   drafts: Record<string, Draft>
   /** What the form says about the connection: settings of another version, settings left out. */
   notes: string[]
+  /** The connection's own failover settings; unset keys take the defaults. */
+  failover?: ConnectionFailover
 }
 
 export interface BuildForm {
@@ -296,6 +311,8 @@ export interface BuildForm {
   /** The commands picked, the target's required ones among them, in the factory's order. */
   commands: string[]
   connections: ConnectionDraft[]
+  /** How the minion moves between its connections on its own. */
+  failover: FailoverPolicy
 }
 
 /** A connection as an earlier build's turns into ("Build again"). */
@@ -309,6 +326,7 @@ export interface ConnectionSource {
   settings?: Record<string, unknown> | null
   values?: Record<string, unknown> | null
   notes?: readonly string[]
+  failover?: ConnectionFailover
 }
 
 /** What a form is filled from: an earlier build ("Build again"). */
@@ -320,6 +338,7 @@ export interface FormSource {
   /** The commands it had; none named: the target's defaults. */
   commands?: readonly string[] | null
   connections?: readonly ConnectionSource[]
+  failover?: FailoverPolicy
 }
 
 /**
@@ -366,6 +385,7 @@ export function connectionDraft(
     settings: draftsFor(settingFields(ch, connKind), source.settings),
     drafts: draftsFor(paramFields(kind, source.moduleName, connKind), source.values),
     notes,
+    ...(source.failover ? { failover: source.failover } : {}),
   }
 }
 
@@ -489,6 +509,7 @@ export function initialForm(
     drafts: draftsFor(targetFields(kind, target), source?.values),
     commands: source?.commands ? pickedCommands(kind, target, source.commands) : defaultCommands(kind, target),
     connections: (source?.connections ?? []).map((c) => connectionDraft(kind, channels.get(c.moduleName), c, target)),
+    failover: source?.failover ?? { ...DEFAULT_FAILOVER },
   }
 }
 
@@ -504,6 +525,8 @@ export interface BuildRecordLike {
   connections?: unknown
   /** The operators' notes on the connections, by position. */
   connectionDescriptions?: readonly string[] | null
+  /** The failover policy as the factory got it. */
+  failover?: unknown
 }
 
 /** One of a build record's connections, as far as it reads. */
@@ -519,6 +542,7 @@ function recordedConnection(raw: unknown) {
     schemaVersion: typeof channel.schema_version === "number" ? channel.schema_version : null,
     params: isRecord(ep.params) ? ep.params : {},
     values: isRecord(rec.values) ? rec.values : {},
+    failover: recordConnectionFailover(rec.failover),
   }
 }
 
@@ -565,7 +589,7 @@ export function sourceFromBuild(
   const target = kind.targets.find((t) => t.id === build.target)
   const records = Array.isArray(build.connections) ? build.connections : []
   const connections = records.map((raw: unknown, i): ConnectionSource => {
-    const { moduleName, kind: connKind, name, schemaVersion, params, values } = recordedConnection(raw)
+    const { moduleName, kind: connKind, name, schemaVersion, params, values, failover } = recordedConnection(raw)
     const ch = channels.get(moduleName)
     const notes: string[] = []
     const fields = settingFields(ch, connKind)
@@ -582,6 +606,7 @@ export function sourceFromBuild(
       settings: withoutDefaults(fields, params),
       values: withoutDefaults(paramFields(kind, moduleName, connKind), values),
       notes,
+      ...(failover ? { failover } : {}),
     }
   })
   return {
@@ -591,6 +616,7 @@ export function sourceFromBuild(
     values: withoutDefaults(targetFields(kind, target), isRecord(build.values) ? build.values : {}),
     commands: build.commands ?? null,
     connections,
+    failover: recordFailover(build.failover),
   }
 }
 
@@ -613,6 +639,8 @@ export interface ConnectionInput {
   description: string | null
   settings: Record<string, unknown>
   values: Record<string, unknown>
+  /** The connection's own failover settings; null for none. */
+  failover?: ConnectionFailover | null
 }
 
 /** What createBuild takes from the form. */
@@ -623,6 +651,7 @@ export interface FormInput {
   values: Record<string, unknown>
   commands: string[]
   connections: ConnectionInput[]
+  failover: FailoverPolicy
 }
 
 function evaluateFields(
@@ -723,6 +752,7 @@ export function evaluateForm(
     const at = `connections[${i}]`
     const ch = channels.get(c.moduleName)
     const connKind = effectiveKind(c, target, ch)
+    connectionFailoverErrors(at, c.failover, errors)
     return {
       moduleName: c.moduleName,
       kind: c.kind || null,
@@ -730,8 +760,10 @@ export function evaluateForm(
       description: c.description.trim() || null,
       settings: evaluateFields(`${at}.settings.`, settingFields(ch, connKind), c.settings, errors),
       values: evaluateFields(`${at}.values.`, paramFields(kind, c.moduleName, connKind), c.drafts, errors),
+      failover: connectionFailoverInput(c.failover),
     }
   })
+  failoverErrors(form.failover, errors)
   const input = {
     description: form.description.trim(),
     target: form.target,
@@ -739,6 +771,7 @@ export function evaluateForm(
     values,
     commands: form.commands,
     connections,
+    failover: form.failover,
   }
   return { input, errors }
 }

@@ -2,6 +2,7 @@ package builds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -39,7 +40,10 @@ type BuildInput struct {
 	// NewPersistedSession reserves a new session with the build for its
 	// minion to claim (one per build: not with PersistedSession).
 	NewPersistedSession bool
-	Actor               models.ModuleActor
+	// Failover is how the minion moves between its connections on its own;
+	// nil: protocol.DefaultBuildFailover.
+	Failover *protocol.BuildFailover
+	Actor    models.ModuleActor
 }
 
 // artifactKey is where a build's artifact is uploaded.
@@ -121,6 +125,11 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		sid := uuid.New()
 		b.PersistedSessionID = &sid
 	}
+	failover := protocol.DefaultBuildFailover()
+	if in.Failover != nil {
+		failover = *in.Failover
+	}
+	b.Failover = (*models.BuildFailover)(&failover)
 	if schema.Crypto != "" {
 		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {
 			return nil, err
@@ -143,7 +152,8 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 				Kind:    c.kinds[i],
 				Params:  protocol.ResolveFieldValues(cs.KindFields(c.kinds[i]), conn.Settings),
 			},
-			Values: protocol.ResolveFieldValues(ch.KindFields(c.kinds[i]), conn.Values),
+			Values:   protocol.ResolveFieldValues(ch.KindFields(c.kinds[i]), conn.Values),
+			Failover: conn.Failover,
 		})
 	}
 
@@ -322,6 +332,53 @@ func (s *Service) DeleteBuild(ctx context.Context, id string, actor models.Modul
 	}
 	s.logger.Info("build deleted", zap.String("build_id", b.BuildID.String()), zap.String("state", b.State), zap.String("by", actor.ID))
 	return nil
+}
+
+// MaxBulkBuilds bounds the builds DeleteBuilds takes by id.
+const MaxBulkBuilds = 500
+
+// DeleteBuilds deletes many of an operation's builds as DeleteBuild does
+// each: those with ids (at most MaxBulkBuilds; one not of the operation, or
+// gone already, is skipped), or, ids nil, every one filter lets through. It
+// returns how many went; on an error, those before it are gone.
+func (s *Service) DeleteBuilds(ctx context.Context, op uuid.UUID, ids []string, filter *repository.BuildFilter, actor models.ModuleActor) (int, error) {
+	n := 0
+	if filter == nil {
+		if len(ids) > MaxBulkBuilds {
+			return 0, invalid("at most %d builds at once by id", MaxBulkBuilds)
+		}
+		for _, id := range ids {
+			b, err := s.Build(ctx, id)
+			if errors.Is(err, ErrBuildNotFound) || (err == nil && b.OperationID != op) {
+				continue
+			}
+			if err != nil {
+				return n, err
+			}
+			if err := s.DeleteBuild(ctx, id, actor); err != nil && !errors.Is(err, ErrBuildNotFound) {
+				return n, err
+			}
+			n++
+		}
+		return n, nil
+	}
+	// Every match: the first page again and again, as each goes. One that
+	// does not go (an error) stops it, so the loop always moves on.
+	for {
+		page, err := s.Builds(ctx, op, *filter, nil, 100, true)
+		if err != nil {
+			return n, fmt.Errorf("list builds: %w", err)
+		}
+		if len(page) == 0 {
+			return n, nil
+		}
+		for _, b := range page {
+			if err := s.DeleteBuild(ctx, b.BuildID.String(), actor); err != nil && !errors.Is(err, ErrBuildNotFound) {
+				return n, err
+			}
+			n++
+		}
+	}
 }
 
 // Minions returns an operation's minions, newest first.

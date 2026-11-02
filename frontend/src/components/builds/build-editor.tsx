@@ -39,6 +39,8 @@ import { kindsByName, problemsFromError } from "@/components/endpoints/endpoint-
 import { BuildFilesContext, type BuildFilesContextValue } from "@/components/builds/build-files-context"
 import { FieldRow } from "@/components/builds/build-field-row"
 import { ConnectionCard, type EndpointOption } from "@/components/builds/connection-card"
+import { FailoverSettings } from "@/components/builds/failover-editor"
+import { DEFAULT_FAILOVER } from "@/components/builds/failover-values"
 import { ConnectionPickerDialog } from "@/components/builds/connection-picker-dialog"
 import { SaveEndpointDialog } from "@/components/builds/save-endpoint-dialog"
 import { CommandPicker } from "@/components/builds/command-picker"
@@ -382,6 +384,7 @@ function Editor({
           values: request.values,
           commands: request.commands,
           connections: request.connections,
+          failover: request.failover,
           ...(persistedOptions ? persistedInput(read?.ok && read.doc.persisted ? read.doc.persisted : persisted) : {}),
         },
       })
@@ -478,6 +481,16 @@ function Editor({
       state: Object.keys(shown).some((k) => k.startsWith("connections"))
         ? "error"
         : form.connections.length > 0
+          ? "set"
+          : null,
+    },
+    {
+      id: sectionId(FAILOVER),
+      title: FAILOVER,
+      // Set: the policy is not the defaults.
+      state: Object.keys(shown).some((k) => k.startsWith("failover"))
+        ? "error"
+        : JSON.stringify(form.failover) !== JSON.stringify(DEFAULT_FAILOVER)
           ? "set"
           : null,
     },
@@ -698,6 +711,8 @@ function Editor({
                     onSave={() => setSaving({ open: true, key: c.key })}
                     onMove={(by) => setConnections((cs) => move(cs, i, by))}
                     onRemove={() => setConnections((cs) => cs.filter((_, j) => j !== i))}
+                    buildFailAfter={form.failover.fail_after}
+                    onFailover={(failover) => updateConnection(i, (x) => ({ ...x, failover }), `${at}.failover.`)}
                   />
                 )
               })}
@@ -713,6 +728,19 @@ function Editor({
               </Button>
             </div>
           </section>
+          <FailoverSettings
+            id={sectionId(FAILOVER)}
+            value={form.failover}
+            onChange={(failover) => {
+              setForm((f) => ({ ...f, failover }))
+              setServerErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith("failover."))))
+            }}
+            errors={shown}
+            disabled={disabled}
+            honored={!!kind.failover}
+            factory={kind.name}
+            connections={form.connections.length}
+          />
           <ConnectionPickerDialog
             open={picker.open}
             onClose={() => setPicker((p) => ({ ...p, open: false }))}
@@ -796,6 +824,7 @@ function snapshotOf(form: Form): string {
       description: c.description,
       settings: c.settings,
       drafts: c.drafts,
+      failover: c.failover ?? null,
     })),
   })
 }
@@ -804,6 +833,7 @@ function snapshotOf(form: Form): string {
 const WHAT_TO_BUILD = "What to build"
 const COMMANDS = "Commands"
 const CONNECTIONS = "Connections"
+const FAILOVER = "Failover"
 
 /** A problem's key that is the commands': "commands", "commands[2]". */
 const isCommandsKey = (key: string) => key === "commands" || key.startsWith("commands[")

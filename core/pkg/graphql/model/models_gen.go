@@ -74,6 +74,7 @@ type Build struct {
 	Commands               []string          `json:"commands"`
 	Connections            any               `json:"connections"`
 	ConnectionDescriptions []string          `json:"connectionDescriptions"`
+	Failover               any               `json:"failover"`
 	Crypto                 any               `json:"crypto,omitempty"`
 	PersistedSession       *string           `json:"persistedSession,omitempty"`
 	State                  string            `json:"state"`
@@ -143,6 +144,7 @@ type BuildConnectionInput struct {
 	Description *string `json:"description,omitempty"`
 	Settings    any     `json:"settings,omitempty"`
 	Values      any     `json:"values,omitempty"`
+	Failover    any     `json:"failover,omitempty"`
 }
 
 type BuildEdge struct {
@@ -176,6 +178,13 @@ type BuildInput struct {
 	Connections         []*BuildConnectionInput `json:"connections"`
 	PersistedSession    *string                 `json:"persistedSession,omitempty"`
 	NewPersistedSession *bool                   `json:"newPersistedSession,omitempty"`
+	Failover            any                     `json:"failover,omitempty"`
+}
+
+type BuildMatchInput struct {
+	Search      *string  `json:"search,omitempty"`
+	States      []string `json:"states,omitempty"`
+	ModuleNames []string `json:"moduleNames,omitempty"`
 }
 
 type BuildProblem struct {
@@ -191,6 +200,7 @@ type BuildSchema struct {
 	Targets           []*BuildTarget  `json:"targets"`
 	Commands          []*BuildCommand `json:"commands"`
 	PersistedSessions bool            `json:"persistedSessions"`
+	Failover          bool            `json:"failover"`
 }
 
 type BuildStage struct {

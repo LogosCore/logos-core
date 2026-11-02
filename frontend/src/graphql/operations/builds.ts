@@ -5,6 +5,7 @@ export const BuildSchemaFields = graphql(`
     version
     crypto
     persistedSessions
+    failover
     fields {
       ...ModuleFieldDefFields
     }
@@ -171,6 +172,7 @@ export const BuildQuery = graphql(`
       commands
       connections
       connectionDescriptions
+      failover
       crypto
       warnings
       log
@@ -202,6 +204,12 @@ export const CancelBuildMutation = graphql(`
 export const DeleteBuildMutation = graphql(`
   mutation DeleteBuild($id: ID!) {
     deleteBuild(id: $id)
+  }
+`)
+
+export const DeleteBuildsMutation = graphql(`
+  mutation DeleteBuilds($operationId: ID!, $ids: [ID!], $matching: BuildMatchInput) {
+    deleteBuilds(operationId: $operationId, ids: $ids, matching: $matching)
   }
 `)
 
