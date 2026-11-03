@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 import type { ConsoleCommand } from "./command-bar"
 import { StreamFieldControl } from "./stream-field-control"
 import { TaskFilesProvider } from "./task-files"
-import { joinPath, type UploadTarget } from "./upload-target"
+import { joinPath, samePathOn, type UploadTarget } from "./upload-target"
 
 // A listing's Upload here (docs: contracts/task-results-and-actions.md,
 // dir_listing View): the upload_file action's params as a form. The file is
@@ -81,7 +81,8 @@ function UploadForm({
   const [overwrite, setOverwrite] = useState(false)
   const [pending, setPending] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
-  const there = (target.names ?? []).some((n) => joinPath(target, n) === path.trim())
+  // On Windows a name in another case is the same file.
+  const there = (target.names ?? []).some((n) => samePathOn(target, joinPath(target, n), path.trim()))
 
   const submit = async () => {
     if (!field || !ready || path.trim() === "" || pending) return

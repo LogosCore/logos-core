@@ -73,11 +73,17 @@ import {
   pathsTo,
   sepOf,
   takenIn,
+  spaceSays,
   UNLISTED_FOLDER,
   UNREADABLE_FOLDER,
+  VOLUMES_PATH,
+  volumeSays,
+  volumesListed,
   when,
   type InFlight,
 } from "./file-browser-model"
+import { VolumeKindIcon } from "@/components/minion-sessions/volume-parts"
+import { volumeKind } from "@/components/minion-sessions/volumes"
 import { useFileBrowserState } from "./file-browser-state"
 
 // The file browser of a session's machine (docs: contracts/file-browser.md):
@@ -136,6 +142,8 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
   const deleteCommands = writable ? commandsFor(commands, "delete_path") : []
   const walkCommands = writable ? commandsFor(commands, "walk_dir") : []
   const refreshCommand = chooseActionCommand(listCommands, readPicked(actingId, "list_dir"))
+  // At the machine's roots, Refresh lists its volumes: its drives.
+  const volumesCommand = chooseActionCommand(writable ? commandsFor(commands, "list_volumes") : [], readPicked(actingId, "list_volumes"))
 
   const queue = useQueueMinionTask()
   // quiet: a task the browser runs by itself (Auto-list) says nothing
@@ -295,7 +303,13 @@ export function FileBrowser({ tabId, sessionId }: { tabId: string; sessionId: st
                 actions={actions}
                 onOpen={(p) => open(p)}
                 onRefresh={
-                  refreshCommand && state.path ? (quiet) => run(refreshCommand.id, { path: state.path }, "Refresh", quiet) : undefined
+                  state.path
+                    ? refreshCommand
+                      ? (quiet) => run(refreshCommand.id, { path: state.path }, "Refresh", quiet)
+                      : undefined
+                    : volumesCommand
+                      ? (quiet) => run(volumesCommand.id, {}, "List volumes", quiet)
+                      : undefined
                 }
                 autoList={state.autoList}
                 toolsSlot={toolsSlot}
@@ -377,9 +391,9 @@ function FolderView({
   running: readonly InFlight[]
   actions: EntryActions
   onOpen: (path: string | null) => void
-  /** Lists the folder; quiet, when the browser does it by itself. */
+  /** Lists the folder (at the roots: the machine's volumes); quiet, when the browser does it by itself. */
   onRefresh?: (quiet?: boolean) => void
-  /** Lists a folder never listed as it is entered. */
+  /** Lists a folder never listed as it is entered, and the volumes of a machine whose roots never had them. */
   autoList: boolean
   /** Where the status and tools go: the browser's header. */
   toolsSlot: HTMLElement | null
@@ -391,16 +405,21 @@ function FolderView({
   const folder = pages[0]?.fileBrowserEntries.folder ?? null
   const sep = path ? sepOf(path) : "/"
   const way = path ? crumbs(path, sep) : []
-  const here = path ? inFlightAt(running, path) : undefined
+  const here = path ? inFlightAt(running, path) : running.find((f) => f.action === "list_volumes")
+  // At the roots: the newest volumes listing they hold, if any.
+  const volumes = path === null ? volumesListed(entries) : null
   // Auto-list: a folder entered that was never listed (or is not in the
   // snapshot at all) is listed, once while the tab shows it: a listing
   // that fails is not run again and again. Its own entries, read, decide:
-  // not the folder before's, still shown while they come.
+  // not the folder before's, still shown while they come. The roots, with
+  // no volume among them, list the machine's volumes the same way.
   const autoListed = useRef(new Set<string>())
-  const unlisted = path !== null && !q.isLoading && !q.isPlaceholderData && !q.isError && !folder?.listedAt
+  const unlisted =
+    !q.isLoading && !q.isPlaceholderData && !q.isError && (path !== null ? !folder?.listedAt : search === "" && volumes === null)
   useEffect(() => {
-    if (!autoList || !unlisted || !onRefresh || here || autoListed.current.has(path)) return
-    autoListed.current.add(path)
+    const key = path ?? VOLUMES_PATH
+    if (!autoList || !unlisted || !onRefresh || here || autoListed.current.has(key)) return
+    autoListed.current.add(key)
     onRefresh(true)
   }, [autoList, unlisted, onRefresh, here, path])
   // Uploads on their way into this folder: their files may not be in it yet.
@@ -442,6 +461,16 @@ function FolderView({
           createPortal(
             <>
               <span className="flex min-w-0 shrink items-center gap-3 px-1 text-xs whitespace-nowrap text-muted-foreground">
+                {path === null &&
+                  (volumes ? (
+                    <span className="truncate" title={formatDateTime(volumes.seenAt)}>
+                      Volumes listed {when(volumes.seenAt)} by {byWhom(volumes.seenBy)}
+                    </span>
+                  ) : (
+                    <span className="truncate" title={onRefresh ? "Refresh lists the machine's volumes: its drives" : "Only the roots other tasks reached"}>
+                      Volumes never listed
+                    </span>
+                  ))}
                 {path !== null &&
                   (folder?.listedAt ? (
                     <span className="truncate" title={formatDateTime(folder.listedAt)}>
@@ -495,11 +524,19 @@ function FolderView({
                 variant="ghost"
                 size="icon-xs"
                 aria-label="Refresh"
-                title={onRefresh ? `List ${path} again on the host` : path ? "No session that can list it" : "Open a folder to list it"}
+                title={
+                  onRefresh
+                    ? path
+                      ? `List ${path} again on the host`
+                      : "List the machine's volumes (its drives) on the host"
+                    : path
+                      ? "No session that can list it"
+                      : "No session that can list the machine's volumes"
+                }
                 disabled={!onRefresh || !!here}
                 onClick={() => onRefresh?.()}
               >
-                <RefreshCwIcon className={cn(here?.action === "list_dir" && "animate-spin")} />
+                <RefreshCwIcon className={cn((here?.action === "list_dir" || here?.action === "list_volumes") && "animate-spin")} />
               </Button>
             </>,
             toolsSlot,
@@ -536,7 +573,9 @@ function FolderView({
           search
             ? "No entry here holds that."
             : path === null
-              ? "Nothing seen yet: list a folder (ls) in the session's console."
+              ? onRefresh
+                ? "Nothing seen yet: Refresh lists the machine's volumes."
+                : "Nothing seen yet: list a folder (ls) in the session's console."
               : folder?.listedAt
                 ? "The folder was empty when it was listed."
                 : "Nothing known here yet: Refresh lists it."
@@ -718,12 +757,17 @@ function EntryRow({
   const lastUpload = e.uploaded.at(-1)
   const isDir = e.type === "dir"
   const isFile = e.type === "file"
+  // A volume's path (a drive's root, a mount point): its kind's icon, its
+  // label and space beside its name.
+  const v = e.volume
+  const volumeNote = v ? [v.label, spaceSays(v)].filter(Boolean).join(" · ") : ""
   const title = [
     e.path,
     gone ? goneSays(e) : null,
     !e.known ? "Known only as a folder on the way to another entry" : null,
     isDir ? listedSays(e) : null,
     e.seenAt ? `Seen ${formatDateTime(e.seenAt)} by ${byWhom(e.seenBy)}` : null,
+    v ? volumeSays(v) : null,
   ]
     .filter(Boolean)
     .join("\n")
@@ -749,6 +793,11 @@ function EntryRow({
               name={e.name}
               className={cn("size-3.5 shrink-0 self-center", !gone && e.downloaded.length > 0 ? DOWNLOADED_FILE : "text-muted-foreground")}
             />
+          ) : v ? (
+            <VolumeKindIcon
+              kind={volumeKind(v.kind)}
+              className={cn("self-center", gone ? "text-muted-foreground" : e.listErr ? UNREADABLE_FOLDER : e.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER)}
+            />
           ) : (
             <Icon
               className={cn(
@@ -771,6 +820,7 @@ function EntryRow({
             {fullPath ? e.path : e.name}
           </span>
           {e.target && <span className="truncate text-muted-foreground">→ {e.target}</span>}
+          {volumeNote && <span className="truncate text-xs text-muted-foreground">{volumeNote}</span>}
           {lastDownload && (
             <button
               type="button"

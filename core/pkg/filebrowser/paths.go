@@ -28,8 +28,10 @@ func sepOf(path string) string {
 }
 
 // absolute: a path from a root, not one relative to a minion's directory.
+// A Windows one may be written with / (C:/Users), as Windows takes it.
 func absolute(path string) bool {
-	return strings.HasPrefix(path, "/") || strings.HasPrefix(path, `\\`) || (len(path) >= 3 && path[1] == ':' && path[2] == '\\')
+	return strings.HasPrefix(path, "/") || strings.HasPrefix(path, `\\`) ||
+		(len(path) >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
 }
 
 // isRoot: a path that is a file system's root.
@@ -40,9 +42,12 @@ func isRoot(path, sep string) bool {
 	return driveRoot.MatchString(path) || shareRoot.MatchString(path)
 }
 
-// clean drops a path's trailing separators, but a root's.
+// clean drops a path's trailing separators, but a root's. A Windows path's
+// / are \ (C:/Users is C:\Users, as Windows takes it), so a path typed either
+// way is the same entry.
 func clean(path, sep string) string {
 	if sep == `\` {
+		path = strings.ReplaceAll(path, "/", `\`)
 		if bareDrive.MatchString(path) || bareShare.MatchString(path) {
 			return path + `\`
 		}

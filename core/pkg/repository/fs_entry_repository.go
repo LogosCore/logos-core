@@ -48,6 +48,13 @@ type IFsEntryRepository interface {
 	// Ensure makes the entries on the way to one (its parents), as folders,
 	// where there are none.
 	Ensure(ctx context.Context, op uuid.UUID, machine string, entries []models.FsEntry) error
+	// Volumes records the machine's volumes as a task listed them at at:
+	// each entry given (a drive's root, a mount point; its Volume set) a
+	// folder that holds its volume, and a volume listed before that this
+	// list no longer has, gone from its entry. The paths whose volume went.
+	// A list older than the machine's newest changes nothing: it would
+	// bring back a volume the newer one no longer had.
+	Volumes(ctx context.Context, op uuid.UUID, machine string, volumes []models.FsEntry, at time.Time) ([]string, error)
 
 	Get(ctx context.Context, op uuid.UUID, machine, pathKey string) (*models.FsEntry, error)
 	// Children are a folder's entries, a page at a time (FsPage).
@@ -90,8 +97,21 @@ func NewFsEntryRepository(db database.Database) IFsEntryRepository {
 
 // identity is what an entry is, set when it is made.
 func identity(op uuid.UUID, machine string, e models.FsEntry) bson.M {
-	return bson.M{"operation_id": op, "machine": machine, "path": e.Path, "path_key": e.PathKey, "parent": e.Parent,
-		"parent_key": e.ParentKey, "name": e.Name, "name_key": e.NameKey, "sep": e.Sep}
+	return withKeys(keysOf(op, machine, e), spelling(e))
+}
+
+// keysOf is what finds an entry: on Windows its keys are lowercase, so one
+// entry holds a path however its case is written.
+func keysOf(op uuid.UUID, machine string, e models.FsEntry) bson.M {
+	return bson.M{"operation_id": op, "machine": machine, "path_key": e.PathKey, "parent_key": e.ParentKey,
+		"name_key": e.NameKey, "sep": e.Sep}
+}
+
+// spelling is how an entry is written: the case its host gives it, which a
+// file renamed by case alone changes (README to readme, on Windows) while
+// its keys stay.
+func spelling(e models.FsEntry) bson.M {
+	return bson.M{"path": e.Path, "parent": e.Parent, "name": e.Name}
 }
 
 // olderThan matches an entry holding no change newer than at.
@@ -151,10 +171,12 @@ func (r *fsEntryRepository) ListingPiece(ctx context.Context, op uuid.UUID, mach
 		var models_ []mongo.WriteModel
 		for _, e := range children[start:min(start+1000, len(children))] {
 			filter := withKeys(bson.M{"operation_id": op, "machine": machine, "path_key": e.PathKey}, olderThan(at))
-			set := withKeys(described(e), bson.M{"changed_at": at, "seen_at": at, "seen_by": ref})
+			// Spelled as the folder's read gives it (a name in a directory is
+			// as the host writes it), its keys set once.
+			set := withKeys(withKeys(described(e), spelling(e)), bson.M{"changed_at": at, "seen_at": at, "seen_by": ref})
 			models_ = append(models_, mongo.NewUpdateOneModel().SetFilter(filter).SetUpsert(true).SetUpdate(bson.M{
 				"$set": set, "$unset": bson.M{"gone_at": "", "gone_by": "", "gone_how": ""},
-				"$setOnInsert": identity(op, machine, e),
+				"$setOnInsert": keysOf(op, machine, e),
 			}))
 		}
 		if _, err := c.BulkWrite(ctx, models_, options.BulkWrite().SetOrdered(false)); err != nil && !onlyDuplicates(err) {
@@ -303,6 +325,55 @@ func (r *fsEntryRepository) Ensure(ctx context.Context, op uuid.UUID, machine st
 		return err
 	}
 	return nil
+}
+
+func (r *fsEntryRepository) Volumes(ctx context.Context, op uuid.UUID, machine string, volumes []models.FsEntry, at time.Time) ([]string, error) {
+	c, err := r.raw()
+	if err != nil {
+		return nil, err
+	}
+	newer, err := c.CountDocuments(ctx, bson.M{"operation_id": op, "machine": machine, "volume.seen_at": bson.M{"$gt": at}},
+		options.Count().SetLimit(1))
+	if err != nil || newer > 0 {
+		return nil, err
+	}
+	keys := make(bson.A, 0, len(volumes))
+	var models_ []mongo.WriteModel
+	for _, e := range volumes {
+		keys = append(keys, e.PathKey)
+		// A volume's path is a folder. Its listing's times stay: holding a
+		// volume says nothing of what is in it.
+		models_ = append(models_, mongo.NewUpdateOneModel().SetUpsert(true).
+			SetFilter(bson.M{"operation_id": op, "machine": machine, "path_key": e.PathKey,
+				"$or": bson.A{bson.M{"volume.seen_at": bson.M{"$lte": at}}, bson.M{"volume": bson.M{"$exists": false}}}}).
+			SetUpdate(bson.M{"$set": bson.M{"type": "dir", "dir_rank": 0, "known": true, "volume": e.Volume},
+				"$setOnInsert": withKeys(identity(op, machine, e), bson.M{"size_key": int64(-1), "mod_key": int64(math.MinInt64),
+					"changed_at": time.Time{}})}))
+	}
+	if len(models_) > 0 {
+		// A duplicate key: the entry holds a volume listed later.
+		if _, err := c.BulkWrite(ctx, models_, options.BulkWrite().SetOrdered(false)); err != nil && !onlyDuplicates(err) {
+			return nil, fmt.Errorf("the volumes: %w", err)
+		}
+	}
+	// The ones no longer listed: a machine has few volumes, so they are
+	// read first, to say which went.
+	gone := bson.M{"operation_id": op, "machine": machine, "volume.seen_at": bson.M{"$lt": at}, "path_key": bson.M{"$nin": keys}}
+	var went []models.FsEntry
+	if err := r.coll.Find(ctx, gone).Select(bson.M{"path": 1}).All(&went); err != nil {
+		return nil, fmt.Errorf("the volumes no longer listed: %w", err)
+	}
+	if len(went) == 0 {
+		return nil, nil
+	}
+	if _, err := c.UpdateMany(ctx, gone, bson.M{"$unset": bson.M{"volume": ""}}); err != nil {
+		return nil, fmt.Errorf("the volumes no longer listed: %w", err)
+	}
+	paths := make([]string, 0, len(went))
+	for _, e := range went {
+		paths = append(paths, e.Path)
+	}
+	return paths, nil
 }
 
 func (r *fsEntryRepository) Get(ctx context.Context, op uuid.UUID, machine, pathKey string) (*models.FsEntry, error) {

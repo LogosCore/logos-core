@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQueries,
@@ -20,6 +21,8 @@ import {
   MinionSessionsLayoutDocument,
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
+  SetMinionSessionMaxTasksDocument,
+  MinionSessionRunningTasksDocument,
   SetMinionSessionArchivedDocument,
   SetMinionSessionsArchivedDocument,
   SetMinionSessionDescriptionDocument,
@@ -61,6 +64,7 @@ export const minionSessionKeys = {
   layout: () => [...minionSessionKeys.all, "layout"] as const,
   detail: (id: string) => [...minionSessionKeys.all, "detail", id] as const,
   connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
+  runningTasks: (id: string, rev: number) => [...minionSessionKeys.all, "running-tasks", id, rev] as const,
 }
 
 // How often a list with a filter on the clock ("seen within 5m") refetches:
@@ -241,6 +245,29 @@ export function useSetMinionSessionAddress() {
   return useMutation({
     mutationFn: (vars: { id: string; address: string | null }) => graphqlClient(SetMinionSessionAddressDocument, vars),
     onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionAddress),
+  })
+}
+
+/** Sets how many tasks the session's minion runs at once: core sends it until the minion says it has it. */
+export function useSetMinionSessionMaxTasks() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: { id: string; max: number }) => graphqlClient(SetMinionSessionMaxTasksDocument, vars),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionMaxTasks),
+  })
+}
+
+/**
+ * The session's tasks its minion has and has not ended, read again with
+ * each change to the session (its rev: a check-in, a task's news reaching
+ * it), the last count shown meanwhile.
+ */
+export function useMinionSessionRunningTasks(id: string, rev: number) {
+  return useQuery({
+    queryKey: minionSessionKeys.runningTasks(id, rev),
+    queryFn: () => graphqlClient(MinionSessionRunningTasksDocument, { id }),
+    enabled: id !== "",
+    placeholderData: keepPreviousData,
   })
 }
 

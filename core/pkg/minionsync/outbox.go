@@ -17,7 +17,8 @@ import (
 // contracts/minion-messages/, Mechanics by connection kind).
 //
 // Everything core starts sending a minion comes from one place, outbox:
-// cancels, resumes, the streams' acks and tasks. The paths a message takes
+// cancels, the operator's limit of tasks, resumes, the streams' acks and
+// tasks. The paths a message takes
 // differ only in what one message may carry (a delivery) and in when it
 // goes (Nudge):
 //
@@ -107,8 +108,10 @@ func roomFor(limit int, answers []cbor.RawMessage) int {
 }
 
 // outbox is what goes to the session's minion in one message, as d allows,
-// most urgent first: cancels, resumes, the streams' acks, then tasks (those
-// sent and not acknowledged first). What does not fit waits for the next
+// most urgent first: cancels, the operator's limit of tasks (a max_tasks,
+// in every message until the minion says it has it: whatever it runs, as a
+// cancel goes), resumes, the streams' acks, then tasks (those sent and not
+// acknowledged first). What does not fit waits for the next
 // message; a task too large for any message of the connection ends failed,
 // saying so.
 func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d delivery) (outcome, error) {
@@ -135,6 +138,26 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 			break
 		}
 		o.fresh = true
+	}
+	// A limit sent with MaxTasksTries messages and never answered: the
+	// minion does not take it, and the max_tasks commands for it end so.
+	if session.MaxTasksNotTaken() != nil {
+		s.endMaxTasksCommands(ctx, session)
+	}
+	if due := session.MaxTasksDue(); due != nil {
+		item, err := protocol.MarshalCBOR(protocol.MaxTasksItem{T: protocol.ItemMaxTasks, Max: uint64(max(*due, 0))})
+		if err != nil {
+			return o, err
+		}
+		if add(item) {
+			o.fresh = true
+			// Counted: a minion that does not take it is not sent it for
+			// ever (models.MaxTasksTries).
+			if err := s.sessions.MaxTasksSent(ctx, session.SessionID); err != nil {
+				return o, fmt.Errorf("count a max_tasks: %w", err)
+			}
+			session.MaxTasksSends++
+		}
 	}
 	if d.resumes {
 		resumes, err := s.resumes(ctx, session)

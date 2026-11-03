@@ -38,6 +38,7 @@ const schema: BuildSchemaFieldsFragment = {
   version: 1,
   crypto: null,
   failover: false,
+  maxTasks: false,
   persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -279,6 +280,7 @@ describe("the build form", () => {
         },
       ],
       failover: DEFAULT_FAILOVER,
+      maxTasks: null,
     })
   })
 
@@ -503,6 +505,24 @@ describe("endpoint summaries", () => {
     expect(settingsSummary(http, "reverse-call", null)).toBe("")
     // Another kind's fields: only base_url is one of reverse-persistent's.
     expect(settingsSummary(http, "reverse-persistent", eu.values)).toBe("https://cdn.eu.example.com")
+  })
+})
+
+describe("max tasks", () => {
+  const limited = factoryKindsByName([{ moduleName: "bob", instances: 1, schema: { ...schema, maxTasks: true } }]).get("bob")!
+  it("starts at the default, checks what is typed, and goes to createBuild", () => {
+    const form = initialForm(limited, null, channels)
+    expect(form.maxTasks).toBe("5")
+    expect(evaluateForm(limited, { ...form, maxTasks: "12" }, channels).input.maxTasks).toBe(12)
+    expect(evaluateForm(limited, { ...form, maxTasks: "65" }, channels).errors.maxTasks).toBe("64 at most")
+    expect(evaluateForm(limited, { ...form, maxTasks: "" }, channels).errors.maxTasks).toBe("A whole number")
+  })
+  it("is none for a factory whose minions take no limit, and comes back with Build again", () => {
+    const form = initialForm(kind, null, channels)
+    expect(form.maxTasks).toBe("")
+    expect(evaluateForm(kind, form, channels).input.maxTasks).toBeNull()
+    const again = sourceFromBuild(limited, { target: "dummy", platform: "any/any", maxTasks: 2 }, channels)
+    expect(initialForm(limited, again, channels).maxTasks).toBe("2")
   })
 })
 

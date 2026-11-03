@@ -22,6 +22,8 @@ import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { readDirWalk } from "./dir-walk"
 import { WalkView } from "./walk-view"
+import { readVolumes } from "./volumes"
+import { VolumesView } from "./volumes-view"
 import { DirListingView } from "./dir-listing-view"
 import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
@@ -157,9 +159,12 @@ export function TaskDetail({
   // The result's view, for data that fits it; the rest shows raw.
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
   const walk = t.result === "dir_walk" && !t.dataProblem ? readDirWalk(data) : null
+  const volumes = t.result === "volumes" && !t.dataProblem ? readVolumes(data) : null
   const dataNotes = [
     t.dataProblem ? `The data does not fit ${t.result}: ${t.dataProblem}. It shows raw.` : null,
-    t.result && t.result !== "dir_listing" && t.result !== "dir_walk" && !isFile && t.result !== "file_upload" && t.result !== "file_stream"
+    t.result &&
+    !["dir_listing", "dir_walk", "volumes", "file_upload", "file_stream"].includes(t.result) &&
+    !isFile
       ? `Its result, ${t.result}, is not one this version shows: the data shows raw.`
       : null,
     t.missingParts > 0
@@ -301,6 +306,8 @@ export function TaskDetail({
             <StreamView task={t} stream={t.stream} />
           ) : walk && !rawData ? (
             <WalkView task={t} walk={walk} onOpenInFileBrowser={onOpenInFileBrowser} />
+          ) : volumes && !rawData ? (
+            <VolumesView volumes={volumes} onOpenInFileBrowser={onOpenInFileBrowser} />
           ) : listing && !rawData ? (
             <DirListingView
               listing={listing}

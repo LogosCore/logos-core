@@ -82,6 +82,17 @@ type IMinionSessionRepository interface {
 	BackfillDescriptions(ctx context.Context) (int64, error)
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
+	// SetMaxTasks records how many tasks the minion runs at once, as it
+	// said (models.MinionSession.MaxTasks); nil: it says none. The count
+	// of the operator's limit sent unanswered starts again.
+	SetMaxTasks(ctx context.Context, sessionID uuid.UUID, max *int) error
+	// SetMaxTasksWanted records the operator's limit, which core sends the
+	// minion until it says it has it (models.MinionSession.MaxTasksSet),
+	// its count of sends at 0.
+	SetMaxTasksWanted(ctx context.Context, sessionID uuid.UUID, max int) error
+	// MaxTasksSent counts one more message that carried the operator's
+	// limit (models.MinionSession.MaxTasksSends).
+	MaxTasksSent(ctx context.Context, sessionID uuid.UUID) error
 	// SetConnected records whether a persistent connection serving the
 	// session is open (models.MinionSession.Connected).
 	SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error
@@ -396,6 +407,12 @@ type MinionSessionClaim struct {
 	// Sleep is the schedule the claim's hello says; nil drops the earlier
 	// process's (and its late_at) until the new one says one.
 	Sleep *models.MinionSessionSleep
+	// MaxTasks is the limit the claim's hello says; nil: it says none.
+	// MaxTasksSettable: the claiming build's factory declares max_tasks.
+	// The operator's (max_tasks_set) stays, and goes to the new process
+	// when it takes one.
+	MaxTasks         *int
+	MaxTasksSettable bool
 }
 
 func (r *minionSessionRepository) SetArchived(ctx context.Context, sessionID uuid.UUID, archived bool) error {
@@ -504,6 +521,23 @@ func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uu
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": bson.M{"persisted": true}}))
 }
 
+func (r *minionSessionRepository) SetMaxTasks(ctx context.Context, sessionID uuid.UUID, max *int) error {
+	update := bson.M{"$unset": bson.M{"max_tasks": "", "max_tasks_sends": ""}}
+	if max != nil {
+		update = bson.M{"$set": bson.M{"max_tasks": *max}, "$unset": bson.M{"max_tasks_sends": ""}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
+}
+
+func (r *minionSessionRepository) SetMaxTasksWanted(ctx context.Context, sessionID uuid.UUID, max int) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
+		withRev(bson.M{"$set": bson.M{"max_tasks_set": max}, "$unset": bson.M{"max_tasks_sends": ""}}))
+}
+
+func (r *minionSessionRepository) MaxTasksSent(ctx context.Context, sessionID uuid.UUID) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$inc": bson.M{"max_tasks_sends": 1}}))
+}
+
 func (r *minionSessionRepository) SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error {
 	update := withRev(bson.M{"$unset": bson.M{"connected": ""}})
 	if connected {
@@ -534,29 +568,39 @@ func (r *minionSessionRepository) Claim(ctx context.Context, sessionID uuid.UUID
 	}
 	restart := models.MinionSessionRestart{At: c.At, PID: c.Hello.PID, Host: c.Hello.Host, BuildID: c.BuildID}
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID, "closed_at": nil}, bson.A{bson.M{"$set": bson.M{
-		"replaced_keys":     prepend("replaced_keys", bson.M{"crypto": "$crypto", "at": c.At}, models.MaxSessionReplacedKeys),
-		"restarts":          prepend("restarts", lit(restart), models.MaxSessionRestarts),
-		"restart_count":     bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$restart_count", 0}}, 1}},
-		"crypto":            lit(c.Crypto),
-		"hello":             lit(c.Hello),
-		"address":           lit(c.Address),
-		"address_picked":    c.AddressPicked,
-		"build_id":          lit(c.BuildID),
-		"build_description": lit(c.BuildDescription),
-		"module_name":       lit(c.ModuleName),
-		"target":            lit(c.Target),
-		"platform":          lit(c.Platform),
-		"staged":            c.Staged,
-		"persisted":         true,
-		"sleep":             sleepOrRemove(c.Sleep),
-		"late_at":           "$$REMOVE", // set again by the claim's check-in
-		"lost_at":           "$$REMOVE",
-		"rev":               revStage,
+		"replaced_keys":      prepend("replaced_keys", bson.M{"crypto": "$crypto", "at": c.At}, models.MaxSessionReplacedKeys),
+		"restarts":           prepend("restarts", lit(restart), models.MaxSessionRestarts),
+		"restart_count":      bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$restart_count", 0}}, 1}},
+		"crypto":             lit(c.Crypto),
+		"hello":              lit(c.Hello),
+		"address":            lit(c.Address),
+		"address_picked":     c.AddressPicked,
+		"build_id":           lit(c.BuildID),
+		"build_description":  lit(c.BuildDescription),
+		"module_name":        lit(c.ModuleName),
+		"target":             lit(c.Target),
+		"platform":           lit(c.Platform),
+		"staged":             c.Staged,
+		"persisted":          true,
+		"sleep":              sleepOrRemove(c.Sleep),
+		"max_tasks":          intOrRemove(c.MaxTasks),
+		"max_tasks_settable": c.MaxTasksSettable,
+		"max_tasks_sends":    "$$REMOVE",
+		"late_at":            "$$REMOVE", // set again by the claim's check-in
+		"lost_at":            "$$REMOVE",
+		"rev":                revStage,
 	}}})
 }
 
 // sleepOrRemove is a schedule for a pipeline $set, or the removal of the
 // field for none.
+func intOrRemove(n *int) any {
+	if n == nil {
+		return "$$REMOVE"
+	}
+	return bson.M{"$literal": *n}
+}
+
 func sleepOrRemove(s *models.MinionSessionSleep) any {
 	if s == nil {
 		return "$$REMOVE"

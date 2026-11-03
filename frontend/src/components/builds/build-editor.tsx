@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { LeaveJsonDialog } from "@/components/ui/leave-json-dialog"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
@@ -22,6 +23,7 @@ import {
   useRequestClose,
 } from "@/components/ui/record-modal"
 import { SettingRow, SettingsSection } from "@/components/ui/settings-rows"
+import { DEFAULT_MAX_TASKS, MAX_TASKS_LIMIT } from "@/components/minion-sessions/max-tasks-values"
 import { SettingsNav, type SettingsNavSection } from "@/components/ui/settings-nav"
 import { sectionId, useActiveSection } from "@/hooks/use-active-section"
 import { useRecordModals } from "@/hooks/use-record-modals"
@@ -385,6 +387,7 @@ function Editor({
           commands: request.commands,
           connections: request.connections,
           failover: request.failover,
+          maxTasks: kind.maxTasks ? request.maxTasks : null,
           ...(persistedOptions ? persistedInput(read?.ok && read.doc.persisted ? read.doc.persisted : persisted) : {}),
         },
       })
@@ -457,11 +460,12 @@ function Editor({
           {
             id: sectionId(COMMANDS),
             title: COMMANDS,
-            state: commandsError
-              ? ("error" as const)
-              : form.commands.join() !== defaults.join()
-                ? ("set" as const)
-                : null,
+            state:
+              commandsError || shown.maxTasks
+                ? ("error" as const)
+                : form.commands.join() !== defaults.join() || (kind.maxTasks && form.maxTasks !== String(DEFAULT_MAX_TASKS))
+                  ? ("set" as const)
+                  : null,
           },
         ]),
     ...groups.map(
@@ -649,7 +653,30 @@ function Editor({
               onChange={pickCommands}
               error={commandsError}
               disabled={disabled}
-            />
+            >
+              {kind.maxTasks && (
+                <SettingRow
+                  id="build-max-tasks"
+                  label="Tasks at once"
+                  help={`How many tasks the minion runs at once, 0 to ${MAX_TASKS_LIMIT}; 0: none until its session sets more. Its sessions change it live.`}
+                  error={shown.maxTasks}
+                >
+                  <Input
+                    id="build-max-tasks"
+                    value={form.maxTasks}
+                    onChange={(e) => {
+                      const maxTasks = e.target.value
+                      setForm((f) => ({ ...f, maxTasks }))
+                      setServerErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== "maxTasks")))
+                    }}
+                    inputMode="numeric"
+                    className="w-24"
+                    aria-invalid={!!shown.maxTasks}
+                    disabled={disabled}
+                  />
+                </SettingRow>
+              )}
+            </CommandPicker>
           )}
 
           {groups.map((g) => (

@@ -26,6 +26,7 @@ const schema: BuildSchemaFieldsFragment = {
   version: 1,
   crypto: null,
   failover: false,
+  maxTasks: false,
   persistedSessions: false,
   fields: [
     field({ key: "greeting", type: "string", default: "hello from BOB", order: 1 }),
@@ -266,6 +267,40 @@ describe("persisted_session", () => {
   })
 })
 
+describe("max_tasks", () => {
+  const limited = factoryKindsByName([{ moduleName: "bob", instances: 1, schema: { ...schema, maxTasks: true } }]).get("bob")!
+  const readM = (doc: unknown) => readBuildJson(JSON.stringify(doc), limited, channels)
+
+  it("goes in and out of the form, and to createBuild", () => {
+    const form = formFromDocument(limited, channels, { ...good, maxTasks: 8 })
+    expect(form.maxTasks).toBe("8")
+    expect(formDocument(limited, channels, { ...form, maxTasks: "3" }).maxTasks).toBe(3)
+    expect(formDocument(limited, channels, { ...form, maxTasks: "lots" }).maxTasks).toBe("lots")
+    expect(formFromDocument(limited, channels, good).maxTasks).toBe("5")
+    expect(JSON.parse(buildJson(limited, channels, { ...good, maxTasks: 3 })).max_tasks).toBe(3)
+    expect(documentInput({ ...good, maxTasks: 3 }).maxTasks).toBe(3)
+    expect(documentInput(good).maxTasks).toBeNull()
+  })
+
+  it("reads it back, 0 to 64, and refuses anything else", () => {
+    const at = (value: unknown) => {
+      const r = readM({ ...json(), max_tasks: value })
+      if (!r.ok) throw new Error(r.message)
+      return { maxTasks: r.doc.maxTasks, problems: r.problems.map((p) => p.path) }
+    }
+    expect(at(0)).toEqual({ maxTasks: 0, problems: [] })
+    expect(at(64).maxTasks).toBe(64)
+    expect(at(65).problems).toEqual(["/max_tasks"])
+    expect(at(2.5).problems).toEqual(["/max_tasks"])
+    expect(at("5").problems).toEqual(["/max_tasks"])
+  })
+
+  it("is not for a factory whose minions take no limit", () => {
+    expect(problems({ ...json(), max_tasks: 5 })["/max_tasks"]).toMatch(/take no limit/)
+    expect(formFromDocument(kind, channels, good).maxTasks).toBe("")
+  })
+})
+
 describe("a finished build's JSON", () => {
   it("reads back as a new build's, the defaults it holds left to the server", () => {
     const record = {
@@ -344,6 +379,7 @@ describe("documentInput", () => {
         },
       ],
       failover: DEFAULT_FAILOVER,
+      maxTasks: null,
     })
   })
 })

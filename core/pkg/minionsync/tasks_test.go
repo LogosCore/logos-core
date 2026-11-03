@@ -64,7 +64,8 @@ func (f *fakeTasks) MarkSent(_ context.Context, ids []uuid.UUID, at time.Time) e
 func (f *fakeTasks) CountRunning(_ context.Context, sid uuid.UUID) (int, error) {
 	n := 0
 	for _, t := range f.rows {
-		if t.SessionID == sid && (t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+		if t.SessionID == sid && !protocol.IsCoreCommand(t.Command) &&
+			(t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
 			n++
 		}
 	}
@@ -115,6 +116,16 @@ func (f *fakeTasks) CancelsToSend(_ context.Context, sid uuid.UUID, _ time.Time)
 		}
 	}
 	return send, nil, nil
+}
+
+func (f *fakeTasks) OpenOfCommand(_ context.Context, sid uuid.UUID, command string) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	for _, t := range f.rows {
+		if t.SessionID == sid && t.Command == command && !t.Finished() {
+			out = append(out, t)
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeTasks) OpenWithAction(_ context.Context, sid uuid.UUID, action string) ([]models.MinionTask, error) {

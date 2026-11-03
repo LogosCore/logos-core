@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { SettingsSection } from "@/components/ui/settings-rows"
 import { TransferList, type TransferItem } from "@/components/ui/transfer-list"
 import type { Command } from "@/components/builds/build-values"
@@ -19,6 +20,7 @@ export function CommandPicker({
   onChange,
   error,
   disabled,
+  children,
 }: {
   /** The section's id, for the side list to scroll to. */
   id: string
@@ -31,6 +33,8 @@ export function CommandPicker({
   onChange: (picked: string[]) => void
   error?: string
   disabled: boolean
+  /** More of the section, under the lists: how the commands run (tasks at once). */
+  children?: ReactNode
 }) {
   const items = commands.map(
     (c): TransferItem => ({
@@ -73,6 +77,7 @@ export function CommandPicker({
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
+      {children}
     </SettingsSection>
   )
 }

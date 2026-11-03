@@ -16,6 +16,9 @@ func TestEntryAt(t *testing.T) {
 		{`C:\Users\Bob\`, `\`, `C:\Users`, "Bob", `c:\users\bob`},
 		{`\\srv\share\`, `\`, "", `\\srv\share\`, `\\srv\share\`},
 		{`\\srv\share\docs`, `\`, `\\srv\share\`, "docs", `\\srv\share\docs`},
+		// A Windows path typed with /: the same entry as with \.
+		{`C:/Users/Bob/`, `\`, `C:\Users`, "Bob", `c:\users\bob`},
+		{`c:/`, `\`, "", `c:\`, `c:\`},
 	} {
 		e := entryAt(tc.path, tc.sep)
 		if e.Parent != tc.parent || e.Name != tc.name || e.PathKey != tc.key {
@@ -35,8 +38,11 @@ func TestSepAndAbsolute(t *testing.T) {
 	if sepOf(`C:\x`) != `\` || sepOf(`\\s\h\x`) != `\` || sepOf("/x") != "/" {
 		t.Fatal("sepOf")
 	}
-	if !absolute("/x") || !absolute(`C:\x`) || absolute("x/y") || absolute(`C:x`) {
+	if !absolute("/x") || !absolute(`C:\x`) || !absolute("C:/x") || absolute("x/y") || absolute(`C:x`) {
 		t.Fatal("absolute")
+	}
+	if sepOf("C:/Users") != `\` || entryAt("C:/Users", sepOf("C:/Users")).PathKey != entryAt(`C:\Users`, `\`).PathKey {
+		t.Fatal("C:/Users is not C:\\Users")
 	}
 }
 

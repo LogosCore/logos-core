@@ -210,6 +210,10 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 	}
 	failover := b.FailoverPolicy()
 	req.Failover = &failover
+	if b.MaxTasks != nil {
+		n := uint64(max(*b.MaxTasks, 0))
+		req.MaxTasks = &n
+	}
 	if b.PersistedSessionID != nil {
 		req.SessionID = b.PersistedSessionID.String()
 	}

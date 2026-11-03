@@ -459,6 +459,42 @@ func TestBuildFailover(t *testing.T) {
 	}
 }
 
+// A factory whose minions take a limit of tasks gets one, the operator's or
+// protocol.DefaultMaxTasks; one whose minions take none gets none, and a
+// limit asked of it is refused, as one past protocol.MaxTasksLimit.
+func TestBuildMaxTasks(t *testing.T) {
+	r := newRig(t)
+	if b := r.queue(t, nil); b.MaxTasks != nil {
+		t.Fatalf("a limit for a factory without max tasks: %d", *b.MaxTasks)
+	}
+	three := 3
+	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.MaxTasks = &three }))
+	var v *ValidationError
+	if !errors.As(err, &v) || v.Problems["maxTasks"] == "" {
+		t.Fatalf("a limit the factory takes none of: %v", err)
+	}
+	r.reg.schemas["bob"].MaxTasks = true
+	if b := r.queue(t, nil); b.MaxTasks == nil || *b.MaxTasks != protocol.DefaultMaxTasks {
+		t.Fatalf("the default: %v", b.MaxTasks)
+	}
+	b := r.queue(t, func(in *BuildInput) { in.MaxTasks = &three })
+	r.svc.Tick(context.Background())
+	var req *protocol.BuildRequest
+	for _, c := range r.rpc.recorded() {
+		if q, ok := c.payload.(protocol.BuildRequest); ok && q.BuildID == b.BuildID.String() {
+			req = &q
+		}
+	}
+	if req == nil || req.MaxTasks == nil || *req.MaxTasks != 3 {
+		t.Fatalf("the factory got %+v", req)
+	}
+	over := protocol.MaxTasksLimit + 1
+	if _, err := r.svc.CreateBuild(context.Background(), opID, r.input(func(in *BuildInput) { in.MaxTasks = &over })); !errors.As(err, &v) ||
+		v.Problems["maxTasks"] == "" {
+		t.Fatalf("a limit past the most: %v", err)
+	}
+}
+
 func TestOfferWithCrypto(t *testing.T) {
 	r := newRig(t)
 	r.reg.schemas["bob"].Crypto = protocol.CryptoAES256CBCHMACSHA256

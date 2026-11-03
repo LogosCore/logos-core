@@ -100,6 +100,9 @@ type minionTaskResolver struct {
 	// connector opens and closes bind-persistent targets' connections, for
 	// connect and disconnect; nil, sessions have neither.
 	connector TaskConnector
+	// limits sets a session's max tasks, for max_tasks; nil, sessions have
+	// none.
+	limits MaxTasksSetter
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -114,9 +117,11 @@ type TaskFiles interface {
 
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
-	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector) IMinionTaskResolver {
+	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector,
+	limits MaxTasksSetter) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
-		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector}
+		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
+		limits: limits}
 }
 
 const (
@@ -219,6 +224,9 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 	if r.offersConnect(s) {
 		out = append(out, connectCommands()...)
 	}
+	if r.offersMaxTasks(s) {
+		out = append(out, maxTasksCommand())
+	}
 	return &sc.BuildSchema, append(out, helpCommand(out)), nil
 }
 
@@ -276,6 +284,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	if command == protocol.CommandConnect || command == protocol.CommandDisconnect {
 		return r.runConnect(ctx, s, uid, values, command)
+	}
+	if command == protocol.CommandMaxTasks {
+		return r.runMaxTasks(ctx, s, uid, values, wire)
 	}
 	if err := overKind(ctx, s, commands[i]); err != nil {
 		return nil, err

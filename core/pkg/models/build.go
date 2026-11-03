@@ -96,6 +96,10 @@ type Build struct {
 	// (protocol.BuildFailover), as the factory gets it; nil for a build made
 	// before it existed (FailoverPolicy: the defaults).
 	Failover *BuildFailover `bson:"failover,omitempty" json:"failover,omitempty"`
+	// MaxTasks is how many tasks the minion runs at once as it starts
+	// (protocol.BuildRequest.MaxTasks), for a factory whose minions take
+	// one (protocol.BuildSchema.MaxTasks); nil for any other.
+	MaxTasks *int `bson:"max_tasks,omitempty" json:"max_tasks,omitempty"`
 	// SearchText is what the builds list search reads of the build beyond
 	// its fields (BuildSearchText), set when the build is stored.
 	SearchText string `bson:"search_text" json:"-"`

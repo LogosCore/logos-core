@@ -50,6 +50,10 @@ type BuildSchema {
   # those say. Without it the settings still reach the factory, which may
   # ignore them.
   failover: Boolean!
+  # The minions run up to a number of tasks at once: a build says how many
+  # (BuildInput.maxTasks), and a session changes it live
+  # (setMinionSessionMaxTasks).
+  maxTasks: Boolean!
 }
 
 # A command a factory's minions can be built with.
@@ -212,6 +216,9 @@ input BuildInput {
   # "5m". Keys left out take the defaults (enabled, 5, "0s", true, "5m",
   # "1h"); null: all defaults.
   failover: JSON
+  # How many tasks the minion runs at once as it starts, 0 (none until a
+  # session sets more) to 64, for a factory with maxTasks; null: 5 there.
+  maxTasks: Int
 }
 
 # One stage of a build's pipeline: core's queue, then the factory's steps
@@ -289,6 +296,9 @@ type Build {
   # fail_for, wrap, cycle_pause, failback_after} (a build from before
   # builds had one: the defaults).
   failover: JSON!
+  # How many tasks the minion runs at once as it starts, as the factory got
+  # it; null for a factory whose minions take no max tasks.
+  maxTasks: Int
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON

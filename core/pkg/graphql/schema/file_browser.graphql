@@ -57,6 +57,28 @@ type FsEntry {
   listErrBy: FsTaskRef
   downloaded: [FsTransfer!]!
   uploaded: [FsTransfer!]!
+  # A volume's files are here (a drive's root, a mount point), as the
+  # newest volumes task of the machine said; null once a later one no
+  # longer had it.
+  volume: FsVolume
+}
+
+# A volume as a volumes task listed it: kind (fixed, removable, optical,
+# network, ram or other), what it is mounted from, its label, file system,
+# size and free space in bytes (none where the host does not say), and the
+# task that listed it.
+type FsVolume {
+  kind: String!
+  device: String
+  label: String
+  fs: String
+  size: Int
+  free: Int
+  readOnly: Boolean!
+  # A drive with nothing in it (an empty DVD drive or card reader).
+  noMedia: Boolean!
+  seenAt: String!
+  seenBy: FsTaskRef!
 }
 
 # The task that said something of an entry, and its session then.

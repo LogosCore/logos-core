@@ -128,6 +128,7 @@ export type Build = {
   id: Scalars['ID']['output'];
   instance?: Maybe<Scalars['String']['output']>;
   log?: Maybe<Scalars['String']['output']>;
+  maxTasks?: Maybe<Scalars['Int']['output']>;
   moduleName: Scalars['String']['output'];
   operationId: Scalars['ID']['output'];
   persistedSession?: Maybe<Scalars['ID']['output']>;
@@ -221,6 +222,7 @@ export type BuildInput = {
   connections: Array<BuildConnectionInput>;
   description: Scalars['String']['input'];
   failover?: InputMaybe<Scalars['JSON']['input']>;
+  maxTasks?: InputMaybe<Scalars['Int']['input']>;
   moduleName: Scalars['String']['input'];
   newPersistedSession?: InputMaybe<Scalars['Boolean']['input']>;
   persistedSession?: InputMaybe<Scalars['ID']['input']>;
@@ -246,6 +248,7 @@ export type BuildSchema = {
   crypto?: Maybe<Scalars['String']['output']>;
   failover: Scalars['Boolean']['output'];
   fields: Array<ModuleField>;
+  maxTasks: Scalars['Boolean']['output'];
   persistedSessions: Scalars['Boolean']['output'];
   targets: Array<BuildTarget>;
   version: Scalars['Int']['output'];
@@ -566,6 +569,7 @@ export type FsEntry = {
   target?: Maybe<Scalars['String']['output']>;
   type: Scalars['String']['output'];
   uploaded: Array<FsTransfer>;
+  volume?: Maybe<FsVolume>;
 };
 
 export type FsEntryPage = {
@@ -603,6 +607,19 @@ export type FsTransfer = {
   size: Scalars['Int']['output'];
   stream: Scalars['Boolean']['output'];
   taskId: Scalars['ID']['output'];
+};
+
+export type FsVolume = {
+  device?: Maybe<Scalars['String']['output']>;
+  free?: Maybe<Scalars['Int']['output']>;
+  fs?: Maybe<Scalars['String']['output']>;
+  kind: Scalars['String']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  noMedia: Scalars['Boolean']['output'];
+  readOnly: Scalars['Boolean']['output'];
+  seenAt: Scalars['String']['output'];
+  seenBy: FsTaskRef;
+  size?: Maybe<Scalars['Int']['output']>;
 };
 
 export type Hash = {
@@ -801,6 +818,10 @@ export type MinionSession = {
   lostAt?: Maybe<Scalars['String']['output']>;
   machineId?: Maybe<Scalars['String']['output']>;
   mark?: Maybe<MinionSessionMark>;
+  maxTasks?: Maybe<Scalars['Int']['output']>;
+  maxTasksNotTaken?: Maybe<Scalars['Int']['output']>;
+  maxTasksPending?: Maybe<Scalars['Int']['output']>;
+  maxTasksSettable: Scalars['Boolean']['output'];
   moduleName: Scalars['String']['output'];
   number: Scalars['Int']['output'];
   operationId: Scalars['ID']['output'];
@@ -814,6 +835,7 @@ export type MinionSession = {
   restartCount: Scalars['Int']['output'];
   restarts: Array<MinionSessionRestart>;
   rev: Scalars['Int']['output'];
+  runningTasks: Scalars['Int']['output'];
   sleepInterval?: Maybe<Scalars['Int']['output']>;
   sleepJitter?: Maybe<Scalars['Int']['output']>;
   staged: Scalars['Boolean']['output'];
@@ -1366,6 +1388,7 @@ export type Mutation = {
   setMinionSessionArchived: MinionSession;
   setMinionSessionDescription: MinionSession;
   setMinionSessionMark: MinionSession;
+  setMinionSessionMaxTasks: MinionSession;
   setMinionSessionsArchived: Scalars['Int']['output'];
   setMinionSessionsLayout?: Maybe<MinionSessionsLayout>;
   setMinionSessionsMark: Scalars['Int']['output'];
@@ -1791,6 +1814,12 @@ export type MutationSetMinionSessionDescriptionArgs = {
 export type MutationSetMinionSessionMarkArgs = {
   id: Scalars['ID']['input'];
   mark?: InputMaybe<MinionSessionMarkInput>;
+};
+
+
+export type MutationSetMinionSessionMaxTasksArgs = {
+  id: Scalars['ID']['input'];
+  max: Scalars['Int']['input'];
 };
 
 
@@ -3459,7 +3488,7 @@ export type DeleteMyApiKeyMutationVariables = Exact<{ [key: string]: never; }>;
 
 export type DeleteMyApiKeyMutation = { deleteMyAPIKey: boolean };
 
-export type BuildSchemaFieldsFragment = { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> };
+export type BuildSchemaFieldsFragment = { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> };
 
 export type BuildFileFieldsFragment = { id: string, operationId: string, name: string, size: number, sha256: string, mediaType?: string | null, createdAt: string };
 
@@ -3468,7 +3497,7 @@ export type BuildFieldsFragment = { id: string, operationId: string, persistedSe
 export type FactoryKindsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, icon: string, iconLight: string, instances: number, schema: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } }> };
+export type FactoryKindsQuery = { factoryKinds: Array<{ moduleName: string, icon: string, iconLight: string, instances: number, schema: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } }> };
 
 export type BuildFilesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3501,7 +3530,7 @@ export type BuildQueryVariables = Exact<{
 }>;
 
 
-export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, failover: unknown, crypto?: unknown | null, warnings: Array<string>, log?: string | null, id: string, operationId: string, persistedSession?: string | null, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
+export type BuildQuery = { build?: { values: unknown, commands: Array<string>, connections: unknown, connectionDescriptions: Array<string>, failover: unknown, maxTasks?: number | null, crypto?: unknown | null, warnings: Array<string>, log?: string | null, id: string, operationId: string, persistedSession?: string | null, description: string, moduleName: string, target: string, platform: string, schemaVersion: number, state: string, factoryVersion?: string | null, createdAt: string, startedAt?: string | null, finishedAt?: string | null, deadline: string, cancelledBy?: { type: string, id: string, name?: string | null } | null, stages: Array<{ id: string, label: string, core: boolean, state: string, message?: string | null, startedAt?: string | null, finishedAt?: string | null }>, artifact?: { filename: string, size: number, sha256: string, mediaType?: string | null, deleted: boolean } | null, error?: { code: string, message: string } | null, createdBy: { type: string, id: string, name?: string | null } } | null };
 
 export type CreateBuildMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3745,7 +3774,7 @@ export type MyCredentialChangedSubscription = { myCredentialChanged: { action: E
 
 export type FsTaskRefFieldsFragment = { taskId: string, sessionId: string, number: number, user?: string | null };
 
-export type FsEntryFieldsFragment = { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> };
+export type FsEntryFieldsFragment = { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }>, volume?: { kind: string, device?: string | null, label?: string | null, fs?: string | null, size?: number | null, free?: number | null, readOnly: boolean, noMedia: boolean, seenAt: string, seenBy: { taskId: string, sessionId: string, number: number, user?: string | null } } | null };
 
 export type FileBrowserQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -3767,7 +3796,7 @@ export type FileBrowserEntriesQueryVariables = Exact<{
 }>;
 
 
-export type FileBrowserEntriesQuery = { fileBrowserEntries: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }>, folder?: { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> } | null } };
+export type FileBrowserEntriesQuery = { fileBrowserEntries: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }>, volume?: { kind: string, device?: string | null, label?: string | null, fs?: string | null, size?: number | null, free?: number | null, readOnly: boolean, noMedia: boolean, seenAt: string, seenBy: { taskId: string, sessionId: string, number: number, user?: string | null } } | null }>, folder?: { path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }>, volume?: { kind: string, device?: string | null, label?: string | null, fs?: string | null, size?: number | null, free?: number | null, readOnly: boolean, noMedia: boolean, seenAt: string, seenBy: { taskId: string, sessionId: string, number: number, user?: string | null } } | null } | null } };
 
 export type FileBrowserSearchQueryVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -3778,7 +3807,7 @@ export type FileBrowserSearchQueryVariables = Exact<{
 }>;
 
 
-export type FileBrowserSearchQuery = { fileBrowserSearch: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }> }> } };
+export type FileBrowserSearchQuery = { fileBrowserSearch: { next?: string | null, entries: Array<{ path: string, name: string, parent?: string | null, sep: string, type: string, size?: number | null, modified?: number | null, mode?: string | null, owner?: string | null, group?: string | null, target?: string | null, hidden: boolean, known: boolean, seenAt?: string | null, goneAt?: string | null, goneHow?: string | null, listedAt?: string | null, listErr?: string | null, listErrAt?: string | null, seenBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, goneBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listedBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, listErrBy?: { taskId: string, sessionId: string, number: number, user?: string | null } | null, downloaded: Array<{ taskId: string, fileId?: string | null, size: number, sha256?: string | null, stream: boolean, at: string }>, uploaded: Array<{ taskId: string, size: number, sha256?: string | null, stream: boolean, by?: string | null, at: string }>, volume?: { kind: string, device?: string | null, label?: string | null, fs?: string | null, size?: number | null, free?: number | null, readOnly: boolean, noMedia: boolean, seenAt: string, seenBy: { taskId: string, sessionId: string, number: number, user?: string | null } } | null }> } };
 
 export type FileBrowserChangedSubscriptionVariables = Exact<{
   sessionId: Scalars['ID']['input'];
@@ -3979,7 +4008,7 @@ export type HostChangedSubscriptionVariables = Exact<{
 
 export type HostChangedSubscription = { hostChanged: { action: EventAction, hostId: string, host?: { id: string, rev: number, operationId: string, hostname: string, description: string, os: string, emoji: string, icon: string, color: string, createdAt: string, updatedAt: string, interfaces: Array<{ name: string, mac: string, addresses: Array<string> }>, routes: Array<{ destination: string, gateway: string, interface: string }>, logins: Array<{ user: string, from: string, tty: string, lastSeen: string, count: number }>, createdBy?: { id: string, username: string } | null } | null } };
 
-export type MinionSessionFieldsFragment = { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> };
+export type MinionSessionFieldsFragment = { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> };
 
 export type MinionSessionsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3992,14 +4021,14 @@ export type MinionSessionsQueryVariables = Exact<{
 }>;
 
 
-export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MinionSessionsQuery = { minionSessions: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MinionSessionChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null } };
+export type MinionSessionChangedSubscription = { minionSessionChanged: { action: EventAction, sessionId: string, operationId: string, session?: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null } };
 
 export type MinionSessionValuesQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4029,14 +4058,29 @@ export type SetMinionSessionAddressMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionAddressMutation = { setMinionSessionAddress: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+
+export type SetMinionSessionMaxTasksMutationVariables = Exact<{
+  id: Scalars['ID']['input'];
+  max: Scalars['Int']['input'];
+}>;
+
+
+export type SetMinionSessionMaxTasksMutation = { setMinionSessionMaxTasks: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+
+export type MinionSessionRunningTasksQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type MinionSessionRunningTasksQuery = { minionSession?: { id: string, runningTasks: number } | null };
 
 export type MinionSessionQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionQuery = { minionSession?: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null };
+export type MinionSessionQuery = { minionSession?: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } | null };
 
 export type MinionSessionConnectionsQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4051,7 +4095,7 @@ export type SetMinionSessionArchivedMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionArchivedMutation = { setMinionSessionArchived: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionsArchivedMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4069,7 +4113,7 @@ export type SetMinionSessionDescriptionMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionDescriptionMutation = { setMinionSessionDescription: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionDescriptionMutation = { setMinionSessionDescription: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionMarkMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4077,7 +4121,7 @@ export type SetMinionSessionMarkMutationVariables = Exact<{
 }>;
 
 
-export type SetMinionSessionMarkMutation = { setMinionSessionMark: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
+export type SetMinionSessionMarkMutation = { setMinionSessionMark: { id: string, rev: number, state: string, archived: boolean, number: number, operationId: string, buildId: string, buildDescription: string, description: string, moduleName: string, target: string, platform: string, staged: boolean, pid: number, os: string, arch: string, host?: string | null, user?: string | null, domain?: string | null, proc?: string | null, machineId?: string | null, integrity?: string | null, addrs: Array<string>, address?: string | null, addressPicked: boolean, sleepInterval?: number | null, sleepJitter?: number | null, lateAt?: string | null, lostAt?: string | null, persisted: boolean, restartCount: number, peerAddress?: string | null, version?: string | null, x?: unknown | null, createdAt: string, lastSeenAt?: string | null, connected: boolean, conn?: number | null, connKind?: string | null, connName?: string | null, connCount: number, maxTasks?: number | null, maxTasksSettable: boolean, maxTasksPending?: number | null, maxTasksNotTaken?: number | null, mark?: { color?: string | null, icon?: string | null, emoji?: string | null } | null, restarts: Array<{ at: string, pid: number, host?: string | null, buildId: string }>, peers: Array<{ address: string, firstSeen: string, lastSeen: string, count: number }>, connChanges: Array<{ at: string, from?: number | null, to: number, reason?: string | null }> } };
 
 export type SetMinionSessionsMarkMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4286,14 +4330,14 @@ export type ModuleChangedSubscription = { moduleChanged: { action: EventAction, 
 
 export type ModuleFieldDefFieldsFragment = { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null };
 
-export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null };
+export type ModuleDetailFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
 export type ModuleQueryVariables = Exact<{
   instance: Scalars['ID']['input'];
 }>;
 
 
-export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } | null };
+export type ModuleQuery = { module?: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } | null };
 
 export type ModuleActionInvocationFieldsFragment = { id: string, instance: string, action: string, params?: unknown | null, status: ModuleActionStatus, result?: unknown | null, error?: string | null, startedAt: string, finishedAt?: string | null, actor: { type: string, id: string, name?: string | null } };
 
@@ -4320,7 +4364,7 @@ export type UpdateModuleConfigMutationVariables = Exact<{
 }>;
 
 
-export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } };
+export type UpdateModuleConfigMutation = { updateModuleConfig: { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, management?: { schemaVersion: string, revision: number, appliedRevision: number, syncState: ModuleSyncState, lastApplyError?: string | null, capabilities: Array<string>, properties: Array<{ apply: string, effective?: unknown | null, source: string, value?: unknown | null, isSet: boolean, rejectedReason?: string | null, restartRequired: boolean, field: { key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null } }>, actions: Array<{ name: string, label: string, description?: string | null, risk: string, confirm?: string | null, timeoutSeconds: number, available: boolean, unavailableReason?: string | null, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }>, status: Array<{ key: string, type: string, label: string, description?: string | null, unit?: string | null, value?: unknown | null, alert?: unknown | null }> } | null, connection?: { version: number, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, build?: { version: number, crypto?: string | null, persistedSessions: boolean, failover: boolean, maxTasks: boolean, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<{ kind: string, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> }>, targets: Array<{ id: string, label: string, description?: string | null, format: string, platforms: Array<string>, fields: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }>, channels: Array<{ moduleName: string, versions: Array<number>, kinds: Array<string> }> }>, commands: Array<{ id: string, label: string, description?: string | null, targets: Array<string>, default: boolean, required: boolean, kinds: Array<string>, params: Array<{ key: string, type: string, label: string, description?: string | null, group?: string | null, order: number, unit?: string | null, placeholder?: string | null, format?: string | null, required: boolean, default?: unknown | null, min?: unknown | null, max?: unknown | null, pattern?: string | null, maxLength?: number | null, keyPattern?: string | null, maxItems?: number | null, accept?: Array<string> | null, maxSize?: unknown | null, options?: Array<{ value: string, label?: string | null, description?: string | null }> | null }> }> } | null, blockedBy?: { type: string, id: string, name?: string | null } | null } };
 
 export type InvokeModuleActionMutationVariables = Exact<{
   instance: Scalars['ID']['input'];
@@ -5469,6 +5513,20 @@ export const FsEntryFieldsFragmentDoc = new TypedDocumentString(`
     by
     at
   }
+  volume {
+    kind
+    device
+    label
+    fs
+    size
+    free
+    readOnly
+    noMedia
+    seenAt
+    seenBy {
+      ...FsTaskRefFields
+    }
+  }
 }
     fragment FsTaskRefFields on FsTaskRef {
   taskId
@@ -5655,6 +5713,10 @@ export const MinionSessionFieldsFragmentDoc = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }
     `, {"fragmentName":"MinionSessionFields"}) as unknown as TypedDocumentString<MinionSessionFieldsFragment, unknown>;
 export const MinionSessionsLayoutFieldsFragmentDoc = new TypedDocumentString(`
@@ -5853,6 +5915,7 @@ export const BuildSchemaFieldsFragmentDoc = new TypedDocumentString(`
   crypto
   persistedSessions
   failover
+  maxTasks
   fields {
     ...ModuleFieldDefFields
   }
@@ -5983,6 +6046,7 @@ export const ModuleDetailFieldsFragmentDoc = new TypedDocumentString(`
   crypto
   persistedSessions
   failover
+  maxTasks
   fields {
     ...ModuleFieldDefFields
   }
@@ -6665,6 +6729,7 @@ export const FactoryKindsDocument = new TypedDocumentString(`
   crypto
   persistedSessions
   failover
+  maxTasks
   fields {
     ...ModuleFieldDefFields
   }
@@ -6825,6 +6890,7 @@ export const BuildDocument = new TypedDocumentString(`
     connections
     connectionDescriptions
     failover
+    maxTasks
     crypto
     warnings
     log
@@ -7920,6 +7986,20 @@ fragment FsEntryFields on FsEntry {
     by
     at
   }
+  volume {
+    kind
+    device
+    label
+    fs
+    size
+    free
+    readOnly
+    noMedia
+    seenAt
+    seenBy {
+      ...FsTaskRefFields
+    }
+  }
 }`) as unknown as TypedDocumentString<FileBrowserEntriesQuery, FileBrowserEntriesQueryVariables>;
 export const FileBrowserSearchDocument = new TypedDocumentString(`
     query FileBrowserSearch($sessionId: ID!, $query: String!, $after: String, $first: Int, $showDeleted: Boolean) {
@@ -7989,6 +8069,20 @@ fragment FsEntryFields on FsEntry {
     stream
     by
     at
+  }
+  volume {
+    kind
+    device
+    label
+    fs
+    size
+    free
+    readOnly
+    noMedia
+    seenAt
+    seenBy {
+      ...FsTaskRefFields
+    }
   }
 }`) as unknown as TypedDocumentString<FileBrowserSearchQuery, FileBrowserSearchQueryVariables>;
 export const FileBrowserChangedDocument = new TypedDocumentString(`
@@ -8746,6 +8840,10 @@ export const MinionSessionsDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<MinionSessionsQuery, MinionSessionsQueryVariables>;
 export const MinionSessionChangedDocument = new TypedDocumentString(`
     subscription MinionSessionChanged($operationId: ID!) {
@@ -8823,6 +8921,10 @@ export const MinionSessionChangedDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<MinionSessionChangedSubscription, MinionSessionChangedSubscriptionVariables>;
 export const MinionSessionValuesDocument = new TypedDocumentString(`
     query MinionSessionValues($operationId: ID!, $column: String!) {
@@ -8956,7 +9058,95 @@ export const SetMinionSessionAddressDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<SetMinionSessionAddressMutation, SetMinionSessionAddressMutationVariables>;
+export const SetMinionSessionMaxTasksDocument = new TypedDocumentString(`
+    mutation SetMinionSessionMaxTasks($id: ID!, $max: Int!) {
+  setMinionSessionMaxTasks(id: $id, max: $max) {
+    ...MinionSessionFields
+  }
+}
+    fragment MinionSessionFields on MinionSession {
+  id
+  rev
+  state
+  archived
+  mark {
+    color
+    icon
+    emoji
+  }
+  number
+  operationId
+  buildId
+  buildDescription
+  description
+  moduleName
+  target
+  platform
+  staged
+  pid
+  os
+  arch
+  host
+  user
+  domain
+  proc
+  machineId
+  integrity
+  addrs
+  address
+  addressPicked
+  sleepInterval
+  sleepJitter
+  lateAt
+  lostAt
+  persisted
+  restartCount
+  restarts {
+    at
+    pid
+    host
+    buildId
+  }
+  peerAddress
+  peers {
+    address
+    firstSeen
+    lastSeen
+    count
+  }
+  version
+  x
+  createdAt
+  lastSeenAt
+  connected
+  conn
+  connKind
+  connName
+  connCount
+  connChanges {
+    at
+    from
+    to
+    reason
+  }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
+}`) as unknown as TypedDocumentString<SetMinionSessionMaxTasksMutation, SetMinionSessionMaxTasksMutationVariables>;
+export const MinionSessionRunningTasksDocument = new TypedDocumentString(`
+    query MinionSessionRunningTasks($id: ID!) {
+  minionSession(id: $id) {
+    id
+    runningTasks
+  }
+}
+    `) as unknown as TypedDocumentString<MinionSessionRunningTasksQuery, MinionSessionRunningTasksQueryVariables>;
 export const MinionSessionDocument = new TypedDocumentString(`
     query MinionSession($id: ID!) {
   minionSession(id: $id) {
@@ -9028,6 +9218,10 @@ export const MinionSessionDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<MinionSessionQuery, MinionSessionQueryVariables>;
 export const MinionSessionConnectionsDocument = new TypedDocumentString(`
     query MinionSessionConnections($id: ID!) {
@@ -9114,6 +9308,10 @@ export const SetMinionSessionArchivedDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<SetMinionSessionArchivedMutation, SetMinionSessionArchivedMutationVariables>;
 export const SetMinionSessionsArchivedDocument = new TypedDocumentString(`
     mutation SetMinionSessionsArchived($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $archived: Boolean!) {
@@ -9196,6 +9394,10 @@ export const SetMinionSessionDescriptionDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<SetMinionSessionDescriptionMutation, SetMinionSessionDescriptionMutationVariables>;
 export const SetMinionSessionMarkDocument = new TypedDocumentString(`
     mutation SetMinionSessionMark($id: ID!, $mark: MinionSessionMarkInput) {
@@ -9268,6 +9470,10 @@ export const SetMinionSessionMarkDocument = new TypedDocumentString(`
     to
     reason
   }
+  maxTasks
+  maxTasksSettable
+  maxTasksPending
+  maxTasksNotTaken
 }`) as unknown as TypedDocumentString<SetMinionSessionMarkMutation, SetMinionSessionMarkMutationVariables>;
 export const SetMinionSessionsMarkDocument = new TypedDocumentString(`
     mutation SetMinionSessionsMark($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $mark: MinionSessionMarkInput) {
@@ -10224,6 +10430,7 @@ export const ModuleDocument = new TypedDocumentString(`
   crypto
   persistedSessions
   failover
+  maxTasks
   fields {
     ...ModuleFieldDefFields
   }
@@ -10428,6 +10635,7 @@ export const UpdateModuleConfigDocument = new TypedDocumentString(`
   crypto
   persistedSessions
   failover
+  maxTasks
   fields {
     ...ModuleFieldDefFields
   }

@@ -28,6 +28,7 @@ import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, formatInterval, lateness } from "./sessions-layout"
 import { ConnectionsCard } from "./session-connections"
+import { MaxTasksValue } from "./max-tasks"
 
 // One minion session (?session=<id>[&sessionTab=]), over any page: Overview,
 // what it is and where it runs, in cards; JSON, its record as the API gives
@@ -197,6 +198,9 @@ function SessionCard({ s }: { s: Session }) {
           <When at={s.lostAt} now={now} />
         </LabelRow>
       )}
+      <LabelRow label="Tasks">
+        <MaxTasksValue s={s} />
+      </LabelRow>
       <LabelRow label="Restarts">{s.restartCount}</LabelRow>
       <LabelRow label="Session id">
         <code className="font-mono text-xs break-all">{s.id}</code>

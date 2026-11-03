@@ -2,7 +2,9 @@ import { ChevronRightIcon, FolderIcon, FolderLockIcon, HardDriveIcon, LoaderIcon
 import { samePath, useFileBrowserEntries, type FsEntriesFilter } from "@/graphql/hooks/file-browser"
 import type { FsEntryFieldsFragment } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
-import { LISTED_FOLDER, listedSays, takenIn, UNLISTED_FOLDER, UNREADABLE_FOLDER } from "./file-browser-model"
+import { VolumeKindIcon } from "@/components/minion-sessions/volume-parts"
+import { volumeKind } from "@/components/minion-sessions/volumes"
+import { LISTED_FOLDER, listedSays, takenIn, UNLISTED_FOLDER, UNREADABLE_FOLDER, volumeSays } from "./file-browser-model"
 
 // The file browser's folder tree: the machine's roots, and each folder's
 // sub-folders as it is opened, read from core (foldersOnly) a page at a
@@ -135,6 +137,7 @@ function FolderNode({
   const open = expanded.some((p) => samePath(p, f.path))
   const here = current !== null && samePath(current, f.path)
   const Icon = !f.parent ? HardDriveIcon : f.listErr ? FolderLockIcon : FolderIcon
+  const iconClass = !f.parent ? "text-muted-foreground" : f.listErr ? UNREADABLE_FOLDER : f.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER
   return (
     <>
       <div
@@ -144,7 +147,7 @@ function FolderNode({
           f.goneAt && "text-muted-foreground line-through",
         )}
         style={{ paddingLeft: 6 + depth * 12 }}
-        title={[f.path, listedSays(f)].join("\n")}
+        title={[f.path, listedSays(f), f.volume ? volumeSays(f.volume) : null].filter(Boolean).join("\n")}
         onClick={() => onOpen(f.path)}
       >
         <button
@@ -158,7 +161,12 @@ function FolderNode({
         >
           <ChevronRightIcon className={cn("size-3 transition-transform", open && "rotate-90")} />
         </button>
-        <Icon className={cn("size-3.5 shrink-0", !f.parent ? "text-muted-foreground" : f.listErr ? UNREADABLE_FOLDER : f.listedAt ? LISTED_FOLDER : UNLISTED_FOLDER)} />
+        {/* A volume's path (a drive, a mount point) by its kind. */}
+        {f.volume ? (
+          <VolumeKindIcon kind={volumeKind(f.volume.kind)} className={iconClass} />
+        ) : (
+          <Icon className={cn("size-3.5 shrink-0", iconClass)} />
+        )}
         <span className={cn("whitespace-nowrap", !f.goneAt && takenIn(f) ? "text-foreground" : "text-muted-foreground")}>{f.name}</span>
       </div>
       {open && (

@@ -141,6 +141,19 @@ func fsEntryModel(e models.FsEntry) *model.FsEntry {
 		n := int(*e.Modified)
 		m.Modified = &n
 	}
+	if v := e.Volume; v != nil {
+		ref := v.SeenBy
+		m.Volume = &model.FsVolume{Kind: v.Kind, Device: strPtr(v.Device), Label: strPtr(v.Label), Fs: strPtr(v.FS),
+			ReadOnly: v.ReadOnly, NoMedia: v.NoMedia, SeenAt: v.SeenAt.UTC().Format(time.RFC3339Nano), SeenBy: fsRefModel(&ref)}
+		if v.Size != nil {
+			n := int(*v.Size)
+			m.Volume.Size = &n
+		}
+		if v.Free != nil {
+			n := int(*v.Free)
+			m.Volume.Free = &n
+		}
+	}
 	return m
 }
 

@@ -490,3 +490,33 @@ func TestIntegrationMinionTaskLatestData(t *testing.T) {
 		t.Fatalf("output parts: %+v %v", out, err)
 	}
 }
+
+// Core's own commands (a connect waiting for its dial, a max_tasks for the
+// minion's word) run in core: they take none of the minion's room; the
+// open ones of a command are found by it.
+func TestIntegrationMinionTasksCoreCommands(t *testing.T) {
+	db := integrationDB(t)
+	ctx := testCtx(t)
+	repo := NewMinionTaskRepository(db)
+	session := uuid.New()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	insert := func(command, state string) uuid.UUID {
+		t.Helper()
+		id := uuid.New()
+		if err := repo.Insert(ctx, &models.MinionTask{TaskID: id, OperationID: uuid.New(), SessionID: session, Command: command,
+			IssuedBy: uuid.New(), State: state, QueuedAt: now, AckedAt: &now, StartedAt: &now}); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	insert("shell", models.MinionTaskRunning)
+	open := insert(protocol.CommandMaxTasks, models.MinionTaskRunning)
+	insert(protocol.CommandConnect, models.MinionTaskRunning)
+	insert(protocol.CommandMaxTasks, models.MinionTaskDone)
+	if n, err := repo.CountRunning(ctx, session); err != nil || n != 1 {
+		t.Fatalf("running: %d %v", n, err)
+	}
+	if got, err := repo.OpenOfCommand(ctx, session, protocol.CommandMaxTasks); err != nil || len(got) != 1 || got[0].TaskID != open {
+		t.Fatalf("open max_tasks: %+v %v", got, err)
+	}
+}

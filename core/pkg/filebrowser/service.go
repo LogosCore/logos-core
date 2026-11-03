@@ -2,12 +2,13 @@
 // file system (docs: contracts/file-browser.md): a snapshot per machine of
 // an operation, made from its sessions' tasks: their listings as their
 // pieces come (any command's), and their results as they end (a delete, a
-// download, an upload); read by the file browser. Nothing is asked of a
-// minion for it.
+// download, an upload, the machine's volumes); read by the file browser.
+// Nothing is asked of a minion for it.
 package filebrowser
 
 import (
 	"context"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -170,7 +171,7 @@ func (s *Service) TaskEnded(ctx context.Context, t *models.MinionTask) {
 	// A listing is taken as its pieces come (Listings), not here.
 	switch {
 	case t.Result == protocol.ResultFileDownload, t.Result == protocol.ResultFileStream,
-		t.Result == protocol.ResultFileUpload, t.Action == protocol.ActionDeletePath:
+		t.Result == protocol.ResultFileUpload, t.Action == protocol.ActionDeletePath, t.Result == protocol.ResultVolumes:
 	default:
 		return
 	}
@@ -182,15 +183,85 @@ func (s *Service) TaskEnded(ctx context.Context, t *models.MinionTask) {
 	machine := models.FsMachineKey(*session)
 	ref := models.FsTaskRef{TaskID: t.TaskID, SessionID: session.SessionID, Number: session.Number, User: session.Hello.User}
 	at := *t.DoneAt
-	folder, err := s.take(ctx, t, machine, ref, at)
+	var folders []string
+	if t.Result == protocol.ResultVolumes {
+		folders, err = s.volumes(ctx, t, machine, ref, at)
+	} else {
+		var folder string
+		folder, err = s.take(ctx, t, machine, ref, at)
+		if folder != "" {
+			folders = []string{folder}
+		}
+	}
 	if err != nil {
 		s.logger.Warn("file browser: a task's result", zap.String("task_id", t.TaskID.String()), zap.Error(err))
 		return
 	}
-	if folder != "" && s.bus != nil {
+	if s.bus == nil {
+		return
+	}
+	for _, folder := range folders {
 		s.bus.Publish(eventbus.NewFileBrowserChangedEvent(eventbus.FileBrowserEventPayload{
 			OperationID: t.OperationID.String(), Machine: machine, Folder: folder}))
 	}
+}
+
+// volumes applies a volumes task: each volume's path (a drive's root, a
+// mount point) a folder that holds it, the machine's other volumes gone.
+// The folders it changed: each volume's path, and those whose volume went
+// (a drive taken out).
+func (s *Service) volumes(ctx context.Context, t *models.MinionTask, machine string, ref models.FsTaskRef, at time.Time) ([]string, error) {
+	op := t.OperationID
+	parts, err := s.tasks.Parts(ctx, t.TaskID)
+	if err != nil {
+		return nil, err
+	}
+	var entries, way []models.FsEntry
+	var folders []string
+	for _, p := range parts {
+		if len(p.DataCBOR) == 0 {
+			continue
+		}
+		v, err := protocol.ReadVolumes(p.Seq, p.DataCBOR)
+		if err != nil {
+			return nil, err
+		}
+		for _, vol := range v.Volumes {
+			e := entryAt(vol.Path, v.Sep)
+			e.Volume = volumeOf(vol, at, ref)
+			entries = append(entries, e)
+			way = append(way, ancestors(e)...)
+			folders = append(folders, e.Path)
+		}
+	}
+	if len(entries) == 0 {
+		// None at all is no list of the machine's volumes: a minion that
+		// sent nothing says nothing of the ones it had.
+		return nil, nil
+	}
+	if err := s.entries.Ensure(ctx, op, machine, way); err != nil {
+		return nil, err
+	}
+	went, err := s.entries.Volumes(ctx, op, machine, entries, at)
+	if err != nil {
+		return nil, err
+	}
+	return append(folders, went...), nil
+}
+
+// volumeOf is a volume as the snapshot keeps it.
+func volumeOf(v protocol.Volume, at time.Time, ref models.FsTaskRef) *models.FsVolume {
+	out := &models.FsVolume{Kind: v.Kind, Device: v.Device, Label: v.Label, FS: v.FS, ReadOnly: v.ReadOnly, NoMedia: v.NoMedia,
+		SeenAt: at, SeenBy: ref}
+	if v.Size != nil {
+		n := int64(min(*v.Size, math.MaxInt64))
+		out.Size = &n
+	}
+	if v.Free != nil {
+		n := int64(min(*v.Free, math.MaxInt64))
+		out.Free = &n
+	}
+	return out
 }
 
 // take applies a task to the snapshot: the folder it changed, "" for none.

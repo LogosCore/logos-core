@@ -157,3 +157,25 @@ func TestDirWalk(t *testing.T) {
 		t.Fatalf("joined %v", m)
 	}
 }
+
+// A volumes task's parts are checked, and their volumes joined in order:
+// a minion sends them over several parts where its messages are small.
+func TestVolumes(t *testing.T) {
+	size := uint64(64 << 30)
+	first := data(t, protocol.Volumes{Sep: `\`, Volumes: []protocol.Volume{{Path: `C:\`, Kind: protocol.VolumeFixed, FS: "NTFS", Size: &size}}})
+	last := data(t, protocol.Volumes{Sep: `\`, Volumes: []protocol.Volume{{Path: `D:\`, Kind: protocol.VolumeOptical, NoMedia: true}}})
+	bad := data(t, protocol.Volumes{Sep: `\`, Volumes: []protocol.Volume{{Path: "C:", Kind: protocol.VolumeFixed}}})
+	if Check(protocol.ResultVolumes, 0, first) != nil || Check(protocol.ResultVolumes, 1, bad) == nil {
+		t.Fatal("check")
+	}
+	joined, err := Join(models.MinionTask{Result: protocol.ResultVolumes},
+		[]models.MinionTaskPart{{Seq: 0, DataCBOR: first}, {Seq: 1, DataCBOR: last}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := joined.(map[string]any)
+	vols, _ := m["volumes"].([]any)
+	if m["sep"] != `\` || len(vols) != 2 || vols[0].(map[string]any)["path"] != `C:\` || vols[1].(map[string]any)["no_media"] != true {
+		t.Fatalf("joined %v", m)
+	}
+}

@@ -66,6 +66,27 @@ type FsEntry struct {
 
 	Downloaded []FsTransfer `bson:"downloaded,omitempty" json:"downloaded,omitempty"`
 	Uploaded   []FsTransfer `bson:"uploaded,omitempty" json:"uploaded,omitempty"`
+
+	// Volume: a volume's files are here (a drive's root, a mount point),
+	// as the newest volumes task of the machine said; none once a later
+	// one no longer had it.
+	Volume *FsVolume `bson:"volume,omitempty" json:"volume,omitempty"`
+}
+
+// FsVolume is a volume as a volumes task listed it (protocol.Volume): its
+// kind, what it is mounted from, its label, file system, size and free
+// space, and the task that listed it.
+type FsVolume struct {
+	Kind     string    `bson:"kind" json:"kind"`
+	Device   string    `bson:"device,omitempty" json:"device,omitempty"`
+	Label    string    `bson:"label,omitempty" json:"label,omitempty"`
+	FS       string    `bson:"fs,omitempty" json:"fs,omitempty"`
+	Size     *int64    `bson:"size,omitempty" json:"size,omitempty"`
+	Free     *int64    `bson:"free,omitempty" json:"free,omitempty"`
+	ReadOnly bool      `bson:"read_only,omitempty" json:"read_only,omitempty"`
+	NoMedia  bool      `bson:"no_media,omitempty" json:"no_media,omitempty"`
+	SeenAt   time.Time `bson:"seen_at" json:"seen_at"`
+	SeenBy   FsTaskRef `bson:"seen_by" json:"seen_by"`
 }
 
 // FsTaskRef is the task that said something of an entry, and its session.

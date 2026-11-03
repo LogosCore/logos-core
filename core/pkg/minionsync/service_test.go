@@ -174,9 +174,37 @@ func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.Minio
 		r.RestartCount++
 		r.Crypto, r.Hello, r.BuildID, r.Address, r.AddressPicked, r.Persisted = c.Crypto, c.Hello, c.BuildID, c.Address, c.AddressPicked, true
 		r.Sleep, r.LateAt, r.LostAt = c.Sleep, nil, nil
+		r.MaxTasks, r.MaxTasksSettable, r.MaxTasksSends = c.MaxTasks, c.MaxTasksSettable, 0
 		return nil
 	}
 	return qmgo.ErrNoSuchDocuments
+}
+
+func (f *fakeSessions) SetMaxTasks(_ context.Context, id uuid.UUID, max *int) error {
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].MaxTasks, f.rows[i].MaxTasksSends = max, 0
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) SetMaxTasksWanted(_ context.Context, id uuid.UUID, max int) error {
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].MaxTasksSet, f.rows[i].MaxTasksSends = &max, 0
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) MaxTasksSent(_ context.Context, id uuid.UUID) error {
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].MaxTasksSends++
+		}
+	}
+	return nil
 }
 
 // fakeReservations keeps reserved session ids; the rest is not used here.

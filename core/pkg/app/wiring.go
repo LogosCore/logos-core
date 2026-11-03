@@ -219,10 +219,11 @@ func (a *App) buildResolvers() *resolvers {
 		// Channel endpoints are operation data, authorized by operation role.
 		endpoint: resolver.NewChannelEndpointResolver(a.endpoints, a.repos.Operation),
 		// Builds too: operation data, authorized by operation role.
-		builds:         resolver.NewBuildResolver(a.builds, a.repos.Operation),
-		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus),
+		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
+		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus,
+			a.repos.MinionTask, a.minionSync),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
-			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync),
+			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
 }

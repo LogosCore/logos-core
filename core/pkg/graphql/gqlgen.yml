@@ -99,6 +99,8 @@ models:
         resolver: true
       bindTarget:
         resolver: true
+      runningTasks:
+        resolver: true
 
   Build:
     fields:

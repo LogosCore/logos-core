@@ -36,6 +36,12 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionAddress picks the address a session shows; nil goes
 	// back to core's guess.
 	SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error)
+	// SetMinionSessionMaxTasks sets the operator's limit of tasks at once,
+	// which core sends the minion (the outbox) until it says it has it.
+	SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error)
+	// RunningTasks is MinionSession.runningTasks: its tasks the minion has
+	// and has not ended.
+	RunningTasks(ctx context.Context, s *model.MinionSession) (int, error)
 	// SetMinionSessionMark and SetMinionSessionsMark mark sessions for the
 	// caller alone.
 	SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error)
@@ -61,14 +67,28 @@ type minionSessionResolver struct {
 	marks         repository.IMinionSessionMarkRepository
 	builds        repository.IBuildRepository
 	bus           eventbus.IEventBus
+	tasks         SessionTasks
+	limits        MaxTasksSetter
+}
+
+// SessionTasks counts a session's tasks under way (the minion task
+// repository).
+type SessionTasks interface {
+	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
+}
+
+// MaxTasksSetter sets the operator's limit of tasks a session's minion runs
+// at once (minionsync.Service.SetMaxTasks): kept, and sent to the minion.
+type MaxTasksSetter interface {
+	SetMaxTasks(ctx context.Context, session *models.MinionSession, max int) error
 }
 
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,
 	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
 	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
-	builds repository.IBuildRepository, bus eventbus.IEventBus) IMinionSessionResolver {
+	builds repository.IBuildRepository, bus eventbus.IEventBus, tasks SessionTasks, limits MaxTasksSetter) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
-		reservations: reservations, marks: marks, builds: builds, bus: bus}
+		reservations: reservations, marks: marks, builds: builds, bus: bus, tasks: tasks, limits: limits}
 }
 
 func (r *minionSessionResolver) Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error) {
@@ -412,6 +432,35 @@ func (r *minionSessionResolver) SetMinionSessionAddress(ctx context.Context, id 
 	return r.withMark(ctx, s), nil
 }
 
+func (r *minionSessionResolver) SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error) {
+	s, err := r.operatorSession(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if r.limits == nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "max tasks cannot be set here")
+	}
+	if err := r.limits.SetMaxTasks(ctx, s, max); err != nil {
+		if models.IsMaxTasksRefusal(err) {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
+		return nil, err
+	}
+	return r.withMark(ctx, s), nil
+}
+
+func (r *minionSessionResolver) RunningTasks(ctx context.Context, s *model.MinionSession) (int, error) {
+	// A reserved session has no minion yet, so no tasks under way.
+	if r.tasks == nil || s.State == "RESERVED" {
+		return 0, nil
+	}
+	id, err := uuid.Parse(s.ID)
+	if err != nil {
+		return 0, fmt.Errorf("session id %q: %w", s.ID, err)
+	}
+	return r.tasks.CountRunning(ctx, id)
+}
+
 func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*model.MinionSession, error) {
 	sid, err := uuid.Parse(id)
 	if err != nil {
@@ -634,6 +683,8 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		conn := s.Conn
 		out.Conn = &conn
 	}
+	out.MaxTasks, out.MaxTasksSettable = s.MaxTasks, s.MaxTasksSettable
+	out.MaxTasksPending, out.MaxTasksNotTaken = s.MaxTasksDue(), s.MaxTasksNotTaken()
 	out.ConnKind, out.ConnName, out.ConnCount = strPtr(s.ConnKind), strPtr(s.ConnName), s.ConnCount
 	out.ConnChanges = make([]*model.MinionConnChange, len(s.ConnChanges))
 	for i, c := range s.ConnChanges {

@@ -78,10 +78,13 @@ type IMinionTaskRepository interface {
 	// OpenWithAction returns the session's tasks of an action (a command's
 	// action when queued) that have not ended.
 	OpenWithAction(ctx context.Context, sessionID uuid.UUID, action string) ([]models.MinionTask, error)
+	// OpenOfCommand returns the session's tasks of a command that have not
+	// ended (core's own: a max_tasks waiting for the minion).
+	OpenOfCommand(ctx context.Context, sessionID uuid.UUID, command string) ([]models.MinionTask, error)
 	// CountRunning counts a session's tasks its minion has and has not
 	// ended: acknowledged, or with a result, and not finished. Tasks sent
 	// and not acknowledged are not counted: ForDelivery sends them again,
-	// within its limit.
+	// within its limit; nor are core's own commands, which core runs.
 	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
 	// MarkSent records that these tasks went out at at.
 	MarkSent(ctx context.Context, taskIDs []uuid.UUID, at time.Time) error
@@ -235,6 +238,13 @@ func (r *minionTaskRepository) OpenWithAction(ctx context.Context, sessionID uui
 	return out, err
 }
 
+func (r *minionTaskRepository) OpenOfCommand(ctx context.Context, sessionID uuid.UUID, command string) ([]models.MinionTask, error) {
+	var out []models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "command": command,
+		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent, models.MinionTaskRunning}}}).Sort("queued_at").All(&out)
+	return out, err
+}
+
 func (r *minionTaskRepository) ForDelivery(ctx context.Context, sessionID uuid.UUID, limit int) ([]models.MinionTask, error) {
 	var resend, queued []models.MinionTask
 	notCancelled := bson.M{"$exists": false}
@@ -261,7 +271,13 @@ func uuidsIn(ids []uuid.UUID) bson.A {
 }
 
 func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error) {
-	n, err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "$or": bson.A{
+	// Core's own commands (a connect waiting for its dial, a max_tasks for
+	// the minion's word) run in core: they take none of the minion's room.
+	core := bson.A{}
+	for _, c := range protocol.CoreCommands() {
+		core = append(core, c)
+	}
+	n, err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "command": bson.M{"$nin": core}, "$or": bson.A{
 		bson.M{"state": models.MinionTaskRunning},
 		bson.M{"state": models.MinionTaskSent, "acked_at": bson.M{"$exists": true}},
 	}}).Count()

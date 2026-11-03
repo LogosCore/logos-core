@@ -68,6 +68,10 @@ export const MinionSessionFields = graphql(`
       to
       reason
     }
+    maxTasks
+    maxTasksSettable
+    maxTasksPending
+    maxTasksNotTaken
   }
 `)
 
@@ -169,6 +173,25 @@ export const SetMinionSessionAddressMutation = graphql(`
   mutation SetMinionSessionAddress($id: ID!, $address: String) {
     setMinionSessionAddress(id: $id, address: $address) {
       ...MinionSessionFields
+    }
+  }
+`)
+
+export const SetMinionSessionMaxTasksMutation = graphql(`
+  mutation SetMinionSessionMaxTasks($id: ID!, $max: Int!) {
+    setMinionSessionMaxTasks(id: $id, max: $max) {
+      ...MinionSessionFields
+    }
+  }
+`)
+
+// How many of the session's tasks the minion has and has not ended: read
+// apart from the session (a count, for one session at a time).
+export const MinionSessionRunningTasksQuery = graphql(`
+  query MinionSessionRunningTasks($id: ID!) {
+    minionSession(id: $id) {
+      id
+      runningTasks
     }
   }
 `)

@@ -350,7 +350,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		Description: b.Description, DescriptionSet: true,
 		ModuleName: b.ModuleName, Target: b.Target, Platform: b.Platform, Staged: from.staging != nil,
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.AddrStrings()),
-		CreatedAt: now, PurgeAt: &purge,
+		MaxTasks: models.MaxTasksOf(hello), MaxTasksSettable: b.MaxTasks != nil, CreatedAt: now, PurgeAt: &purge,
 	}
 	conn := connOf(b, connPlace(hello.Conn))
 	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
@@ -417,7 +417,8 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	err = s.sessions.Claim(ctx, sid, repository.MinionSessionClaim{
 		At: now, BuildID: b.BuildID, BuildDescription: b.Description, ModuleName: b.ModuleName, Target: b.Target,
 		Platform: b.Platform, Staged: from.staging != nil, Crypto: from.crypto, Hello: models.MinionHelloFrom(hello),
-		Address: address, AddressPicked: picked, Sleep: sleepOf(hello),
+		Address: address, AddressPicked: picked, Sleep: sleepOf(hello), MaxTasks: models.MaxTasksOf(hello),
+		MaxTasksSettable: b.MaxTasks != nil,
 	})
 	if repository.IsNotFound(err) {
 		return refuse("the session closed meanwhile")
@@ -524,6 +525,13 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello), address, picked); err != nil {
 				return nil, fmt.Errorf("rehello: %w", err)
 			}
+			// The limit of tasks it says now (the operator's goes again
+			// while it says another: the outbox).
+			session.MaxTasks, session.MaxTasksSends = models.MaxTasksOf(hello), 0
+			if err = s.sessions.SetMaxTasks(ctx, session.SessionID, session.MaxTasks); err != nil {
+				return nil, fmt.Errorf("rehello: %w", err)
+			}
+			s.endMaxTasksCommands(ctx, session)
 			// The connection it says hello through, when it says.
 			if c := connPlace(hello.Conn); c > 0 && c != session.Conn {
 				conn := s.sessionConn(ctx, session, c)
@@ -555,6 +563,23 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			s.logger.Info("minion moved to another connection", zap.String("session_id", session.SessionID.String()),
 				zap.Int("from", session.Conn), zap.Int("to", to), zap.String("reason", u.Reason))
 			session.Conn, session.ConnKind, session.ConnMaxMessage = to, conn.Kind, conn.MaxMessage
+		case protocol.ItemMaxTasks:
+			// The minion's limit of tasks at once, in answer to core's or
+			// its own: recorded, nothing to answer. Its get_tasks follow it.
+			m, rErr := readMaxTasks(raw)
+			if rErr != nil {
+				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
+				break
+			}
+			n := int(m.Max)
+			if session.MaxTasks == nil || *session.MaxTasks != n {
+				s.logger.Info("minion's max tasks", zap.String("session_id", session.SessionID.String()), zap.Int("max", n))
+			}
+			if err = s.sessions.SetMaxTasks(ctx, session.SessionID, &n); err != nil {
+				return nil, fmt.Errorf("record a max_tasks: %w", err)
+			}
+			session.MaxTasks, session.MaxTasksSends = &n, 0
+			s.endMaxTasksCommands(ctx, session)
 		case protocol.ItemGetTasks:
 			// Answered after the other items (tasks.go): an ack or a result
 			// in the same message first stops those tasks being sent again.
@@ -662,6 +687,14 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 }
 
 // readConnUpdate reads and checks a conn_update.
+func readMaxTasks(raw cbor.RawMessage) (protocol.MaxTasksItem, error) {
+	var m protocol.MaxTasksItem
+	if err := protocol.UnmarshalCBOR(raw, &m); err != nil {
+		return m, errors.New("the max_tasks does not read")
+	}
+	return m, m.Validate()
+}
+
 func readConnUpdate(raw cbor.RawMessage) (protocol.ConnUpdateItem, error) {
 	var u protocol.ConnUpdateItem
 	if err := protocol.UnmarshalCBOR(raw, &u); err != nil {

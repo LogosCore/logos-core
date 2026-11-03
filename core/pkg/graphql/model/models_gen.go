@@ -75,6 +75,7 @@ type Build struct {
 	Connections            any               `json:"connections"`
 	ConnectionDescriptions []string          `json:"connectionDescriptions"`
 	Failover               any               `json:"failover"`
+	MaxTasks               *int              `json:"maxTasks,omitempty"`
 	Crypto                 any               `json:"crypto,omitempty"`
 	PersistedSession       *string           `json:"persistedSession,omitempty"`
 	State                  string            `json:"state"`
@@ -180,6 +181,7 @@ type BuildInput struct {
 	PersistedSession    *string                 `json:"persistedSession,omitempty"`
 	NewPersistedSession *bool                   `json:"newPersistedSession,omitempty"`
 	Failover            any                     `json:"failover,omitempty"`
+	MaxTasks            *int                    `json:"maxTasks,omitempty"`
 }
 
 type BuildMatchInput struct {
@@ -202,6 +204,7 @@ type BuildSchema struct {
 	Commands          []*BuildCommand `json:"commands"`
 	PersistedSessions bool            `json:"persistedSessions"`
 	Failover          bool            `json:"failover"`
+	MaxTasks          bool            `json:"maxTasks"`
 }
 
 type BuildStage struct {
@@ -448,6 +451,7 @@ type FsEntry struct {
 	ListErrBy  *FsTaskRef    `json:"listErrBy,omitempty"`
 	Downloaded []*FsTransfer `json:"downloaded"`
 	Uploaded   []*FsTransfer `json:"uploaded"`
+	Volume     *FsVolume     `json:"volume,omitempty"`
 }
 
 type FsEntryPage struct {
@@ -485,6 +489,19 @@ type FsTransfer struct {
 	Stream bool    `json:"stream"`
 	By     *string `json:"by,omitempty"`
 	At     string  `json:"at"`
+}
+
+type FsVolume struct {
+	Kind     string     `json:"kind"`
+	Device   *string    `json:"device,omitempty"`
+	Label    *string    `json:"label,omitempty"`
+	Fs       *string    `json:"fs,omitempty"`
+	Size     *int       `json:"size,omitempty"`
+	Free     *int       `json:"free,omitempty"`
+	ReadOnly bool       `json:"readOnly"`
+	NoMedia  bool       `json:"noMedia"`
+	SeenAt   string     `json:"seenAt"`
+	SeenBy   *FsTaskRef `json:"seenBy"`
 }
 
 type HashConnection struct {
@@ -646,6 +663,11 @@ type MinionSession struct {
 	ConnCount        int                     `json:"connCount"`
 	ConnChanges      []*MinionConnChange     `json:"connChanges"`
 	Connections      []*MinionConnection     `json:"connections"`
+	MaxTasks         *int                    `json:"maxTasks,omitempty"`
+	MaxTasksSettable bool                    `json:"maxTasksSettable"`
+	MaxTasksPending  *int                    `json:"maxTasksPending,omitempty"`
+	MaxTasksNotTaken *int                    `json:"maxTasksNotTaken,omitempty"`
+	RunningTasks     int                     `json:"runningTasks"`
 	BindTarget       *MinionTarget           `json:"bindTarget,omitempty"`
 }
 

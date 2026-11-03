@@ -2,6 +2,8 @@ import { samePath } from "@/graphql/hooks/file-browser"
 import { crumbs } from "@/components/minion-sessions/dir-listing"
 import { formatAgo } from "@/components/minion-sessions/sessions-layout"
 import { formatDateTime } from "@/lib/date-format"
+import { formatBytes } from "@/lib/format-bytes"
+import { KIND_LABELS, volumeKind } from "@/components/minion-sessions/volumes"
 
 // What the file browser works out of what it reads (file-browser.tsx):
 // tasks on their way, a folder's ancestors, how fresh a folder is.
@@ -29,7 +31,11 @@ const LABELS: Record<string, string> = {
   upload_file: "uploading…",
   upload_stream: "uploading…",
   walk_dir: "walking…",
+  list_volumes: "listing volumes…",
 }
+
+/** A list_volumes task on its way: the machine's roots, no path of its own. */
+export const VOLUMES_PATH = ""
 
 const FINISHED = new Set(["DONE", "FAILED", "CANCELLED"])
 
@@ -39,6 +45,10 @@ export function inFlight(tasks: readonly TaskLike[], actionOf: (command: string)
   for (const t of tasks) {
     if (FINISHED.has(t.state)) continue
     const action = actionOf(t.command)
+    if (action === "list_volumes") {
+      out.push({ taskId: t.id, path: VOLUMES_PATH, action, label: LABELS[action] })
+      continue
+    }
     const path = (t.args as Record<string, unknown> | null | undefined)?.path
     if (!action || !(action in LABELS) || typeof path !== "string" || path === "") continue
     out.push({ taskId: t.id, path, action, label: LABELS[action] })
@@ -110,6 +120,48 @@ export function listedSays(e: {
   if (!e.listErr) return listed
   const failed = `Could not be read${e.listErrAt ? ` ${formatDateTime(e.listErrAt)}` : ""}${e.listErrBy ? ` by ${byWhom(e.listErrBy)}` : ""}: ${e.listErr}`
   return e.listedAt ? `${failed}\n${listed}` : failed
+}
+
+export interface VolumeLike {
+  kind: string
+  device?: string | null
+  label?: string | null
+  fs?: string | null
+  size?: number | null
+  free?: number | null
+  readOnly: boolean
+  noMedia: boolean
+  seenAt: string
+  seenBy: TaskRefLike
+}
+
+/** The newest volumes listing the entries say: when, and by whom; null when none holds a volume. */
+export function volumesListed(entries: readonly { volume?: VolumeLike | null }[]): VolumeLike | null {
+  let newest: VolumeLike | null = null
+  for (const e of entries) {
+    if (e.volume && (!newest || Date.parse(e.volume.seenAt) > Date.parse(newest.seenAt))) newest = e.volume
+  }
+  return newest
+}
+
+/** A volume's space as a row says it: "12 GB free of 64 GB", its size alone, "No media"; "" when the host did not say. */
+export function spaceSays(v: Pick<VolumeLike, "size" | "free" | "noMedia">): string {
+  if (v.noMedia) return "No media"
+  if (v.size == null) return ""
+  return `${v.free != null ? `${formatBytes(v.free)} free of ` : ""}${formatBytes(v.size)}`
+}
+
+/** What a volume's hover says: its kind and label, file system, device, space, and the task that listed it. */
+export function volumeSays(v: VolumeLike): string {
+  const what = [`${KIND_LABELS[volumeKind(v.kind)]} volume`, v.label ? `"${v.label}"` : null, v.fs, v.readOnly ? "read-only" : null]
+  return [
+    what.filter(Boolean).join(", "),
+    v.device ? `From ${v.device}` : null,
+    spaceSays(v),
+    `Volumes listed ${formatDateTime(v.seenAt)} by ${byWhom(v.seenBy)}`,
+  ]
+    .filter(Boolean)
+    .join("\n")
 }
 
 /** "3h ago", or the date and time from a day on. */

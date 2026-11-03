@@ -39,6 +39,7 @@ import {
   type ConnectionFailover,
   type FailoverPolicy,
 } from "./failover-values"
+import { DEFAULT_MAX_TASKS, MAX_TASKS_LIMIT, parseMaxTasks } from "@/components/minion-sessions/max-tasks-values"
 
 // A new build as the build modal's JSON tab edits it: what createBuild takes,
 // every value listed with the one the build will use, the factory's or the
@@ -58,6 +59,9 @@ import {
 // ({enabled, fail_after, fail_for, wrap, cycle_pause, failback_after}; keys
 // left out take the defaults), and a connection's "failover" its own
 // ({auto, fail_after}).
+//
+// "max_tasks", for a factory whose minions take a limit: how many tasks the
+// minion runs at once, 0 to 64 (left out: 5); its sessions change it live.
 //
 // "persisted_session", for a factory whose minions claim persisted sessions:
 // false (none), true (a new one, reserved with the build), or an existing
@@ -91,6 +95,8 @@ export interface BuildDocument {
   values: Record<string, unknown>
   connections: ConnectionDocument[]
   failover: FailoverPolicy
+  /** How many tasks at once, typed text that does not read kept as typed; absent where the factory has none. */
+  maxTasks?: number | string
   /** The persisted session; absent where the factory has none, or the JSON leaves it out. */
   persisted?: PersistedChoice
 }
@@ -98,7 +104,7 @@ export interface BuildDocument {
 /** The parts the JSON tab locks. */
 export const BUILD_JSON_LOCKED: readonly string[] = ["/factory"]
 
-const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "failover", "persisted_session"]
+const KEYS = ["factory", "description", "target", "platform", "commands", "values", "connections", "failover", "max_tasks", "persisted_session"]
 const CONNECTION_KEYS = ["channel", "kind", "name", "description", "settings", "values", "failover"]
 
 /**
@@ -140,6 +146,7 @@ export function buildJson(kind: FactoryKind, channels: ReadonlyMap<string, Chann
       }
     }),
     failover: doc.failover,
+    ...(doc.maxTasks !== undefined ? { max_tasks: doc.maxTasks } : {}),
     ...(doc.persisted ? { persisted_session: persistedJson(doc.persisted) } : {}),
   })
 }
@@ -182,7 +189,14 @@ export function formDocument(kind: FactoryKind, channels: ReadonlyMap<string, Ch
       }
     }),
     failover: form.failover,
+    ...(kind.maxTasks ? { maxTasks: maxTasksOf(form.maxTasks) } : {}),
   }
+}
+
+/** A limit as typed: its number when it reads as one, the text otherwise. */
+function maxTasksOf(text: string): number | string {
+  const parsed = parseMaxTasks(text)
+  return parsed.ok ? parsed.value : text
 }
 
 /** The JSON tab's document as the form, for the Form tab and the close guard. */
@@ -211,6 +225,7 @@ export function formFromDocument(kind: FactoryKind, channels: ReadonlyMap<string
       ),
     ),
     failover: doc.failover,
+    maxTasks: kind.maxTasks ? String(doc.maxTasks ?? DEFAULT_MAX_TASKS) : "",
   }
 }
 
@@ -232,6 +247,7 @@ export function documentInput(doc: BuildDocument): FormInput {
       failover: c.failover ?? null,
     })),
     failover: doc.failover,
+    maxTasks: typeof doc.maxTasks === "number" ? doc.maxTasks : null,
   }
 }
 
@@ -325,6 +341,18 @@ export function readBuildJson(text: string, kind: FactoryKind, channels: Readonl
   const errors: Record<string, string> = {}
   const failover = readFailover(root.failover, at)
   const doc: BuildDocument = { description, target: targetId, platform, commands, values, connections, failover }
+  if (root.max_tasks !== undefined && root.max_tasks !== null) {
+    if (!kind.maxTasks) at("/max_tasks", `${kind.name}'s minions take no limit of tasks`)
+    else {
+      const raw = root.max_tasks
+      const parsed = typeof raw === "number" ? parseMaxTasks(String(raw)) : null
+      if (parsed?.ok) doc.maxTasks = parsed.value
+      else {
+        at("/max_tasks", `A whole number 0 to ${MAX_TASKS_LIMIT}`)
+        doc.maxTasks = typeof raw === "string" || typeof raw === "number" ? raw : JSON.stringify(raw)
+      }
+    }
+  }
   if (root.persisted_session !== undefined) {
     if (!kind.persistedSessions) at("/persisted_session", `${kind.name}'s minions do not claim persisted sessions`)
     else doc.persisted = readPersisted(root.persisted_session, at)
@@ -444,6 +472,15 @@ export function buildJsonHints(
           ? "How the minion moves between its connections on its own when the one in use keeps failing."
           : `How the minion moves between its connections on its own. ${kind.name} does not say its minions apply it: it may ignore these.`,
       },
+      ...(kind.maxTasks
+        ? [
+            {
+              key: "max_tasks",
+              detail: `number, 0 to ${MAX_TASKS_LIMIT}`,
+              info: `How many tasks the minion runs at once as it starts; 0: none until a session sets more. Left out: ${DEFAULT_MAX_TASKS}. Its sessions change it live.`,
+            },
+          ]
+        : []),
       ...(kind.persistedSessions
         ? [
             {

@@ -75,3 +75,41 @@ func TestOffersConnect(t *testing.T) {
 		t.Error("no connector")
 	}
 }
+
+// limitsOK sets any limit.
+type limitsOK struct{}
+
+func (limitsOK) SetMaxTasks(context.Context, *models.MinionSession, int) error { return nil }
+
+// Only a session whose build's factory declares max tasks, and whose
+// minion said its limit, has max_tasks; it takes a max of 0 to 64.
+func TestOffersMaxTasks(t *testing.T) {
+	five := 5
+	r := &minionTaskResolver{limits: limitsOK{}}
+	if !r.offersMaxTasks(&models.MinionSession{MaxTasksSettable: true, MaxTasks: &five}) {
+		t.Error("a settable session")
+	}
+	for name, s := range map[string]*models.MinionSession{
+		"fixed":    {MaxTasks: &five},
+		"unsaid":   {MaxTasksSettable: true},
+		"no limit": {},
+	} {
+		if r.offersMaxTasks(s) {
+			t.Errorf("%s", name)
+		}
+	}
+	if (&minionTaskResolver{}).offersMaxTasks(&models.MinionSession{MaxTasksSettable: true, MaxTasks: &five}) {
+		t.Error("no setter")
+	}
+	c := maxTasksCommand()
+	if c.ID != protocol.CommandMaxTasks || len(c.Params) != 1 || c.Params[0].Key != "max" || !c.Params[0].Required ||
+		!strings.Contains(c.Description, "0 pauses it") {
+		t.Fatalf("%+v", c)
+	}
+	if _, problems := protocol.TaskArgs(c.Params, map[string]any{"max": 65}); problems == nil {
+		t.Error("a max past 64 passed")
+	}
+	if wire, problems := protocol.TaskArgs(c.Params, map[string]any{"max": 0}); problems != nil || wire["max"] != int64(0) {
+		t.Errorf("0: %v %v", wire, problems)
+	}
+}

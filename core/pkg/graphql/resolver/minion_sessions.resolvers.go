@@ -27,6 +27,11 @@ func (r *minionSessionResolver) Connections(ctx context.Context, obj *model.Mini
 	return r.MinionSessionResolver.Connections(ctx, obj)
 }
 
+// RunningTasks is the resolver for the runningTasks field.
+func (r *minionSessionResolver) RunningTasks(ctx context.Context, obj *model.MinionSession) (int, error) {
+	return r.MinionSessionResolver.RunningTasks(ctx, obj)
+}
+
 // SetMinionSessionArchived is the resolver for the setMinionSessionArchived field.
 func (r *mutationResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionArchived(ctx, id, archived)
@@ -55,6 +60,11 @@ func (r *mutationResolver) SetMinionSessionsMark(ctx context.Context, operationI
 // SetMinionSessionAddress is the resolver for the setMinionSessionAddress field.
 func (r *mutationResolver) SetMinionSessionAddress(ctx context.Context, id string, address *string) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionAddress(ctx, id, address)
+}
+
+// SetMinionSessionMaxTasks is the resolver for the setMinionSessionMaxTasks field.
+func (r *mutationResolver) SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.SetMinionSessionMaxTasks(ctx, id, max)
 }
 
 // SetMinionSessionsLayout is the resolver for the setMinionSessionsLayout field.

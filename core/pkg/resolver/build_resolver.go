@@ -210,6 +210,7 @@ func (r *buildResolver) CreateBuild(ctx context.Context, operationID string, inp
 		}
 		in.Failover = &f
 	}
+	in.MaxTasks = input.MaxTasks
 	in.NewPersistedSession = input.NewPersistedSession != nil && *input.NewPersistedSession
 	if input.PersistedSession != nil {
 		sid, err := uuid.Parse(*input.PersistedSession)
@@ -378,7 +379,7 @@ func mapBuildError(ctx context.Context, err error) error {
 
 func toBuildSchemaModel(s *protocol.BuildSchema) *model.BuildSchema {
 	out := &model.BuildSchema{Version: s.Version, Crypto: strPtr(s.Crypto), Fields: toBuildFieldModels(s.Fields),
-		PersistedSessions: s.PersistedSessions, Failover: s.Failover}
+		PersistedSessions: s.PersistedSessions, Failover: s.Failover, MaxTasks: s.MaxTasks}
 	for _, c := range s.Channels {
 		ch := &model.BuildChannel{ModuleName: c.ModuleName, Versions: c.Versions, Kinds: []*model.BuildChannelKind{}}
 		for _, k := range c.Kinds {
@@ -463,6 +464,7 @@ func toBuildModel(b *models.Build) *model.Build {
 		out.Connections = []protocol.BuildConnection{}
 	}
 	out.Failover = b.FailoverPolicy()
+	out.MaxTasks = b.MaxTasks
 	out.ConnectionDescriptions = make([]string, len(b.Connections.Items))
 	copy(out.ConnectionDescriptions, b.ConnectionDescriptions)
 	for _, st := range builds.Pipeline(b) {

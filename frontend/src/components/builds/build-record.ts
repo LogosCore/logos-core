@@ -52,6 +52,7 @@ export function buildRecordJson(b: BuildRecord): Record<string, unknown> {
       ...(c.failover ? { failover: c.failover } : {}),
     })),
     failover: recordFailover(b.failover),
+    ...(b.maxTasks != null ? { max_tasks: b.maxTasks } : {}),
     ...(b.crypto ? { crypto: b.crypto } : {}),
     ...(b.persistedSession ? { persisted_session: b.persistedSession } : {}),
   }

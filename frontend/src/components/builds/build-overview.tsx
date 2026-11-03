@@ -95,6 +95,12 @@ export function BuildOverview({
           <LabelRow label="Build id">
             <Copyable text={b.id} what="Build id" />
           </LabelRow>
+          {b.maxTasks != null && (
+            <LabelRow label="Tasks at once">
+              <span className="tabular-nums">{b.maxTasks}</span>
+              <span className="text-muted-foreground">{b.maxTasks === 0 ? " · none until a session sets more" : " · as it starts; its sessions change it"}</span>
+            </LabelRow>
+          )}
           {b.persistedSession && (
             <LabelRow label="Persisted session">
               <PersistedSession id={b.persistedSession} />

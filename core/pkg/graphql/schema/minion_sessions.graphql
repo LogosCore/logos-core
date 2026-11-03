@@ -120,6 +120,22 @@ type MinionSession {
   # The build's connections, in the build's order (the order the minion
   # tries them); empty when the build is deleted.
   connections: [MinionConnection!]!
+  # How many tasks the minion runs at once, as it last said (its hello, or a
+  # max_tasks of its); null when it never said.
+  maxTasks: Int
+  # The limit can be changed (setMinionSessionMaxTasks): the build's factory
+  # declares max tasks. false: its factory sets it, and maxTasks, when the
+  # minion says it, only reports it.
+  maxTasksSettable: Boolean!
+  # The operator's limit while the minion says another: on its way, with
+  # every message core sends it. null otherwise.
+  maxTasksPending: Int
+  # The operator's limit the minion did not take: core sent it with 5
+  # messages and the minion never said it has it (a minion that does not
+  # know the item). null otherwise; setting it again tries again.
+  maxTasksNotTaken: Int
+  # The tasks the minion has and has not ended (sent, started).
+  runningTasks: Int!
 }
 
 # One of a session's build's connections.
@@ -396,6 +412,16 @@ extend type Mutation {
   # operation; null goes back to core's guess. Needs at least operator; agent
   # API keys are rejected.
   setMinionSessionAddress(id: ID!, address: String): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Sets how many tasks the session's minion runs at once, 0 (it takes no new
+  # tasks: a pause; what it runs goes on) to 64. Core sends it with every
+  # message to the minion, whatever the minion runs, until the minion says it
+  # has it (maxTasksPending till then), 5 messages at most (maxTasksNotTaken
+  # after); a process that claims the session later gets it too. Only where
+  # maxTasksSettable, for a minion whose hello said its limit. Needs at least
+  # operator; agent API keys are rejected.
+  setMinionSessionMaxTasks(id: ID!, max: Int!): MinionSession!
     @hasPermission(permission: "operation:member")
 
   # Keeps the caller's Sessions table layout, for every operation and every

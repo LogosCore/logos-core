@@ -43,6 +43,10 @@ type BuildInput struct {
 	// Failover is how the minion moves between its connections on its own;
 	// nil: protocol.DefaultBuildFailover.
 	Failover *protocol.BuildFailover
+	// MaxTasks is how many tasks the minion runs at once as it starts, 0 to
+	// protocol.MaxTasksLimit, for a factory whose minions take one; nil:
+	// protocol.DefaultMaxTasks there, none elsewhere.
+	MaxTasks *int
 	Actor    models.ModuleActor
 }
 
@@ -106,6 +110,17 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 			}
 		}
 	}
+	if in.MaxTasks != nil {
+		if probs == nil {
+			probs = problems{}
+		}
+		switch {
+		case !schema.MaxTasks:
+			probs.add("maxTasks", "this factory's minions take no max tasks")
+		case *in.MaxTasks < 0 || *in.MaxTasks > protocol.MaxTasksLimit:
+			probs.add("maxTasks", "0 to %d", protocol.MaxTasksLimit)
+		}
+	}
 	if err := probs.err("the build does not fit the factory's build schema"); err != nil {
 		return nil, err
 	}
@@ -130,6 +145,13 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 		failover = *in.Failover
 	}
 	b.Failover = (*models.BuildFailover)(&failover)
+	if schema.MaxTasks {
+		n := protocol.DefaultMaxTasks
+		if in.MaxTasks != nil {
+			n = *in.MaxTasks
+		}
+		b.MaxTasks = &n
+	}
 	if schema.Crypto != "" {
 		if b.Crypto, err = payloadcrypto.NewKeys(schema.Crypto); err != nil {
 			return nil, err

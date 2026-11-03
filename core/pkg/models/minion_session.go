@@ -1,6 +1,8 @@
 package models
 
 import (
+	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
 	"time"
@@ -88,6 +90,20 @@ type MinionSession struct {
 	ConnKind  string `bson:"conn_kind,omitempty" json:"conn_kind,omitempty"`
 	ConnName  string `bson:"conn_name,omitempty" json:"conn_name,omitempty"`
 	ConnCount int    `bson:"conn_count,omitempty" json:"conn_count,omitempty"`
+	// MaxTasks is how many tasks the minion runs at once, as it last said
+	// (its hello's, or a max_tasks of its); nil when it never said.
+	// MaxTasksSettable: its build's factory declares max_tasks (the build
+	// has a limit), so its minion takes core's max_tasks; a minion whose
+	// factory does not runs as many as its factory made it, which it may
+	// say all the same. MaxTasksSet is the operator's: core sends it (a
+	// max_tasks item) while the minion says another, a process that claims
+	// the session with the build's own included; nil until one is set.
+	// MaxTasksSends counts the messages that carried it unanswered: at
+	// MaxTasksTries core stops, the minion not taking it.
+	MaxTasks         *int `bson:"max_tasks,omitempty" json:"max_tasks,omitempty"`
+	MaxTasksSettable bool `bson:"max_tasks_settable,omitempty" json:"max_tasks_settable,omitempty"`
+	MaxTasksSet      *int `bson:"max_tasks_set,omitempty" json:"max_tasks_set,omitempty"`
+	MaxTasksSends    int  `bson:"max_tasks_sends,omitempty" json:"max_tasks_sends,omitempty"`
 	// Connected: a persistent connection serving the session is open. Core
 	// holds the connections (minionsync); it writes this when the session's
 	// first opens and its last closes, and clears it as it starts, so the
@@ -269,6 +285,79 @@ type MinionHello struct {
 	Version   string         `bson:"version,omitempty" json:"version,omitempty"`
 	MachineID string         `bson:"machine_id,omitempty" json:"machine_id,omitempty"` // "<source>:<value>" (protocol.MachineID), by the source's name; empty when the minion said none
 	X         map[string]any `bson:"x,omitempty" json:"x,omitempty"`
+}
+
+// MaxTasksTries is how many messages carry the operator's limit unanswered
+// before core stops: a minion that takes it says so in its very next
+// message, and one that does not (unknown_item) would be sent it forever.
+// An err names an item only by its place in a message core no longer
+// has, so the count is what tells.
+const MaxTasksTries = 5
+
+// maxTasksWanted: the operator's limit differs from the minion's, for a
+// minion that takes one.
+func (s MinionSession) maxTasksWanted() bool {
+	return s.MaxTasksSettable && s.MaxTasks != nil && s.MaxTasksSet != nil && *s.MaxTasks != *s.MaxTasksSet
+}
+
+// MaxTasksDue is the limit core has to send the session's minion: the
+// operator's while the minion says another; nil when there is none to
+// send (none set, the minion has it, it takes none, or it did not take it
+// after MaxTasksTries messages).
+func (s MinionSession) MaxTasksDue() *int {
+	if !s.maxTasksWanted() || s.MaxTasksSends >= MaxTasksTries {
+		return nil
+	}
+	return s.MaxTasksSet
+}
+
+// MaxTasksNotTaken is the operator's limit the minion did not take: sent
+// MaxTasksTries times, never answered. nil otherwise.
+func (s MinionSession) MaxTasksNotTaken() *int {
+	if !s.maxTasksWanted() || s.MaxTasksSends < MaxTasksTries {
+		return nil
+	}
+	return s.MaxTasksSet
+}
+
+// Why an operator's limit of tasks cannot be set (CanSetMaxTasks).
+var (
+	ErrMaxTasksRange       = fmt.Errorf("max tasks is 0 to %d", protocol.MaxTasksLimit)
+	ErrMaxTasksFixed       = errors.New("its factory sets how many tasks the minion runs at once: it cannot be changed")
+	ErrMaxTasksUnsaid      = errors.New("the minion takes no max tasks: its hello said none")
+	ErrMaxTasksSessionGone = errors.New("the session is closed")
+)
+
+// CanSetMaxTasks says why an operator may not set max as the session's
+// limit at now; nil when they may.
+func (s MinionSession) CanSetMaxTasks(max int, now time.Time) error {
+	switch {
+	case max < 0 || max > protocol.MaxTasksLimit:
+		return ErrMaxTasksRange
+	case !s.MaxTasksSettable:
+		return ErrMaxTasksFixed
+	case s.MaxTasks == nil:
+		return ErrMaxTasksUnsaid
+	case s.Closed(now):
+		return ErrMaxTasksSessionGone
+	}
+	return nil
+}
+
+// IsMaxTasksRefusal: err is one of CanSetMaxTasks's, an operator's to fix.
+func IsMaxTasksRefusal(err error) bool {
+	return errors.Is(err, ErrMaxTasksRange) || errors.Is(err, ErrMaxTasksFixed) || errors.Is(err, ErrMaxTasksUnsaid) ||
+		errors.Is(err, ErrMaxTasksSessionGone)
+}
+
+// MaxTasksOf is the limit a hello says, as a session keeps it; nil when it
+// says none.
+func MaxTasksOf(h protocol.HelloItem) *int {
+	if h.MaxTasks == nil {
+		return nil
+	}
+	n := int(min(*h.MaxTasks, protocol.MaxTasksLimit))
+	return &n
 }
 
 // MinionHelloFrom keeps a hello's fields; proc as a process name.

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { byWhom, inFlight, inFlightAt, listedSays, parentOf, pathsTo, takenIn } from "./file-browser-model"
+import {
+  byWhom,
+  inFlight,
+  inFlightAt,
+  listedSays,
+  parentOf,
+  pathsTo,
+  spaceSays,
+  takenIn,
+  volumeSays,
+  volumesListed,
+  VOLUMES_PATH,
+} from "./file-browser-model"
 
 describe("inFlight", () => {
   const actions: Record<string, string> = { ls: "list_dir", rm: "delete_path", up: "upload_file", ps: "" }
@@ -61,5 +73,38 @@ describe("takenIn", () => {
     expect(takenIn({ type: "file", parent: "/etc", downloaded: [] })).toBe(false)
     expect(takenIn({ type: "link", parent: "/etc", downloaded: [] })).toBe(false)
     expect(takenIn({ type: "dir", parent: null, downloaded: [] })).toBe(true)
+  })
+})
+
+describe("volumes", () => {
+  const vol = (seenAt: string, number: number) => ({
+    kind: "fixed",
+    label: "System",
+    fs: "NTFS",
+    size: 64 * 1024 ** 3,
+    free: 20 * 1024 ** 3,
+    readOnly: false,
+    noMedia: false,
+    seenAt,
+    seenBy: { number },
+  })
+  it("a list_volumes task runs at the roots, with no path of its own", () => {
+    const all = inFlight([{ id: "9", command: "vol", state: "SENT", args: {} }], () => "list_volumes")
+    expect(all).toEqual([{ taskId: "9", path: VOLUMES_PATH, action: "list_volumes", label: "listing volumes…" }])
+  })
+  it("the roots' newest volumes listing", () => {
+    const older = vol("2026-11-03T10:00:00Z", 1)
+    const newer = vol("2026-11-03T11:00:00Z", 2)
+    expect(volumesListed([{ volume: older }, { volume: null }, { volume: newer }])?.seenBy.number).toBe(2)
+    expect(volumesListed([{ volume: null }, {}])).toBeNull()
+  })
+  it("says a volume's space and what it is", () => {
+    expect(spaceSays(vol("2026-11-03T10:00:00Z", 1))).toBe("20 GB free of 64 GB")
+    expect(spaceSays({ size: 2 * 1024 ** 4, noMedia: false })).toBe("2.0 TB")
+    expect(spaceSays({ noMedia: true })).toBe("No media")
+    expect(spaceSays({ noMedia: false })).toBe("")
+    const says = volumeSays({ ...vol("2026-11-03T10:00:00Z", 46), kind: "holographic", device: "/dev/sda1", readOnly: true })
+    expect(says.split("\n").slice(0, 3)).toEqual(['Other volume, "System", NTFS, read-only', "From /dev/sda1", "20 GB free of 64 GB"])
+    expect(says).toContain("by #46")
   })
 })

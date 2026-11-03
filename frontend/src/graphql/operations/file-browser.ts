@@ -61,6 +61,20 @@ export const FsEntryFields = graphql(`
       by
       at
     }
+    volume {
+      kind
+      device
+      label
+      fs
+      size
+      free
+      readOnly
+      noMedia
+      seenAt
+      seenBy {
+        ...FsTaskRefFields
+      }
+    }
   }
 `)
 
