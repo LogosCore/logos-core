@@ -14,7 +14,9 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { LazyJsonEditor, preloadJsonEditor } from "@/components/ui/lazy-json-editor"
-import { useMinionTaskDocument, useMinionTaskOutput } from "@/graphql/hooks/minion-tasks"
+import { useMinionTaskDocument, useMinionTaskFeedback, useMinionTaskOutput } from "@/graphql/hooks/minion-tasks"
+import { useMinionSession } from "@/graphql/hooks/minion-sessions"
+import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatAbsolute } from "@/lib/relative-time"
 import { cn } from "@/lib/utils"
 import { copyToClipboard } from "@/lib/copy-to-clipboard"
@@ -22,6 +24,9 @@ import { lineOf, type CommandDef } from "./command-line"
 import { readDirListing } from "./dir-listing"
 import { readDirWalk } from "./dir-walk"
 import { WalkView } from "./walk-view"
+import { FeedbackCounts } from "./feedback-parts"
+import { feedbackSummary } from "./feedback-values"
+import { TaskFeedbackView } from "./task-feedback"
 import { readVolumes } from "./volumes"
 import { VolumesView } from "./volumes-view"
 import { DirListingView } from "./dir-listing-view"
@@ -43,7 +48,8 @@ import { useSessionConnectionChoices } from "./use-connection-choices"
 // and what came back: the output as text, read again as more comes (Ctrl+F
 // finds in it), and any data the command gave, in its result's
 // view (a dir_listing as a file browser) or as raw JSON. Output and data
-// download as the minion sent them.
+// download as the minion sent them. What the minion said of it as feedback
+// is a tab of its own, its counts in the tab's name.
 // The JSON tab shows the task as core keeps it, for debugging.
 
 const API_URL = import.meta.env.VITE_API_URL as string
@@ -145,6 +151,16 @@ export function TaskDetail({
   const detail = outputQ.data?.minionTask
   const output = detail?.output ?? ""
   const data = (detail?.data as Record<string, unknown> | null | undefined) ?? null
+  // Its feedback, read when it has some, again as more comes or the
+  // session's is marked read (unread ones are marked).
+  const counts = { errors: t.feedbackErrors, warnings: t.feedbackWarnings }
+  const hasFeedback = counts.errors + counts.warnings > 0
+  const session = useMinionSession(t.sessionId).data?.minionSession
+  const feedbackQ = useMinionTaskFeedback(t.id, `${counts.errors}:${counts.warnings}:${session?.feedbackReadAt ?? ""}`, hasFeedback)
+  const feedback = feedbackQ.data?.minionTask?.feedback ?? []
+  const feedbackTitle = `What the minion said of it: ${feedbackSummary(counts.errors, counts.warnings)}`
+  const { open: openRecord } = useRecordModals()
+  const sessionId = t.sessionId
   // Whether it gave data, known from its size until it is read (and
   // guessed for a task kept before that: parts with no output are data),
   // so an ls opens on its Data tab at once rather than on an empty Output.
@@ -173,13 +189,15 @@ export function TaskDetail({
     t.dataTruncated ? "Cut at 4 MiB with the output: the rest was dropped." : null,
   ].filter((n): n is string => n !== null)
 
-  const [tab, setTab] = useState<"output" | "data" | "json" | null>(null)
+  const [tab, setTab] = useState<"output" | "data" | "feedback" | "json" | null>(null)
   // Data alone shows as data; with output, the output first. An upload
-  // shows its progress first, whatever it prints.
+  // shows its progress first, whatever it prints. Feedback only when asked.
   const shown =
     tab === "json"
       ? "json"
-      : tab === "data" && hasData
+      : tab === "feedback" && hasFeedback
+        ? "feedback"
+        : tab === "data" && hasData
         ? "data"
         : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream)
           ? "output"
@@ -207,6 +225,14 @@ export function TaskDetail({
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
               {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : "Data"}
+            </TabButton>
+          )}
+          {hasFeedback && (
+            <TabButton active={shown === "feedback"} onClick={() => setTab("feedback")} title={feedbackTitle}>
+              <span className="inline-flex items-center gap-1.5">
+                Feedback
+                <FeedbackCounts errors={counts.errors} warnings={counts.warnings} className="gap-1.5" title={feedbackTitle} />
+              </span>
             </TabButton>
           )}
           <TabButton active={shown === "json"} onClick={() => setTab("json")} title="The task as core keeps it: for debugging">
@@ -252,7 +278,7 @@ export function TaskDetail({
                 <DownloadIcon />
               </Button>
             </>
-          ) : (
+          ) : shown === "feedback" ? null : (
             <>
               <Button variant="ghost" size="icon-xs" title="Copy the output" aria-label="Copy the output" disabled={!actions.hasOutput}
                 onClick={() => void actions.copyOutput(detail ? output : undefined)}>
@@ -280,7 +306,16 @@ export function TaskDetail({
       </div>
       {t.err && <div className="border-b px-3 py-1 font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
 
-      {shown === "output" ? (
+      {shown === "feedback" ? (
+        <TaskFeedbackView
+          key={t.id}
+          entries={feedback}
+          errors={counts.errors}
+          warnings={counts.warnings}
+          loading={feedbackQ.isLoading}
+          onOpenSession={() => openRecord({ kind: "session", id: sessionId, tab: "feedback" })}
+        />
+      ) : shown === "output" ? (
         <OutputView
           output={output}
           loading={outputQ.isLoading}

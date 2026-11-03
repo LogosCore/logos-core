@@ -42,6 +42,16 @@ func (f *fakeTasks) SetDataProblem(_ context.Context, id uuid.UUID, problem stri
 	return t, nil
 }
 
+func (f *fakeTasks) AddFeedback(_ context.Context, sid, id uuid.UUID, errs, warns int) (*models.MinionTask, error) {
+	t := f.find(id)
+	if t == nil || t.SessionID != sid {
+		return nil, qmgo.ErrNoSuchDocuments
+	}
+	t.FeedbackErrors += errs
+	t.FeedbackWarnings += warns
+	return t, nil
+}
+
 // fakeFiles holds task files in memory.
 type fakeFiles struct {
 	bodies   map[uuid.UUID][]byte

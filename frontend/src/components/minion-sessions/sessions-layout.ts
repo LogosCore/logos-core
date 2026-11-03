@@ -43,6 +43,7 @@ export type SessionColumnId =
   | "staged"
   | "persisted"
   | "restarts"
+  | "feedback"
 
 export interface SessionColumnDef {
   id: SessionColumnId
@@ -101,6 +102,16 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "sessionId", label: "Session id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.id },
   { id: "persisted", label: "Persisted", kind: "bool", sortable: true, initialDirection: "DESC", width: fr(0.6), value: (s) => s.persisted },
   { id: "restarts", label: "Restarts", kind: "number", sortable: true, initialDirection: "DESC", width: fr(0.6), value: (s) => s.restartCount },
+  // Its minion's unread feedback, errors and warnings together.
+  {
+    id: "feedback",
+    label: "Feedback",
+    kind: "number",
+    sortable: true,
+    initialDirection: "DESC",
+    width: fr(0.7),
+    value: (s) => s.feedbackErrors + s.feedbackWarnings,
+  },
   { id: "staged", label: "Staged", kind: "bool", sortable: true, initialDirection: "DESC", width: fr(0.5), value: (s) => s.staged },
 ]
 
@@ -132,7 +143,7 @@ export interface SessionsLayout {
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
-  columns: ["number", "peer", "addrs", "user", "host", "domain", "arch", "pid", "proc", "os", "lastSeen", "build", "description"],
+  columns: ["number", "peer", "addrs", "user", "host", "domain", "arch", "pid", "proc", "os", "lastSeen", "feedback", "build", "description"],
   sort: null,
   filters: [],
   split: null,

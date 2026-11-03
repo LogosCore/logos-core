@@ -199,6 +199,8 @@ describe("live updates", () => {
     connCount: 0,
     connChanges: [],
     maxTasksSettable: false,
+    feedbackErrors: 0,
+    feedbackWarnings: 0,
     ...patch,
   })
   const listData = (...rows: MinionSessionFieldsFragment[]) => ({

@@ -9,6 +9,7 @@ import {
   MinionStreamLinkDocument,
   MinionTaskChangedDocument,
   MinionTaskDocumentDocument,
+  MinionTaskFeedbackDocument,
   MinionTaskOutputDocument,
   MinionTasksDocument,
   QueueMinionTaskDocument,
@@ -26,6 +27,7 @@ export const minionTaskKeys = {
   commands: (sessionId: string) => [...minionTaskKeys.all, "commands", sessionId] as const,
   output: (id: string) => [...minionTaskKeys.all, "output", id] as const,
   document: (id: string) => [...minionTaskKeys.all, "document", id] as const,
+  feedback: (id: string) => [...minionTaskKeys.all, "feedback", id] as const,
   fileStrings: (fileId: string, filter: MinionFileStringsFilter) =>
     [...minionTaskKeys.all, "fileStrings", fileId, filter] as const,
 }
@@ -68,6 +70,19 @@ export function useMinionTaskOutput(id: string | null, version: string, finished
     // Up to 4 MiB each: the reads of a growing output go soon, its last one
     // (the task ended) stays as long as any other query.
     gcTime: finished ? 5 * 60_000 : 10_000,
+  })
+}
+
+/**
+ * What its minion said of a task as feedback, read while enabled (it has
+ * some) and again whenever version changes (more came, it was marked read).
+ */
+export function useMinionTaskFeedback(id: string, version: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...minionTaskKeys.feedback(id), version],
+    queryFn: () => graphqlClient(MinionTaskFeedbackDocument, { id }),
+    enabled,
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === id ? prev : undefined),
   })
 }
 

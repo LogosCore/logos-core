@@ -1,4 +1,7 @@
+import { useEffect } from "react"
 import { Outlet } from "react-router"
+import { preloadPage } from "@/lib/page-loaders"
+import { whenIdle } from "@/lib/preloadable"
 import { PageBoundary } from "@/components/page-boundary"
 import { RecordModals } from "@/components/layout/record-modals"
 import { AppSidebar } from "@/components/layout/app-sidebar"
@@ -98,6 +101,12 @@ export function AppLayout() {
   // beacon because the two describe the same absence from the operator's side:
   // one says they stopped watching, this one catches them up when they return.
   useResumeRefetch()
+
+  // The Sessions page, the working surface, fetched once the app is idle: its
+  // first visit then opens at once instead of holding the page before on
+  // screen while its code loads (lib/page-loaders.ts). The other pages are
+  // fetched as their sidebar links are hovered.
+  useEffect(() => whenIdle(() => preloadPage("/sessions")), [])
 
   // Operation and membership changes, on every authed page. These lived on
   // /operations only, so every other list of operations went stale: the

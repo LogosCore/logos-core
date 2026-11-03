@@ -8,9 +8,11 @@ import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
-import { DocumentIcon } from "@/components/wiki/document-icon"
+import { MarkIcon } from "./mark-icon"
 import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
+import { useRecordModals } from "@/hooks/use-record-modals"
+import { FeedbackCounts } from "./feedback-parts"
 import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
@@ -114,7 +116,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           {/* The caller's mark, in its color's tone (the row sets it). */}
           {(s.mark?.icon || s.mark?.emoji) && (
             <span data-mark-icon className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
-              <DocumentIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
+              <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
             </span>
           )}
         </div>
@@ -239,6 +241,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return <div className="truncate">{s.staged ? "Yes" : muted("No")}</div>
     case "persisted":
       return <div className="truncate">{s.persisted ? "Yes" : muted("No")}</div>
+    case "feedback":
+      return <FeedbackCell s={s} />
     case "restarts":
       return (
         <div
@@ -249,4 +253,24 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
         </div>
       )
   }
+}
+
+/** A session's unread feedback: its counts, which open its Feedback. */
+function FeedbackCell({ s }: { s: MinionSessionFieldsFragment }) {
+  const { open } = useRecordModals()
+  const id = s.id
+  if (s.feedbackErrors + s.feedbackWarnings === 0) return <div className="truncate text-muted-foreground">0</div>
+  return (
+    <button
+      type="button"
+      className="flex min-w-0 cursor-pointer items-center rounded hover:bg-muted"
+      title="Open the session's feedback"
+      onClick={(e) => {
+        e.stopPropagation()
+        open({ kind: "session", id, tab: "feedback" })
+      }}
+    >
+      <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} />
+    </button>
+  )
 }

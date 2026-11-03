@@ -136,6 +136,41 @@ type MinionSession {
   maxTasksNotTaken: Int
   # The tasks the minion has and has not ended (sent, started).
   runningTasks: Int!
+  # Its minion's feedback since it was last marked read (for everyone of the
+  # operation): errors and warnings; when the latest came, and when it was
+  # marked read. Entries: minionFeedback.
+  feedbackErrors: Int!
+  feedbackWarnings: Int!
+  feedbackAt: String
+  feedbackReadAt: String
+}
+
+# A warning or an error a session's minion sent its operators (docs:
+# contracts/minion-messages/sessions, Feedback): what it would otherwise only
+# log on the host.
+type MinionFeedback {
+  id: ID!
+  # warning or error.
+  level: String!
+  msg: String!
+  # The factory's short tag for the kind of problem ("checkin_failed").
+  code: String
+  # The task it is about, if any.
+  taskId: ID
+  # When it happened, as the minion says; null when it did not.
+  at: String
+  # How many times it happened (the minion folds repeats).
+  count: Int!
+  receivedAt: String!
+  # Came after the session's feedback was last marked read.
+  unread: Boolean!
+}
+
+# A page of feedback, newest first; next is the cursor of the next, null on
+# the last.
+type MinionFeedbackPage {
+  entries: [MinionFeedback!]!
+  next: String
 }
 
 # One of a session's build's connections.
@@ -330,6 +365,13 @@ type MinionSessionEvent {
 }
 
 extend type Query {
+  # A session's feedback, newest first, a page at a time (first: 200 by
+  # default, 500 at most; after: a page's next). level keeps one level's
+  # (warning, error); search the entries whose message or code holds it, any
+  # case. Needs at least viewer.
+  minionFeedback(sessionId: ID!, level: String, search: String, after: String, first: Int): MinionFeedbackPage!
+    @hasPermission(permission: "operation:member")
+
   # An operation's sessions, newest first, a page at a time. search is the
   # app's search (a substring, case aside; "quotes" for whole words) over the
   # host, user, domain, process, os, arch, integrity, addresses, version, the
@@ -412,6 +454,12 @@ extend type Mutation {
   # operation; null goes back to core's guess. Needs at least operator; agent
   # API keys are rejected.
   setMinionSessionAddress(id: ID!, address: String): MinionSession!
+    @hasPermission(permission: "operation:member")
+
+  # Marks the session's feedback read, for everyone in the operation: its
+  # unread counts go back to 0. Needs at least operator; agent API keys are
+  # rejected.
+  markMinionFeedbackRead(id: ID!): MinionSession!
     @hasPermission(permission: "operation:member")
 
   # Sets how many tasks the session's minion runs at once, 0 (it takes no new

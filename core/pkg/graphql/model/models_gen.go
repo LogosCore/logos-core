@@ -590,6 +590,23 @@ type MinionConnection struct {
 	Params     any    `json:"params"`
 }
 
+type MinionFeedback struct {
+	ID         string  `json:"id"`
+	Level      string  `json:"level"`
+	Msg        string  `json:"msg"`
+	Code       *string `json:"code,omitempty"`
+	TaskID     *string `json:"taskId,omitempty"`
+	At         *string `json:"at,omitempty"`
+	Count      int     `json:"count"`
+	ReceivedAt string  `json:"receivedAt"`
+	Unread     bool    `json:"unread"`
+}
+
+type MinionFeedbackPage struct {
+	Entries []*MinionFeedback `json:"entries"`
+	Next    *string           `json:"next,omitempty"`
+}
+
 type MinionFile struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
@@ -668,6 +685,10 @@ type MinionSession struct {
 	MaxTasksPending  *int                    `json:"maxTasksPending,omitempty"`
 	MaxTasksNotTaken *int                    `json:"maxTasksNotTaken,omitempty"`
 	RunningTasks     int                     `json:"runningTasks"`
+	FeedbackErrors   int                     `json:"feedbackErrors"`
+	FeedbackWarnings int                     `json:"feedbackWarnings"`
+	FeedbackAt       *string                 `json:"feedbackAt,omitempty"`
+	FeedbackReadAt   *string                 `json:"feedbackReadAt,omitempty"`
 	BindTarget       *MinionTarget           `json:"bindTarget,omitempty"`
 }
 
@@ -836,6 +857,9 @@ type MinionTargetInput struct {
 
 type MinionTask struct {
 	ID                string            `json:"id"`
+	Feedback          []*MinionFeedback `json:"feedback"`
+	FeedbackErrors    int               `json:"feedbackErrors"`
+	FeedbackWarnings  int               `json:"feedbackWarnings"`
 	Rev               int               `json:"rev"`
 	SessionID         string            `json:"sessionId"`
 	OperationID       string            `json:"operationId"`

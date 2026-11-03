@@ -82,6 +82,12 @@ type IMinionSessionRepository interface {
 	BackfillDescriptions(ctx context.Context) (int64, error)
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
+	// AddFeedback counts feedback its minion sent at at: errors and warnings
+	// unread (models.MinionSession.FeedbackErrors), and when the latest came.
+	AddFeedback(ctx context.Context, sessionID uuid.UUID, errors, warnings int, at time.Time) error
+	// MarkFeedbackRead marks the session's feedback read at at, for
+	// everyone: its unread counts go back to 0.
+	MarkFeedbackRead(ctx context.Context, sessionID uuid.UUID, at time.Time) error
 	// SetMaxTasks records how many tasks the minion runs at once, as it
 	// said (models.MinionSession.MaxTasks); nil: it says none. The count
 	// of the operator's limit sent unanswered starts again.
@@ -519,6 +525,20 @@ func (r *minionSessionRepository) OwnSessionIDs(ctx context.Context, operationID
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": bson.M{"persisted": true}}))
+}
+
+func (r *minionSessionRepository) AddFeedback(ctx context.Context, sessionID uuid.UUID, errors, warnings int, at time.Time) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{
+		"$inc": bson.M{"feedback_errors": errors, "feedback_warnings": warnings, "feedback_unread": errors + warnings},
+		"$max": bson.M{"feedback_at": at},
+	}))
+}
+
+func (r *minionSessionRepository) MarkFeedbackRead(ctx context.Context, sessionID uuid.UUID, at time.Time) error {
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{
+		"$set":   bson.M{"feedback_read_at": at},
+		"$unset": bson.M{"feedback_errors": "", "feedback_warnings": "", "feedback_unread": ""},
+	}))
 }
 
 func (r *minionSessionRepository) SetMaxTasks(ctx context.Context, sessionID uuid.UUID, max *int) error {

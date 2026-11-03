@@ -72,6 +72,44 @@ export const MinionSessionFields = graphql(`
     maxTasksSettable
     maxTasksPending
     maxTasksNotTaken
+    feedbackErrors
+    feedbackWarnings
+    feedbackAt
+    feedbackReadAt
+  }
+`)
+
+export const MinionFeedbackFields = graphql(`
+  fragment MinionFeedbackFields on MinionFeedback {
+    id
+    level
+    msg
+    code
+    taskId
+    at
+    count
+    receivedAt
+    unread
+  }
+`)
+
+// A session's feedback, newest first, a page at a time.
+export const MinionFeedbackQuery = graphql(`
+  query MinionFeedback($sessionId: ID!, $level: String, $search: String, $after: String, $first: Int) {
+    minionFeedback(sessionId: $sessionId, level: $level, search: $search, after: $after, first: $first) {
+      entries {
+        ...MinionFeedbackFields
+      }
+      next
+    }
+  }
+`)
+
+export const MarkMinionFeedbackReadMutation = graphql(`
+  mutation MarkMinionFeedbackRead($id: ID!) {
+    markMinionFeedbackRead(id: $id) {
+      ...MinionSessionFields
+    }
   }
 `)
 

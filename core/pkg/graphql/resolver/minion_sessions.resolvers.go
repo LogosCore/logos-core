@@ -62,6 +62,11 @@ func (r *mutationResolver) SetMinionSessionAddress(ctx context.Context, id strin
 	return r.MinionSessionResolver.SetMinionSessionAddress(ctx, id, address)
 }
 
+// MarkMinionFeedbackRead is the resolver for the markMinionFeedbackRead field.
+func (r *mutationResolver) MarkMinionFeedbackRead(ctx context.Context, id string) (*model.MinionSession, error) {
+	return r.MinionSessionResolver.MarkMinionFeedbackRead(ctx, id)
+}
+
 // SetMinionSessionMaxTasks is the resolver for the setMinionSessionMaxTasks field.
 func (r *mutationResolver) SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionMaxTasks(ctx, id, max)
@@ -70,6 +75,11 @@ func (r *mutationResolver) SetMinionSessionMaxTasks(ctx context.Context, id stri
 // SetMinionSessionsLayout is the resolver for the setMinionSessionsLayout field.
 func (r *mutationResolver) SetMinionSessionsLayout(ctx context.Context, layout *model.MinionSessionsLayoutInput) (*model.MinionSessionsLayout, error) {
 	return r.MinionSessionResolver.SetMinionSessionsLayout(ctx, layout)
+}
+
+// MinionFeedback is the resolver for the minionFeedback field.
+func (r *queryResolver) MinionFeedback(ctx context.Context, sessionID string, level *string, search *string, after *string, first *int) (*model.MinionFeedbackPage, error) {
+	return r.MinionSessionResolver.MinionFeedback(ctx, sessionID, level, search, after, first)
 }
 
 // MinionSessions is the resolver for the minionSessions field.

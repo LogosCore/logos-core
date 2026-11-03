@@ -86,6 +86,10 @@ type MinionTask struct {
 	// DataProblem is the first part whose data does not fit the result's
 	// shape, and why: the data is then shown raw.
 	DataProblem string `bson:"data_problem,omitempty" json:"data_problem,omitempty"`
+	// FeedbackErrors and FeedbackWarnings count the feedback its minion
+	// sent about it (models.MinionFeedback): a task list marks it by them.
+	FeedbackErrors   int `bson:"feedback_errors,omitempty" json:"feedback_errors,omitempty"`
+	FeedbackWarnings int `bson:"feedback_warnings,omitempty" json:"feedback_warnings,omitempty"`
 	// DataParts counts the parts with data: a client showing the data
 	// reads it again when it grows (Parts grows with listing pieces too).
 	DataParts int `bson:"data_parts,omitempty" json:"data_parts,omitempty"`

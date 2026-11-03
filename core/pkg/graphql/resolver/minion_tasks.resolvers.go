@@ -16,6 +16,11 @@ import (
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
+// Feedback is the resolver for the feedback field.
+func (r *minionTaskResolver) Feedback(ctx context.Context, obj *model.MinionTask) ([]*model.MinionFeedback, error) {
+	return r.MinionTaskResolver.Feedback(ctx, obj)
+}
+
 // Output is the resolver for the output field.
 func (r *minionTaskResolver) Output(ctx context.Context, obj *model.MinionTask) (string, error) {
 	out, err := r.MinionTaskResolver.Output(ctx, obj.ID)

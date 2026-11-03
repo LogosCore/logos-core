@@ -70,6 +70,7 @@ type operationResolver struct {
 	markRepo       repository.IMinionSessionMarkRepository  // needed for cascade delete
 	minionTaskRepo repository.IMinionTaskRepository         // needed for cascade delete
 	fsEntryRepo    repository.IFsEntryRepository            // needed for cascade delete
+	feedbackRepo   repository.IMinionFeedbackRepository     // needed for cascade delete
 	minionFiles    MinionFileCleanup                        // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
@@ -174,6 +175,13 @@ type MinionFileCleanup interface {
 func WithMinionFiles(files MinionFileCleanup) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.minionFiles = files
+	}
+}
+
+// WithMinionFeedbackRepo adds minions' feedback for cascade delete.
+func WithMinionFeedbackRepo(repo repository.IMinionFeedbackRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.feedbackRepo = repo
 	}
 }
 
@@ -383,6 +391,11 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.fsEntryRepo != nil {
 		if err := r.fsEntryRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's file browser snapshots: %w", err)
+		}
+	}
+	if r.feedbackRepo != nil {
+		if err := r.feedbackRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's minion feedback: %w", err)
 		}
 	}
 

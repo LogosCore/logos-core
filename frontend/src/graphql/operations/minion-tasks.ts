@@ -34,6 +34,8 @@ export const MinionTaskFields = graphql(`
     dataTruncated
     dataProblem
     missingParts
+    feedbackErrors
+    feedbackWarnings
     file {
       id
       name
@@ -84,6 +86,19 @@ export const MinionTaskOutputQuery = graphql(`
       output
       outputUtf8
       data
+    }
+  }
+`)
+
+// What its minion said of a task as feedback (the latest 20), read apart
+// from its output: it comes with the session's feedback, not its parts.
+export const MinionTaskFeedbackQuery = graphql(`
+  query MinionTaskFeedback($id: ID!) {
+    minionTask(id: $id) {
+      id
+      feedback {
+        ...MinionFeedbackFields
+      }
     }
   }
 `)

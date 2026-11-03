@@ -39,6 +39,10 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionMaxTasks sets the operator's limit of tasks at once,
 	// which core sends the minion (the outbox) until it says it has it.
 	SetMinionSessionMaxTasks(ctx context.Context, id string, max int) (*model.MinionSession, error)
+	// MinionFeedback is a session's feedback, a page at a time;
+	// MarkMinionFeedbackRead marks it read for everyone.
+	MinionFeedback(ctx context.Context, sessionID string, level, search, after *string, first *int) (*model.MinionFeedbackPage, error)
+	MarkMinionFeedbackRead(ctx context.Context, id string) (*model.MinionSession, error)
 	// RunningTasks is MinionSession.runningTasks: its tasks the minion has
 	// and has not ended.
 	RunningTasks(ctx context.Context, s *model.MinionSession) (int, error)
@@ -69,6 +73,7 @@ type minionSessionResolver struct {
 	bus           eventbus.IEventBus
 	tasks         SessionTasks
 	limits        MaxTasksSetter
+	feedback      repository.IMinionFeedbackRepository
 }
 
 // SessionTasks counts a session's tasks under way (the minion task
@@ -86,9 +91,10 @@ type MaxTasksSetter interface {
 func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, operationRepo repository.IOperationRepository,
 	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
 	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
-	builds repository.IBuildRepository, bus eventbus.IEventBus, tasks SessionTasks, limits MaxTasksSetter) IMinionSessionResolver {
+	builds repository.IBuildRepository, bus eventbus.IEventBus, tasks SessionTasks, limits MaxTasksSetter,
+	feedback repository.IMinionFeedbackRepository) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
-		reservations: reservations, marks: marks, builds: builds, bus: bus, tasks: tasks, limits: limits}
+		reservations: reservations, marks: marks, builds: builds, bus: bus, tasks: tasks, limits: limits, feedback: feedback}
 }
 
 func (r *minionSessionResolver) Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error) {
@@ -684,6 +690,8 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		out.Conn = &conn
 	}
 	out.MaxTasks, out.MaxTasksSettable = s.MaxTasks, s.MaxTasksSettable
+	out.FeedbackErrors, out.FeedbackWarnings = s.FeedbackErrors, s.FeedbackWarnings
+	out.FeedbackAt, out.FeedbackReadAt = timePtr(s.FeedbackAt), timePtr(s.FeedbackReadAt)
 	out.MaxTasksPending, out.MaxTasksNotTaken = s.MaxTasksDue(), s.MaxTasksNotTaken()
 	out.ConnKind, out.ConnName, out.ConnCount = strPtr(s.ConnKind), strPtr(s.ConnName), s.ConnCount
 	out.ConnChanges = make([]*model.MinionConnChange, len(s.ConnChanges))

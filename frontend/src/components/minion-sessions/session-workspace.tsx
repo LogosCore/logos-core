@@ -1,18 +1,18 @@
-import { useMemo } from "react"
-import { AArrowDownIcon, AArrowUpIcon, FolderTreeIcon, SquareTerminalIcon } from "lucide-react"
+import { useEffect, useMemo } from "react"
+import { FeedbackCounts } from "./feedback-parts"
+import { AArrowDownIcon, AArrowUpIcon, FolderTreeIcon, LoaderIcon, SquareTerminalIcon } from "lucide-react"
+import { preloadable, useLoaded, whenIdle } from "@/lib/preloadable"
 import { Button } from "@/components/ui/button"
 import { WorkPane } from "@/components/work-pane/work-pane"
 import { openTab, replaceTab, type WorkPaneTabs } from "@/components/work-pane/work-pane-tabs"
-import { FileBrowser } from "@/components/file-browser/file-browser"
 import { dropFileBrowserState, moveFileBrowserState, setFileBrowserState } from "@/components/file-browser/file-browser-state"
 import { ModuleIcon } from "@/components/modules/module-icon"
-import { DocumentIcon } from "@/components/wiki/document-icon"
+import { MarkIcon } from "./mark-icon"
 import { useFactoryIcons } from "@/graphql/hooks/builds"
 import { useMinionSession, useMinionSessions, useMinionSessionsLayout } from "@/graphql/hooks/minion-sessions"
 import { DEFAULT_PANE_TEXT, PANE_TEXT_SIZES, PaneTextContext, paneTextStyle } from "./pane-text"
 import { markColorVars, markRowClass } from "./session-mark-colors"
 import { SessionFire } from "./session-fire"
-import { SessionConsole } from "./session-console"
 import { fileBrowserTabId, workspaceTab, WorkspaceActionsContext, type WorkspaceActions } from "./workspace-tabs"
 
 // The lower half of the Sessions page: the sessions an operator works with,
@@ -28,6 +28,16 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
     const next = PANE_TEXT_SIZES[PANE_TEXT_SIZES.indexOf(textSize) + by]
     if (next !== undefined) setLayout({ ...layout, paneTextSize: next })
   }
+  // With tabs open, both panels' code once the browser is idle: a console or
+  // a file browser opened next then shows at once.
+  const hasTabs = tabs.ids.length > 0
+  useEffect(() => {
+    if (!hasTabs) return
+    return whenIdle(() => {
+      void consoleCode.load().catch(() => {})
+      void filesCode.load().catch(() => {})
+    })
+  }, [hasTabs])
   // A session's console and its file browser are one session: read once.
   const sessionIds = [...new Set(tabs.ids.map((id) => workspaceTab(id).sessionId))]
   const loaded = useMinionSessions(sessionIds)
@@ -143,12 +153,39 @@ function SessionTabLabel({ id }: { id: string }) {
       )}
       <span className="font-mono font-medium">{s.number}</span>
       {s.host && <span className="truncate">{s.host}</span>}
-      {(s.mark?.icon || s.mark?.emoji) && <DocumentIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} />}
+      {(s.mark?.icon || s.mark?.emoji) && <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} />}
+      {!files && <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />}
     </span>
   )
 }
 
+// A tab's panel, its code fetched the first time a tab needs it: the console
+// and the file browser are more than half the Sessions page's code, so a page
+// with no tab open does not wait for them. With tabs open, the kind the open
+// tab needs loads first, the other once the browser is idle
+// (SessionWorkspace).
+const consoleCode = preloadable(() => import("./session-console"))
+const filesCode = preloadable(() => import("@/components/file-browser/file-browser"))
+
 function SessionPanel({ id }: { id: string }) {
   const tab = workspaceTab(id)
-  return tab.kind === "files" ? <FileBrowser tabId={id} sessionId={tab.sessionId} /> : <SessionConsole sessionId={tab.sessionId} />
+  return tab.kind === "files" ? <FilesPanel tabId={id} sessionId={tab.sessionId} /> : <ConsolePanel sessionId={tab.sessionId} />
+}
+
+function ConsolePanel({ sessionId }: { sessionId: string }) {
+  const code = useLoaded(consoleCode)
+  return code ? <code.SessionConsole sessionId={sessionId} /> : <PanelLoading />
+}
+
+function FilesPanel({ tabId, sessionId }: { tabId: string; sessionId: string }) {
+  const code = useLoaded(filesCode)
+  return code ? <code.FileBrowser tabId={tabId} sessionId={sessionId} /> : <PanelLoading />
+}
+
+function PanelLoading() {
+  return (
+    <div className="flex flex-1 items-center justify-center text-muted-foreground">
+      <LoaderIcon className="size-4 animate-spin" />
+    </div>
+  )
 }

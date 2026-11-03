@@ -22,6 +22,8 @@ import {
   SetMinionSessionsLayoutDocument,
   SetMinionSessionAddressDocument,
   SetMinionSessionMaxTasksDocument,
+  MinionFeedbackDocument,
+  MarkMinionFeedbackReadDocument,
   MinionSessionRunningTasksDocument,
   SetMinionSessionArchivedDocument,
   SetMinionSessionsArchivedDocument,
@@ -65,6 +67,7 @@ export const minionSessionKeys = {
   detail: (id: string) => [...minionSessionKeys.all, "detail", id] as const,
   connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
   runningTasks: (id: string, rev: number) => [...minionSessionKeys.all, "running-tasks", id, rev] as const,
+  feedback: (id: string) => [...minionSessionKeys.all, "feedback", id] as const,
 }
 
 // How often a list with a filter on the clock ("seen within 5m") refetches:
@@ -245,6 +248,43 @@ export function useSetMinionSessionAddress() {
   return useMutation({
     mutationFn: (vars: { id: string; address: string | null }) => graphqlClient(SetMinionSessionAddressDocument, vars),
     onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.setMinionSessionAddress),
+  })
+}
+
+/** How a session's feedback is asked for: one level, a word of its message or code. */
+export interface FeedbackFilter {
+  level: "" | "warning" | "error"
+  search: string
+}
+
+/**
+ * A session's feedback, newest first, a page at a time: read again when
+ * more came (the session's feedbackAt) or it was marked read.
+ */
+export function useMinionFeedback(sessionId: string, filter: FeedbackFilter, feedbackAt: string | null | undefined, readAt: string | null | undefined) {
+  return useInfiniteQuery({
+    queryKey: [...minionSessionKeys.feedback(sessionId), filter, feedbackAt ?? "", readAt ?? ""],
+    queryFn: ({ pageParam }) =>
+      graphqlClient(MinionFeedbackDocument, {
+        sessionId,
+        level: filter.level || null,
+        search: filter.search.trim() || null,
+        after: pageParam,
+        first: 200,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.minionFeedback.next ?? null,
+    enabled: sessionId !== "",
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Marks the session's feedback read, for everyone in the operation. */
+export function useMarkMinionFeedbackRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => graphqlClient(MarkMinionFeedbackReadDocument, { id }),
+    onSuccess: (data) => applyMinionSessionEvent(queryClient, "UPDATED", data.markMinionFeedbackRead),
   })
 }
 

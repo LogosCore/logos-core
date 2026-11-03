@@ -86,6 +86,8 @@ var MinionSessionColumns = map[string]MinionSessionColumn{
 	// Missing for most sessions: false and 0 (the filters count them so).
 	"persisted": {Field: "persisted", Kind: SessionColumnBool, Sortable: true},
 	"restarts":  {Field: "restart_count", Kind: SessionColumnNumber, Sortable: true},
+	// Its unread feedback, errors and warnings together.
+	"feedback": {Field: "feedback_unread", Kind: SessionColumnNumber, Sortable: true},
 }
 
 // Filter operations (GraphQL MinionSessionFilterOp).

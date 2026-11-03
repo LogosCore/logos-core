@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils"
 import { lineOf, type CommandDef } from "./command-line"
 import { clock, useTaskActions, type Task } from "./task-actions"
 import { StateIcon } from "./task-state"
+import { FeedbackLevelIcon } from "./feedback-parts"
+import { feedbackSummary } from "./feedback-values"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
 
@@ -185,6 +187,11 @@ function TaskRow({
         <StateIcon t={t} held={held} className="self-center" />
         <span className="shrink-0 font-mono text-muted-foreground tabular-nums">{clock(t.queuedAt)}</span>
         <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
+        {t.feedbackErrors + t.feedbackWarnings > 0 && (
+          <span className="self-center" title={`What the minion said of it: ${feedbackSummary(t.feedbackErrors, t.feedbackWarnings)}`}>
+            <FeedbackLevelIcon level={t.feedbackErrors > 0 ? "error" : "warning"} />
+          </span>
+        )}
       </ContextMenuTrigger>
       <ContextMenuContent>
         <TaskMenu task={t} line={line} canWrite={canWrite} onQueued={onQueued} />

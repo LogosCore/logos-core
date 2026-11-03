@@ -28,6 +28,8 @@ import (
 // answered (models.MinionTask; pkg/minionsync delivers them).
 type IMinionTaskResolver interface {
 	MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error)
+	// Feedback is MinionTask.feedback: what its minion said of it.
+	Feedback(ctx context.Context, t *model.MinionTask) ([]*model.MinionFeedback, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	QueueMinionTask(ctx context.Context, sessionID, command string, args any) (*model.MinionTask, error)
 	CancelMinionTask(ctx context.Context, id string) (*model.MinionTask, error)
@@ -103,6 +105,8 @@ type minionTaskResolver struct {
 	// limits sets a session's max tasks, for max_tasks; nil, sessions have
 	// none.
 	limits MaxTasksSetter
+	// feedback is minions' feedback, a task's on the task; nil, none.
+	feedback repository.IMinionFeedbackRepository
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -118,10 +122,10 @@ type TaskFiles interface {
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
 	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector,
-	limits MaxTasksSetter) IMinionTaskResolver {
+	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
 		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
-		limits: limits}
+		limits: limits, feedback: feedback}
 }
 
 const (
@@ -719,6 +723,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
 		Result: strPtr(t.Result), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
+		FeedbackErrors: t.FeedbackErrors, FeedbackWarnings: t.FeedbackWarnings,
 	}
 	if name, ok := names[t.IssuedBy]; ok {
 		m.IssuedByName = &name

@@ -6,6 +6,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import type { NavigationItem } from "@/navigation"
+import { preloadPage } from "@/lib/page-loaders"
 
 export function NavMain({ items }: { items: NavigationItem[] }) {
   const { pathname } = useLocation()
@@ -29,7 +30,9 @@ export function NavMain({ items }: { items: NavigationItem[] }) {
                     rel="noreferrer noopener"
                   />
                 ) : (
-                  <Link to={item.url} />
+                  // The page's code is fetched as the pointer or focus
+                  // reaches its link: the click then opens it at once.
+                  <Link to={item.url} onPointerEnter={() => preloadPage(item.url)} onFocus={() => preloadPage(item.url)} />
                 )
               }
             >

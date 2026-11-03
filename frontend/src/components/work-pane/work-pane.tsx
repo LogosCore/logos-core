@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react"
 import { XIcon } from "lucide-react"
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core"
 import { SortableContext, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable"
@@ -21,9 +21,10 @@ import { activateTab, closeTabs, moveTab, tabsToClose, type WorkPaneTabs } from 
 // The tab strip scrolls sideways when the tabs do not fit, and brings the
 // one in front into view. A tab closes by its ✕ or a middle click; its
 // context menu closes it, the others, those to its right or all; a drag
-// reorders them; the arrow keys, Home and End move between them. Every
-// panel stays mounted, the ones behind hidden, so what is going on in a
-// tab (a console, later) carries on behind the others.
+// reorders them; the arrow keys, Home and End move between them. A panel
+// mounts the first time its tab is in front, and stays mounted from then on,
+// hidden behind the others, so what is going on in it carries on: a pane
+// with many tabs renders only the one in front when it opens.
 
 export interface WorkPaneTab {
   id: string
@@ -66,6 +67,9 @@ export function WorkPane({
   end?: ReactNode
 }) {
   const strip = useRef<HTMLDivElement>(null)
+  // The tabs that have been in front: their panels are mounted.
+  const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set(state.active ? [state.active] : []))
+  if (state.active && !shown.has(state.active)) setShown(new Set([...shown, state.active]))
   // A drag only past 6px: a click brings the tab to the front.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -136,7 +140,7 @@ export function WorkPane({
           hidden={tab.id !== state.active}
           className="flex min-h-0 flex-1 flex-col"
         >
-          {panel(tab.id)}
+          {shown.has(tab.id) && panel(tab.id)}
         </div>
       ))}
     </div>

@@ -31,6 +31,7 @@ describe("recordModalOf", () => {
   it("reads a session and its tab", () => {
     expect(recordModalOf(params("session=s-1"))).toEqual({ kind: "session", id: "s-1" })
     expect(recordModalOf(params("session=s-1&sessionTab=json"))).toEqual({ kind: "session", id: "s-1", tab: "json" })
+    expect(recordModalOf(params("session=s-1&sessionTab=feedback"))).toEqual({ kind: "session", id: "s-1", tab: "feedback" })
     expect(recordModalOf(params("session=s-1&sessionTab=pipeline"))).toEqual({ kind: "session", id: "s-1" })
     expect(withRecordModal(params("view=archived"), { kind: "session", id: "s-1", tab: "json" }).toString()).toBe(
       "view=archived&session=s-1&sessionTab=json",

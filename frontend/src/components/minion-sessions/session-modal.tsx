@@ -15,7 +15,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { platformLabel } from "@/components/builds/build-values"
 import { KindName, ModuleIcon } from "@/components/modules/module-icon"
-import { DocumentIcon } from "@/components/wiki/document-icon"
+import { MarkIcon } from "./mark-icon"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { useFactoryIcons } from "@/graphql/hooks/builds"
 import { useMinionSession } from "@/graphql/hooks/minion-sessions"
@@ -29,6 +29,8 @@ import { cn } from "@/lib/utils"
 import { formatAgo, formatAgoExact, formatInterval, lateness } from "./sessions-layout"
 import { ConnectionsCard } from "./session-connections"
 import { MaxTasksValue } from "./max-tasks"
+import { FeedbackCounts } from "./feedback-parts"
+import { FeedbackView } from "./feedback-view"
 
 // One minion session (?session=<id>[&sessionTab=]), over any page: Overview,
 // what it is and where it runs, in cards; JSON, its record as the API gives
@@ -73,7 +75,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
     <Tabs
       value={tab}
       onValueChange={(v) => {
-        if (v === "overview" || v === "json") open({ kind: "session", id: s.id, tab: v })
+        if (v === "overview" || v === "feedback" || v === "json") open({ kind: "session", id: s.id, tab: v })
       }}
       className="min-h-0 flex-1 gap-0"
     >
@@ -83,7 +85,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
           <RecordModalTitle>
             <span className="inline-flex items-center gap-2">
               {s.state === "RESERVED" ? "Reserved session" : `Session ${s.number}`}
-              {(s.mark?.icon || s.mark?.emoji) && <DocumentIcon icon={s.mark.icon} emoji={s.mark.emoji} size={18} />}
+              {(s.mark?.icon || s.mark?.emoji) && <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={18} />}
             </span>
           </RecordModalTitle>
           {s.archived && <Badge>Archived</Badge>}
@@ -92,6 +94,10 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
         <div className="flex items-center gap-2 sm:ml-auto">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="feedback">
+              Feedback
+              <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />
+            </TabsTrigger>
             <TabsTrigger value="json">JSON</TabsTrigger>
           </TabsList>
         </div>
@@ -111,6 +117,10 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
             {extras(s).length > 0 && <ExtrasCard s={s} />}
           </CardColumns>
         </RecordModalBody>
+      </TabsContent>
+
+      <TabsContent value="feedback" className="flex min-h-0 flex-col">
+        <FeedbackView s={s} />
       </TabsContent>
 
       <TabsContent value="json" className="flex min-h-0 flex-col px-4 py-4">

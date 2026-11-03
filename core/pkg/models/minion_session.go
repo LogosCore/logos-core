@@ -100,10 +100,20 @@ type MinionSession struct {
 	// the session with the build's own included; nil until one is set.
 	// MaxTasksSends counts the messages that carried it unanswered: at
 	// MaxTasksTries core stops, the minion not taking it.
-	MaxTasks         *int `bson:"max_tasks,omitempty" json:"max_tasks,omitempty"`
-	MaxTasksSettable bool `bson:"max_tasks_settable,omitempty" json:"max_tasks_settable,omitempty"`
-	MaxTasksSet      *int `bson:"max_tasks_set,omitempty" json:"max_tasks_set,omitempty"`
-	MaxTasksSends    int  `bson:"max_tasks_sends,omitempty" json:"max_tasks_sends,omitempty"`
+	// FeedbackErrors and FeedbackWarnings count the feedback its minion
+	// sent since an operator last marked it read (FeedbackReadAt), for
+	// everyone of the operation alike; FeedbackUnread is both, what the
+	// Sessions table sorts and filters by; FeedbackAt is when the latest
+	// came (MinionFeedback).
+	FeedbackErrors   int        `bson:"feedback_errors,omitempty" json:"feedback_errors,omitempty"`
+	FeedbackWarnings int        `bson:"feedback_warnings,omitempty" json:"feedback_warnings,omitempty"`
+	FeedbackUnread   int        `bson:"feedback_unread,omitempty" json:"feedback_unread,omitempty"`
+	FeedbackAt       *time.Time `bson:"feedback_at,omitempty" json:"feedback_at,omitempty"`
+	FeedbackReadAt   *time.Time `bson:"feedback_read_at,omitempty" json:"feedback_read_at,omitempty"`
+	MaxTasks         *int       `bson:"max_tasks,omitempty" json:"max_tasks,omitempty"`
+	MaxTasksSettable bool       `bson:"max_tasks_settable,omitempty" json:"max_tasks_settable,omitempty"`
+	MaxTasksSet      *int       `bson:"max_tasks_set,omitempty" json:"max_tasks_set,omitempty"`
+	MaxTasksSends    int        `bson:"max_tasks_sends,omitempty" json:"max_tasks_sends,omitempty"`
 	// Connected: a persistent connection serving the session is open. Core
 	// holds the connections (minionsync); it writes this when the session's
 	// first opens and its last closes, and clears it as it starts, so the

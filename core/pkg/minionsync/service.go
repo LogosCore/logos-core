@@ -81,6 +81,9 @@ type Service struct {
 	// files takes the chunks of files minions send (files.go); nil takes
 	// none.
 	files Files
+	// feedback keeps minions' warnings and errors (feedback.go); nil drops
+	// them.
+	feedback repository.IMinionFeedbackRepository
 	// streams relays the files minions stream (streams.go); nil relays
 	// none.
 	streams Streams
@@ -505,6 +508,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	var wantTasks bool
 	var wantMax *uint64
 	var pulls []pull
+	var feedback []protocol.FeedbackItem
 	// The streams whose chunks this reply answers (streams.go).
 	answered := map[string]bool{}
 	for i, raw := range msg.Items {
@@ -563,6 +567,14 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			s.logger.Info("minion moved to another connection", zap.String("session_id", session.SessionID.String()),
 				zap.Int("from", session.Conn), zap.Int("to", to), zap.String("reason", u.Reason))
 			session.Conn, session.ConnKind, session.ConnMaxMessage = to, conn.Kind, conn.MaxMessage
+		case protocol.ItemFeedback:
+			// Kept after the loop, all of the message's at once.
+			f, rErr := readFeedback(raw)
+			if rErr != nil {
+				out, err = errItem(protocol.ErrItemBadMessage, rErr.Error(), i)
+				break
+			}
+			feedback = append(feedback, f)
 		case protocol.ItemMaxTasks:
 			// The minion's limit of tasks at once, in answer to core's or
 			// its own: recorded, nothing to answer. Its get_tasks follow it.
@@ -633,6 +645,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		// An err about an item that said a ctx carries it back: a minion
 		// that keeps nothing finds there what to end or clean up.
 		items = append(items, echoCtx(out, i, protocol.ItemCtx(raw))...)
+	}
+	// The message's feedback: kept, its counts on the session, which the
+	// update published below carries to the Sessions table.
+	if _, err := s.takeFeedback(ctx, session, feedback); err != nil {
+		return nil, err
 	}
 	if s.tasks != nil {
 		// After the answers, what the outbox has (cancels whenever core has

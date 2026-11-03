@@ -1,4 +1,5 @@
 import { lazy, useEffect, useRef, type ComponentType } from "react"
+import { pageLoaders } from "@/lib/page-loaders"
 import { createBrowserRouter, Navigate, Route, Routes, useParams, useSearchParams } from "react-router"
 import { RouterProvider } from "react-router/dom"
 import { QueryProvider } from "@/providers/query-provider"
@@ -23,22 +24,24 @@ function page<K extends string>(
   return lazy(() => load().then((m) => ({ default: m[name] })))
 }
 
-const LoginPage = page(() => import("@/pages/login"), "LoginPage")
-const EnrollPage = page(() => import("@/pages/enroll"), "EnrollPage")
-const OperationsPage = page(() => import("@/pages/operations"), "OperationsPage")
-const UsersPage = page(() => import("@/pages/users"), "UsersPage")
-const ModulesPage = page(() => import("@/pages/modules"), "ModulesPage")
-const ModuleDetailPage = page(() => import("@/pages/module-detail"), "ModuleDetailPage")
-const SkillsPage = page(() => import("@/pages/skills"), "SkillsPage")
-const WikiPage = page(() => import("@/pages/wiki"), "WikiPage")
-const WikiPrintPage = page(() => import("@/pages/wiki-print"), "WikiPrintPage")
-const FindingsPage = page(() => import("@/pages/findings"), "FindingsPage")
-const TasksPage = page(() => import("@/pages/tasks"), "TasksPage")
-const EndpointsPage = page(() => import("@/pages/endpoints"), "EndpointsPage")
-const BuildsPage = page(() => import("@/pages/builds"), "BuildsPage")
-const MinionSessionsPage = page(() => import("@/pages/minion-sessions"), "MinionSessionsPage")
-const AgentsPage = page(() => import("@/pages/agents"), "AgentsPage")
-const TimelinePage = page(() => import("@/pages/timeline"), "TimelinePage")
+// Their code is in lib/page-loaders.ts, which the sidebar fetches ahead of a
+// visit with.
+const LoginPage = page(pageLoaders["/login"], "LoginPage")
+const EnrollPage = page(pageLoaders["/enroll"], "EnrollPage")
+const OperationsPage = page(pageLoaders["/operations"], "OperationsPage")
+const UsersPage = page(pageLoaders["/users"], "UsersPage")
+const ModulesPage = page(pageLoaders["/modules"], "ModulesPage")
+const ModuleDetailPage = page(pageLoaders["/modules/:instance"], "ModuleDetailPage")
+const SkillsPage = page(pageLoaders["/skills"], "SkillsPage")
+const WikiPage = page(pageLoaders["/wiki"], "WikiPage")
+const WikiPrintPage = page(pageLoaders["/wiki/print"], "WikiPrintPage")
+const FindingsPage = page(pageLoaders["/findings"], "FindingsPage")
+const TasksPage = page(pageLoaders["/tasks"], "TasksPage")
+const EndpointsPage = page(pageLoaders["/endpoints"], "EndpointsPage")
+const BuildsPage = page(pageLoaders["/builds"], "BuildsPage")
+const MinionSessionsPage = page(pageLoaders["/sessions"], "MinionSessionsPage")
+const AgentsPage = page(pageLoaders["/agents"], "AgentsPage")
+const TimelinePage = page(pageLoaders["/timeline"], "TimelinePage")
 
 /**
  * Where a build or an endpoint had its own page (/builds/:id,

@@ -136,6 +136,9 @@ type IMinionTaskRepository interface {
 	// SetDataProblem records why the task's data does not fit, unless one is
 	// recorded.
 	SetDataProblem(ctx context.Context, taskID uuid.UUID, problem string) (*models.MinionTask, error)
+	// AddFeedback counts new feedback about one of the session's tasks: the
+	// task after; IsNotFound when it is not the session's.
+	AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings int) (*models.MinionTask, error)
 
 	// Streams (minionstreams). StreamAnnounce records a stream_file
 	// task's announcement, once: IsNotFound for a task that is not the
@@ -630,6 +633,18 @@ func (r *minionTaskRepository) SetDataProblem(ctx context.Context, taskID uuid.U
 	if IsNotFound(err) {
 		return r.FindByTaskID(ctx, taskID)
 	}
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) AddFeedback(ctx context.Context, sessionID, taskID uuid.UUID, errors, warnings int) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID}).Apply(qmgo.Change{
+		Update:    bson.M{"$inc": bson.M{"feedback_errors": errors, "feedback_warnings": warnings, "rev": 1}},
+		ReturnNew: true,
+	}, &after)
 	if err != nil {
 		return nil, err
 	}

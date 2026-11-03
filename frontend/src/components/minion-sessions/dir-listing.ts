@@ -84,7 +84,11 @@ export function crumbs(path: string, sep: "/" | "\\"): Crumb[] {
 }
 
 /** Folders first (a link may lead to one: with them), then by name. */
+// One collator for every sort: localeCompare makes one per comparison, which a
+// listing of thousands pays for tens of thousands of times.
+const names = new Intl.Collator()
+
 export function sortEntries(entries: readonly DirEntry[]): DirEntry[] {
   const rank = (e: DirEntry) => (e.type === "dir" ? 0 : e.type === "link" ? 1 : 2)
-  return [...entries].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+  return [...entries].sort((a, b) => rank(a) - rank(b) || names.compare(a.name, b.name))
 }

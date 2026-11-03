@@ -552,6 +552,8 @@ models:
         resolver: true         # map[string]any -> JSON-encoded string
   MinionTask:
     fields:
+      feedback:
+        resolver: true
       # Read from the task's parts only when a query asks: a list asks for
       # the rest, the selected task for these.
       output:

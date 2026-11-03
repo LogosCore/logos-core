@@ -97,7 +97,8 @@ import { SessionCell } from "./session-cells"
 import { SessionFire } from "./session-fire"
 import { SessionFilterEditor } from "./session-filter-editor"
 import { SessionDescriptionDialog } from "./session-description-dialog"
-import { SessionMarkDialog, type SessionMarkTarget } from "./session-mark-dialog"
+import type { SessionMarkTarget } from "./session-mark-dialog"
+import { preloadable, useLoaded } from "@/lib/preloadable"
 import { markColorVars, markRowClass } from "./session-mark-colors"
 import {
   DEFAULT_SESSIONS_LAYOUT,
@@ -496,7 +497,9 @@ export function SessionsDatatable({
       </div>
 
       <SessionDescriptionDialog session={describing} onClose={() => setDescribing(null)} />
-      <SessionMarkDialog target={marking} onClose={() => setMarking(null)} />
+      {/* Its code (the icon picker and the icon catalogs) the first time a
+          mark is set, then kept mounted so it closes as it opened. */}
+      {(marking !== null || markDialogCode.current()) && <MarkDialog target={marking} onClose={() => setMarking(null)} />}
       <Popover open={filterTarget !== null} onOpenChange={(open) => !open && setFilterTarget(null)}>
         <PopoverContent anchor={filterTarget?.anchor} align="start" className="w-72">
           {filterTarget && filterColumn && (
@@ -1038,4 +1041,11 @@ function SelectionBar({
       </Button>
     </span>
   )
+}
+
+const markDialogCode = preloadable(() => import("./session-mark-dialog"))
+
+function MarkDialog({ target, onClose }: { target: SessionMarkTarget | null; onClose: () => void }) {
+  const code = useLoaded(markDialogCode)
+  return code && <code.SessionMarkDialog target={target} onClose={onClose} />
 }

@@ -313,6 +313,19 @@ func TestIntegrationMinionTaskUploads(t *testing.T) {
 	if got, _ := repo.SetDataProblem(ctx, task.TaskID, "second"); got.DataProblem != "first" {
 		t.Fatalf("a second problem: %q", got.DataProblem)
 	}
+
+	// Feedback about it: counted, its rev bumped; not about another session's.
+	before, _ := repo.FindByTaskID(ctx, task.TaskID)
+	got, err := repo.AddFeedback(ctx, session, task.TaskID, 1, 2)
+	if err != nil || got.FeedbackErrors != 1 || got.FeedbackWarnings != 2 || got.Rev != before.Rev+1 {
+		t.Fatalf("feedback: %+v %v", got, err)
+	}
+	if got, _ = repo.AddFeedback(ctx, session, task.TaskID, 0, 1); got.FeedbackErrors != 1 || got.FeedbackWarnings != 3 {
+		t.Fatalf("more feedback: %d errors, %d warnings", got.FeedbackErrors, got.FeedbackWarnings)
+	}
+	if _, err := repo.AddFeedback(ctx, uuid.New(), task.TaskID, 1, 0); !IsNotFound(err) {
+		t.Fatalf("another session's: %v", err)
+	}
 }
 
 // A stream: announced once, for a file_stream task of the session; a
