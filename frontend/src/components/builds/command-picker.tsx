@@ -1,6 +1,7 @@
 import { SettingsSection } from "@/components/ui/settings-rows"
 import { TransferList, type TransferItem } from "@/components/ui/transfer-list"
 import type { Command } from "@/components/builds/build-values"
+import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
 
 /**
  * The build form's commands: what the minion will be able to do, and nothing
@@ -36,7 +37,13 @@ export function CommandPicker({
       id: c.id,
       label: c.label,
       hint: c.id,
-      description: [c.description, c.params.length > 0 ? `Takes ${c.params.map((f) => f.key).join(", ")}.` : ""]
+      description: [
+        c.description,
+        c.params.length > 0 ? `Takes ${c.params.map((f) => f.key).join(", ")}.` : "",
+        // Where it works, when not over every kind: a minion on another is
+        // switched first.
+        commandKindsNote(c.kinds)?.text.concat(".") ?? "",
+      ]
         .filter(Boolean)
         .join("\n"),
       locked: c.required,

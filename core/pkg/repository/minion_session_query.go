@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -137,14 +138,22 @@ func columnFilter(f models.MinionSessionFilter, now time.Time) bson.M {
 	case models.SessionFilterNever:
 		return bson.M{field: nil}
 	case models.SessionFilterLive:
-		return bson.M{"late_at": bson.M{"$gt": now}}
+		// On time by its schedule, or connected now: a persistent connection
+		// open says the minion is there (a bind-persistent one has no
+		// schedule at all), as the list shows it.
+		return bson.M{"$or": bson.A{bson.M{"late_at": bson.M{"$gt": now}}, bson.M{"connected": true}}}
 	case models.SessionFilterLate:
 		// Late, not lost yet (or with no lost_at: from before core kept one).
-		return bson.M{"late_at": bson.M{"$lte": now}, "$or": bson.A{
-			bson.M{"lost_at": bson.M{"$gt": now}}, bson.M{"lost_at": nil},
-		}}
+		// Never a connected one, nor a minion on a bind-persistent
+		// connection: its connection says whether it is there
+		// (models.LateBySchedule).
+		return bson.M{"late_at": bson.M{"$lte": now}, "connected": bson.M{"$ne": true},
+			"conn_kind": bson.M{"$ne": protocol.KindBindPersistent}, "$or": bson.A{
+				bson.M{"lost_at": bson.M{"$gt": now}}, bson.M{"lost_at": nil},
+			}}
 	case models.SessionFilterLost:
-		return bson.M{"lost_at": bson.M{"$lte": now}}
+		return bson.M{"lost_at": bson.M{"$lte": now}, "connected": bson.M{"$ne": true},
+			"conn_kind": bson.M{"$ne": protocol.KindBindPersistent}}
 	}
 	// Validate refuses anything else.
 	return bson.M{"_id": nil}

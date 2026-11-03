@@ -259,9 +259,17 @@ func TestBindFirstCallOpensSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Staged || s.ConnKind != protocol.KindBindCall || s.Hello.Host != "www01" || s.LastSeenAt != nil && s.LastSeenAt.IsZero() ||
-		s.PeerAddress != "203.0.113.7" {
+	if s.Staged || s.ConnKind != protocol.KindBindCall || s.Hello.Host != "www01" || s.PeerAddress != "203.0.113.7" {
 		t.Fatalf("session %+v", s)
+	}
+	// The page's hello answered core's own call: it is the session's first
+	// check-in, so a page given nothing to do for a day stays open.
+	if s.LastSeenAt == nil || s.Closed(s.CreatedAt.Add(48*time.Hour)) {
+		t.Fatalf("not checked in by its hello: last seen %v", s.LastSeenAt)
+	}
+	// Every call says core's time.
+	if at := b.page.calls[0].At; at == 0 || time.Since(time.Unix(int64(at), 0)) > time.Minute {
+		t.Fatalf("the call's at %d", at)
 	}
 	// Nothing waited: no call under the session yet.
 	if n := b.page.callCount(); n != 1 {
@@ -558,7 +566,7 @@ func TestBindWakeCallsWhenAStreamMayGo(t *testing.T) {
 	streams := &lockedStreams{ack: protocol.AckItem{T: protocol.ItemAck, Xfer: xfer, Next: &next, Hold: true, Ctx: []byte("c")}}
 	b.svc.WithStreams(streams)
 	before := b.page.callCount()
-	b.svc.StreamRoom(*tg.SessionID)
+	b.svc.WakeStreams(*tg.SessionID)
 	time.Sleep(4 * bindWakeDelay)
 	if n := b.page.callCount() - before; n != 0 {
 		t.Fatalf("%d calls while the stream holds", n)
@@ -591,10 +599,10 @@ type lockedStreams struct {
 
 func (l *lockedStreams) set(hold bool) { l.mu.Lock(); l.ack.Hold = hold; l.mu.Unlock() }
 
-func (l *lockedStreams) Acks(context.Context, *models.MinionSession, map[string]bool) ([]protocol.AckItem, error) {
+func (l *lockedStreams) Acks(context.Context, *models.MinionSession, map[string]bool) ([]protocol.AckItem, bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return []protocol.AckItem{l.ack}, nil
+	return []protocol.AckItem{l.ack}, false, nil
 }
 
 // A long task (a walk) carried across calls: each part says where the

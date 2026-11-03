@@ -277,6 +277,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if command == protocol.CommandConnect || command == protocol.CommandDisconnect {
 		return r.runConnect(ctx, s, uid, values, command)
 	}
+	if err := overKind(ctx, s, commands[i]); err != nil {
+		return nil, err
+	}
 	if err := r.reachable(ctx, s); err != nil {
 		return nil, err
 	}
@@ -299,6 +302,19 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	r.publish(t)
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// overKind refuses a task of a command that does not work over the kind of
+// connection the session's minion uses (its build schema's kinds): an
+// operator switches the minion first. A session whose minion never said
+// its connection takes it.
+func overKind(ctx context.Context, s *models.MinionSession, c protocol.BuildCommand) error {
+	if s.ConnKind == "" || c.OverKind(s.ConnKind) {
+		return nil
+	}
+	return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf(
+		"%s works over %s connections; session #%d's minion uses connection %d, %s: switch it first",
+		c.ID, strings.Join(c.Kinds, " or "), s.Number, s.Conn, s.ConnKind))
 }
 
 // reachable refuses a task core could never deliver: a bind session (a

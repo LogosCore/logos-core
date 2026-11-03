@@ -114,6 +114,8 @@ export interface Command {
   default: boolean
   /** In every build of its targets: it cannot be unpicked. */
   required: boolean
+  /** The connection kinds it works over; empty: every kind. */
+  kinds: string[]
   /** What a task of the command takes, sorted. */
   params: FieldDef[]
 }
@@ -182,6 +184,7 @@ export function factoryKindsByName(
         targets: c.targets,
         default: c.default,
         required: c.required,
+        kinds: c.kinds,
         params: sorted(c.params),
       })),
     })

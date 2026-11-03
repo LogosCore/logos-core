@@ -191,7 +191,7 @@ func minion(t *testing.T, s *Service, session *models.MinionSession, body, xfer 
 	ctx := context.Background()
 	for i := 0; i < exchanges; i++ {
 		if a.Hold || *a.Next >= uint64(len(body)) {
-			acks, err := s.Acks(ctx, session, map[string]bool{})
+			acks, _, err := s.Acks(ctx, session, map[string]bool{})
 			if err != nil || len(acks) != 1 {
 				t.Fatalf("acks: %v %v", acks, err)
 			}
@@ -230,16 +230,11 @@ func announce(t *testing.T, s *Service, tasks *memTasks, session *models.MinionS
 // every byte, is the whole without hold.
 // wakes counts the sessions a Waker was told of.
 type wakes struct {
-	mu   sync.Mutex
-	of   []uuid.UUID
-	room int
+	mu sync.Mutex
+	of []uuid.UUID
 }
 
 func (w *wakes) WakeStreams(id uuid.UUID) { w.mu.Lock(); w.of = append(w.of, id); w.mu.Unlock() }
-
-func (w *wakes) StreamRoom(uuid.UUID) { w.mu.Lock(); w.room++; w.mu.Unlock() }
-
-func (w *wakes) rooms() int { w.mu.Lock(); defer w.mu.Unlock(); return w.room }
 
 func (w *wakes) count() int { w.mu.Lock(); defer w.mu.Unlock(); return len(w.of) }
 
@@ -272,14 +267,14 @@ func TestStream(t *testing.T) {
 	if n := <-done; n != int64(len(body)) || !bytes.Equal(got.Bytes(), body) {
 		t.Fatalf("read %d, equal %v", n, bytes.Equal(got.Bytes(), body))
 	}
-	acks, _ := s.Acks(context.Background(), session, map[string]bool{})
+	acks, _, _ := s.Acks(context.Background(), session, map[string]bool{})
 	if len(acks) != 1 || acks[0].Hold || *acks[0].Next != uint64(len(body)) || string(acks[0].Ctx) != "path=/var/big.iso" {
 		t.Fatalf("the end: %+v (last %+v)", acks, a)
 	}
-	// Each chunk the downloader took said there is room (a bind-call page
-	// is called for it).
-	if w.rooms() < 4 {
-		t.Fatalf("%d rooms for 4 chunks", w.rooms())
+	// The minion, holding once it sent all of it, is woken when the
+	// downloader has every byte: that ack ends its task.
+	if w.count() < 2 {
+		t.Fatalf("%d wakes: none once the downloader had it all", w.count())
 	}
 }
 
@@ -308,7 +303,7 @@ func TestStreamResumeNewestWins(t *testing.T) {
 	waitFor(t, "second downloader", func() bool { return tasks.get().Stream.Gen == 2 })
 	close(block)
 	<-first
-	acks, _ := s.Acks(context.Background(), session, map[string]bool{})
+	acks, _, _ := s.Acks(context.Background(), session, map[string]bool{})
 	if len(acks) != 1 || *acks[0].Next != uint64(from) || acks[0].Hold {
 		t.Fatalf("resume: %+v", acks)
 	}
@@ -321,17 +316,31 @@ func TestStreamResumeNewestWins(t *testing.T) {
 // A slow downloader holds the minion once it is a window ahead.
 func TestStreamWindow(t *testing.T) {
 	s, tasks, session, body, xfer := setup(t, 8*protocol.MaxChunkData)
+	w := &wakes{}
+	s.WithWaker(w)
 	a := announce(t, s, tasks, session, body, xfer)
 	release := make(chan struct{})
 	go func() {
 		_, _ = s.Read(context.Background(), tasks.t.TaskID, 0, int64(len(body)), func([]byte) error { <-release; return nil })
 	}()
 	waitFor(t, "downloader", func() bool { return tasks.get().Stream.Reader != "" })
+	attached := w.count()
 	a = minion(t, s, session, body, xfer, a, 6)
 	if st := tasks.get().Stream; !a.Hold || st.Want-st.Delivered > s.cfg.Window {
 		t.Fatalf("not held a window ahead: %+v, want %d delivered %d", a, st.Want, st.Delivered)
 	}
+	// Held while its downloader is there: soon, so a polling minion comes
+	// back quickly.
+	if _, soon, _ := s.Acks(context.Background(), session, map[string]bool{}); !soon {
+		t.Fatal("a held stream with its downloader there is not soon")
+	}
+	if w.count() != attached {
+		t.Fatalf("%d wakes before the downloader took anything", w.count()-attached)
+	}
+	// The downloader takes a chunk from the full window: the minion, told to
+	// hold, is woken.
 	close(release)
+	waitFor(t, "a wake for room", func() bool { return w.count() > attached })
 }
 
 func TestStreamLinkAndSweep(t *testing.T) {
@@ -390,7 +399,7 @@ func TestStreamLastChunkCounts(t *testing.T) {
 	if st := tasks.get().Stream; st.Delivered != int64(len(body)) {
 		t.Fatalf("delivered %d of %d", st.Delivered, len(body))
 	}
-	acks, _ := s.Acks(context.Background(), session, map[string]bool{})
+	acks, _, _ := s.Acks(context.Background(), session, map[string]bool{})
 	if len(acks) != 1 || acks[0].Hold || *acks[0].Next != uint64(len(body)) {
 		t.Fatalf("the end: %+v", acks)
 	}

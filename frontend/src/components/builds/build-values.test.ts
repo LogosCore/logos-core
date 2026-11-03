@@ -91,12 +91,13 @@ const schema: BuildSchemaFieldsFragment = {
       targets: ["dummy", "service"],
       default: false,
       required: true,
+      kinds: [],
       params: [field({ key: "jitter", type: "int", order: 2 }), field({ key: "interval", type: "duration", order: 1 })],
     },
-    { id: "hello", label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, params: [] },
-    { id: "ls", label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, params: [] },
-    { id: "shell", label: "Shell", description: null, targets: ["dummy"], default: true, required: false, params: [] },
-    { id: "stop", label: "Stop the service", description: null, targets: ["service"], default: true, required: false, params: [] },
+    { id: "hello", label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], params: [] },
+    { id: "ls", label: "List", description: null, targets: ["dummy", "service"], default: false, required: false, kinds: [], params: [] },
+    { id: "shell", label: "Shell", description: null, targets: ["dummy"], default: true, required: false, kinds: [], params: [] },
+    { id: "stop", label: "Stop the service", description: null, targets: ["service"], default: true, required: false, kinds: [], params: [] },
   ],
 }
 

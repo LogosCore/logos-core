@@ -31,7 +31,7 @@ const OP_LABEL: Record<MinionSessionFilterOp, string> = {
   OLDER_THAN: "longer ago than",
   NEVER: "never",
   EQUALS: "is",
-  LIVE: "is on time",
+  LIVE: "is on time or connected",
   LATE: "is late (not lost yet)",
   LOST: "is lost",
 }

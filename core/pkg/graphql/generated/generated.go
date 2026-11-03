@@ -210,6 +210,7 @@ type ComplexityRoot struct {
 		Default     func(childComplexity int) int
 		Description func(childComplexity int) int
 		ID          func(childComplexity int) int
+		Kinds       func(childComplexity int) int
 		Label       func(childComplexity int) int
 		Params      func(childComplexity int) int
 		Required    func(childComplexity int) int
@@ -2759,6 +2760,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BuildCommand.ID(childComplexity), true
+	case "BuildCommand.kinds":
+		if e.ComplexityRoot.BuildCommand.Kinds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BuildCommand.Kinds(childComplexity), true
 	case "BuildCommand.label":
 		if e.ComplexityRoot.BuildCommand.Label == nil {
 			break
@@ -10714,6 +10721,9 @@ type BuildCommand {
   # contracts/task-results-and-actions.md).
   result: String
   action: String
+  # The connection kinds it works over (reverse-call, ...): core refuses a
+  # task of it on a session whose minion uses another; empty: every kind.
+  kinds: [String!]!
   # What a task of the command takes.
   params: [ModuleField!]!
 }
@@ -22227,6 +22237,35 @@ func (ec *executionContext) fieldContext_BuildCommand_action(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _BuildCommand_kinds(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BuildCommand_kinds,
+		func(ctx context.Context) (any, error) {
+			return obj.Kinds, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BuildCommand_kinds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BuildCommand",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BuildCommand_params(ctx context.Context, field graphql.CollectedField, obj *model.BuildCommand) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23126,6 +23165,8 @@ func (ec *executionContext) fieldContext_BuildSchema_commands(_ context.Context,
 				return ec.fieldContext_BuildCommand_result(ctx, field)
 			case "action":
 				return ec.fieldContext_BuildCommand_action(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildCommand_kinds(ctx, field)
 			case "params":
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
@@ -54848,6 +54889,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionCommands(ctx context
 				return ec.fieldContext_BuildCommand_result(ctx, field)
 			case "action":
 				return ec.fieldContext_BuildCommand_action(ctx, field)
+			case "kinds":
+				return ec.fieldContext_BuildCommand_kinds(ctx, field)
 			case "params":
 				return ec.fieldContext_BuildCommand_params(ctx, field)
 			}
@@ -73531,6 +73574,11 @@ func (ec *executionContext) _BuildCommand(ctx context.Context, sel ast.Selection
 			out.Values[i] = ec._BuildCommand_result(ctx, field, obj)
 		case "action":
 			out.Values[i] = ec._BuildCommand_action(ctx, field, obj)
+		case "kinds":
+			out.Values[i] = ec._BuildCommand_kinds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "params":
 			out.Values[i] = ec._BuildCommand_params(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

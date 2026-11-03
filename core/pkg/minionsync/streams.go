@@ -14,13 +14,15 @@ import (
 // Files a minion streams (docs: contracts/minion-messages.md, Streaming a
 // file): its chunks go to the streams service, answered by an ack that
 // says where to send from, and whether to hold; every reply also carries
-// the acks of the session's other streams, so a minion that holds hears
-// when its downloader comes, catches up, or goes.
+// the acks of the session's other streams (outbox), so a minion that holds
+// hears when its downloader comes, catches up, or goes.
 
 // Streams relays the files minions stream (minionstreams.Service).
 type Streams interface {
 	TakeChunk(ctx context.Context, session *models.MinionSession, c protocol.ChunkItem) (minionstreams.Reply, bool, error)
-	Acks(ctx context.Context, session *models.MinionSession, answered map[string]bool) ([]protocol.AckItem, error)
+	// Acks are the session's streams' acks, but those in answered; soon: a
+	// stream is held while its downloader or uploader is there.
+	Acks(ctx context.Context, session *models.MinionSession, answered map[string]bool) (acks []protocol.AckItem, soon bool, err error)
 	// Pull answers a minion asking for a stream's chunk (uploads.go).
 	Pull(ctx context.Context, t *models.MinionTask, next int64, room int) (*protocol.ChunkItem, *protocol.AckItem, error)
 }
@@ -71,25 +73,4 @@ func (s *Service) streamChunk(ctx context.Context, session *models.MinionSession
 		return nil, true, err
 	}
 	return []cbor.RawMessage{item}, true, nil
-}
-
-// streamAcks are the acks of the session's streams this reply has not
-// answered.
-func (s *Service) streamAcks(ctx context.Context, session *models.MinionSession, answered map[string]bool) ([]cbor.RawMessage, error) {
-	if s.streams == nil {
-		return nil, nil
-	}
-	acks, err := s.streams.Acks(ctx, session, answered)
-	if err != nil {
-		return nil, fmt.Errorf("streams' acks: %w", err)
-	}
-	out := make([]cbor.RawMessage, 0, len(acks))
-	for _, a := range acks {
-		item, err := protocol.MarshalCBOR(a)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, nil
 }

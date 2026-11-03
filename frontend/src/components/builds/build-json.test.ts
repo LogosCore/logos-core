@@ -57,9 +57,9 @@ const schema: BuildSchemaFieldsFragment = {
     },
   ],
   commands: [
-    { id: "sleep", label: "Sleep", description: null, targets: ["dummy", "service"], default: false, required: true, params: [] },
-    { id: "hello", label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, params: [] },
-    { id: "shell", label: "Shell", description: null, targets: ["dummy"], default: false, required: false, params: [] },
+    { id: "sleep", label: "Sleep", description: null, targets: ["dummy", "service"], default: false, required: true, kinds: [], params: [] },
+    { id: "hello", label: "Say hello", description: "Answers.", targets: ["dummy", "service"], default: true, required: false, kinds: [], params: [] },
+    { id: "shell", label: "Shell", description: null, targets: ["dummy"], default: false, required: false, kinds: [], params: [] },
   ],
 }
 const kind = factoryKindsByName([{ moduleName: "bob", instances: 1, schema }]).get("bob")!

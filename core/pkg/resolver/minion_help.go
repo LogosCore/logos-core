@@ -54,7 +54,11 @@ func helpText(commands []protocol.BuildCommand, topic string) string {
 		width = max(width, len(usages[i]))
 	}
 	for i, c := range commands {
-		fmt.Fprintf(&b, "  %-*s  %s\n", width, usages[i], c.Label)
+		label := c.Label
+		if len(c.Kinds) > 0 {
+			label = strings.TrimSpace(label + " (over " + strings.Join(c.Kinds, ", ") + ")")
+		}
+		fmt.Fprintf(&b, "  %-*s  %s\n", width, usages[i], label)
 	}
 	b.WriteString("\n<param> is required, [param] is not, [param=x] defaults to x.\n")
 	b.WriteString("help <command> tells more about one.\n")
@@ -68,6 +72,9 @@ func writeCommandHelp(b *strings.Builder, c protocol.BuildCommand) {
 	}
 	if c.Description != "" {
 		b.WriteString("\n" + c.Description + "\n")
+	}
+	if len(c.Kinds) > 0 {
+		b.WriteString("\nIt works over " + strings.Join(c.Kinds, ", ") + " connections only: a minion on another kind is switched first.\n")
 	}
 	if len(c.Params) == 0 {
 		b.WriteString("\nIt takes no params.\n")

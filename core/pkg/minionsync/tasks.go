@@ -66,8 +66,10 @@ func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, ra
 	return nil, nil, nil
 }
 
-// takeResult keeps one part of a task's output.
-func (s *Service) takeResult(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int) ([]cbor.RawMessage, error) {
+// takeResult keeps one part of a task's output. A part that says where
+// the minion stands is answered with its resume when resume is set (a call
+// carries the outbox's resumes instead).
+func (s *Service) takeResult(ctx context.Context, session *models.MinionSession, raw cbor.RawMessage, i int, resume bool) ([]cbor.RawMessage, error) {
 	var res protocol.ResultItem
 	if protocol.UnmarshalCBOR(raw, &res) != nil {
 		return errItem(protocol.ErrItemBadMessage, "the result does not read", i)
@@ -139,7 +141,7 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 	// giving it back (a sent-again part too: the resume may have been
 	// lost): a minion that keeps nothing goes on with the task from there.
 	// Not once an operator asked to stop it: the cancel carries the ctx.
-	if !res.Done && res.Ctx != nil && task.CancelRequestedAt == nil && !task.Finished() {
+	if resume && !res.Done && res.Ctx != nil && task.CancelRequestedAt == nil && !task.Finished() {
 		return resumeItem(task.TaskID, res.Ctx)
 	}
 	return nil, nil
@@ -155,8 +157,8 @@ func resumeItem(task uuid.UUID, ctx []byte) ([]cbor.RawMessage, error) {
 }
 
 // resumes are resumes of the session's tasks under way whose newest part
-// said a ctx: what a call core starts to a bind-call page carries, so a
-// walk goes on after a call that failed.
+// said a ctx: what every call core makes to a bind-call page carries
+// (outbox), so a walk goes on after a call that failed.
 func (s *Service) resumes(ctx context.Context, session *models.MinionSession) ([]cbor.RawMessage, error) {
 	tasks, err := s.tasks.Resumable(ctx, session.SessionID)
 	if err != nil {
@@ -171,50 +173,6 @@ func (s *Service) resumes(ctx context.Context, session *models.MinionSession) ([
 		out = append(out, item...)
 	}
 	return out, nil
-}
-
-// deliver gives a minion at most limit of the tasks waiting for it, those
-// sent and not acknowledged first, and marks them sent.
-func (s *Service) deliver(ctx context.Context, session *models.MinionSession, limit int) ([]cbor.RawMessage, error) {
-	// ForDelivery takes 0 for no limit: none asked is none sent.
-	if limit <= 0 {
-		return nil, nil
-	}
-	waiting, err := s.tasks.ForDelivery(ctx, session.SessionID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("tasks to deliver: %w", err)
-	}
-	return s.send(ctx, waiting)
-}
-
-// send makes task items of waiting and marks the tasks sent.
-func (s *Service) send(ctx context.Context, waiting []models.MinionTask) ([]cbor.RawMessage, error) {
-	if len(waiting) == 0 {
-		return nil, nil
-	}
-	items := make([]cbor.RawMessage, 0, len(waiting))
-	ids := make([]uuid.UUID, 0, len(waiting))
-	for _, t := range waiting {
-		var args protocol.Args
-		if len(t.WireArgs) > 0 {
-			if err := protocol.UnmarshalCBOR(t.WireArgs, &args); err != nil {
-				return nil, fmt.Errorf("the args of task %s: %w", t.TaskID, err)
-			}
-		}
-		item, err := protocol.MarshalCBOR(protocol.TaskItem{T: protocol.ItemTask, Task: t.TaskID[:], Cmd: uint64(t.Op), Args: args})
-		if err != nil {
-			return nil, fmt.Errorf("a task item: %w", err)
-		}
-		items = append(items, item)
-		ids = append(ids, t.TaskID)
-	}
-	if err := s.tasks.MarkSent(ctx, ids, s.now()); err != nil {
-		return nil, fmt.Errorf("mark tasks sent: %w", err)
-	}
-	for i := range waiting {
-		s.publishTask(&waiting[i])
-	}
-	return items, nil
 }
 
 // cancels are the cancel items a reply carries: one for each task an

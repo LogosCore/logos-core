@@ -84,11 +84,20 @@ type MinionSession struct {
 	// does not have it), so a list shows them without the build; ConnCount
 	// is how many connections the build has. ConnChanges are the moves it
 	// reported, most recent first, at most MaxSessionConnChanges.
-	Conn        int                       `bson:"conn,omitempty" json:"conn,omitempty"`
-	ConnKind    string                    `bson:"conn_kind,omitempty" json:"conn_kind,omitempty"`
-	ConnName    string                    `bson:"conn_name,omitempty" json:"conn_name,omitempty"`
-	ConnCount   int                       `bson:"conn_count,omitempty" json:"conn_count,omitempty"`
-	ConnChanges []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
+	Conn      int    `bson:"conn,omitempty" json:"conn,omitempty"`
+	ConnKind  string `bson:"conn_kind,omitempty" json:"conn_kind,omitempty"`
+	ConnName  string `bson:"conn_name,omitempty" json:"conn_name,omitempty"`
+	ConnCount int    `bson:"conn_count,omitempty" json:"conn_count,omitempty"`
+	// Connected: a persistent connection serving the session is open. Core
+	// holds the connections (minionsync); it writes this when the session's
+	// first opens and its last closes, and clears it as it starts, so the
+	// Sessions list can filter on it.
+	Connected bool `bson:"connected,omitempty" json:"-"`
+	// ConnMaxMessage is the largest message the connection in use carries
+	// (protocol.BuildConnection.MaxMessage): what core sends the minion
+	// keeps within it. 0: the protocol's limit.
+	ConnMaxMessage int                       `bson:"conn_max_message,omitempty" json:"-"`
+	ConnChanges    []MinionSessionConnChange `bson:"conn_changes,omitempty" json:"conn_changes,omitempty"`
 	// LastSeenAt is the latest message under the session id; nil before the
 	// first check-in.
 	LastSeenAt *time.Time `bson:"last_seen_at,omitempty" json:"last_seen_at,omitempty"`
@@ -153,7 +162,24 @@ type MinionSessionConn struct {
 	Place int
 	Kind  string
 	Name  string
+	// MaxMessage is the largest message the connection carries
+	// (protocol.BuildConnection.MaxMessage); 0 for the protocol's limit.
+	MaxMessage int
 }
+
+// MessageLimit is the largest message core sends the session's minion: its
+// connection's, or the protocol's.
+func (s *MinionSession) MessageLimit() int {
+	return protocol.BuildConnection{MaxMessage: s.ConnMaxMessage}.MessageLimit()
+}
+
+// LateBySchedule reports whether a session whose minion is on a connection
+// of kind turns late and lost by its schedule (docs: Sessions, Late and
+// lost): every kind but bind-persistent, whose connection says whether the
+// minion is there (connected, not connected on purpose, unreachable), so a
+// closed one is not a missed check-in. A kind not known yet (no hello said
+// one) counts by its schedule.
+func LateBySchedule(kind string) bool { return kind != protocol.KindBindPersistent }
 
 // MinionSessionConnChange is a move to another connection a minion reported
 // (a conn_update): from the connection it used (0: unknown) to To, both

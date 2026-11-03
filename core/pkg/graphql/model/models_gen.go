@@ -128,6 +128,7 @@ type BuildCommand struct {
 	Required    bool           `json:"required"`
 	Result      *string        `json:"result,omitempty"`
 	Action      *string        `json:"action,omitempty"`
+	Kinds       []string       `json:"kinds"`
 	Params      []*ModuleField `json:"params"`
 }
 

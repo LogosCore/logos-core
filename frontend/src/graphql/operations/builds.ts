@@ -41,6 +41,7 @@ export const BuildSchemaFields = graphql(`
       targets
       default
       required
+      kinds
       params {
         ...ModuleFieldDefFields
       }

@@ -8,8 +8,9 @@
 // the build id opens one with the build's own keys), and every message after
 // is sent under the session id. Under a session core records the check-in,
 // takes a hello again (a rehello), and runs the tasks operators gave it
-// (tasks.go): get_tasks, acks, results and cancels. File transfers (chunks)
-// are not built yet.
+// (tasks.go): get_tasks, acks, results and cancels; files move in chunks
+// (files.go, uploads.go, streams.go). What core sends a minion comes from
+// one place whatever the connection's kind (outbox.go).
 package minionsync
 
 import (
@@ -186,10 +187,12 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		s.logger.Info("minion message under a closed session", zap.String("session_id", id))
 		items, err = errMessage(protocol.ErrItemSessionClosed, "the session is closed: start over")
 	case from.session != nil:
+		p := pathSync
 		if via != nil {
 			s.seenOn(ctx, via, from.session)
+			p = pathSocket
 		}
-		items, err = s.underSession(ctx, from.session, peer, msg, via)
+		items, err = s.underSession(ctx, from.session, peer, msg, via, p)
 	case from.staging != nil:
 		items, err = s.underStaging(ctx, from, peer, msg)
 	default:
@@ -351,14 +354,17 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	}
 	conn := connOf(b, connPlace(hello.Conn))
 	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
+	session.ConnMaxMessage = conn.MaxMessage
 	if peer != "" {
 		session.PeerAddress = peer
 		session.Peers = []models.MinionSessionPeer{{Address: peer, FirstSeen: now, LastSeen: now, Count: 1}}
 	}
 	if hello.Sleep != nil {
 		session.Sleep = models.SleepFrom(*hello.Sleep)
-		late, lost := session.Sleep.LateAtFrom(now), session.Sleep.LostAtFrom(now)
-		session.LateAt, session.LostAt = &late, &lost
+		if models.LateBySchedule(session.ConnKind) {
+			late, lost := session.Sleep.LateAtFrom(now), session.Sleep.LostAtFrom(now)
+			session.LateAt, session.LostAt = &late, &lost
+		}
 	}
 	var err error
 	if session.Number, err = s.sessions.NextNumber(ctx, b.OperationID); err != nil {
@@ -419,8 +425,16 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	if err != nil {
 		return nil, false, fmt.Errorf("claim the session: %w", err)
 	}
+	// The connection the claim came through, when it says.
+	if c := connPlace(hello.Conn); c > 0 {
+		conn := connOf(b, c)
+		if err := s.sessions.SetConn(ctx, sid, conn, nil); err != nil {
+			return nil, false, fmt.Errorf("claim the session: %w", err)
+		}
+		sess.ConnKind = conn.Kind
+	}
 	// The claim's own message is the session's check-in, from where it came.
-	if err := s.sessions.CheckIn(ctx, sid, checkIn(now, peer, sleepOf(hello), sleepOf(hello))); err != nil {
+	if err := s.sessions.CheckIn(ctx, sid, checkIn(now, peer, sleepOf(hello), sleepOf(hello), sess.ConnKind)); err != nil {
 		return nil, false, fmt.Errorf("check in: %w", err)
 	}
 	s.logger.Info("minion claimed its persisted session", zap.Int64("number", sess.Number), zap.String("session_id", sid.String()),
@@ -457,11 +471,13 @@ func (s *Service) claimReserved(ctx context.Context, from *sender, peer string, 
 	return items, err == nil, err
 }
 
-// underSession answers a message sent under a session id. Any message is a
-// check-in; a hello replaces what the session recorded (a rehello) and gets
-// the same session id back; acks and results are taken, a get_tasks gets the
-// tasks waiting, and cancels go with any reply (tasks.go).
-func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage, via *Conn) ([]cbor.RawMessage, error) {
+// underSession answers a message sent under a session id, which came by p
+// (via, the connection socket it came over). Any message is a check-in; a
+// hello replaces what the session recorded (a rehello) and gets the same
+// session id back; acks and results are taken; and the reply carries, after
+// the answers to the message's items, what the outbox has for the minion: a
+// get_tasks gets the tasks waiting (outbox.go).
+func (s *Service) underSession(ctx context.Context, session *models.MinionSession, peer string, msg protocol.MinionMessage, via *Conn, p path) ([]cbor.RawMessage, error) {
 	// A schedule the message says (a sleep_update, or a rehello's) takes
 	// effect with this check-in: the last one that reads.
 	var said *models.MinionSessionSleep
@@ -481,7 +497,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	if schedule == nil {
 		schedule = session.Sleep
 	}
-	if err := s.sessions.CheckIn(ctx, session.SessionID, checkIn(s.now(), peer, said, schedule)); err != nil {
+	if err := s.sessions.CheckIn(ctx, session.SessionID, checkIn(s.now(), peer, said, schedule, session.ConnKind)); err != nil {
 		return nil, fmt.Errorf("check in: %w", err)
 	}
 	var items []cbor.RawMessage
@@ -510,10 +526,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			// The connection it says hello through, when it says.
 			if c := connPlace(hello.Conn); c > 0 && c != session.Conn {
-				if err = s.sessions.SetConn(ctx, session.SessionID, s.sessionConn(ctx, session, c), nil); err != nil {
+				conn := s.sessionConn(ctx, session, c)
+				if err = s.sessions.SetConn(ctx, session.SessionID, conn, nil); err != nil {
 					return nil, fmt.Errorf("rehello: %w", err)
 				}
-				session.Conn = c
+				session.Conn, session.ConnKind, session.ConnMaxMessage = c, conn.Kind, conn.MaxMessage
 			}
 			s.logger.Info("minion rehello", zap.String("session_id", session.SessionID.String()))
 			out, err = helloResponse(session.SessionID)
@@ -531,12 +548,13 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			to := connPlace(u.Conn)
 			change := &models.MinionSessionConnChange{At: s.now(), From: session.Conn, To: to, Reason: u.Reason}
-			if err = s.sessions.SetConn(ctx, session.SessionID, s.sessionConn(ctx, session, to), change); err != nil {
+			conn := s.sessionConn(ctx, session, to)
+			if err = s.sessions.SetConn(ctx, session.SessionID, conn, change); err != nil {
 				return nil, fmt.Errorf("record a conn_update: %w", err)
 			}
 			s.logger.Info("minion moved to another connection", zap.String("session_id", session.SessionID.String()),
 				zap.Int("from", session.Conn), zap.Int("to", to), zap.String("reason", u.Reason))
-			session.Conn = to
+			session.Conn, session.ConnKind, session.ConnMaxMessage = to, conn.Kind, conn.MaxMessage
 		case protocol.ItemGetTasks:
 			// Answered after the other items (tasks.go): an ack or a result
 			// in the same message first stops those tasks being sent again.
@@ -554,12 +572,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)
 				break
 			}
-			var p *pull
-			out, p, err = s.takeAck(ctx, session, raw, i)
-			if p != nil {
-				pulls = append(pulls, *p)
+			var pl *pull
+			out, pl, err = s.takeAck(ctx, session, raw, i)
+			if pl != nil {
+				pulls = append(pulls, *pl)
 				// Its answer is a chunk, or a stream's ack: no other ack.
-				answered[string(p.xfer)] = true
+				answered[string(pl.xfer)] = true
 			}
 		case protocol.ItemChunk:
 			out, err = s.takeChunk(ctx, session, raw, i, answered)
@@ -568,7 +586,9 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				out, err = errItem(protocol.ErrItemUnknownItem, "no tasks are taken", i)
 				break
 			}
-			out, err = s.takeResult(ctx, session, raw, i)
+			// A call carries every resume the outbox has: the part's own
+			// goes with it there.
+			out, err = s.takeResult(ctx, session, raw, i, p != pathCall)
 		case protocol.ItemErr:
 			// The minion's word on an earlier item of core's (a cancel for a
 			// task it no longer has): noted, not answered.
@@ -585,44 +605,52 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, out...)
+		// An err about an item that said a ctx carries it back: a minion
+		// that keeps nothing finds there what to end or clean up.
+		items = append(items, echoCtx(out, i, protocol.ItemCtx(raw))...)
 	}
 	if s.tasks != nil {
-		// Cancels go whenever core has them; tasks only when asked.
-		cancels, err := s.cancels(ctx, session)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, cancels...)
+		// After the answers, what the outbox has (cancels whenever core has
+		// them, tasks only when asked), in the room the answers leave.
+		d := delivery{streams: true, answered: answered, room: roomFor(session.MessageLimit(), items)}
 		if wantTasks {
-			// Through a call get_tasks's max bounds this reply; on a
-			// persistent connection it is a standing allowance (Notify).
-			limit := models.MaxMinionTasksPerReply
-			if wantMax != nil && *wantMax < uint64(limit) {
-				limit = int(*wantMax)
+			// Through a request (the sync call, a call's answer) get_tasks's
+			// max bounds this message; over a socket it is a standing
+			// allowance (Notify).
+			d.tasks = models.MaxMinionTasksPerReply
+			if wantMax != nil && *wantMax < uint64(d.tasks) {
+				d.tasks = int(*wantMax)
 			}
 			if via != nil {
 				via.setAllowance(session.SessionID, wantMax)
 				var err error
-				if limit, err = s.room(ctx, session, wantMax); err != nil {
+				if d.tasks, err = s.room(ctx, session, wantMax); err != nil {
 					return nil, err
 				}
 			}
-			tasks, err := s.deliver(ctx, session, limit)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, tasks...)
 		}
-		// What each stream may do now, but those answered already.
-		acks, err := s.streamAcks(ctx, session, answered)
+		// A call carries the resumes of every task under way: the page
+		// keeps nothing.
+		d.resumes = p == pathCall
+		o, err := s.outbox(ctx, session, d)
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, acks...)
+		items = append(items, o.items...)
+		left := d.room - o.used
+		if p == pathSync && o.soon {
+			// A stream of its may go on any moment: a minion that polls
+			// comes back soon rather than on its schedule.
+			poll, err := pollItem()
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, poll)
+			left -= len(poll) + itemOverhead
+		}
 		// Chunks last: in the room the rest leaves.
 		if len(pulls) > 0 {
-			chunks, err := s.serveUploads(ctx, session, pulls, items)
+			chunks, err := s.serveUploads(ctx, session, pulls, left)
 			if err != nil {
 				return nil, err
 			}
@@ -648,7 +676,7 @@ func connOf(b *models.Build, place int) models.MinionSessionConn {
 	c := models.MinionSessionConn{Place: place}
 	if b != nil && place >= 1 && place <= len(b.Connections.Items) {
 		bc := b.Connections.Items[place-1]
-		c.Kind, c.Name = bc.ConnectionKind(), bc.Endpoint.Name
+		c.Kind, c.Name, c.MaxMessage = bc.ConnectionKind(), bc.Endpoint.Name, bc.MaxMessage
 	}
 	return c
 }
@@ -694,14 +722,41 @@ func sleepOf(h protocol.HelloItem) *models.MinionSessionSleep {
 
 // checkIn is a check-in at now from peer: said is a schedule the message
 // says (nil for none), schedule the one in force, from which the session
-// turns late.
-func checkIn(now time.Time, peer string, said, schedule *models.MinionSessionSleep) repository.MinionSessionCheckIn {
+// turns late, kind the kind of the connection the minion uses: on one that
+// says whether the minion is there (bind-persistent) it is never late by a
+// schedule (models.LateBySchedule).
+func checkIn(now time.Time, peer string, said, schedule *models.MinionSessionSleep, kind string) repository.MinionSessionCheckIn {
 	c := repository.MinionSessionCheckIn{At: now, Peer: peer, Sleep: said}
-	if schedule != nil {
+	switch {
+	case !models.LateBySchedule(kind):
+		c.Untimed = true
+	case schedule != nil:
 		late, lost := schedule.LateAtFrom(now), schedule.LostAtFrom(now)
 		c.LateAt, c.LostAt = &late, &lost
 	}
 	return c
+}
+
+// echoCtx gives each err in out about item i the ctx that item said, when
+// it said one and the err has none.
+func echoCtx(out []cbor.RawMessage, i int, ctx []byte) []cbor.RawMessage {
+	if ctx == nil {
+		return out
+	}
+	for j, raw := range out {
+		if protocol.ItemType(raw) != protocol.ItemErr {
+			continue
+		}
+		var e protocol.ErrItem
+		if protocol.UnmarshalCBOR(raw, &e) != nil || e.Item == nil || *e.Item != i || e.Ctx != nil {
+			continue
+		}
+		e.Ctx = ctx
+		if b, err := protocol.MarshalCBOR(e); err == nil {
+			out[j] = b
+		}
+	}
+	return out
 }
 
 // readHello reads and checks a hello.

@@ -216,6 +216,7 @@ export function SessionConsole({ sessionId }: { sessionId: string }) {
         sessionId={sessionId}
         operationId={session?.operationId ?? ""}
         commands={commands}
+        connKind={session?.connKind}
         disabled={disabledReason !== undefined}
         disabledReason={disabledReason}
         history={history}

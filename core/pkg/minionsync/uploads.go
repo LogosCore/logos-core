@@ -37,22 +37,19 @@ const chunkOverhead = 512
 // is answered in the next reply.
 const minChunk = 4 << 10
 
-// serveUploads answers the pulls with chunks, in the room items leave.
-func (s *Service) serveUploads(ctx context.Context, session *models.MinionSession, pulls []pull, items []cbor.RawMessage) ([]cbor.RawMessage, error) {
-	used := 0
-	for _, it := range items {
-		used += len(it) + 8
-	}
+// serveUploads answers the pulls with chunks, in room bytes: what the
+// reply's other items leave of its connection's messages.
+func (s *Service) serveUploads(ctx context.Context, session *models.MinionSession, pulls []pull, room int) ([]cbor.RawMessage, error) {
 	var out []cbor.RawMessage
 	for _, p := range pulls {
 		// The chunk carries the pull's ctx back: its room too.
-		item, err := s.serveUpload(ctx, session, p, protocol.MaxMinionMessageSize-used-chunkOverhead-len(p.ctx))
+		item, err := s.serveUpload(ctx, session, p, room-chunkOverhead-len(p.ctx))
 		if err != nil {
 			return nil, err
 		}
-		for _, it := range item {
-			used += len(it) + 8
-		}
+		// An err about the pull carries its ctx back, as any err does.
+		item = echoCtx(item, p.i, p.ctx)
+		room -= itemsSize(item)
 		out = append(out, item...)
 	}
 	return out, nil

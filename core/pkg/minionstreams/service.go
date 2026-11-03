@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -93,7 +94,11 @@ type Service struct {
 	bus   eventbus.IEventBus
 	// waker pushes a session's stream acks to its minion at once; nil:
 	// they go with its next message.
-	waker  Waker
+	waker Waker
+	// full are the streams (by xfer) the minion was told to hold because
+	// the downloader's window was full: the downloader taking a chunk wakes
+	// the minion once (core is one instance: docs, One core instance).
+	full   sync.Map
 	key    []byte
 	cfg    Config
 	logger *zap.Logger
@@ -103,17 +108,13 @@ type Service struct {
 }
 
 // NewService: key signs the links streams download from.
-// Waker tells a minion over a persistent connection serving its session,
-// at once, what its streams may do now (minionsync): a stream it holds goes
-// when a downloader comes, and one it receives when bytes it has not got
-// arrive from the uploader, without waiting for the minion's next message.
-//
-// StreamRoom says a downloader took a chunk, which leaves room for the
-// next: a minion that polls finds it on its own, but one that only answers
-// (a bind-call page) hears it only when core calls.
+// Waker tells a session's minion, by the connection it uses (minionsync's
+// Nudge), that one of its streams it holds may go on: a downloader came,
+// took a chunk from a full window or has the whole file, or bytes it has
+// not got arrived from the uploader. A minion that holds sends nothing of
+// the stream, so the ack cannot cross a chunk of its.
 type Waker interface {
 	WakeStreams(sessionID uuid.UUID)
-	StreamRoom(sessionID uuid.UUID)
 }
 
 // WithWaker gives the service a Waker, told when a downloader attaches and
@@ -150,11 +151,21 @@ func (s *Service) readerAlive(st *models.MinionTaskStream) bool {
 // ends the task.
 func (s *Service) ack(st *models.MinionTaskStream) protocol.AckItem {
 	next := uint64(st.Want)
-	hold := !s.readerAlive(st) || st.Want-st.Delivered >= s.cfg.Window || st.Want >= st.Size
+	full := st.Want-st.Delivered >= s.cfg.Window
+	hold := !s.readerAlive(st) || full || st.Want >= st.Size
 	if st.Delivered >= st.Size && st.Ran {
 		next, hold = uint64(st.Size), false
 	}
+	if hold && full && s.readerAlive(st) {
+		s.full.Store(string(st.Xfer), true)
+	}
 	return protocol.AckItem{T: protocol.ItemAck, Xfer: st.Xfer, Next: &next, Hold: hold, Ctx: st.Ctx}
+}
+
+// soon reports whether a stream's minion holds while its downloader is
+// there: it may go on any moment.
+func (s *Service) soon(st *models.MinionTaskStream) bool {
+	return s.readerAlive(st) && s.ack(st).Hold
 }
 
 // Reply is the service's answer to a chunk: an ack, or an err item's code
@@ -227,21 +238,33 @@ func (s *Service) TakeChunk(ctx context.Context, session *models.MinionSession, 
 // answered (those its chunks were answered for already): what each
 // minion's stream may do now, said with every exchange, as a downloader
 // comes, catches up or goes.
-func (s *Service) Acks(ctx context.Context, session *models.MinionSession, answered map[string]bool) ([]protocol.AckItem, error) {
+//
+// soon says a stream is held while its downloader or uploader is there
+// (answered or not): it may go on any moment, so a minion that starts its
+// exchanges is told to come back soon (a poll).
+func (s *Service) Acks(ctx context.Context, session *models.MinionSession, answered map[string]bool) ([]protocol.AckItem, bool, error) {
 	tasks, err := s.tasks.ActiveStreams(ctx, session.SessionID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var out []protocol.AckItem
+	soon := false
 	for _, t := range tasks {
 		switch {
-		case t.Stream != nil && !answered[string(t.Stream.Xfer)]:
-			out = append(out, s.ack(t.Stream))
-		case t.Upload != nil && t.Upload.Stream && !answered[string(t.Upload.Xfer)]:
-			out = append(out, s.upAck(t.Upload, t.Upload.Acked))
+		case t.Stream != nil:
+			soon = soon || s.soon(t.Stream)
+			if !answered[string(t.Stream.Xfer)] {
+				out = append(out, s.ack(t.Stream))
+			}
+		case t.Upload != nil && t.Upload.Stream:
+			a := s.upAck(t.Upload, t.Upload.Acked)
+			soon = soon || (a.Hold && s.uploaderAlive(t.Upload))
+			if !answered[string(t.Upload.Xfer)] {
+				out = append(out, a)
+			}
 		}
 	}
-	return out, nil
+	return out, soon, nil
 }
 
 // ErrGone is a stream that cannot be downloaded: its task ended, or it is
@@ -293,6 +316,7 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 		dctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = s.tasks.StreamDetach(dctx, taskID, gen, s.now())
+		s.full.Delete(string(t.Stream.Xfer))
 		if after, err := s.tasks.FindByTaskID(dctx, taskID); err == nil {
 			s.publish(after)
 		}
@@ -320,8 +344,11 @@ func (s *Service) Read(ctx context.Context, taskID uuid.UUID, from, end int64, w
 			if !ours {
 				return pos, nil
 			}
-			if s.waker != nil {
-				s.waker.StreamRoom(t.SessionID)
+			// A minion told to hold for a full window hears there is room;
+			// one that sent all of it, that the downloader has it (its task
+			// ends on that ack).
+			if _, held := s.full.LoadAndDelete(string(t.Stream.Xfer)); held || pos >= t.Stream.Size {
+				s.wake(t)
 			}
 			beat = s.now()
 			if s.now().Sub(lastPublish) >= time.Second || pos >= end {

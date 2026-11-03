@@ -154,6 +154,9 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 			},
 			Values:   protocol.ResolveFieldValues(ch.KindFields(c.kinds[i]), conn.Values),
 			Failover: conn.Failover,
+			// What the channel carries on a connection of the kind: the
+			// minion, and core, keep their messages within it.
+			MaxMessage: cs.Kinds[c.kinds[i]].MaxMessage,
 		})
 	}
 

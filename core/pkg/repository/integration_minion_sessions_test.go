@@ -185,6 +185,38 @@ func TestIntegrationMinionSessionQueries(t *testing.T) {
 	if _, err := repo.Values(ctx, op, "host"); err == nil {
 		t.Error("values of a text column")
 	}
+
+	// Connected now: live whatever its schedule says, never late or lost;
+	// and a minion on a bind-persistent connection is never late or lost.
+	if err := repo.SetConnected(ctx, rows[1].SessionID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetConn(ctx, rows[3].SessionID, models.MinionSessionConn{Place: 2, Kind: protocol.KindBindPersistent}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]struct {
+		op   string
+		want []int64
+	}{
+		"live, connected too": {"LIVE", []int64{1, 2}},
+		"late, not connected": {"LATE", []int64{}},
+		"lost, not listening": {"LOST", []int64{}},
+	} {
+		q := MinionSessionQuery{Filters: []models.MinionSessionFilter{{Column: "lastSeen", Op: c.op}}, Sort: byNumber}
+		page, err := repo.FindByOperationIDWithCursor(ctx, op, q, nil, 50, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := numbers(page); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", name, got, c.want)
+		}
+	}
+	if n, err := repo.ClearConnected(ctx); err != nil || n != 1 {
+		t.Errorf("cleared %d: %v", n, err)
+	}
+	if s, _ := repo.FindBySessionID(ctx, rows[1].SessionID); s.Connected {
+		t.Error("still connected after core started")
+	}
 }
 
 func numbers(rows []models.MinionSession) []int64 {

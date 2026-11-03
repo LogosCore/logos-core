@@ -107,6 +107,11 @@ type IMinionTaskRepository interface {
 	// failed otherwise, with why. IsNotFound for one that is not sent and
 	// unfinished (ended already, or never sent).
 	EndUnknown(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error)
+	// FailUndelivered ends failed, with why, a task of the session its
+	// minion never acknowledged (queued, or sent without an ack): one core
+	// cannot deliver (its task item does not fit the connection's
+	// messages). IsNotFound for one acknowledged or ended.
+	FailUndelivered(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error)
 	// ListBySession returns a page of the session's tasks, newest first.
 	ListBySession(ctx context.Context, sessionID uuid.UUID, before *MinionTaskCursor, limit int64) ([]models.MinionTask, error)
 	// Parts returns a task's output parts in seq order.
@@ -492,6 +497,19 @@ func (r *minionTaskRepository) EndUnknown(ctx context.Context, sessionID, taskID
 			"done_at": at, "ok": false, "err": why,
 			"rev": bson.M{"$add": bson.A{"$rev", 1}},
 		}}},
+		ReturnNew: true,
+	}, &after)
+	if err != nil {
+		return nil, err
+	}
+	return &after, nil
+}
+
+func (r *minionTaskRepository) FailUndelivered(ctx context.Context, sessionID, taskID uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
+	var after models.MinionTask
+	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "session_id": sessionID, "acked_at": nil,
+		"state": bson.M{"$in": bson.A{models.MinionTaskQueued, models.MinionTaskSent}}}).Apply(qmgo.Change{
+		Update:    bson.M{"$set": bson.M{"state": models.MinionTaskFailed, "done_at": at, "ok": false, "err": why}, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
 	if err != nil {

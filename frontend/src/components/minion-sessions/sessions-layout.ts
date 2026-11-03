@@ -304,7 +304,7 @@ export function describeFilter(f: SessionFilter): string {
     case "NEVER":
       return col?.id === "lastSeen" ? "never (no check-in yet)" : "never"
     case "LIVE":
-      return "on time"
+      return "on time or connected"
     case "LATE":
       return "late"
     case "LOST":
@@ -337,13 +337,16 @@ export function isClockFilter(f: SessionFilter): boolean {
 
 /**
  * Where a session stands by its schedule: on time, late (a check-in
- * overdue), lost (three missed), or unknown (it never said one).
+ * overdue), lost (three missed), or unknown (it never said one). A minion on
+ * a bind-persistent connection is neither: its connection says whether it is
+ * there (connected, not connected on purpose, unreachable), so core sets no
+ * schedule for it; one left from before a move is not shown either.
  */
 export function lateness(
-  s: Pick<MinionSessionFieldsFragment, "lateAt" | "lostAt">,
+  s: Pick<MinionSessionFieldsFragment, "lateAt" | "lostAt"> & { connKind?: string | null },
   now: number,
 ): "live" | "late" | "lost" | null {
-  if (!s.lateAt) return null
+  if (!s.lateAt || s.connKind === "bind-persistent") return null
   if (now < Date.parse(s.lateAt)) return "live"
   return s.lostAt && now >= Date.parse(s.lostAt) ? "lost" : "late"
 }

@@ -140,6 +140,16 @@ func (f *fakeTasks) EndUnknown(_ context.Context, sid, id uuid.UUID, why string,
 	return &after, nil
 }
 
+func (f *fakeTasks) FailUndelivered(_ context.Context, sid, id uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
+	t := f.find(id)
+	if t == nil || t.SessionID != sid || t.AckedAt != nil || (t.State != models.MinionTaskQueued && t.State != models.MinionTaskSent) {
+		return nil, qmgo.ErrNoSuchDocuments
+	}
+	t.State, t.DoneAt, t.Err = models.MinionTaskFailed, &at, why
+	after := *t
+	return &after, nil
+}
+
 // openSession opens a session with a hello straight under the build id, and
 // gives the service a task store.
 func openSession(t *testing.T, r *rig) (uuid.UUID, *fakeTasks) {

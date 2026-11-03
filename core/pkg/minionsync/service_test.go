@@ -102,6 +102,9 @@ func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, c repository.Min
 		if c.LateAt != nil {
 			r.LateAt, r.LostAt = c.LateAt, c.LostAt
 		}
+		if c.Untimed {
+			r.LateAt, r.LostAt = nil, nil
+		}
 	}
 	return nil
 }
@@ -119,12 +122,36 @@ func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn models.Mini
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].Conn, f.rows[i].ConnKind, f.rows[i].ConnName = conn.Place, conn.Kind, conn.Name
+			f.rows[i].ConnMaxMessage = conn.MaxMessage
+			if !models.LateBySchedule(conn.Kind) {
+				f.rows[i].LateAt, f.rows[i].LostAt = nil, nil
+			}
 			if change != nil {
 				f.rows[i].ConnChanges = append([]models.MinionSessionConnChange{*change}, f.rows[i].ConnChanges...)
 			}
 		}
 	}
 	return nil
+}
+
+func (f *fakeSessions) SetConnected(_ context.Context, id uuid.UUID, connected bool) error {
+	for i := range f.rows {
+		if f.rows[i].SessionID == id {
+			f.rows[i].Connected = connected
+		}
+	}
+	return nil
+}
+
+func (f *fakeSessions) ClearConnected(context.Context) (int64, error) {
+	n := int64(0)
+	for i := range f.rows {
+		if f.rows[i].Connected {
+			f.rows[i].Connected = false
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {

@@ -30,14 +30,17 @@ import (
 //     build's keys: the page's hello opens a session with those keys (the
 //     page skips staging), and the target is linked to it.
 //   - After, calls go under the session id: when there is something to send
-//     (a task, a cancel; Notify's news, coalesced over a second), on the
-//     session's schedule when its hello said one, and on Check now. The
-//     page's answer is taken as any message under the session (underSession),
-//     and what core has to say back goes in another call at once, while
-//     there is any and the calls make progress: a file moves a chunk a
-//     call, for as many calls as it takes. Two calls in a row that would
-//     carry the same items (a page answering the same thing over and over)
-//     end the exchange.
+//     (a task, a cancel, a stream that may go on: Nudge, coalesced), on the
+//     session's schedule when its hello said one, and on Check now. A call
+//     carries what the outbox has (outbox.go). The page's answer is taken
+//     as any message under the session (underSession), and what core has
+//     to say back goes in another call at once, while there is any and the
+//     calls make progress: a file moves a chunk a call, for as many calls
+//     as it takes. Two calls in a row that would carry the same items (a
+//     page answering the same thing over and over) end the exchange.
+//   - Every call says core's time (at): a page, which cannot remember
+//     message ids, refuses a call too old (a replay) with err stale, and
+//     the target says so.
 //   - A call that reaches nothing leaves the session open and the target
 //     unreachable, retried after 1 minute, 5, 30, then hourly, for a day.
 
@@ -138,8 +141,11 @@ func (s *Service) CheckTarget(ctx context.Context, targetID uuid.UUID) (*models.
 	return s.targets.FindByTargetID(ctx, targetID)
 }
 
-// RunTargets makes the calls due (retries, schedules) until ctx ends.
+// RunTargets makes the calls due (retries, schedules) until ctx ends. As
+// core starts, it first says no session is connected: core held the
+// connections, which went with the process before.
 func (s *Service) RunTargets(ctx context.Context) {
+	s.resetConnected(ctx)
 	if s.targets == nil {
 		return
 	}
@@ -164,32 +170,6 @@ func (s *Service) RunTargets(ctx context.Context) {
 		case <-t.C:
 		}
 	}
-}
-
-// notifyBind calls the target of a bind session after bindCoalesce, once
-// for what comes meanwhile; nothing for a session no target opened.
-func (s *Service) notifyBind(session uuid.UUID) {
-	if s.targets == nil {
-		return
-	}
-	t, err := s.targets.FindBySessionID(context.Background(), session)
-	if err != nil {
-		return
-	}
-	s.callSoon(t.TargetID, bindNews, bindCoalesce)
-}
-
-// wakeBind calls the target of a bind session soon, when one of its
-// streams may go on; nothing for a session no target opened.
-func (s *Service) wakeBind(session uuid.UUID) {
-	if s.targets == nil {
-		return
-	}
-	t, err := s.targets.FindBySessionID(context.Background(), session)
-	if err != nil {
-		return
-	}
-	s.callSoon(t.TargetID, bindWake, bindWakeDelay)
 }
 
 // callSoon calls a target after delay, once for what comes meanwhile (of
@@ -359,6 +339,13 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	}
 	t.SessionID = &sid
 	s.allowanceOf(t, msg)
+	// The page answered core's own call: core holds the session's id, so
+	// nothing can lose it (as a hello_response can a minion's), and the
+	// call is the session's first check-in. A page given nothing to do for
+	// a day stays open.
+	if err := s.sessions.CheckIn(ctx, sid, checkIn(s.now(), peer, nil, session.Sleep, session.ConnKind)); err != nil {
+		return fmt.Errorf("check the page's session in: %w", err)
+	}
 	s.logger.Info("targets: a page's hello opened a session", zap.String("target_id", t.TargetID.String()),
 		zap.Int64("number", session.Number), zap.String("session_id", sid.String()))
 	if err := s.saveCall(ctx, s.reached(t, session)); err != nil {
@@ -399,7 +386,7 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 		}
 		last = items
 		nameUnknownTasks(msg, items)
-		if items, err = s.underSession(ctx, session, peer, *msg, nil); err != nil {
+		if items, err = s.underSession(ctx, session, peer, *msg, nil, pathCall); err != nil {
 			return err
 		}
 		s.allowanceOf(t, msg)
@@ -432,56 +419,20 @@ func sameItems(a, b []cbor.RawMessage) bool {
 	return true
 }
 
-// bindItems are what a call core starts carries: the session's cancels, its
-// tasks within the allowance (those sent and not acknowledged first), and
-// its streams' acks. fresh says whether any of it is news: a cancel, or a
-// task never sent; going, whether a stream's ack lets it go on.
+// bindItems are what a call core starts carries: the outbox's, with the
+// session's tasks within the target's allowance, the resumes of tasks under
+// way and its streams' acks. fresh says whether any of it is news (a cancel,
+// a task never sent, a resume); going, whether a stream's ack lets it go on.
 func (s *Service) bindItems(ctx context.Context, t *models.MinionTarget, session *models.MinionSession) ([]cbor.RawMessage, bool, bool, error) {
-	if s.tasks == nil {
-		return nil, false, false, nil
-	}
-	items, err := s.cancels(ctx, session)
-	if err != nil {
-		return nil, false, false, err
-	}
-	fresh := len(items) > 0
 	limit := bindDefaultAllowance
 	if t.Allowance != nil {
 		limit = int(min(*t.Allowance, uint64(models.MaxMinionTasksPerReply)))
 	}
-	if limit > 0 {
-		waiting, err := s.tasks.ForDelivery(ctx, session.SessionID, limit)
-		if err != nil {
-			return nil, false, false, fmt.Errorf("tasks to deliver: %w", err)
-		}
-		for _, w := range waiting {
-			fresh = fresh || w.State == models.MinionTaskQueued
-		}
-		tasks, err := s.send(ctx, waiting)
-		if err != nil {
-			return nil, false, false, err
-		}
-		items = append(items, tasks...)
-	}
-	resumes, err := s.resumes(ctx, session)
+	o, err := s.outbox(ctx, session, delivery{tasks: limit, resumes: true, streams: true, room: roomFor(session.MessageLimit(), nil)})
 	if err != nil {
 		return nil, false, false, err
 	}
-	// A task to go on with is news: the call goes.
-	fresh = fresh || len(resumes) > 0
-	items = append(items, resumes...)
-	acks, err := s.streamAcks(ctx, session, nil)
-	if err != nil {
-		return nil, false, false, err
-	}
-	going := false
-	for _, raw := range acks {
-		var a protocol.AckItem
-		if protocol.UnmarshalCBOR(raw, &a) == nil && !a.Hold {
-			going = true
-		}
-	}
-	return append(items, acks...), fresh, going, nil
+	return o.items, o.fresh, o.going, nil
 }
 
 // allowanceOf takes the get_tasks of the page's answer as the target's
@@ -509,7 +460,7 @@ func (s *Service) allowanceOf(t *models.MinionTarget, msg *protocol.MinionMessag
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
 	keys protocol.AES256CBCHMACSHA256Material, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, string, bool, error) {
 	msgID := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items})
+	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items, At: unixNow(s.now())})
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -548,6 +499,15 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	if err := protocol.UnmarshalCBOR(opened, &msg); err != nil || protocol.ValidateMessageHead(msg.V, msg.ID, msg.Re, len(msg.Items)) != nil ||
 		!bytes.Equal(msg.Re, msgID) {
 		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
+	}
+	// A page whose clock is far from core's refuses the call as stale, as
+	// it would a replay: nothing goes until the clocks agree.
+	for _, raw := range msg.Items {
+		var e protocol.ErrItem
+		if protocol.ItemType(raw) == protocol.ItemErr && protocol.UnmarshalCBOR(raw, &e) == nil && e.Code == protocol.ErrItemStale {
+			return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
+				"the page refused the call as stale: its clock is far from core's ("+e.Msg+")"))
+		}
 	}
 	// The address the channel reached the page at: its external one.
 	return &msg, peerAddress(a.Peer), false, nil

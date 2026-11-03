@@ -16,6 +16,7 @@ import { commandOf, lineOf, lineTexts, parseCommandLine, usage, valueCompletion,
 import { CONNECTION_FORMAT, choiceDetail, connectionText, type ConnectionChoice } from "./connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { useSessionConnectionChoices } from "./use-connection-choices"
+import { commandKindsNote } from "./command-kinds"
 
 // The console's command line: a command of the session's build typed as a
 // line (command-line.ts), with its commands offered as the first word is
@@ -26,6 +27,27 @@ import { useSessionConnectionChoices } from "./use-connection-choices"
 // pick). ↑ and ↓ go through what was run here (the session's tasks, as
 // lines), and / anywhere else on the page comes to it.
 
+/** A suggestion's note on a command that works over some kinds only. */
+function KindsHint({ kinds, connKind }: { kinds?: readonly string[]; connKind?: string | null }) {
+  const note = commandKindsNote(kinds, connKind)
+  if (!note) return null
+  return (
+    <span
+      className={cn("ml-auto shrink-0 text-xs", note.blocked ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}
+      title={note.text}
+    >
+      {note.blocked ? "switch first" : `over ${(kinds ?? []).join(", ")}`}
+    </span>
+  )
+}
+
+/** The command form's line on a command that works over some kinds only. */
+function KindsLine({ kinds, connKind }: { kinds?: readonly string[]; connKind?: string | null }) {
+  const note = commandKindsNote(kinds, connKind)
+  if (!note) return null
+  return <span className={cn("mt-1 block", note.blocked && "text-amber-700 dark:text-amber-400")}>{note.text}.</span>
+}
+
 /** A command as the console uses it: its params as the forms know them too. */
 export interface ConsoleCommand extends CommandDef {
   fields: readonly FieldDef[]
@@ -33,12 +55,15 @@ export interface ConsoleCommand extends CommandDef {
   result?: string | null
   /** What core can ask it to do, one of core's actions (list_dir), if any. */
   action?: string | null
+  /** The connection kinds it works over; empty: every kind. */
+  kinds?: readonly string[]
 }
 
 export function CommandBar({
   sessionId,
   operationId,
   commands,
+  connKind,
   disabled,
   disabledReason,
   history,
@@ -48,6 +73,8 @@ export function CommandBar({
   /** The session's operation: a file param's file is uploaded to it. */
   operationId: string
   commands: readonly ConsoleCommand[]
+  /** The kind of the connection the session's minion uses: a command that does not work over it says so. */
+  connKind?: string | null
   disabled: boolean
   /** Why it is disabled, said in its place. */
   disabledReason?: string
@@ -289,6 +316,7 @@ export function CommandBar({
             >
               <code className="font-mono text-xs">{usage(c)}</code>
               <span className="truncate text-xs text-muted-foreground">{c.label}</span>
+              <KindsHint kinds={c.kinds} connKind={connKind} />
             </button>
           ))}
         </div>
@@ -366,6 +394,7 @@ export function CommandBar({
               <>
                 <code className="font-mono text-xs">{usage(formCommand)}</code>
                 {formCommand.description && <span className="mt-1 block">{formCommand.description}</span>}
+                <KindsLine kinds={formCommand.kinds} connKind={connKind} />
               </>
             ) : (
               "Pick one of the session's commands."

@@ -72,6 +72,9 @@ type BuildCommand {
   # contracts/task-results-and-actions.md).
   result: String
   action: String
+  # The connection kinds it works over (reverse-call, ...): core refuses a
+  # task of it on a session whose minion uses another; empty: every kind.
+  kinds: [String!]!
   # What a task of the command takes.
   params: [ModuleField!]!
 }

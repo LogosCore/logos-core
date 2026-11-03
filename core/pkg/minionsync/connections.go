@@ -16,11 +16,10 @@ import (
 // Persistent connections (docs: contracts/channel-core-connections/): a
 // channel opens a connection socket for each minion connection that stays
 // open, and core sends on it whenever it has something for a session the
-// connection serves. Everything that sends to a minion goes through Notify:
-// callers say a session has news (a task queued, a cancel, a task ended),
-// and Notify reads what to send from the database. Core runs as one
-// instance (docs: architecture, One core instance), so the connections are
-// this process's.
+// connection serves. Callers say a session has news (Nudge: a task queued,
+// a cancel, a task ended, a stream that may go on), and the push reads what
+// to send from the outbox (outbox.go). Core runs as one instance (docs:
+// architecture, One core instance), so the connections are this process's.
 
 // maxSessionConns is how many open connections a session keeps; one more
 // closes its oldest.
@@ -135,7 +134,8 @@ type connUse struct {
 type connections struct {
 	mu        sync.Mutex
 	bySession map[uuid.UUID][]connUse
-	// scheduled are the sessions a Notify is due for.
+	// scheduled are the sessions a push is due for, and whether it carries
+	// the streams' acks.
 	scheduled map[uuid.UUID]bool
 	// sending serializes a session's pushes.
 	sending map[uuid.UUID]*sync.Mutex
@@ -244,8 +244,7 @@ func (s *Service) Connected(session uuid.UUID) bool {
 }
 
 // WatchTasks makes every change to a task (queued, cancelled, a part taken)
-// news for its session: Notify, coalesced, when the session has a
-// connection open.
+// news for its session (Nudge).
 func (s *Service) WatchTasks() func() {
 	return s.bus.Subscribe([]eventbus.Topic{eventbus.TopicMinionTaskChanged}, func(_ context.Context, e eventbus.Event) {
 		p, ok := e.Payload.(eventbus.MinionTaskEventPayload)
@@ -253,39 +252,42 @@ func (s *Service) WatchTasks() func() {
 			return
 		}
 		if id, err := uuid.Parse(p.SessionID); err == nil {
-			s.notifySoon(id)
-			s.notifyBind(id)
+			s.Nudge(id, false)
 		}
 	})
 }
 
-// notifySoon notifies the session after notifyDelay, once for what comes
-// meanwhile; nothing when it has no connection open.
-func (s *Service) notifySoon(session uuid.UUID) {
-	if !s.Connected(session) {
-		return
-	}
+// pushSoon pushes to the session after notifyDelay, once for what comes
+// meanwhile, with the streams' acks when any nudge asked for them.
+func (s *Service) pushSoon(session uuid.UUID, streams bool) {
 	s.conns.mu.Lock()
-	if s.conns.scheduled[session] {
-		s.conns.mu.Unlock()
+	withStreams, due := s.conns.scheduled[session]
+	s.conns.scheduled[session] = withStreams || streams
+	s.conns.mu.Unlock()
+	if due {
 		return
 	}
-	s.conns.scheduled[session] = true
-	s.conns.mu.Unlock()
 	time.AfterFunc(notifyDelay, func() {
 		s.conns.mu.Lock()
+		streams := s.conns.scheduled[session]
 		delete(s.conns.scheduled, session)
 		s.conns.mu.Unlock()
-		s.Notify(context.Background(), session)
+		s.pushNow(context.Background(), session, streams)
 	})
 }
 
-// Notify sends the session what is waiting for it, on the connection that
-// carried its latest message, the one before when that send fails: cancels,
-// and tasks within the allowance the minion said on that connection.
-// Nothing goes when it has no connection open: what waits goes with its
-// next exchange.
-func (s *Service) Notify(ctx context.Context, session uuid.UUID) {
+// Notify pushes what waits for the session now: cancels, and tasks within
+// the allowance the minion said on the connection.
+func (s *Service) Notify(ctx context.Context, session uuid.UUID) { s.pushNow(ctx, session, false) }
+
+// pushNow sends the session what the outbox has for it, on the connection
+// that carried its latest message, the one before when that send fails:
+// cancels, tasks within the allowance the minion said on that connection,
+// and with streams the streams' acks (a stream it holds may go on: the
+// minion sends nothing of it meanwhile, so the ack cannot cross its
+// chunks). Nothing goes when it has no connection open: what waits goes
+// with its next exchange.
+func (s *Service) pushNow(ctx context.Context, session uuid.UUID, streams bool) {
 	conns := s.conns.of(session)
 	if len(conns) == 0 || s.tasks == nil {
 		return
@@ -296,96 +298,28 @@ func (s *Service) Notify(ctx context.Context, session uuid.UUID) {
 		return
 	}
 	for _, c := range conns {
-		items, err := s.pushItems(ctx, from.session, c)
+		d := delivery{streams: streams, room: roomFor(from.session.MessageLimit(), nil)}
+		if max, ok := c.allowanceOf(session); ok {
+			if d.tasks, err = s.room(ctx, from.session, max); err != nil {
+				s.logger.Error("minion push: the allowance's room", zap.String("session_id", session.String()), zap.Error(err))
+				return
+			}
+		}
+		o, err := s.outbox(ctx, from.session, d)
 		if err != nil {
 			s.logger.Error("minion push: what to send", zap.String("session_id", session.String()), zap.Error(err))
 			return
 		}
-		if len(items) == 0 {
+		if len(o.items) == 0 {
 			return
 		}
-		if err := s.push(ctx, c, from, items); err == nil {
-			return
-		} else {
-			s.logger.Info("minion push failed, trying another connection", zap.String("session_id", session.String()),
-				zap.String("conn", c.ID), zap.Error(err))
-		}
-	}
-}
-
-// WakeStreams pushes the session's stream acks to its minion now, over a
-// persistent connection serving it: a stream it holds goes as soon as a
-// downloader (or an uploader) comes, instead of with the minion's next
-// message, which on a persistent connection may be long in coming. The
-// minion holds such a stream, sending nothing, so the ack cannot cross its
-// chunks. Nothing goes without a connection open. It returns at once.
-//
-// A session no persistent connection serves may be a bind-call page's: its
-// target is called, if a stream of its may go on (bind.go).
-func (s *Service) WakeStreams(session uuid.UUID) {
-	if !s.Connected(session) {
-		s.wakeBind(session)
-		return
-	}
-	go s.wakeStreams(context.Background(), session)
-}
-
-// StreamRoom: a downloader took a chunk of one of the session's streams.
-// Only a bind-call page is told, by a call: a minion that polls, or holds a
-// persistent connection, asks on its own.
-func (s *Service) StreamRoom(session uuid.UUID) {
-	if !s.Connected(session) {
-		s.wakeBind(session)
-	}
-}
-
-func (s *Service) wakeStreams(ctx context.Context, session uuid.UUID) {
-	conns := s.conns.of(session)
-	if len(conns) == 0 {
-		return
-	}
-	defer s.conns.lock(session)()
-	from, err := s.sender(ctx, session)
-	if err != nil || from.session == nil || from.session.Closed(s.now()) {
-		return
-	}
-	items, err := s.streamAcks(ctx, from.session, nil)
-	if err != nil {
-		s.logger.Error("minion push: streams' acks", zap.String("session_id", session.String()), zap.Error(err))
-		return
-	}
-	if len(items) == 0 {
-		return
-	}
-	for _, c := range conns {
-		if err := s.push(ctx, c, from, items); err == nil {
+		if err := s.push(ctx, c, from, o.items); err == nil {
 			return
 		} else {
 			s.logger.Info("minion push failed, trying another connection", zap.String("session_id", session.String()),
 				zap.String("conn", c.ID), zap.Error(err))
 		}
 	}
-}
-
-// pushItems is what goes to the session on c: its cancels, and its tasks
-// within c's allowance.
-func (s *Service) pushItems(ctx context.Context, session *models.MinionSession, c *Conn) ([]cbor.RawMessage, error) {
-	items, err := s.cancels(ctx, session)
-	if err != nil {
-		return nil, err
-	}
-	if max, ok := c.allowanceOf(session.SessionID); ok {
-		limit, err := s.room(ctx, session, max)
-		if err != nil {
-			return nil, err
-		}
-		tasks, err := s.deliver(ctx, session, limit)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, tasks...)
-	}
-	return items, nil
 }
 
 // room is how many tasks an allowance of max leaves room for: max less the
@@ -408,7 +342,7 @@ func (s *Service) room(ctx context.Context, session *models.MinionSession, allow
 func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.RawMessage) error {
 	c.touch(s.now())
 	id := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: id, Items: items})
+	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: id, Items: items, At: unixNow(s.now())})
 	if err != nil {
 		return err
 	}
@@ -440,7 +374,30 @@ func (s *Service) seenOn(ctx context.Context, via *Conn, session *models.MinionS
 		evicted.close()
 	}
 	if first {
+		s.setConnected(ctx, session.SessionID, true)
 		s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
+	}
+}
+
+// setConnected records whether a persistent connection serving the session
+// is open, for the Sessions list's filters (models.MinionSession.Connected).
+func (s *Service) setConnected(ctx context.Context, session uuid.UUID, connected bool) {
+	if err := s.sessions.SetConnected(ctx, session, connected); err != nil {
+		s.logger.Warn("minion connection: record the session connected", zap.String("session_id", session.String()),
+			zap.Bool("connected", connected), zap.Error(err))
+	}
+}
+
+// resetConnected, as core starts, says no session is connected: the
+// connections went with the process that held them.
+func (s *Service) resetConnected(ctx context.Context) {
+	n, err := s.sessions.ClearConnected(ctx)
+	if err != nil {
+		s.logger.Warn("minion connections: clear the sessions connected before core started", zap.Error(err))
+		return
+	}
+	if n > 0 {
+		s.logger.Info("minion connections: sessions connected before core started are not", zap.Int64("sessions", n))
 	}
 }
 
@@ -464,6 +421,7 @@ func (s *Service) Closed(ctx context.Context, c *Conn) {
 		s.touch(ctx, session, c.Peer)
 	}
 	for _, session := range nowNone {
+		s.setConnected(ctx, session, false)
 		s.publishSession(ctx, session)
 	}
 }
@@ -475,7 +433,7 @@ func (s *Service) touch(ctx context.Context, session uuid.UUID, peer string) {
 	if err != nil || from.session == nil || from.session.Closed(s.now()) {
 		return
 	}
-	if err := s.sessions.CheckIn(ctx, session, checkIn(s.now(), peer, nil, from.session.Sleep)); err != nil {
+	if err := s.sessions.CheckIn(ctx, session, checkIn(s.now(), peer, nil, from.session.Sleep, from.session.ConnKind)); err != nil {
 		s.logger.Warn("minion connection: check the session in", zap.String("session_id", session.String()), zap.Error(err))
 	}
 }

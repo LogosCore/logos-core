@@ -10,6 +10,7 @@ import { platformLabel } from "@/components/builds/build-values"
 import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { compareFields, formatValue, type FieldDef } from "./field-values"
 import { channelsText, fieldNotes, versionsText } from "./schema-notes"
+import { commandKindsNote } from "@/components/minion-sessions/command-kinds"
 
 type Management = NonNullable<ModuleDetailFieldsFragment["management"]>
 type Connection = NonNullable<ModuleDetailFieldsFragment["connection"]>
@@ -135,6 +136,9 @@ export function BuildCommands({ build }: { build: Build }) {
             <>
               <div>{c.label}</div>
               {c.description && <div className="text-xs text-muted-foreground">{c.description}</div>}
+              {c.kinds.length > 0 && (
+                <div className="text-xs text-muted-foreground">{commandKindsNote(c.kinds)?.text}</div>
+              )}
             </>
           ),
         }))}

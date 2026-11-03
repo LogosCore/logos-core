@@ -126,6 +126,8 @@ describe("lateness", () => {
     expect(lateness(s, at + 300_000)).toBe("lost")
     expect(lateness({ lateAt: "2026-10-30T10:00:00Z", lostAt: null }, at + 3600_000)).toBe("late")
     expect(lateness({ lateAt: null, lostAt: null }, at)).toBeNull()
+    // A minion on a bind-persistent connection: its connection says, not a schedule.
+    expect(lateness({ lateAt: "2026-10-30T10:00:00Z", lostAt: null, connKind: "bind-persistent" }, at + 3600_000)).toBeNull()
   })
   test("live and late filters read and refresh with the clock", () => {
     expect(describeFilter({ column: "lastSeen", op: "LATE" })).toBe("late")

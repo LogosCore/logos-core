@@ -82,6 +82,12 @@ type IMinionSessionRepository interface {
 	BackfillDescriptions(ctx context.Context) (int64, error)
 	// SetPersisted marks a session persisted: a build names it.
 	SetPersisted(ctx context.Context, sessionID uuid.UUID) error
+	// SetConnected records whether a persistent connection serving the
+	// session is open (models.MinionSession.Connected).
+	SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error
+	// ClearConnected says no session is connected: core held the
+	// connections, and they went with the process before.
+	ClearConnected(ctx context.Context) (int64, error)
 	// Claim gives an open session to the process that claimed it: its
 	// keys, build and hello, the previous keys kept as replaced, the restart
 	// recorded. IsNotFound when the session is not open.
@@ -178,6 +184,9 @@ type MinionSessionCheckIn struct {
 	// late and lost from now; nil leaves them (no schedule known).
 	Sleep          *models.MinionSessionSleep
 	LateAt, LostAt *time.Time
+	// Untimed: the minion's connection says whether it is there, not a
+	// schedule (models.LateBySchedule): late_at and lost_at go.
+	Untimed bool
 }
 
 func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UUID, c MinionSessionCheckIn) error {
@@ -192,10 +201,20 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 		set["lost_at"] = *c.LostAt
 	}
 	// A check-in also restores an archived session: its minion is back.
-	if c.Peer == "" {
-		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": set, "$unset": bson.M{"purge_at": "", "archived": ""}}))
+	unset := []string{"purge_at", "archived"}
+	if c.Untimed {
+		delete(set, "late_at")
+		delete(set, "lost_at")
+		unset = append(unset, "late_at", "lost_at")
 	}
-	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(c.At, c.Peer, set))
+	if c.Peer == "" {
+		u := bson.M{}
+		for _, k := range unset {
+			u[k] = ""
+		}
+		return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": set, "$unset": u}))
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, checkInPipeline(c.At, c.Peer, set, unset))
 }
 
 // checkInPipeline is CheckIn's update with a peer address, in one write,
@@ -206,7 +225,7 @@ func (r *minionSessionRepository) CheckIn(ctx context.Context, sessionID uuid.UU
 //	        old.count+1}, by last_seen desc), MaxSessionPeers)
 //
 // The address goes in through $literal, as a client's value must.
-func checkInPipeline(at time.Time, peer string, set bson.M) bson.A {
+func checkInPipeline(at time.Time, peer string, set bson.M, unset []string) bson.A {
 	lit := bson.M{"$literal": peer}
 	byAddress := func(op string) bson.M {
 		return bson.M{"$filter": bson.M{"input": "$$cur", "cond": bson.M{op: bson.A{"$$this.address", lit}}}}
@@ -237,7 +256,11 @@ func checkInPipeline(at time.Time, peer string, set bson.M) bson.A {
 		stage[k] = bson.M{"$literal": v}
 	}
 	stage["rev"] = revStage
-	return bson.A{bson.M{"$set": stage}, bson.M{"$unset": bson.A{"purge_at", "archived"}}}
+	u := bson.A{}
+	for _, k := range unset {
+		u = append(u, k)
+	}
+	return bson.A{bson.M{"$set": stage}, bson.M{"$unset": u}}
 }
 
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
@@ -246,7 +269,13 @@ func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.U
 }
 
 func (r *minionSessionRepository) SetConn(ctx context.Context, sessionID uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error {
-	update := bson.M{"$set": bson.M{"conn": conn.Place, "conn_kind": conn.Kind, "conn_name": conn.Name}}
+	update := bson.M{"$set": bson.M{"conn": conn.Place, "conn_kind": conn.Kind, "conn_name": conn.Name,
+		"conn_max_message": conn.MaxMessage}}
+	if !models.LateBySchedule(conn.Kind) {
+		// On a connection that says whether the minion is there: no
+		// longer late by a schedule.
+		update["$unset"] = bson.M{"late_at": "", "lost_at": ""}
+	}
 	if change != nil {
 		update["$push"] = bson.M{"conn_changes": bson.M{
 			"$each": bson.A{change}, "$position": 0, "$slice": models.MaxSessionConnChanges,
@@ -473,6 +502,22 @@ func (r *minionSessionRepository) OwnSessionIDs(ctx context.Context, operationID
 
 func (r *minionSessionRepository) SetPersisted(ctx context.Context, sessionID uuid.UUID) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(bson.M{"$set": bson.M{"persisted": true}}))
+}
+
+func (r *minionSessionRepository) SetConnected(ctx context.Context, sessionID uuid.UUID, connected bool) error {
+	update := withRev(bson.M{"$unset": bson.M{"connected": ""}})
+	if connected {
+		update = withRev(bson.M{"$set": bson.M{"connected": true}})
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, update)
+}
+
+func (r *minionSessionRepository) ClearConnected(ctx context.Context) (int64, error) {
+	res, err := r.coll.UpdateAll(ctx, bson.M{"connected": true}, withRev(bson.M{"$unset": bson.M{"connected": ""}}))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
 }
 
 // Claim is one update inside Mongo: the session's keys move to the front of

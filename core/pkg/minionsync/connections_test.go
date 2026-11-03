@@ -217,15 +217,18 @@ func TestSessionConnectionsCap(t *testing.T) {
 	}
 }
 
-// fakeStreams answers Acks with acks; the rest is not used here.
-type fakeStreams struct{ acks []protocol.AckItem }
+// fakeStreams answers Acks with acks, and soon; the rest is not used here.
+type fakeStreams struct {
+	acks []protocol.AckItem
+	soon bool
+}
 
 func (f *fakeStreams) TakeChunk(context.Context, *models.MinionSession, protocol.ChunkItem) (minionstreams.Reply, bool, error) {
 	return minionstreams.Reply{}, false, nil
 }
 
-func (f *fakeStreams) Acks(context.Context, *models.MinionSession, map[string]bool) ([]protocol.AckItem, error) {
-	return f.acks, nil
+func (f *fakeStreams) Acks(context.Context, *models.MinionSession, map[string]bool) ([]protocol.AckItem, bool, error) {
+	return f.acks, f.soon, nil
 }
 
 func (f *fakeStreams) Pull(context.Context, *models.MinionTask, int64, int) (*protocol.ChunkItem, *protocol.AckItem, error) {
@@ -242,7 +245,7 @@ func TestWakeStreams(t *testing.T) {
 	c := newConnRig(t, r, sid, "c1")
 
 	// Not connected: nothing to push it on.
-	r.svc.wakeStreams(context.Background(), sid)
+	r.svc.pushNow(context.Background(), sid, true)
 	if p := c.pushes(t); len(p) != 0 {
 		t.Fatalf("a push with no connection: %+v", p)
 	}
@@ -250,7 +253,7 @@ func TestWakeStreams(t *testing.T) {
 	if _, err := c.exchange(t, protocol.NewMessageID(), nil, protocol.GetTasksItem{T: protocol.ItemGetTasks}); err != nil {
 		t.Fatal(err)
 	}
-	r.svc.wakeStreams(context.Background(), sid)
+	r.svc.pushNow(context.Background(), sid, true)
 	p := c.pushes(t)
 	if len(p) != 1 {
 		t.Fatalf("pushes %+v", p)
@@ -259,5 +262,28 @@ func TestWakeStreams(t *testing.T) {
 	var a protocol.AckItem
 	if len(acks) != 1 || protocol.UnmarshalCBOR(acks[0], &a) != nil || !bytes.Equal(a.Xfer, xfer) || a.Hold || a.Next == nil || *a.Next != 0 {
 		t.Fatalf("the pushed ack %+v", a)
+	}
+}
+
+// A session is recorded connected while a persistent connection serving it
+// is open, for the Sessions list's filters; core clears it as it starts.
+func TestConnectedRecorded(t *testing.T) {
+	r := newRig(t)
+	sid, _ := openSession(t, r)
+	c := newConnRig(t, r, sid, "c1")
+	if _, err := c.exchange(t, protocol.NewMessageID(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if !r.sessionRow(t, sid).Connected {
+		t.Fatal("not recorded connected")
+	}
+	r.svc.Closed(context.Background(), c.conn)
+	if r.sessionRow(t, sid).Connected {
+		t.Fatal("still recorded connected once its connection closed")
+	}
+	r.sessionRow(t, sid).Connected = true
+	r.svc.resetConnected(context.Background())
+	if r.sessionRow(t, sid).Connected {
+		t.Fatal("still connected after core started")
 	}
 }
