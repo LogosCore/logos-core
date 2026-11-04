@@ -34,7 +34,9 @@ type BuildSchema {
   version: Int!
   # Channel kinds the minions speak.
   channels: [BuildChannel!]!
-  # Payload crypto suite the minions implement; null for none.
+  # Payload crypto suite the minions implement ("none": their messages go
+  # unsealed, only through kinds a channel declares agentless); null when the
+  # factory declares no suite.
   crypto: String
   # Build parameters every target shares.
   fields: [ModuleField!]!
@@ -302,6 +304,9 @@ type Build {
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON
+  # The minions talk unsealed (crypto none): an agentless channel acts as
+  # them, and their messages are in the clear between core and it.
+  unsealed: Boolean!
   # The session the minion claims when it starts; null for a minion that
   # opens new sessions.
   persistedSession: ID

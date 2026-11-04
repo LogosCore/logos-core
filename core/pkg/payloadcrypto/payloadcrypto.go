@@ -21,6 +21,10 @@ var suites = map[string]func() (any, error){
 		rand.Read(m.MACKey)
 		return m, nil
 	},
+	// No keys: a minion its channel acts as and core exchange messages
+	// unsealed (docs: contracts/agentless-channels/), only through a kind
+	// that channel declares agentless.
+	protocol.CryptoNone: nil,
 }
 
 // Supported reports whether core implements suite.
@@ -45,6 +49,9 @@ func NewKeys(suite string) (*protocol.BuildCrypto, error) {
 	if !ok {
 		return nil, fmt.Errorf("payload crypto suite %q is not implemented", suite)
 	}
+	if gen == nil {
+		return &protocol.BuildCrypto{Suite: suite}, nil
+	}
 	m, err := gen()
 	if err != nil {
 		return nil, err
@@ -55,3 +62,7 @@ func NewKeys(suite string) (*protocol.BuildCrypto, error) {
 	}
 	return &protocol.BuildCrypto{Suite: suite, Material: raw}, nil
 }
+
+// Sealed reports whether a suite seals messages: every one but
+// protocol.CryptoNone.
+func Sealed(suite string) bool { return suite != protocol.CryptoNone }

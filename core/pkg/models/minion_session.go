@@ -182,6 +182,10 @@ const (
 	MaxSessionConnChanges  = 32
 )
 
+// Unsealed reports whether the session's messages go unsealed
+// (protocol.CryptoNone): an agentless channel acts as its minion.
+func (s *MinionSession) Unsealed() bool { return s.Crypto.Suite == protocol.CryptoNone }
+
 // MinionSessionConn is the connection a minion uses: its place in the
 // build's connections, its kind and its name.
 type MinionSessionConn struct {

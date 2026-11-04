@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
 import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
@@ -32,6 +33,9 @@ import {
   type FieldDef,
   type MapEntry,
 } from "./field-values"
+
+/** A string or secret over several lines (protocol.FormatMultiline): a PEM key, say. */
+const MULTILINE_FORMAT = "multiline"
 
 interface FieldControlProps {
   field: FieldDef
@@ -304,6 +308,26 @@ export function FieldControl({
       )
 
     default: {
+      // Text over several lines (a PEM key): a one-line box would drop its
+      // line breaks, so a box of several lines, a secret's too (a text
+      // area cannot be masked).
+      if (field.format === MULTILINE_FORMAT) {
+        return (
+          <Textarea
+            id={id}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            placeholder={field.placeholder ?? undefined}
+            maxLength={field.maxLength ?? undefined}
+            rows={6}
+            autoComplete="off"
+            spellCheck={false}
+            className="text-xs"
+          />
+        )
+      }
       // string, url, secret-as-text (action params), and unknown types.
       const input = (
         <Input

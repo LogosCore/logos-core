@@ -290,7 +290,9 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	if err != nil {
 		return fmt.Errorf("load the build: %w", err)
 	}
-	from := &sender{build: b, crypto: *b.Crypto}
+	// A hello through the target is of its connection, when it says none
+	// (a minion an agentless channel acts as knows no build).
+	from := &sender{build: b, crypto: *b.Crypto, place: t.Conn}
 	if err := from.readKeys(); err != nil {
 		return s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "core does not implement the build's crypto"))
 	}
@@ -298,7 +300,7 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	if err != nil {
 		return err
 	}
-	msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, b.BuildID, []cbor.RawMessage{rehello})
+	msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from, b.BuildID, []cbor.RawMessage{rehello})
 	if err != nil || done {
 		return err
 	}
@@ -380,7 +382,7 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 	// on; no count bounds them, as a file takes a call a chunk.
 	var last []cbor.RawMessage
 	for {
-		msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from.keys, session.SessionID, items)
+		msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from, session.SessionID, items)
 		if err != nil || done {
 			return err
 		}
@@ -454,17 +456,18 @@ func (s *Service) allowanceOf(t *models.MinionTarget, msg *protocol.MinionMessag
 	}
 }
 
-// exchange makes one call: items sealed under id with keys, to the target
-// through its channel. It returns the page's answer, opened; or done, when
-// the call reached nothing or not the page, which it recorded.
+// exchange makes one call: items under id, sealed as from's suite has
+// them, to the target through its channel. It returns the page's answer,
+// opened; or done, when the call reached nothing or not the page, which it
+// recorded.
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
-	keys protocol.AES256CBCHMACSHA256Material, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, string, bool, error) {
+	from *sender, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, string, bool, error) {
 	msgID := protocol.NewMessageID()
 	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items, At: unixNow(s.now())})
 	if err != nil {
 		return nil, "", false, err
 	}
-	sealed, err := protocol.SealFrame(keys, id, protocol.FrameCoreToMinion, plain)
+	sealed, err := from.seal(id, plain)
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -480,6 +483,11 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable, "the channel's control link dropped during the call"))
 	case err != nil:
 		return nil, "", false, err
+	case a.Failure != nil && refusal(a.Failure.Kind):
+		// The target refused the channel (a login, a host key): calling it
+		// again changes nothing until it is edited.
+		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
+			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
 	case a.Failure != nil:
 		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetUnreachable,
 			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
@@ -491,7 +499,7 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	if !bytes.Equal(a.ID, id[:]) {
 		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
 	}
-	opened, err := protocol.OpenFrame(keys, id, protocol.FrameMinionToCore, a.Data)
+	opened, err := from.open(id, a.Data)
 	if err != nil {
 		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, nil)+": an answer that does not open"))
 	}
@@ -511,6 +519,13 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	}
 	// The address the channel reached the page at: its external one.
 	return &msg, peerAddress(a.Peer), false, nil
+}
+
+// refusal reports whether a link failure is the target refusing the
+// channel (an agentless channel's: the login, the host key), which no retry
+// changes until the target is edited.
+func refusal(kind int) bool {
+	return kind == protocol.LinkFailLogin || kind == protocol.LinkFailHostKey
 }
 
 // peerAddress is a channel's peer as sessions keep it: an IP address,

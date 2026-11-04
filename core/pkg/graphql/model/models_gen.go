@@ -77,6 +77,7 @@ type Build struct {
 	Failover               any               `json:"failover"`
 	MaxTasks               *int              `json:"maxTasks,omitempty"`
 	Crypto                 any               `json:"crypto,omitempty"`
+	Unsealed               bool              `json:"unsealed"`
 	PersistedSession       *string           `json:"persistedSession,omitempty"`
 	State                  string            `json:"state"`
 	Instance               *string           `json:"instance,omitempty"`
@@ -666,6 +667,7 @@ type MinionSession struct {
 	Archived         bool                    `json:"archived"`
 	Mark             *MinionSessionMark      `json:"mark,omitempty"`
 	Persisted        bool                    `json:"persisted"`
+	Unsealed         bool                    `json:"unsealed"`
 	Restarts         []*MinionSessionRestart `json:"restarts"`
 	RestartCount     int                     `json:"restartCount"`
 	SleepInterval    *int                    `json:"sleepInterval,omitempty"`
@@ -992,9 +994,10 @@ type ModuleConnection struct {
 }
 
 type ModuleConnectionKind struct {
-	Kind   string         `json:"kind"`
-	Fields []*ModuleField `json:"fields"`
-	Target []*ModuleField `json:"target"`
+	Kind      string         `json:"kind"`
+	Fields    []*ModuleField `json:"fields"`
+	Target    []*ModuleField `json:"target"`
+	Agentless bool           `json:"agentless"`
 }
 
 type ModuleConnectionSchema struct {

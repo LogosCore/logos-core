@@ -189,6 +189,7 @@ describe("live updates", () => {
     lateAt: null,
     lostAt: null,
     persisted: false,
+    unsealed: false,
     restartCount: 0,
     restarts: [],
     version: null,

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { DownloadIcon, ExternalLinkIcon, ListChecksIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { DownloadIcon, ExternalLinkIcon, ListChecksIcon, LockOpenIcon, PinIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu"
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
@@ -13,7 +13,7 @@ import { artifactUrl } from "@/lib/build-file-upload"
 import { ModuleIconCell } from "@/components/modules/module-icon"
 import { cn } from "@/lib/utils"
 import { PipelineDots } from "./build-pipeline"
-import { currentStage, platformLabel } from "./build-values"
+import { currentStage, platformLabel, UNENCRYPTED_BUILD } from "./build-values"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
 
 const GRID_COLS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1fr)_48px]"
@@ -174,6 +174,11 @@ export function BuildsTable({
                           title="Persists a session: its minions come back to it when they restart"
                         >
                           <PinIcon className="size-3" aria-label="Persists a session" />
+                        </span>
+                      )}
+                      {b.unsealed && (
+                        <span className="ml-1.5 shrink-0 self-center text-muted-foreground" title={UNENCRYPTED_BUILD}>
+                          <LockOpenIcon className="size-3" aria-label="Unencrypted" />
                         </span>
                       )}
                     </>

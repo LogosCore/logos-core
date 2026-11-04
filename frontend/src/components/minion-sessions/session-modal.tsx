@@ -13,7 +13,7 @@ import {
   RecordModalTitle,
 } from "@/components/ui/record-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { platformLabel } from "@/components/builds/build-values"
+import { platformLabel, UNENCRYPTED_SESSION } from "@/components/builds/build-values"
 import { KindName, ModuleIcon } from "@/components/modules/module-icon"
 import { MarkIcon } from "./mark-icon"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
@@ -90,6 +90,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
           </RecordModalTitle>
           {s.archived && <Badge>Archived</Badge>}
           {s.state === "CLOSED" && <Badge>Closed</Badge>}
+          {s.unsealed && <Badge title={UNENCRYPTED_SESSION}>Unencrypted</Badge>}
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
           <TabsList>
@@ -140,8 +141,12 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
 /** The JSON tab only shows the session: nothing it could change. */
 function noChange() {}
 
-function Badge({ children }: { children: ReactNode }) {
-  return <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground">{children}</span>
+function Badge({ children, title }: { children: ReactNode; title?: string }) {
+  return (
+    <span className="rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground" title={title}>
+      {children}
+    </span>
+  )
 }
 
 const none = <span className="text-muted-foreground">—</span>
@@ -233,7 +238,11 @@ function HostCard({ s }: { s: Session }) {
       </LabelRow>
       <LabelRow label="Process">{s.proc || none}</LabelRow>
       <LabelRow label="PID">
-        <span className="font-mono">{s.pid}</span>
+        {s.pid === 0 ? (
+          <span className="text-muted-foreground">none: a channel acts as the minion</span>
+        ) : (
+          <span className="font-mono">{s.pid}</span>
+        )}
       </LabelRow>
       <LabelRow label="Minion version">{s.version || none}</LabelRow>
     </InfoCard>
@@ -265,7 +274,7 @@ function BuildCard({
       <LabelRow label="Platform">{platformLabel(s.platform)}</LabelRow>
       <LabelRow label="Description">{s.buildDescription || none}</LabelRow>
       <LabelRow label="Keys">
-        {s.staged ? "its own, from a stage" : "the build's own (no stage)"}
+        {s.unsealed ? "none: unencrypted, a channel acts as the minion" : s.staged ? "its own, from a stage" : "the build's own (no stage)"}
       </LabelRow>
       <LabelRow label="Build id">
         <code className="font-mono text-xs break-all">{s.buildId}</code>

@@ -18,7 +18,8 @@ type Build = NonNullable<ModuleDetailFieldsFragment["build"]>
 
 /**
  * The minion connection settings this instance declared (read-only), per
- * connection kind it carries, each under a row saying which. Operators fill
+ * connection kind it carries, each under a row saying which, and whether the
+ * channel acts as the minion on it (agentless). Operators fill
  * them in for each connection of a build, or keep them as endpoints on an
  * operation's Endpoints page.
  */
@@ -27,7 +28,7 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
     <InfoCard title="Minion connection settings" note={`schema v${connection.version}`}>
       {connection.kinds.map((k) => (
         <Fragment key={k.kind}>
-          <SectionRow title={kindLabels[k.kind] ?? k.kind} note={k.kind} />
+          <SectionRow title={kindLabels[k.kind] ?? k.kind} note={k.agentless ? `${k.kind} · acts as the minion` : k.kind} />
           {k.fields.length > 0 ? <IdRows rows={fieldRows(k.fields)} /> : <NoteRow>None.</NoteRow>}
         </Fragment>
       ))}
@@ -43,7 +44,8 @@ export function ConnectionSchema({ connection }: { connection: Connection }) {
  * crypto. Operators fill them in on an operation's Builds page.
  */
 export function BuildParameters({ build }: { build: Build }) {
-  const crypto = build.crypto ? `payload crypto ${build.crypto}` : "no payload crypto"
+  const crypto =
+    build.crypto === "none" ? "unencrypted: a channel acts as the minion" : build.crypto ? `payload crypto ${build.crypto}` : "no payload crypto"
   return (
     <InfoCard title="Build parameters" note={`schema v${build.version} · ${crypto}`}>
       {build.fields.length > 0 && (

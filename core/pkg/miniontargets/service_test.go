@@ -3,6 +3,7 @@ package miniontargets
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -295,4 +296,43 @@ func TestProblems(t *testing.T) {
 	if got := ProblemsText(map[string]string{"": "whole", "b": "two", "a": "one"}); got != "whole; a: one; b: two" {
 		t.Fatalf("text %q", got)
 	}
+}
+
+// A build whose minions talk unsealed takes targets only where its channel
+// acts as the minion: added, edited and called, its kind must be agentless.
+func TestUnsealedBuildNeedsAgentless(t *testing.T) {
+	s, _, _, b, c := setup()
+	ctx := context.Background()
+	b.Crypto = &protocol.BuildCrypto{Suite: protocol.CryptoNone}
+	in := Input{Values: map[string]any{"url": "https://h/a.php"}, Retries: true}
+	if _, err := s.Add(ctx, b, 2, nil, in); err == nil || !isInvalid(err, "does not act as the minion") {
+		t.Fatalf("a kind that is not agentless: %v", err)
+	}
+	k := s.schemas.(schemas)["dumbo"].Kinds[protocol.KindBindCall]
+	k.Agentless = true
+	s.schemas.(schemas)["dumbo"].Kinds[protocol.KindBindCall] = k
+	tg, err := s.Add(ctx, b, 2, nil, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-c.calls
+	if p, err := s.Problems(ctx, tg); err != nil || len(p) != 0 {
+		t.Fatalf("agentless: %v %v", p, err)
+	}
+	// The channel stops acting as the minion: the target needs editing, and
+	// takes no edit until it does again.
+	k.Agentless = false
+	s.schemas.(schemas)["dumbo"].Kinds[protocol.KindBindCall] = k
+	if p, _ := s.Problems(ctx, tg); p[""] == "" {
+		t.Fatalf("no longer agentless: %v", p)
+	}
+	if _, err := s.Update(ctx, tg.TargetID, in); err == nil || !isInvalid(err, "does not act as the minion") {
+		t.Fatalf("an edit: %v", err)
+	}
+}
+
+// isInvalid reports whether err is the service's refusal, saying want.
+func isInvalid(err error, want string) bool {
+	var v *ValidationError
+	return errors.As(err, &v) && strings.Contains(v.Message, want)
 }

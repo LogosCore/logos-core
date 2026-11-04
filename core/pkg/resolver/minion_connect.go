@@ -22,10 +22,11 @@ import (
 // get a task.
 
 // TaskConnector opens and closes a bind-persistent target's connection
-// (minionsync.Service).
+// (minionsync.Service), and says whether one is open now.
 type TaskConnector interface {
 	ConnectTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error)
 	DisconnectTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error)
+	TargetConnected(targetID uuid.UUID) bool
 }
 
 // connectCommands are core's connect and disconnect.
@@ -85,9 +86,11 @@ func (r *minionTaskResolver) runConnect(ctx context.Context, s *models.MinionSes
 }
 
 // connectOutcome opens or closes target's connection: whether it worked,
-// the task's output, and its error when it did not.
+// the task's output, and its error when it did not. Whether the target is
+// connected is whether a connection is open now, not its stored state,
+// which may be behind on it.
 func (r *minionTaskResolver) connectOutcome(ctx context.Context, command string, target *models.MinionTarget) (bool, string, string) {
-	connected := target.State == models.TargetConnected
+	connected := r.connector.TargetConnected(target.TargetID)
 	if command == protocol.CommandConnect {
 		if connected {
 			return true, fmt.Sprintf("already connected (%s)\n", target.Name), ""
@@ -96,7 +99,7 @@ func (r *minionTaskResolver) connectOutcome(ctx context.Context, command string,
 		if err != nil {
 			return false, "", "the open failed: " + err.Error()
 		}
-		if after.State == models.TargetConnected {
+		if r.connector.TargetConnected(target.TargetID) {
 			return true, fmt.Sprintf("connected (%s)\n", after.Name), ""
 		}
 		return false, "", stateText(after)
@@ -108,7 +111,7 @@ func (r *minionTaskResolver) connectOutcome(ctx context.Context, command string,
 	if err != nil {
 		return false, "", "the close failed: " + err.Error()
 	}
-	if after.State == models.TargetConnected {
+	if r.connector.TargetConnected(target.TargetID) {
 		return false, "", "still connected"
 	}
 	out := fmt.Sprintf("disconnected (%s)\n", after.Name)

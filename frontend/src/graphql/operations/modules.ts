@@ -162,6 +162,7 @@ export const ModuleDetailFields = graphql(`
       version
       kinds {
         kind
+        agentless
         fields {
           ...ModuleFieldDefFields
         }

@@ -167,6 +167,7 @@ describe("parseEndpointImport", () => {
     kinds: [
       {
         kind: "reverse-call",
+        agentless: false,
         fields: [
           { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
           { key: "tls_verify", type: "bool", label: "Verify TLS", order: 2, required: false, default: false },
@@ -174,7 +175,7 @@ describe("parseEndpointImport", () => {
           { key: "headers", type: "string_map", label: "Headers", order: 4, required: false },
         ] as FieldDef[],
       },
-      { kind: "reverse-persistent", fields: [{ key: "base_url", type: "url", label: "Base URL", order: 1, required: true }] },
+      { kind: "reverse-persistent", agentless: false, fields: [{ key: "base_url", type: "url", label: "Base URL", order: 1, required: true }] },
     ],
   }
   const kinds = new Map([["http", http]])

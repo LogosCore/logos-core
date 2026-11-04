@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -46,22 +47,32 @@ type openKey struct {
 	request  uint64
 }
 
-// opening is an open waiting for its socket: its target and policy.
+// opening is an open waiting for its socket: its target and policy; taken
+// once a socket named it (OpenedFor), and arrived closed once that socket
+// is the target's (ForTarget).
 type opening struct {
-	target uuid.UUID
-	policy string
+	target  uuid.UUID
+	policy  string
+	taken   bool
+	arrived chan struct{}
 }
+
+// socketWait bounds how long an open the channel answered waits for the
+// socket that took it to become its target's: the socket's handler does
+// that right after the WebSocket's upgrade, which the channel's answer can
+// outrun. Longer means the upgrade failed.
+var socketWait = 5 * time.Second
 
 // persistent are the opens waiting for their sockets, and the targets'
 // open connections.
 type persistent struct {
 	mu    sync.Mutex
-	opens map[openKey]opening
+	opens map[openKey]*opening
 	conns map[uuid.UUID][]*Conn
 }
 
 func newPersistent() *persistent {
-	return &persistent{opens: map[openKey]opening{}, conns: map[uuid.UUID][]*Conn{}}
+	return &persistent{opens: map[openKey]*opening{}, conns: map[uuid.UUID][]*Conn{}}
 }
 
 // OpenedFor is the target and policy of the open a connection socket
@@ -70,19 +81,103 @@ func newPersistent() *persistent {
 func (s *Service) OpenedFor(instance string, request uint64) (target uuid.UUID, policy string, ok bool) {
 	s.persist.mu.Lock()
 	defer s.persist.mu.Unlock()
-	o, ok := s.persist.opens[openKey{instance, request}]
-	delete(s.persist.opens, openKey{instance, request})
-	return o.target, o.policy, ok
+	o := s.persist.opens[openKey{instance, request}]
+	if o == nil || o.taken {
+		return uuid.Nil, "", false
+	}
+	o.taken = true
+	return o.target, o.policy, true
 }
 
 // ForTarget makes c a bind-persistent connection of target (policy as it
 // was opened) and keeps it with the target's: its controller calls it once
-// the socket is up, before any frame.
+// the socket is up, before any frame. The open the socket took, waiting
+// for it, is told.
 func (s *Service) ForTarget(c *Conn, target uuid.UUID, policy string) {
 	c.target, c.policy = target, policy
 	s.persist.mu.Lock()
-	defer s.persist.mu.Unlock()
 	s.persist.conns[target] = append(s.persist.conns[target], c)
+	for k, o := range s.persist.opens {
+		if o.taken && o.target == target {
+			close(o.arrived)
+			delete(s.persist.opens, k)
+		}
+	}
+	s.persist.mu.Unlock()
+	go s.firstWord(c, target)
+}
+
+// awaitSocket waits for the socket that took the open key, when one did,
+// until it is its target's (ForTarget), socketWait at most. One no socket
+// took is not waited for: it came to nothing.
+func (s *Service) awaitSocket(ctx context.Context, key openKey) {
+	s.persist.mu.Lock()
+	o := s.persist.opens[key]
+	s.persist.mu.Unlock()
+	if o == nil || !o.taken {
+		return
+	}
+	timer := time.NewTimer(socketWait)
+	defer timer.Stop()
+	select {
+	case <-o.arrived:
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+}
+
+// dropOpen forgets the open key, whatever came of it.
+func (s *Service) dropOpen(key openKey) {
+	s.persist.mu.Lock()
+	delete(s.persist.opens, key)
+	s.persist.mu.Unlock()
+}
+
+// firstWord speaks first on a connection of a build that talks unsealed
+// (docs: contracts/agentless-channels/): the minion its channel acts as
+// keeps nothing from one connection to the next, so it waits for core. A
+// target with an open session gets a message under the session's id, which
+// the minion's answer links to the connection; one without, a rehello under
+// the build id, which the minion answers with its hello. A minion that
+// listens speaks first itself: nothing is sent.
+func (s *Service) firstWord(c *Conn, targetID uuid.UUID) {
+	if s.targets == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), openDeadline)
+	defer cancel()
+	t, err := s.targets.FindByTargetID(ctx, targetID)
+	if err != nil {
+		s.logger.Info("targets: core's first word: the target does not load", zap.String("target_id", targetID.String()), zap.Error(err))
+		return
+	}
+	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
+	if err != nil {
+		s.logger.Info("targets: core's first word: the build does not load", zap.String("target_id", targetID.String()), zap.Error(err))
+		return
+	}
+	if !b.Unsealed() {
+		return // its minion speaks first
+	}
+	c.mu.Lock()
+	c.build, c.place, c.unsealed = b.BuildID, t.Conn, true
+	c.mu.Unlock()
+	if t.SessionID != nil {
+		if from, err := s.sender(ctx, *t.SessionID); err == nil && from.session != nil && !from.session.Closed(s.now()) {
+			if err := s.push(ctx, c, from, nil); err != nil {
+				s.logger.Info("targets: core's first word did not go", zap.String("target_id", targetID.String()), zap.Error(err))
+			}
+			return
+		}
+	}
+	rehello, err := protocol.MarshalCBOR(protocol.RehelloItem{T: protocol.ItemRehello})
+	if err != nil {
+		return
+	}
+	from := &sender{build: b, crypto: *b.Crypto}
+	if err := s.pushUnder(ctx, c, from, b.BuildID, []cbor.RawMessage{rehello}); err != nil {
+		s.logger.Info("targets: core's first word did not go", zap.String("target_id", targetID.String()), zap.Error(err))
+	}
 }
 
 // targetConns are the target's open connections.
@@ -197,16 +292,12 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	sent := func(instance string, request uint64) {
 		key = openKey{instance, request}
 		s.persist.mu.Lock()
-		s.persist.opens[key] = opening{target: t.TargetID, policy: policy}
+		s.persist.opens[key] = &opening{target: t.TargetID, policy: policy, arrived: make(chan struct{})}
 		s.persist.mu.Unlock()
 	}
+	defer func() { s.dropOpen(key) }()
 	t.Calls++
 	a, err := s.link.Open(ctx, t.ModuleName, callValues(buildConn(b, t), t), openDeadline, sent)
-	// The socket comes before the answer, and takes its open: one left
-	// came to nothing.
-	s.persist.mu.Lock()
-	delete(s.persist.opens, key)
-	s.persist.mu.Unlock()
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
 		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
@@ -214,10 +305,19 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 		return s.saveCall(ctx, s.openFailed(t, models.TargetUnreachable, "the channel's control link dropped during the open"))
 	case err != nil:
 		return err
+	case a.Failure != nil && refusal(a.Failure.Kind):
+		// The target refused the channel (a login, a host key): opening it
+		// again changes nothing until it is edited.
+		return s.saveCall(ctx, s.answered(t, models.TargetRefused,
+			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
 	case a.Failure != nil:
 		return s.saveCall(ctx, s.openFailed(t, models.TargetUnreachable,
 			fmt.Sprintf("%s: %s", protocol.LinkFailName(a.Failure.Kind), a.Failure.Msg)))
 	}
+	// The socket comes before the answer and takes its open, but becomes
+	// the target's only after its upgrade, which the answer can outrun:
+	// wait for it.
+	s.awaitSocket(ctx, key)
 	if len(s.targetConns(t.TargetID)) == 0 {
 		// The channel said it opened, and no socket came, or it closed
 		// already (the minion hung up at once).
@@ -342,18 +442,43 @@ func (s *Service) linkTarget(ctx context.Context, target uuid.UUID, session *mod
 	if s.targets == nil {
 		return
 	}
+	// As the target's calls and opens save it: under its lock.
+	defer s.binds.lock(target)()
 	t, err := s.targets.FindByTargetID(ctx, target)
-	if err != nil || (t.SessionID != nil && *t.SessionID == session.SessionID) {
+	if err != nil {
+		return
+	}
+	linked := t.SessionID != nil && *t.SessionID == session.SessionID
+	// Its minion speaks over its connection: the target is connected,
+	// whatever an open that came to nothing on its way said.
+	stale := t.State != models.TargetConnected && len(s.targetConns(target)) > 0
+	if linked && !stale {
 		return
 	}
 	sid := session.SessionID
 	t.SessionID = &sid
+	if stale {
+		now := s.now()
+		t.State, t.StateDetail, t.StateAt = models.TargetConnected, "", now
+		t.Failures, t.UnreachableSince, t.LastOKAt, t.NextCallAt = 0, nil, &now, nil
+	}
 	if err := s.saveCall(ctx, t); err != nil {
 		s.logger.Warn("targets: link a session", zap.String("target_id", target.String()), zap.Error(err))
 		return
 	}
-	s.logger.Info("targets: a connection's minion is a session", zap.String("target_id", target.String()),
-		zap.Int64("number", session.Number), zap.String("session_id", sid.String()))
+	if !linked {
+		s.logger.Info("targets: a connection's minion is a session", zap.String("target_id", target.String()),
+			zap.Int64("number", session.Number), zap.String("session_id", sid.String()))
+	}
+	if stale {
+		s.logger.Info("targets: connected, as its connection's minion speaks", zap.String("target_id", target.String()))
+	}
+}
+
+// TargetConnected reports whether the bind-persistent target has a
+// connection open now: what its stored state may be behind on.
+func (s *Service) TargetConnected(target uuid.UUID) bool {
+	return len(s.targetConns(target)) > 0
 }
 
 // resetPersistent, as core starts, says the bind-persistent targets left

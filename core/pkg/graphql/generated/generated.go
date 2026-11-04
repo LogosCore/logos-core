@@ -177,6 +177,7 @@ type ComplexityRoot struct {
 		StartedAt              func(childComplexity int) int
 		State                  func(childComplexity int) int
 		Target                 func(childComplexity int) int
+		Unsealed               func(childComplexity int) int
 		Values                 func(childComplexity int) int
 		Warnings               func(childComplexity int) int
 	}
@@ -686,6 +687,7 @@ type ComplexityRoot struct {
 		Staged           func(childComplexity int) int
 		State            func(childComplexity int) int
 		Target           func(childComplexity int) int
+		Unsealed         func(childComplexity int) int
 		User             func(childComplexity int) int
 		Version          func(childComplexity int) int
 		X                func(childComplexity int) int
@@ -963,9 +965,10 @@ type ComplexityRoot struct {
 	}
 
 	ModuleConnectionKind struct {
-		Fields func(childComplexity int) int
-		Kind   func(childComplexity int) int
-		Target func(childComplexity int) int
+		Agentless func(childComplexity int) int
+		Fields    func(childComplexity int) int
+		Kind      func(childComplexity int) int
+		Target    func(childComplexity int) int
 	}
 
 	ModuleConnectionSchema struct {
@@ -2704,6 +2707,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Build.Target(childComplexity), true
+	case "Build.unsealed":
+		if e.ComplexityRoot.Build.Unsealed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Build.Unsealed(childComplexity), true
 	case "Build.values":
 		if e.ComplexityRoot.Build.Values == nil {
 			break
@@ -4857,6 +4866,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.Target(childComplexity), true
+	case "MinionSession.unsealed":
+		if e.ComplexityRoot.MinionSession.Unsealed == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.Unsealed(childComplexity), true
 	case "MinionSession.user":
 		if e.ComplexityRoot.MinionSession.User == nil {
 			break
@@ -6077,6 +6092,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ModuleConnection.TotalCount(childComplexity), true
 
+	case "ModuleConnectionKind.agentless":
+		if e.ComplexityRoot.ModuleConnectionKind.Agentless == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ModuleConnectionKind.Agentless(childComplexity), true
 	case "ModuleConnectionKind.fields":
 		if e.ComplexityRoot.ModuleConnectionKind.Fields == nil {
 			break
@@ -10998,7 +11019,9 @@ type BuildSchema {
   version: Int!
   # Channel kinds the minions speak.
   channels: [BuildChannel!]!
-  # Payload crypto suite the minions implement; null for none.
+  # Payload crypto suite the minions implement ("none": their messages go
+  # unsealed, only through kinds a channel declares agentless); null when the
+  # factory declares no suite.
   crypto: String
   # Build parameters every target shares.
   fields: [ModuleField!]!
@@ -11266,6 +11289,9 @@ type Build {
   # The minion's payload crypto as the factory got it: {suite, material}.
   # null when its factory declares no suite.
   crypto: JSON
+  # The minions talk unsealed (crypto none): an agentless channel acts as
+  # them, and their messages are in the clear between core and it.
+  unsealed: Boolean!
   # The session the minion claims when it starts; null for a minion that
   # opens new sessions.
   persistedSession: ID
@@ -11431,6 +11457,10 @@ type ModuleConnectionKind {
   # For a bind kind: what operators fill in for each target (where a minion
   # is reached), never built into a minion. Empty for a reverse kind.
   target: [ModuleField!]!
+  # The channel acts as the minion on this kind (a bind kind only): nothing
+  # runs on the target, and the channel reads what it carries. Only such a
+  # kind carries the unsealed messages of a factory whose crypto is none.
+  agentless: Boolean!
 }
 
 # A channel kind minions can be given endpoints for.
@@ -12621,6 +12651,9 @@ type MinionSession {
   # A build persists the session: its minions claim it when they start, so
   # a restarted process comes back here instead of opening a new session.
   persisted: Boolean!
+  # The session's messages go unsealed (crypto none): an agentless channel
+  # acts as its minion, and reads what it carries.
+  unsealed: Boolean!
   # The processes that claimed the session (restarts), most recent first, at
   # most 32; restartCount counts them all.
   restarts: [MinionSessionRestart!]!
@@ -21572,6 +21605,35 @@ func (ec *executionContext) fieldContext_Build_crypto(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Build_unsealed(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Build_unsealed,
+		func(ctx context.Context) (any, error) {
+			return obj.Unsealed, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Build_unsealed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Build",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Build_persistedSession(ctx context.Context, field graphql.CollectedField, obj *model.Build) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23012,6 +23074,8 @@ func (ec *executionContext) fieldContext_BuildEdge_node(_ context.Context, field
 				return ec.fieldContext_Build_maxTasks(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_Build_unsealed(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -33055,6 +33119,35 @@ func (ec *executionContext) fieldContext_MinionSession_persisted(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_unsealed(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_unsealed,
+		func(ctx context.Context) (any, error) {
+			return obj.Unsealed, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_unsealed(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_restarts(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34030,6 +34123,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -34289,6 +34384,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -35885,6 +35982,8 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -40530,6 +40629,35 @@ func (ec *executionContext) fieldContext_ModuleConnectionKind_target(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _ModuleConnectionKind_agentless(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionKind) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ModuleConnectionKind_agentless,
+		func(ctx context.Context) (any, error) {
+			return obj.Agentless, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ModuleConnectionKind_agentless(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModuleConnectionKind",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModuleConnectionSchema_version(ctx context.Context, field graphql.CollectedField, obj *model.ModuleConnectionSchema) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -40589,6 +40717,8 @@ func (ec *executionContext) fieldContext_ModuleConnectionSchema_kinds(_ context.
 				return ec.fieldContext_ModuleConnectionKind_fields(ctx, field)
 			case "target":
 				return ec.fieldContext_ModuleConnectionKind_target(ctx, field)
+			case "agentless":
+				return ec.fieldContext_ModuleConnectionKind_agentless(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleConnectionKind", field.Name)
 		},
@@ -44523,6 +44653,8 @@ func (ec *executionContext) fieldContext_Mutation_createBuild(ctx context.Contex
 				return ec.fieldContext_Build_maxTasks(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_Build_unsealed(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -44644,6 +44776,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelBuild(ctx context.Contex
 				return ec.fieldContext_Build_maxTasks(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_Build_unsealed(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -44765,6 +44899,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteBuildArtifact(ctx contex
 				return ec.fieldContext_Build_maxTasks(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_Build_unsealed(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -46562,6 +46698,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -46794,6 +46932,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -46967,6 +47107,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -47199,6 +47341,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -47372,6 +47516,8 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -47545,6 +47691,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -54601,6 +54749,8 @@ func (ec *executionContext) fieldContext_Query_build(ctx context.Context, field 
 				return ec.fieldContext_Build_maxTasks(ctx, field)
 			case "crypto":
 				return ec.fieldContext_Build_crypto(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_Build_unsealed(ctx, field)
 			case "persistedSession":
 				return ec.fieldContext_Build_persistedSession(ctx, field)
 			case "state":
@@ -56493,6 +56643,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_mark(ctx, field)
 			case "persisted":
 				return ec.fieldContext_MinionSession_persisted(ctx, field)
+			case "unsealed":
+				return ec.fieldContext_MinionSession_unsealed(ctx, field)
 			case "restarts":
 				return ec.fieldContext_MinionSession_restarts(ctx, field)
 			case "restartCount":
@@ -75486,6 +75638,11 @@ func (ec *executionContext) _Build(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = ec._Build_maxTasks(ctx, field, obj)
 		case "crypto":
 			out.Values[i] = ec._Build_crypto(ctx, field, obj)
+		case "unsealed":
+			out.Values[i] = ec._Build_unsealed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "persistedSession":
 			out.Values[i] = ec._Build_persistedSession(ctx, field, obj)
 		case "state":
@@ -79774,6 +79931,11 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "unsealed":
+			out.Values[i] = ec._MinionSession_unsealed(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "restarts":
 			out.Values[i] = ec._MinionSession_restarts(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -82132,6 +82294,11 @@ func (ec *executionContext) _ModuleConnectionKind(ctx context.Context, sel ast.S
 			}
 		case "target":
 			out.Values[i] = ec._ModuleConnectionKind_target(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentless":
+			out.Values[i] = ec._ModuleConnectionKind_agentless(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

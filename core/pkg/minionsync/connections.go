@@ -65,6 +65,27 @@ type Conn struct {
 	policy string
 	linked bool
 	why    string
+	// build and place are the target's build and connection, once core
+	// spoke first on a connection of a build that talks unsealed (unsealed):
+	// its messages are taken unsealed over it, and nowhere else.
+	build    uuid.UUID
+	place    int
+	unsealed bool
+}
+
+// unsealedFor reports whether c carries build's unsealed messages: it is
+// the connection an open of one of its targets brought.
+func (c *Conn) unsealedFor(build uuid.UUID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.unsealed && build != uuid.Nil && c.build == build
+}
+
+// placeOf is the build connection of c's target, once known; 0 otherwise.
+func (c *Conn) placeOf() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.place
 }
 
 // NewConn is a connection whose frames go out through send, and which
@@ -340,20 +361,25 @@ func (s *Service) room(ctx context.Context, session *models.MinionSession, allow
 // push sends items on c as a message core starts, under the session's id,
 // and waits for its answer.
 func (s *Service) push(ctx context.Context, c *Conn, from *sender, items []cbor.RawMessage) error {
+	return s.pushUnder(ctx, c, from, from.session.SessionID, items)
+}
+
+// pushUnder is push under id: the session's, or a build's (core's first
+// word to a minion that has none yet).
+func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.UUID, items []cbor.RawMessage) error {
 	c.touch(s.now())
-	id := protocol.NewMessageID()
-	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: id, Items: items, At: unixNow(s.now())})
+	msgID := protocol.NewMessageID()
+	plain, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, ID: msgID, Items: items, At: unixNow(s.now())})
 	if err != nil {
 		return err
 	}
-	sid := from.session.SessionID
-	sealed, err := protocol.SealFrame(from.keys, sid, protocol.FrameCoreToMinion, plain)
+	sealed, err := from.seal(id, plain)
 	if err != nil {
 		return err
 	}
-	c.addPending(id, s.now())
-	if err := c.send(ctx, protocol.ConnFrame{ID: sid[:], Data: sealed}); err != nil {
-		c.takePending(id)
+	c.addPending(msgID, s.now())
+	if err := c.send(ctx, protocol.ConnFrame{ID: id[:], Data: sealed}); err != nil {
+		c.takePending(msgID)
 		return err
 	}
 	return nil

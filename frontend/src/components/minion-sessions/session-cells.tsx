@@ -1,11 +1,11 @@
 import type { ReactNode } from "react"
-import { CableIcon, PhoneIncomingIcon, PinIcon, PlugIcon, RefreshCwIcon, UnplugIcon, type LucideIcon } from "lucide-react"
+import { CableIcon, LockOpenIcon, PhoneIncomingIcon, PinIcon, PlugIcon, RefreshCwIcon, UnplugIcon, type LucideIcon } from "lucide-react"
 import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
 import { KindName } from "@/components/modules/module-icon"
 import type { ModuleIconSvgs } from "@/components/modules/module-icon-values"
-import { platformLabel } from "@/components/builds/build-values"
+import { platformLabel, UNENCRYPTED_SESSION } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
 import { MarkIcon } from "./mark-icon"
@@ -165,7 +165,8 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "machine":
       return text(s.machineId, "truncate font-mono text-xs")
     case "pid":
-      return <div className="truncate font-mono">{s.pid}</div>
+      // 0: no process of its own, a channel acts as the minion.
+      return s.pid === 0 ? <div className="truncate">{muted("—")}</div> : <div className="truncate font-mono">{s.pid}</div>
     case "os":
       return <div className="truncate">{platformLabel(`${s.os}/${s.arch}`)}</div>
     case "arch":
@@ -223,6 +224,11 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
               title={`Persisted: the build's minions come back to this session when they restart (${s.restartCount} so far)`}
             >
               <PinIcon className="size-3" aria-label="Persisted" />
+            </span>
+          )}
+          {s.unsealed && (
+            <span className="ml-1.5 shrink-0 self-center text-muted-foreground" title={UNENCRYPTED_SESSION}>
+              <LockOpenIcon className="size-3" aria-label="Unencrypted" />
             </span>
           )}
         </div>

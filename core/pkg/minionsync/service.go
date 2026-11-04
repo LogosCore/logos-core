@@ -66,6 +66,41 @@ type sender struct {
 	// replaced: the message opened with keys a claim replaced; keys are
 	// those.
 	replaced bool
+	// place is the build connection a hello came through when a target's
+	// call or connection brought it (0: the hello says): a minion an
+	// agentless channel acts as knows no build, and says none.
+	place int
+}
+
+// unsealed reports whether the sender's messages go unsealed
+// (protocol.CryptoNone: a minion an agentless channel acts as).
+func (f *sender) unsealed() bool { return f.crypto.Suite == protocol.CryptoNone }
+
+// seal is a message core sends under id, as the sender's suite has it.
+func (f *sender) seal(id uuid.UUID, plain []byte) ([]byte, error) {
+	if f.unsealed() {
+		return plain, nil
+	}
+	return protocol.SealFrame(f.keys, id, protocol.FrameCoreToMinion, plain)
+}
+
+// open is a message the minion sent under id, as the sender's suite has it.
+func (f *sender) open(id uuid.UUID, frame []byte) ([]byte, error) {
+	if f.unsealed() {
+		return frame, nil
+	}
+	return protocol.OpenFrame(f.keys, id, protocol.FrameMinionToCore, frame)
+}
+
+// buildID is the build the sender's messages are of.
+func (f *sender) buildID() uuid.UUID {
+	if f.session != nil {
+		return f.session.BuildID
+	}
+	if f.build != nil {
+		return f.build.BuildID
+	}
+	return uuid.Nil
 }
 
 // Service handles minion messages.
@@ -143,8 +178,18 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	if err != nil {
 		return nil, err
 	}
-	plain, err := protocol.OpenFrame(from.keys, sentUnder, protocol.FrameMinionToCore, frame)
-	if err != nil && from.session != nil {
+	if from.unsealed() && (via == nil || !via.unsealedFor(from.buildID())) {
+		// Unsealed messages come only where the channel is the minion: over
+		// the connection an open of a target of their build brought, never
+		// the sync call (docs: contracts/agentless-channels/).
+		s.logger.Info("an unsealed minion message not over its target's connection, refused", zap.String("id", id))
+		return nil, ErrUnopened
+	}
+	if via != nil {
+		from.place = via.placeOf()
+	}
+	plain, err := from.open(sentUnder, frame)
+	if err != nil && from.session != nil && !from.unsealed() {
 		// Not the session's keys: maybe an earlier holder's, replaced by a
 		// claim. It is told so.
 		plain, err = s.openReplaced(from, sentUnder, frame)
@@ -225,7 +270,7 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	if err != nil {
 		return nil, err
 	}
-	return protocol.SealFrame(from.keys, sentUnder, protocol.FrameCoreToMinion, reply)
+	return from.seal(sentUnder, reply)
 }
 
 // seenOnHello records that via serves the session a hello_response among
@@ -253,11 +298,20 @@ func (s *Service) seenOnHello(ctx context.Context, via *Conn, items []cbor.RawMe
 // underBuild answers a message sent under a build id: one stage, or one
 // hello that opens a session with the build's own keys.
 func (s *Service) underBuild(ctx context.Context, from *sender, peer string, msg protocol.MinionMessage) ([]cbor.RawMessage, error) {
-	if len(msg.Items) == 1 && protocol.ItemType(msg.Items[0]) == protocol.ItemHello {
+	if err := protocol.ValidateBuildMessage(msg.Items); err != nil {
+		// Said: a minion that sends more is told only in an err item, which
+		// it may not read for what it is.
+		s.logger.Info("minion message under its build id refused", zap.String("build_id", from.build.BuildID.String()),
+			zap.Int("items", len(msg.Items)), zap.Error(err))
+		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
+	}
+	if protocol.ItemType(msg.Items[0]) == protocol.ItemHello {
 		return s.openSession(ctx, from, peer, msg.Items[0])
 	}
-	if len(msg.Items) != 1 || protocol.ItemType(msg.Items[0]) != protocol.ItemStage {
-		return errItem(protocol.ErrItemBadMessage, "under a build id the only item taken is one stage or one hello", 0)
+	if from.unsealed() {
+		// No keys to give: a minion that talks unsealed says hello under the
+		// build id.
+		return errItem(protocol.ErrItemBadMessage, "a minion that talks unsealed does not stage: its hello goes under the build id", 0)
 	}
 	b := from.build
 	var stage protocol.StageItem
@@ -319,7 +373,7 @@ func (s *Service) underStaging(ctx context.Context, from *sender, peer string, m
 // id it came under. A temporary id serves one hello: its entry goes first,
 // so of two hellos racing on it one opens a session.
 func (s *Service) openSession(ctx context.Context, from *sender, peer string, raw cbor.RawMessage) ([]cbor.RawMessage, error) {
-	hello, err := readHello(raw)
+	hello, err := readHello(raw, from.unsealed())
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
 	}
@@ -355,7 +409,11 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 		Crypto: from.crypto, Hello: models.MinionHelloFrom(hello), Address: models.DefaultAddress(hello.AddrStrings()),
 		MaxTasks: models.MaxTasksOf(hello), MaxTasksSettable: b.MaxTasks != nil, CreatedAt: now, PurgeAt: &purge,
 	}
-	conn := connOf(b, connPlace(hello.Conn))
+	place := connPlace(hello.Conn)
+	if place == 0 {
+		place = from.place
+	}
+	conn := connOf(b, place)
 	session.Conn, session.ConnKind, session.ConnName, session.ConnCount = conn.Place, conn.Kind, conn.Name, len(b.Connections.Items)
 	session.ConnMaxMessage = conn.MaxMessage
 	if peer != "" {
@@ -492,7 +550,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 				said = models.SleepFrom(u.Sleep())
 			}
 		case protocol.ItemHello:
-			if h, err := readHello(raw); err == nil && h.Sleep != nil {
+			if h, err := readHello(raw, session.Unsealed()); err == nil && h.Sleep != nil {
 				said = models.SleepFrom(*h.Sleep)
 			}
 		}
@@ -517,7 +575,7 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		switch protocol.ItemType(raw) {
 		case protocol.ItemHello:
 			var hello protocol.HelloItem
-			if hello, err = readHello(raw); err != nil {
+			if hello, err = readHello(raw, session.Unsealed()); err != nil {
 				out, err = errItem(protocol.ErrItemBadMessage, err.Error(), i)
 				break
 			}
@@ -809,11 +867,15 @@ func echoCtx(out []cbor.RawMessage, i int, ctx []byte) []cbor.RawMessage {
 	return out
 }
 
-// readHello reads and checks a hello.
-func readHello(raw cbor.RawMessage) (protocol.HelloItem, error) {
+// readHello reads and checks a hello; unsealed, as an agentless channel
+// sends it for the minion it acts as, which has no process (pid 0).
+func readHello(raw cbor.RawMessage, unsealed bool) (protocol.HelloItem, error) {
 	var hello protocol.HelloItem
 	if err := protocol.UnmarshalCBOR(raw, &hello); err != nil {
 		return hello, errors.New("the hello does not read")
+	}
+	if unsealed {
+		return hello, hello.ValidateAgentless()
 	}
 	return hello, hello.Validate()
 }
@@ -891,6 +953,9 @@ func (s *Service) openReplaced(from *sender, id uuid.UUID, frame []byte) ([]byte
 // readKeys reads the sender's key material; a suite core does not implement
 // does not open.
 func (f *sender) readKeys() error {
+	if f.unsealed() {
+		return nil
+	}
 	if f.crypto.Suite != protocol.CryptoAES256CBCHMACSHA256 {
 		return ErrUnopened
 	}

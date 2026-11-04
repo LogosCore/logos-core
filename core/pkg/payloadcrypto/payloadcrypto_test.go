@@ -40,3 +40,14 @@ func TestNewKeys(t *testing.T) {
 		t.Fatal("rot13 keys")
 	}
 }
+
+// none is a suite core implements, with no keys.
+func TestNone(t *testing.T) {
+	if !Supported(protocol.CryptoNone) || Sealed(protocol.CryptoNone) || !Sealed(protocol.CryptoAES256CBCHMACSHA256) {
+		t.Fatal("none")
+	}
+	k, err := NewKeys(protocol.CryptoNone)
+	if err != nil || k.Suite != protocol.CryptoNone || k.Material != nil {
+		t.Fatalf("keys %+v %v", k, err)
+	}
+}

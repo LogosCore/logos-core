@@ -165,7 +165,7 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 			return nil, err
 		}
 	}
-	values, err := s.check(ctx, module, kind, in.Values)
+	values, err := s.check(ctx, module, kind, in.Values, b.Unsealed())
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,14 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (*models.M
 	if err != nil {
 		return nil, err
 	}
-	values, err := s.check(ctx, t.ModuleName, t.Kind, in.Values)
+	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, invalid("the target's build is gone")
+		}
+		return nil, fmt.Errorf("load the build: %w", err)
+	}
+	values, err := s.check(ctx, t.ModuleName, t.Kind, in.Values, b.Unsealed())
 	if err != nil {
 		return nil, err
 	}
@@ -345,6 +352,11 @@ func (s *Service) Problems(ctx context.Context, t *models.MinionTarget) (map[str
 	if schema == nil || !hasKind(schema, t.Kind) {
 		return map[string]string{"": fmt.Sprintf("no %s channel declares %s connections now", t.ModuleName, t.Kind)}, nil
 	}
+	// A build's unsealed messages go only to a channel that acts as the
+	// minion: never to one that stopped.
+	if b, err := s.builds.FindByBuildID(ctx, t.BuildID); err == nil && b.Unsealed() && !schema.IsAgentless(t.Kind) {
+		return map[string]string{"": fmt.Sprintf("the %s channel no longer acts as the minion on %s connections, and this build's minions talk unsealed", t.ModuleName, t.Kind)}, nil
+	}
 	values := map[string]any{}
 	for k, v := range t.Values {
 		if !empty(v) {
@@ -369,7 +381,7 @@ func ProblemsText(problems map[string]string) string {
 
 // check validates values against the channel's target fields for kind and
 // returns them over the fields' defaults.
-func (s *Service) check(ctx context.Context, module, kind string, values map[string]any) (models.JSONMap, error) {
+func (s *Service) check(ctx context.Context, module, kind string, values map[string]any, unsealed bool) (models.JSONMap, error) {
 	if kind != protocol.KindBindCall && kind != protocol.KindBindPersistent {
 		return nil, invalid("core does not reach %s minions yet", kind)
 	}
@@ -379,6 +391,9 @@ func (s *Service) check(ctx context.Context, module, kind string, values map[str
 	}
 	if schema == nil || !hasKind(schema, kind) {
 		return nil, invalid("no %s channel declares %s connections now", module, kind)
+	}
+	if unsealed && !schema.IsAgentless(kind) {
+		return nil, invalid("the %s channel does not act as the minion on %s connections, and the build's minions talk unsealed", module, kind)
 	}
 	clean := map[string]any{}
 	for k, v := range values {

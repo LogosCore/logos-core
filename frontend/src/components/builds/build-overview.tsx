@@ -101,6 +101,12 @@ export function BuildOverview({
               <span className="text-muted-foreground">{b.maxTasks === 0 ? " · none until a session sets more" : " · as it starts; its sessions change it"}</span>
             </LabelRow>
           )}
+          {b.unsealed && (
+            <LabelRow label="Messages">
+              Unencrypted
+              <span className="text-muted-foreground"> · a channel acts as the minion, and reads what it carries</span>
+            </LabelRow>
+          )}
           {b.persistedSession && (
             <LabelRow label="Persisted session">
               <PersistedSession id={b.persistedSession} />

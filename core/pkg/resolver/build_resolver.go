@@ -456,6 +456,7 @@ func toBuildModel(b *models.Build) *model.Build {
 	if b.Crypto != nil {
 		out.Crypto = b.Crypto
 	}
+	out.Unsealed = b.Unsealed()
 	if b.PersistedSessionID != nil {
 		sid := b.PersistedSessionID.String()
 		out.PersistedSession = &sid

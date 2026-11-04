@@ -10,48 +10,61 @@ import (
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
-// fakeConnector leaves the target in after's state.
+// fakeConnector leaves the target in after's state, a connection open or
+// not as open says (openAfter once it connected or disconnected).
 type fakeConnector struct {
 	after             models.MinionTarget
+	open, openAfter   bool
 	connects, discons int
 }
 
 func (f *fakeConnector) ConnectTarget(context.Context, uuid.UUID) (*models.MinionTarget, error) {
 	f.connects++
+	f.open = f.openAfter
 	t := f.after
 	return &t, nil
 }
 
 func (f *fakeConnector) DisconnectTarget(context.Context, uuid.UUID) (*models.MinionTarget, error) {
 	f.discons++
+	f.open = f.openAfter
 	t := f.after
 	return &t, nil
 }
 
+func (f *fakeConnector) TargetConnected(uuid.UUID) bool { return f.open }
+
 // connect and disconnect say what came of them, and do nothing when the
-// connection is already as asked.
+// connection is already as asked: whether one is open, not what the
+// target's stored state says, which may be behind on it.
 func TestConnectOutcome(t *testing.T) {
 	ctx := context.Background()
 	notConnected := &models.MinionTarget{Name: "10.0.0.5", State: models.TargetNotConnected}
 	connected := &models.MinionTarget{Name: "10.0.0.5", State: models.TargetConnected}
+	// An open that lost its race to its socket said so, and the connection is up.
+	behind := &models.MinionTarget{Name: "10.0.0.5", State: models.TargetUnreachable, StateDetail: "the connection closed as soon as it opened"}
 	for _, c := range []struct {
-		name, command string
-		before        *models.MinionTarget
-		after         models.MinionTarget
-		ok            bool
-		out, err      string
-		calls         int
+		name, command   string
+		before          *models.MinionTarget
+		open, openAfter bool
+		after           models.MinionTarget
+		ok              bool
+		out, err        string
+		calls           int
 	}{
-		{"connect", protocol.CommandConnect, notConnected, models.MinionTarget{Name: "10.0.0.5", State: models.TargetConnected}, true, "connected (10.0.0.5)", "", 1},
-		{"connect, unreachable", protocol.CommandConnect, notConnected,
+		{"connect", protocol.CommandConnect, notConnected, false, true, models.MinionTarget{Name: "10.0.0.5", State: models.TargetConnected}, true, "connected (10.0.0.5)", "", 1},
+		{"connect, unreachable", protocol.CommandConnect, notConnected, false, false,
 			models.MinionTarget{State: models.TargetUnreachable, StateDetail: "unreachable: connection refused"}, false, "", "unreachable: unreachable: connection refused", 1},
-		{"connect, connected", protocol.CommandConnect, connected, models.MinionTarget{}, true, "already connected", "", 0},
-		{"disconnect", protocol.CommandDisconnect, connected, models.MinionTarget{Name: "10.0.0.5", State: models.TargetNotConnected}, true, "disconnected (10.0.0.5)", "", 1},
-		{"disconnect, always", protocol.CommandDisconnect, connected,
+		{"connect, connected", protocol.CommandConnect, connected, true, true, models.MinionTarget{}, true, "already connected", "", 0},
+		{"connect, its state behind", protocol.CommandConnect, behind, true, true, models.MinionTarget{}, true, "already connected", "", 0},
+		{"disconnect", protocol.CommandDisconnect, connected, true, false, models.MinionTarget{Name: "10.0.0.5", State: models.TargetNotConnected}, true, "disconnected (10.0.0.5)", "", 1},
+		{"disconnect, its state behind", protocol.CommandDisconnect, behind, true, false,
+			models.MinionTarget{Name: "10.0.0.5", State: models.TargetNotConnected}, true, "disconnected (10.0.0.5)", "", 1},
+		{"disconnect, always", protocol.CommandDisconnect, connected, true, false,
 			models.MinionTarget{State: models.TargetNotConnected, Policy: models.PolicyAlways}, true, "opens it again", "", 1},
-		{"disconnect, not connected", protocol.CommandDisconnect, notConnected, models.MinionTarget{}, true, "not connected", "", 0},
+		{"disconnect, not connected", protocol.CommandDisconnect, notConnected, false, false, models.MinionTarget{}, true, "not connected", "", 0},
 	} {
-		f := &fakeConnector{after: c.after}
+		f := &fakeConnector{after: c.after, open: c.open, openAfter: c.openAfter}
 		r := &minionTaskResolver{connector: f}
 		ok, out, why := r.connectOutcome(ctx, c.command, c.before)
 		if ok != c.ok || !strings.Contains(out, c.out) || why != c.err || f.connects+f.discons != c.calls {
@@ -60,7 +73,6 @@ func TestConnectOutcome(t *testing.T) {
 	}
 }
 
-// Only a bind-persistent session's console has connect and disconnect.
 func TestOffersConnect(t *testing.T) {
 	r := &minionTaskResolver{connector: &fakeConnector{}, targets: fakeTaskTargets{}}
 	if !r.offersConnect(&models.MinionSession{ConnKind: protocol.KindBindPersistent}) {
