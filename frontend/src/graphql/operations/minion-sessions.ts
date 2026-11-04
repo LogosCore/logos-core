@@ -188,6 +188,7 @@ export const MinionSessionsLayoutFields = graphql(`
     consoleSplit
     filesSplit
     paneTextSize
+    promptFx
   }
 `)
 

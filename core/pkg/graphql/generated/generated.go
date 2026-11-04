@@ -752,6 +752,7 @@ type ComplexityRoot struct {
 		FilesSplit   func(childComplexity int) int
 		Filters      func(childComplexity int) int
 		PaneTextSize func(childComplexity int) int
+		PromptFx     func(childComplexity int) int
 		Sort         func(childComplexity int) int
 		Split        func(childComplexity int) int
 	}
@@ -5099,6 +5100,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSessionsLayout.PaneTextSize(childComplexity), true
+	case "MinionSessionsLayout.promptFx":
+		if e.ComplexityRoot.MinionSessionsLayout.PromptFx == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.PromptFx(childComplexity), true
 	case "MinionSessionsLayout.sort":
 		if e.ComplexityRoot.MinionSessionsLayout.Sort == nil {
 			break
@@ -12876,6 +12883,11 @@ type MinionSessionsLayout {
   # The session work pane's text size in pixels, 10 to 12; null for the
   # default (12).
   paneTextSize: Int
+  # The effect the operator's console prompt shows as keys are typed and
+  # lines run, set with the console's /fx (lightning, inferno); null for
+  # none. Core keeps any name of its form (^[a-z][a-z0-9-]{0,31}$); the app
+  # shows the effects it knows, none for another.
+  promptFx: String
 }
 
 input MinionSessionsLayoutInput {
@@ -12886,6 +12898,7 @@ input MinionSessionsLayoutInput {
   consoleSplit: Float
   filesSplit: Float
   paneTextSize: Int
+  promptFx: String
 }
 
 type MinionSessionEvent {
@@ -35198,6 +35211,35 @@ func (ec *executionContext) fieldContext_MinionSessionsLayout_paneTextSize(_ con
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSessionsLayout_promptFx(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_promptFx,
+		func(ctx context.Context) (any, error) {
+			return obj.PromptFx, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_promptFx(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionStreamLink_path(ctx context.Context, field graphql.CollectedField, obj *model.MinionStreamLink) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -47626,6 +47668,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionsLayout(ctx co
 				return ec.fieldContext_MinionSessionsLayout_filesSplit(ctx, field)
 			case "paneTextSize":
 				return ec.fieldContext_MinionSessionsLayout_paneTextSize(ctx, field)
+			case "promptFx":
+				return ec.fieldContext_MinionSessionsLayout_promptFx(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -56630,6 +56674,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionsLayout(_ context.Co
 				return ec.fieldContext_MinionSessionsLayout_filesSplit(ctx, field)
 			case "paneTextSize":
 				return ec.fieldContext_MinionSessionsLayout_paneTextSize(ctx, field)
+			case "promptFx":
+				return ec.fieldContext_MinionSessionsLayout_promptFx(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -73246,7 +73292,7 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"columns", "sort", "filters", "split", "consoleSplit", "filesSplit", "paneTextSize"}
+	fieldsInOrder := [...]string{"columns", "sort", "filters", "split", "consoleSplit", "filesSplit", "paneTextSize", "promptFx"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -73302,6 +73348,13 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 				return it, err
 			}
 			it.PaneTextSize = data
+		case "promptFx":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("promptFx"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PromptFx = data
 		}
 	}
 	return it, nil
@@ -80368,6 +80421,8 @@ func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.S
 			out.Values[i] = ec._MinionSessionsLayout_filesSplit(ctx, field, obj)
 		case "paneTextSize":
 			out.Values[i] = ec._MinionSessionsLayout_paneTextSize(ctx, field, obj)
+		case "promptFx":
+			out.Values[i] = ec._MinionSessionsLayout_promptFx(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

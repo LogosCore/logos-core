@@ -8,6 +8,7 @@ import type {
 import { platformLabel } from "@/components/builds/build-values"
 import { formatDateTime } from "@/lib/date-format"
 import { PANE_TEXT_SIZES } from "./pane-text"
+import { readPromptFx, type PromptFxName } from "./prompt-fx-model"
 
 // The Sessions table's model: the columns an operator can show (every
 // property of a session), what each holds, and the layout they keep (columns
@@ -140,6 +141,8 @@ export interface SessionsLayout {
   filesSplit: number | null
   /** The work pane's text size in pixels; null: DEFAULT_PANE_TEXT (pane-text.ts). */
   paneTextSize: number | null
+  /** The console prompt's effect (its /fx); null: none. */
+  promptFx: PromptFxName | null
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -150,6 +153,7 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   consoleSplit: null,
   filesSplit: null,
   paneTextSize: null,
+  promptFx: null,
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
@@ -187,12 +191,22 @@ export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | 
     consoleSplit: share(stored.consoleSplit),
     filesSplit: share(stored.filesSplit),
     paneTextSize: stored.paneTextSize != null && PANE_TEXT_SIZES.includes(stored.paneTextSize) ? stored.paneTextSize : null,
+    promptFx: readPromptFx(stored.promptFx),
   }
 }
 
 /** The layout as the mutation takes it. */
 export function sessionsLayoutInput(layout: SessionsLayout) {
-  return { columns: layout.columns, sort: layout.sort, filters: layout.filters, split: layout.split, consoleSplit: layout.consoleSplit, filesSplit: layout.filesSplit, paneTextSize: layout.paneTextSize }
+  return {
+    columns: layout.columns,
+    sort: layout.sort,
+    filters: layout.filters,
+    split: layout.split,
+    consoleSplit: layout.consoleSplit,
+    filesSplit: layout.filesSplit,
+    paneTextSize: layout.paneTextSize,
+    promptFx: layout.promptFx,
+  }
 }
 
 function withoutNulls(f: SessionFilter): SessionFilter {

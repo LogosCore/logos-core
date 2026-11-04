@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"time"
 
@@ -238,7 +239,16 @@ type MinionSessionsLayout struct {
 	// PaneTextSize is the session work pane's text size in pixels,
 	// MinPaneTextSize to MaxPaneTextSize; nil for the default.
 	PaneTextSize *int `bson:"pane_text_size,omitempty" json:"pane_text_size,omitempty"`
+	// PromptFx is the effect the operator's console prompt shows as keys
+	// are typed and lines run, set with the console's /fx (lightning,
+	// inferno): any name of PromptFxPattern's form, the app showing the
+	// ones it knows and none for another; nil for none.
+	PromptFx *string `bson:"prompt_fx,omitempty" json:"prompt_fx,omitempty"`
 }
+
+// PromptFxPattern is the form of a layout's PromptFx: core keeps the name,
+// the app knows the effects.
+var PromptFxPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // The text sizes the work pane offers.
 const (
@@ -286,6 +296,9 @@ func (l MinionSessionsLayout) Validate() error {
 	}
 	if l.PaneTextSize != nil && (*l.PaneTextSize < MinPaneTextSize || *l.PaneTextSize > MaxPaneTextSize) {
 		return fmt.Errorf("layout: paneTextSize is %d to %d", MinPaneTextSize, MaxPaneTextSize)
+	}
+	if l.PromptFx != nil && !PromptFxPattern.MatchString(*l.PromptFx) {
+		return fmt.Errorf("layout: promptFx must match %s", PromptFxPattern)
 	}
 	for _, f := range l.Filters {
 		if err := f.Validate(); err != nil {

@@ -345,6 +345,11 @@ type MinionSessionsLayout {
   # The session work pane's text size in pixels, 10 to 12; null for the
   # default (12).
   paneTextSize: Int
+  # The effect the operator's console prompt shows as keys are typed and
+  # lines run, set with the console's /fx (lightning, inferno); null for
+  # none. Core keeps any name of its form (^[a-z][a-z0-9-]{0,31}$); the app
+  # shows the effects it knows, none for another.
+  promptFx: String
 }
 
 input MinionSessionsLayoutInput {
@@ -355,6 +360,7 @@ input MinionSessionsLayoutInput {
   consoleSplit: Float
   filesSplit: Float
   paneTextSize: Int
+  promptFx: String
 }
 
 type MinionSessionEvent {
