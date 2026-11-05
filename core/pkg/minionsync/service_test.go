@@ -47,10 +47,24 @@ func (f *fakeStagings) FindByTempID(_ context.Context, id uuid.UUID) (*models.Mi
 	return nil, qmgo.ErrNoSuchDocuments
 }
 
-func (f *fakeStagings) Delete(_ context.Context, id uuid.UUID) error {
+func (f *fakeStagings) BeginHello(_ context.Context, id uuid.UUID, at time.Time) (bool, *uuid.UUID, error) {
+	for i := range f.rows {
+		if f.rows[i].TempID != id {
+			continue
+		}
+		if f.rows[i].HelloAt == nil {
+			f.rows[i].HelloAt = &at
+			return true, nil, nil
+		}
+		return false, f.rows[i].SessionID, nil
+	}
+	return false, nil, qmgo.ErrNoSuchDocuments
+}
+
+func (f *fakeStagings) Served(_ context.Context, id, sid uuid.UUID) error {
 	for i := range f.rows {
 		if f.rows[i].TempID == id {
-			f.rows = append(f.rows[:i], f.rows[i+1:]...)
+			f.rows[i].SessionID = &sid
 			return nil
 		}
 	}
@@ -274,6 +288,8 @@ func (f *fakeBus) Publish(e eventbus.Event) {
 type fakeCache struct {
 	mu   sync.Mutex
 	seen map[string]bool
+	// values are what Set kept.
+	values map[string]string
 }
 
 func (f *fakeCache) SetNX(_ context.Context, key string, _ interface{}, _ time.Duration) (bool, error) {
@@ -285,8 +301,26 @@ func (f *fakeCache) SetNX(_ context.Context, key string, _ interface{}, _ time.D
 	f.seen[key] = true
 	return true, nil
 }
-func (f *fakeCache) Get(context.Context, string) (string, error)                   { return "", nil }
-func (f *fakeCache) Set(context.Context, string, interface{}, time.Duration) error { return nil }
+func (f *fakeCache) Get(_ context.Context, key string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	v, ok := f.values[key]
+	if !ok {
+		return "", errors.New("cache miss")
+	}
+	return v, nil
+}
+
+func (f *fakeCache) Set(_ context.Context, key string, value interface{}, _ time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.values == nil {
+		f.values = map[string]string{}
+	}
+	v, _ := value.(string)
+	f.values[key] = v
+	return nil
+}
 func (f *fakeCache) AppendAt(context.Context, string, int64, string, int64, time.Duration) (int64, error) {
 	return 0, nil
 }
@@ -424,10 +458,26 @@ func TestStage(t *testing.T) {
 		t.Fatalf("staging %+v", st)
 	}
 
-	// The same message again is a replay: refused, like any failure.
+	// The same message again (its reply lost on the way): the same reply,
+	// and no second staging.
+	again, err := r.send(t, id, stage)
+	if err != nil || !bytes.Equal(again, reply) || len(r.stagings.rows) != 1 {
+		t.Fatalf("sent again: %v, the same reply %v, stagings %d", err, bytes.Equal(again, reply), len(r.stagings.rows))
+	}
+	// Once core no longer keeps the reply, it is a replay: refused, like
+	// any failure.
+	r.forgetReplies()
 	if reply, err := r.send(t, id, stage); !errors.Is(err, ErrReplayed) || reply != nil {
 		t.Fatalf("replay: %x %v", reply, err)
 	}
+}
+
+// forgetReplies drops the replies core keeps, as replyKeep passing does.
+func (r *rig) forgetReplies() {
+	c := r.svc.cache.(*fakeCache)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.values = nil
 }
 
 func TestStageRefusals(t *testing.T) {
@@ -517,8 +567,8 @@ func TestHelloUnderTemporaryID(t *testing.T) {
 	}
 	sid := sessionID(t, r.openUnder(t, tempID, keys, reply))
 
-	if len(r.sessions.rows) != 1 || len(r.stagings.rows) != 0 {
-		t.Fatalf("sessions %d, stagings %d", len(r.sessions.rows), len(r.stagings.rows))
+	if len(r.sessions.rows) != 1 || len(r.stagings.rows) != 1 || r.stagings.rows[0].SessionID == nil || *r.stagings.rows[0].SessionID != sid {
+		t.Fatalf("sessions %d, stagings %+v", len(r.sessions.rows), r.stagings.rows)
 	}
 	s := r.sessions.rows[0]
 	var stored protocol.AES256CBCHMACSHA256Material
@@ -532,9 +582,29 @@ func TestHelloUnderTemporaryID(t *testing.T) {
 		t.Fatalf("events %v", r.bus.topics)
 	}
 
-	// The temporary id served its hello: another one under it does not open.
+	// Its reply lost on the way, the minion says hello again under the
+	// temporary id: the same session, none opened.
+	reply, err = r.sendUnder(t, tempID, keys, protocol.NewMessageID(), hello("web01"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again := sessionID(t, r.openUnder(t, tempID, keys, reply)); again != sid || len(r.sessions.rows) != 1 {
+		t.Fatalf("hello again: %s, sessions %d", again, len(r.sessions.rows))
+	}
+	// While its first hello is under way, another is told to say it again.
+	pending := time.Now()
+	r.stagings.rows[0].SessionID, r.stagings.rows[0].HelloAt = nil, &pending
+	reply, err = r.sendUnder(t, tempID, keys, protocol.NewMessageID(), hello("web01"))
+	var e protocol.ErrItem
+	if m := r.openUnder(t, tempID, keys, reply); err != nil || len(m.Items) != 1 || protocol.UnmarshalCBOR(m.Items[0], &e) != nil ||
+		e.Code != protocol.ErrItemBadMessage {
+		t.Fatalf("a hello while one is under way: %+v %v", m, err)
+	}
+	// stagingAnswerFor after its hello, the temporary id no longer opens.
+	long := time.Now().Add(-stagingAnswerFor - time.Minute)
+	r.stagings.rows[0].SessionID, r.stagings.rows[0].HelloAt = &sid, &long
 	if _, err := r.sendUnder(t, tempID, keys, protocol.NewMessageID(), hello("web01")); !errors.Is(err, ErrUnopened) {
-		t.Fatalf("second hello: %v", err)
+		t.Fatalf("a hello long after: %v", err)
 	}
 }
 

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/database"
@@ -23,9 +24,12 @@ type IMinionStagingRepository interface {
 	Insert(ctx context.Context, s *models.MinionStaging) error
 	// FindByTempID returns one entry; IsNotFound on a miss.
 	FindByTempID(ctx context.Context, tempID uuid.UUID) (*models.MinionStaging, error)
-	// Delete removes one entry: it serves one hello. IsNotFound when it is
-	// gone already, to a hello that came first.
-	Delete(ctx context.Context, tempID uuid.UUID) error
+	// BeginHello marks the entry's hello begun at at, once: first is true
+	// for the hello that did, else served is the session the first opened
+	// (nil while it is under way). IsNotFound when the entry is gone.
+	BeginHello(ctx context.Context, tempID uuid.UUID, at time.Time) (first bool, served *uuid.UUID, err error)
+	// Served records the session the entry's hello opened.
+	Served(ctx context.Context, tempID, sessionID uuid.UUID) error
 }
 
 type minionStagingRepository struct{ coll database.Collection }
@@ -51,6 +55,21 @@ func (r *minionStagingRepository) FindByTempID(ctx context.Context, tempID uuid.
 	return &s, nil
 }
 
-func (r *minionStagingRepository) Delete(ctx context.Context, tempID uuid.UUID) error {
-	return r.coll.Remove(ctx, bson.M{"temp_id": tempID})
+func (r *minionStagingRepository) BeginHello(ctx context.Context, tempID uuid.UUID, at time.Time) (bool, *uuid.UUID, error) {
+	err := r.coll.UpdateOne(ctx, bson.M{"temp_id": tempID, "hello_at": bson.M{"$exists": false}}, bson.M{"$set": bson.M{"hello_at": at}})
+	switch {
+	case err == nil:
+		return true, nil, nil
+	case !IsNotFound(err):
+		return false, nil, err
+	}
+	s, err := r.FindByTempID(ctx, tempID)
+	if err != nil {
+		return false, nil, err
+	}
+	return false, s.SessionID, nil
+}
+
+func (r *minionStagingRepository) Served(ctx context.Context, tempID, sessionID uuid.UUID) error {
+	return r.coll.UpdateOne(ctx, bson.M{"temp_id": tempID}, bson.M{"$set": bson.M{"session_id": sessionID}})
 }

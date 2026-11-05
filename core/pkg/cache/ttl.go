@@ -20,10 +20,6 @@ const (
 
 	// TTLDefault - default TTL for cache keys
 	TTLDefault = TTLSingle
-
-	// TTLChannelSyncDedup - retention window for channel sync message_id dedup
-	// guards. Bounds replay protection for the data-plane sync endpoint.
-	TTLChannelSyncDedup = 24 * time.Hour
 )
 
 func GetTTLForKey(cacheKey string) time.Duration {

@@ -199,7 +199,11 @@ func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, mod
 			return
 		}
 		id, _ := uuid.FromBytes(f.ID)
-		reply, err := ctrl.minions.Exchange(ctx, conn, id.String(), peer, f.Data)
+		// Core's own work, within handleWithin: the socket closing does not
+		// cut it short.
+		hctx, cancelMsg := context.WithTimeout(context.WithoutCancel(ctx), handleWithin)
+		reply, err := ctrl.minions.Exchange(hctx, conn, id.String(), peer, f.Data)
+		cancelMsg()
 		switch {
 		case errors.Is(err, minionsync.ErrUnopened), errors.Is(err, minionsync.ErrReplayed):
 			// As the sync call's 422 and 409: nothing to tell the minion.

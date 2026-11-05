@@ -21,4 +21,9 @@ type MinionStaging struct {
 	// Crypto is the suite and the new key material. Never shown.
 	Crypto    protocol.BuildCrypto `bson:"crypto" json:"-"`
 	CreatedAt time.Time            `bson:"created_at" json:"created_at"`
+	// HelloAt is when its hello began, SessionID the session it opened:
+	// a hello again under the temporary id, soon after (its reply lost),
+	// gets that session.
+	HelloAt   *time.Time `bson:"hello_at,omitempty" json:"hello_at,omitempty"`
+	SessionID *uuid.UUID `bson:"session_id,omitempty" json:"session_id,omitempty"`
 }

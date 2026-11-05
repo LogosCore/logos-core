@@ -49,6 +49,23 @@ const replayWindow = 24 * time.Hour
 
 const replayKeyPrefix = "minion:msg:"
 
+// A message seen again within replyKeep gets the reply it got the first
+// time, when that was at most replyKeepMax (a request whose reply was lost
+// on the way, sent again): nothing runs twice, and the reply is sealed for
+// the minion. A larger one, or one seen again later, is refused as a
+// replay.
+const (
+	replyKeep      = 10 * time.Minute
+	replyKeepMax   = 64 << 10
+	replyKeyPrefix = "minion:reply:"
+	// replyNone is kept for a message core had nothing to say to.
+	replyNone = "-"
+)
+
+// stagingAnswerFor is how long a temporary id answers a hello again with
+// the session its first hello opened (that reply lost on the way).
+const stagingAnswerFor = 10 * time.Minute
+
 // Builds is what the service reads of builds.
 type Builds interface {
 	FindByBuildID(ctx context.Context, buildID uuid.UUID) (*models.Build, error)
@@ -210,9 +227,16 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		}
 	} else {
 		fresh, err := s.cache.SetNX(ctx, replayKeyPrefix+hex.EncodeToString(msg.ID), "1", replayWindow)
-		if err != nil {
+		switch {
+		case err != nil:
 			s.logger.Warn("minion replay check failed, handling the message anyway", zap.Error(err))
-		} else if !fresh {
+		case !fresh:
+			// Sent again: the reply it got, while core keeps it (its reply
+			// was lost on the way); a replay otherwise.
+			if reply, kept := s.keptReply(ctx, msg.ID); kept {
+				s.logger.Info("minion message sent again: the reply it got", zap.String("id", id))
+				return reply, nil
+			}
 			s.logger.Info("minion message replayed, refused", zap.String("id", id))
 			return nil, ErrReplayed
 		}
@@ -273,22 +297,58 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 	if via != nil {
 		via.carry(items)
 	}
-	// Through a call, nothing to say is the sync call's 204. Over a
-	// connection socket a request always gets its reply, empty or not, so
-	// the minion knows its message arrived.
-	if len(items) == 0 && (via == nil || answer) {
-		return nil, nil
-	}
 	if answer {
 		// An answer gets no reply: what core has to say back goes as a
 		// message of its own.
+		if len(items) == 0 {
+			return nil, nil
+		}
 		return nil, s.push(ctx, via, from, items)
+	}
+	// Through a call, nothing to say is the sync call's 204. Over a
+	// connection socket a request always gets its reply, empty or not, so
+	// the minion knows its message arrived.
+	if len(items) == 0 && via == nil {
+		s.keepReply(ctx, msg.ID, nil)
+		return nil, nil
 	}
 	reply, err := protocol.MarshalCBOR(protocol.CoreMessage{V: protocol.MinionMessageV3, Re: msg.ID, Items: items})
 	if err != nil {
 		return nil, err
 	}
-	return from.seal(sentUnder, reply)
+	sealed, err := from.seal(sentUnder, reply)
+	if err == nil {
+		s.keepReply(ctx, msg.ID, sealed)
+	}
+	return sealed, err
+}
+
+// keepReply keeps the reply to the minion's message id (nil: none) for
+// replyKeep, when it is small enough: the message sent again gets it.
+func (s *Service) keepReply(ctx context.Context, id, sealed []byte) {
+	if len(sealed) > replyKeepMax {
+		return
+	}
+	value := replyNone
+	if sealed != nil {
+		value = string(sealed)
+	}
+	if err := s.cache.Set(ctx, replyKeyPrefix+hex.EncodeToString(id), value, replyKeep); err != nil {
+		s.logger.Debug("minion message: keep its reply", zap.Error(err))
+	}
+}
+
+// keptReply is the reply core gave the minion's message id, while it keeps
+// it: kept false when it does not.
+func (s *Service) keptReply(ctx context.Context, id []byte) ([]byte, bool) {
+	v, err := s.cache.Get(ctx, replyKeyPrefix+hex.EncodeToString(id))
+	switch {
+	case err != nil || v == "":
+		return nil, false
+	case v == replyNone:
+		return nil, true
+	}
+	return []byte(v), true
 }
 
 // seenOnHello records that via serves the session a hello_response among
@@ -383,21 +443,44 @@ func (s *Service) underStaging(ctx context.Context, from *sender, peer string, m
 }
 
 // openSession reads a hello and opens a session for it with the keys of the
-// id it came under. A temporary id serves one hello: its entry goes first,
-// so of two hellos racing on it one opens a session.
+// id it came under. A temporary id serves one hello: the first to begin
+// opens a session, and for stagingAnswerFor after it a hello again under
+// that id (its reply lost on the way) gets the same hello_response.
 func (s *Service) openSession(ctx context.Context, from *sender, peer string, raw cbor.RawMessage) ([]cbor.RawMessage, error) {
 	hello, err := readHello(raw)
 	if err != nil {
 		return errItem(protocol.ErrItemBadMessage, err.Error(), 0)
 	}
 	if from.staging != nil {
-		if err := s.stagings.Delete(ctx, from.staging.TempID); err != nil {
-			if repository.IsNotFound(err) {
-				return errItem(protocol.ErrItemBadMessage, "the temporary id served a hello already", 0)
-			}
-			return nil, fmt.Errorf("remove the staging: %w", err)
+		first, served, err := s.stagings.BeginHello(ctx, from.staging.TempID, s.now())
+		switch {
+		case repository.IsNotFound(err):
+			return errItem(protocol.ErrItemBadMessage, "the temporary id is gone: stage again", 0)
+		case err != nil:
+			return nil, fmt.Errorf("begin the staging's hello: %w", err)
+		case !first && served != nil:
+			s.logger.Info("minion hello again under its temporary id: the session it opened",
+				zap.String("temp_id", from.staging.TempID.String()), zap.String("session_id", served.String()))
+			return helloResponse(*served)
+		case !first:
+			return errItem(protocol.ErrItemBadMessage, "the temporary id's hello is under way: say it again", 0)
 		}
 	}
+	items, err := s.helloSession(ctx, from, peer, hello)
+	if err == nil && from.staging != nil {
+		if sid, ok := helloSessionID(items); ok {
+			if err := s.stagings.Served(ctx, from.staging.TempID, sid); err != nil {
+				s.logger.Warn("minion staging: record the session its hello opened", zap.String("temp_id", from.staging.TempID.String()),
+					zap.Error(err))
+			}
+		}
+	}
+	return items, err
+}
+
+// helloSession opens the session a hello asks for: the one it claims, when
+// honoured, else a new one.
+func (s *Service) helloSession(ctx context.Context, from *sender, peer string, hello protocol.HelloItem) ([]cbor.RawMessage, error) {
 	if hello.SID != nil {
 		items, claimed, err := s.claim(ctx, from, peer, hello)
 		if err != nil || claimed {
@@ -406,6 +489,22 @@ func (s *Service) openSession(ctx context.Context, from *sender, peer string, ra
 		// Not honoured: a new session, as without a claim.
 	}
 	return s.newSession(ctx, from, peer, hello, uuid.New(), false)
+}
+
+// helloSessionID is the session a hello_response among items names.
+func helloSessionID(items []cbor.RawMessage) (uuid.UUID, bool) {
+	for _, raw := range items {
+		if protocol.ItemType(raw) != protocol.ItemHelloResponse {
+			continue
+		}
+		var r protocol.HelloResponseItem
+		if protocol.UnmarshalCBOR(raw, &r) != nil {
+			return uuid.Nil, false
+		}
+		sid, err := uuid.FromBytes(r.SID)
+		return sid, err == nil
+	}
+	return uuid.Nil, false
 }
 
 // newSession opens a session with id for a hello: a new one, or one its
@@ -913,7 +1012,14 @@ func checkIn(now time.Time, peer string, said, schedule *models.MinionSessionSle
 	switch {
 	case !models.LateBySchedule(kind):
 		c.Untimed = true
-	case schedule != nil:
+	case schedule == nil && kind == protocol.KindBindCall:
+		// A page that says no schedule is called when there is something
+		// for it: its silence says nothing.
+	case schedule == nil:
+		// A minion that says no schedule is taken to keep a day's.
+		late, lost := models.DefaultSessionSleep.LateAtFrom(now), models.DefaultSessionSleep.LostAtFrom(now)
+		c.LateAt, c.LostAt = &late, &lost
+	default:
 		late, lost := schedule.LateAtFrom(now), schedule.LostAtFrom(now)
 		c.LateAt, c.LostAt = &late, &lost
 	}
@@ -978,6 +1084,8 @@ func (s *Service) sender(ctx context.Context, id uuid.UUID) (*sender, error) {
 	}
 	staging, err := s.stagings.FindByTempID(ctx, id)
 	switch {
+	case err == nil && staging.HelloAt != nil && s.now().Sub(*staging.HelloAt) > stagingAnswerFor:
+		// Its hello came and went: the temporary id no longer opens.
 	case err == nil:
 		from.staging, from.crypto = staging, staging.Crypto
 		id = staging.BuildID

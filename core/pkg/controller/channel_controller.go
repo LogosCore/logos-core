@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"net/netip"
 	"regexp"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/logger"
 	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/responses"
@@ -19,9 +19,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// dedupKeyPrefix namespaces channel sync message_id idempotency guards in the
-// shared cache.
-const dedupKeyPrefix = "channel:sync:msg:"
+// handleWithin bounds how long core takes over one minion message. The
+// handling is core's own: a channel that stops waiting (its request timed
+// out, its socket closed) does not cut it short, and a message sent again
+// gets the reply it got (minionsync's replies kept).
+const handleWithin = 2 * time.Minute
 
 // RegistrationGate reports whether a module instance is currently registered.
 // Satisfied by *modulegate.Gate; the data-plane endpoint rejects sync messages
@@ -60,7 +62,6 @@ type MinionHandler interface {
 }
 
 type channelController struct {
-	cache   cache.Cache
 	gate    RegistrationGate
 	minions MinionHandler
 	log     *zap.Logger
@@ -69,9 +70,8 @@ type channelController struct {
 
 // NewChannelController serves the sync endpoint. maxSize caps a request's
 // body: the minion's ciphertext. minions answers what the minion sent.
-func NewChannelController(c cache.Cache, gate RegistrationGate, minions MinionHandler, log *zap.Logger, maxSize int64) IChannelController {
+func NewChannelController(gate RegistrationGate, minions MinionHandler, log *zap.Logger, maxSize int64) IChannelController {
 	return &channelController{
-		cache:   c,
 		gate:    gate,
 		minions: minions,
 		log:     log,
@@ -173,42 +173,33 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 		return
 	}
 
-	// Idempotency guard. SetNX reports false when this message id was already
-	// seen within the dedup window; the replay gets the same no-op answer
-	// rather than an error. Fails open when the cache is disabled (noop cache
-	// reports every key as new).
-	fresh, err := ctrl.cache.SetNX(ctx, dedupKeyPrefix+in.MessageID, "1", cache.TTLChannelSyncDedup)
-	if err != nil {
-		log.Warn("channel sync: dedup guard failed, processing anyway",
-			zap.String("message_id", in.MessageID), zap.Error(err))
-	} else if !fresh {
-		log.Debug("channel sync: duplicate message id, returning no-op",
-			zap.String("message_id", in.MessageID))
-	}
-
+	// A request sent again (the channel retrying one it is unsure of) is the
+	// minion's message sent again: minionsync answers it with the reply it
+	// got, or refuses it as a replay, by the minion's own message id.
 	out := protocol.OutboundMinionMessage{
 		MessageID:   protocol.NewID(),
 		BuildID:     in.BuildID,
 		TraceParent: in.TraceParent,
 	}
-	if fresh || err != nil {
-		// The channel that carried it: a hello naming no connection came
-		// through the build's of that channel.
-		reply, err := ctrl.minions.Handle(minionsync.ViaChannel(ctx, module), in.BuildID, in.PeerAddress, in.Data)
-		switch {
-		case errors.Is(err, minionsync.ErrUnopened):
-			c.JSON(http.StatusUnprocessableEntity, responses.NewErrorResponse("the message does not open"))
-			return
-		case errors.Is(err, minionsync.ErrReplayed):
-			c.JSON(http.StatusConflict, responses.NewErrorResponse("the message was seen before"))
-			return
-		case err != nil:
-			log.Error("channel sync: handle the minion's message", zap.String("build_id", in.BuildID), zap.Error(err))
-			c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
-			return
-		}
-		out.Data = reply
+	// Core's own work, within handleWithin, through the channel that
+	// carried it: a hello naming no connection came through the build's of
+	// that channel.
+	hctx, cancel := context.WithTimeout(context.WithoutCancel(minionsync.ViaChannel(ctx, module)), handleWithin)
+	reply, err := ctrl.minions.Handle(hctx, in.BuildID, in.PeerAddress, in.Data)
+	cancel()
+	switch {
+	case errors.Is(err, minionsync.ErrUnopened):
+		c.JSON(http.StatusUnprocessableEntity, responses.NewErrorResponse("the message does not open"))
+		return
+	case errors.Is(err, minionsync.ErrReplayed):
+		c.JSON(http.StatusConflict, responses.NewErrorResponse("the message was seen before"))
+		return
+	case err != nil:
+		log.Error("channel sync: handle the minion's message", zap.String("build_id", in.BuildID), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, responses.ErrInternalError)
+		return
 	}
+	out.Data = reply
 	out.SetHeaders(c.Writer.Header())
 	if len(out.Data) == 0 {
 		c.Status(http.StatusNoContent)

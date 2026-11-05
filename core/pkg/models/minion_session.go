@@ -243,6 +243,11 @@ type MinionSessionSleep struct {
 // the session is late: slow networks, a busy host.
 const SessionLateGrace = 30 * time.Second
 
+// DefaultSessionSleep is the schedule a minion that says none is taken to
+// keep where its check-ins say whether it is there (a reverse kind's): once
+// a day, so it shows late after a day of silence, lost after three.
+var DefaultSessionSleep = MinionSessionSleep{Interval: (24 * time.Hour).Milliseconds()}
+
 // SleepFrom keeps a schedule a minion said.
 func SleepFrom(s protocol.Sleep) *MinionSessionSleep {
 	return &MinionSessionSleep{Interval: int64(s.Interval), Jitter: int64(s.Jitter)} //nolint:gosec // validated small

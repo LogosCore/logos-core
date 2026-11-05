@@ -27,6 +27,9 @@ type slowMinions struct {
 
 func (f *slowMinions) Exchange(ctx context.Context, _ *minionsync.Conn, _, _ string, _ []byte) ([]byte, error) {
 	f.modules = append(f.modules, minionsync.ChannelOf(ctx))
+	if _, ok := ctx.Deadline(); !ok {
+		f.modules = append(f.modules, "no deadline")
+	}
 	f.taken++
 	if f.taken == 1 {
 		time.Sleep(f.slow)
@@ -42,7 +45,7 @@ func TestConnectionSlowHandlingIsNotSilence(t *testing.T) {
 	t.Cleanup(func() { connSilentFor = was })
 	gin.SetMode(gin.TestMode)
 	minions := &slowMinions{slow: 500 * time.Millisecond}
-	ctrl := NewChannelController(&fakeCache{}, fakeGate{registered: true, module: "http"}, minions, zap.NewNop(), 1<<20)
+	ctrl := NewChannelController(fakeGate{registered: true, module: "http"}, minions, zap.NewNop(), 1<<20)
 	r := gin.New()
 	r.GET("/channel/connection", ctrl.Connection)
 	srv := httptest.NewServer(r)

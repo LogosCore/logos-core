@@ -10,51 +10,12 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/logoscore/logos-core/core/pkg/cache"
 	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
-
-// fakeCache is an in-memory Cache used to exercise the SetNX dedup path without
-// a live Redis. Only SetNX is meaningful here; the rest satisfy the interface.
-type fakeCache struct {
-	seen map[string]struct{}
-}
-
-func newFakeCache() *fakeCache { return &fakeCache{seen: map[string]struct{}{}} }
-
-func (f *fakeCache) Get(ctx context.Context, key string) (string, error) { return "", nil }
-func (f *fakeCache) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
-	return nil
-}
-func (f *fakeCache) SetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) (bool, error) {
-	if _, ok := f.seen[key]; ok {
-		return false, nil
-	}
-	f.seen[key] = struct{}{}
-	return true, nil
-}
-
-// AppendAt is unused by this package; present to satisfy cache.Cache.
-func (f *fakeCache) AppendAt(_ context.Context, _ string, _ int64, _ string, _ int64, _ time.Duration) (int64, error) {
-	return 0, nil
-}
-
-// IncrWithTTL is unused by this package; present to satisfy cache.Cache.
-func (f *fakeCache) IncrWithTTL(_ context.Context, _ string, _ time.Duration) (int64, error) {
-	return 0, nil
-}
-func (f *fakeCache) SetWithTags(ctx context.Context, key string, value interface{}, tags []string, ttl time.Duration) error {
-	return nil
-}
-func (f *fakeCache) Del(ctx context.Context, keys ...string) error                  { return nil }
-func (f *fakeCache) InvalidateCache(ctx context.Context, e string, id string) error { return nil }
-func (f *fakeCache) Close() error                                                   { return nil }
-func (f *fakeCache) IsEnabled() bool                                                { return true }
 
 // fakeGate is a stub RegistrationGate. registeredGate() admits everything; the
 // rejection/error variants are constructed inline per test.
@@ -115,6 +76,9 @@ type fakeMinions struct {
 	id     string
 	frame  []byte
 	module string
+	// ctxErr and deadline are what the last message's context said.
+	ctxErr   error
+	deadline bool
 }
 
 func (f *fakeMinions) OpenedFor(string, uint64) (uuid.UUID, string, bool) { return uuid.Nil, "", false }
@@ -124,6 +88,8 @@ func (f *fakeMinions) ForTarget(*minionsync.Conn, string, uint64) bool { return 
 func (f *fakeMinions) Handle(ctx context.Context, id, _ string, frame []byte) ([]byte, error) {
 	f.calls++
 	f.id, f.frame, f.module = id, frame, minionsync.ChannelOf(ctx)
+	f.ctxErr = ctx.Err()
+	_, f.deadline = ctx.Deadline()
 	return f.reply, f.err
 }
 
@@ -141,7 +107,7 @@ func newCtrl(gate RegistrationGate) IChannelController {
 
 func newCtrlWith(gate RegistrationGate, minions MinionHandler) IChannelController {
 	gin.SetMode(gin.TestMode)
-	return NewChannelController(newFakeCache(), gate, minions, zap.NewNop(), testMaxSize)
+	return NewChannelController(gate, minions, zap.NewNop(), testMaxSize)
 }
 
 // What the minion handler answers decides the reply: its sealed answer as a
@@ -173,12 +139,28 @@ func TestChannelSync_MinionAnswers(t *testing.T) {
 		t.Fatalf("failure: %d", w.Code)
 	}
 
-	// A replay of the channel's message id is not handed on again.
+	// A request sent again (the channel retrying it) is handed on: core
+	// answers it by the minion's own message id, with the reply it got.
 	m = &fakeMinions{reply: []byte{1}}
 	ctrl := newCtrlWith(registeredGate(), m)
 	doSync(ctrl, validSyncHeaders(), ciphertext)
-	if w := doSync(ctrl, validSyncHeaders(), ciphertext); w.Code != http.StatusNoContent || m.calls != 1 {
-		t.Fatalf("replay: %d after %d calls", w.Code, m.calls)
+	if w := doSync(ctrl, validSyncHeaders(), ciphertext); w.Code != http.StatusOK || m.calls != 2 || !bytes.Equal(w.Body.Bytes(), m.reply) {
+		t.Fatalf("sent again: %d after %d calls", w.Code, m.calls)
+	}
+}
+
+// The handling is core's own: a channel whose request ends (it timed out,
+// it went away) does not cut it short, and it has a deadline of its own.
+func TestChannelSync_HandlingOutlivesTheRequest(t *testing.T) {
+	m := &fakeMinions{reply: []byte{1}}
+	w, c := newSyncRequest(validSyncHeaders(), ciphertext)
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	cancel()
+	c.Request = c.Request.WithContext(ctx)
+	newCtrlWith(registeredGate(), m).Sync(c)
+	c.Writer.WriteHeaderNow()
+	if m.calls != 1 || m.ctxErr != nil || !m.deadline {
+		t.Fatalf("handled %d: ctx %v, deadline %v (%d)", m.calls, m.ctxErr, m.deadline, w.Code)
 	}
 }
 
@@ -275,21 +257,3 @@ func TestChannelSync_RegistryErrorFailsClosed(t *testing.T) {
 		t.Fatalf("expected 503 on registry error, got %d (%s)", w.Code, w.Body.String())
 	}
 }
-
-func TestChannelSync_DuplicateMessageIDReturnsNoOp(t *testing.T) {
-	// Shared cache across both calls so the second SetNX reports a duplicate.
-	ctrl := newCtrl(registeredGate())
-	if w := doSync(ctrl, validSyncHeaders(), ciphertext); w.Code != http.StatusNoContent {
-		t.Fatalf("first call: expected 204, got %d", w.Code)
-	}
-	w := doSync(ctrl, validSyncHeaders(), ciphertext)
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("duplicate call: expected 204 no-op, got %d (%s)", w.Code, w.Body.String())
-	}
-	if out := protocol.OutboundFromHeaders(w.Header()); out.BuildID != testBuildID {
-		t.Errorf("duplicate response not a valid no-op: %+v", out)
-	}
-}
-
-// Compile-time assurance the fake satisfies the interface.
-var _ cache.Cache = (*fakeCache)(nil)

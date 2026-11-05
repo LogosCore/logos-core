@@ -95,7 +95,7 @@ func (a *App) buildControllers() *controllers {
 			LocalLoginEnabled: a.authCfg.localLoginEnabled,
 			OIDCStatus:        a.oidcStatus,
 		}),
-		channel: controller.NewChannelController(a.cache, a.moduleGate, a.minionSync, a.logger, a.env.ChannelSyncMaxSize),
+		channel: controller.NewChannelController(a.moduleGate, a.minionSync, a.logger, a.env.ChannelSyncMaxSize),
 		link:    controller.NewChannelLinkController(a.moduleGate, a.channelModule, a.links),
 		skill:   controller.NewSkillController(a.skillService, a.logger),
 		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
