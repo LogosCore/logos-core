@@ -24,17 +24,28 @@ type CredentialSearchField string
 const (
 	CredentialSearchFieldName       CredentialSearchField = "name"
 	CredentialSearchFieldUsername   CredentialSearchField = "username"
+	CredentialSearchFieldRealm      CredentialSearchField = "realm"
 	CredentialSearchFieldPassword   CredentialSearchField = "password"
+	CredentialSearchFieldHash       CredentialSearchField = "hash"
+	CredentialSearchFieldHex        CredentialSearchField = "hex"
+	CredentialSearchFieldService    CredentialSearchField = "service"
+	CredentialSearchFieldAlgorithm  CredentialSearchField = "algorithm"
 	CredentialSearchFieldProperties CredentialSearchField = "properties.value"
 )
 
 // defaultCredentialSearchFields is the field set used when the caller does not
-// restrict the search. Preserves the historical behaviour of matching name,
-// username, password, and property values in one pass.
+// restrict the search: every one-line field and the property values. The
+// blobs (key, certificate, private key, ticket) are left out: a search term
+// matching inside a kilobyte of base64 is noise, not a find.
 var defaultCredentialSearchFields = []CredentialSearchField{
 	CredentialSearchFieldName,
 	CredentialSearchFieldUsername,
+	CredentialSearchFieldRealm,
 	CredentialSearchFieldPassword,
+	CredentialSearchFieldHash,
+	CredentialSearchFieldHex,
+	CredentialSearchFieldService,
+	CredentialSearchFieldAlgorithm,
 	CredentialSearchFieldProperties,
 }
 
@@ -149,6 +160,10 @@ type ICredentialRepository interface {
 	// BackfillValidity stamps the three-state validity field on credentials
 	// that predate it. Returns the number of rows touched.
 	BackfillValidity(ctx context.Context) (int64, error)
+	// BackfillCredentialTypes rewrites credentials recorded under the old
+	// types (schema version 1) as the current ones. Returns how many became
+	// PLAINTEXT and how many OTHER.
+	BackfillCredentialTypes(ctx context.Context) (plaintext, other int64, err error)
 
 	// Embedded comment operations
 	AddComment(ctx context.Context, credentialID uuid.UUID, comment models.CredentialComment) error
@@ -185,8 +200,12 @@ func NewCredentialRepository(db database.Database) ICredentialRepository {
 	return &credentialRepository{coll: coll}
 }
 
+// Create writes a new credential. Every row written here is in the current
+// shape, so it is stamped so: a row without the stamp is one the startup
+// backfill rewrites.
 func (r *credentialRepository) Create(ctx context.Context, c *models.Credential) error {
 	c.Rev = 1
+	c.SchemaVersion = models.CredentialSchemaVersion
 	_, err := r.coll.InsertOne(ctx, c)
 	return err
 }
@@ -194,7 +213,19 @@ func (r *credentialRepository) Create(ctx context.Context, c *models.Credential)
 func (r *credentialRepository) FindByID(ctx context.Context, id uuid.UUID) (models.Credential, error) {
 	var c models.Credential
 	err := r.coll.FindOne(ctx, bson.M{"credential_id": id}).One(&c)
+	if err == nil {
+		c.UpgradeLegacy()
+	}
 	return c, err
+}
+
+// upgradeLegacy reads rows the startup backfill has not reached (it failed,
+// or an older core wrote them since) as the current types, so an old type
+// never reaches a caller. Drop it with the backfill, a release after.
+func upgradeLegacy(creds []models.Credential) {
+	for i := range creds {
+		creds[i].UpgradeLegacy()
+	}
 }
 
 func (r *credentialRepository) FindByOperationIDWithCursor(ctx context.Context, opID uuid.UUID, filter CredentialFilter, sort CredentialSort, cursor *pagination.Cursor, limit int64, forward bool) ([]models.Credential, error) {
@@ -226,6 +257,7 @@ func (r *credentialRepository) findWithCursor(ctx context.Context, base bson.M, 
 			creds[i], creds[j] = creds[j], creds[i]
 		}
 	}
+	upgradeLegacy(creds)
 
 	return creds, err
 }
@@ -238,6 +270,7 @@ func (r *credentialRepository) FindByIDs(ctx context.Context, ids []uuid.UUID) (
 	if err := r.coll.Find(ctx, bson.M{"credential_id": bson.M{"$in": ids}}).All(&creds); err != nil {
 		return nil, fmt.Errorf("find by ids: %w", err)
 	}
+	upgradeLegacy(creds)
 	return creds, nil
 }
 
@@ -431,4 +464,62 @@ func (r *credentialRepository) BackfillValidity(ctx context.Context) (int64, err
 		}
 	}
 	return n, nil
+}
+
+// BackfillCredentialTypes rewrites the credentials recorded before the types
+// had fields of their own (no schema_version: the old types PASSWORD, SSH_KEY,
+// API_KEY, TOKEN, HASH and OTHER, each a username, a password and keys) as
+// the current ones, the way models.Credential.UpgradeLegacy reads them:
+//
+//   - a PASSWORD with a password and no keys is exactly a PLAINTEXT, and
+//     becomes one;
+//   - everything else becomes OTHER, which has the old shape, so nothing
+//     moves between fields; its old type goes to legacy_type, for whoever
+//     converts it (an OTHER stays plain OTHER).
+//
+// An old HASH goes to OTHER too: its hash sat in the password, and the new
+// HASH keeps it in a field of its own. Both steps are one update inside Mongo
+// and match only unstamped rows, so a later boot does nothing; the PLAINTEXT
+// step runs first, or the second would take its rows too. updateAt stays:
+// nobody edited these.
+func (r *credentialRepository) BackfillCredentialTypes(ctx context.Context) (plaintext, other int64, err error) {
+	old := bson.M{"schema_version": bson.M{"$not": bson.M{"$gte": models.CredentialSchemaVersion}}}
+
+	lossless := bson.M{
+		"type":     "PASSWORD",
+		"password": bson.M{"$nin": bson.A{nil, ""}},
+		"$or":      bson.A{bson.M{"keys": nil}, bson.M{"keys": bson.M{"$size": 0}}},
+	}
+	for k, v := range old {
+		lossless[k] = v
+	}
+	res, err := r.coll.UpdateAll(ctx, lossless, bson.M{
+		"$set": bson.M{"type": models.CredentialTypePlaintext, "schema_version": models.CredentialSchemaVersion},
+		"$inc": bson.M{"rev": 1},
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("backfill credential types: plaintext: %w", err)
+	}
+	if res != nil {
+		plaintext = res.ModifiedCount
+	}
+
+	// A pipeline update, so the old type can be read while it is replaced.
+	res, err = r.coll.UpdateAll(ctx, old, bson.A{bson.M{"$set": bson.M{
+		"legacy_type": bson.M{"$cond": bson.A{
+			bson.M{"$in": bson.A{bson.M{"$ifNull": bson.A{"$type", ""}}, bson.A{string(models.CredentialTypeOther), ""}}},
+			"$$REMOVE",
+			"$type",
+		}},
+		"type":           models.CredentialTypeOther,
+		"schema_version": models.CredentialSchemaVersion,
+		"rev":            bson.M{"$add": bson.A{bson.M{"$ifNull": bson.A{"$rev", 0}}, 1}},
+	}}})
+	if err != nil {
+		return plaintext, 0, fmt.Errorf("backfill credential types: other: %w", err)
+	}
+	if res != nil {
+		other = res.ModifiedCount
+	}
+	return plaintext, other, nil
 }

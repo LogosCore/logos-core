@@ -5,7 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useInfiniteCredentials } from "@/graphql/hooks/credentials";
 import { flattenConnection } from "@/lib/connection";
-import { credentialTypeLabel } from "@/components/findings/credential-type-utils";
+import {
+  credentialTypeLabel,
+  useCredentialTypeSpecs,
+} from "@/components/findings/credential-type-utils";
+import {
+  credentialAccount,
+  credentialSecret,
+  filledCredentialFields,
+} from "@/lib/credential-fields";
 import type { CredentialFieldsFragment } from "@/graphql/gql/graphql";
 import { cn } from "@/lib/utils";
 
@@ -126,7 +134,7 @@ export function CredentialPickerList({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Search by name, username, or password…"
+          placeholder="Search by name, account, or secret…"
           className="pl-8"
         />
       </div>
@@ -179,7 +187,7 @@ export function CredentialPickerList({
                 <Badge variant="outline" className="shrink-0">
                   {credentialTypeLabel(c.type)}
                 </Badge>
-                <CredentialMeta username={c.username} password={c.password} />
+                <CredentialMeta credential={c} />
               </button>
             );
           })
@@ -196,18 +204,19 @@ export function CredentialPickerList({
 }
 
 /**
- * Trailing username · password hint on a credential row. Hidden below `sm`
- * where the row is too narrow; password rendered monospace so it reads as a
- * secret value rather than prose. Renders nothing when the credential carries
- * neither (e.g. a key-only SSH credential).
+ * Trailing account · secret hint on a credential row. Hidden below `sm`
+ * where the row is too narrow; the secret rendered monospace so it reads as
+ * a secret value rather than prose. Renders nothing when the credential
+ * carries neither (e.g. a key with no username: its secret is a blob).
  */
-function CredentialMeta({
-  username,
-  password,
-}: {
-  username: string;
-  password: string;
-}) {
+function CredentialMeta({ credential }: { credential: CredentialFieldsFragment }) {
+  const specs = useCredentialTypeSpecs();
+  const filled = filledCredentialFields(
+    credential,
+    specs.get(credential.type)?.fields ?? [],
+  );
+  const username = credentialAccount(filled);
+  const password = credentialSecret(filled);
   if (!username && !password) return null;
   return (
     <span className="hidden shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">

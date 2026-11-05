@@ -418,6 +418,16 @@ func runStartupBackfills(ctx context.Context, l *zap.Logger, repos *Repositories
 		l.Info("credential validity backfill complete", zap.Int64("rows", n))
 	}
 
+	// Rewrite credentials recorded under the old types as the current ones:
+	// a password-only PASSWORD as PLAINTEXT, the rest as OTHER. See
+	// BackfillCredentialTypes. Until it has run, reads upgrade them as well.
+	if plaintext, other, err := repos.Credential.BackfillCredentialTypes(ctx); err != nil {
+		l.Warn("credential types backfill failed", zap.Error(err))
+	} else if plaintext+other > 0 {
+		l.Info("credential types backfill complete",
+			zap.Int64("plaintext", plaintext), zap.Int64("other", other))
+	}
+
 	// Public ids (repository/public_ids.go): rows from before their
 	// collection had one get a UUID (a row an older core writes afterwards
 	// gets one when it is read), and finished invocations recorded with a

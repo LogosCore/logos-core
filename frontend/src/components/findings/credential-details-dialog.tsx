@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react"
 import { toast } from "sonner"
 import {
+  ArrowRightLeftIcon,
   CheckIcon,
   CopyIcon,
   KeyIcon,
@@ -8,6 +9,18 @@ import {
   PencilIcon,
   TrashIcon,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { formatDateTime } from "@/lib/date-format"
+import {
+  credentialExpired,
+  credentialFieldValue,
+  type CredentialValueField,
+} from "@/lib/credential-fields"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,19 +46,31 @@ import {
   CredentialValidityIcon,
   credentialValidity,
 } from "@/components/findings/credential-validity-utils"
-import { credentialTypeLabel } from "@/components/findings/credential-type-utils"
+import {
+  CREDENTIAL_TYPES,
+  credentialTypeLabel,
+  legacyCredentialTypeLabel,
+  legacyCredentialTypeSuccessor,
+  useCredentialTypeSpecs,
+} from "@/components/findings/credential-type-utils"
 import { truncateHashValue } from "@/components/findings/hash-status-utils"
 import { CredentialBacklinkList } from "@/components/findings/credential-backlink-list"
 import { buildCredentialShareUrl } from "@/components/findings/credential-share-link"
-import type { CredentialCommentFieldsFragment } from "@/graphql/gql/graphql"
+import type {
+  CredentialCommentFieldsFragment,
+  CredentialType,
+} from "@/graphql/gql/graphql"
 
 export function CredentialDetailsDialog() {
   const detailsPanelOpen = useCredentialStore((s) => s.detailsPanelOpen)
   const selected = useCredentialStore((s) => s.selected)
   const closeDetailsPanel = useCredentialStore((s) => s.closeDetailsPanel)
   const openEditDialog = useCredentialStore((s) => s.openEditDialog)
+  const openConvertDialog = useCredentialStore((s) => s.openConvertDialog)
   const { data, isLoading, isError } = useCredential(selected?.id ?? "")
   const credential = data?.credential
+  const specs = useCredentialTypeSpecs()
+  const spec = credential ? specs.get(credential.type) : undefined
 
   // Prefer the freshly-loaded name; fall back to the row's name (when opened
   // from a row click) and finally to a generic label (when opened via
@@ -125,32 +150,66 @@ export function CredentialDetailsDialog() {
                   />
                   {credentialValidity(credential.validity).label}
                 </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ms-auto"
-                  onClick={() =>
-                    openEditDialog({ id: credential.id, name: credential.name })
-                  }
-                >
-                  <PencilIcon className="size-3.5" />
-                  Edit
-                </Button>
+                {credentialExpired(credential.expiresAt) && (
+                  <Badge variant="destructive">Expired</Badge>
+                )}
+                <div className="ms-auto flex items-center gap-2">
+                  {credential.type === "OTHER" && (
+                    <ConvertMenu
+                      suggested={legacyCredentialTypeSuccessor(credential.legacyType)}
+                      onPick={(to) =>
+                        openConvertDialog(
+                          { id: credential.id, name: credential.name },
+                          to,
+                        )
+                      }
+                    />
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      openEditDialog({ id: credential.id, name: credential.name })
+                    }
+                  >
+                    <PencilIcon className="size-3.5" />
+                    Edit
+                  </Button>
+                </div>
               </div>
+              {credential.type === "OTHER" && credential.legacyType && (
+                <p className="text-sm text-muted-foreground">
+                  Recorded as {legacyCredentialTypeLabel(credential.legacyType)}{" "}
+                  before the types had fields of their own.
+                </p>
+              )}
 
-              <FieldRow
-                label="Username"
-                value={credential.username || "—"}
-                copyValue={credential.username}
-                copyLabel="username"
-              />
-              <FieldRow
-                label="Password"
-                value={credential.password || "—"}
-                copyValue={credential.password}
-                copyLabel="password"
-                mono
-              />
+              {/* The type's fields, in its order: one-line ones always (an
+                  empty one says it was not recorded), blobs when held. */}
+              {spec?.fields.map((f) => {
+                if (f.kind === "KEY_LIST") return null
+                const value = credentialFieldValue(
+                  credential,
+                  f.field as CredentialValueField,
+                )
+                if (f.kind === "BLOB") {
+                  return value ? (
+                    <BlobRow key={f.field} label={f.label} value={value} />
+                  ) : null
+                }
+                return (
+                  <FieldRow
+                    key={f.field}
+                    label={f.label}
+                    value={
+                      !value ? "—" : f.kind === "DATETIME" ? formatDateTime(value) : value
+                    }
+                    copyValue={value}
+                    copyLabel={f.label.toLowerCase()}
+                    mono={f.kind === "SECRET"}
+                  />
+                )
+              })}
 
               {credential.keys.length > 0 && (
                 <div>
@@ -252,6 +311,58 @@ export function CredentialDetailsDialog() {
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// A many-line value (a key, a certificate, a ticket): its label and copy
+// button over the value in a scrolling block.
+function BlobRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-1.5">
+        <span className="flex-1 text-xs uppercase text-muted-foreground">
+          {label}
+        </span>
+        <CopyIconButton value={value} label={label.toLowerCase()} />
+      </div>
+      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 font-mono text-xs">
+        {value}
+      </pre>
+    </div>
+  )
+}
+
+// "Convert to…" for an OTHER: the types to give it, the one its old type
+// most likely is now first. Opens the edit dialog with the fields seeded.
+function ConvertMenu({
+  suggested,
+  onPick,
+}: {
+  suggested: CredentialType | null
+  onPick: (to: CredentialType) => void
+}) {
+  const types = CREDENTIAL_TYPES.filter((t) => t !== "OTHER")
+  const ordered = suggested
+    ? [suggested, ...types.filter((t) => t !== suggested)]
+    : types
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <ArrowRightLeftIcon className="size-3.5" />
+            Convert to…
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end">
+        {ordered.map((t) => (
+          <DropdownMenuItem key={t} onClick={() => onPick(t)}>
+            {credentialTypeLabel(t)}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

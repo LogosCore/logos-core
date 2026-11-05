@@ -286,8 +286,19 @@ func (t *transform) credentialChip(attrs map[string]any) {
 		attrs[ExportAttr] = map[string]any{"missing": true}
 		return
 	}
+	// The fields of its type that hold a value, in its order, named as the
+	// GraphQL CredentialField enum does: the viewer shows them as the app's
+	// details do, without a copy of the type table.
+	spec, _ := models.CredentialTypeSpecFor(c.Type)
+	fields := []map[string]any{}
+	for _, f := range c.FilledFields() {
+		fields = append(fields, map[string]any{
+			"field": strings.ToUpper(string(f.Spec.Field)), "label": f.Spec.Label,
+			"kind": string(f.Spec.Kind), "value": f.Value,
+		})
+	}
 	attrs[ExportAttr] = map[string]any{
-		"name": c.Name, "type": string(c.Type), "username": c.Username, "password": c.Password,
+		"name": c.Name, "type": string(c.Type), "typeLabel": spec.Label, "fields": fields,
 		"keys": c.Keys, "properties": c.Properties, "validity": string(c.Validity), "tags": c.Tags,
 	}
 	t.run.report.CredentialsExported++

@@ -28,8 +28,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { SearchInput } from "@/components/ui/search-input"
-import { Switch } from "@/components/ui/switch"
 import { TagFilterPanel } from "@/components/findings/tag-filter-panel"
+import {
+  CREDENTIAL_VALIDITIES,
+  CredentialValidityIcon,
+  credentialValidity,
+} from "@/components/findings/credential-validity-utils"
+import {
+  shownValidities,
+  toggleValidity,
+} from "@/components/findings/credential-validity-filter"
 import {
   useCredentialStore,
   DEFAULT_CREDENTIAL_VALIDITY,
@@ -52,7 +60,10 @@ import {
   credentialSearchFieldLabel,
   describeSearchFields,
 } from "@/components/findings/credential-search-fields"
-import type { CredentialSearchField } from "@/graphql/gql/graphql"
+import type {
+  CredentialSearchField,
+  CredentialValidity,
+} from "@/graphql/gql/graphql"
 
 const ALL_TYPES_VALUE = "__all__"
 
@@ -86,16 +97,6 @@ export function CredentialsToolbar({ mode }: CredentialsToolbarProps) {
       ? tagsData.credentialTags
       : tagsData.myCredentialTags
   }, [tagsData])
-
-  // Toggle semantics: switch OFF (default) shows untested and valid
-  // credentials, switch ON adds the ones known not to work. Untested is never
-  // on the hidden side of this switch — that conflation is exactly what the
-  // three-state validity replaced. An empty list means every state, so the
-  // filter does not have to be restated when a fourth state never arrives.
-  const showInvalid = filters.validity.length === 0
-  function onShowInvalidChange(next: boolean) {
-    setValidity(next ? [] : DEFAULT_CREDENTIAL_VALIDITY)
-  }
 
   // Search-field toggle semantics. The store keeps an empty list as the
   // canonical "all fields" state, but the picker shows every box checked in
@@ -185,13 +186,7 @@ export function CredentialsToolbar({ mode }: CredentialsToolbarProps) {
         </PopoverContent>
       </Popover>
 
-      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-        <Switch
-          checked={showInvalid}
-          onCheckedChange={onShowInvalidChange}
-        />
-        Show invalid
-      </label>
+      <ValidityFilter selected={filters.validity} onChange={setValidity} />
 
       {/* Credentials are created against a specific operation. In scoped mode
           the parent passes the op id straight to the dialog. In global mode
@@ -204,6 +199,92 @@ export function CredentialsToolbar({ mode }: CredentialsToolbarProps) {
         </Button>
       </div>
     </div>
+  )
+}
+
+// Which validity states the list shows. Checked means shown; the store keeps
+// "every state" as the empty list, which renders all three checked, so a
+// click there hides the one clicked. Hiding the last one shown would show
+// nothing, a dead end, so it shows everything instead. The badge counts the
+// states shown while some are hidden: the default (untested and valid)
+// reads as 2, because it is a filter: invalid credentials are hidden.
+function ValidityFilter({
+  selected,
+  onChange,
+}: {
+  selected: readonly CredentialValidity[]
+  onChange: (validity: CredentialValidity[]) => void
+}) {
+  const shown = shownValidities(selected)
+  const narrowed = shown.length < CREDENTIAL_VALIDITIES.length
+  const isDefault =
+    shown.length === DEFAULT_CREDENTIAL_VALIDITY.length &&
+    DEFAULT_CREDENTIAL_VALIDITY.every((v) => shown.includes(v))
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <FilterIcon className="size-4" />
+            Validity
+            {narrowed && (
+              <Badge variant="secondary" className="ml-1">
+                {shown.length}
+              </Badge>
+            )}
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-56 p-1">
+        {CREDENTIAL_VALIDITIES.map((v) => {
+          const active = shown.includes(v)
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => onChange(toggleValidity(selected, v))}
+              title={credentialValidity(v).description}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+            >
+              <Checkbox
+                checked={active}
+                tabIndex={-1}
+                aria-hidden
+                className="pointer-events-none"
+              />
+              <CredentialValidityIcon validity={v} />
+              <span>{credentialValidity(v).label}</span>
+            </button>
+          )
+        })}
+        {(narrowed || !isDefault) && (
+          <div className="flex gap-1 border-t pt-1">
+            {narrowed && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onChange([])}
+                className="flex-1 justify-start text-xs"
+              >
+                Show all
+              </Button>
+            )}
+            {!isDefault && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onChange(DEFAULT_CREDENTIAL_VALIDITY)}
+                className="flex-1 justify-start text-xs"
+                title="Untested and valid: hide the ones known not to work"
+              >
+                Default
+              </Button>
+            )}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
 

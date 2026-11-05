@@ -15,6 +15,7 @@ package wikitransfer
 
 import (
 	"io"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -121,14 +122,30 @@ type Attachment struct {
 // CredentialPayload is a credential as carried by a bundle or a
 // logos-credential fence. Mirrors the fields the export writes.
 type CredentialPayload struct {
-	ID         string               `json:"id"`
-	Name       string               `json:"name"`
-	Type       string               `json:"type"`
-	Username   string               `json:"username"`
-	Password   string               `json:"password"`
-	Keys       []CredentialKey      `json:"keys"`
-	Properties []CredentialProperty `json:"properties"`
-	Validity   string               `json:"validity"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	// Version is models.CredentialSchemaVersion on what this core exports;
+	// 0 on a payload from before the types had fields, whose type is one of
+	// the old ones and is read the way the startup backfill reads them.
+	Version     int                  `json:"version,omitempty"`
+	LegacyType  string               `json:"legacyType,omitempty"`
+	Username    string               `json:"username"`
+	Realm       string               `json:"realm,omitempty"`
+	Password    string               `json:"password"`
+	Key         string               `json:"key,omitempty"`
+	Passphrase  string               `json:"passphrase,omitempty"`
+	Certificate string               `json:"certificate,omitempty"`
+	PrivateKey  string               `json:"privateKey,omitempty"`
+	Ticket      string               `json:"ticket,omitempty"`
+	Service     string               `json:"service,omitempty"`
+	ExpiresAt   *time.Time           `json:"expiresAt,omitempty"`
+	Hash        string               `json:"hash,omitempty"`
+	Hex         string               `json:"hex,omitempty"`
+	Algorithm   string               `json:"algorithm,omitempty"`
+	Keys        []CredentialKey      `json:"keys"`
+	Properties  []CredentialProperty `json:"properties"`
+	Validity    string               `json:"validity"`
 	// LegacyIsValid carries the boolean this field used to be, so a bundle
 	// exported before validity became three-state still imports. Written by
 	// nothing; read only when Validity is empty. See buildCredential.

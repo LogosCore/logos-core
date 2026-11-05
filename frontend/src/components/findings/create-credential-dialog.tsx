@@ -19,23 +19,16 @@ import {
   type CredentialFormValues,
 } from "@/components/findings/credential-form-fields";
 import { CredentialValiditySelect } from "@/components/findings/credential-validity-utils";
-import { keyDraftsToInputs } from "@/components/findings/credential-key-drafts";
 import { propertyDraftsToInputs } from "@/components/findings/credential-property-drafts";
+import {
+  credentialCreateFields,
+  emptyCredentialFormValues,
+} from "@/components/findings/credential-form-values";
+import { useCredentialTypeSpecs } from "@/components/findings/credential-type-utils";
 import {
   OperationSinglePicker,
   type OperationSinglePickerValue,
 } from "@/components/findings/operation-single-select";
-
-const emptyValues: CredentialFormValues = {
-  name: "",
-  type: "PASSWORD",
-  username: "",
-  password: "",
-  keys: [],
-  properties: [],
-  validity: "UNKNOWN",
-  tags: [],
-};
 
 interface CreateCredentialDialogProps {
   // Scoped mode: the parent fixes the target operation. The dialog hides its
@@ -51,7 +44,11 @@ export function CreateCredentialDialog({
   const createDialogOpen = useCredentialStore((s) => s.createDialogOpen);
   const closeCreateDialog = useCredentialStore((s) => s.closeCreateDialog);
   const createCredential = useCreateCredential();
-  const [values, setValues] = useState<CredentialFormValues>(emptyValues);
+  const [values, setValues] = useState<CredentialFormValues>(() =>
+    emptyCredentialFormValues(),
+  );
+  const specs = useCredentialTypeSpecs();
+  const spec = specs.get(values.type);
   const [error, setError] = useState<string | null>(null);
   const [pickedOp, setPickedOp] =
     useState<OperationSinglePickerValue | null>(null);
@@ -78,7 +75,7 @@ export function CreateCredentialDialog({
     : myTagsFallback.isLoading;
 
   function reset() {
-    setValues(emptyValues);
+    setValues(emptyCredentialFormValues());
     setError(null);
     setPickedOp(null);
   }
@@ -96,9 +93,7 @@ export function CreateCredentialDialog({
         input: {
           name: values.name,
           type: values.type,
-          username: values.username || null,
-          password: values.password || null,
-          keys: keyDraftsToInputs(values.keys),
+          ...credentialCreateFields(values, spec),
           properties: propertyDraftsToInputs(values.properties),
           validity: values.validity,
           tags: values.tags,
@@ -154,6 +149,7 @@ export function CreateCredentialDialog({
             idPrefix="create-cred"
             values={values}
             onChange={setValues}
+            specs={specs}
             tagSuggestions={tagSuggestions}
             tagSuggestionsLoading={tagSuggestionsLoading}
           />
@@ -170,7 +166,8 @@ export function CreateCredentialDialog({
               disabled={
                 createCredential.isPending ||
                 !values.name.trim() ||
-                !targetOpId
+                !targetOpId ||
+                !spec
               }
             >
               {createCredential.isPending ? "Saving..." : "Add credential"}

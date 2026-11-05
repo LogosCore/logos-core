@@ -12,25 +12,43 @@ import (
 
 type findCredentialsArgs struct {
 	OperationID string   `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Search      string   `json:"search,omitempty"       jsonschema:"Free-text match against name and username."`
+	Search      string   `json:"search,omitempty"       jsonschema:"Free-text match against the name, the one-line fields (username, realm, password, hash, hex, service, algorithm) and property values."`
+	Type        string   `json:"type,omitempty"         jsonschema:"Only credentials of this type."`
 	Tags        []string `json:"tags,omitempty"         jsonschema:"Only credentials carrying all of these tags."`
 	Validity    []string `json:"validity,omitempty"     jsonschema:"Only these states: UNKNOWN, VALID, INVALID. Omit for all."`
 	Limit       int      `json:"limit,omitempty"        jsonschema:"Page size, max 50."`
 	Cursor      string   `json:"cursor,omitempty"       jsonschema:"nextCursor from the previous page."`
 }
 
+// credentialKeyArg is one of an OTHER credential's named keys.
+type credentialKeyArg struct {
+	Name    string `json:"name"    jsonschema:"e.g. id_rsa"`
+	Content string `json:"content" jsonschema:"Key material."`
+}
+
+// The typed fields' descriptions say what each holds; which types take which
+// is the table in the create tool's description, built from the one in
+// models (credentialTypesDoc).
 type createCredentialArgs struct {
 	IdempotencyKey
-	OperationID string `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
-	Name        string `json:"name"                   jsonschema:"e.g. 'web-01 local admin'"`
-	Type        string `json:"type"                   jsonschema:"PASSWORD, SSH_KEY, API_KEY, TOKEN, HASH or OTHER."`
-	Username    string `json:"username,omitempty"     jsonschema:"Account name."`
-	Password    string `json:"password,omitempty"     jsonschema:"The secret."`
-	Keys        []struct {
-		Name    string `json:"name"    jsonschema:"e.g. id_rsa"`
-		Content string `json:"content" jsonschema:"Key material."`
-	} `json:"keys,omitempty" jsonschema:"Key material for SSH_KEY and API_KEY."`
-	Properties []struct {
+	OperationID string             `json:"operation_id,omitempty" jsonschema:"Operation id; omit for the operator's current one."`
+	Name        string             `json:"name"                   jsonschema:"e.g. 'web-01 local admin'"`
+	Type        string             `json:"type"                   jsonschema:"PLAINTEXT, KEY, CERTIFICATE, TICKET, HASH, HEX or OTHER."`
+	Username    string             `json:"username,omitempty"     jsonschema:"Account name."`
+	Realm       string             `json:"realm,omitempty"        jsonschema:"Its domain or realm, e.g. CORP."`
+	Password    string             `json:"password,omitempty"     jsonschema:"A password in the clear; for a CERTIFICATE, its PFX's."`
+	Key         string             `json:"key,omitempty"          jsonschema:"A private key, such as an SSH key."`
+	Passphrase  string             `json:"passphrase,omitempty"   jsonschema:"The key's passphrase."`
+	Certificate string             `json:"certificate,omitempty"  jsonschema:"PEM, or a PFX as base64."`
+	PrivateKey  string             `json:"private_key,omitempty"  jsonschema:"The certificate's private key, PEM."`
+	Ticket      string             `json:"ticket,omitempty"       jsonschema:"A Kerberos ticket, kirbi or ccache as base64."`
+	Service     string             `json:"service,omitempty"      jsonschema:"The ticket's service (SPN), e.g. cifs/dc01.corp.local."`
+	ExpiresAt   string             `json:"expires_at,omitempty"   jsonschema:"When the ticket expires, RFC 3339."`
+	Hash        string             `json:"hash,omitempty"         jsonschema:"A hash to pass, not to crack (those are hash findings)."`
+	Hex         string             `json:"hex,omitempty"          jsonschema:"Key material in hex, e.g. an AES key."`
+	Algorithm   string             `json:"algorithm,omitempty"    jsonschema:"The hash's or the hex key's, e.g. NTLM, aes256-cts-hmac-sha1-96."`
+	Keys        []credentialKeyArg `json:"keys,omitempty"         jsonschema:"Named key material, for OTHER."`
+	Properties  []struct {
 		Name  string `json:"name"  jsonschema:"e.g. domain, port"`
 		Value string `json:"value"`
 	} `json:"properties,omitempty" jsonschema:"Extra fields."`
@@ -48,16 +66,24 @@ type getCredentialArgs struct {
 // one thing about a credential without knowing the rest of it.
 type updateCredentialArgs struct {
 	IdempotencyKey
-	CredentialID string  `json:"credential_id"      jsonschema:"Credential id."`
-	Name         *string `json:"name,omitempty"     jsonschema:"New name; omit to leave it."`
-	Type         *string `json:"type,omitempty"     jsonschema:"PASSWORD, SSH_KEY, API_KEY, TOKEN, HASH or OTHER."`
-	Username     *string `json:"username,omitempty" jsonschema:"New account name; omit to leave it."`
-	Password     *string `json:"password,omitempty" jsonschema:"New secret; omit to leave it."`
-	Keys         []struct {
-		Name    string `json:"name"    jsonschema:"e.g. id_rsa"`
-		Content string `json:"content" jsonschema:"Key material."`
-	} `json:"keys,omitempty" jsonschema:"Replaces every key. Omit to leave them; send [] to clear them."`
-	Properties []struct {
+	CredentialID string             `json:"credential_id"         jsonschema:"Credential id."`
+	Name         *string            `json:"name,omitempty"        jsonschema:"New name; omit to leave it."`
+	Type         *string            `json:"type,omitempty"        jsonschema:"A new type: PLAINTEXT, KEY, CERTIFICATE, TICKET, HASH, HEX or OTHER."`
+	Username     *string            `json:"username,omitempty"    jsonschema:"Account name."`
+	Realm        *string            `json:"realm,omitempty"       jsonschema:"Its domain or realm."`
+	Password     *string            `json:"password,omitempty"    jsonschema:"A password in the clear; for a CERTIFICATE, its PFX's."`
+	Key          *string            `json:"key,omitempty"         jsonschema:"A private key."`
+	Passphrase   *string            `json:"passphrase,omitempty"  jsonschema:"The key's passphrase."`
+	Certificate  *string            `json:"certificate,omitempty" jsonschema:"PEM, or a PFX as base64."`
+	PrivateKey   *string            `json:"private_key,omitempty" jsonschema:"The certificate's private key, PEM."`
+	Ticket       *string            `json:"ticket,omitempty"      jsonschema:"A Kerberos ticket, kirbi or ccache as base64."`
+	Service      *string            `json:"service,omitempty"     jsonschema:"The ticket's service (SPN)."`
+	ExpiresAt    *string            `json:"expires_at,omitempty"  jsonschema:"When the ticket expires, RFC 3339; \"\" clears it."`
+	Hash         *string            `json:"hash,omitempty"        jsonschema:"A hash to pass."`
+	Hex          *string            `json:"hex,omitempty"         jsonschema:"Key material in hex."`
+	Algorithm    *string            `json:"algorithm,omitempty"   jsonschema:"The hash's or the hex key's."`
+	Keys         []credentialKeyArg `json:"keys,omitempty"        jsonschema:"Replaces every key (OTHER). Omit to leave them; send [] to clear them."`
+	Properties   []struct {
 		Name  string `json:"name"  jsonschema:"e.g. domain, port"`
 		Value string `json:"value"`
 	} `json:"properties,omitempty" jsonschema:"Replaces every property. Omit to leave them; send [] to clear them."`
@@ -78,13 +104,16 @@ func registerCredentialTools(s *Server) {
 	}, readTool, handleFindCredentials)
 
 	register(s, &mcp.Tool{
-		Name:        "create_credential",
-		Description: "Record a credential: a password, an SSH key, a token.",
+		Name: "create_credential",
+		Description: "Record a credential. Each type takes only its own fields (* required): " +
+			credentialTypesDoc() + ". Any type also takes properties, tags and validity.",
 	}, writeTool, handleCreateCredential)
 
 	register(s, &mcp.Tool{
-		Name:        "update_credential",
-		Description: "Update a credential. Send only fields that change; omitted fields are kept.",
+		Name: "update_credential",
+		Description: "Update a credential. Send only fields that change; omitted fields are kept, \"\" empties one. " +
+			"A new type takes the new type's required fields, and values its fields have no room for must be sent empty: " +
+			"the refusal names them.",
 	}, writeTool, handleUpdateCredential)
 
 	register(s, &mcp.Tool{
@@ -109,9 +138,17 @@ func handleFindCredentials(ctx context.Context, s *Server, args findCredentialsA
 	if err != nil {
 		return toolResult{}, err
 	}
+	var credType *models.CredentialType
+	if args.Type != "" {
+		t, err := parseCredentialType(args.Type)
+		if err != nil {
+			return toolResult{}, err
+		}
+		credType = &t
+	}
 
 	conn, err := s.deps.Credentials.Credentials(ctx, opID.String(), optionalString(args.Search),
-		nil, nil, args.Tags, validity, nil, nil, &limit, optionalString(args.Cursor), nil, nil)
+		nil, credType, args.Tags, validity, nil, nil, &limit, optionalString(args.Cursor), nil, nil)
 	if err != nil {
 		return toolResult{}, fmt.Errorf("failed to search credentials: %w", err)
 	}
@@ -138,18 +175,28 @@ func handleCreateCredential(ctx context.Context, s *Server, args createCredentia
 		return toolResult{}, err
 	}
 
-	credType := models.CredentialType(strings.ToUpper(strings.TrimSpace(args.Type)))
-	if !credType.IsValid() {
-		return toolResult{}, fmt.Errorf(
-			"type %q is not one of PASSWORD, SSH_KEY, API_KEY, TOKEN, HASH, OTHER", args.Type)
+	credType, err := parseCredentialType(args.Type)
+	if err != nil {
+		return toolResult{}, err
 	}
 
 	input := model.CreateCredentialInput{
-		Name:     args.Name,
-		Type:     credType,
-		Username: optionalString(args.Username),
-		Password: optionalString(args.Password),
-		Tags:     args.Tags,
+		Name:        args.Name,
+		Type:        credType,
+		Username:    optionalString(args.Username),
+		Realm:       optionalString(args.Realm),
+		Password:    optionalString(args.Password),
+		Key:         optionalString(args.Key),
+		Passphrase:  optionalString(args.Passphrase),
+		Certificate: optionalString(args.Certificate),
+		PrivateKey:  optionalString(args.PrivateKey),
+		Ticket:      optionalString(args.Ticket),
+		Service:     optionalString(args.Service),
+		ExpiresAt:   optionalString(args.ExpiresAt),
+		Hash:        optionalString(args.Hash),
+		Hex:         optionalString(args.Hex),
+		Algorithm:   optionalString(args.Algorithm),
+		Tags:        args.Tags,
 	}
 	if args.Validity != "" {
 		validity, err := parseCredentialValidity(args.Validity)
@@ -186,10 +233,21 @@ func handleCreateCredential(ctx context.Context, s *Server, args createCredentia
 // correcting a password silently delete every key on the credential.
 func buildUpdateCredentialInput(args updateCredentialArgs) (model.UpdateCredentialInput, error) {
 	input := model.UpdateCredentialInput{
-		Name:     args.Name,
-		Username: args.Username,
-		Password: args.Password,
-		Tags:     args.Tags,
+		Name:        args.Name,
+		Username:    args.Username,
+		Realm:       args.Realm,
+		Password:    args.Password,
+		Key:         args.Key,
+		Passphrase:  args.Passphrase,
+		Certificate: args.Certificate,
+		PrivateKey:  args.PrivateKey,
+		Ticket:      args.Ticket,
+		Service:     args.Service,
+		ExpiresAt:   args.ExpiresAt,
+		Hash:        args.Hash,
+		Hex:         args.Hex,
+		Algorithm:   args.Algorithm,
+		Tags:        args.Tags,
 	}
 	if args.Validity != nil {
 		validity, err := parseCredentialValidity(*args.Validity)
@@ -199,10 +257,9 @@ func buildUpdateCredentialInput(args updateCredentialArgs) (model.UpdateCredenti
 		input.Validity = &validity
 	}
 	if args.Type != nil {
-		credType := models.CredentialType(upperTrim(*args.Type))
-		if !credType.IsValid() {
-			return input, refuse(
-				"type %q is not one of PASSWORD, SSH_KEY, API_KEY, TOKEN, HASH, OTHER", *args.Type)
+		credType, err := parseCredentialType(*args.Type)
+		if err != nil {
+			return input, err
 		}
 		input.Type = &credType
 	}
@@ -225,6 +282,43 @@ func buildUpdateCredentialInput(args updateCredentialArgs) (model.UpdateCredenti
 
 // upperTrim normalises an enum the agent typed.
 func upperTrim(v string) string { return strings.ToUpper(strings.TrimSpace(v)) }
+
+// renamedCredentialTypes says where the old types with an obvious successor
+// went, for an agent still using them.
+var renamedCredentialTypes = map[string]models.CredentialType{
+	"PASSWORD": models.CredentialTypePlaintext,
+	"SSH_KEY":  models.CredentialTypeKey,
+}
+
+// parseCredentialType accepts a type in whatever case the agent typed, and
+// refuses the rest by name, the old types with where they went.
+func parseCredentialType(v string) (models.CredentialType, error) {
+	t := models.CredentialType(upperTrim(v))
+	if t.IsValid() {
+		return t, nil
+	}
+	if now, ok := renamedCredentialTypes[string(t)]; ok {
+		return "", refuse("type %q is not one of %s: it is %s now", v, models.CredentialTypeNames(), now)
+	}
+	return "", refuse("type %q is not one of %s (OTHER for what fits none)", v, models.CredentialTypeNames())
+}
+
+// credentialTypesDoc is the type table for a tool description: "PLAINTEXT
+// (username, realm, password*), KEY (...)".
+func credentialTypesDoc() string {
+	parts := make([]string, 0, len(models.CredentialTypeSpecs()))
+	for _, spec := range models.CredentialTypeSpecs() {
+		fields := make([]string, len(spec.Fields))
+		for i, f := range spec.Fields {
+			fields[i] = string(f.Field)
+			if f.Required {
+				fields[i] += "*"
+			}
+		}
+		parts = append(parts, fmt.Sprintf("%s (%s)", spec.Type, strings.Join(fields, ", ")))
+	}
+	return strings.Join(parts, ", ")
+}
 
 // parseCredentialValidity accepts the enum in whatever case the agent typed
 // and refuses anything else by name, rather than quietly picking a state on
@@ -274,14 +368,17 @@ func handleUpdateCredential(ctx context.Context, s *Server, args updateCredentia
 	return toolResult{
 		Payload:     toCredentialView(updated),
 		OperationID: &cred.OperationID,
-		Summary:     summarizeCredentialUpdate(updated, args),
+		Summary:     summarizeCredentialUpdate(cred, updated, args),
 	}, nil
 }
 
 // summarizeCredentialUpdate is the line the operator sees in the activity
 // rail. Validity leads when it changed, because that is the fact other people
-// act on.
-func summarizeCredentialUpdate(cred *models.Credential, args updateCredentialArgs) string {
+// act on; then a change of type.
+func summarizeCredentialUpdate(before, cred *models.Credential, args updateCredentialArgs) string {
+	if args.Validity == nil && before.Type != cred.Type {
+		return fmt.Sprintf("converted the credential %q from %s to %s", cred.Name, before.Type, cred.Type)
+	}
 	if args.Validity != nil {
 		switch cred.Validity {
 		case models.CredentialValidityValid:
@@ -303,10 +400,20 @@ func handleGetCredential(ctx context.Context, s *Server, args getCredentialArgs)
 
 	view := struct {
 		credentialView
-		Keys       []credentialKeyView      `json:"keys,omitempty"`
-		Properties []credentialPropertyView `json:"properties,omitempty"`
-		Comments   []credentialCommentView  `json:"comments,omitempty"`
-	}{credentialView: toCredentialView(cred)}
+		Key         string                   `json:"key,omitempty"`
+		Certificate string                   `json:"certificate,omitempty"`
+		PrivateKey  string                   `json:"private_key,omitempty"`
+		Ticket      string                   `json:"ticket,omitempty"`
+		Keys        []credentialKeyView      `json:"keys,omitempty"`
+		Properties  []credentialPropertyView `json:"properties,omitempty"`
+		Comments    []credentialCommentView  `json:"comments,omitempty"`
+	}{
+		credentialView: toCredentialView(cred),
+		Key:            credentialFieldShown(cred, models.CredentialFieldKey),
+		Certificate:    credentialFieldShown(cred, models.CredentialFieldCertificate),
+		PrivateKey:     credentialFieldShown(cred, models.CredentialFieldPrivateKey),
+		Ticket:         credentialFieldShown(cred, models.CredentialFieldTicket),
+	}
 
 	for _, k := range cred.Keys {
 		view.Keys = append(view.Keys, credentialKeyView{Name: k.Name, Content: k.Content})

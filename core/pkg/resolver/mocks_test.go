@@ -83,6 +83,9 @@ func (m *mockCredRepo) DeleteByOperationID(ctx context.Context, operationID uuid
 	return m.deleteByOperationIDFn(ctx, operationID)
 }
 func (m *mockCredRepo) BackfillValidity(ctx context.Context) (int64, error) { return 0, nil }
+func (m *mockCredRepo) BackfillCredentialTypes(ctx context.Context) (int64, int64, error) {
+	return 0, 0, nil
+}
 func (m *mockCredRepo) AddComment(ctx context.Context, credentialID uuid.UUID, comment models.CredentialComment) error {
 	return m.addCommentFn(ctx, credentialID, comment)
 }

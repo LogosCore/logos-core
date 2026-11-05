@@ -39,7 +39,7 @@ func newFixture(t *testing.T) *fixture {
 	rootID, childID := uuid.New(), uuid.New()
 	f.img = models.WikiImage{ImageID: uuid.New(), OperationID: f.op, DocumentID: rootID, ObjectKey: "img-key", ContentType: "image/png", SizeBytes: 3}
 	f.file = models.WikiFile{FileID: uuid.New(), OperationID: f.op, DocumentID: childID, ObjectKey: "file-key", Filename: "notes.pdf", ContentType: "application/pdf", SizeBytes: 3}
-	f.cred = models.Credential{CredentialID: uuid.New(), OperationID: f.op, Name: "svc", Type: models.CredentialTypePassword, Username: "u", Password: "p"}
+	f.cred = models.Credential{CredentialID: uuid.New(), OperationID: f.op, Name: "svc", Type: models.CredentialTypePlaintext, Username: "u", Password: "p"}
 
 	f.root = models.WikiDocument{
 		DocumentID: rootID, OperationID: f.op, Title: "Root", Emoji: "🚀", SortOrder: "a", PathIDs: []uuid.UUID{},

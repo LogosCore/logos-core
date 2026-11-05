@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -145,7 +146,8 @@ func LowerCredentialFences(
 
 // buildCredentialMarkdown writes a credential out as markdown any reader
 // can follow: a bold line naming it and what kind it is, a list of its
-// single-line fields, then one fenced block per key.
+// single-line fields, then one fenced block per key, certificate or ticket:
+// the fields of its type (models.Credential.FilledFields), in its order.
 //
 // Keys are not list items because they are not one line — an SSH private
 // key is forty of them, and a reader wanting to use it needs to be able to
@@ -174,38 +176,55 @@ func buildCredentialMarkdown(c *models.Credential, detail CredentialDetail) stri
 	}
 	b.WriteString("\n")
 
-	var fields []string
+	var fields, blobs []string
 	addField := func(label, value string) {
 		if strings.TrimSpace(value) == "" {
 			return
 		}
 		fields = append(fields, "- "+label+": "+inlineCode(value))
 	}
-	addField("Username", c.Username)
-	addField("Password", c.Password)
+	addBlob := func(label, content string) {
+		if strings.TrimSpace(content) == "" {
+			return
+		}
+		fence := fenceFor(content)
+		blobs = append(blobs, "\n"+escapeLabel(label)+":\n\n"+
+			fence+"\n"+strings.TrimRight(content, "\n")+"\n"+fence+"\n")
+	}
+	for _, f := range c.FilledFields() {
+		switch f.Spec.Kind {
+		case models.CredentialFieldKindBlob:
+			addBlob(f.Spec.Label, f.Value)
+		case models.CredentialFieldKindDateTime:
+			at, err := time.Parse(time.RFC3339, f.Value)
+			if err == nil {
+				f.Value = at.UTC().Format("2006.01.02 15:04:05") + " UTC"
+			}
+			addField(f.Spec.Label, f.Value)
+		default:
+			addField(f.Spec.Label, f.Value)
+		}
+	}
 	for _, p := range c.Properties {
 		addField(escapeLabel(p.Name), p.Value)
 	}
 	if len(c.Tags) > 0 {
 		fields = append(fields, "- Tags: "+strings.Join(c.Tags, ", "))
 	}
+	for _, k := range c.Keys {
+		label := strings.TrimSpace(k.Name)
+		if label == "" {
+			label = "Key"
+		}
+		addBlob(label, k.Content)
+	}
 	if len(fields) > 0 {
 		b.WriteString("\n")
 		b.WriteString(strings.Join(fields, "\n"))
 		b.WriteString("\n")
 	}
-
-	for _, k := range c.Keys {
-		if strings.TrimSpace(k.Content) == "" {
-			continue
-		}
-		label := strings.TrimSpace(k.Name)
-		if label == "" {
-			label = "Key"
-		}
-		fence := fenceFor(k.Content)
-		b.WriteString("\n" + escapeLabel(label) + ":\n\n")
-		b.WriteString(fence + "\n" + strings.TrimRight(k.Content, "\n") + "\n" + fence + "\n")
+	for _, blob := range blobs {
+		b.WriteString(blob)
 	}
 
 	return strings.TrimRight(b.String(), "\n")

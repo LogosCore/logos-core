@@ -11,8 +11,12 @@ import {
 } from "@/components/findings/credential-form-fields"
 import { CredentialValiditySelect } from "@/components/findings/credential-validity-utils"
 import type { CredentialFieldsFragment } from "@/graphql/gql/graphql"
-import { keyDraftsToInputs } from "@/components/findings/credential-key-drafts"
 import { propertyDraftsToInputs } from "@/components/findings/credential-property-drafts"
+import {
+  credentialCreateFields,
+  emptyCredentialFormValues,
+} from "@/components/findings/credential-form-values"
+import { useCredentialTypeSpecs } from "@/components/findings/credential-type-utils"
 
 /**
  * Inline "create credential" form shared by every picker that offers a
@@ -34,17 +38,6 @@ interface CredentialCreateFormProps {
   onBack: () => void
 }
 
-const emptyFormValues: CredentialFormValues = {
-  name: "",
-  type: "PASSWORD",
-  username: "",
-  password: "",
-  keys: [],
-  properties: [],
-  validity: "UNKNOWN",
-  tags: [],
-}
-
 export function CredentialCreateForm({
   operationId,
   initialName = "",
@@ -57,10 +50,11 @@ export function CredentialCreateForm({
   const createCredential = useCreateCredential()
   const { data: tagsData, isLoading: tagsLoading } =
     useCredentialTags(operationId)
-  const [values, setValues] = useState<CredentialFormValues>(() => ({
-    ...emptyFormValues,
-    name: initialName,
-  }))
+  const [values, setValues] = useState<CredentialFormValues>(() =>
+    emptyCredentialFormValues(initialName),
+  )
+  const specs = useCredentialTypeSpecs()
+  const spec = specs.get(values.type)
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -72,9 +66,7 @@ export function CredentialCreateForm({
         input: {
           name: values.name,
           type: values.type,
-          username: values.username || null,
-          password: values.password || null,
-          keys: keyDraftsToInputs(values.keys),
+          ...credentialCreateFields(values, spec),
           properties: propertyDraftsToInputs(values.properties),
           validity: values.validity,
           tags: values.tags,
@@ -103,6 +95,7 @@ export function CredentialCreateForm({
         idPrefix={idPrefix}
         values={values}
         onChange={setValues}
+        specs={specs}
         tagSuggestions={tagsData?.credentialTags ?? []}
         tagSuggestionsLoading={tagsLoading}
       />
@@ -126,7 +119,7 @@ export function CredentialCreateForm({
         </div>
         <Button
           type="submit"
-          disabled={createCredential.isPending || !values.name.trim()}
+          disabled={createCredential.isPending || !values.name.trim() || !spec}
         >
           {createCredential.isPending ? submitPendingLabel : submitLabel}
         </Button>

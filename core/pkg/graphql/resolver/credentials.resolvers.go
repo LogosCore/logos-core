@@ -28,6 +28,16 @@ func (r *credentialResolver) Operation(ctx context.Context, obj *models.Credenti
 	return r.CredentialResolver.Operation(ctx, obj)
 }
 
+// LegacyType is the resolver for the legacyType field.
+func (r *credentialResolver) LegacyType(ctx context.Context, obj *models.Credential) (*string, error) {
+	return r.CredentialResolver.LegacyType(ctx, obj)
+}
+
+// ExpiresAt is the resolver for the expiresAt field.
+func (r *credentialResolver) ExpiresAt(ctx context.Context, obj *models.Credential) (*string, error) {
+	return r.CredentialResolver.ExpiresAt(ctx, obj)
+}
+
 // Comments is the resolver for the comments field.
 func (r *credentialResolver) Comments(ctx context.Context, obj *models.Credential) ([]*models.CredentialComment, error) {
 	return r.CredentialResolver.Comments(ctx, obj)
@@ -111,6 +121,11 @@ func (r *mutationResolver) UpdateCredentialComment(ctx context.Context, credenti
 // DeleteCredentialComment is the resolver for the deleteCredentialComment field.
 func (r *mutationResolver) DeleteCredentialComment(ctx context.Context, credentialID string, commentID string) (*models.Credential, error) {
 	return r.CredentialResolver.DeleteCredentialComment(ctx, credentialID, commentID)
+}
+
+// CredentialTypes is the resolver for the credentialTypes field.
+func (r *queryResolver) CredentialTypes(ctx context.Context) ([]*model.CredentialTypeSpec, error) {
+	return r.CredentialResolver.CredentialTypes(ctx)
 }
 
 // Credential is the resolver for the credential field.

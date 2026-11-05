@@ -28,6 +28,7 @@ import type {
 import {
   CredentialDocument,
   CredentialChipDocument,
+  CredentialTypesDocument,
   CredentialsDocument,
   CredentialTagsDocument,
   CredentialBacklinksDocument,
@@ -112,7 +113,10 @@ const credentialLists: LiveListSpec<CredentialFieldsFragment> = {
       (p.sortBy != null && p.sortBy !== "CREATED_AT")
     )
   },
-  membership: (c) => [c.name, c.username, c.password, c.properties, c.type, c.tags, c.validity],
+  membership: (c) => [
+    c.name, c.type, c.username, c.realm, c.password, c.hash, c.hex, c.service,
+    c.algorithm, c.properties, c.tags, c.validity,
+  ],
 }
 
 // applyCredentialEvent folds one credential event into the cache. An update
@@ -139,6 +143,18 @@ function applyCredentialEvent(
 }
 
 // --- Queries ---
+
+// The type table (credentialTypes). The same for everyone and fixed for a
+// release, so it is fetched once and kept.
+export function useCredentialTypes() {
+  return useQuery({
+    queryKey: [...credentialKeys.all, "types"] as const,
+    queryFn: () => graphqlClient(CredentialTypesDocument),
+    select: (data) => data.credentialTypes,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+}
 
 // `options.enabled` lets callers defer the fetch until the credential is
 // actually about to be displayed — wiki-credential-chip uses this to gate

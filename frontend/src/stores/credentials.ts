@@ -44,6 +44,9 @@ interface CredentialStoreState {
 
   createDialogOpen: boolean
   editDialogOpen: boolean
+  // Set when the edit dialog was opened as "Convert to…": the type it starts
+  // from. Null for a plain edit.
+  editConvertTo: CredentialType | null
   deleteDialogOpen: boolean
   detailsPanelOpen: boolean
 
@@ -59,6 +62,7 @@ interface CredentialStoreState {
 
   openCreateDialog: () => void
   openEditDialog: (c: SelectedCredential) => void
+  openConvertDialog: (c: SelectedCredential, to: CredentialType) => void
   openDeleteDialog: (c: SelectedCredential) => void
   openDetailsPanel: (c: SelectedCredential) => void
   closeCreateDialog: () => void
@@ -74,6 +78,12 @@ interface CredentialStoreState {
 export const DEFAULT_CREDENTIAL_VALIDITY: CredentialValidity[] = [
   "UNKNOWN",
   "VALID",
+]
+
+const CREDENTIAL_VALIDITY_STATES: readonly CredentialValidity[] = [
+  "UNKNOWN",
+  "VALID",
+  "INVALID",
 ]
 
 const defaultFilters: CredentialFilters = {
@@ -99,6 +109,7 @@ export const useCredentialStore = create<CredentialStoreState>()(
 
       createDialogOpen: false,
       editDialogOpen: false,
+      editConvertTo: null,
       deleteDialogOpen: false,
       detailsPanelOpen: false,
 
@@ -125,7 +136,9 @@ export const useCredentialStore = create<CredentialStoreState>()(
 
       openCreateDialog: () => set({ createDialogOpen: true }),
       openEditDialog: (c) =>
-        set({ editDialogOpen: true, selected: c }),
+        set({ editDialogOpen: true, editConvertTo: null, selected: c }),
+      openConvertDialog: (c, to) =>
+        set({ editDialogOpen: true, editConvertTo: to, selected: c }),
       openDeleteDialog: (c) =>
         set({ deleteDialogOpen: true, selected: c }),
       openDetailsPanel: (c) =>
@@ -134,7 +147,8 @@ export const useCredentialStore = create<CredentialStoreState>()(
       // details) don't tear down the dialog underneath. Closing the details panel
       // is the only place we clear `selected`, since it's the entry point.
       closeCreateDialog: () => set({ createDialogOpen: false }),
-      closeEditDialog: () => set({ editDialogOpen: false }),
+      closeEditDialog: () =>
+        set({ editDialogOpen: false, editConvertTo: null }),
       closeDeleteDialog: () => set({ deleteDialogOpen: false }),
       closeDetailsPanel: () =>
         set({ detailsPanelOpen: false, selected: null }),
@@ -155,13 +169,18 @@ export const useCredentialStore = create<CredentialStoreState>()(
         const p = persisted as
           | { filters?: { validity?: CredentialValidity[] } }
           | undefined
+        // Only the states there are: a stored value from some other shape
+        // would reach the list query and fail it.
+        const validity = Array.isArray(p?.filters?.validity)
+          ? p.filters.validity.filter((v) =>
+              (CREDENTIAL_VALIDITY_STATES as readonly string[]).includes(v),
+            )
+          : null
         return {
           ...current,
           filters: {
             ...current.filters,
-            ...(Array.isArray(p?.filters?.validity)
-              ? { validity: p.filters.validity }
-              : {}),
+            ...(validity ? { validity } : {}),
           },
         }
       },

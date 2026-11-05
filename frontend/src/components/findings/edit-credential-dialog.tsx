@@ -19,22 +19,33 @@ import {
   type CredentialFormValues,
 } from "@/components/findings/credential-form-fields"
 import { CredentialValiditySelect } from "@/components/findings/credential-validity-utils"
-import {
-  keyDraftsFromWire,
-  keyDraftsToInputs,
-} from "@/components/findings/credential-key-drafts"
+import { keyDraftsFromWire } from "@/components/findings/credential-key-drafts"
 import {
   propertyDraftsFromWire,
   propertyDraftsToInputs,
 } from "@/components/findings/credential-property-drafts"
-import type { CredentialFieldsFragment } from "@/graphql/gql/graphql"
+import {
+  carryCredentialFieldsOver,
+  credentialFieldDraftsFrom,
+  credentialUpdateFields,
+} from "@/components/findings/credential-form-values"
+import {
+  useCredentialTypeSpecs,
+  type CredentialTypeSpecs,
+} from "@/components/findings/credential-type-utils"
+import type {
+  CredentialFieldsFragment,
+  CredentialType,
+} from "@/graphql/gql/graphql"
 
 export function EditCredentialDialog() {
   const editDialogOpen = useCredentialStore((s) => s.editDialogOpen)
   const selected = useCredentialStore((s) => s.selected)
   const closeEditDialog = useCredentialStore((s) => s.closeEditDialog)
+  const convertTo = useCredentialStore((s) => s.editConvertTo)
   const { data, isLoading } = useCredential(selected?.id ?? "")
   const credential = data?.credential
+  const specs = useCredentialTypeSpecs()
 
   return (
     <Dialog
@@ -45,12 +56,16 @@ export function EditCredentialDialog() {
     >
       <DialogContent className="grid-rows-[auto_minmax(0,1fr)] max-h-[calc(100dvh-2rem)] sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Edit credential</DialogTitle>
+          <DialogTitle>
+            {convertTo ? "Convert credential" : "Edit credential"}
+          </DialogTitle>
           <DialogDescription>
-            Update credential details, tags, and validity.
+            {convertTo
+              ? "Check its fields under the new type, then save."
+              : "Update credential details, tags, and validity."}
           </DialogDescription>
         </DialogHeader>
-        {isLoading || !credential ? (
+        {isLoading || !credential || specs.size === 0 ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
             Loading...
           </div>
@@ -58,8 +73,10 @@ export function EditCredentialDialog() {
           // Remount the form on credential id change so its initial state
           // re-seeds from the freshly loaded entity. Avoids setState-in-effect.
           <EditCredentialForm
-            key={credential.id}
+            key={`${credential.id}:${convertTo ?? ""}`}
             credential={credential}
+            specs={specs}
+            convertTo={convertTo}
             onSaved={closeEditDialog}
           />
         )}
@@ -70,10 +87,19 @@ export function EditCredentialDialog() {
 
 interface EditCredentialFormProps {
   credential: CredentialFieldsFragment
+  specs: CredentialTypeSpecs
+  /** Opened as "Convert to…": the type to start from, its fields seeded
+   * from what the old shape holds. */
+  convertTo: CredentialType | null
   onSaved: () => void
 }
 
-function EditCredentialForm({ credential, onSaved }: EditCredentialFormProps) {
+function EditCredentialForm({
+  credential,
+  specs,
+  convertTo,
+  onSaved,
+}: EditCredentialFormProps) {
   const updateCredential = useUpdateCredential()
   // Tag suggestions are scoped to this credential's operation. React Query
   // dedupes against the toolbar's tag query, so opening the dialog while the
@@ -81,16 +107,27 @@ function EditCredentialForm({ credential, onSaved }: EditCredentialFormProps) {
   const { data: tagsData, isLoading: tagsLoading } = useCredentialTags(
     credential.operationId,
   )
-  const [values, setValues] = useState<CredentialFormValues>({
-    name: credential.name,
-    type: credential.type,
-    username: credential.username,
-    password: credential.password,
-    keys: keyDraftsFromWire(credential.keys),
-    properties: propertyDraftsFromWire(credential.properties),
-    validity: credential.validity,
-    tags: credential.tags,
+  const [initialFields] = useState(() => credentialFieldDraftsFrom(credential))
+  const [values, setValues] = useState<CredentialFormValues>(() => {
+    const initial: CredentialFormValues = {
+      name: credential.name,
+      type: credential.type,
+      fields: initialFields,
+      keys: keyDraftsFromWire(credential.keys),
+      properties: propertyDraftsFromWire(credential.properties),
+      validity: credential.validity,
+      tags: credential.tags,
+    }
+    return convertTo && convertTo !== credential.type
+      ? carryCredentialFieldsOver({ ...initial, type: convertTo }, specs.get(convertTo))
+      : initial
   })
+  const was = {
+    type: credential.type,
+    spec: specs.get(credential.type),
+    fields: initialFields,
+  }
+  const spec = specs.get(values.type)
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -101,10 +138,7 @@ function EditCredentialForm({ credential, onSaved }: EditCredentialFormProps) {
         id: credential.id,
         input: {
           name: values.name,
-          type: values.type,
-          username: values.username,
-          password: values.password,
-          keys: keyDraftsToInputs(values.keys),
+          ...credentialUpdateFields(values, spec, was),
           properties: propertyDraftsToInputs(values.properties),
           validity: values.validity,
           tags: values.tags,
@@ -134,6 +168,8 @@ function EditCredentialForm({ credential, onSaved }: EditCredentialFormProps) {
           idPrefix="edit-cred"
           values={values}
           onChange={setValues}
+          specs={specs}
+          was={{ spec: was.spec, legacyType: credential.legacyType }}
           tagSuggestions={tagsData?.credentialTags ?? []}
           tagSuggestionsLoading={tagsLoading}
         />
@@ -146,7 +182,7 @@ function EditCredentialForm({ credential, onSaved }: EditCredentialFormProps) {
         />
         <Button
           type="submit"
-          disabled={updateCredential.isPending || !values.name.trim()}
+          disabled={updateCredential.isPending || !values.name.trim() || !spec}
         >
           {updateCredential.isPending ? "Saving..." : "Save changes"}
         </Button>

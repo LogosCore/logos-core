@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -40,7 +41,7 @@ func TestLowerCredentialFences_WritesReadableMarkdown(t *testing.T) {
 			CredentialID: credID,
 			OperationID:  opID,
 			Name:         "prod-db",
-			Type:         models.CredentialTypePassword,
+			Type:         models.CredentialTypeOther,
 			Username:     "admin",
 			Password:     "hunter2",
 			Validity:     models.CredentialValidityValid,
@@ -62,7 +63,7 @@ func TestLowerCredentialFences_WritesReadableMarkdown(t *testing.T) {
 	}
 	// Everything a reader can act on is still there.
 	for _, want := range []string{
-		"**Credential: prod-db** (password, valid)",
+		"**Credential: prod-db** (other, valid)",
 		"- Username: `admin`",
 		"- Password: `hunter2`",
 		"- Host: `sql01`",
@@ -76,20 +77,45 @@ func TestLowerCredentialFences_WritesReadableMarkdown(t *testing.T) {
 	}
 }
 
+// A typed credential is written out by its type's fields, in its order: the
+// one-line ones as a list, the blobs as blocks, the expiry as a time.
+func TestLowerCredentialFences_TypedFields(t *testing.T) {
+	opID := uuid.New()
+	credID := uuid.New()
+	at := time.Date(2026, 11, 5, 18, 0, 0, 0, time.UTC)
+	lookup := &fakeCredLookup{by: map[uuid.UUID]models.Credential{
+		credID: {
+			CredentialID: credID, OperationID: opID, Name: "dc01 tgs", Type: models.CredentialTypeTicket,
+			Username: "svc_sql", Realm: "CORP", Ticket: "doIFxjCCBcKgAwIBBaEDAgEW", Service: "MSSQLSvc/sql01",
+			ExpiresAt: &at, Validity: models.CredentialValidityUnknown,
+		},
+	}}
+	out, _, _ := LowerCredentialFences(context.Background(), fence(credID.String()), opID, lookup, CredentialValues)
+	for _, want := range []string{
+		"**Credential: dc01 tgs** (ticket, unknown)",
+		"- Username: `svc_sql`\n- Realm/Domain: `CORP`\n- Service: `MSSQLSvc/sql01`\n- Expires at: `2026.11.05 18:00:00 UTC`",
+		"Ticket:\n\n```\ndoIFxjCCBcKgAwIBBaEDAgEW\n```",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
 // A credential with nothing but a name still reads as a sentence rather
 // than as an empty list.
 func TestLowerCredentialFences_SparseCredential(t *testing.T) {
 	opID := uuid.New()
 	credID := uuid.New()
 	lookup := &fakeCredLookup{by: map[uuid.UUID]models.Credential{
-		credID: {CredentialID: credID, OperationID: opID, Name: "token only", Type: models.CredentialTypeToken},
+		credID: {CredentialID: credID, OperationID: opID, Name: "token only", Type: models.CredentialTypeOther},
 	}}
 
 	out, written, _ := LowerCredentialFences(context.Background(), fence(credID.String()), opID, lookup, CredentialValues)
 	if written != 1 {
 		t.Fatalf("written=%d", written)
 	}
-	if strings.TrimSpace(out) != "**Credential: token only** (token)" {
+	if strings.TrimSpace(out) != "**Credential: token only** (other)" {
 		t.Errorf("sparse credential = %q", out)
 	}
 }

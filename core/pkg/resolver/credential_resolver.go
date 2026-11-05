@@ -55,6 +55,7 @@ type ICredentialResolver interface {
 	DeleteCredentialComment(ctx context.Context, credentialID string, commentID string) (*models.Credential, error)
 
 	// Queries
+	CredentialTypes(ctx context.Context) ([]*model.CredentialTypeSpec, error)
 	Credential(ctx context.Context, id string) (*models.Credential, error)
 	Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	CredentialTags(ctx context.Context, operationID string) ([]string, error)
@@ -71,6 +72,8 @@ type ICredentialResolver interface {
 	ID(ctx context.Context, obj *models.Credential) (string, error)
 	OperationIDField(ctx context.Context, obj *models.Credential) (string, error)
 	Operation(ctx context.Context, obj *models.Credential) (*models.Operation, error)
+	LegacyType(ctx context.Context, obj *models.Credential) (*string, error)
+	ExpiresAt(ctx context.Context, obj *models.Credential) (*string, error)
 	Comments(ctx context.Context, obj *models.Credential) ([]*models.CredentialComment, error)
 	ViewerCanModerateComments(ctx context.Context, obj *models.Credential) (bool, error)
 	CreatedBy(ctx context.Context, obj *models.Credential) (*models.User, error)
@@ -153,9 +156,6 @@ func (r *credentialResolver) CreateCredential(ctx context.Context, operationID s
 	if name == "" {
 		return nil, fmt.Errorf("name is required")
 	}
-	if !input.Type.IsValid() {
-		return nil, fmt.Errorf("invalid credential type: %s", input.Type)
-	}
 
 	auth := gqlctx.AuthFromContext(ctx)
 	callerUID, err := uuid.Parse(auth.UserID)
@@ -182,14 +182,24 @@ func (r *credentialResolver) CreateCredential(ctx context.Context, operationID s
 		OperationID:  opUID,
 		Name:         name,
 		Type:         input.Type,
-		Username:     strDeref(input.Username),
-		Password:     strDeref(input.Password),
-		Keys:         normalizeCredentialKeys(input.Keys),
+		Keys:         []models.CredentialKey{},
 		Properties:   properties,
 		Validity:     validity,
 		Tags:         normalizeTags(input.Tags),
 		Comments:     []models.CredentialComment{},
 		CreatedByID:  callerUID,
+	}
+	if _, _, err := applyCredentialFields(cred, credentialFieldInput{
+		Username: input.Username, Realm: input.Realm, Password: input.Password,
+		Key: input.Key, Passphrase: input.Passphrase, Certificate: input.Certificate,
+		PrivateKey: input.PrivateKey, Ticket: input.Ticket, Service: input.Service,
+		ExpiresAt: input.ExpiresAt, Hash: input.Hash, Hex: input.Hex,
+		Algorithm: input.Algorithm, Keys: input.Keys,
+	}); err != nil {
+		return nil, err
+	}
+	if err := cred.CheckFields(); err != nil {
+		return nil, err
 	}
 
 	if err := r.credRepo.Create(ctx, cred); err != nil {
@@ -232,20 +242,12 @@ func (r *credentialResolver) UpdateCredential(ctx context.Context, id string, in
 		}
 		updates["name"] = name
 	}
-	if input.Type != nil {
-		if !input.Type.IsValid() {
-			return nil, fmt.Errorf("invalid credential type: %s", *input.Type)
-		}
-		updates["type"] = *input.Type
+	fields, err := credentialFieldUpdates(cred, input)
+	if err != nil {
+		return nil, err
 	}
-	if input.Username != nil {
-		updates["username"] = *input.Username
-	}
-	if input.Password != nil {
-		updates["password"] = *input.Password
-	}
-	if input.Keys != nil {
-		updates["keys"] = normalizeCredentialKeys(input.Keys)
+	for k, v := range fields {
+		updates[k] = v
 	}
 	if input.Properties != nil {
 		properties, err := normalizeCredentialProperties(input.Properties)
@@ -904,6 +906,44 @@ func (r *credentialResolver) CreatedAt(ctx context.Context, obj *models.Credenti
 	return obj.CreateAt.Format(time.RFC3339), nil
 }
 
+// LegacyType is null unless the migration moved the credential to OTHER from
+// one of the old types.
+func (r *credentialResolver) LegacyType(ctx context.Context, obj *models.Credential) (*string, error) {
+	if obj.LegacyType == "" {
+		return nil, nil
+	}
+	legacy := string(obj.LegacyType)
+	return &legacy, nil
+}
+
+func (r *credentialResolver) ExpiresAt(ctx context.Context, obj *models.Credential) (*string, error) {
+	return rfc3339Ptr(obj.ExpiresAt), nil
+}
+
+// CredentialTypes serves the type table the API checks against, so the UI's
+// forms are built from it rather than from a copy. No operation, no data:
+// any signed-in caller may read it.
+func (r *credentialResolver) CredentialTypes(ctx context.Context) ([]*model.CredentialTypeSpec, error) {
+	specs := models.CredentialTypeSpecs()
+	out := make([]*model.CredentialTypeSpec, 0, len(specs))
+	for _, s := range specs {
+		fields := make([]*model.CredentialFieldSpec, 0, len(s.Fields))
+		for _, f := range s.Fields {
+			fields = append(fields, &model.CredentialFieldSpec{
+				Field:    model.CredentialField(strings.ToUpper(string(f.Field))),
+				Label:    f.Label,
+				Kind:     model.CredentialFieldKind(f.Kind),
+				Required: f.Required,
+				Hint:     f.Hint,
+			})
+		}
+		out = append(out, &model.CredentialTypeSpec{
+			Type: s.Type, Label: s.Label, Description: s.Description, Fields: fields,
+		})
+	}
+	return out, nil
+}
+
 // UpdatedAt converts the qmgo DefaultField timestamp to an ISO 8601 string.
 func (r *credentialResolver) UpdatedAt(ctx context.Context, obj *models.Credential) (string, error) {
 	return obj.UpdateAt.Format(time.RFC3339), nil
@@ -933,6 +973,146 @@ func (r *credentialResolver) CommentUpdatedAt(ctx context.Context, obj *models.C
 
 // --- helpers ---
 // strDeref, boolDeref, and callerUIDFromCtx live in helpers.go.
+
+// credentialFieldInput is the typed fields of a create or an update input:
+// a nil one is left as it is (Keys: nil, where [] empties them).
+type credentialFieldInput struct {
+	Username, Realm, Password, Key, Passphrase, Certificate, PrivateKey,
+	Ticket, Service, ExpiresAt, Hash, Hex, Algorithm *string
+	Keys []*model.CredentialKeyInput
+}
+
+// applyCredentialFields writes the fields in sets onto c, tidied: one-line
+// names and the blobs trimmed (a password or passphrase is kept exactly as
+// typed), expires_at parsed, hex compacted. Returns the fields it set, and
+// each one's stored value by its bson name.
+func applyCredentialFields(c *models.Credential, in credentialFieldInput) (map[models.CredentialField]bool, map[string]any, error) {
+	set := map[models.CredentialField]bool{}
+	stored := map[string]any{}
+	text := func(f models.CredentialField, v *string, into *string, trim bool) {
+		if v == nil {
+			return
+		}
+		value := *v
+		if trim {
+			value = strings.TrimSpace(value)
+		}
+		*into = value
+		set[f], stored[string(f)] = true, value
+	}
+	text(models.CredentialFieldUsername, in.Username, &c.Username, true)
+	text(models.CredentialFieldRealm, in.Realm, &c.Realm, true)
+	text(models.CredentialFieldPassword, in.Password, &c.Password, false)
+	text(models.CredentialFieldKey, in.Key, &c.Key, true)
+	text(models.CredentialFieldPassphrase, in.Passphrase, &c.Passphrase, false)
+	text(models.CredentialFieldCertificate, in.Certificate, &c.Certificate, true)
+	text(models.CredentialFieldPrivateKey, in.PrivateKey, &c.PrivateKey, true)
+	text(models.CredentialFieldTicket, in.Ticket, &c.Ticket, true)
+	text(models.CredentialFieldService, in.Service, &c.Service, true)
+	text(models.CredentialFieldHash, in.Hash, &c.Hash, true)
+	text(models.CredentialFieldAlgorithm, in.Algorithm, &c.Algorithm, true)
+	if in.Hex != nil {
+		hex, err := models.NormalizeCredentialHex(*in.Hex)
+		if err != nil {
+			return nil, nil, err
+		}
+		c.Hex = hex
+		set[models.CredentialFieldHex], stored[string(models.CredentialFieldHex)] = true, hex
+	}
+	if in.ExpiresAt != nil {
+		c.ExpiresAt = nil
+		if v := strings.TrimSpace(*in.ExpiresAt); v != "" {
+			at, err := time.Parse(time.RFC3339, v)
+			if err != nil {
+				return nil, nil, fmt.Errorf("expires_at %q is not an RFC 3339 time, such as 2026-11-05T18:00:00Z", v)
+			}
+			at = at.UTC()
+			c.ExpiresAt = &at
+		}
+		set[models.CredentialFieldExpiresAt] = true
+		stored[string(models.CredentialFieldExpiresAt)] = c.ExpiresAt
+	}
+	if in.Keys != nil {
+		c.Keys = normalizeCredentialKeys(in.Keys)
+		set[models.CredentialFieldKeys], stored[string(models.CredentialFieldKeys)] = true, c.Keys
+	}
+	return set, stored, nil
+}
+
+// credentialFieldUpdates is the $set an update input makes of cred's type and
+// typed fields, checked against the type the credential ends up with.
+//
+// Without a change of type, a value may only go into a field the type takes,
+// and a field it requires cannot be emptied. A change of type must leave
+// nothing behind silently: a value the old type holds (or this update sets)
+// in a field the new one has not is refused by name, and the caller sends it
+// empty to drop it. What the new type has not is then emptied — the fields
+// named, and any value a field the old type had not was left holding, which
+// nobody could see. The write marks the row current (schema_version): it may
+// be an old one read through UpgradeLegacy, and an unmarked row's type is
+// rewritten by the startup backfill.
+func credentialFieldUpdates(cred models.Credential, input model.UpdateCredentialInput) (map[string]any, error) {
+	next := cred
+	set, updates, err := applyCredentialFields(&next, credentialFieldInput{
+		Username: input.Username, Realm: input.Realm, Password: input.Password,
+		Key: input.Key, Passphrase: input.Passphrase, Certificate: input.Certificate,
+		PrivateKey: input.PrivateKey, Ticket: input.Ticket, Service: input.Service,
+		ExpiresAt: input.ExpiresAt, Hash: input.Hash, Hex: input.Hex,
+		Algorithm: input.Algorithm, Keys: input.Keys,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Type != nil && *input.Type != cred.Type {
+		spec, ok := models.CredentialTypeSpecFor(*input.Type)
+		if !ok {
+			return nil, fmt.Errorf("type %q is not one of %s", *input.Type, models.CredentialTypeNames())
+		}
+		was, _ := models.CredentialTypeSpecFor(cred.Type)
+		var lost []models.CredentialField
+		for _, f := range models.CredentialFields {
+			if !spec.Takes(f) && next.HasField(f) && (was.Takes(f) || set[f]) {
+				lost = append(lost, f)
+			}
+		}
+		if len(lost) > 0 {
+			return nil, fmt.Errorf("%w: send them empty in the same update to drop them",
+				models.FieldsNotTakenError(spec, lost))
+		}
+		for _, f := range models.CredentialFields {
+			if !spec.Takes(f) && cred.HasField(f) {
+				updates[string(f)] = next.ClearField(f)
+			}
+		}
+		next.Type = spec.Type
+		updates["type"] = spec.Type
+		updates["schema_version"] = models.CredentialSchemaVersion
+		if cred.LegacyType != "" {
+			updates["legacy_type"] = ""
+		}
+	}
+
+	spec, ok := models.CredentialTypeSpecFor(next.Type)
+	if !ok {
+		return nil, fmt.Errorf("type %q is not one of %s", next.Type, models.CredentialTypeNames())
+	}
+	var extra []models.CredentialField
+	for _, f := range models.CredentialFields {
+		if set[f] && next.HasField(f) && !spec.Takes(f) {
+			extra = append(extra, f)
+		}
+	}
+	if len(extra) > 0 {
+		return nil, models.FieldsNotTakenError(spec, extra)
+	}
+	for _, f := range spec.Fields {
+		if f.Required && !next.HasField(f.Field) {
+			return nil, models.NeedsFieldError(spec, f.Field)
+		}
+	}
+	return updates, nil
+}
 
 // normalizeCredentialKeys trims each field and drops entries where both name
 // and content are empty after trimming. Returns a non-nil empty slice for nil
@@ -1051,8 +1231,18 @@ func mapCredentialSearchFields(in []model.CredentialSearchField) ([]repository.C
 			out = append(out, repository.CredentialSearchFieldName)
 		case model.CredentialSearchFieldUsername:
 			out = append(out, repository.CredentialSearchFieldUsername)
+		case model.CredentialSearchFieldRealm:
+			out = append(out, repository.CredentialSearchFieldRealm)
 		case model.CredentialSearchFieldPassword:
 			out = append(out, repository.CredentialSearchFieldPassword)
+		case model.CredentialSearchFieldHash:
+			out = append(out, repository.CredentialSearchFieldHash)
+		case model.CredentialSearchFieldHex:
+			out = append(out, repository.CredentialSearchFieldHex)
+		case model.CredentialSearchFieldService:
+			out = append(out, repository.CredentialSearchFieldService)
+		case model.CredentialSearchFieldAlgorithm:
+			out = append(out, repository.CredentialSearchFieldAlgorithm)
 		case model.CredentialSearchFieldProperties:
 			out = append(out, repository.CredentialSearchFieldProperties)
 		default:

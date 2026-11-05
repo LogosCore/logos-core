@@ -36,7 +36,7 @@ func newMarkdownWorld(t *testing.T) *markdownWorld {
 
 	w.cred = models.Credential{
 		CredentialID: uuid.New(), OperationID: w.op, Name: "svc-backup",
-		Type: models.CredentialTypePassword, Username: "svc", Password: "s3cret",
+		Type: models.CredentialTypePlaintext, Username: "svc", Password: "s3cret",
 		Validity: models.CredentialValidityValid,
 	}
 	w.host = models.Host{HostID: uuid.New(), OperationID: w.op, Hostname: "dc01.meridian.local"}
@@ -89,7 +89,7 @@ func TestWikiDocumentMarkdown_ViewerGetsCredentialNameNotValues(t *testing.T) {
 	if strings.Contains(out, "s3cret") || strings.Contains(out, "- Username:") {
 		t.Errorf("a viewer's copy carries the secret:\n%s", out)
 	}
-	if !strings.Contains(out, "**Credential: svc-backup** (password, held in Logos)") {
+	if !strings.Contains(out, "**Credential: svc-backup** (plaintext, held in Logos)") {
 		t.Errorf("a viewer should still be told which credential this is:\n%s", out)
 	}
 }
@@ -100,7 +100,7 @@ func TestWikiDocumentMarkdown_OperatorGetsCredentialValues(t *testing.T) {
 	out := w.render(t, w.operator)
 
 	for _, want := range []string{
-		"**Credential: svc-backup** (password, valid)",
+		"**Credential: svc-backup** (plaintext, valid)",
 		"- Username: `svc`",
 		"- Password: `s3cret`",
 	} {

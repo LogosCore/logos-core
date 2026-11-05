@@ -14,6 +14,12 @@ import { useCredentialStore } from "@/stores/credentials"
 import { useInViewport } from "@/hooks/use-in-viewport"
 import { GraphQLRequestError } from "@/lib/graphql-client"
 import { useSha1Hashes } from "@/lib/sha1"
+import {
+  credentialBlobs,
+  credentialSegment,
+  filledCredentialFields,
+} from "@/lib/credential-fields"
+import { useCredentialTypeSpecs } from "@/components/findings/credential-type-utils"
 import { cn } from "@/lib/utils"
 import type {
   CredentialChipFieldsFragment,
@@ -110,12 +116,21 @@ export const WikiCredentialChipView = forwardRef<
     />
   ) : null
 
-  // Stable inputs array so the hash effect doesn't churn on unrelated renders.
-  const keyContents = useMemo(
-    () => cred?.keys.map((k) => k.content) ?? [],
-    [cred?.keys],
+  // The type's fields holding a value; the blobs among them (a key, a
+  // certificate, a ticket, OTHER's keys) show as their label and the start
+  // of their SHA-1, never their content.
+  const specs = useCredentialTypeSpecs()
+  const filled = useMemo(
+    () => (cred ? filledCredentialFields(cred, specs.get(cred.type)?.fields ?? []) : []),
+    [cred, specs],
   )
-  const keyHashes = useSha1Hashes(keyContents)
+  const blobs = useMemo(
+    () => (cred ? credentialBlobs(filled, cred.keys) : []),
+    [cred, filled],
+  )
+  // Stable inputs array so the hash effect doesn't churn on unrelated renders.
+  const blobContents = useMemo(() => blobs.map((b) => b.content), [blobs])
+  const keyHashes = useSha1Hashes(blobContents)
 
   if (!id) {
     return (
@@ -162,12 +177,11 @@ export const WikiCredentialChipView = forwardRef<
     )
   }
 
-  const credsSegment = formatCredsSegment(cred.username, cred.password)
+  const credsSegment = credentialSegment(filled)
   const title = buildTooltip({
     name: cred.name,
-    username: cred.username,
-    password: cred.password,
-    keys: cred.keys,
+    segment: credsSegment,
+    blobs,
     hashes: keyHashes,
   })
 
@@ -180,16 +194,16 @@ export const WikiCredentialChipView = forwardRef<
       {credsSegment && (
         <span className="wiki-credential-chip__segment">({credsSegment})</span>
       )}
-      {cred.keys.map((k, i) => {
+      {blobs.map((b, i) => {
         const hash = keyHashes[i]
         const shortHash = hash ? hash.slice(0, KEY_HASH_DISPLAY_LEN) : null
         return (
           <span
-            key={`${k.name}-${i}`}
+            key={`${b.label}-${i}`}
             className="wiki-credential-chip__segment wiki-credential-chip__segment--key"
-            title={hash ? `${k.name}: ${hash}` : `${k.name}: hashing…`}
+            title={hash ? `${b.label}: ${hash}` : `${b.label}: hashing…`}
           >
-            ({k.name}:{shortHash ?? "…"})
+            ({b.label}:{shortHash ?? "…"})
           </span>
         )
       })}
@@ -384,36 +398,19 @@ export function WikiCredentialChipById({
   )
 }
 
-function formatCredsSegment(username: string, password: string): string | null {
-  const hasUser = username.length > 0
-  const hasPass = password.length > 0
-  if (hasUser && hasPass) return `${username}:${password}`
-  if (hasUser) return username
-  if (hasPass) return password
-  return null
-}
-
 interface TooltipArgs {
   name: string
-  username: string
-  password: string
-  keys: readonly { name: string }[]
+  segment: string
+  blobs: readonly { label: string }[]
   hashes: readonly (string | null)[]
 }
 
-function buildTooltip({
-  name,
-  username,
-  password,
-  keys,
-  hashes,
-}: TooltipArgs): string {
+function buildTooltip({ name, segment, blobs, hashes }: TooltipArgs): string {
   const lines = [name]
-  const creds = formatCredsSegment(username, password)
-  if (creds) lines.push(creds)
-  keys.forEach((k, i) => {
+  if (segment) lines.push(segment)
+  blobs.forEach((b, i) => {
     const h = hashes[i] ?? "hashing…"
-    lines.push(`${k.name}: ${h}`)
+    lines.push(`${b.label}: ${h}`)
   })
   return lines.join("\n")
 }

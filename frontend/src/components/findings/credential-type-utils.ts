@@ -1,27 +1,75 @@
-import type { CredentialType } from "@/graphql/gql/graphql"
+import { useMemo } from "react"
+import type {
+  CredentialType,
+  CredentialTypeSpec,
+} from "@/graphql/gql/graphql"
+import { useCredentialTypes } from "@/graphql/hooks/credentials"
 
-// The full list of credential types — kept in the same order they're exposed
-// in the UI dropdowns. Mirrors the GraphQL enum on the backend.
+// The credential types, in the order the UI offers them. Mirrors the GraphQL
+// enum; which fields each takes comes from the server (useCredentialTypeSpecs).
 export const CREDENTIAL_TYPES: CredentialType[] = [
-  "PASSWORD",
-  "SSH_KEY",
-  "API_KEY",
-  "TOKEN",
+  "PLAINTEXT",
+  "KEY",
+  "CERTIFICATE",
+  "TICKET",
   "HASH",
+  "HEX",
   "OTHER",
 ]
 
 const TYPE_LABELS: Record<CredentialType, string> = {
-  PASSWORD: "Password",
-  SSH_KEY: "SSH Key",
-  API_KEY: "API Key",
-  TOKEN: "Token",
+  PLAINTEXT: "Plaintext",
+  KEY: "Key",
+  CERTIFICATE: "Certificate",
+  TICKET: "Ticket",
   HASH: "Hash",
+  HEX: "Hex",
   OTHER: "Other",
 }
 
 export function credentialTypeLabel(t: CredentialType): string {
-  return TYPE_LABELS[t]
+  return TYPE_LABELS[t] ?? t
+}
+
+// What the types were called before they had fields of their own: an OTHER
+// the migration made keeps its old one (legacyType) as a hint for converting.
+const LEGACY_TYPE_LABELS: Record<string, string> = {
+  PASSWORD: "Password",
+  SSH_KEY: "SSH key",
+  API_KEY: "API key",
+  TOKEN: "Token",
+  HASH: "Hash",
+}
+
+export function legacyCredentialTypeLabel(t: string): string {
+  return LEGACY_TYPE_LABELS[t] ?? t
+}
+
+// The type the old one most likely is now, to offer first when converting.
+const LEGACY_SUCCESSOR: Record<string, CredentialType> = {
+  PASSWORD: "PLAINTEXT",
+  SSH_KEY: "KEY",
+  HASH: "HASH",
+}
+
+export function legacyCredentialTypeSuccessor(
+  t: string | null | undefined,
+): CredentialType | null {
+  return (t && LEGACY_SUCCESSOR[t]) || null
+}
+
+export type CredentialTypeSpecs = ReadonlyMap<CredentialType, CredentialTypeSpec>
+
+/**
+ * The server's type table by type: which fields each takes, in order, and
+ * which it requires. Empty until it has loaded (once per session).
+ */
+export function useCredentialTypeSpecs(): CredentialTypeSpecs {
+  const { data } = useCredentialTypes()
+  return useMemo(
+    () => new Map((data ?? []).map((s) => [s.type, s] as const)),
+    [data],
+  )
 }
 
 /**

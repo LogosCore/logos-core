@@ -20,8 +20,20 @@ export const CredentialFields = graphql(`
     operationId
     name
     type
+    legacyType
     username
+    realm
     password
+    key
+    passphrase
+    certificate
+    privateKey
+    ticket
+    service
+    expiresAt
+    hash
+    hex
+    algorithm
     keys {
       name
       content
@@ -70,8 +82,20 @@ export const CredentialChipFields = graphql(`
     operationId
     name
     type
+    legacyType
     username
+    realm
     password
+    key
+    passphrase
+    certificate
+    privateKey
+    ticket
+    service
+    expiresAt
+    hash
+    hex
+    algorithm
     validity
     keys {
       name
@@ -80,6 +104,25 @@ export const CredentialChipFields = graphql(`
     properties {
       name
       value
+    }
+  }
+`)
+
+// The credential types and the fields each takes: the table the server
+// checks writes against, and what the forms and record views are built from.
+export const CredentialTypesQuery = graphql(`
+  query CredentialTypes {
+    credentialTypes {
+      type
+      label
+      description
+      fields {
+        field
+        label
+        kind
+        required
+        hint
+      }
     }
   }
 `)

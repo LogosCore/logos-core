@@ -72,7 +72,11 @@ func (r *CredentialReconciler) Reconcile(
 			out.Reused++
 			continue
 		}
-		created := buildCredential(p, r.targetOperation, callerID)
+		created, err := buildCredential(p, r.targetOperation, callerID)
+		if err != nil {
+			out.Skipped = append(out.Skipped, id)
+			continue
+		}
 		if err := r.repo.Create(ctx, created); err != nil {
 			out.Skipped = append(out.Skipped, id)
 			continue
@@ -86,11 +90,11 @@ func (r *CredentialReconciler) Reconcile(
 
 // buildCredential produces a fresh Credential from a payload. Comments and
 // timestamps do not travel; the repository fills in DefaultField.
-func buildCredential(p CredentialPayload, operationID, callerID uuid.UUID) *models.Credential {
-	t := models.CredentialType(p.Type)
-	if !t.IsValid() {
-		t = models.CredentialTypeOther
-	}
+//
+// A payload from before the types had fields (Version 0) carries an old type,
+// and is read as the startup backfill reads such a row: UpgradeLegacy. One
+// that does not fit its type is refused, and its chip dropped by the caller.
+func buildCredential(p CredentialPayload, operationID, callerID uuid.UUID) (*models.Credential, error) {
 	keys := make([]models.CredentialKey, len(p.Keys))
 	for i, k := range p.Keys {
 		keys[i] = models.CredentialKey{Name: k.Name, Content: k.Content}
@@ -109,20 +113,42 @@ func buildCredential(p CredentialPayload, operationID, callerID uuid.UUID) *mode
 			validity = models.CredentialValidityValid
 		}
 	}
-
-	return &models.Credential{
-		CredentialID: uuid.New(),
-		OperationID:  operationID,
-		Name:         p.Name,
-		Type:         t,
-		Username:     p.Username,
-		Password:     p.Password,
-		Keys:         keys,
-		Properties:   props,
-		Validity:     validity,
-		Tags:         append([]string(nil), p.Tags...),
-		CreatedByID:  callerID,
+	hex, err := models.NormalizeCredentialHex(p.Hex)
+	if err != nil {
+		return nil, err
 	}
+
+	c := &models.Credential{
+		CredentialID:  uuid.New(),
+		OperationID:   operationID,
+		Name:          p.Name,
+		Type:          models.CredentialType(p.Type),
+		LegacyType:    models.CredentialType(p.LegacyType),
+		SchemaVersion: p.Version,
+		Username:      p.Username,
+		Realm:         p.Realm,
+		Password:      p.Password,
+		Key:           p.Key,
+		Passphrase:    p.Passphrase,
+		Certificate:   p.Certificate,
+		PrivateKey:    p.PrivateKey,
+		Ticket:        p.Ticket,
+		Service:       p.Service,
+		ExpiresAt:     p.ExpiresAt,
+		Hash:          p.Hash,
+		Hex:           hex,
+		Algorithm:     p.Algorithm,
+		Keys:          keys,
+		Properties:    props,
+		Validity:      validity,
+		Tags:          append([]string(nil), p.Tags...),
+		CreatedByID:   callerID,
+	}
+	c.UpgradeLegacy()
+	if err := c.CheckFields(); err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 // PayloadFromCredential is the export-side inverse of buildCredential.
@@ -136,14 +162,27 @@ func PayloadFromCredential(c models.Credential) CredentialPayload {
 		props[i] = CredentialProperty{Name: p.Name, Value: p.Value}
 	}
 	return CredentialPayload{
-		ID:         c.CredentialID.String(),
-		Name:       c.Name,
-		Type:       string(c.Type),
-		Username:   c.Username,
-		Password:   c.Password,
-		Keys:       keys,
-		Properties: props,
-		Validity:   string(c.Validity),
-		Tags:       append([]string(nil), c.Tags...),
+		ID:          c.CredentialID.String(),
+		Name:        c.Name,
+		Type:        string(c.Type),
+		Version:     models.CredentialSchemaVersion,
+		LegacyType:  string(c.LegacyType),
+		Username:    c.Username,
+		Realm:       c.Realm,
+		Password:    c.Password,
+		Key:         c.Key,
+		Passphrase:  c.Passphrase,
+		Certificate: c.Certificate,
+		PrivateKey:  c.PrivateKey,
+		Ticket:      c.Ticket,
+		Service:     c.Service,
+		ExpiresAt:   c.ExpiresAt,
+		Hash:        c.Hash,
+		Hex:         c.Hex,
+		Algorithm:   c.Algorithm,
+		Keys:        keys,
+		Properties:  props,
+		Validity:    string(c.Validity),
+		Tags:        append([]string(nil), c.Tags...),
 	}
 }

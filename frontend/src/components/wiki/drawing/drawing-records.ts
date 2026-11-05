@@ -106,8 +106,9 @@ async function load(qc: QueryClient, ref: CardRef): Promise<RecordLookup> {
         staleTime: STALE_MS,
       })
       if (!c) return { status: "missing" }
-      const title = c.name || c.username || "Credential"
-      const detail = [c.username && c.username !== title ? c.username : "", humanize(c.type)].filter(Boolean).join(" · ")
+      const account = c.realm && c.username ? `${c.realm}\\${c.username}` : c.username
+      const title = c.name || account || "Credential"
+      const detail = [account && account !== title ? account : "", humanize(c.type)].filter(Boolean).join(" · ")
       return {
         status: "ok",
         title,

@@ -21,7 +21,8 @@ Findings hold the data; the wiki explains it. Record both.
   PKI". The operator sorts and filters on `os`, so a sentence in it sorts
   under nothing.
 - **A secret**: `create_credential`, tagged with the host it came
-  from. Not a wiki page. `validity` stays UNKNOWN until somebody tries it:
+  from. Not a wiki page. A hash to crack is a hash, not a HASH credential;
+  a domain goes in `realm`. `validity` stays UNKNOWN until somebody tries it:
   say VALID once you have used it, INVALID once it was refused. Never
   claim VALID for one you merely found — UNKNOWN is a real answer and nothing
   hides it.

@@ -77,14 +77,26 @@ type hostLoginView struct {
 // own secrets, and an agent that cannot see them cannot do the correlation
 // work it is here for. The consequence — plaintext reaching the model
 // provider — is stated on the agent-key screen where keys are minted.
+// credentialView carries a credential's one-line fields, those its type
+// takes; get_credential adds the blobs (key, certificate, ticket...).
 type credentialView struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Username string   `json:"username,omitempty"`
-	Password string   `json:"password,omitempty"`
-	Validity string   `json:"validity"`
-	Tags     []string `json:"tags,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	// LegacyType is what an OTHER the migration made was recorded as: the
+	// type to convert it to, usually.
+	LegacyType string   `json:"legacy_type,omitempty"`
+	Username   string   `json:"username,omitempty"`
+	Realm      string   `json:"realm,omitempty"`
+	Password   string   `json:"password,omitempty"`
+	Passphrase string   `json:"passphrase,omitempty"`
+	Service    string   `json:"service,omitempty"`
+	ExpiresAt  string   `json:"expires_at,omitempty"`
+	Hash       string   `json:"hash,omitempty"`
+	Hex        string   `json:"hex,omitempty"`
+	Algorithm  string   `json:"algorithm,omitempty"`
+	Validity   string   `json:"validity"`
+	Tags       []string `json:"tags,omitempty"`
 }
 
 // Detail views for a single credential. Keys and properties carry their
@@ -374,15 +386,36 @@ func hostAddresses(h *models.Host) []string {
 }
 
 func toCredentialView(c *models.Credential) credentialView {
-	return credentialView{
-		ID:       c.CredentialID.String(),
-		Name:     c.Name,
-		Type:     string(c.Type),
-		Username: c.Username,
-		Password: c.Password,
-		Validity: string(c.Validity),
-		Tags:     c.Tags,
+	view := credentialView{
+		ID:         c.CredentialID.String(),
+		Name:       c.Name,
+		Type:       string(c.Type),
+		LegacyType: string(c.LegacyType),
+		Username:   credentialFieldShown(c, models.CredentialFieldUsername),
+		Realm:      credentialFieldShown(c, models.CredentialFieldRealm),
+		Password:   credentialFieldShown(c, models.CredentialFieldPassword),
+		Passphrase: credentialFieldShown(c, models.CredentialFieldPassphrase),
+		Service:    credentialFieldShown(c, models.CredentialFieldService),
+		Hash:       credentialFieldShown(c, models.CredentialFieldHash),
+		Hex:        credentialFieldShown(c, models.CredentialFieldHex),
+		Algorithm:  credentialFieldShown(c, models.CredentialFieldAlgorithm),
+		Validity:   string(c.Validity),
+		Tags:       c.Tags,
 	}
+	if c.ExpiresAt != nil {
+		view.ExpiresAt = formatTime(*c.ExpiresAt)
+	}
+	return view
+}
+
+// credentialFieldShown is c's value in f if its type has the field: a value
+// left in one it has not (two edits crossing a change of type) is nobody's
+// to read.
+func credentialFieldShown(c *models.Credential, f models.CredentialField) string {
+	if spec, ok := models.CredentialTypeSpecFor(c.Type); ok && !spec.Takes(f) {
+		return ""
+	}
+	return c.FieldString(f)
 }
 
 func toHashView(h *models.Hash) hashView {

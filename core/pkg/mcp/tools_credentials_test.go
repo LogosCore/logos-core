@@ -3,6 +3,7 @@ package mcp
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/logoscore/logos-core/core/pkg/models"
 )
@@ -85,10 +86,7 @@ func TestUpdateCredential_DistinguishesOmittedFromCleared(t *testing.T) {
 func TestUpdateCredential_KeysAndPropertiesFollowTheSameRule(t *testing.T) {
 	input, err := buildUpdateCredentialInput(updateCredentialArgs{
 		CredentialID: "id",
-		Keys: []struct {
-			Name    string `json:"name"    jsonschema:"e.g. id_rsa"`
-			Content string `json:"content" jsonschema:"Key material."`
-		}{},
+		Keys:         []credentialKeyArg{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -120,13 +118,63 @@ func TestUpdateCredential_RejectsAnUnknownType(t *testing.T) {
 func TestUpdateCredential_NormalisesTheType(t *testing.T) {
 	input, err := buildUpdateCredentialInput(updateCredentialArgs{
 		CredentialID: "id",
-		Type:         strPtr("  ssh_key "),
+		Type:         strPtr("  key "),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.Type == nil || *input.Type != models.CredentialTypeSSHKey {
-		t.Fatalf("type = %v, want SSH_KEY", input.Type)
+	if input.Type == nil || *input.Type != models.CredentialTypeKey {
+		t.Fatalf("type = %v, want KEY", input.Type)
+	}
+}
+
+// An agent still using an old type is told where it went, or what to use.
+func TestParseCredentialType_OldTypes(t *testing.T) {
+	for in, want := range map[string]string{
+		"password": `type "password" is not one of PLAINTEXT, KEY, CERTIFICATE, TICKET, HASH, HEX, OTHER: it is PLAINTEXT now`,
+		"SSH_KEY":  "it is KEY now",
+		"TOKEN":    "(OTHER for what fits none)",
+	} {
+		if _, err := parseCredentialType(in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want %q", in, err, want)
+		}
+	}
+	if got, err := parseCredentialType(" hash "); err != nil || got != models.CredentialTypeHash {
+		t.Errorf("hash: %v %v", got, err)
+	}
+}
+
+// The create tool's type table comes from the one in models.
+func TestCredentialTypesDoc(t *testing.T) {
+	doc := credentialTypesDoc()
+	for _, want := range []string{
+		"PLAINTEXT (username, realm, password*)",
+		"KEY (username, key*, passphrase)",
+		"TICKET (username, realm, ticket*, service, expires_at)",
+		"OTHER (username, password, keys)",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Errorf("missing %q in %s", want, doc)
+		}
+	}
+}
+
+// A view carries the fields of the credential's type, not a value left in a
+// field it has not.
+func TestToCredentialView_FieldsOfItsType(t *testing.T) {
+	at := time.Date(2026, 11, 5, 18, 0, 0, 0, time.UTC)
+	v := toCredentialView(&models.Credential{
+		Type: models.CredentialTypeTicket, Username: "svc", Realm: "CORP", Service: "cifs/dc01",
+		ExpiresAt: &at, Ticket: "doIF", Password: "stray",
+	})
+	if v.Username != "svc" || v.Realm != "CORP" || v.Service != "cifs/dc01" || v.ExpiresAt == "" {
+		t.Errorf("view: %+v", v)
+	}
+	if v.Password != "" {
+		t.Errorf("a stray password shown: %+v", v)
+	}
+	if o := toCredentialView(&models.Credential{Type: models.CredentialTypeOther, LegacyType: "SSH_KEY"}); o.LegacyType != "SSH_KEY" {
+		t.Errorf("legacy type: %+v", o)
 	}
 }
 
@@ -145,7 +193,7 @@ func TestSummarizeCredentialUpdate(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cred := &models.Credential{Name: "web-01 local admin", Validity: tc.validity}
-			if got := summarizeCredentialUpdate(cred, tc.args); got != tc.want {
+			if got := summarizeCredentialUpdate(cred, cred, tc.args); got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})

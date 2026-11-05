@@ -351,11 +351,22 @@ export type CreateAgentKeyInput = {
 };
 
 export type CreateCredentialInput = {
+  algorithm?: InputMaybe<Scalars['String']['input']>;
+  certificate?: InputMaybe<Scalars['String']['input']>;
+  expiresAt?: InputMaybe<Scalars['String']['input']>;
+  hash?: InputMaybe<Scalars['String']['input']>;
+  hex?: InputMaybe<Scalars['String']['input']>;
+  key?: InputMaybe<Scalars['String']['input']>;
   keys?: InputMaybe<Array<CredentialKeyInput>>;
   name: Scalars['String']['input'];
+  passphrase?: InputMaybe<Scalars['String']['input']>;
   password?: InputMaybe<Scalars['String']['input']>;
+  privateKey?: InputMaybe<Scalars['String']['input']>;
   properties?: InputMaybe<Array<CredentialPropertyInput>>;
+  realm?: InputMaybe<Scalars['String']['input']>;
+  service?: InputMaybe<Scalars['String']['input']>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  ticket?: InputMaybe<Scalars['String']['input']>;
   type: CredentialType;
   username?: InputMaybe<Scalars['String']['input']>;
   validity?: InputMaybe<CredentialValidity>;
@@ -433,22 +444,34 @@ export type CreateWikiDocumentInput = {
 };
 
 export type Credential = {
+  algorithm: Scalars['String']['output'];
   backlinkCount: Scalars['Int']['output'];
   backlinks: Array<WikiDocument>;
+  certificate: Scalars['String']['output'];
   comments: Array<CredentialComment>;
   createdAt: Scalars['String']['output'];
   createdBy?: Maybe<User>;
+  expiresAt?: Maybe<Scalars['String']['output']>;
+  hash: Scalars['String']['output'];
+  hex: Scalars['String']['output'];
   id: Scalars['ID']['output'];
+  key: Scalars['String']['output'];
   keys: Array<CredentialKey>;
+  legacyType?: Maybe<Scalars['String']['output']>;
   name: Scalars['String']['output'];
   operation: Operation;
   operationId: Scalars['ID']['output'];
+  passphrase: Scalars['String']['output'];
   password: Scalars['String']['output'];
+  privateKey: Scalars['String']['output'];
   properties: Array<CredentialProperty>;
+  realm: Scalars['String']['output'];
   rev: Scalars['Int']['output'];
+  service: Scalars['String']['output'];
   sourceHashes: Array<Hash>;
   tags: Array<Scalars['String']['output']>;
   taskBacklinks: Array<Task>;
+  ticket: Scalars['String']['output'];
   type: CredentialType;
   updatedAt: Scalars['String']['output'];
   username: Scalars['String']['output'];
@@ -482,6 +505,37 @@ export type CredentialEvent = {
   operationId: Scalars['ID']['output'];
 };
 
+export type CredentialField =
+  | 'ALGORITHM'
+  | 'CERTIFICATE'
+  | 'EXPIRES_AT'
+  | 'HASH'
+  | 'HEX'
+  | 'KEY'
+  | 'KEYS'
+  | 'PASSPHRASE'
+  | 'PASSWORD'
+  | 'PRIVATE_KEY'
+  | 'REALM'
+  | 'SERVICE'
+  | 'TICKET'
+  | 'USERNAME';
+
+export type CredentialFieldKind =
+  | 'BLOB'
+  | 'DATETIME'
+  | 'KEY_LIST'
+  | 'SECRET'
+  | 'TEXT';
+
+export type CredentialFieldSpec = {
+  field: CredentialField;
+  hint: Scalars['String']['output'];
+  kind: CredentialFieldKind;
+  label: Scalars['String']['output'];
+  required: Scalars['Boolean']['output'];
+};
+
 export type CredentialKey = {
   content: Scalars['String']['output'];
   name: Scalars['String']['output'];
@@ -503,9 +557,14 @@ export type CredentialPropertyInput = {
 };
 
 export type CredentialSearchField =
+  | 'ALGORITHM'
+  | 'HASH'
+  | 'HEX'
   | 'NAME'
   | 'PASSWORD'
   | 'PROPERTIES'
+  | 'REALM'
+  | 'SERVICE'
   | 'USERNAME';
 
 export type CredentialSortField =
@@ -514,12 +573,20 @@ export type CredentialSortField =
   | 'USERNAME';
 
 export type CredentialType =
-  | 'API_KEY'
+  | 'CERTIFICATE'
   | 'HASH'
+  | 'HEX'
+  | 'KEY'
   | 'OTHER'
-  | 'PASSWORD'
-  | 'SSH_KEY'
-  | 'TOKEN';
+  | 'PLAINTEXT'
+  | 'TICKET';
+
+export type CredentialTypeSpec = {
+  description: Scalars['String']['output'];
+  fields: Array<CredentialFieldSpec>;
+  label: Scalars['String']['output'];
+  type: CredentialType;
+};
 
 export type CredentialValidity =
   | 'INVALID'
@@ -2143,6 +2210,7 @@ export type Query = {
   channelKinds: Array<ChannelKind>;
   credential: Credential;
   credentialTags: Array<Scalars['String']['output']>;
+  credentialTypes: Array<CredentialTypeSpec>;
   credentials: CredentialConnection;
   factoryKinds: Array<FactoryKind>;
   fileBrowser: FsMachine;
@@ -3134,11 +3202,22 @@ export type UpdateAgentKeyInput = {
 };
 
 export type UpdateCredentialInput = {
+  algorithm?: InputMaybe<Scalars['String']['input']>;
+  certificate?: InputMaybe<Scalars['String']['input']>;
+  expiresAt?: InputMaybe<Scalars['String']['input']>;
+  hash?: InputMaybe<Scalars['String']['input']>;
+  hex?: InputMaybe<Scalars['String']['input']>;
+  key?: InputMaybe<Scalars['String']['input']>;
   keys?: InputMaybe<Array<CredentialKeyInput>>;
   name?: InputMaybe<Scalars['String']['input']>;
+  passphrase?: InputMaybe<Scalars['String']['input']>;
   password?: InputMaybe<Scalars['String']['input']>;
+  privateKey?: InputMaybe<Scalars['String']['input']>;
   properties?: InputMaybe<Array<CredentialPropertyInput>>;
+  realm?: InputMaybe<Scalars['String']['input']>;
+  service?: InputMaybe<Scalars['String']['input']>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
+  ticket?: InputMaybe<Scalars['String']['input']>;
   type?: InputMaybe<CredentialType>;
   username?: InputMaybe<Scalars['String']['input']>;
   validity?: InputMaybe<CredentialValidity>;
@@ -3673,25 +3752,30 @@ export type DeleteChannelEndpointMutation = { deleteChannelEndpoint: boolean };
 
 export type CredentialCommentFieldsFragment = { id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null };
 
-export type CredentialFieldsFragment = { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
+export type CredentialFieldsFragment = { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
 
-export type CredentialFieldsWithOperationFragment = { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
+export type CredentialFieldsWithOperationFragment = { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null };
 
-export type CredentialChipFieldsFragment = { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }> };
+export type CredentialChipFieldsFragment = { id: string, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }> };
+
+export type CredentialTypesQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type CredentialTypesQuery = { credentialTypes: Array<{ type: CredentialType, label: string, description: string, fields: Array<{ field: CredentialField, label: string, kind: CredentialFieldKind, required: boolean, hint: string }> }> };
 
 export type CredentialChipQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CredentialChipQuery = { credential: { id: string, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }> } };
+export type CredentialChipQuery = { credential: { id: string, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }> } };
 
 export type CredentialQueryVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CredentialQuery = { credential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type CredentialQuery = { credential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type CredentialsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3707,7 +3791,7 @@ export type CredentialsQueryVariables = Exact<{
 }>;
 
 
-export type CredentialsQuery = { credentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type CredentialsQuery = { credentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type CredentialTagsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3744,7 +3828,7 @@ export type MyCredentialsQueryVariables = Exact<{
 }>;
 
 
-export type MyCredentialsQuery = { myCredentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type MyCredentialsQuery = { myCredentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type MyCredentialTagsQueryVariables = Exact<{
   operationIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
@@ -3759,7 +3843,7 @@ export type CreateCredentialMutationVariables = Exact<{
 }>;
 
 
-export type CreateCredentialMutation = { createCredential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type CreateCredentialMutation = { createCredential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type UpdateCredentialMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3767,7 +3851,7 @@ export type UpdateCredentialMutationVariables = Exact<{
 }>;
 
 
-export type UpdateCredentialMutation = { updateCredential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type UpdateCredentialMutation = { updateCredential: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type DeleteCredentialMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -3782,7 +3866,7 @@ export type AddCredentialCommentMutationVariables = Exact<{
 }>;
 
 
-export type AddCredentialCommentMutation = { addCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type AddCredentialCommentMutation = { addCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type UpdateCredentialCommentMutationVariables = Exact<{
   credentialId: Scalars['ID']['input'];
@@ -3791,7 +3875,7 @@ export type UpdateCredentialCommentMutationVariables = Exact<{
 }>;
 
 
-export type UpdateCredentialCommentMutation = { updateCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type UpdateCredentialCommentMutation = { updateCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type DeleteCredentialCommentMutationVariables = Exact<{
   credentialId: Scalars['ID']['input'];
@@ -3799,21 +3883,21 @@ export type DeleteCredentialCommentMutationVariables = Exact<{
 }>;
 
 
-export type DeleteCredentialCommentMutation = { deleteCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
+export type DeleteCredentialCommentMutation = { deleteCredentialComment: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } };
 
 export type CredentialChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type CredentialChangedSubscription = { credentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
+export type CredentialChangedSubscription = { credentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
 
 export type MyCredentialChangedSubscriptionVariables = Exact<{
   operationIds?: InputMaybe<Array<Scalars['ID']['input']> | Scalars['ID']['input']>;
 }>;
 
 
-export type MyCredentialChangedSubscription = { myCredentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, username: string, password: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
+export type MyCredentialChangedSubscription = { myCredentialChanged: { action: EventAction, credentialId: string, operationId: string, credential?: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, operation: { id: string, name: string }, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } | null } };
 
 export type FsTaskRefFieldsFragment = { taskId: string, sessionId: string, number: number, user?: string | null };
 
@@ -5425,8 +5509,20 @@ export const CredentialFieldsFragmentDoc = new TypedDocumentString(`
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -5483,8 +5579,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -5513,8 +5621,20 @@ export const CredentialChipFieldsFragmentDoc = new TypedDocumentString(`
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   validity
   keys {
     name
@@ -7382,6 +7502,22 @@ export const DeleteChannelEndpointDocument = new TypedDocumentString(`
   deleteChannelEndpoint(id: $id)
 }
     `) as unknown as TypedDocumentString<DeleteChannelEndpointMutation, DeleteChannelEndpointMutationVariables>;
+export const CredentialTypesDocument = new TypedDocumentString(`
+    query CredentialTypes {
+  credentialTypes {
+    type
+    label
+    description
+    fields {
+      field
+      label
+      kind
+      required
+      hint
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<CredentialTypesQuery, CredentialTypesQueryVariables>;
 export const CredentialChipDocument = new TypedDocumentString(`
     query CredentialChip($id: ID!) {
   credential(id: $id) {
@@ -7393,8 +7529,20 @@ export const CredentialChipDocument = new TypedDocumentString(`
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   validity
   keys {
     name
@@ -7427,8 +7575,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7494,8 +7654,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7602,8 +7774,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7660,8 +7844,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7706,8 +7902,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7757,8 +7965,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7807,8 +8027,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7853,8 +8085,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7904,8 +8148,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content
@@ -7955,8 +8211,20 @@ fragment CredentialFields on Credential {
   operationId
   name
   type
+  legacyType
   username
+  realm
   password
+  key
+  passphrase
+  certificate
+  privateKey
+  ticket
+  service
+  expiresAt
+  hash
+  hex
+  algorithm
   keys {
     name
     content

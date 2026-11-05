@@ -180,7 +180,7 @@ func newWorld(t *testing.T) *world {
 		w.taskID: {TaskID: w.taskID, OperationID: w.op, Name: "Kerberoast", Stage: models.TaskStageInProcess},
 	}}
 	creds := transfertest.NewCredentialRepo(models.Credential{
-		CredentialID: w.credID, OperationID: w.op, Name: "svc_backup", Username: "backup", Password: "Winter2026!",
+		CredentialID: w.credID, OperationID: w.op, Name: "svc_backup", Type: models.CredentialTypePlaintext, Username: "backup", Password: "Winter2026!",
 	})
 	w.exporter = NewExporter(images, files, store, store, docs, hosts, hashes, w.tasks, pmRenderer{},
 		transfertest.NewDrawingRenderer(images, store), creds, &w.viewer, zap.NewNop(), Config{})
@@ -329,7 +329,8 @@ func TestExport_ResolvesChipsAndRewritesLinks(t *testing.T) {
 	if e := exp(find(doc, "wikiHashReference")[0]); e["value"] != "aad3b435" || e["status"] != "CRACKED" {
 		t.Errorf("hash chip = %v", e)
 	}
-	if e := exp(find(doc, "wikiCredentialReference")[0]); e["name"] != "svc_backup" || e["password"] != "Winter2026!" {
+	if e := exp(find(doc, "wikiCredentialReference")[0]); e["name"] != "svc_backup" || exportedField(e, "PASSWORD") != "Winter2026!" ||
+		e["typeLabel"] != "Plaintext" {
 		t.Errorf("credential chip = %v", e)
 	}
 
@@ -429,7 +430,7 @@ func TestExport_DrawingRecordCardsCarryTheirRecords(t *testing.T) {
 	if doc := page.Refs["document:"+w.peering.DocumentID.String()]; doc["href"] != "#/page/"+w.peering.DocumentID.String() {
 		t.Errorf("page = %v", doc)
 	}
-	if c := page.Refs["credential:"+w.credID.String()]; c["password"] != "Winter2026!" {
+	if c := page.Refs["credential:"+w.credID.String()]; exportedField(c, "PASSWORD") != "Winter2026!" {
 		t.Errorf("credential = %v", c)
 	}
 	if missing := page.Refs["task:"+gone]; missing["missing"] != true {
@@ -512,4 +513,23 @@ func TestInlinePreviewable(t *testing.T) {
 			t.Errorf("inlinePreviewable(%q, %d) = %v", c.ct, c.size, got)
 		}
 	}
+}
+
+// exportedField is the value of one of an exported credential's fields, as
+// the viewer reads them: by the GraphQL enum name.
+func exportedField(e map[string]any, field string) any {
+	fields, _ := e["fields"].([]map[string]any)
+	for _, f := range fields {
+		if f["field"] == field {
+			return f["value"]
+		}
+	}
+	// Decoded from JSON, the list is of plain maps.
+	list, _ := e["fields"].([]any)
+	for _, raw := range list {
+		if f, ok := raw.(map[string]any); ok && f["field"] == field {
+			return f["value"]
+		}
+	}
+	return nil
 }

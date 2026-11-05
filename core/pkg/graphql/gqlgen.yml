@@ -283,6 +283,10 @@ models:
         resolver: true         # caller-role check (app admin or operation admin)
       createdBy:
         resolver: true         # CreatedByID (uuid.UUID) -> User (fetched from DB)
+      legacyType:
+        resolver: true         # LegacyType (CredentialType) -> *string, null when none
+      expiresAt:
+        resolver: true         # *time.Time -> *string (RFC 3339)
       createdAt:
         resolver: true         # field.DefaultField.CreateAt -> string
       updatedAt:

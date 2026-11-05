@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from "react"
 import { toast } from "sonner"
 import {
+  ArrowRightLeftIcon,
   CopyIcon,
   KeyIcon,
   LinkIcon,
@@ -27,6 +28,13 @@ import {
   credentialValidity,
 } from "@/components/findings/credential-validity-utils"
 import { useUpdateCredential } from "@/graphql/hooks/credentials"
+import {
+  CREDENTIAL_TYPES,
+  credentialTypeLabel,
+  legacyCredentialTypeSuccessor,
+  useCredentialTypeSpecs,
+} from "@/components/findings/credential-type-utils"
+import { filledCredentialFields } from "@/lib/credential-fields"
 import { buildCredentialShareUrl } from "@/components/findings/credential-share-link"
 import type {
   CredentialChipFieldsFragment,
@@ -44,16 +52,28 @@ interface CredentialRowContextMenuProps {
 }
 
 // Right-click context menu wrapper for a single credentials row. Holds all
-// per-row actions: toggle validity, copy username/password/key contents,
-// edit, delete. The trigger is rendered as the row passed via children.
+// per-row actions: toggle validity, copy each field the type holds, convert
+// an OTHER, edit, delete. The trigger is rendered as the row passed via
+// children.
 export function CredentialRowContextMenu({
   credential,
   children,
   triggerRender,
 }: CredentialRowContextMenuProps) {
   const openEdit = useCredentialStore((s) => s.openEditDialog)
+  const openConvert = useCredentialStore((s) => s.openConvertDialog)
   const openDelete = useCredentialStore((s) => s.openDeleteDialog)
   const updateCredential = useUpdateCredential()
+  const specs = useCredentialTypeSpecs()
+  const filled = filledCredentialFields(
+    credential,
+    specs.get(credential.type)?.fields ?? [],
+  )
+  const suggested = legacyCredentialTypeSuccessor(credential.legacyType)
+  const convertTargets = CREDENTIAL_TYPES.filter((t) => t !== "OTHER")
+  if (suggested) {
+    convertTargets.sort((a, b) => Number(b === suggested) - Number(a === suggested))
+  }
 
   async function copy(text: string, label: string) {
     if (!text) {
@@ -109,20 +129,25 @@ export function CredentialRowContextMenu({
 
         <ContextMenuSeparator />
 
-        <ContextMenuItem
-          disabled={!credential.username}
-          onClick={() => copy(credential.username, "username")}
-        >
-          <CopyIcon className="size-4" />
-          Copy username
-        </ContextMenuItem>
-        <ContextMenuItem
-          disabled={!credential.password}
-          onClick={() => copy(credential.password, "password")}
-        >
-          <CopyIcon className="size-4" />
-          Copy password
-        </ContextMenuItem>
+        {filled.length === 0 && (
+          <ContextMenuItem disabled>
+            <CopyIcon className="size-4" />
+            Nothing to copy
+          </ContextMenuItem>
+        )}
+        {filled.map((f) => (
+          <ContextMenuItem
+            key={f.field}
+            onClick={() => copy(f.value, f.label.toLowerCase())}
+          >
+            {f.kind === "BLOB" ? (
+              <KeyIcon className="size-4" />
+            ) : (
+              <CopyIcon className="size-4" />
+            )}
+            Copy {f.label.toLowerCase()}
+          </ContextMenuItem>
+        ))}
 
         {credential.keys.length > 0 && (
           <>
@@ -185,6 +210,26 @@ export function CredentialRowContextMenu({
           <PencilIcon className="size-4" />
           Edit
         </ContextMenuItem>
+        {credential.type === "OTHER" && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ArrowRightLeftIcon className="size-4" />
+              Convert to…
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {convertTargets.map((t) => (
+                <ContextMenuItem
+                  key={t}
+                  onClick={() =>
+                    openConvert({ id: credential.id, name: credential.name }, t)
+                  }
+                >
+                  {credentialTypeLabel(t)}
+                </ContextMenuItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
         <ContextMenuItem
           variant="destructive"
           onClick={() =>

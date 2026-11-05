@@ -422,6 +422,14 @@ var releases = []Release{
 			"Drawings: a card can stand for a host, credential, hash, task or wiki page with `%% id ref=host:<id>`. The operator clicks it to open the record; get_wiki_drawing reads the ref back. New card kinds task and document.",
 		},
 	},
+	{
+		Version: 49,
+		Date:    "2026-11-05",
+		Notes: []string{
+			"Credential types have fields of their own: PLAINTEXT (username, realm, password), KEY (username, key, passphrase), CERTIFICATE (username, realm, certificate, private_key, password), TICKET (username, realm, ticket, service, expires_at), HASH (username, realm, hash, algorithm), HEX (username, realm, hex, algorithm) and OTHER (username, password, keys). A value in a field its type has not is refused.",
+			"PASSWORD, SSH_KEY, API_KEY and TOKEN are gone. Existing credentials became PLAINTEXT (a password alone) or OTHER, which keeps the old type as legacy_type: convert one with update_credential, sending empty what the new type has no room for. mark_hash_cracked records a PLAINTEXT and takes a realm.",
+		},
+	},
 }
 
 // Releases returns the full history, oldest first. A copy, so callers cannot

@@ -12,7 +12,16 @@ import {
 import { SortableHeader } from "@/components/ui/sortable-header"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import { useCredentialStore, type CredentialSort } from "@/stores/credentials"
-import { credentialTypeLabel } from "@/components/findings/credential-type-utils"
+import {
+  credentialTypeLabel,
+  legacyCredentialTypeLabel,
+  useCredentialTypeSpecs,
+} from "@/components/findings/credential-type-utils"
+import {
+  credentialAccount,
+  credentialExpired,
+  filledCredentialFields,
+} from "@/lib/credential-fields"
 import {
   CredentialValidityIcon,
   credentialValidity,
@@ -57,6 +66,7 @@ export function CredentialsTable({
   showOperationColumn = false,
 }: CredentialsTableProps) {
   const openDetails = useCredentialStore((s) => s.openDetailsPanel)
+  const specs = useCredentialTypeSpecs()
 
   const gridCols = showOperationColumn ? GRID_COLS_GLOBAL : GRID_COLS_SCOPED
 
@@ -81,12 +91,12 @@ export function CredentialsTable({
           {showOperationColumn && <div>Operation</div>}
           <div>Type</div>
           <SortableHeader
-            label="Username"
+            label="Account"
             field="USERNAME"
             sort={sort}
             onSortChange={onSortChange}
           />
-          <div>Password</div>
+          <div>Secret</div>
           <div className="text-center" title="Keys">
             <KeyIcon className="mx-auto size-3.5" />
           </div>
@@ -112,7 +122,17 @@ export function CredentialsTable({
           <p className="text-sm">No credentials match these filters.</p>
         </>
       }
-      renderRow={(cred) => (
+      renderRow={(cred) => {
+        const filled = filledCredentialFields(
+          cred,
+          specs.get(cred.type)?.fields ?? [],
+        )
+        // The type's main secret: its required field (OTHER has none, so
+        // its password). A blob shows its start; the cell truncates it.
+        const main =
+          specs.get(cred.type)?.fields.find((f) => f.required)?.field ?? "PASSWORD"
+        const secret = filled.find((f) => f.field === main)?.value ?? ""
+        return (
         <CredentialRowContextMenu credential={cred}>
           <button
             type="button"
@@ -134,14 +154,26 @@ export function CredentialsTable({
                 <span className="truncate">{cred.operation?.name ?? "—"}</span>
               </div>
             )}
-            <div>
-              <Badge variant="outline">{credentialTypeLabel(cred.type)}</Badge>
+            <div className="flex min-w-0 items-center gap-1">
+              <Badge
+                variant="outline"
+                title={
+                  cred.legacyType
+                    ? `Recorded as ${legacyCredentialTypeLabel(cred.legacyType)}`
+                    : undefined
+                }
+              >
+                {credentialTypeLabel(cred.type)}
+              </Badge>
+              {credentialExpired(cred.expiresAt) && (
+                <Badge variant="destructive">Expired</Badge>
+              )}
             </div>
             <div className="truncate text-muted-foreground">
-              {cred.username || "—"}
+              {credentialAccount(filled) || "—"}
             </div>
             <div className="truncate font-mono text-xs text-muted-foreground">
-              {cred.password || "—"}
+              {secret.slice(0, 96) || "—"}
             </div>
             <KeysCountCell count={cred.keys.length} />
             <div className="flex flex-wrap gap-1 overflow-hidden">
@@ -167,7 +199,8 @@ export function CredentialsTable({
             </div>
           </button>
         </CredentialRowContextMenu>
-      )}
+        )
+      }}
     />
   )
 }

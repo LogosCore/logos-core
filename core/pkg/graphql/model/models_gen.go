@@ -304,14 +304,25 @@ type CreateAgentKeyInput struct {
 }
 
 type CreateCredentialInput struct {
-	Name       string                     `json:"name"`
-	Type       models.CredentialType      `json:"type"`
-	Username   *string                    `json:"username,omitempty"`
-	Password   *string                    `json:"password,omitempty"`
-	Keys       []*CredentialKeyInput      `json:"keys,omitempty"`
-	Properties []*CredentialPropertyInput `json:"properties,omitempty"`
-	Validity   *models.CredentialValidity `json:"validity,omitempty"`
-	Tags       []string                   `json:"tags,omitempty"`
+	Name        string                     `json:"name"`
+	Type        models.CredentialType      `json:"type"`
+	Username    *string                    `json:"username,omitempty"`
+	Realm       *string                    `json:"realm,omitempty"`
+	Password    *string                    `json:"password,omitempty"`
+	Key         *string                    `json:"key,omitempty"`
+	Passphrase  *string                    `json:"passphrase,omitempty"`
+	Certificate *string                    `json:"certificate,omitempty"`
+	PrivateKey  *string                    `json:"privateKey,omitempty"`
+	Ticket      *string                    `json:"ticket,omitempty"`
+	Service     *string                    `json:"service,omitempty"`
+	ExpiresAt   *string                    `json:"expiresAt,omitempty"`
+	Hash        *string                    `json:"hash,omitempty"`
+	Hex         *string                    `json:"hex,omitempty"`
+	Algorithm   *string                    `json:"algorithm,omitempty"`
+	Keys        []*CredentialKeyInput      `json:"keys,omitempty"`
+	Properties  []*CredentialPropertyInput `json:"properties,omitempty"`
+	Validity    *models.CredentialValidity `json:"validity,omitempty"`
+	Tags        []string                   `json:"tags,omitempty"`
 }
 
 type CreateCustomTimelineEventInput struct {
@@ -403,6 +414,14 @@ type CredentialEvent struct {
 	Credential   *models.Credential `json:"credential,omitempty"`
 }
 
+type CredentialFieldSpec struct {
+	Field    CredentialField     `json:"field"`
+	Label    string              `json:"label"`
+	Kind     CredentialFieldKind `json:"kind"`
+	Required bool                `json:"required"`
+	Hint     string              `json:"hint"`
+}
+
 type CredentialKeyInput struct {
 	Name    string `json:"name"`
 	Content string `json:"content"`
@@ -411,6 +430,13 @@ type CredentialKeyInput struct {
 type CredentialPropertyInput struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+
+type CredentialTypeSpec struct {
+	Type        models.CredentialType  `json:"type"`
+	Label       string                 `json:"label"`
+	Description string                 `json:"description"`
+	Fields      []*CredentialFieldSpec `json:"fields"`
 }
 
 type FactoryKind struct {
@@ -1293,14 +1319,25 @@ type UpdateAgentKeyInput struct {
 }
 
 type UpdateCredentialInput struct {
-	Name       *string                    `json:"name,omitempty"`
-	Type       *models.CredentialType     `json:"type,omitempty"`
-	Username   *string                    `json:"username,omitempty"`
-	Password   *string                    `json:"password,omitempty"`
-	Keys       []*CredentialKeyInput      `json:"keys,omitempty"`
-	Properties []*CredentialPropertyInput `json:"properties,omitempty"`
-	Validity   *models.CredentialValidity `json:"validity,omitempty"`
-	Tags       []string                   `json:"tags,omitempty"`
+	Name        *string                    `json:"name,omitempty"`
+	Type        *models.CredentialType     `json:"type,omitempty"`
+	Username    *string                    `json:"username,omitempty"`
+	Realm       *string                    `json:"realm,omitempty"`
+	Password    *string                    `json:"password,omitempty"`
+	Key         *string                    `json:"key,omitempty"`
+	Passphrase  *string                    `json:"passphrase,omitempty"`
+	Certificate *string                    `json:"certificate,omitempty"`
+	PrivateKey  *string                    `json:"privateKey,omitempty"`
+	Ticket      *string                    `json:"ticket,omitempty"`
+	Service     *string                    `json:"service,omitempty"`
+	ExpiresAt   *string                    `json:"expiresAt,omitempty"`
+	Hash        *string                    `json:"hash,omitempty"`
+	Hex         *string                    `json:"hex,omitempty"`
+	Algorithm   *string                    `json:"algorithm,omitempty"`
+	Keys        []*CredentialKeyInput      `json:"keys,omitempty"`
+	Properties  []*CredentialPropertyInput `json:"properties,omitempty"`
+	Validity    *models.CredentialValidity `json:"validity,omitempty"`
+	Tags        []string                   `json:"tags,omitempty"`
 }
 
 type UpdateCustomTimelineEventInput struct {
@@ -1544,25 +1581,175 @@ func (e AgentActionOutcome) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+type CredentialField string
+
+const (
+	CredentialFieldUsername    CredentialField = "USERNAME"
+	CredentialFieldRealm       CredentialField = "REALM"
+	CredentialFieldPassword    CredentialField = "PASSWORD"
+	CredentialFieldKey         CredentialField = "KEY"
+	CredentialFieldPassphrase  CredentialField = "PASSPHRASE"
+	CredentialFieldCertificate CredentialField = "CERTIFICATE"
+	CredentialFieldPrivateKey  CredentialField = "PRIVATE_KEY"
+	CredentialFieldTicket      CredentialField = "TICKET"
+	CredentialFieldService     CredentialField = "SERVICE"
+	CredentialFieldExpiresAt   CredentialField = "EXPIRES_AT"
+	CredentialFieldHash        CredentialField = "HASH"
+	CredentialFieldHex         CredentialField = "HEX"
+	CredentialFieldAlgorithm   CredentialField = "ALGORITHM"
+	CredentialFieldKeys        CredentialField = "KEYS"
+)
+
+var AllCredentialField = []CredentialField{
+	CredentialFieldUsername,
+	CredentialFieldRealm,
+	CredentialFieldPassword,
+	CredentialFieldKey,
+	CredentialFieldPassphrase,
+	CredentialFieldCertificate,
+	CredentialFieldPrivateKey,
+	CredentialFieldTicket,
+	CredentialFieldService,
+	CredentialFieldExpiresAt,
+	CredentialFieldHash,
+	CredentialFieldHex,
+	CredentialFieldAlgorithm,
+	CredentialFieldKeys,
+}
+
+func (e CredentialField) IsValid() bool {
+	switch e {
+	case CredentialFieldUsername, CredentialFieldRealm, CredentialFieldPassword, CredentialFieldKey, CredentialFieldPassphrase, CredentialFieldCertificate, CredentialFieldPrivateKey, CredentialFieldTicket, CredentialFieldService, CredentialFieldExpiresAt, CredentialFieldHash, CredentialFieldHex, CredentialFieldAlgorithm, CredentialFieldKeys:
+		return true
+	}
+	return false
+}
+
+func (e CredentialField) String() string {
+	return string(e)
+}
+
+func (e *CredentialField) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CredentialField(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CredentialField", str)
+	}
+	return nil
+}
+
+func (e CredentialField) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CredentialField) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CredentialField) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type CredentialFieldKind string
+
+const (
+	CredentialFieldKindText     CredentialFieldKind = "TEXT"
+	CredentialFieldKindSecret   CredentialFieldKind = "SECRET"
+	CredentialFieldKindBlob     CredentialFieldKind = "BLOB"
+	CredentialFieldKindDatetime CredentialFieldKind = "DATETIME"
+	CredentialFieldKindKeyList  CredentialFieldKind = "KEY_LIST"
+)
+
+var AllCredentialFieldKind = []CredentialFieldKind{
+	CredentialFieldKindText,
+	CredentialFieldKindSecret,
+	CredentialFieldKindBlob,
+	CredentialFieldKindDatetime,
+	CredentialFieldKindKeyList,
+}
+
+func (e CredentialFieldKind) IsValid() bool {
+	switch e {
+	case CredentialFieldKindText, CredentialFieldKindSecret, CredentialFieldKindBlob, CredentialFieldKindDatetime, CredentialFieldKindKeyList:
+		return true
+	}
+	return false
+}
+
+func (e CredentialFieldKind) String() string {
+	return string(e)
+}
+
+func (e *CredentialFieldKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = CredentialFieldKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid CredentialFieldKind", str)
+	}
+	return nil
+}
+
+func (e CredentialFieldKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *CredentialFieldKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e CredentialFieldKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type CredentialSearchField string
 
 const (
 	CredentialSearchFieldName       CredentialSearchField = "NAME"
 	CredentialSearchFieldUsername   CredentialSearchField = "USERNAME"
+	CredentialSearchFieldRealm      CredentialSearchField = "REALM"
 	CredentialSearchFieldPassword   CredentialSearchField = "PASSWORD"
+	CredentialSearchFieldHash       CredentialSearchField = "HASH"
+	CredentialSearchFieldHex        CredentialSearchField = "HEX"
+	CredentialSearchFieldService    CredentialSearchField = "SERVICE"
+	CredentialSearchFieldAlgorithm  CredentialSearchField = "ALGORITHM"
 	CredentialSearchFieldProperties CredentialSearchField = "PROPERTIES"
 )
 
 var AllCredentialSearchField = []CredentialSearchField{
 	CredentialSearchFieldName,
 	CredentialSearchFieldUsername,
+	CredentialSearchFieldRealm,
 	CredentialSearchFieldPassword,
+	CredentialSearchFieldHash,
+	CredentialSearchFieldHex,
+	CredentialSearchFieldService,
+	CredentialSearchFieldAlgorithm,
 	CredentialSearchFieldProperties,
 }
 
 func (e CredentialSearchField) IsValid() bool {
 	switch e {
-	case CredentialSearchFieldName, CredentialSearchFieldUsername, CredentialSearchFieldPassword, CredentialSearchFieldProperties:
+	case CredentialSearchFieldName, CredentialSearchFieldUsername, CredentialSearchFieldRealm, CredentialSearchFieldPassword, CredentialSearchFieldHash, CredentialSearchFieldHex, CredentialSearchFieldService, CredentialSearchFieldAlgorithm, CredentialSearchFieldProperties:
 		return true
 	}
 	return false

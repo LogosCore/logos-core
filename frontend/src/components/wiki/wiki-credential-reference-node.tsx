@@ -6,7 +6,7 @@ import { WikiCredentialChip } from "@/components/wiki/wiki-credential-chip"
  * Inline atom node that points at a Findings credential by id. Renders as a
  * chip whose click opens the same details modal as the credentials table row,
  * and whose right-click surfaces the same per-row action menu. All data
- * (name, validity, username, password, keys) is fetched live from the server
+ * (name, validity, the fields of its type) is fetched live from the server
  * via `useCredential` — the node persists only `credentialId` so renames and
  * SSE updates flow through without rewriting the document.
  *

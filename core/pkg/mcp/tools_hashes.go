@@ -57,7 +57,8 @@ type markHashCrackedArgs struct {
 	CredentialID string   `json:"credential_id,omitempty" jsonschema:"Link an existing credential instead of creating one."`
 	Name         string   `json:"name,omitempty"          jsonschema:"Name for the new credential; required without credential_id."`
 	Username     string   `json:"username,omitempty"      jsonschema:"Account name."`
-	Password     string   `json:"password,omitempty"      jsonschema:"The plaintext value."`
+	Realm        string   `json:"realm,omitempty"         jsonschema:"Its domain or realm, e.g. CORP."`
+	Password     string   `json:"password,omitempty"      jsonschema:"The plaintext value; required without credential_id."`
 	Tags         []string `json:"tags,omitempty"          jsonschema:"Tags for the new credential."`
 }
 
@@ -230,8 +231,9 @@ func handleMarkHashCracked(ctx context.Context, s *Server, args markHashCrackedA
 	case args.Name != "":
 		input.NewCredential = &model.CreateCredentialInput{
 			Name:     args.Name,
-			Type:     models.CredentialTypePassword,
+			Type:     models.CredentialTypePlaintext,
 			Username: optionalString(args.Username),
+			Realm:    optionalString(args.Realm),
 			Password: optionalString(args.Password),
 			Tags:     args.Tags,
 			// A cracked hash is a working secret by definition, so record it
@@ -240,7 +242,7 @@ func handleMarkHashCracked(ctx context.Context, s *Server, args markHashCrackedA
 		}
 	default:
 		return toolResult{}, fmt.Errorf(
-			"give either credential_id to link an existing credential, or name (and usually password) to create one")
+			"give either credential_id to link an existing credential, or name and password to create one")
 	}
 
 	updated, err := s.deps.Hashes.MarkHashCracked(ctx, args.HashID, input)

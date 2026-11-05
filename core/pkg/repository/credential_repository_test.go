@@ -28,7 +28,7 @@ func TestBuildCredentialFilter_OperationOnly(t *testing.T) {
 // validity constraints land on the right BSON keys when present.
 func TestBuildCredentialFilter_TypeAndValidity(t *testing.T) {
 	opID := uuid.New()
-	pwd := models.CredentialTypePassword
+	pwd := models.CredentialTypePlaintext
 
 	f := buildCredentialFilter(opID, CredentialFilter{
 		Type:     &pwd,
@@ -94,8 +94,8 @@ func TestBuildCredentialFilter_SearchEscapesRegexMetachars(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected $or bson.A, got %T", f["$or"])
 			}
-			if len(orVal) != 4 {
-				t.Fatalf("expected $or with 4 branches (name/username/password/properties.value), got %d", len(orVal))
+			if len(orVal) != len(defaultCredentialSearchFields) {
+				t.Fatalf("expected $or with a branch per default field (%d), got %d", len(defaultCredentialSearchFields), len(orVal))
 			}
 			first, ok := orVal[0].(bson.M)
 			if !ok {
@@ -117,7 +117,7 @@ func TestBuildCredentialFilter_SearchEscapesRegexMetachars(t *testing.T) {
 
 // TestBuildCredentialFilter_SearchFieldsRestrictsOrBranches verifies that a
 // non-empty SearchFields restricts the $or to exactly the selected field paths,
-// while an empty set falls back to the four default fields.
+// while an empty set falls back to the default fields.
 func TestBuildCredentialFilter_SearchFieldsRestrictsOrBranches(t *testing.T) {
 	opID := uuid.New()
 
@@ -129,7 +129,8 @@ func TestBuildCredentialFilter_SearchFieldsRestrictsOrBranches(t *testing.T) {
 		{
 			"default-when-empty",
 			nil,
-			[]string{"name", "username", "password", "properties.value"},
+			// Every one-line field and the property values; not the blobs.
+			[]string{"name", "username", "realm", "password", "hash", "hex", "service", "algorithm", "properties.value"},
 		},
 		{
 			"username-only",
@@ -228,7 +229,7 @@ func TestBuildCredentialFilter_EmptyValidityShowsEverything(t *testing.T) {
 func TestBuildCredentialFilterMulti_UsesIn(t *testing.T) {
 	op1 := uuid.New()
 	op2 := uuid.New()
-	pwd := models.CredentialTypePassword
+	pwd := models.CredentialTypePlaintext
 
 	f := buildCredentialFilterMulti([]uuid.UUID{op1, op2}, CredentialFilter{
 		Type: &pwd,

@@ -462,10 +462,11 @@ func (r *hashResolver) MarkHashCracked(ctx context.Context, id string, input mod
 			return nil, fmt.Errorf("credential belongs to a different operation")
 		}
 	} else {
-		// Create inline. Default type to PASSWORD if omitted.
+		// Create inline: a cracked hash is a password in the clear, so the
+		// type defaults to PLAINTEXT.
 		newInput := *input.NewCredential
 		if !newInput.Type.IsValid() {
-			newInput.Type = models.CredentialTypePassword
+			newInput.Type = models.CredentialTypePlaintext
 		}
 		if strings.TrimSpace(newInput.Name) == "" {
 			newInput.Name = "Cracked credential"

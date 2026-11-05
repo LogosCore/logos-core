@@ -21,6 +21,11 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSha1Hashes } from "@/lib/sha1"
+import {
+  credentialBlobs,
+  credentialSegment,
+  type FilledCredentialField,
+} from "@/lib/credential-fields"
 import { DocumentIcon } from "@/components/wiki/document-icon"
 import { HostIcon } from "@/components/findings/host-icon"
 import { hashStatusLabel, truncateHashValue } from "@/components/findings/hash-status-utils"
@@ -179,14 +184,17 @@ interface CredentialKey {
   content: string
 }
 
-/** Mirrors the editor chip: a key shows as its name and the start of its
- * SHA-1, never its content. The content is in the dialog. */
+/** Mirrors the editor chip: a key, a certificate or a ticket shows as its
+ * label and the start of its SHA-1, never its content. The content is in
+ * the dialog. */
 const KEY_HASH_DISPLAY_LEN = 12
 
 export function StaticCredentialChip(props: NodeViewProps) {
   const e = exported(props)
   const keys = (Array.isArray(e?.keys) ? e.keys : []) as CredentialKey[]
-  const hashes = useSha1Hashes(keys.map((k) => k.content))
+  const fields = (Array.isArray(e?.fields) ? e.fields : []) as FilledCredentialField[]
+  const blobs = credentialBlobs(fields, keys)
+  const hashes = useSha1Hashes(blobs.map((b) => b.content))
   const dialog = useOpen()
   if (!e || e.missing) {
     return (
@@ -199,12 +207,10 @@ export function StaticCredentialChip(props: NodeViewProps) {
     )
   }
   const name = str(e.name) || "Credential"
-  const username = str(e.username)
-  const password = str(e.password)
-  const creds = username && password ? `${username}:${password}` : username || password
+  const creds = credentialSegment(fields)
   const validity = (str(e.validity) || "UNKNOWN") as keyof typeof VALIDITY_ICON
   const ValidityIcon = VALIDITY_ICON[validity] ?? VALIDITY_ICON.UNKNOWN
-  const title = [name, creds, ...keys.map((k, i) => `${k.name}: ${hashes[i] ?? "hashing…"}`), "Click for details"]
+  const title = [name, creds, ...blobs.map((b, i) => `${b.label}: ${hashes[i] ?? "hashing…"}`), "Click for details"]
     .filter(Boolean)
     .join("\n")
   return (
@@ -218,9 +224,9 @@ export function StaticCredentialChip(props: NodeViewProps) {
         <KeyIcon className="size-3.5 wiki-credential-chip__icon" />
         <span className="wiki-credential-chip__name">{name}</span>
         {creds && <span className="wiki-credential-chip__segment">({creds})</span>}
-        {keys.map((k, i) => (
-          <span key={`${k.name}-${i}`} className="wiki-credential-chip__segment wiki-credential-chip__segment--key">
-            ({k.name}:{hashes[i]?.slice(0, KEY_HASH_DISPLAY_LEN) ?? "…"})
+        {blobs.map((b, i) => (
+          <span key={`${b.label}-${i}`} className="wiki-credential-chip__segment wiki-credential-chip__segment--key">
+            ({b.label}:{hashes[i]?.slice(0, KEY_HASH_DISPLAY_LEN) ?? "…"})
           </span>
         ))}
         <ValidityIcon className={cn("wiki-credential-chip__validity size-3", VALIDITY_CLASS[validity])} />

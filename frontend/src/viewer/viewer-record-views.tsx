@@ -5,6 +5,8 @@
 
 import { HashIcon, KeyIcon, ListTodoIcon, ServerIcon } from "lucide-react"
 import { hashStatusLabel } from "@/components/findings/hash-status-utils"
+import type { FilledCredentialField } from "@/lib/credential-fields"
+import { formatDateTime } from "@/lib/date-format"
 import type { HashStatus } from "@/graphql/gql/graphql"
 import { RecordDialog, type RecordRow } from "./viewer-record-dialog"
 
@@ -13,14 +15,6 @@ export type ExportedRecord = Record<string, unknown>
 const str = (v: unknown) => (typeof v === "string" ? v : "")
 const num = (v: unknown) => (typeof v === "number" ? String(v) : "")
 
-const TYPE_LABEL: Record<string, string> = {
-  PASSWORD: "Password",
-  SSH_KEY: "SSH key",
-  API_KEY: "API key",
-  TOKEN: "Token",
-  HASH: "Hash",
-  OTHER: "Other",
-}
 
 const VALIDITY_LABEL: Record<string, string> = {
   UNKNOWN: "Not tested",
@@ -86,6 +80,9 @@ export function RecordDialogFor({ kind, data: e, open, onOpenChange }: RecordDia
       )
     }
     case "credential": {
+      // The fields of its type holding a value, in its order, as the export
+      // wrote them (htmlbundle credentialChip).
+      const fields = (Array.isArray(e.fields) ? e.fields : []) as FilledCredentialField[]
       const keys = (Array.isArray(e.keys) ? e.keys : []) as { name: string; content: string }[]
       const properties = (Array.isArray(e.properties) ? e.properties : []) as { name: string; value: string }[]
       const tags = (Array.isArray(e.tags) ? e.tags : []) as string[]
@@ -95,10 +92,14 @@ export function RecordDialogFor({ kind, data: e, open, onOpenChange }: RecordDia
           {...common}
           icon={<KeyIcon className="size-4" />}
           title={str(e.name) || "Credential"}
-          description={[TYPE_LABEL[str(e.type)] ?? str(e.type), VALIDITY_LABEL[validity]].filter(Boolean).join(" · ")}
+          description={[str(e.typeLabel) || str(e.type), VALIDITY_LABEL[validity]].filter(Boolean).join(" · ")}
           rows={[
-            { label: "Username", value: str(e.username), mono: true },
-            { label: "Password", value: str(e.password), mono: true },
+            ...fields.map((f) => ({
+              label: f.label,
+              value: f.kind === "DATETIME" ? formatDateTime(f.value) : f.value,
+              mono: f.kind !== "TEXT",
+              block: f.kind === "BLOB",
+            })),
             ...keys.map((k) => ({ label: k.name || "Key", value: k.content, mono: true, block: true })),
             ...properties.map((p) => ({ label: p.name, value: p.value, mono: true })),
           ]}
