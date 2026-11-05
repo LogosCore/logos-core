@@ -29,6 +29,7 @@ import {
   CredentialDocument,
   CredentialChipDocument,
   CredentialTypesDocument,
+  CredentialUsageDocument,
   CredentialsDocument,
   CredentialTagsDocument,
   CredentialBacklinksDocument,
@@ -51,6 +52,8 @@ export type CredentialListParams = {
   // Empty/omitted = search all fields (backend default).
   searchFields?: CredentialSearchField[] | null
   type?: CredentialType | null
+  // Any of these types (a picker for a field that takes several).
+  types?: CredentialType[] | null
   tags?: string[] | null
   // Validity states to include. Empty/omitted = every state.
   validity?: CredentialValidity[] | null
@@ -70,6 +73,8 @@ export type MyCredentialListParams = {
   search?: string | null
   searchFields?: CredentialSearchField[] | null
   type?: CredentialType | null
+  // Any of these types (a picker for a field that takes several).
+  types?: CredentialType[] | null
   tags?: string[] | null
   validity?: CredentialValidity[] | null
   sortBy?: CredentialSortField | null
@@ -144,6 +149,17 @@ function applyCredentialEvent(
 
 // --- Queries ---
 
+// Where a credential is used (CredentialUsageQuery): loaded when asked for,
+// as it reads several collections.
+export function useCredentialUsage(credentialId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: [...credentialKeys.all, "usage", credentialId] as const,
+    queryFn: () => graphqlClient(CredentialUsageDocument, { id: credentialId }),
+    select: (data) => data.credential.usage,
+    enabled: !!credentialId && (options?.enabled ?? true),
+  })
+}
+
 // The type table (credentialTypes). The same for everyone and fixed for a
 // release, so it is fetched once and kept.
 export function useCredentialTypes() {
@@ -198,6 +214,7 @@ export function useInfiniteCredentials(params: CredentialListParams) {
             ? params.searchFields
             : null,
         type: params.type ?? null,
+        types: params.types && params.types.length > 0 ? params.types : null,
         tags: params.tags && params.tags.length > 0 ? params.tags : null,
         validity:
           params.validity && params.validity.length > 0
@@ -270,6 +287,7 @@ export function useInfiniteMyCredentials(
             ? params.searchFields
             : null,
         type: params.type ?? null,
+        types: params.types && params.types.length > 0 ? params.types : null,
         tags: params.tags && params.tags.length > 0 ? params.tags : null,
         validity:
           params.validity && params.validity.length > 0

@@ -1142,7 +1142,7 @@ func TestCreateBuildPersistedSession(t *testing.T) {
 	if b.PersistedSessionID == nil || *b.PersistedSessionID != sid || !r.sessions.rows[sid].Persisted {
 		t.Fatalf("build %+v, session persisted=%v", b.PersistedSessionID, r.sessions.rows[sid].Persisted)
 	}
-	req, err := r.svc.request(context.Background(), b, b.Deadline)
+	req, _, err := r.svc.request(context.Background(), b, b.Deadline)
 	if err != nil || req.SessionID != sid.String() {
 		t.Fatalf("the factory's request: %q %v", req.SessionID, err)
 	}
@@ -1197,7 +1197,7 @@ func TestCreateBuildNewPersistedSession(t *testing.T) {
 	if !ok || res.BuildID != b.BuildID || res.OperationID != opID {
 		t.Fatalf("reservation %+v %v", res, ok)
 	}
-	req, _ := r.svc.request(context.Background(), b, b.Deadline)
+	req, _, _ := r.svc.request(context.Background(), b, b.Deadline)
 	if req.SessionID != b.PersistedSessionID.String() {
 		t.Fatalf("the factory's session id %q", req.SessionID)
 	}

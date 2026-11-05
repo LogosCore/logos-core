@@ -142,7 +142,7 @@ func (s *Server) countOperation(ctx context.Context, opID uuid.UUID) (operationC
 			return conn.TotalCount, nil
 		}},
 		{"credentials", &counts.Credentials, func() (int, error) {
-			conn, err := s.deps.Credentials.Credentials(ctx, idStr, nil, nil, nil, nil, nil, nil, nil, &first, nil, nil, nil)
+			conn, err := s.deps.Credentials.Credentials(ctx, idStr, nil, nil, nil, nil, nil, nil, nil, nil, &first, nil, nil, nil)
 			if err != nil {
 				return 0, err
 			}

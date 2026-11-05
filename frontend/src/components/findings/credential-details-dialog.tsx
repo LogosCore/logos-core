@@ -55,6 +55,7 @@ import {
 } from "@/components/findings/credential-type-utils"
 import { truncateHashValue } from "@/components/findings/hash-status-utils"
 import { CredentialBacklinkList } from "@/components/findings/credential-backlink-list"
+import { CredentialUsageSection } from "@/components/findings/credential-usage"
 import { buildCredentialShareUrl } from "@/components/findings/credential-share-link"
 import type {
   CredentialCommentFieldsFragment,
@@ -297,6 +298,8 @@ export function CredentialDetailsDialog() {
                 <FormattedDateTimeText date={credential.createdAt} />
               </div>
             </section>
+
+            <CredentialUsageSection credentialId={credential.id} />
 
             <CredentialBacklinkList credentialId={credential.id} />
 

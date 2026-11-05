@@ -474,6 +474,7 @@ export type Credential = {
   ticket: Scalars['String']['output'];
   type: CredentialType;
   updatedAt: Scalars['String']['output'];
+  usage: CredentialUsage;
   username: Scalars['String']['output'];
   validity: CredentialValidity;
   viewerCanModerateComments: Scalars['Boolean']['output'];
@@ -496,6 +497,14 @@ export type CredentialConnection = {
 export type CredentialEdge = {
   cursor: Scalars['String']['output'];
   node: Credential;
+};
+
+export type CredentialEndpointUse = {
+  accept: Array<CredentialType>;
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+  moduleName: Scalars['String']['output'];
+  name: Scalars['String']['output'];
 };
 
 export type CredentialEvent = {
@@ -546,6 +555,11 @@ export type CredentialKeyInput = {
   name: Scalars['String']['input'];
 };
 
+export type CredentialLogin = {
+  accepted: Scalars['Boolean']['output'];
+  at: Scalars['String']['output'];
+};
+
 export type CredentialProperty = {
   name: Scalars['String']['output'];
   value: Scalars['String']['output'];
@@ -572,6 +586,16 @@ export type CredentialSortField =
   | 'NAME'
   | 'USERNAME';
 
+export type CredentialTargetUse = {
+  accept: Array<CredentialType>;
+  buildId: Scalars['ID']['output'];
+  id: Scalars['ID']['output'];
+  kind: Scalars['String']['output'];
+  login?: Maybe<CredentialLogin>;
+  moduleName: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+};
+
 export type CredentialType =
   | 'CERTIFICATE'
   | 'HASH'
@@ -586,6 +610,13 @@ export type CredentialTypeSpec = {
   fields: Array<CredentialFieldSpec>;
   label: Scalars['String']['output'];
   type: CredentialType;
+};
+
+export type CredentialUsage = {
+  builds: Scalars['Int']['output'];
+  endpoints: Array<CredentialEndpointUse>;
+  targets: Array<CredentialTargetUse>;
+  tasks: Scalars['Int']['output'];
 };
 
 export type CredentialValidity =
@@ -2359,6 +2390,7 @@ export type QueryCredentialsArgs = {
   sortDirection?: InputMaybe<SortDirection>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<CredentialType>;
+  types?: InputMaybe<Array<CredentialType>>;
   validity?: InputMaybe<Array<CredentialValidity>>;
 };
 
@@ -2576,6 +2608,7 @@ export type QueryMyCredentialsArgs = {
   sortDirection?: InputMaybe<SortDirection>;
   tags?: InputMaybe<Array<Scalars['String']['input']>>;
   type?: InputMaybe<CredentialType>;
+  types?: InputMaybe<Array<CredentialType>>;
   validity?: InputMaybe<Array<CredentialValidity>>;
 };
 
@@ -3782,6 +3815,7 @@ export type CredentialsQueryVariables = Exact<{
   search?: InputMaybe<Scalars['String']['input']>;
   searchFields?: InputMaybe<Array<CredentialSearchField> | CredentialSearchField>;
   type?: InputMaybe<CredentialType>;
+  types?: InputMaybe<Array<CredentialType> | CredentialType>;
   tags?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
   validity?: InputMaybe<Array<CredentialValidity> | CredentialValidity>;
   sortBy?: InputMaybe<CredentialSortField>;
@@ -3792,6 +3826,13 @@ export type CredentialsQueryVariables = Exact<{
 
 
 export type CredentialsQuery = { credentials: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, rev: number, operationId: string, name: string, type: CredentialType, legacyType?: string | null, username: string, realm: string, password: string, key: string, passphrase: string, certificate: string, privateKey: string, ticket: string, service: string, expiresAt?: string | null, hash: string, hex: string, algorithm: string, validity: CredentialValidity, tags: Array<string>, viewerCanModerateComments: boolean, backlinkCount: number, createdAt: string, updatedAt: string, keys: Array<{ name: string, content: string }>, properties: Array<{ name: string, value: string }>, comments: Array<{ id: string, text: string, createdAt: string, updatedAt: string, author?: { id: string, username: string } | null }>, createdBy?: { id: string, username: string } | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+
+export type CredentialUsageQueryVariables = Exact<{
+  id: Scalars['ID']['input'];
+}>;
+
+
+export type CredentialUsageQuery = { credential: { id: string, usage: { builds: number, tasks: number, targets: Array<{ id: string, name: string, moduleName: string, kind: string, buildId: string, accept: Array<CredentialType>, login?: { accepted: boolean, at: string } | null }>, endpoints: Array<{ id: string, name: string, moduleName: string, kind: string, accept: Array<CredentialType> }> } } };
 
 export type CredentialTagsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -3819,6 +3860,7 @@ export type MyCredentialsQueryVariables = Exact<{
   search?: InputMaybe<Scalars['String']['input']>;
   searchFields?: InputMaybe<Array<CredentialSearchField> | CredentialSearchField>;
   type?: InputMaybe<CredentialType>;
+  types?: InputMaybe<Array<CredentialType> | CredentialType>;
   tags?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
   validity?: InputMaybe<Array<CredentialValidity> | CredentialValidity>;
   sortBy?: InputMaybe<CredentialSortField>;
@@ -7612,12 +7654,13 @@ fragment CredentialFields on Credential {
   updatedAt
 }`) as unknown as TypedDocumentString<CredentialQuery, CredentialQueryVariables>;
 export const CredentialsDocument = new TypedDocumentString(`
-    query Credentials($operationId: ID!, $search: String, $searchFields: [CredentialSearchField!], $type: CredentialType, $tags: [String!], $validity: [CredentialValidity!], $sortBy: CredentialSortField, $sortDirection: SortDirection, $first: Int, $after: String) {
+    query Credentials($operationId: ID!, $search: String, $searchFields: [CredentialSearchField!], $type: CredentialType, $types: [CredentialType!], $tags: [String!], $validity: [CredentialValidity!], $sortBy: CredentialSortField, $sortDirection: SortDirection, $first: Int, $after: String) {
   credentials(
     operationId: $operationId
     search: $search
     searchFields: $searchFields
     type: $type
+    types: $types
     tags: $tags
     validity: $validity
     sortBy: $sortBy
@@ -7690,6 +7733,36 @@ fragment CredentialFields on Credential {
   createdAt
   updatedAt
 }`) as unknown as TypedDocumentString<CredentialsQuery, CredentialsQueryVariables>;
+export const CredentialUsageDocument = new TypedDocumentString(`
+    query CredentialUsage($id: ID!) {
+  credential(id: $id) {
+    id
+    usage {
+      targets {
+        id
+        name
+        moduleName
+        kind
+        buildId
+        accept
+        login {
+          accepted
+          at
+        }
+      }
+      endpoints {
+        id
+        name
+        moduleName
+        kind
+        accept
+      }
+      builds
+      tasks
+    }
+  }
+}
+    `) as unknown as TypedDocumentString<CredentialUsageQuery, CredentialUsageQueryVariables>;
 export const CredentialTagsDocument = new TypedDocumentString(`
     query CredentialTags($operationId: ID!) {
   credentialTags(operationId: $operationId)
@@ -7732,12 +7805,13 @@ export const CredentialBacklinksDocument = new TypedDocumentString(`
   }
 }`) as unknown as TypedDocumentString<CredentialBacklinksQuery, CredentialBacklinksQueryVariables>;
 export const MyCredentialsDocument = new TypedDocumentString(`
-    query MyCredentials($operationIds: [ID!], $search: String, $searchFields: [CredentialSearchField!], $type: CredentialType, $tags: [String!], $validity: [CredentialValidity!], $sortBy: CredentialSortField, $sortDirection: SortDirection, $first: Int, $after: String) {
+    query MyCredentials($operationIds: [ID!], $search: String, $searchFields: [CredentialSearchField!], $type: CredentialType, $types: [CredentialType!], $tags: [String!], $validity: [CredentialValidity!], $sortBy: CredentialSortField, $sortDirection: SortDirection, $first: Int, $after: String) {
   myCredentials(
     operationIds: $operationIds
     search: $search
     searchFields: $searchFields
     type: $type
+    types: $types
     tags: $tags
     validity: $validity
     sortBy: $sortBy

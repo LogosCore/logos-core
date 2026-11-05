@@ -407,6 +407,14 @@ type CredentialEdge struct {
 	Cursor string             `json:"cursor"`
 }
 
+type CredentialEndpointUse struct {
+	ID         string                  `json:"id"`
+	Name       string                  `json:"name"`
+	ModuleName string                  `json:"moduleName"`
+	Kind       string                  `json:"kind"`
+	Accept     []models.CredentialType `json:"accept"`
+}
+
 type CredentialEvent struct {
 	Action       EventAction        `json:"action"`
 	CredentialID string             `json:"credentialId"`
@@ -427,9 +435,24 @@ type CredentialKeyInput struct {
 	Content string `json:"content"`
 }
 
+type CredentialLogin struct {
+	Accepted bool   `json:"accepted"`
+	At       string `json:"at"`
+}
+
 type CredentialPropertyInput struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+
+type CredentialTargetUse struct {
+	ID         string                  `json:"id"`
+	Name       string                  `json:"name"`
+	ModuleName string                  `json:"moduleName"`
+	Kind       string                  `json:"kind"`
+	BuildID    string                  `json:"buildId"`
+	Accept     []models.CredentialType `json:"accept"`
+	Login      *CredentialLogin        `json:"login,omitempty"`
 }
 
 type CredentialTypeSpec struct {
@@ -437,6 +460,13 @@ type CredentialTypeSpec struct {
 	Label       string                 `json:"label"`
 	Description string                 `json:"description"`
 	Fields      []*CredentialFieldSpec `json:"fields"`
+}
+
+type CredentialUsage struct {
+	Targets   []*CredentialTargetUse   `json:"targets"`
+	Endpoints []*CredentialEndpointUse `json:"endpoints"`
+	Builds    int                      `json:"builds"`
+	Tasks     int                      `json:"tasks"`
 }
 
 type FactoryKind struct {

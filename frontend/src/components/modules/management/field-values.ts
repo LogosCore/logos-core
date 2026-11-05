@@ -43,6 +43,10 @@ export type FieldType =
   | "enum_list"
   | "file"
   | "stream"
+  // A credential's id, a credential_list's ids in order: the operation's
+  // credentials, of the types accept names.
+  | "credential"
+  | "credential_list"
 
 // ---------------------------------------------------------------------------
 // Bytes
@@ -181,6 +185,9 @@ export type Draft =
   // is its name. None picked: uploaded with curl, and core names it by the
   // path (name: one typed on a command line).
   | { kind: "stream"; file: File | null; name: string }
+  // credential (multiple false) and credential_list: the picked credentials'
+  // ids, in order; none means not set.
+  | { kind: "credentials"; ids: string[]; multiple: boolean }
 
 /** One row of a string_map control. */
 export interface MapEntry {
@@ -235,6 +242,14 @@ export function initialDraft(
   if (type === "stream") {
     return { kind: "stream", file: null, name: typeof value === "string" ? value : "" }
   }
+  if (type === "credential" || type === "credential_list") {
+    const ids = Array.isArray(value)
+      ? value.filter((v): v is string => typeof v === "string" && v !== "")
+      : typeof value === "string" && value !== ""
+        ? [value]
+        : []
+    return { kind: "credentials", ids, multiple: type === "credential_list" }
+  }
   if (type === "datetime") {
     return { kind: "text", text: typeof value === "string" ? rfc3339ToLocalInput(value) : "" }
   }
@@ -282,6 +297,9 @@ export function parseDraft(field: FieldDef, draft: Draft): ParseResult {
     }
     case "file":
       return { ok: true, value: draft.id }
+    case "credentials":
+      if (draft.ids.length === 0) return { ok: true, value: null }
+      return { ok: true, value: draft.multiple ? [...draft.ids] : draft.ids[0] }
     case "stream": {
       const name = draft.file?.name ?? draft.name.trim()
       return { ok: true, value: name === "" ? null : name }
@@ -429,6 +447,14 @@ export function validateValue(
     }
     case "file":
       return typeof value === "string" && value !== "" ? null : "Must be a file"
+    case "credential":
+      return typeof value === "string" && value !== "" ? null : "Must be a credential"
+    case "credential_list": {
+      if (!Array.isArray(value) || value.some((v) => typeof v !== "string" || v === "")) return "Must be credentials"
+      if (field.maxItems != null && value.length > field.maxItems) return `At most ${field.maxItems}`
+      if (new Set(value).size !== value.length) return "A credential is picked twice"
+      return null
+    }
     case "stream":
       if (typeof value !== "string" || value === "") return "Must be a file"
       return /[/\\\0]/.test(value) || new TextEncoder().encode(value).length > 255 ? "A file name, without a path" : null

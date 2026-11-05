@@ -53,8 +53,12 @@ type ModuleEnumOption {
   description: String
 }
 
-# A typed field: a property or an action parameter.
+# A typed field: a property, an action parameter, a connection or build
+# schema's field.
 # type: string | int | number | bool | enum | duration | bytes | url | secret | string_list | string_map
+#   | datetime | enum_list | file | stream | credential | credential_list
+# A credential field's value is a credential's id (a credential_list's, a
+# list of ids, in order) from the operation's credentials.
 type ModuleField {
   key: String!
   type: String!
@@ -77,11 +81,13 @@ type ModuleField {
   maxLength: Int
   # string_map: what every key must match.
   keyPattern: String
-  # string_list / string_map / enum_list: most items or entries.
+  # string_list / string_map / enum_list / credential_list: most items or
+  # entries.
   maxItems: Int
   options: [ModuleEnumOption!]
   # file: the extensions (".ico") or media types ("image/*") a file may have;
-  # any when empty.
+  # credential / credential_list: the credential types it takes (KEY,
+  # PLAINTEXT...). Any when empty.
   accept: [String!]
   # file: the largest file in bytes; null when there is no limit.
   maxSize: JSON

@@ -148,7 +148,7 @@ func handleFindCredentials(ctx context.Context, s *Server, args findCredentialsA
 	}
 
 	conn, err := s.deps.Credentials.Credentials(ctx, opID.String(), optionalString(args.Search),
-		nil, credType, args.Tags, validity, nil, nil, &limit, optionalString(args.Cursor), nil, nil)
+		nil, credType, nil, args.Tags, validity, nil, nil, &limit, optionalString(args.Cursor), nil, nil)
 	if err != nil {
 		return toolResult{}, fmt.Errorf("failed to search credentials: %w", err)
 	}

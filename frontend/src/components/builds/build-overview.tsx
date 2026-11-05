@@ -1,3 +1,4 @@
+import { CredentialValueNames } from "@/components/findings/credential-field-control"
 import { useMemo, type ReactNode } from "react"
 import { CopyIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -292,6 +293,7 @@ function valueText(r: ValueRow, fileNames: ReadonlyMap<string, string>): ReactNo
   if (r.value === undefined) return "not set"
   const f: FieldDef | null = r.field
   if (f?.type === "file" && typeof r.value === "string") return fileNames.get(r.value) ?? r.value
+  if (f?.type === "credential" || f?.type === "credential_list") return <CredentialValueNames value={r.value} />
   return formatValue(f?.type ?? "", r.value, f?.unit)
 }
 

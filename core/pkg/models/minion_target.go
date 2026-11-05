@@ -110,6 +110,13 @@ func TargetRetryAfter(n int) time.Duration {
 }
 
 // MinionTarget is one target of a bind connection of a build.
+// TargetLogin is how a credential last fared logging in to a target:
+// Accepted when the target took it, else refused; At when.
+type TargetLogin struct {
+	Accepted bool      `bson:"accepted" json:"accepted"`
+	At       time.Time `bson:"at" json:"at"`
+}
+
 type MinionTarget struct {
 	field.DefaultField `bson:",inline"`
 
@@ -123,6 +130,12 @@ type MinionTarget struct {
 	Kind       string `bson:"kind" json:"kind"`
 	// Values are the operator's values for the channel's target fields.
 	Values JSONMap `bson:"values" json:"values"`
+	// CredentialIDs are the credentials Values name (credential fields):
+	// what a credential's usage finds the target by.
+	CredentialIDs []uuid.UUID `bson:"credential_ids,omitempty" json:"credential_ids,omitempty"`
+	// Logins are how its credentials last fared logging in to it, by
+	// credential id: what the channel answered of each it tried.
+	Logins map[string]TargetLogin `bson:"logins,omitempty" json:"logins,omitempty"`
 	// Name is what the target is shown as: its URL, or host.
 	Name string `bson:"name" json:"name"`
 	// Retries says whether an unreachable target is called again on its

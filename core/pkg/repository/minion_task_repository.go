@@ -67,6 +67,8 @@ type MinionTaskCursor struct {
 // (models.MinionTask) and their output parts.
 type IMinionTaskRepository interface {
 	Insert(ctx context.Context, t *models.MinionTask) error
+	// CountByCredentialID counts the tasks that carried a credential.
+	CountByCredentialID(ctx context.Context, credentialID uuid.UUID) (int64, error)
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
 	// Document is a task's document as stored, in its key order: for
 	// debugging. IsNotFound for an unknown task.
@@ -204,6 +206,7 @@ func NewMinionTaskRepository(db database.Database) IMinionTaskRepository {
 		// A transfer's task, and the tasks of a task file.
 		{Key: []string{"session_id", "upload.xfer"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"upload.file_id"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
+		{Key: []string{"credential_ids"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 		{Key: []string{"session_id", "stream.xfer"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	db.EnsureIndexes(context.Background(), minionTaskPartCollection, []opts.IndexModel{
@@ -222,6 +225,10 @@ func (r *minionTaskRepository) Insert(ctx context.Context, t *models.MinionTask)
 	t.Rev = 1
 	_, err := r.tasks.InsertOne(ctx, t)
 	return err
+}
+
+func (r *minionTaskRepository) CountByCredentialID(ctx context.Context, credentialID uuid.UUID) (int64, error) {
+	return r.tasks.Count(ctx, bson.M{"credential_ids": credentialID})
 }
 
 func (r *minionTaskRepository) FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error) {

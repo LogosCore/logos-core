@@ -16,6 +16,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -58,8 +59,23 @@ import (
 // *channellink.Hub.
 type Linker interface {
 	Call(ctx context.Context, module string, c channellink.Call) (protocol.LinkFrame, error)
-	Open(ctx context.Context, module string, values map[string]any, under [16]byte, keys *protocol.LinkKeys,
-		deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error)
+	Open(ctx context.Context, module string, values map[string]any, creds map[string]protocol.Credential, under [16]byte,
+		keys *protocol.LinkKeys, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error)
+}
+
+// Credentials resolves the credentials a call's values name, and learns
+// from how a channel's logins with them fared: one that logged in works.
+// Satisfied by *credentialrefs.Resolver.
+type Credentials interface {
+	ResolveFields(ctx context.Context, operationID uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]protocol.Credential, error)
+	LoginWorked(ctx context.Context, operationID, credentialID uuid.UUID) error
+}
+
+// WithCredentials has calls and opens carry the credentials their values
+// name. Without it a target that names one is refused: its tests.
+func (s *Service) WithCredentials(c Credentials) *Service {
+	s.creds = c
+	return s
 }
 
 // ChannelSchemas are the channels' connection schemas, by module name: nil
@@ -85,6 +101,9 @@ type callKind struct {
 	// deadline is how long a call may take (callDeadline), open how long
 	// an open may (openWithin).
 	deadline, open time.Duration
+	// fields are the kind's endpoint fields and its targets' fields: what
+	// a call's values are by, the credentials they name among them.
+	fields []protocol.FieldSpec
 }
 
 // kindOf is what t's channel's connection schema says of t's kind.
@@ -99,8 +118,70 @@ func (s *Service) kindOf(ctx context.Context, t *models.MinionTarget) (callKind,
 	}
 	if cs != nil {
 		k.agentless, k.deadline, k.open = cs.IsAgentless(t.Kind), callDeadline(cs.CallLimit(t.Kind)), openWithin(cs.OpenLimit(t.Kind))
+		k.fields = append(slices.Clone(cs.Kinds[t.Kind].Fields), cs.TargetFields(t.Kind)...)
 	}
 	return k, nil
+}
+
+// credentialsOf are the credentials a call's or an open's values name, as
+// the channel gets them. A credential gone, or not of a type its field takes
+// now (credentialrefs.Unusable), refuses the target until it is edited:
+// retrying changes nothing. Any other error is core's own.
+func (s *Service) credentialsOf(ctx context.Context, t *models.MinionTarget, kind callKind, values map[string]any) (map[string]protocol.Credential, error) {
+	if len(credentialrefs.IDs(kind.fields, values)) == 0 {
+		return nil, nil
+	}
+	if s.creds == nil {
+		return nil, &credentialrefs.Unusable{Why: "core resolves no credentials here"}
+	}
+	return s.creds.ResolveFields(ctx, t.OperationID, kind.fields, values)
+}
+
+// refusedCredentials is the state detail of a target whose credentials
+// cannot go to its channel; "" for an error that is core's own.
+func refusedCredentials(err error) string {
+	var u *credentialrefs.Unusable
+	if errors.As(err, &u) {
+		return "credentials: " + u.Why
+	}
+	return ""
+}
+
+// noteLogins records how the credentials a channel tried fared at t (only
+// those it was given), and marks one that logged in VALID: it works. What a
+// channel says of a credential it was not given is no news.
+func (s *Service) noteLogins(ctx context.Context, t *models.MinionTarget, given map[string]protocol.Credential, logins []protocol.LinkLogin) {
+	if len(logins) == 0 {
+		return
+	}
+	now := s.now()
+	noted := map[string]models.TargetLogin{}
+	for _, l := range logins {
+		c, ok := given[l.Credential]
+		id, err := uuid.Parse(l.Credential)
+		if !ok || err != nil {
+			continue
+		}
+		noted[l.Credential] = models.TargetLogin{Accepted: l.Accepted, At: now}
+		s.logger.Info("a target's login", zap.String("target_id", t.TargetID.String()), zap.String("credential", c.Name),
+			zap.Bool("accepted", l.Accepted))
+		if l.Accepted && s.creds != nil {
+			if err := s.creds.LoginWorked(ctx, t.OperationID, id); err != nil {
+				s.logger.Warn("mark a credential that logged in valid", zap.String("credential_id", l.Credential), zap.Error(err))
+			}
+		}
+	}
+	if len(noted) == 0 {
+		return
+	}
+	if err := s.targets.NoteLogins(ctx, t.TargetID, noted); err != nil {
+		s.logger.Warn("note a target's logins", zap.String("target_id", t.TargetID.String()), zap.Error(err))
+		return
+	}
+	if t.Logins == nil {
+		t.Logins = map[string]models.TargetLogin{}
+	}
+	maps.Copy(t.Logins, noted)
 }
 
 const (
@@ -658,8 +739,16 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	if err != nil {
 		return nil, "", false, err
 	}
+	values := callValues(conn, t)
+	creds, err := s.credentialsOf(ctx, t, kind, values)
+	if why := refusedCredentials(err); why != "" {
+		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused, why))
+	}
+	if err != nil {
+		return nil, "", false, err
+	}
 	t.Calls++
-	call := channellink.Call{Values: callValues(conn, t), ID: id, Data: sealed, Deadline: kind.deadline}
+	call := channellink.Call{Values: values, Credentials: creds, ID: id, Data: sealed, Deadline: kind.deadline}
 	// A channel that acts as the minion opens the message and seals the
 	// answer itself: it gets the id's keys with every call.
 	if kind.agentless {
@@ -669,6 +758,9 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	// would leave the tasks it ran unacknowledged, and the next call would
 	// run them again.
 	a, err := s.link.Call(context.WithoutCancel(ctx), t.ModuleName, call)
+	if err == nil {
+		s.noteLogins(ctx, t, creds, a.Logins)
+	}
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
 		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))

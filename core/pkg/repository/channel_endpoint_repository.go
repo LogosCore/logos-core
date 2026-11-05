@@ -57,6 +57,9 @@ type IChannelEndpointRepository interface {
 	Update(ctx context.Context, ep *models.ChannelEndpoint) error
 	// Delete removes one endpoint; false when there was none.
 	Delete(ctx context.Context, endpointID uuid.UUID) (bool, error)
+	// FindByCredentialID returns the endpoints whose values name a
+	// credential, by name, at most limit.
+	FindByCredentialID(ctx context.Context, credentialID uuid.UUID, limit int64) ([]models.ChannelEndpoint, error)
 	// DeleteByOperationID removes every endpoint of an operation (operation
 	// delete cascade).
 	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
@@ -94,6 +97,7 @@ func NewChannelEndpointRepository(db database.Database) IChannelEndpointReposito
 		// The list's order: by name, case aside, _id breaking ties.
 		{Key: []string{"operation_id", "name", "_id"}, IndexOptions: new(options.IndexOptions).SetCollation(caseInsensitiveSortCollation)},
 		uniqueIDIndex("endpoint_id"),
+		{Key: []string{"credential_ids"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	return &channelEndpointRepository{coll: coll}
 }
@@ -203,10 +207,19 @@ func channelEndpointUpdate(ep *models.ChannelEndpoint) bson.M {
 		"updateAt":       ep.UpdatedAt,
 	}
 	u := bson.M{"$set": set, "$inc": bson.M{"revision": int64(1)}}
+	unset := bson.M{}
 	if ep.Description != "" {
 		set["description"] = ep.Description
 	} else {
-		u["$unset"] = bson.M{"description": ""}
+		unset["description"] = ""
+	}
+	if len(ep.CredentialIDs) > 0 {
+		set["credential_ids"] = ep.CredentialIDs
+	} else {
+		unset["credential_ids"] = ""
+	}
+	if len(unset) > 0 {
+		u["$unset"] = unset
 	}
 	return u
 }
@@ -228,6 +241,12 @@ func (r *channelEndpointRepository) Update(ctx context.Context, ep *models.Chann
 	default:
 		return err
 	}
+}
+
+func (r *channelEndpointRepository) FindByCredentialID(ctx context.Context, credentialID uuid.UUID, limit int64) ([]models.ChannelEndpoint, error) {
+	var out []models.ChannelEndpoint
+	err := r.coll.Find(ctx, bson.M{"credential_ids": credentialID}).Sort("name").Limit(limit).All(&out)
+	return out, err
 }
 
 func (r *channelEndpointRepository) Delete(ctx context.Context, endpointID uuid.UUID) (bool, error) {

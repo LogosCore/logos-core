@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
@@ -57,14 +58,29 @@ type Caller interface {
 }
 
 // Service manages targets.
+// Credentials checks the credentials a target's values name (credential
+// fields): each one of the operation's, of a type its field takes.
+// Satisfied by *credentialrefs.Resolver.
+type Credentials interface {
+	Check(ctx context.Context, operationID uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]string, error)
+}
+
 type Service struct {
 	targets  repository.IMinionTargetRepository
 	sessions repository.IMinionSessionRepository
 	builds   Builds
 	schemas  Schemas
 	caller   Caller
+	creds    Credentials
 	bus      eventbus.IEventBus
 	now      func() time.Time
+}
+
+// WithCredentials has the service check the credentials targets name. A
+// service without it takes credential fields unchecked: its tests.
+func (s *Service) WithCredentials(c Credentials) *Service {
+	s.creds = c
+	return s
 }
 
 // NewService is the targets service.
@@ -166,7 +182,7 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 			return nil, err
 		}
 	}
-	values, err := s.check(ctx, module, kind, in.Values)
+	values, credentialIDs, err := s.check(ctx, b.OperationID, module, kind, in.Values)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +193,7 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 	now := s.now()
 	t := &models.MinionTarget{
 		OperationID: b.OperationID, BuildID: b.BuildID, Conn: conn, ModuleName: module, Kind: kind, Policy: policy,
-		Values: values, Name: targetName(values), Retries: in.Retries, SessionID: session,
+		Values: values, CredentialIDs: credentialIDs, Name: targetName(values), Retries: in.Retries, SessionID: session,
 		State: models.TargetNew, StateAt: now, CreatedBy: in.Actor, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.targets.Insert(ctx, t); err != nil {
@@ -226,7 +242,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (*models.M
 	if err != nil {
 		return nil, err
 	}
-	values, err := s.check(ctx, t.ModuleName, t.Kind, in.Values)
+	values, credentialIDs, err := s.check(ctx, t.OperationID, t.ModuleName, t.Kind, in.Values)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +250,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (*models.M
 	if err != nil {
 		return nil, err
 	}
-	if err := s.targets.SetValues(ctx, id, values, targetName(values), in.Retries, policy, s.now()); err != nil {
+	if err := s.targets.SetValues(ctx, id, values, credentialIDs, targetName(values), in.Retries, policy, s.now()); err != nil {
 		return nil, fmt.Errorf("store the target: %w", err)
 	}
 	s.publish(t, false)
@@ -352,7 +368,19 @@ func (s *Service) Problems(ctx context.Context, t *models.MinionTarget) (map[str
 			values[k] = v
 		}
 	}
-	return protocol.ValidateTargetValues(*schema, t.Kind, values), nil
+	if problems := protocol.ValidateTargetValues(*schema, t.Kind, values); len(problems) > 0 {
+		return problems, nil
+	}
+	// A credential deleted, or converted to a type the field does not take:
+	// the call would carry what the channel cannot use.
+	return s.credentialProblems(ctx, t.OperationID, schema.TargetFields(t.Kind), values)
+}
+
+func (s *Service) credentialProblems(ctx context.Context, op uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]string, error) {
+	if s.creds == nil {
+		return nil, nil
+	}
+	return s.creds.Check(ctx, op, fields, values)
 }
 
 // ProblemsText is problems as one line, for a target's state detail.
@@ -368,18 +396,19 @@ func ProblemsText(problems map[string]string) string {
 	return strings.Join(parts, "; ")
 }
 
-// check validates values against the channel's target fields for kind and
-// returns them over the fields' defaults.
-func (s *Service) check(ctx context.Context, module, kind string, values map[string]any) (models.JSONMap, error) {
+// check validates values against the channel's target fields for kind (the
+// credentials they name: operation op's, of the types their fields take)
+// and returns them over the fields' defaults, with the credentials' ids.
+func (s *Service) check(ctx context.Context, op uuid.UUID, module, kind string, values map[string]any) (models.JSONMap, []uuid.UUID, error) {
 	if kind != protocol.KindBindCall && kind != protocol.KindBindPersistent {
-		return nil, invalid("core does not reach %s minions yet", kind)
+		return nil, nil, invalid("core does not reach %s minions yet", kind)
 	}
 	schema, err := s.schemas.Schema(ctx, module)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if schema == nil || !hasKind(schema, kind) {
-		return nil, invalid("no %s channel declares %s connections now", module, kind)
+		return nil, nil, invalid("no %s channel declares %s connections now", module, kind)
 	}
 	clean := map[string]any{}
 	for k, v := range values {
@@ -387,10 +416,16 @@ func (s *Service) check(ctx context.Context, module, kind string, values map[str
 			clean[k] = v
 		}
 	}
-	if problems := protocol.ValidateTargetValues(*schema, kind, clean); len(problems) > 0 {
-		return nil, &ValidationError{Message: "the target's values do not fit the channel's target fields", Problems: problems}
+	problems := protocol.ValidateTargetValues(*schema, kind, clean)
+	if len(problems) == 0 {
+		if problems, err = s.credentialProblems(ctx, op, schema.TargetFields(kind), clean); err != nil {
+			return nil, nil, err
+		}
 	}
-	return models.JSONMap(protocol.ResolveTargetValues(*schema, kind, clean)), nil
+	if len(problems) > 0 {
+		return nil, nil, &ValidationError{Message: "the target's values do not fit the channel's target fields", Problems: problems}
+	}
+	return models.JSONMap(protocol.ResolveTargetValues(*schema, kind, clean)), credentialrefs.IDs(schema.TargetFields(kind), clean), nil
 }
 
 // empty reports a value an operator left blank: its default applies.

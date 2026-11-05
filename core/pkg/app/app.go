@@ -17,6 +17,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/channelendpoints"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
 	"github.com/logoscore/logos-core/core/pkg/controller"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/database"
 	"github.com/logoscore/logos-core/core/pkg/environment"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
@@ -170,7 +171,10 @@ type App struct {
 	// the calls' scheduler.
 	links         *channellink.Hub
 	minionTargets *miniontargets.Service
-	stopTargets   context.CancelFunc
+	// credentialRefs checks and resolves the credentials modules' values
+	// name.
+	credentialRefs *credentialrefs.Resolver
+	stopTargets    context.CancelFunc
 
 	// Future integration points:
 	// sseManager       sse.ISSEManager
@@ -235,11 +239,15 @@ func NewApp() (*App, error) {
 
 	// Minion builds: offered to factories over the same RPC client; their
 	// progress and results come back on logos.core.rpc.
-	endpoints := channelendpoints.NewService(repos.ChannelEndpoint, repos.ModuleRegistry)
+	// Credentials a module's values name (credential fields): checked when
+	// saved, given to the module when used.
+	credentialRefs := credentialrefs.New(repos.Credential, bus)
+	endpoints := channelendpoints.NewService(repos.ChannelEndpoint, repos.ModuleRegistry).WithCredentials(credentialRefs)
 	buildSvc, err := newBuildService(ctx, e, l, repos, endpoints, rpcClient)
 	if err != nil {
 		return nil, err
 	}
+	buildSvc.WithCredentials(credentialRefs)
 	minionFiles, err := newMinionFileService(ctx, e, l, repos, bus)
 	if err != nil {
 		return nil, err
@@ -249,7 +257,7 @@ func NewApp() (*App, error) {
 		minionstreams.DefaultConfig(), l)
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser).
-		WithFeedback(repos.MinionFeedback)
+		WithFeedback(repos.MinionFeedback).WithCredentials(credentialRefs)
 	// A downloader or an uploader coming wakes a stream the minion holds,
 	// over its persistent connection.
 	minionStreams.WithWaker(minionSync)
@@ -257,7 +265,10 @@ func NewApp() (*App, error) {
 	// links.
 	links := channellink.New(l)
 	minionSync.WithTargets(repos.MinionTarget, links)
-	minionTargets := miniontargets.NewService(repos.MinionTarget, repos.MinionSession, repos.Build, endpoints, minionSync, bus)
+	minionTargets := miniontargets.NewService(repos.MinionTarget, repos.MinionSession, repos.Build, endpoints, minionSync, bus).
+		WithCredentials(credentialRefs)
+	credentialRefs.WithUsage(credentialrefs.UsageRepos{Targets: repos.MinionTarget, Endpoints: repos.ChannelEndpoint,
+		Builds: repos.Build, Tasks: repos.MinionTask, Schemas: endpoints})
 	minionSync.WithTargetChecker(minionTargets, miniontargets.ProblemsText)
 	minionSync.WithChannelSchemas(endpoints)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
@@ -320,6 +331,7 @@ func NewApp() (*App, error) {
 		minionSync:      minionSync,
 		links:           links,
 		minionTargets:   minionTargets,
+		credentialRefs:  credentialRefs,
 	}, nil
 }
 

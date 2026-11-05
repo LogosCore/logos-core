@@ -43,14 +43,20 @@ type fakeAgentless struct {
 	spoken  sync.WaitGroup
 	// refused: a socket the channel opened late was refused (ForTarget).
 	refused bool
+	// creds are the credentials each call carried; logins what the
+	// channel answers of them.
+	creds  []map[string]protocol.Credential
+	logins []protocol.LinkLogin
 }
 
 func (f *fakeAgentless) Call(_ context.Context, _ string, c channellink.Call) (protocol.LinkFrame, error) {
 	f.mu.Lock()
 	f.keys = append(f.keys, c.Keys)
+	f.creds = append(f.creds, c.Credentials)
+	logins := f.logins
 	f.mu.Unlock()
 	if f.fail != nil {
-		return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: f.fail}, nil
+		return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: f.fail, Logins: logins}, nil
 	}
 	if c.Keys == nil {
 		f.t.Error("a call to an agentless kind without its id's keys")
@@ -78,10 +84,11 @@ func (f *fakeAgentless) Call(_ context.Context, _ string, c channellink.Call) (p
 	max := uint64(4)
 	out = append(out, protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &max})
 	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, ID: c.ID[:],
-		Data: sealedMinionMessage(f.t, c.Keys.Material, c.ID, msg.ID, out...), Peer: "203.0.113.9"}, nil
+		Data: sealedMinionMessage(f.t, c.Keys.Material, c.ID, msg.ID, out...), Peer: "203.0.113.9", Logins: logins}, nil
 }
 
-func (f *fakeAgentless) Open(_ context.Context, _ string, _ map[string]any, under [16]byte, keys *protocol.LinkKeys, _ time.Duration,
+func (f *fakeAgentless) Open(_ context.Context, _ string, _ map[string]any, _ map[string]protocol.Credential, under [16]byte,
+	keys *protocol.LinkKeys, _ time.Duration,
 	sent func(string, uint64)) (protocol.LinkFrame, error) {
 	f.mu.Lock()
 	f.unders = append(f.unders, uuid.UUID(under))

@@ -161,7 +161,7 @@ func (a *App) buildResolvers() *resolvers {
 	// cross-domain join lives on wikiDoc (where the wiki repo lives) so the
 	// dependency arrow points from credentials → wiki, not the other way.
 	credential := resolver.NewCredentialResolver(
-		a.repos.Credential, a.repos.Operation, a.repos.User, wikiDoc, a.repos.Task, a.eventBus,
+		a.repos.Credential, a.repos.Operation, a.repos.User, wikiDoc, a.repos.Task, a.eventBus, a.credentialRefs,
 	)
 
 	// hash depends on credential because MarkHashCracked may need to create a
@@ -224,7 +224,8 @@ func (a *App) buildResolvers() *resolvers {
 		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus,
 			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
-			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback),
+			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
+			a.credentialRefs),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
 }

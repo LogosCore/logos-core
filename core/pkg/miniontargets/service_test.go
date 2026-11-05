@@ -39,11 +39,11 @@ func (f *fakeTargets) FindByTargetID(_ context.Context, id uuid.UUID) (*models.M
 	return &t, nil
 }
 
-func (f *fakeTargets) SetValues(_ context.Context, id uuid.UUID, v models.JSONMap, name string, retries bool, policy string, _ time.Time) error {
+func (f *fakeTargets) SetValues(_ context.Context, id uuid.UUID, v models.JSONMap, creds []uuid.UUID, name string, retries bool, policy string, _ time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.rows[id]
-	t.Values, t.Name, t.Retries = v, name, retries
+	t.Values, t.CredentialIDs, t.Name, t.Retries = v, creds, name, retries
 	if policy != "" {
 		t.Policy = policy
 	}
@@ -294,5 +294,58 @@ func TestProblems(t *testing.T) {
 	}
 	if got := ProblemsText(map[string]string{"": "whole", "b": "two", "a": "one"}); got != "whole; a: one; b: two" {
 		t.Fatalf("text %q", got)
+	}
+}
+
+// fakeCreds says one credential is the operation's, of type KEY.
+type fakeCreds struct{ ok uuid.UUID }
+
+func (f fakeCreds) Check(_ context.Context, _ uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]string, error) {
+	for _, field := range fields {
+		for _, id := range protocol.FieldCredentialIDs(field, values[field.Key]) {
+			if id != f.ok.String() {
+				return map[string]string{field.Key: "credential " + id + " is not one of the operation's"}, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
+// A target's credentials are checked when it is saved, and before each call
+// (Problems): one deleted since leaves it needing an edit.
+func TestTargetCredentials(t *testing.T) {
+	s, targets, _, b, _ := setup()
+	key := uuid.New()
+	schema := s.schemas.(schemas)["dumbo"]
+	k := schema.Kinds[protocol.KindBindCall]
+	k.Target = append(k.Target, protocol.FieldSpec{Key: "logins", Type: protocol.FieldCredentialList, Label: "Logins"})
+	schema.Kinds[protocol.KindBindCall] = k
+	s.WithCredentials(fakeCreds{ok: key})
+	ctx := context.Background()
+
+	var invalid *ValidationError
+	other := uuid.New().String()
+	if _, err := s.Add(ctx, b, 2, nil, Input{Values: map[string]any{"url": "https://h/a.php", "logins": []any{other}}}); !errors.As(err, &invalid) ||
+		invalid.Problems["logins"] == "" {
+		t.Fatalf("another operation's credential: %v", err)
+	}
+	tg, err := s.Add(ctx, b, 2, nil, Input{Values: map[string]any{"url": "https://h/a.php", "logins": []any{key.String()}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row := targets.rows[tg.TargetID]; len(row.CredentialIDs) != 1 || row.CredentialIDs[0] != key {
+		t.Fatalf("credential ids %v", row.CredentialIDs)
+	}
+	if _, err := s.Update(ctx, tg.TargetID, Input{Values: map[string]any{"url": "https://h/a.php"}}); err != nil {
+		t.Fatal(err)
+	}
+	if row := targets.rows[tg.TargetID]; len(row.CredentialIDs) != 0 {
+		t.Fatalf("credential ids after none: %v", row.CredentialIDs)
+	}
+
+	row := targets.rows[tg.TargetID]
+	row.Values = models.JSONMap{"url": "https://h/a.php", "logins": []any{other}}
+	if p, err := s.Problems(ctx, &row); err != nil || p["logins"] == "" {
+		t.Fatalf("a credential gone since: %v %v", p, err)
 	}
 }

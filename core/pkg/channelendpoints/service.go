@@ -27,6 +27,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -126,11 +127,43 @@ type Kind struct {
 	IconLight  string // the icon on light themes; empty when Icon serves both
 }
 
+// Credentials checks the credentials an endpoint's values name (credential
+// fields): each one of the operation's, of a type its field takes.
+// Satisfied by *credentialrefs.Resolver.
+type Credentials interface {
+	Check(ctx context.Context, operationID uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]string, error)
+}
+
 // Service validates and stores channel endpoints.
 type Service struct {
 	repo     repository.IChannelEndpointRepository
 	registry Registry
+	creds    Credentials
 	now      func() time.Time
+}
+
+// WithCredentials has the service check the credentials endpoints name. A
+// service without it takes credential fields unchecked: its tests.
+func (s *Service) WithCredentials(c Credentials) *Service {
+	s.creds = c
+	return s
+}
+
+// checkCredentials checks the credentials values name, as checkValues
+// reports a problem.
+func (s *Service) checkCredentials(ctx context.Context, op uuid.UUID, schema protocol.ConnectionSchema, kind string, values models.JSONMap) ([]uuid.UUID, error) {
+	fields := schema.Kinds[kind].Fields
+	if s.creds != nil {
+		problems, err := s.creds.Check(ctx, op, fields, values)
+		if err != nil {
+			return nil, err
+		}
+		if len(problems) > 0 {
+			keys := protocol.SortedProblemKeys(problems)
+			return nil, &ValidationError{Message: fmt.Sprintf("%s: %s", keys[0], problems[keys[0]]), Problems: problems}
+		}
+	}
+	return credentialrefs.IDs(fields, values), nil
 }
 
 func NewService(repo repository.IChannelEndpointRepository, registry Registry) *Service {
@@ -293,10 +326,14 @@ func (s *Service) Create(ctx context.Context, operationID uuid.UUID, moduleName 
 	if err != nil {
 		return View{}, err
 	}
+	credentialIDs, err := s.checkCredentials(ctx, operationID, *schema, kind, values)
+	if err != nil {
+		return View{}, err
+	}
 	now := s.now()
 	ep := &models.ChannelEndpoint{
 		OperationID: operationID, Name: name, Slug: slug, Description: desc, ModuleName: moduleName,
-		Kind: kind, SchemaVersion: schema.Version, Values: values,
+		Kind: kind, SchemaVersion: schema.Version, Values: values, CredentialIDs: credentialIDs,
 		CreatedBy: in.Actor, UpdatedBy: in.Actor, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repo.Insert(ctx, ep); err != nil {
@@ -335,7 +372,12 @@ func (s *Service) Update(ctx context.Context, id string, expectedRevision int64,
 	if err != nil {
 		return View{}, err
 	}
+	credentialIDs, err := s.checkCredentials(ctx, ep.OperationID, *schema, kind, values)
+	if err != nil {
+		return View{}, err
+	}
 	ep.Name, ep.Slug, ep.Description, ep.Kind, ep.Values, ep.SchemaVersion = name, slug, desc, kind, values, schema.Version
+	ep.CredentialIDs = credentialIDs
 	ep.UpdatedBy, ep.UpdatedAt = in.Actor, s.now()
 	if err := s.repo.Update(ctx, ep); err != nil {
 		return View{}, s.writeErr(err, slug)

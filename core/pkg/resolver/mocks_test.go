@@ -86,6 +86,9 @@ func (m *mockCredRepo) BackfillValidity(ctx context.Context) (int64, error) { re
 func (m *mockCredRepo) BackfillCredentialTypes(ctx context.Context) (int64, int64, error) {
 	return 0, 0, nil
 }
+func (m *mockCredRepo) MarkValid(ctx context.Context, operationID, credentialID uuid.UUID) (bool, error) {
+	return false, nil
+}
 func (m *mockCredRepo) AddComment(ctx context.Context, credentialID uuid.UUID, comment models.CredentialComment) error {
 	return m.addCommentFn(ctx, credentialID, comment)
 }

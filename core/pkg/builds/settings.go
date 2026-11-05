@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -92,6 +93,9 @@ type checked struct {
 	kinds []string
 	// fileIDs are the build files the values and connection values name.
 	fileIDs []uuid.UUID
+	// credentialIDs are the credentials the values, the connection values
+	// and the connections' settings name.
+	credentialIDs []uuid.UUID
 }
 
 // problems collects validation problems by where they are.
@@ -124,7 +128,8 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 	}
 
 	files := map[uuid.UUID]bool{}
-	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, out, files); err != nil {
+	creds := map[uuid.UUID]bool{}
+	if err := s.checkValues(ctx, op, "values.", c.fields, st.Values, out, files, creds); err != nil {
 		return c, out, err
 	}
 	c.commands = commandsFor(schema, t, st.Commands, out)
@@ -182,15 +187,16 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			continue
 		}
 		c.kinds[i] = kind
-		if err := s.checkValues(ctx, op, key+".settings.", cs.KindFields(kind), conn.Settings, out, files); err != nil {
+		if err := s.checkValues(ctx, op, key+".settings.", cs.KindFields(kind), conn.Settings, out, files, creds); err != nil {
 			return c, out, err
 		}
 		ch, _ := schema.Channel(conn.ModuleName)
-		if err := s.checkValues(ctx, op, key+".values.", ch.KindFields(kind), conn.Values, out, files); err != nil {
+		if err := s.checkValues(ctx, op, key+".values.", ch.KindFields(kind), conn.Values, out, files, creds); err != nil {
 			return c, out, err
 		}
 	}
 	c.fileIDs = slices.SortedFunc(maps.Keys(files), func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
+	c.credentialIDs = slices.SortedFunc(maps.Keys(creds), func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	return c, out, nil
 }
 
@@ -228,7 +234,8 @@ func commandsFor(schema protocol.BuildSchema, t protocol.BuildTarget, picked []s
 // checkValues checks values against fields: no undeclared keys, every value
 // valid, required ones set, and file values naming a fitting build file of
 // op, whose ids go into files.
-func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, out problems, files map[uuid.UUID]bool) error {
+func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, fields []protocol.FieldSpec, values map[string]any, out problems,
+	files, creds map[uuid.UUID]bool) error {
 	declared := make(map[string]protocol.FieldSpec, len(fields))
 	for _, f := range fields {
 		declared[f.Key] = f
@@ -248,6 +255,25 @@ func (s *Service) checkValues(ctx context.Context, op uuid.UUID, prefix string, 
 		}
 		if err := protocol.ValidateValue(f, v); err != nil {
 			out.add(prefix+f.Key, "%v", err)
+			continue
+		}
+		if f.Type == protocol.FieldCredential || f.Type == protocol.FieldCredentialList {
+			if s.creds == nil {
+				out.add(prefix+f.Key, "core resolves no credentials here")
+				continue
+			}
+			one := []protocol.FieldSpec{f}
+			problems, err := s.creds.Check(ctx, op, one, map[string]any{f.Key: v})
+			if err != nil {
+				return err
+			}
+			if reason, bad := problems[f.Key]; bad {
+				out.add(prefix+f.Key, "%s", reason)
+				continue
+			}
+			for _, id := range credentialrefs.IDs(one, map[string]any{f.Key: v}) {
+				creds[id] = true
+			}
 			continue
 		}
 		if f.Type != protocol.FieldFile {

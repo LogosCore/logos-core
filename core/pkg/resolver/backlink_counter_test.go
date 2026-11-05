@@ -174,7 +174,7 @@ func TestCredentials_PageWarmsItsFieldResolvers(t *testing.T) {
 	ctx = gqlctx.WithUserMemo(gqlctx.WithOperationMemo(ctx))
 	ctx = WithBacklinkCounter(ctx, NewBacklinkCounter())
 	first := 50
-	conn, err := r.Credentials(ctx, opID.String(), nil, nil, nil, nil, nil, nil, nil, &first, nil, nil, nil)
+	conn, err := r.Credentials(ctx, opID.String(), nil, nil, nil, nil, nil, nil, nil, nil, &first, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("Credentials: %v", err)
 	}

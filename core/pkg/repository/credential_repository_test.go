@@ -376,3 +376,18 @@ func TestCredentialSortCursor(t *testing.T) {
 		t.Fatalf("createAt cursor should carry the timestamp, got %v", c.CreateAt)
 	}
 }
+
+// Types narrows to any of several types (a picker for a field that takes
+// some); with Type, both apply.
+func TestBuildCredentialFilter_Types(t *testing.T) {
+	opID := uuid.New()
+	key, pw := models.CredentialTypeKey, models.CredentialTypePlaintext
+	f := buildCredentialFilter(opID, CredentialFilter{Types: []models.CredentialType{key, pw}})
+	if in, ok := f["type"].(bson.M)["$in"].([]models.CredentialType); !ok || len(in) != 2 {
+		t.Fatalf("types: %v", f["type"])
+	}
+	f = buildCredentialFilter(opID, CredentialFilter{Type: &key, Types: []models.CredentialType{key, pw}})
+	if m, ok := f["type"].(bson.M); !ok || m["$eq"] != key || m["$in"] == nil {
+		t.Fatalf("type and types: %v", f["type"])
+	}
+}

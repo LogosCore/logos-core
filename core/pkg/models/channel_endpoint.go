@@ -42,6 +42,8 @@ type ChannelEndpoint struct {
 	// against.
 	SchemaVersion int     `bson:"schema_version" json:"schema_version"`
 	Values        JSONMap `bson:"values" json:"values"`
+	// CredentialIDs are the credentials Values name (credential fields).
+	CredentialIDs []uuid.UUID `bson:"credential_ids,omitempty" json:"credential_ids,omitempty"`
 	// SearchText is the values as the endpoints list search reads them
 	// (EndpointSearchText), set whenever they are stored.
 	SearchText string `bson:"search_text" json:"-"`

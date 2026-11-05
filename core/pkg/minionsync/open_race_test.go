@@ -18,7 +18,7 @@ type lateSocket struct {
 	delay time.Duration
 }
 
-func (f lateSocket) Open(_ context.Context, _ string, _ map[string]any, under [16]byte, keys *protocol.LinkKeys, _ time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
+func (f lateSocket) Open(_ context.Context, _ string, _ map[string]any, _ map[string]protocol.Credential, under [16]byte, keys *protocol.LinkKeys, _ time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
 	sent("ssh-1", 88)
 	if _, _, ok := f.svc.OpenedFor("ssh-1", 88); !ok {
 		f.t.Error("the socket's open is not waited for")

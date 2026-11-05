@@ -43,6 +43,11 @@ export function draftFromText(field: FieldDef, text: string): Draft {
     case "stream":
       // Named on a line: uploaded with curl, or picked in the task's view.
       return { kind: "stream", file: null, name: text }
+    case "credential":
+    case "credential_list":
+      // Typed on a line: credential ids, comma-separated; the form shows
+      // their names, and picks others.
+      return { kind: "credentials", ids: parts(), multiple: field.type === "credential_list" }
     case "datetime":
       // The form's field takes local time; text that is no time stays as typed.
       return { kind: "text", text: Number.isNaN(Date.parse(text)) ? text : rfc3339ToLocalInput(text) }

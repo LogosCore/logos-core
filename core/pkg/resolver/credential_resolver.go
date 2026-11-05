@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
@@ -57,7 +58,7 @@ type ICredentialResolver interface {
 	// Queries
 	CredentialTypes(ctx context.Context) ([]*model.CredentialTypeSpec, error)
 	Credential(ctx context.Context, id string) (*models.Credential, error)
-	Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
+	Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	CredentialTags(ctx context.Context, operationID string) ([]string, error)
 
 	// Cross-operation queries — power the "global" Findings page. See
@@ -65,7 +66,7 @@ type ICredentialResolver interface {
 	//   nil   ⇒ caller's full membership set
 	//   []    ⇒ explicit empty, returns empty result
 	//   [...] ⇒ resolver authorizes each id (viewer role minimum)
-	MyCredentials(ctx context.Context, operationIDs []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
+	MyCredentials(ctx context.Context, operationIDs []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	MyCredentialTags(ctx context.Context, operationIDs []string) ([]string, error)
 
 	// Field resolvers for Credential type
@@ -79,6 +80,7 @@ type ICredentialResolver interface {
 	CreatedBy(ctx context.Context, obj *models.Credential) (*models.User, error)
 	BacklinkCount(ctx context.Context, obj *models.Credential) (int, error)
 	Backlinks(ctx context.Context, obj *models.Credential) ([]*models.WikiDocument, error)
+	Usage(ctx context.Context, obj *models.Credential) (*model.CredentialUsage, error)
 	CreatedAt(ctx context.Context, obj *models.Credential) (string, error)
 	UpdatedAt(ctx context.Context, obj *models.Credential) (string, error)
 
@@ -105,6 +107,15 @@ type credentialResolver struct {
 	// existing unit tests / wiring that predates Tasks continue to work.
 	taskRepo repository.ITaskRepository
 	eventBus eventbus.IEventBus
+	// usage says where credentials are used (modules' values naming them);
+	// nil, nowhere.
+	usage CredentialUsageReader
+}
+
+// CredentialUsageReader says where a credential is used. Satisfied by
+// *credentialrefs.Resolver.
+type CredentialUsageReader interface {
+	Usage(ctx context.Context, credentialID uuid.UUID) (credentialrefs.Usage, error)
 }
 
 // NewCredentialResolver creates a new credential resolver with the given dependencies.
@@ -117,6 +128,7 @@ func NewCredentialResolver(
 	wikiDocRes IWikiDocumentResolver,
 	taskRepo repository.ITaskRepository,
 	bus eventbus.IEventBus,
+	usage CredentialUsageReader,
 ) ICredentialResolver {
 	if bus == nil {
 		bus = eventbus.NewNopEventBus()
@@ -128,6 +140,7 @@ func NewCredentialResolver(
 		wikiDocRes:    wikiDocRes,
 		taskRepo:      taskRepo,
 		eventBus:      bus,
+		usage:         usage,
 	}
 }
 
@@ -558,7 +571,7 @@ func (r *credentialResolver) Credential(ctx context.Context, id string) (*models
 
 // Credentials returns a cursor-paginated list of credentials for an operation.
 // Requires at least viewer role in the operation.
-func (r *credentialResolver) Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error) {
+func (r *credentialResolver) Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error) {
 	opUID, err := uuid.Parse(operationID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid operation ID: %w", err)
@@ -597,6 +610,12 @@ func (r *credentialResolver) Credentials(ctx context.Context, operationID string
 		}
 		filter.Type = typeArg
 	}
+	for _, t := range types {
+		if !t.IsValid() {
+			return nil, fmt.Errorf("invalid credential type: %s", t)
+		}
+	}
+	filter.Types = types
 
 	total, err := r.credRepo.CountByOperationID(ctx, opUID, filter)
 	if err != nil {
@@ -728,7 +747,7 @@ func (r *credentialResolver) warmPage(ctx context.Context, creds []models.Creden
 // MyCredentials returns a cursor-paginated list of credentials across the
 // caller's accessible operations. See the GraphQL schema doc for the
 // operationIDs semantics. The pagination shape mirrors Credentials exactly.
-func (r *credentialResolver) MyCredentials(ctx context.Context, operationIDs []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error) {
+func (r *credentialResolver) MyCredentials(ctx context.Context, operationIDs []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error) {
 	opUIDs, err, ok := r.resolveAccessibleOperationIDs(ctx, operationIDs)
 	if err != nil {
 		return nil, err
@@ -772,6 +791,12 @@ func (r *credentialResolver) MyCredentials(ctx context.Context, operationIDs []s
 		}
 		filter.Type = typeArg
 	}
+	for _, t := range types {
+		if !t.IsValid() {
+			return nil, fmt.Errorf("invalid credential type: %s", t)
+		}
+	}
+	filter.Types = types
 
 	total, err := r.credRepo.CountByOperationIDs(ctx, opUIDs, filter)
 	if err != nil {
@@ -902,6 +927,42 @@ func (r *credentialResolver) Backlinks(ctx context.Context, obj *models.Credenti
 }
 
 // CreatedAt converts the qmgo DefaultField timestamp to an ISO 8601 string.
+// Usage says where the credential is used: the targets and endpoints whose
+// values name it, with the types their fields take and how its logins
+// fared, and the builds and tasks it went into.
+func (r *credentialResolver) Usage(ctx context.Context, obj *models.Credential) (*model.CredentialUsage, error) {
+	out := &model.CredentialUsage{Targets: []*model.CredentialTargetUse{}, Endpoints: []*model.CredentialEndpointUse{}}
+	if r.usage == nil {
+		return out, nil
+	}
+	u, err := r.usage.Usage(ctx, obj.CredentialID)
+	if err != nil {
+		return nil, fmt.Errorf("the credential's usage: %w", err)
+	}
+	for _, t := range u.Targets {
+		use := &model.CredentialTargetUse{ID: t.Target.TargetID.String(), Name: t.Target.Name, ModuleName: t.Target.ModuleName,
+			Kind: t.Target.Kind, BuildID: t.Target.BuildID.String(), Accept: credentialTypesOf(t.Accept)}
+		if t.Login != nil {
+			use.Login = &model.CredentialLogin{Accepted: t.Login.Accepted, At: t.Login.At.UTC().Format(time.RFC3339)}
+		}
+		out.Targets = append(out.Targets, use)
+	}
+	for _, e := range u.Endpoints {
+		out.Endpoints = append(out.Endpoints, &model.CredentialEndpointUse{ID: e.Endpoint.EndpointID.String(), Name: e.Endpoint.Name,
+			ModuleName: e.Endpoint.ModuleName, Kind: e.Endpoint.Kind, Accept: credentialTypesOf(e.Accept)})
+	}
+	out.Builds, out.Tasks = int(u.Builds), int(u.Tasks)
+	return out, nil
+}
+
+func credentialTypesOf(names []string) []models.CredentialType {
+	out := make([]models.CredentialType, 0, len(names))
+	for _, n := range names {
+		out = append(out, models.CredentialType(n))
+	}
+	return out
+}
+
 func (r *credentialResolver) CreatedAt(ctx context.Context, obj *models.Credential) (string, error) {
 	return obj.CreateAt.Format(time.RFC3339), nil
 }

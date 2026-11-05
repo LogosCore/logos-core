@@ -91,6 +91,29 @@ type fakeBuilds struct {
 	rows map[uuid.UUID]*models.Build
 }
 
+func (f *fakeBuilds) SetCredentialRevs(_ context.Context, id uuid.UUID, revs map[string]int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if b, ok := f.rows[id]; ok && len(revs) > 0 {
+		b.CredentialRevs = revs
+	}
+	return nil
+}
+
+func (f *fakeBuilds) CountByCredentialID(_ context.Context, id uuid.UUID) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var n int64
+	for _, b := range f.rows {
+		for _, c := range b.CredentialIDs {
+			if c == id {
+				n++
+			}
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeBuilds) Insert(_ context.Context, b *models.Build) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

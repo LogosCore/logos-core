@@ -66,8 +66,39 @@ func (f *fakeTargets) CountByOperationID(context.Context, uuid.UUID, repository.
 	return 0, nil
 }
 
-func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, string, bool, string, time.Time) error {
+func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, []uuid.UUID, string, bool, string, time.Time) error {
 	return nil
+}
+
+func (f *fakeTargets) NoteLogins(_ context.Context, id uuid.UUID, logins map[string]models.TargetLogin) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.rows[id]
+	if !ok {
+		return qmgo.ErrNoSuchDocuments
+	}
+	if t.Logins == nil {
+		t.Logins = map[string]models.TargetLogin{}
+	}
+	for k, l := range logins {
+		t.Logins[k] = l
+	}
+	f.rows[id] = t
+	return nil
+}
+
+func (f *fakeTargets) FindByCredentialID(_ context.Context, id uuid.UUID, _ int64) ([]models.MinionTarget, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []models.MinionTarget
+	for _, t := range f.rows {
+		for _, c := range t.CredentialIDs {
+			if c == id {
+				out = append(out, t)
+			}
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeTargets) SetCallState(_ context.Context, t *models.MinionTarget) error {
@@ -223,7 +254,7 @@ func (p *fakePage) Call(ctx context.Context, module string, c channellink.Call) 
 }
 
 // Open: a page is reached by calls, not connections.
-func (p *fakePage) Open(context.Context, string, map[string]any, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+func (p *fakePage) Open(context.Context, string, map[string]any, map[string]protocol.Credential, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: &protocol.LinkFailure{Kind: protocol.LinkFailOther, Msg: "a page"}}, nil
 }
 
@@ -434,7 +465,7 @@ func (noLink) Call(context.Context, string, channellink.Call) (protocol.LinkFram
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 
-func (noLink) Open(context.Context, string, map[string]any, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+func (noLink) Open(context.Context, string, map[string]any, map[string]protocol.Credential, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 

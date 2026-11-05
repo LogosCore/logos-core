@@ -155,6 +155,9 @@ type Service struct {
 	// target.
 	targetChecker TargetChecker
 	problemsText  func(map[string]string) string
+	// creds resolves the credentials calls carry, and learns from their
+	// logins (bind.go); nil, a call naming one is refused.
+	creds Credentials
 }
 
 func NewService(builds Builds, stagings repository.IMinionStagingRepository, sessions repository.IMinionSessionRepository,

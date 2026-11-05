@@ -12,8 +12,11 @@ import { useCredentialStore } from "@/stores/credentials"
 import {
   useCredential,
   useCredentialTags,
+  useCredentialUsage,
   useUpdateCredential,
 } from "@/graphql/hooks/credentials"
+import { UsageWarning } from "@/components/findings/credential-usage"
+import { wouldRefuse } from "@/components/findings/credential-usage-text"
 import {
   CredentialFormFields,
   type CredentialFormValues,
@@ -30,6 +33,7 @@ import {
   credentialUpdateFields,
 } from "@/components/findings/credential-form-values"
 import {
+  credentialTypeLabel,
   useCredentialTypeSpecs,
   type CredentialTypeSpecs,
 } from "@/components/findings/credential-type-utils"
@@ -128,6 +132,10 @@ function EditCredentialForm({
     fields: initialFields,
   }
   const spec = specs.get(values.type)
+  // A change of type that a target's or an endpoint's field would not take:
+  // their channel could not use the credential after.
+  const { data: usage } = useCredentialUsage(credential.id)
+  const refusing = values.type !== credential.type ? wouldRefuse(usage, values.type) : []
   const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
@@ -162,6 +170,13 @@ function EditCredentialForm({
         {error && (
           <div className="mb-3 rounded-md bg-destructive/15 p-3 text-sm text-destructive">
             {error}
+          </div>
+        )}
+        {refusing.length > 0 && (
+          <div className="mb-3">
+            <UsageWarning>
+              As a {credentialTypeLabel(values.type)}, it can no longer be used by {refusing.join("; ")}.
+            </UsageWarning>
           </div>
         )}
         <CredentialFormFields

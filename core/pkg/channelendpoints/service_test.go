@@ -50,6 +50,18 @@ type fakeRepo struct {
 	rows map[uuid.UUID]*models.ChannelEndpoint
 }
 
+func (r *fakeRepo) FindByCredentialID(_ context.Context, id uuid.UUID, _ int64) ([]models.ChannelEndpoint, error) {
+	var out []models.ChannelEndpoint
+	for _, ep := range r.rows {
+		for _, c := range ep.CredentialIDs {
+			if c == id {
+				out = append(out, *ep)
+			}
+		}
+	}
+	return out, nil
+}
+
 // FindByOperationIDWithCursor applies the kind filter; paging and search are
 // the repository's, tested against Mongo.
 func (f *fakeRepo) FindByOperationIDWithCursor(_ context.Context, operationID uuid.UUID, filter repository.ChannelEndpointFilter, _ *pagination.Cursor, _ int64, _ bool) ([]models.ChannelEndpoint, error) {

@@ -53,6 +53,9 @@ const (
 	BuildErrorSchemaChanged    = "schema_changed"
 	BuildErrorRefused          = "refused"            // the factory would not take the build
 	BuildErrorArtifactTooLarge = "artifact_too_large" // over the max_size the factory was given
+	// BuildErrorCredentials: a credential the build names is gone, or not
+	// of a type its field takes any more (converted since).
+	BuildErrorCredentials = "credentials"
 )
 
 // Build is one build: what was asked for, with defaults filled in (the build
@@ -80,6 +83,12 @@ type Build struct {
 	// what the factory gets, so a note never ends up in an artifact.
 	ConnectionDescriptions []string    `bson:"connection_descriptions,omitempty" json:"connection_descriptions,omitempty"`
 	FileIDs                []uuid.UUID `bson:"file_ids,omitempty" json:"file_ids,omitempty"`
+	// CredentialIDs are the credentials the values, the connections'
+	// values and their endpoints' params name: the factory gets them with
+	// the build. CredentialRevs is the revision of each that went to the
+	// factory, by id, once one took the build.
+	CredentialIDs  []uuid.UUID      `bson:"credential_ids,omitempty" json:"credential_ids,omitempty"`
+	CredentialRevs map[string]int64 `bson:"credential_revs,omitempty" json:"credential_revs,omitempty"`
 	// Commands are what the minion can do: the commands the operator picked,
 	// with the target's required ones, in the schema's order. The factory
 	// gets them, and the minion has these and no others.

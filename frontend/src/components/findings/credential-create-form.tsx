@@ -10,7 +10,7 @@ import {
   type CredentialFormValues,
 } from "@/components/findings/credential-form-fields"
 import { CredentialValiditySelect } from "@/components/findings/credential-validity-utils"
-import type { CredentialFieldsFragment } from "@/graphql/gql/graphql"
+import type { CredentialFieldsFragment, CredentialType } from "@/graphql/gql/graphql"
 import { propertyDraftsToInputs } from "@/components/findings/credential-property-drafts"
 import {
   credentialCreateFields,
@@ -36,6 +36,9 @@ interface CredentialCreateFormProps {
   submitPendingLabel?: string
   onCreated: (credential: CredentialFieldsFragment) => void
   onBack: () => void
+  /** The types the credential may be (a field that takes some): the form
+   * starts at the first and offers only these. All when empty. */
+  types?: readonly CredentialType[]
 }
 
 export function CredentialCreateForm({
@@ -46,13 +49,15 @@ export function CredentialCreateForm({
   submitPendingLabel = "Saving…",
   onCreated,
   onBack,
+  types,
 }: CredentialCreateFormProps) {
   const createCredential = useCreateCredential()
   const { data: tagsData, isLoading: tagsLoading } =
     useCredentialTags(operationId)
-  const [values, setValues] = useState<CredentialFormValues>(() =>
-    emptyCredentialFormValues(initialName),
-  )
+  const [values, setValues] = useState<CredentialFormValues>(() => {
+    const v = emptyCredentialFormValues(initialName)
+    return types && types.length > 0 && !types.includes(v.type) ? { ...v, type: types[0] } : v
+  })
   const specs = useCredentialTypeSpecs()
   const spec = specs.get(values.type)
   const [error, setError] = useState<string | null>(null)
@@ -96,6 +101,7 @@ export function CredentialCreateForm({
         values={values}
         onChange={setValues}
         specs={specs}
+        types={types}
         tagSuggestions={tagsData?.credentialTags ?? []}
         tagSuggestionsLoading={tagsLoading}
       />

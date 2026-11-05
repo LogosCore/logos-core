@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/authorization"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
@@ -107,6 +108,16 @@ type minionTaskResolver struct {
 	limits MaxTasksSetter
 	// feedback is minions' feedback, a task's on the task; nil, none.
 	feedback repository.IMinionFeedbackRepository
+	// creds resolves the credentials credential params name; nil, a
+	// command with one takes no task.
+	creds TaskCredentials
+}
+
+// TaskCredentials resolves the credentials a task's args name (credential
+// params), each one of the operation's, of a type its param takes.
+// Satisfied by *credentialrefs.Resolver.
+type TaskCredentials interface {
+	ResolveFields(ctx context.Context, operationID uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]protocol.Credential, error)
 }
 
 // TaskFiles finds a task's file, and reads a kept one's strings
@@ -122,10 +133,10 @@ type TaskFiles interface {
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
 	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector,
-	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository) IMinionTaskResolver {
+	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository, creds TaskCredentials) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
 		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
-		limits: limits, feedback: feedback}
+		limits: limits, feedback: feedback, creds: creds}
 }
 
 const (
@@ -302,6 +313,10 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if err != nil {
 		return nil, err
 	}
+	credentialIDs, err := r.putCredentials(ctx, s.OperationID, commands[i].Params, wire)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+	}
 	// On the wire the args go by their params' numbers.
 	var wireBytes []byte
 	if numbered := protocol.WireArgs(commands[i].Params, wire); len(numbered) > 0 {
@@ -310,8 +325,8 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		}
 	}
 	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
-		Op: commands[i].Op, Args: values, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action, IssuedBy: uid, State: models.MinionTaskQueued,
-		QueuedAt: time.Now().UTC(), Upload: upload}
+		Op: commands[i].Op, Args: values, CredentialIDs: credentialIDs, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action,
+		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload}
 	if err := r.tasks.Insert(ctx, t); err != nil {
 		return nil, fmt.Errorf("queue the task: %w", err)
 	}
@@ -857,4 +872,38 @@ func decodeTaskCursor(s string) (*repository.MinionTaskCursor, error) {
 		return nil, err
 	}
 	return &repository.MinionTaskCursor{QueuedAt: time.Unix(0, ns).UTC(), TaskID: tid}, nil
+}
+
+// putCredentials puts the credentials a task's credential params name in
+// wire, in place of their ids: a minion has no way to look one up. Each one
+// of the operation's, of a type its param takes; their ids come back, for
+// the task to keep.
+func (r *minionTaskResolver) putCredentials(ctx context.Context, op uuid.UUID, params []protocol.FieldSpec, wire map[string]any) ([]uuid.UUID, error) {
+	ids := credentialrefs.IDs(params, wire)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if r.creds == nil {
+		return nil, errors.New("core resolves no credentials here")
+	}
+	given, err := r.creds.ResolveFields(ctx, op, params, wire)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range params {
+		if p.Type != protocol.FieldCredential && p.Type != protocol.FieldCredentialList {
+			continue
+		}
+		list, err := protocol.FieldCredentials(p, wire[p.Key], given)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case p.Type == protocol.FieldCredentialList:
+			wire[p.Key] = list
+		case len(list) == 1:
+			wire[p.Key] = list[0]
+		}
+	}
+	return ids, nil
 }

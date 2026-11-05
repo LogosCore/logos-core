@@ -48,9 +48,15 @@ type IMinionTargetRepository interface {
 	// newest first.
 	FindByOperationIDWithCursor(ctx context.Context, operationID uuid.UUID, filter MinionTargetFilter, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionTarget, error)
 	CountByOperationID(ctx context.Context, operationID uuid.UUID, filter MinionTargetFilter) (int64, error)
-	// SetValues replaces what the operator gave: the values, the name and
-	// retries.
-	SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, name string, retries bool, policy string, at time.Time) error
+	// SetValues replaces what the operator gave: the values (and the
+	// credentials they name), the name and retries.
+	SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, credentialIDs []uuid.UUID, name string, retries bool, policy string, at time.Time) error
+	// NoteLogins records how the credentials a channel tried fared at the
+	// target (Logins), each under its id.
+	NoteLogins(ctx context.Context, targetID uuid.UUID, logins map[string]models.TargetLogin) error
+	// FindByCredentialID returns the targets whose values name a
+	// credential, newest first, at most limit.
+	FindByCredentialID(ctx context.Context, credentialID uuid.UUID, limit int64) ([]models.MinionTarget, error)
 	// SetCallState writes what calls left: the state and its detail, the
 	// session, the allowance, the failures in a row, when it was unreachable
 	// since, when core calls next, the last call and the last good one, and
@@ -80,6 +86,7 @@ func NewMinionTargetRepository(db database.Database) IMinionTargetRepository {
 			SetPartialFilterExpression(bson.M{"session_id": bson.M{"$exists": true}})},
 		{Key: []string{"next_call_at"}, IndexOptions: new(options.IndexOptions).
 			SetPartialFilterExpression(bson.M{"next_call_at": bson.M{"$exists": true}})},
+		{Key: []string{"credential_ids"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	return &minionTargetRepository{coll: db.Collection(minionTargetCollection)}
 }
@@ -148,12 +155,35 @@ func (r *minionTargetRepository) CountByOperationID(ctx context.Context, operati
 	return r.coll.Count(ctx, minionTargetListFilter(operationID, filter))
 }
 
-func (r *minionTargetRepository) SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, name string, retries bool, policy string, at time.Time) error {
+func (r *minionTargetRepository) SetValues(ctx context.Context, targetID uuid.UUID, values models.JSONMap, credentialIDs []uuid.UUID, name string, retries bool, policy string, at time.Time) error {
 	set := bson.M{"values": values, "name": name, "retries": retries, "updated_at": at, "updateAt": at}
 	if policy != "" {
 		set["policy"] = policy
 	}
+	u := bson.M{"$set": set}
+	if len(credentialIDs) > 0 {
+		set["credential_ids"] = credentialIDs
+	} else {
+		u["$unset"] = bson.M{"credential_ids": ""}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"target_id": targetID}, u)
+}
+
+func (r *minionTargetRepository) NoteLogins(ctx context.Context, targetID uuid.UUID, logins map[string]models.TargetLogin) error {
+	if len(logins) == 0 {
+		return nil
+	}
+	set := bson.M{}
+	for id, l := range logins {
+		set["logins."+id] = l
+	}
 	return r.coll.UpdateOne(ctx, bson.M{"target_id": targetID}, bson.M{"$set": set})
+}
+
+func (r *minionTargetRepository) FindByCredentialID(ctx context.Context, credentialID uuid.UUID, limit int64) ([]models.MinionTarget, error) {
+	var out []models.MinionTarget
+	err := r.coll.Find(ctx, bson.M{"credential_ids": credentialID}).Sort("-created_at").Limit(limit).All(&out)
+	return out, err
 }
 
 func (r *minionTargetRepository) SetCallState(ctx context.Context, t *models.MinionTarget) error {

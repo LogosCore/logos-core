@@ -491,8 +491,19 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 		}
 		keys = from.linkKeys()
 	}
+	values := callValues(buildConn(b, t), t)
+	creds, err := s.credentialsOf(ctx, t, kind, values)
+	if why := refusedCredentials(err); why != "" {
+		return s.saveCall(ctx, s.answered(t, models.TargetRefused, why))
+	}
+	if err != nil {
+		return err
+	}
 	t.Calls++
-	a, err := s.link.Open(ctx, t.ModuleName, callValues(buildConn(b, t), t), under, keys, kind.open, sent)
+	a, err := s.link.Open(ctx, t.ModuleName, values, creds, under, keys, kind.open, sent)
+	if err == nil {
+		s.noteLogins(ctx, t, creds, a.Logins)
+	}
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
 		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))

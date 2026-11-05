@@ -114,6 +114,11 @@ type BuildOutcome struct {
 // IBuildRepository stores builds. State changes are compare-and-set.
 type IBuildRepository interface {
 	Insert(ctx context.Context, b *models.Build) error
+	// SetCredentialRevs records the revision of each credential that went
+	// to the factory with the build, by id.
+	SetCredentialRevs(ctx context.Context, buildID uuid.UUID, revs map[string]int64) error
+	// CountByCredentialID counts the builds a credential went into.
+	CountByCredentialID(ctx context.Context, credentialID uuid.UUID) (int64, error)
 	// FindByBuildID returns one build; IsNotFound on a miss.
 	FindByBuildID(ctx context.Context, buildID uuid.UUID) (*models.Build, error)
 	// List returns an operation's builds, newest first, at most limit (0:
@@ -177,6 +182,7 @@ func NewBuildRepository(db database.Database) IBuildRepository {
 		{Key: []string{"operation_id", "-created_at", "-_id"}},
 		{Key: []string{"state", "created_at"}},
 		{Key: []string{"file_ids"}},
+		{Key: []string{"credential_ids"}, IndexOptions: new(options.IndexOptions).SetSparse(true)},
 	})
 	return &buildRepository{coll: db.Collection(buildCollection)}
 }
@@ -187,6 +193,17 @@ func (r *buildRepository) Insert(ctx context.Context, b *models.Build) error {
 	b.SearchText = models.BuildSearchText(b)
 	_, err := r.coll.InsertOne(ctx, b)
 	return err
+}
+
+func (r *buildRepository) SetCredentialRevs(ctx context.Context, buildID uuid.UUID, revs map[string]int64) error {
+	if len(revs) == 0 {
+		return nil
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"build_id": buildID}, bson.M{"$set": bson.M{"credential_revs": revs}})
+}
+
+func (r *buildRepository) CountByCredentialID(ctx context.Context, credentialID uuid.UUID) (int64, error) {
+	return r.coll.Count(ctx, bson.M{"credential_ids": credentialID})
 }
 
 func (r *buildRepository) FindByBuildID(ctx context.Context, buildID uuid.UUID) (*models.Build, error) {

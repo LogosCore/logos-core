@@ -14,7 +14,7 @@ import {
   credentialSecret,
   filledCredentialFields,
 } from "@/lib/credential-fields";
-import type { CredentialFieldsFragment } from "@/graphql/gql/graphql";
+import type { CredentialFieldsFragment, CredentialType } from "@/graphql/gql/graphql";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,6 +47,8 @@ interface CredentialPickerListProps {
   onStartCreate?: () => void;
   /** Optional footer slot (overrides the default create CTA). */
   footer?: ReactNode;
+  /** Only credentials of these types (a field that takes some); all when empty. */
+  types?: readonly CredentialType[];
 }
 
 export function CredentialPickerList({
@@ -57,6 +59,7 @@ export function CredentialPickerList({
   excludeIds,
   onStartCreate,
   footer,
+  types,
 }: CredentialPickerListProps) {
   const [debounced, setDebounced] = useState(search.trim());
   const [activeIndex, setActiveIndex] = useState(0);
@@ -81,6 +84,7 @@ export function CredentialPickerList({
     useInfiniteCredentials({
       operationId,
       search: debounced || null,
+      types: types && types.length > 0 ? [...types] : null,
       validity: null,
       first: 20,
     });

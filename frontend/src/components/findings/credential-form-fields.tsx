@@ -47,6 +47,8 @@ interface CredentialFormFieldsProps {
   tagSuggestions: string[]
   /** Suggestions query in-flight — drives the dropdown loading state. */
   tagSuggestionsLoading?: boolean
+  /** The types offered (a field that takes some); all when empty. */
+  types?: readonly CredentialType[]
 }
 
 export function CredentialFormFields({
@@ -57,7 +59,9 @@ export function CredentialFormFields({
   was,
   tagSuggestions,
   tagSuggestionsLoading = false,
+  types,
 }: CredentialFormFieldsProps) {
+  const offered = types && types.length > 0 ? CREDENTIAL_TYPES.filter((t) => types.includes(t)) : CREDENTIAL_TYPES
   const spec = specs.get(values.type)
   const drops = credentialTypeChangeDrops(values, spec, was?.spec)
   const legacyType =
@@ -111,7 +115,7 @@ export function CredentialFormFields({
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {CREDENTIAL_TYPES.map((t) => (
+              {offered.map((t) => (
                 <SelectItem key={t} value={t}>
                   {credentialTypeLabel(t)}
                 </SelectItem>

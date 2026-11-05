@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/blob"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -135,6 +136,13 @@ func invalid(format string, args ...any) error {
 }
 
 // Service runs builds.
+// Credentials checks and resolves the credentials a build's values name
+// (credential fields). Satisfied by *credentialrefs.Resolver.
+type Credentials interface {
+	Check(ctx context.Context, operationID uuid.UUID, fields []protocol.FieldSpec, values map[string]any) (map[string]string, error)
+	Resolve(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID) (map[string]protocol.Credential, map[string]int64, error)
+}
+
 type Service struct {
 	repos    Repos
 	registry Registry
@@ -142,6 +150,7 @@ type Service struct {
 	rpc      Caller
 	store    Store
 	signer   Signer
+	creds    Credentials
 	cfg      Config
 	logger   *zap.Logger
 	now      func() time.Time
@@ -151,6 +160,13 @@ type Service struct {
 	wg        sync.WaitGroup
 	next      atomic.Uint64 // rotates the instances builds are offered to
 	verifying sync.Map      // build ids whose artifact this process checks
+}
+
+// WithCredentials has the service check and resolve the credentials builds
+// name. Without it a build may name none: its tests.
+func (s *Service) WithCredentials(c Credentials) *Service {
+	s.creds = c
+	return s
 }
 
 func NewService(repos Repos, registry Registry, channels Channels, rpc Caller, store Store, signer Signer, cfg Config, logger *zap.Logger) *Service {

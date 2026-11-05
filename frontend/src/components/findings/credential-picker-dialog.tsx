@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { CredentialCreateForm } from "@/components/findings/credential-create-form"
 import { CredentialPickerList } from "@/components/findings/credential-picker-list"
-import type { CredentialFieldsFragment } from "@/graphql/gql/graphql"
+import type { CredentialFieldsFragment, CredentialType } from "@/graphql/gql/graphql"
 import { cn } from "@/lib/utils"
 
 /**
@@ -47,6 +47,8 @@ interface CredentialPickerDialogProps {
   excludeIds?: ReadonlySet<string>
   /** Optional banner rendered under the header — e.g. a caller mutation error. */
   banner?: ReactNode
+  /** Only credentials of these types: listed, and offered to create. All when empty. */
+  types?: readonly CredentialType[]
 }
 
 type Mode = "list" | "create"
@@ -63,6 +65,7 @@ export function CredentialPickerDialog({
   onPick,
   excludeIds,
   banner,
+  types,
 }: CredentialPickerDialogProps) {
   const [mode, setMode] = useState<Mode>("list")
   // Hoisted so the create view can pre-fill its `name` from whatever the
@@ -111,6 +114,7 @@ export function CredentialPickerDialog({
               initialName={search.trim()}
               idPrefix={createIdPrefix}
               submitLabel={createSubmitLabel}
+              types={types}
               onCreated={(credential) => {
                 // Back to the list first so a multi-select caller that stays
                 // open lands on the browse view rather than a blank form.
@@ -126,6 +130,7 @@ export function CredentialPickerDialog({
               onSearchChange={setSearch}
               onPick={onPick}
               excludeIds={excludeIds}
+              types={types}
               onStartCreate={() => setMode("create")}
             />
           )

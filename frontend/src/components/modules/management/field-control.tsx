@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react"
 import { BuildFileControl } from "@/components/builds/build-file-control"
+import { CredentialFieldControl } from "@/components/findings/credential-field-control"
 import { StreamFieldControl } from "@/components/minion-sessions/stream-field-control"
 import { CONNECTION_FORMAT, choiceDetail } from "@/components/minion-sessions/connection-choices"
 import { useConnectionChoices } from "@/components/minion-sessions/use-connection-choices"
@@ -131,6 +132,11 @@ export function FieldControl({
 
     case "stream":
       return <StreamFieldControl id={id} draft={draft} onChange={onChange} disabled={disabled} invalid={invalid} />
+
+    case "credentials":
+      return (
+        <CredentialFieldControl id={id} field={field} draft={draft} onChange={onChange} disabled={disabled} invalid={invalid} />
+      )
 
     case "file":
       return (

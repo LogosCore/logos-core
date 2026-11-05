@@ -114,6 +114,9 @@ type CredentialFilter struct {
 	SearchFields []CredentialSearchField
 	// Type, if non-nil, restricts to credentials of this type.
 	Type *models.CredentialType
+	// Types, if non-empty, restricts to credentials of any of these types
+	// (with Type, both apply).
+	Types []models.CredentialType
 	// Tags, if non-empty, requires every listed tag to be present ($all).
 	Tags []string
 	// Validity, if non-empty, restricts to credentials in one of these
@@ -160,6 +163,9 @@ type ICredentialRepository interface {
 	// BackfillValidity stamps the three-state validity field on credentials
 	// that predate it. Returns the number of rows touched.
 	BackfillValidity(ctx context.Context) (int64, error)
+	// MarkValid sets a credential of the operation VALID unless it is
+	// already, and reports whether it changed: a login with it worked.
+	MarkValid(ctx context.Context, operationID, credentialID uuid.UUID) (bool, error)
 	// BackfillCredentialTypes rewrites credentials recorded under the old
 	// types (schema version 1) as the current ones. Returns how many became
 	// PLAINTEXT and how many OTHER.
@@ -344,6 +350,17 @@ func (r *credentialRepository) Update(ctx context.Context, c *models.Credential,
 	)
 }
 
+func (r *credentialRepository) MarkValid(ctx context.Context, operationID, credentialID uuid.UUID) (bool, error) {
+	err := r.coll.UpdateOne(ctx,
+		bson.M{"credential_id": credentialID, "operation_id": operationID, "validity": bson.M{"$ne": models.CredentialValidityValid}},
+		revised(bson.M{"$set": bson.M{"validity": models.CredentialValidityValid}}),
+	)
+	if IsNotFound(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (r *credentialRepository) Delete(ctx context.Context, c *models.Credential) error {
 	return r.coll.Remove(ctx,
 		bson.M{"credential_id": c.CredentialID, "operation_id": c.OperationID},
@@ -402,8 +419,13 @@ func buildCredentialFilterMulti(opIDs []uuid.UUID, f CredentialFilter) bson.M {
 // on top of a base filter (operation predicate). Shared between the single-op
 // and multi-op builders.
 func applyCredentialFilter(q bson.M, f CredentialFilter) bson.M {
-	if f.Type != nil {
+	switch {
+	case f.Type != nil && len(f.Types) > 0:
+		q["type"] = bson.M{"$eq": *f.Type, "$in": f.Types}
+	case f.Type != nil:
 		q["type"] = *f.Type
+	case len(f.Types) > 0:
+		q["type"] = bson.M{"$in": f.Types}
 	}
 	if len(f.Validity) > 0 {
 		q["validity"] = bson.M{"$in": f.Validity}

@@ -362,6 +362,7 @@ type ComplexityRoot struct {
 		Ticket                    func(childComplexity int) int
 		Type                      func(childComplexity int) int
 		UpdatedAt                 func(childComplexity int) int
+		Usage                     func(childComplexity int) int
 		Username                  func(childComplexity int) int
 		Validity                  func(childComplexity int) int
 		ViewerCanModerateComments func(childComplexity int) int
@@ -386,6 +387,14 @@ type ComplexityRoot struct {
 		Node   func(childComplexity int) int
 	}
 
+	CredentialEndpointUse struct {
+		Accept     func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Kind       func(childComplexity int) int
+		ModuleName func(childComplexity int) int
+		Name       func(childComplexity int) int
+	}
+
 	CredentialEvent struct {
 		Action       func(childComplexity int) int
 		Credential   func(childComplexity int) int
@@ -406,9 +415,24 @@ type ComplexityRoot struct {
 		Name    func(childComplexity int) int
 	}
 
+	CredentialLogin struct {
+		Accepted func(childComplexity int) int
+		At       func(childComplexity int) int
+	}
+
 	CredentialProperty struct {
 		Name  func(childComplexity int) int
 		Value func(childComplexity int) int
+	}
+
+	CredentialTargetUse struct {
+		Accept     func(childComplexity int) int
+		BuildID    func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Kind       func(childComplexity int) int
+		Login      func(childComplexity int) int
+		ModuleName func(childComplexity int) int
+		Name       func(childComplexity int) int
 	}
 
 	CredentialTypeSpec struct {
@@ -416,6 +440,13 @@ type ComplexityRoot struct {
 		Fields      func(childComplexity int) int
 		Label       func(childComplexity int) int
 		Type        func(childComplexity int) int
+	}
+
+	CredentialUsage struct {
+		Builds    func(childComplexity int) int
+		Endpoints func(childComplexity int) int
+		Targets   func(childComplexity int) int
+		Tasks     func(childComplexity int) int
 	}
 
 	FactoryKind struct {
@@ -1279,7 +1310,7 @@ type ComplexityRoot struct {
 		Credential                         func(childComplexity int, id string) int
 		CredentialTags                     func(childComplexity int, operationID string) int
 		CredentialTypes                    func(childComplexity int) int
-		Credentials                        func(childComplexity int, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
+		Credentials                        func(childComplexity int, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		FactoryKinds                       func(childComplexity int) int
 		FileBrowser                        func(childComplexity int, sessionID string) int
 		FileBrowserEntries                 func(childComplexity int, sessionID string, path *string, after *string, first *int, search *string, sort *string, desc *bool, showDeleted *bool, foldersOnly *bool) int
@@ -1312,7 +1343,7 @@ type ComplexityRoot struct {
 		MyAgentActivitySummary             func(childComplexity int) int
 		MyAgentKeys                        func(childComplexity int) int
 		MyCredentialTags                   func(childComplexity int, operationIds []string) int
-		MyCredentials                      func(childComplexity int, operationIds []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
+		MyCredentials                      func(childComplexity int, operationIds []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		MyHashTags                         func(childComplexity int, operationIds []string) int
 		MyHashes                           func(childComplexity int, operationIds []string, search *string, statuses []models.HashStatus, tags []string, hasCredential *bool, first *int, after *string, last *int, before *string) int
 		MyOperationRole                    func(childComplexity int, operationID string) int
@@ -1798,6 +1829,7 @@ type CredentialResolver interface {
 	CreatedBy(ctx context.Context, obj *models.Credential) (*models.User, error)
 	BacklinkCount(ctx context.Context, obj *models.Credential) (int, error)
 	Backlinks(ctx context.Context, obj *models.Credential) ([]*models.WikiDocument, error)
+	Usage(ctx context.Context, obj *models.Credential) (*model.CredentialUsage, error)
 	CreatedAt(ctx context.Context, obj *models.Credential) (string, error)
 	UpdatedAt(ctx context.Context, obj *models.Credential) (string, error)
 	SourceHashes(ctx context.Context, obj *models.Credential) ([]*models.Hash, error)
@@ -2014,9 +2046,9 @@ type QueryResolver interface {
 	ChannelEndpointExport(ctx context.Context, id string) (any, error)
 	CredentialTypes(ctx context.Context) ([]*model.CredentialTypeSpec, error)
 	Credential(ctx context.Context, id string) (*models.Credential, error)
-	Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
+	Credentials(ctx context.Context, operationID string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	CredentialTags(ctx context.Context, operationID string) ([]string, error)
-	MyCredentials(ctx context.Context, operationIds []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
+	MyCredentials(ctx context.Context, operationIds []string, search *string, searchFields []model.CredentialSearchField, typeArg *models.CredentialType, types []models.CredentialType, tags []string, validity []models.CredentialValidity, sortBy *model.CredentialSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.CredentialConnection, error)
 	MyCredentialTags(ctx context.Context, operationIds []string) ([]string, error)
 	FileBrowser(ctx context.Context, sessionID string) (*model.FsMachine, error)
 	FileBrowserEntries(ctx context.Context, sessionID string, path *string, after *string, first *int, search *string, sort *string, desc *bool, showDeleted *bool, foldersOnly *bool) (*model.FsEntryPage, error)
@@ -3508,6 +3540,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Credential.UpdatedAt(childComplexity), true
+	case "Credential.usage":
+		if e.ComplexityRoot.Credential.Usage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Credential.Usage(childComplexity), true
 	case "Credential.username":
 		if e.ComplexityRoot.Credential.Username == nil {
 			break
@@ -3590,6 +3628,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CredentialEdge.Node(childComplexity), true
 
+	case "CredentialEndpointUse.accept":
+		if e.ComplexityRoot.CredentialEndpointUse.Accept == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialEndpointUse.Accept(childComplexity), true
+	case "CredentialEndpointUse.id":
+		if e.ComplexityRoot.CredentialEndpointUse.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialEndpointUse.ID(childComplexity), true
+	case "CredentialEndpointUse.kind":
+		if e.ComplexityRoot.CredentialEndpointUse.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialEndpointUse.Kind(childComplexity), true
+	case "CredentialEndpointUse.moduleName":
+		if e.ComplexityRoot.CredentialEndpointUse.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialEndpointUse.ModuleName(childComplexity), true
+	case "CredentialEndpointUse.name":
+		if e.ComplexityRoot.CredentialEndpointUse.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialEndpointUse.Name(childComplexity), true
+
 	case "CredentialEvent.action":
 		if e.ComplexityRoot.CredentialEvent.Action == nil {
 			break
@@ -3659,6 +3728,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CredentialKey.Name(childComplexity), true
 
+	case "CredentialLogin.accepted":
+		if e.ComplexityRoot.CredentialLogin.Accepted == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialLogin.Accepted(childComplexity), true
+	case "CredentialLogin.at":
+		if e.ComplexityRoot.CredentialLogin.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialLogin.At(childComplexity), true
+
 	case "CredentialProperty.name":
 		if e.ComplexityRoot.CredentialProperty.Name == nil {
 			break
@@ -3671,6 +3753,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CredentialProperty.Value(childComplexity), true
+
+	case "CredentialTargetUse.accept":
+		if e.ComplexityRoot.CredentialTargetUse.Accept == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.Accept(childComplexity), true
+	case "CredentialTargetUse.buildId":
+		if e.ComplexityRoot.CredentialTargetUse.BuildID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.BuildID(childComplexity), true
+	case "CredentialTargetUse.id":
+		if e.ComplexityRoot.CredentialTargetUse.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.ID(childComplexity), true
+	case "CredentialTargetUse.kind":
+		if e.ComplexityRoot.CredentialTargetUse.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.Kind(childComplexity), true
+	case "CredentialTargetUse.login":
+		if e.ComplexityRoot.CredentialTargetUse.Login == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.Login(childComplexity), true
+	case "CredentialTargetUse.moduleName":
+		if e.ComplexityRoot.CredentialTargetUse.ModuleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.ModuleName(childComplexity), true
+	case "CredentialTargetUse.name":
+		if e.ComplexityRoot.CredentialTargetUse.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialTargetUse.Name(childComplexity), true
 
 	case "CredentialTypeSpec.description":
 		if e.ComplexityRoot.CredentialTypeSpec.Description == nil {
@@ -3696,6 +3821,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CredentialTypeSpec.Type(childComplexity), true
+
+	case "CredentialUsage.builds":
+		if e.ComplexityRoot.CredentialUsage.Builds == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialUsage.Builds(childComplexity), true
+	case "CredentialUsage.endpoints":
+		if e.ComplexityRoot.CredentialUsage.Endpoints == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialUsage.Endpoints(childComplexity), true
+	case "CredentialUsage.targets":
+		if e.ComplexityRoot.CredentialUsage.Targets == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialUsage.Targets(childComplexity), true
+	case "CredentialUsage.tasks":
+		if e.ComplexityRoot.CredentialUsage.Tasks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CredentialUsage.Tasks(childComplexity), true
 
 	case "FactoryKind.icon":
 		if e.ComplexityRoot.FactoryKind.Icon == nil {
@@ -8176,7 +8326,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.Credentials(childComplexity, args["operationId"].(string), args["search"].(*string), args["searchFields"].([]model.CredentialSearchField), args["type"].(*models.CredentialType), args["tags"].([]string), args["validity"].([]models.CredentialValidity), args["sortBy"].(*model.CredentialSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.Credentials(childComplexity, args["operationId"].(string), args["search"].(*string), args["searchFields"].([]model.CredentialSearchField), args["type"].(*models.CredentialType), args["types"].([]models.CredentialType), args["tags"].([]string), args["validity"].([]models.CredentialValidity), args["sortBy"].(*model.CredentialSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.factoryKinds":
 		if e.ComplexityRoot.Query.FactoryKinds == nil {
 			break
@@ -8510,7 +8660,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.MyCredentials(childComplexity, args["operationIds"].([]string), args["search"].(*string), args["searchFields"].([]model.CredentialSearchField), args["type"].(*models.CredentialType), args["tags"].([]string), args["validity"].([]models.CredentialValidity), args["sortBy"].(*model.CredentialSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
+		return e.ComplexityRoot.Query.MyCredentials(childComplexity, args["operationIds"].([]string), args["search"].(*string), args["searchFields"].([]model.CredentialSearchField), args["type"].(*models.CredentialType), args["types"].([]models.CredentialType), args["tags"].([]string), args["validity"].([]models.CredentialValidity), args["sortBy"].(*model.CredentialSortField), args["sortDirection"].(*model.SortDirection), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.myHashTags":
 		if e.ComplexityRoot.Query.MyHashTags == nil {
 			break
@@ -11946,8 +12096,51 @@ type Credential {
   # documents is the expected fix, not pagination. Loaded on demand (e.g.
   # when the details dialog opens); not part of the table list payload.
   backlinks: [WikiDocument!]!
+  # Where the credential is used: what modules' values name it (credential
+  # fields). Loaded on demand (the details dialog, a delete's warning).
+  usage: CredentialUsage!
   createdAt: String!
   updatedAt: String!
+}
+
+# Where a credential is used. Targets and endpoints name it live: their
+# channel gets it at the next call, so editing it reaches them, and deleting
+# or converting it leaves them unable to log in. Builds and tasks are
+# history: what a minion was built with, or a task carried, stays as it was.
+type CredentialUsage {
+  targets: [CredentialTargetUse!]!
+  endpoints: [CredentialEndpointUse!]!
+  builds: Int!
+  tasks: Int!
+}
+
+type CredentialTargetUse {
+  id: ID!
+  name: String!
+  moduleName: String!
+  kind: String!
+  buildId: ID!
+  # The credential types the target's fields naming it take; empty for any.
+  accept: [CredentialType!]!
+  # How the credential last fared logging in to the target; null when the
+  # channel has not tried it.
+  login: CredentialLogin
+}
+
+type CredentialEndpointUse {
+  id: ID!
+  name: String!
+  moduleName: String!
+  kind: String!
+  # The credential types the endpoint's fields naming it take; empty for any.
+  accept: [CredentialType!]!
+}
+
+# A login with a credential, as a channel reported it.
+type CredentialLogin {
+  # The target took it; false when it refused it.
+  accepted: Boolean!
+  at: String!
 }
 
 # One field of a credential type.
@@ -12072,6 +12265,9 @@ extend type Query {
     # Restricts which fields ` + "`" + `search` + "`" + ` matches. Null/empty = all fields.
     searchFields: [CredentialSearchField!]
     type: CredentialType
+    # Restricts to any of these types (a picker for a field that takes
+    # several). Null/empty = every type; with type, both apply.
+    types: [CredentialType!]
     tags: [String!]
     # Restricts to these validity states. Null/empty = every state. The UI
     # default is [UNKNOWN, VALID] — an untested credential is still worth
@@ -12115,6 +12311,9 @@ extend type Query {
     # Restricts which fields ` + "`" + `search` + "`" + ` matches. Null/empty = all fields.
     searchFields: [CredentialSearchField!]
     type: CredentialType
+    # Restricts to any of these types (a picker for a field that takes
+    # several). Null/empty = every type; with type, both apply.
+    types: [CredentialType!]
     tags: [String!]
     # Restricts to these validity states. Null/empty = every state. The UI
     # default is [UNKNOWN, VALID] — an untested credential is still worth
@@ -13885,8 +14084,12 @@ type ModuleEnumOption {
   description: String
 }
 
-# A typed field: a property or an action parameter.
+# A typed field: a property, an action parameter, a connection or build
+# schema's field.
 # type: string | int | number | bool | enum | duration | bytes | url | secret | string_list | string_map
+#   | datetime | enum_list | file | stream | credential | credential_list
+# A credential field's value is a credential's id (a credential_list's, a
+# list of ids, in order) from the operation's credentials.
 type ModuleField {
   key: String!
   type: String!
@@ -13909,11 +14112,13 @@ type ModuleField {
   maxLength: Int
   # string_map: what every key must match.
   keyPattern: String
-  # string_list / string_map / enum_list: most items or entries.
+  # string_list / string_map / enum_list / credential_list: most items or
+  # entries.
   maxItems: Int
   options: [ModuleEnumOption!]
   # file: the extensions (".ico") or media types ("image/*") a file may have;
-  # any when empty.
+  # credential / credential_list: the credential types it takes (KEY,
+  # PLAINTEXT...). Any when empty.
   accept: [String!]
   # file: the largest file in bytes; null when there is no limit.
   maxSize: JSON
@@ -17780,46 +17985,51 @@ func (ec *executionContext) field_Query_credentials_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["type"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "tags", ec.unmarshalOString2ᚕstringᚄ)
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "types", ec.unmarshalOCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["tags"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "validity", ec.unmarshalOCredentialValidity2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialValidityᚄ)
+	args["types"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "tags", ec.unmarshalOString2ᚕstringᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["validity"] = arg5
-	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy", ec.unmarshalOCredentialSortField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialSortField)
+	args["tags"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "validity", ec.unmarshalOCredentialValidity2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialValidityᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["sortBy"] = arg6
-	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "sortDirection", ec.unmarshalOSortDirection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection)
+	args["validity"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy", ec.unmarshalOCredentialSortField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialSortField)
 	if err != nil {
 		return nil, err
 	}
-	args["sortDirection"] = arg7
-	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	args["sortBy"] = arg7
+	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "sortDirection", ec.unmarshalOSortDirection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection)
 	if err != nil {
 		return nil, err
 	}
-	args["first"] = arg8
-	arg9, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	args["sortDirection"] = arg8
+	arg9, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg9
-	arg10, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	args["first"] = arg9
+	arg10, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["last"] = arg10
-	arg11, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	args["after"] = arg10
+	arg11, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["before"] = arg11
+	args["last"] = arg11
+	arg12, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg12
 	return args, nil
 }
 
@@ -18487,46 +18697,51 @@ func (ec *executionContext) field_Query_myCredentials_args(ctx context.Context, 
 		return nil, err
 	}
 	args["type"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "tags", ec.unmarshalOString2ᚕstringᚄ)
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "types", ec.unmarshalOCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["tags"] = arg4
-	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "validity", ec.unmarshalOCredentialValidity2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialValidityᚄ)
+	args["types"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "tags", ec.unmarshalOString2ᚕstringᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["validity"] = arg5
-	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy", ec.unmarshalOCredentialSortField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialSortField)
+	args["tags"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "validity", ec.unmarshalOCredentialValidity2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialValidityᚄ)
 	if err != nil {
 		return nil, err
 	}
-	args["sortBy"] = arg6
-	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "sortDirection", ec.unmarshalOSortDirection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection)
+	args["validity"] = arg6
+	arg7, err := graphql.ProcessArgField(ctx, rawArgs, "sortBy", ec.unmarshalOCredentialSortField2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialSortField)
 	if err != nil {
 		return nil, err
 	}
-	args["sortDirection"] = arg7
-	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	args["sortBy"] = arg7
+	arg8, err := graphql.ProcessArgField(ctx, rawArgs, "sortDirection", ec.unmarshalOSortDirection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐSortDirection)
 	if err != nil {
 		return nil, err
 	}
-	args["first"] = arg8
-	arg9, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	args["sortDirection"] = arg8
+	arg9, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg9
-	arg10, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	args["first"] = arg9
+	arg10, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["last"] = arg10
-	arg11, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	args["after"] = arg10
+	arg11, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["before"] = arg11
+	args["last"] = arg11
+	arg12, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg12
 	return args, nil
 }
 
@@ -26503,6 +26718,45 @@ func (ec *executionContext) fieldContext_Credential_backlinks(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Credential_usage(ctx context.Context, field graphql.CollectedField, obj *models.Credential) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Credential_usage,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Credential().Usage(ctx, obj)
+		},
+		nil,
+		ec.marshalNCredentialUsage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialUsage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Credential_usage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Credential",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "targets":
+				return ec.fieldContext_CredentialUsage_targets(ctx, field)
+			case "endpoints":
+				return ec.fieldContext_CredentialUsage_endpoints(ctx, field)
+			case "builds":
+				return ec.fieldContext_CredentialUsage_builds(ctx, field)
+			case "tasks":
+				return ec.fieldContext_CredentialUsage_tasks(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CredentialUsage", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Credential_createdAt(ctx context.Context, field graphql.CollectedField, obj *models.Credential) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27059,6 +27313,8 @@ func (ec *executionContext) fieldContext_CredentialEdge_node(_ context.Context, 
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -27098,6 +27354,151 @@ func (ec *executionContext) fieldContext_CredentialEdge_cursor(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialEndpointUse_id(ctx context.Context, field graphql.CollectedField, obj *model.CredentialEndpointUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialEndpointUse_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialEndpointUse_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialEndpointUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialEndpointUse_name(ctx context.Context, field graphql.CollectedField, obj *model.CredentialEndpointUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialEndpointUse_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialEndpointUse_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialEndpointUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialEndpointUse_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.CredentialEndpointUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialEndpointUse_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialEndpointUse_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialEndpointUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialEndpointUse_kind(ctx context.Context, field graphql.CollectedField, obj *model.CredentialEndpointUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialEndpointUse_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialEndpointUse_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialEndpointUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialEndpointUse_accept(ctx context.Context, field graphql.CollectedField, obj *model.CredentialEndpointUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialEndpointUse_accept,
+		func(ctx context.Context) (any, error) {
+			return obj.Accept, nil
+		},
+		nil,
+		ec.marshalNCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialEndpointUse_accept(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialEndpointUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type CredentialType does not have child fields")
 		},
 	}
 	return fc, nil
@@ -27272,6 +27673,8 @@ func (ec *executionContext) fieldContext_CredentialEvent_credential(_ context.Co
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -27490,6 +27893,64 @@ func (ec *executionContext) fieldContext_CredentialKey_content(_ context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _CredentialLogin_accepted(ctx context.Context, field graphql.CollectedField, obj *model.CredentialLogin) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialLogin_accepted,
+		func(ctx context.Context) (any, error) {
+			return obj.Accepted, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialLogin_accepted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialLogin",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialLogin_at(ctx context.Context, field graphql.CollectedField, obj *model.CredentialLogin) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialLogin_at,
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialLogin_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialLogin",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CredentialProperty_name(ctx context.Context, field graphql.CollectedField, obj *models.CredentialProperty) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27543,6 +28004,215 @@ func (ec *executionContext) fieldContext_CredentialProperty_value(_ context.Cont
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_id(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_name(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_moduleName(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_moduleName,
+		func(ctx context.Context) (any, error) {
+			return obj.ModuleName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_moduleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_kind(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_buildId(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_buildId,
+		func(ctx context.Context) (any, error) {
+			return obj.BuildID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_buildId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_accept(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_accept,
+		func(ctx context.Context) (any, error) {
+			return obj.Accept, nil
+		},
+		nil,
+		ec.marshalNCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_accept(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type CredentialType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialTargetUse_login(ctx context.Context, field graphql.CollectedField, obj *model.CredentialTargetUse) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialTargetUse_login,
+		func(ctx context.Context) (any, error) {
+			return obj.Login, nil
+		},
+		nil,
+		ec.marshalOCredentialLogin2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialLogin,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialTargetUse_login(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialTargetUse",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "accepted":
+				return ec.fieldContext_CredentialLogin_accepted(ctx, field)
+			case "at":
+				return ec.fieldContext_CredentialLogin_at(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CredentialLogin", field.Name)
 		},
 	}
 	return fc, nil
@@ -27671,6 +28341,150 @@ func (ec *executionContext) fieldContext_CredentialTypeSpec_fields(_ context.Con
 				return ec.fieldContext_CredentialFieldSpec_hint(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type CredentialFieldSpec", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialUsage_targets(ctx context.Context, field graphql.CollectedField, obj *model.CredentialUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialUsage_targets,
+		func(ctx context.Context) (any, error) {
+			return obj.Targets, nil
+		},
+		nil,
+		ec.marshalNCredentialTargetUse2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialTargetUseᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialUsage_targets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_CredentialTargetUse_id(ctx, field)
+			case "name":
+				return ec.fieldContext_CredentialTargetUse_name(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_CredentialTargetUse_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_CredentialTargetUse_kind(ctx, field)
+			case "buildId":
+				return ec.fieldContext_CredentialTargetUse_buildId(ctx, field)
+			case "accept":
+				return ec.fieldContext_CredentialTargetUse_accept(ctx, field)
+			case "login":
+				return ec.fieldContext_CredentialTargetUse_login(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CredentialTargetUse", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialUsage_endpoints(ctx context.Context, field graphql.CollectedField, obj *model.CredentialUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialUsage_endpoints,
+		func(ctx context.Context) (any, error) {
+			return obj.Endpoints, nil
+		},
+		nil,
+		ec.marshalNCredentialEndpointUse2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialEndpointUseᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialUsage_endpoints(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_CredentialEndpointUse_id(ctx, field)
+			case "name":
+				return ec.fieldContext_CredentialEndpointUse_name(ctx, field)
+			case "moduleName":
+				return ec.fieldContext_CredentialEndpointUse_moduleName(ctx, field)
+			case "kind":
+				return ec.fieldContext_CredentialEndpointUse_kind(ctx, field)
+			case "accept":
+				return ec.fieldContext_CredentialEndpointUse_accept(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CredentialEndpointUse", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialUsage_builds(ctx context.Context, field graphql.CollectedField, obj *model.CredentialUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialUsage_builds,
+		func(ctx context.Context) (any, error) {
+			return obj.Builds, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialUsage_builds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CredentialUsage_tasks(ctx context.Context, field graphql.CollectedField, obj *model.CredentialUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_CredentialUsage_tasks,
+		func(ctx context.Context) (any, error) {
+			return obj.Tasks, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_CredentialUsage_tasks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CredentialUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -30135,6 +30949,8 @@ func (ec *executionContext) fieldContext_Hash_credential(_ context.Context, fiel
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -46306,6 +47122,8 @@ func (ec *executionContext) fieldContext_Mutation_createCredential(ctx context.C
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -46433,6 +47251,8 @@ func (ec *executionContext) fieldContext_Mutation_updateCredential(ctx context.C
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -46619,6 +47439,8 @@ func (ec *executionContext) fieldContext_Mutation_addCredentialComment(ctx conte
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -46746,6 +47568,8 @@ func (ec *executionContext) fieldContext_Mutation_updateCredentialComment(ctx co
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -46873,6 +47697,8 @@ func (ec *executionContext) fieldContext_Mutation_deleteCredentialComment(ctx co
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -56350,6 +57176,8 @@ func (ec *executionContext) fieldContext_Query_credential(ctx context.Context, f
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -56384,7 +57212,7 @@ func (ec *executionContext) _Query_credentials(ctx context.Context, field graphq
 		ec.fieldContext_Query_credentials,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Credentials(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["searchFields"].([]model.CredentialSearchField), fc.Args["type"].(*models.CredentialType), fc.Args["tags"].([]string), fc.Args["validity"].([]models.CredentialValidity), fc.Args["sortBy"].(*model.CredentialSortField), fc.Args["sortDirection"].(*model.SortDirection), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().Credentials(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["searchFields"].([]model.CredentialSearchField), fc.Args["type"].(*models.CredentialType), fc.Args["types"].([]models.CredentialType), fc.Args["tags"].([]string), fc.Args["validity"].([]models.CredentialValidity), fc.Args["sortBy"].(*model.CredentialSortField), fc.Args["sortDirection"].(*model.SortDirection), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
 			directive0 := next
@@ -56510,7 +57338,7 @@ func (ec *executionContext) _Query_myCredentials(ctx context.Context, field grap
 		ec.fieldContext_Query_myCredentials,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().MyCredentials(ctx, fc.Args["operationIds"].([]string), fc.Args["search"].(*string), fc.Args["searchFields"].([]model.CredentialSearchField), fc.Args["type"].(*models.CredentialType), fc.Args["tags"].([]string), fc.Args["validity"].([]models.CredentialValidity), fc.Args["sortBy"].(*model.CredentialSortField), fc.Args["sortDirection"].(*model.SortDirection), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+			return ec.Resolvers.Query().MyCredentials(ctx, fc.Args["operationIds"].([]string), fc.Args["search"].(*string), fc.Args["searchFields"].([]model.CredentialSearchField), fc.Args["type"].(*models.CredentialType), fc.Args["types"].([]models.CredentialType), fc.Args["tags"].([]string), fc.Args["validity"].([]models.CredentialValidity), fc.Args["sortBy"].(*model.CredentialSortField), fc.Args["sortDirection"].(*model.SortDirection), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
 		},
 		nil,
 		ec.marshalNCredentialConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialConnection,
@@ -65714,6 +66542,8 @@ func (ec *executionContext) fieldContext_Task_credentialReferences(_ context.Con
 				return ec.fieldContext_Credential_backlinkCount(ctx, field)
 			case "backlinks":
 				return ec.fieldContext_Credential_backlinks(ctx, field)
+			case "usage":
+				return ec.fieldContext_Credential_usage(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Credential_createdAt(ctx, field)
 			case "updatedAt":
@@ -78510,6 +79340,42 @@ func (ec *executionContext) _Credential(ctx context.Context, sel ast.SelectionSe
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "usage":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Credential_usage(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "createdAt":
 			field := field
 
@@ -78950,6 +79816,65 @@ func (ec *executionContext) _CredentialEdge(ctx context.Context, sel ast.Selecti
 	return out
 }
 
+var credentialEndpointUseImplementors = []string{"CredentialEndpointUse"}
+
+func (ec *executionContext) _CredentialEndpointUse(ctx context.Context, sel ast.SelectionSet, obj *model.CredentialEndpointUse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, credentialEndpointUseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CredentialEndpointUse")
+		case "id":
+			out.Values[i] = ec._CredentialEndpointUse_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CredentialEndpointUse_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleName":
+			out.Values[i] = ec._CredentialEndpointUse_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._CredentialEndpointUse_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "accept":
+			out.Values[i] = ec._CredentialEndpointUse_accept(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var credentialEventImplementors = []string{"CredentialEvent"}
 
 func (ec *executionContext) _CredentialEvent(ctx context.Context, sel ast.SelectionSet, obj *model.CredentialEvent) graphql.Marshaler {
@@ -79104,6 +80029,50 @@ func (ec *executionContext) _CredentialKey(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var credentialLoginImplementors = []string{"CredentialLogin"}
+
+func (ec *executionContext) _CredentialLogin(ctx context.Context, sel ast.SelectionSet, obj *model.CredentialLogin) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, credentialLoginImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CredentialLogin")
+		case "accepted":
+			out.Values[i] = ec._CredentialLogin_accepted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "at":
+			out.Values[i] = ec._CredentialLogin_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var credentialPropertyImplementors = []string{"CredentialProperty"}
 
 func (ec *executionContext) _CredentialProperty(ctx context.Context, sel ast.SelectionSet, obj *models.CredentialProperty) graphql.Marshaler {
@@ -79125,6 +80094,72 @@ func (ec *executionContext) _CredentialProperty(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var credentialTargetUseImplementors = []string{"CredentialTargetUse"}
+
+func (ec *executionContext) _CredentialTargetUse(ctx context.Context, sel ast.SelectionSet, obj *model.CredentialTargetUse) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, credentialTargetUseImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CredentialTargetUse")
+		case "id":
+			out.Values[i] = ec._CredentialTargetUse_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._CredentialTargetUse_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "moduleName":
+			out.Values[i] = ec._CredentialTargetUse_moduleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._CredentialTargetUse_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "buildId":
+			out.Values[i] = ec._CredentialTargetUse_buildId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "accept":
+			out.Values[i] = ec._CredentialTargetUse_accept(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "login":
+			out.Values[i] = ec._CredentialTargetUse_login(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -79176,6 +80211,60 @@ func (ec *executionContext) _CredentialTypeSpec(ctx context.Context, sel ast.Sel
 			}
 		case "fields":
 			out.Values[i] = ec._CredentialTypeSpec_fields(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var credentialUsageImplementors = []string{"CredentialUsage"}
+
+func (ec *executionContext) _CredentialUsage(ctx context.Context, sel ast.SelectionSet, obj *model.CredentialUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, credentialUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CredentialUsage")
+		case "targets":
+			out.Values[i] = ec._CredentialUsage_targets(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "endpoints":
+			out.Values[i] = ec._CredentialUsage_endpoints(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "builds":
+			out.Values[i] = ec._CredentialUsage_builds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tasks":
+			out.Values[i] = ec._CredentialUsage_tasks(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -93599,6 +94688,32 @@ func (ec *executionContext) marshalNCredentialEdge2ᚖgithubᚗcomᚋlogoscore�
 	return ec._CredentialEdge(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNCredentialEndpointUse2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialEndpointUseᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CredentialEndpointUse) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCredentialEndpointUse2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialEndpointUse(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCredentialEndpointUse2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialEndpointUse(ctx context.Context, sel ast.SelectionSet, v *model.CredentialEndpointUse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CredentialEndpointUse(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCredentialEvent2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialEvent(ctx context.Context, sel ast.SelectionSet, v model.CredentialEvent) graphql.Marshaler {
 	return ec._CredentialEvent(ctx, sel, &v)
 }
@@ -93719,6 +94834,32 @@ func (ec *executionContext) marshalNCredentialSearchField2githubᚗcomᚋlogosco
 	return v
 }
 
+func (ec *executionContext) marshalNCredentialTargetUse2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialTargetUseᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CredentialTargetUse) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCredentialTargetUse2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialTargetUse(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCredentialTargetUse2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialTargetUse(ctx context.Context, sel ast.SelectionSet, v *model.CredentialTargetUse) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CredentialTargetUse(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNCredentialType2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialType(ctx context.Context, v any) (models.CredentialType, error) {
 	tmp, err := graphql.UnmarshalString(v)
 	res := models.CredentialType(tmp)
@@ -93734,6 +94875,37 @@ func (ec *executionContext) marshalNCredentialType2githubᚗcomᚋlogoscoreᚋlo
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ(ctx context.Context, v any) ([]models.CredentialType, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]models.CredentialType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNCredentialType2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []models.CredentialType) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCredentialType2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialType(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNCredentialTypeSpec2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialTypeSpecᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CredentialTypeSpec) graphql.Marshaler {
@@ -93760,6 +94932,20 @@ func (ec *executionContext) marshalNCredentialTypeSpec2ᚖgithubᚗcomᚋlogosco
 		return graphql.Null
 	}
 	return ec._CredentialTypeSpec(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCredentialUsage2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialUsage(ctx context.Context, sel ast.SelectionSet, v model.CredentialUsage) graphql.Marshaler {
+	return ec._CredentialUsage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNCredentialUsage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialUsage(ctx context.Context, sel ast.SelectionSet, v *model.CredentialUsage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CredentialUsage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNCredentialValidity2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialValidity(ctx context.Context, v any) (models.CredentialValidity, error) {
@@ -96752,6 +97938,13 @@ func (ec *executionContext) unmarshalOCredentialKeyInput2ᚕᚖgithubᚗcomᚋlo
 	return res, nil
 }
 
+func (ec *executionContext) marshalOCredentialLogin2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialLogin(ctx context.Context, sel ast.SelectionSet, v *model.CredentialLogin) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CredentialLogin(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOCredentialPropertyInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐCredentialPropertyInputᚄ(ctx context.Context, v any) ([]*model.CredentialPropertyInput, error) {
 	if v == nil {
 		return nil, nil
@@ -96821,6 +98014,43 @@ func (ec *executionContext) marshalOCredentialSortField2ᚖgithubᚗcomᚋlogosc
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) unmarshalOCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ(ctx context.Context, v any) ([]models.CredentialType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]models.CredentialType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNCredentialType2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOCredentialType2ᚕgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []models.CredentialType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCredentialType2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialType(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOCredentialType2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐCredentialType(ctx context.Context, v any) (*models.CredentialType, error) {

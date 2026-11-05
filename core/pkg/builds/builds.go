@@ -128,12 +128,13 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 	b := &models.Build{
 		BuildID: uuid.New(), OperationID: op, ModuleName: moduleName, Description: description,
 		Target: in.Target, Platform: in.Platform, SchemaVersion: schema.Version,
-		Values:    protocol.ResolveFieldValues(c.fields, values),
-		Commands:  c.commands,
-		FileIDs:   c.fileIDs,
-		State:     models.BuildStateQueued,
-		Deadline:  s.now().Add(s.cfg.Timeout),
-		CreatedBy: in.Actor, CreatedAt: s.now(),
+		Values:        protocol.ResolveFieldValues(c.fields, values),
+		Commands:      c.commands,
+		FileIDs:       c.fileIDs,
+		CredentialIDs: c.credentialIDs,
+		State:         models.BuildStateQueued,
+		Deadline:      s.now().Add(s.cfg.Timeout),
+		CreatedBy:     in.Actor, CreatedAt: s.now(),
 		PersistedSessionID: in.PersistedSession,
 	}
 	if in.NewPersistedSession {
@@ -184,7 +185,7 @@ func (s *Service) CreateBuild(ctx context.Context, op uuid.UUID, in BuildInput) 
 
 	// The request a factory gets must pass the factory's own check: the same
 	// function, run here with the URLs the dispatch will sign.
-	req, err := s.request(ctx, b, b.Deadline)
+	req, _, err := s.request(ctx, b, b.Deadline)
 	if err != nil {
 		return nil, err
 	}

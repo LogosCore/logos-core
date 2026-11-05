@@ -32,6 +32,9 @@ type MinionTask struct {
 	// (protocol.BuildCommand.Op): what the task names it by on the wire.
 	Op   int     `bson:"op,omitempty" json:"-"`
 	Args JSONMap `bson:"args,omitempty" json:"args,omitempty"`
+	// CredentialIDs are the credentials Args name (credential params): the
+	// task carries them in their place.
+	CredentialIDs []uuid.UUID `bson:"credential_ids,omitempty" json:"credential_ids,omitempty"`
 	// Result is the command's result when it was queued
 	// (protocol.BuildCommand.Result): the shape its data is checked
 	// against and joined by. Empty: no declared shape.

@@ -149,6 +149,7 @@ export const CredentialsQuery = graphql(`
     $search: String
     $searchFields: [CredentialSearchField!]
     $type: CredentialType
+    $types: [CredentialType!]
     $tags: [String!]
     $validity: [CredentialValidity!]
     $sortBy: CredentialSortField
@@ -161,6 +162,7 @@ export const CredentialsQuery = graphql(`
       search: $search
       searchFields: $searchFields
       type: $type
+      types: $types
       tags: $tags
       validity: $validity
       sortBy: $sortBy
@@ -179,6 +181,41 @@ export const CredentialsQuery = graphql(`
         endCursor
       }
       totalCount
+    }
+  }
+`)
+
+// Where a credential is used: the targets and endpoints whose values name
+// it (with what their fields take and how its logins fared), and the builds
+// and tasks it went into. Loaded on demand: the details dialog, the delete
+// and convert warnings.
+export const CredentialUsageQuery = graphql(`
+  query CredentialUsage($id: ID!) {
+    credential(id: $id) {
+      id
+      usage {
+        targets {
+          id
+          name
+          moduleName
+          kind
+          buildId
+          accept
+          login {
+            accepted
+            at
+          }
+        }
+        endpoints {
+          id
+          name
+          moduleName
+          kind
+          accept
+        }
+        builds
+        tasks
+      }
     }
   }
 `)
@@ -229,6 +266,7 @@ export const MyCredentialsQuery = graphql(`
     $search: String
     $searchFields: [CredentialSearchField!]
     $type: CredentialType
+    $types: [CredentialType!]
     $tags: [String!]
     $validity: [CredentialValidity!]
     $sortBy: CredentialSortField
@@ -241,6 +279,7 @@ export const MyCredentialsQuery = graphql(`
       search: $search
       searchFields: $searchFields
       type: $type
+      types: $types
       tags: $tags
       validity: $validity
       sortBy: $sortBy

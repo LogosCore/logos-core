@@ -9,12 +9,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useCredentialStore } from "@/stores/credentials"
+import { useCredentialUsage } from "@/graphql/hooks/credentials"
+import { UsageWarning } from "@/components/findings/credential-usage"
+import { liveUses, usesText } from "@/components/findings/credential-usage-text"
 import { useDeleteCredential } from "@/graphql/hooks/credentials"
 
 export function DeleteCredentialDialog() {
   const deleteDialogOpen = useCredentialStore((s) => s.deleteDialogOpen)
   const selected = useCredentialStore((s) => s.selected)
   const closeDeleteDialog = useCredentialStore((s) => s.closeDeleteDialog)
+  const { data: usage } = useCredentialUsage(selected?.id ?? "", { enabled: deleteDialogOpen })
   const deleteCredential = useDeleteCredential()
   const [error, setError] = useState<string | null>(null)
 
@@ -50,6 +54,12 @@ export function DeleteCredentialDialog() {
             ? This will remove all of its comments as well. This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
+        {usage && liveUses(usage) > 0 && (
+          <UsageWarning>
+            Used by {usesText(usage)}: their channel gets nothing to log in with until they are given
+            another.
+          </UsageWarning>
+        )}
         {error && (
           <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
             {error}

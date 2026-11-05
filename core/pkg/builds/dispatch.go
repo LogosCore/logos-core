@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/blob"
+	"github.com/logoscore/logos-core/core/pkg/credentialrefs"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -126,11 +128,21 @@ func (s *Service) offer(ctx context.Context, b *models.Build) {
 	}
 
 	deadline := s.now().Add(s.cfg.Timeout)
-	req, err := s.request(ctx, b, deadline)
+	req, revs, err := s.request(ctx, b, deadline)
+	var unusable *credentialrefs.Unusable
+	if errors.As(err, &unusable) {
+		// Gone, or converted since the build was queued: no retry brings it
+		// back.
+		s.fail(ctx, b, models.BuildErrorCredentials, unusable.Why)
+		return
+	}
 	if err != nil {
 		s.logger.Warn("prepare a build request", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 		release()
 		return
+	}
+	if err := s.repos.Builds.SetCredentialRevs(ctx, b.BuildID, revs); err != nil {
+		s.logger.Warn("record a build's credentials", zap.String("build_id", b.BuildID.String()), zap.Error(err))
 	}
 	start := int(s.next.Add(1))
 	for i := range insts {
@@ -200,8 +212,9 @@ func (s *Service) setPlan(ctx context.Context, buildID uuid.UUID, instance strin
 	}
 }
 
-// request is the factory.build request of b, with URLs valid until deadline.
-func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time) (protocol.BuildRequest, error) {
+// request is the factory.build request of b, with URLs valid until
+// deadline, and the revision of each credential it carries.
+func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Time) (protocol.BuildRequest, map[string]int64, error) {
 	expiry := time.Until(deadline) + time.Minute
 	req := protocol.BuildRequest{
 		BuildID: b.BuildID.String(), Target: b.Target, Platform: b.Platform,
@@ -223,20 +236,30 @@ func (s *Service) request(ctx context.Context, b *models.Build, deadline time.Ti
 	for _, id := range b.FileIDs {
 		f, err := s.file(ctx, b.OperationID, id)
 		if err != nil {
-			return req, fmt.Errorf("build file %s: %w", id, err)
+			return req, nil, fmt.Errorf("build file %s: %w", id, err)
 		}
 		pf := f.Protocol()
 		if pf.URL, err = s.signer.GetURL(ctx, f.ObjectKey, expiry); err != nil {
-			return req, err
+			return req, nil, err
 		}
 		req.Files[pf.ID] = pf
 	}
+	var revs map[string]int64
+	if len(b.CredentialIDs) > 0 {
+		if s.creds == nil {
+			return req, nil, &credentialrefs.Unusable{Why: "core resolves no credentials here"}
+		}
+		var err error
+		if req.Credentials, revs, err = s.creds.Resolve(ctx, b.OperationID, b.CredentialIDs); err != nil {
+			return req, nil, err
+		}
+	}
 	upload, err := s.signer.PutURL(ctx, artifactKey(b.OperationID, b.BuildID), expiry)
 	if err != nil {
-		return req, err
+		return req, nil, err
 	}
 	req.Artifact = protocol.ArtifactUpload{UploadURL: upload, MaxSize: s.cfg.ArtifactMaxSize}
-	return req, nil
+	return req, revs, nil
 }
 
 // verifyAsync checks a received artifact in the background, once per build
