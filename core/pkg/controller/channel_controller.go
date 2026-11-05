@@ -28,6 +28,9 @@ const dedupKeyPrefix = "channel:sync:msg:"
 // from instances that have not registered over the AMQP control plane.
 type RegistrationGate interface {
 	IsRegistered(ctx context.Context, instance string) (bool, error)
+	// Registration is whether instance is registered, and its module's
+	// name ("" when not known).
+	Registration(ctx context.Context, instance string) (module string, registered bool, err error)
 }
 
 type IChannelController interface {
@@ -135,7 +138,7 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 	// authentication — the instance id is self-asserted; cryptographic channel
 	// auth is a separate follow-up. A registry read failure fails closed (503)
 	// rather than admitting unverified senders.
-	registered, err := ctrl.gate.IsRegistered(ctx, in.ChannelInstance)
+	module, registered, err := ctrl.gate.Registration(ctx, in.ChannelInstance)
 	if err != nil {
 		log.Warn("channel sync: registration check failed, rejecting",
 			zap.String("instance", in.ChannelInstance), zap.Error(err))
@@ -189,7 +192,9 @@ func (ctrl *channelController) Sync(c *gin.Context) {
 		TraceParent: in.TraceParent,
 	}
 	if fresh || err != nil {
-		reply, err := ctrl.minions.Handle(ctx, in.BuildID, in.PeerAddress, in.Data)
+		// The channel that carried it: a hello naming no connection came
+		// through the build's of that channel.
+		reply, err := ctrl.minions.Handle(minionsync.ViaChannel(ctx, module), in.BuildID, in.PeerAddress, in.Data)
 		switch {
 		case errors.Is(err, minionsync.ErrUnopened):
 			c.JSON(http.StatusUnprocessableEntity, responses.NewErrorResponse("the message does not open"))

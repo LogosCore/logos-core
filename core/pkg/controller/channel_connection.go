@@ -23,10 +23,12 @@ import (
 // opens one for each persistent minion connection, and its messages go over
 // it both ways, core sending whenever it has something for a session the
 // connection serves.
+// connSilentFor closes a socket nothing came over, not even a pong, for
+// that long while core waited for it.
+var connSilentFor = 90 * time.Second
+
 const (
 	connPingEvery = 30 * time.Second
-	// connSilentFor closes a socket nothing came over, not even a pong.
-	connSilentFor = 90 * time.Second
 	connWriteWait = 10 * time.Second
 	// connKeepAlive is how often the sessions a connection serves are
 	// checked in while it is open.
@@ -78,7 +80,7 @@ func (ctrl *channelController) Connection(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, responses.NewErrorResponse("invalid input: a %s socket names its open (%s)", kind, protocol.HeaderOpenRequest))
 		return
 	}
-	registered, err := ctrl.gate.IsRegistered(ctx, instance)
+	module, registered, err := ctrl.gate.Registration(ctx, instance)
 	if err != nil {
 		log.Warn("channel connection: registration check failed, rejecting", zap.String("instance", instance), zap.Error(err))
 		c.JSON(http.StatusServiceUnavailable, responses.ErrRegistryUnavailable)
@@ -105,14 +107,16 @@ func (ctrl *channelController) Connection(c *gin.Context) {
 	if err != nil {
 		return // the upgrader answered the client
 	}
-	ctrl.serveConnection(ws, instance, kind, peer, target, policy, request)
+	ctrl.serveConnection(ws, instance, module, kind, peer, target, policy, request)
 }
 
 // serveConnection reads the socket's frames into the sync service until it
 // closes, pinging it, and keeps the sessions it serves checked in.
-func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kind, peer string, target uuid.UUID, policy string, request uint64) {
-	// The socket outlives the handshake's request: its context is its own.
-	ctx, cancel := context.WithCancel(context.Background())
+func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, module, kind, peer string, target uuid.UUID, policy string,
+	request uint64) {
+	// The socket outlives the handshake's request: its context is its own,
+	// saying the channel that carries its messages.
+	ctx, cancel := context.WithCancel(minionsync.ViaChannel(context.Background(), module))
 	defer cancel()
 	log := ctrl.log.With(zap.String("instance", instance), zap.String("peer", peer))
 	var writeMu sync.Mutex
@@ -150,7 +154,8 @@ func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kin
 	}()
 
 	ws.SetReadLimit(ctrl.maxSize + connFrameOverhead)
-	alive := func() error { return ws.SetReadDeadline(time.Now().Add(connSilentFor)) }
+	silent := connSilentFor
+	alive := func() error { return ws.SetReadDeadline(time.Now().Add(silent)) }
 	_ = alive()
 	ws.SetPongHandler(func(string) error { return alive() })
 	go func() {
@@ -176,6 +181,9 @@ func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kin
 	}()
 
 	for {
+		// Silent for its time from now, not from the last frame: the
+		// handling of a message (a slow store) does not count as silence.
+		_ = alive()
 		mt, data, err := ws.ReadMessage()
 		if err != nil {
 			return

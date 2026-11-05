@@ -295,7 +295,7 @@ func (s *Service) tooLarge(ctx context.Context, session *models.MinionSession, t
 // it in the reply to its next one. It returns at once, and coalesces what
 // comes within a moment.
 func (s *Service) Nudge(session uuid.UUID, streams bool) {
-	if s.Connected(session) {
+	if s.reachable(session) {
 		s.pushSoon(session, streams)
 		return
 	}

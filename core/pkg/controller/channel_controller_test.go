@@ -60,11 +60,16 @@ func (f *fakeCache) IsEnabled() bool                                            
 // rejection/error variants are constructed inline per test.
 type fakeGate struct {
 	registered bool
+	module     string
 	err        error
 }
 
 func (g fakeGate) IsRegistered(_ context.Context, _ string) (bool, error) {
 	return g.registered, g.err
+}
+
+func (g fakeGate) Registration(_ context.Context, _ string) (string, bool, error) {
+	return g.module, g.registered, g.err
 }
 
 func registeredGate() fakeGate { return fakeGate{registered: true} }
@@ -104,20 +109,21 @@ func doSync(ctrl IChannelController, h http.Header, body []byte) *httptest.Respo
 
 // fakeMinions answers every message with reply and err, and counts them.
 type fakeMinions struct {
-	reply []byte
-	err   error
-	calls int
-	id    string
-	frame []byte
+	reply  []byte
+	err    error
+	calls  int
+	id     string
+	frame  []byte
+	module string
 }
 
 func (f *fakeMinions) OpenedFor(string, uint64) (uuid.UUID, string, bool) { return uuid.Nil, "", false }
 
 func (f *fakeMinions) ForTarget(*minionsync.Conn, string, uint64) bool { return false }
 
-func (f *fakeMinions) Handle(_ context.Context, id, _ string, frame []byte) ([]byte, error) {
+func (f *fakeMinions) Handle(ctx context.Context, id, _ string, frame []byte) ([]byte, error) {
 	f.calls++
-	f.id, f.frame = id, frame
+	f.id, f.frame, f.module = id, frame, minionsync.ChannelOf(ctx)
 	return f.reply, f.err
 }
 
@@ -142,12 +148,13 @@ func newCtrlWith(gate RegistrationGate, minions MinionHandler) IChannelControlle
 // 200 body, nothing as a 204, a message that does not open as a 422.
 func TestChannelSync_MinionAnswers(t *testing.T) {
 	m := &fakeMinions{reply: []byte{0x01, 0xff}}
-	w := doSync(newCtrlWith(registeredGate(), m), validSyncHeaders(), ciphertext)
+	w := doSync(newCtrlWith(fakeGate{registered: true, module: "http"}, m), validSyncHeaders(), ciphertext)
 	if w.Code != http.StatusOK || !bytes.Equal(w.Body.Bytes(), m.reply) || w.Header().Get("Content-Type") != protocol.SyncContentType {
 		t.Fatalf("answer: %d %x %q", w.Code, w.Body.Bytes(), w.Header().Get("Content-Type"))
 	}
-	if m.id != testBuildID || !bytes.Equal(m.frame, ciphertext) {
-		t.Fatalf("handler got %s %x", m.id, m.frame)
+	// With the channel that carried it: its instance's module.
+	if m.id != testBuildID || !bytes.Equal(m.frame, ciphertext) || m.module != "http" {
+		t.Fatalf("handler got %s %x through %q", m.id, m.frame, m.module)
 	}
 	if out := protocol.OutboundFromHeaders(w.Header()); out.BuildID != testBuildID {
 		t.Fatalf("reply headers %+v", out)

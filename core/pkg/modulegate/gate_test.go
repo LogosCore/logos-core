@@ -136,6 +136,28 @@ func TestIsRegistered_RegisteredCachesPositive(t *testing.T) {
 	}
 }
 
+// The module's name comes with the registration, from the registry and
+// then from the cache.
+func TestRegistration_ModuleName(t *testing.T) {
+	repo := &fakeRepo{row: &models.Module{Name: "http", Instance: "http-1", Status: models.ModuleStatusRegistered}}
+	c := newMemCache()
+	g := newGate(repo, c)
+	for i := range 2 {
+		module, ok, err := g.Registration(context.Background(), "http-1")
+		if err != nil || !ok || module != "http" {
+			t.Fatalf("check %d: %q %v %v", i+1, module, ok, err)
+		}
+	}
+	if repo.calls != 1 {
+		t.Fatalf("repo calls = %d, want 1 (the second from the cache)", repo.calls)
+	}
+	// An entry from before names were cached: registered, no name.
+	c.data[cacheKeyPrefix+"http-2"] = cacheValueRegistered
+	if module, ok, err := g.Registration(context.Background(), "http-2"); err != nil || !ok || module != "" {
+		t.Fatalf("an old entry: %q %v %v", module, ok, err)
+	}
+}
+
 func TestIsRegistered_UnknownNotCached(t *testing.T) {
 	repo := &fakeRepo{row: nil} // ErrNoSuchDocuments
 	c := newMemCache()

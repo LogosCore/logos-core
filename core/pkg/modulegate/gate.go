@@ -19,8 +19,10 @@ import (
 )
 
 // cacheKeyPrefix namespaces per-instance registration markers in the shared
-// cache. cacheValueRegistered is the only value ever stored — presence of the
-// key means "registered"; absence means "consult the registry".
+// cache. A key's value is the instance's module name — presence means
+// "registered"; absence means "consult the registry". cacheValueRegistered
+// is what entries held before names were kept (and still do for a module
+// with none): registered, its name not known.
 const (
 	cacheKeyPrefix       = "module:registered:"
 	cacheValueRegistered = "1"
@@ -48,34 +50,53 @@ func New(repo repository.IModuleRegistryRepository, c cache.Cache, ttl time.Dura
 }
 
 // IsRegistered reports whether instance currently has a registered row.
-//
-// Only positive results are cached: a negative (not found, or dead/deregistered)
-// is never cached so a freshly-registered instance is accepted without waiting
-// out a TTL. A registry read error is propagated so the caller can fail closed —
-// a cache miss (including a disabled cache) is not an error, only a fall-through
-// to the registry.
 func (g *Gate) IsRegistered(ctx context.Context, instance string) (bool, error) {
+	_, ok, err := g.Registration(ctx, instance)
+	return ok, err
+}
+
+// Registration reports whether instance currently has a registered row, and
+// the name of its module: a minion message it carries came through a
+// connection of that channel.
+//
+// Only positive results are cached, as the module's name: a negative (not
+// found, or dead/deregistered) is never cached so a freshly-registered
+// instance is accepted without waiting out a TTL. A registry read error is
+// propagated so the caller can fail closed — a cache miss (including a
+// disabled cache) is not an error, only a fall-through to the registry. An
+// entry from before names were cached (cacheValueRegistered) says
+// registered, its module not known, until its TTL.
+func (g *Gate) Registration(ctx context.Context, instance string) (string, bool, error) {
 	key := cacheKeyPrefix + instance
-	if v, err := g.cache.Get(ctx, key); err == nil && v == cacheValueRegistered {
-		return true, nil
+	if v, err := g.cache.Get(ctx, key); err == nil && v != "" {
+		if v == cacheValueRegistered {
+			return "", true, nil
+		}
+		return v, true, nil
 	}
 
 	reg, err := g.repo.FindByInstance(ctx, instance)
 	if err != nil {
 		if repository.IsNotFound(err) {
-			return false, nil // never registered — do not cache
+			return "", false, nil // never registered — do not cache
 		}
-		return false, fmt.Errorf("registry lookup for instance %q: %w", instance, err)
+		return "", false, fmt.Errorf("registry lookup for instance %q: %w", instance, err)
 	}
 	if reg.Status != models.ModuleStatusRegistered {
-		return false, nil // dead/deregistered — do not cache
+		return "", false, nil // dead/deregistered — do not cache
 	}
 
-	// Best-effort positive cache; a failure here only costs a future Mongo read.
-	if err := g.cache.Set(ctx, key, cacheValueRegistered, g.ttl); err != nil {
+	// Best-effort positive cache; a failure here only costs a future Mongo
+	// read. A module always has its name; one without is cached as known
+	// registered only.
+	value := reg.Name
+	if value == "" {
+		value = cacheValueRegistered
+	}
+	if err := g.cache.Set(ctx, key, value, g.ttl); err != nil {
 		g.log.Debug("cache set failed", zap.String("instance", instance), zap.Error(err))
 	}
-	return true, nil
+	return reg.Name, true, nil
 }
 
 // Invalidate drops the positive cache entry for instance so the next check

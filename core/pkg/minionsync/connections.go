@@ -32,6 +32,31 @@ const notifyDelay = 100 * time.Millisecond
 // pendingTTL is how long core waits for the answer to a message it sent.
 const pendingTTL = 10 * time.Minute
 
+// unusedFor is how long a reverse-persistent socket stays open while no
+// open session uses it: nothing spoke over it yet (its minion speaks first,
+// at once), or its sessions closed and its minion did not start over on
+// it.
+var unusedFor = 2 * time.Minute
+
+// channelKey keys the channel module a minion message came through in a
+// context (ViaChannel).
+type channelKey struct{}
+
+// ViaChannel is ctx for the minion messages a channel of module carries (a
+// sync call's, a connection socket's): a hello that names no connection is
+// taken to come through the build's connection of that channel, when only
+// one fits.
+func ViaChannel(ctx context.Context, module string) context.Context {
+	return context.WithValue(ctx, channelKey{}, module)
+}
+
+// ChannelOf is the channel module ctx says carried the message
+// (ViaChannel); "" for none.
+func ChannelOf(ctx context.Context) string {
+	m, _ := ctx.Value(channelKey{}).(string)
+	return m
+}
+
 // Conn is a persistent minion connection: a connection socket a channel
 // opened. Its socket's handler reads frames into Exchange and gives Conn
 // the way to write them back.
@@ -51,12 +76,17 @@ type Conn struct {
 	// allowance is each session's standing get_tasks: present once the
 	// minion said one on this connection, a nil max for no limit.
 	allowance map[uuid.UUID]*uint64
-	// pending are the ids of the messages core sent on it, waiting for
-	// their answers.
-	pending map[string]time.Time
 	// active is when a message last went over it, either way: a
 	// bind-persistent connection closes after its policy's idle time.
 	active time.Time
+	// owner is the session whose own connection it is: the first that
+	// spoke over it, or the next once that one's session closed or another
+	// process took it. The socket says its minion is there; sessions it
+	// relays (a pivot's) are only reached over it.
+	owner uuid.UUID
+	// unusedSince is since when no open session uses it (from its open);
+	// zero while one does.
+	unusedSince time.Time
 
 	// A bind-persistent connection (bind_persistent.go): target is the
 	// target it was opened for (uuid.Nil for a reverse one), and the rest
@@ -103,9 +133,39 @@ func (c *Conn) placeOf() int {
 // NewConn is a connection whose frames go out through send, and which
 // close closes (the socket).
 func NewConn(id, kind, instance, peer string, send func(ctx context.Context, f protocol.ConnFrame) error, close func()) *Conn {
+	now := time.Now()
 	return &Conn{ID: id, Kind: kind, Instance: instance, Peer: peer, send: send, close: close,
-		allowance: map[uuid.UUID]*uint64{}, pending: map[string]time.Time{}, active: time.Now(),
+		allowance: map[uuid.UUID]*uint64{}, active: now, unusedSince: now,
 		heard: make(chan struct{}), gone: make(chan struct{}), carried: map[uuid.UUID]bool{}}
+}
+
+// claim makes session c's own when c has none: the minion whose
+// connection it is speaks first. It reports whether session is.
+func (c *Conn) claim(session uuid.UUID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.owner == uuid.Nil {
+		c.owner = session
+	}
+	return c.owner == session
+}
+
+// disown says c is no longer session's own (its session closed, another
+// process took it, or c no longer serves it): the next session to speak
+// over it is.
+func (c *Conn) disown(session uuid.UUID) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.owner == session {
+		c.owner = uuid.Nil
+	}
+}
+
+// ownerOf is the session whose own connection c is; uuid.Nil for none.
+func (c *Conn) ownerOf() uuid.UUID {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.owner
 }
 
 // touch records an exchange on c now: its idle time starts over.
@@ -136,25 +196,56 @@ func (c *Conn) allowanceOf(session uuid.UUID) (max *uint64, ok bool) {
 	return max, ok
 }
 
-func (c *Conn) addPending(id []byte, now time.Time) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for k, at := range c.pending {
-		if now.Sub(at) > pendingTTL {
-			delete(c.pending, k)
-		}
-	}
-	c.pending[string(id)] = now
+// answers are the messages core pushed to sessions and waits for the
+// minions' answers to, by session: an answer is taken over any socket of
+// its session (the minion may have connected again), once, within
+// pendingTTL.
+type answers struct {
+	mu        sync.Mutex
+	bySession map[uuid.UUID]map[string]time.Time
+	swept     time.Time
 }
 
-// takePending reports whether id names a message core sent on c and is
-// waiting the answer to, which it no longer waits for.
-func (c *Conn) takePending(id []byte) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	_, ok := c.pending[string(id)]
-	delete(c.pending, string(id))
-	return ok
+func newAnswers() *answers { return &answers{bySession: map[uuid.UUID]map[string]time.Time{}} }
+
+// add records that core sent message id to session at now.
+func (a *answers) add(session uuid.UUID, id []byte, now time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if now.Sub(a.swept) > pendingTTL {
+		// Now and then, those no answer came for.
+		for sid, m := range a.bySession {
+			for k, at := range m {
+				if now.Sub(at) > pendingTTL {
+					delete(m, k)
+				}
+			}
+			if len(m) == 0 {
+				delete(a.bySession, sid)
+			}
+		}
+		a.swept = now
+	}
+	m := a.bySession[session]
+	if m == nil {
+		m = map[string]time.Time{}
+		a.bySession[session] = m
+	}
+	m[string(id)] = now
+}
+
+// take reports whether id names a message core sent to session and still
+// waits the answer to, which it no longer waits for.
+func (a *answers) take(session uuid.UUID, id []byte, now time.Time) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	m := a.bySession[session]
+	at, ok := m[string(id)]
+	delete(m, string(id))
+	if len(m) == 0 {
+		delete(a.bySession, session)
+	}
+	return ok && now.Sub(at) <= pendingTTL
 }
 
 // connUse is a connection serving a session, with when it last carried one
@@ -173,6 +264,9 @@ type connections struct {
 	scheduled map[uuid.UUID]bool
 	// sending serializes a session's pushes.
 	sending map[uuid.UUID]*sync.Mutex
+	// flags serialize the writes of sessions' connected flags, by their
+	// id's first byte.
+	flags [256]sync.Mutex
 }
 
 func newConnections() *connections {
@@ -202,33 +296,37 @@ func (cs *connections) seen(session uuid.UUID, c *Conn, at time.Time) (first boo
 	return first, evicted
 }
 
-// remove forgets c, and returns the sessions it served that have no other
-// connection open.
-func (cs *connections) remove(c *Conn) (served, nowNone []uuid.UUID) {
+// remove forgets c, for every session it served.
+func (cs *connections) remove(c *Conn) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
-	for session, uses := range cs.bySession {
-		kept := uses[:0]
-		had := false
-		for _, u := range uses {
-			if u.conn == c {
-				had = true
-				continue
-			}
+	for session := range cs.bySession {
+		cs.dropLocked(session, c)
+	}
+}
+
+// drop forgets that c serves session.
+func (cs *connections) drop(session uuid.UUID, c *Conn) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.dropLocked(session, c)
+}
+
+func (cs *connections) dropLocked(session uuid.UUID, c *Conn) {
+	uses := cs.bySession[session]
+	kept := make([]connUse, 0, len(uses))
+	for _, u := range uses {
+		if u.conn != c {
 			kept = append(kept, u)
 		}
-		if !had {
-			continue
-		}
-		served = append(served, session)
-		if len(kept) == 0 {
-			delete(cs.bySession, session)
-			nowNone = append(nowNone, session)
-		} else {
-			cs.bySession[session] = kept
-		}
 	}
-	return served, nowNone
+	switch {
+	case len(kept) == len(uses):
+	case len(kept) == 0:
+		delete(cs.bySession, session)
+	default:
+		cs.bySession[session] = kept
+	}
 }
 
 // of are the session's open connections, the one that carried its latest
@@ -271,9 +369,21 @@ func (cs *connections) lock(session uuid.UUID) func() {
 	return m.Unlock
 }
 
-// Connected reports whether a persistent connection serving the session is
-// open.
+// Connected reports whether a persistent connection of the session's own
+// is open: its minion is there. A session a connection only relays (a
+// pivot's) is not: its own messages say when it was there.
 func (s *Service) Connected(session uuid.UUID) bool {
+	for _, c := range s.conns.of(session) {
+		if c.ownerOf() == session {
+			return true
+		}
+	}
+	return false
+}
+
+// reachable reports whether a persistent connection open reaches the
+// session: its own, or one that relays it.
+func (s *Service) reachable(session uuid.UUID) bool {
 	return len(s.conns.of(session)) > 0
 }
 
@@ -390,33 +500,41 @@ func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.
 	if err != nil {
 		return err
 	}
-	c.addPending(msgID, s.now())
+	s.answers.add(id, msgID, s.now())
 	if err := c.send(ctx, protocol.ConnFrame{ID: id[:], Data: sealed}); err != nil {
-		c.takePending(msgID)
+		s.answers.take(id, msgID, s.now())
 		return err
 	}
 	c.carry(items)
 	return nil
 }
 
-// seenOn records that via carried a message of session: a session that had
-// no connection open is now connected, and a connection a full list let
-// go is closed.
+// seenOn records that via carried a message of session: via reaches the
+// session from now on, first among its connections, and is its own when
+// via has none (the minion whose connection it is speaks first). A
+// session's oldest connection a full list let go no longer reaches it, and
+// closes when it reaches no one.
 func (s *Service) seenOn(ctx context.Context, via *Conn, session *models.MinionSession) {
-	if via.target != uuid.Nil && via.follow(session.SessionID) {
+	sid := session.SessionID
+	if via.target != uuid.Nil && via.follow(sid) {
 		// A bind-persistent target's minion is the session that last spoke
 		// over its connection: the one it opened with, or one it staged
 		// over it since (its session closed, or it restarted).
 		s.linkTarget(ctx, via, session)
 	}
-	first, evicted := s.conns.seen(session.SessionID, via, s.now())
+	was := s.Connected(sid)
+	via.claim(sid)
+	_, evicted := s.conns.seen(sid, via, s.now())
 	if evicted != nil {
-		s.logger.Info("minion connection: a session's oldest let go", zap.String("session_id", session.SessionID.String()),
+		evicted.disown(sid)
+		s.logger.Info("minion connection: a session's oldest let go", zap.String("session_id", sid.String()),
 			zap.String("conn", evicted.ID))
-		evicted.closeBecause("a newer connection of its session took its place")
+		if len(s.conns.sessionsOf(evicted)) == 0 {
+			evicted.closeBecause("a newer connection of its session took its place")
+		}
 	}
-	if first {
-		s.setConnected(ctx, session.SessionID, true)
+	if now := s.Connected(sid); now != was {
+		s.setConnected(ctx, sid)
 		s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
 	}
 	if via.target != uuid.Nil && via.asksFor(session.SessionID) {
@@ -427,9 +545,16 @@ func (s *Service) seenOn(ctx context.Context, via *Conn, session *models.MinionS
 	}
 }
 
-// setConnected records whether a persistent connection serving the session
-// is open, for the Sessions list's filters (models.MinionSession.Connected).
-func (s *Service) setConnected(ctx context.Context, session uuid.UUID, connected bool) {
+// setConnected records whether a persistent connection of the session's
+// own is open, for the Sessions list's filters
+// (models.MinionSession.Connected): what core holds as it writes, one write
+// of the session's at a time, so of two changes racing (a socket closing as
+// the next opens) the last write says the latest.
+func (s *Service) setConnected(ctx context.Context, session uuid.UUID) {
+	m := &s.conns.flags[session[0]]
+	m.Lock()
+	defer m.Unlock()
+	connected := s.Connected(session)
 	if err := s.sessions.SetConnected(ctx, session, connected); err != nil {
 		s.logger.Warn("minion connection: record the session connected", zap.String("session_id", session.String()),
 			zap.Bool("connected", connected), zap.Error(err))
@@ -449,17 +574,82 @@ func (s *Service) resetConnected(ctx context.Context) {
 	}
 }
 
-// KeepAlive tells the sessions c serves that their minion is there: a
-// check-in each, so their last seen stays now and they are not late. A
-// connection's socket handler calls it while the socket is open.
+// KeepAlive is the open socket of c saying its minion is there, every
+// connKeepAlive (its handler calls it while the socket is open): a check-in
+// for the session whose own connection it is, so its last seen stays now
+// and it is not late. Sessions c only relays check in by their own
+// messages. A session closed meanwhile is told so (session_closed, as the
+// reply to its next message would say) and no longer served; a
+// reverse-persistent socket no open session uses for unusedFor closes.
 func (s *Service) KeepAlive(ctx context.Context, c *Conn) {
-	for _, session := range s.conns.sessionsOf(c) {
-		s.touch(ctx, session, c.Peer)
+	now := s.now()
+	owner := c.ownerOf()
+	used := false
+	for _, sid := range s.conns.sessionsOf(c) {
+		from, err := s.sender(ctx, sid)
+		switch {
+		case err != nil || from.session == nil:
+			used = true // not known now: kept
+			continue
+		case from.session.Closed(now):
+			s.tellClosed(ctx, c, from)
+			continue
+		}
+		used = true
+		if sid == owner {
+			s.checkInBy(ctx, from, c.Peer)
+		}
+	}
+	s.closeUnused(c, used, now)
+}
+
+// tellClosed tells the minion over c that its session closed (an
+// operation deleted with it), as the reply to its next message would: a
+// minion that sends nothing while connected learns it too, and starts
+// over. c no longer serves the session.
+func (s *Service) tellClosed(ctx context.Context, c *Conn, from *sender) {
+	sid := from.session.SessionID
+	s.conns.drop(sid, c)
+	c.disown(sid)
+	s.setConnected(ctx, sid)
+	items, err := errMessage(protocol.ErrItemSessionClosed, "the session is closed: start over")
+	if err == nil {
+		err = s.push(ctx, c, from, items)
+	}
+	s.logger.Info("minion connection: its session closed, its minion told", zap.String("session_id", sid.String()),
+		zap.String("conn", c.ID), zap.Error(err))
+}
+
+// closeUnused closes c, a reverse-persistent socket, once no open session
+// has used it for unusedFor: none spoke over it, or its sessions closed and
+// its minion did not start over on it. A target's socket goes as its open
+// and policy say.
+func (s *Service) closeUnused(c *Conn, used bool, now time.Time) {
+	if c.target != uuid.Nil {
+		return
+	}
+	c.mu.Lock()
+	if used {
+		c.unusedSince = time.Time{}
+		c.mu.Unlock()
+		return
+	}
+	if c.unusedSince.IsZero() {
+		c.unusedSince = now
+	}
+	unused := now.Sub(c.unusedSince)
+	c.mu.Unlock()
+	if unused >= unusedFor {
+		s.logger.Info("minion connection: no open session uses it, closing", zap.String("conn", c.ID),
+			zap.Duration("for", unused.Round(time.Second)))
+		c.closeBecause("no open session uses it")
 	}
 }
 
-// Closed forgets c once its socket closed: the sessions it served are seen
-// a last time now, and those it leaves with no connection are told of.
+// Closed forgets c once its socket closed. The session whose own
+// connection it was is seen a last time now (late and lost run from here,
+// by its schedule), and told of when it has none left; sessions c relayed
+// keep their own last word.
 func (s *Service) Closed(ctx context.Context, c *Conn) {
 	// First: an open waiting for its minion's first word over c stops
 	// waiting.
@@ -467,13 +657,16 @@ func (s *Service) Closed(ctx context.Context, c *Conn) {
 	if c.target != uuid.Nil {
 		s.persistentClosed(ctx, c)
 	}
-	served, nowNone := s.conns.remove(c)
-	for _, session := range served {
-		s.touch(ctx, session, c.Peer)
+	owner := c.ownerOf()
+	was := owner != uuid.Nil && s.Connected(owner)
+	s.conns.remove(c)
+	if owner == uuid.Nil {
+		return
 	}
-	for _, session := range nowNone {
-		s.setConnected(ctx, session, false)
-		s.publishSession(ctx, session)
+	s.touch(ctx, owner, c.Peer)
+	if was && !s.Connected(owner) {
+		s.setConnected(ctx, owner)
+		s.publishSession(ctx, owner)
 	}
 }
 
@@ -481,11 +674,20 @@ func (s *Service) Closed(ctx context.Context, c *Conn) {
 // when it goes late and lost by its schedule.
 func (s *Service) touch(ctx context.Context, session uuid.UUID, peer string) {
 	from, err := s.sender(ctx, session)
-	if err != nil || from.session == nil || from.session.Closed(s.now()) {
+	if err != nil || from.session == nil {
 		return
 	}
-	if err := s.sessions.CheckIn(ctx, session, checkIn(s.now(), peer, nil, from.session.Sleep, from.session.ConnKind)); err != nil {
-		s.logger.Warn("minion connection: check the session in", zap.String("session_id", session.String()), zap.Error(err))
+	s.checkInBy(ctx, from, peer)
+}
+
+// checkInBy checks from's open session in now, from peer.
+func (s *Service) checkInBy(ctx context.Context, from *sender, peer string) {
+	session := from.session
+	if session.Closed(s.now()) {
+		return
+	}
+	if err := s.sessions.CheckIn(ctx, session.SessionID, checkIn(s.now(), peer, nil, session.Sleep, session.ConnKind)); err != nil {
+		s.logger.Warn("minion connection: check the session in", zap.String("session_id", session.SessionID.String()), zap.Error(err))
 	}
 }
 
