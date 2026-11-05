@@ -58,16 +58,39 @@ type Conn struct {
 	// bind-persistent connection closes after its policy's idle time.
 	active time.Time
 
-	// target is the bind-persistent target the connection was opened for
-	// (uuid.Nil for a reverse one), policy its policy then; linked once
-	// its first session is linked to the target; why why it is closing.
-	target uuid.UUID
-	policy string
-	linked bool
-	why    string
-	// place is the target's build connection, from the open that brought
-	// c: a hello over it that says none is of it.
-	place int
+	// A bind-persistent connection (bind_persistent.go): target is the
+	// target it was opened for (uuid.Nil for a reverse one), and the rest
+	// what the open that brought it knew of the target: its policy, its
+	// build and operation (the minion over it is of them), the session it
+	// is linked to (kept as the minion's sessions change), and its build
+	// connection (place: a hello over it that says none is of it).
+	target           uuid.UUID
+	policy           string
+	build, operation uuid.UUID
+	session          uuid.UUID
+	place            int
+	// failures and downSince are the target's failures in a row, and since
+	// when, as its open found them: a connection that drops soon after its
+	// minion spoke counts one more.
+	failures  int
+	downSince *time.Time
+	// heard is closed at the first message of the target's minion over it
+	// (spokeAt), gone once its socket closed.
+	heard   chan struct{}
+	spokeAt time.Time
+	gone    chan struct{}
+	ended   bool
+	// why is why core closes it; refused says why is that a minion not the
+	// target's spoke over it.
+	why     string
+	refused bool
+	// carried are the tasks it carried, by id: sent over it, or named by a
+	// result or an ack that came over it. It is not closed idle while one
+	// of them runs.
+	carried map[uuid.UUID]bool
+	// asked is the session core asked over it which tasks its minion still
+	// has (reacks.go).
+	asked uuid.UUID
 }
 
 // placeOf is the build connection of c's target, once known; 0 otherwise.
@@ -81,7 +104,8 @@ func (c *Conn) placeOf() int {
 // close closes (the socket).
 func NewConn(id, kind, instance, peer string, send func(ctx context.Context, f protocol.ConnFrame) error, close func()) *Conn {
 	return &Conn{ID: id, Kind: kind, Instance: instance, Peer: peer, send: send, close: close,
-		allowance: map[uuid.UUID]*uint64{}, pending: map[string]time.Time{}, active: time.Now()}
+		allowance: map[uuid.UUID]*uint64{}, pending: map[string]time.Time{}, active: time.Now(),
+		heard: make(chan struct{}), gone: make(chan struct{}), carried: map[uuid.UUID]bool{}}
 }
 
 // touch records an exchange on c now: its idle time starts over.
@@ -371,6 +395,7 @@ func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.
 		c.takePending(msgID)
 		return err
 	}
+	c.carry(items)
 	return nil
 }
 
@@ -378,19 +403,27 @@ func (s *Service) pushUnder(ctx context.Context, c *Conn, from *sender, id uuid.
 // no connection open is now connected, and a connection a full list let
 // go is closed.
 func (s *Service) seenOn(ctx context.Context, via *Conn, session *models.MinionSession) {
-	if via.target != uuid.Nil && !via.linked {
-		via.linked = true
-		s.linkTarget(ctx, via.target, session)
+	if via.target != uuid.Nil && via.follow(session.SessionID) {
+		// A bind-persistent target's minion is the session that last spoke
+		// over its connection: the one it opened with, or one it staged
+		// over it since (its session closed, or it restarted).
+		s.linkTarget(ctx, via, session)
 	}
 	first, evicted := s.conns.seen(session.SessionID, via, s.now())
-	if evicted != nil && evicted.close != nil {
+	if evicted != nil {
 		s.logger.Info("minion connection: a session's oldest let go", zap.String("session_id", session.SessionID.String()),
 			zap.String("conn", evicted.ID))
-		evicted.close()
+		evicted.closeBecause("a newer connection of its session took its place")
 	}
 	if first {
 		s.setConnected(ctx, session.SessionID, true)
 		s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(session)))
+	}
+	if via.target != uuid.Nil && via.asksFor(session.SessionID) {
+		// Back over a new connection: its minion may not have the tasks
+		// core thinks it runs (a channel acting as the minion ran them
+		// inside the one that went).
+		s.askTasks(ctx, session.SessionID, "back over a new connection")
 	}
 }
 
@@ -428,6 +461,9 @@ func (s *Service) KeepAlive(ctx context.Context, c *Conn) {
 // Closed forgets c once its socket closed: the sessions it served are seen
 // a last time now, and those it leaves with no connection are told of.
 func (s *Service) Closed(ctx context.Context, c *Conn) {
+	// First: an open waiting for its minion's first word over c stops
+	// waiting.
+	c.end()
 	if c.target != uuid.Nil {
 		s.persistentClosed(ctx, c)
 	}

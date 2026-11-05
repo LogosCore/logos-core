@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -21,24 +22,50 @@ import (
 // target. The channel dials, then opens the connection's socket naming the
 // open (OpenedFor); from there the connection is any persistent one: the
 // minion speaks first (a stage, or a check-in under its session), core
-// pushes over it, and its first session is linked to the target.
+// pushes over it, and the session that speaks over it is the target's.
 //
+//   - The target is connected once its minion spoke: a message of the
+//     target's build (or of the session it is linked to) that opens with
+//     its id's keys, within the open's time. Another build's minion, or
+//     nothing at all, is not the minion: the connection closes.
 //   - Who opens it is the target's policy: on-demand (core, when the
 //     session has something to send, and once when the target is added),
 //     manual (an operator's Connect), always (core, and again whenever it
 //     drops).
 //   - It closes idle (models.IdleClose: 10 minutes on-demand, an hour
-//     manual), on Disconnect, or when the minion, the channel or the
-//     network drops it: the target is then not connected.
+//     manual), but not while a task it carried runs; on Disconnect; or when
+//     the minion, the channel or the network drops it: the target is then
+//     not connected. One that drops soon after it opened counts as an open
+//     that failed, so reopens back off.
 //   - An open that fails leaves the target unreachable, retried as a
 //     call's would be (but manual's).
 
-// openDeadline is how long core waits for an open's answer.
-const openDeadline = 30 * time.Second
+const (
+	// openDefault is how long an open may take when its kind says nothing
+	// (ConnectionKind.MaxOpen): the channel's answer, and as long again for
+	// the minion's first word once the connection's socket is up.
+	openDefault = 30 * time.Second
+	// openMax caps what a kind may ask for.
+	openMax = 10 * time.Minute
+	// alwaysReopen is how soon a connection of policy always is opened
+	// again after it closed.
+	alwaysReopen = 5 * time.Second
+)
 
-// alwaysReopen is how soon a connection of policy always is opened again
-// after it closed.
-const alwaysReopen = 5 * time.Second
+// steadyFor is how long a connection stays open after its minion spoke
+// before a drop is no longer the open failing: one that closes sooner (a
+// minion that hangs up at once, a channel that cannot keep it) counts one
+// failure more, and is reopened after the target's retry wait.
+var steadyFor = 30 * time.Second
+
+// openWithin is an open's time: what its kind asks for (limit; 0 for
+// nothing), within core's cap, else openDefault.
+func openWithin(limit time.Duration) time.Duration {
+	if limit <= 0 {
+		return openDefault
+	}
+	return min(limit, openMax)
+}
 
 // openKey names an open as a connection's socket names it.
 type openKey struct {
@@ -46,15 +73,18 @@ type openKey struct {
 	request  uint64
 }
 
-// opening is an open waiting for its socket: its target, policy and build
-// connection (place); taken once a socket named it (OpenedFor), and arrived
-// closed once that socket is the target's (ForTarget).
+// opening is an open waiting for its socket: what it knows of its target
+// (the Conn fields of the same names), taken once a socket named it
+// (OpenedFor), and arrived closed once that socket is conn (ForTarget).
 type opening struct {
-	target  uuid.UUID
-	policy  string
-	place   int
-	taken   bool
-	arrived chan struct{}
+	target, build, operation, session uuid.UUID
+	policy                            string
+	place                             int
+	failures                          int
+	downSince                         *time.Time
+	taken                             bool
+	arrived                           chan struct{}
+	conn                              *Conn
 }
 
 // socketWait bounds how long an open the channel answered waits for the
@@ -89,36 +119,39 @@ func (s *Service) OpenedFor(instance string, request uint64) (target uuid.UUID, 
 	return o.target, o.policy, true
 }
 
-// ForTarget makes c a bind-persistent connection of target (policy as it
-// was opened) and keeps it with the target's: its controller calls it once
-// the socket is up, before any frame. The open the socket took, waiting
-// for it, is told, and gives c its target's build connection: a hello over
-// c that names none is of it.
-func (s *Service) ForTarget(c *Conn, target uuid.UUID, policy string) {
-	c.target, c.policy = target, policy
+// ForTarget makes c the connection of the open its socket names (instance
+// and request, taken by OpenedFor), and keeps it with its target's: its
+// controller calls it once the socket is up, before any frame. The open,
+// waiting for it, is told. false when that open no longer waits (it gave
+// up on the socket, or its target's call ended): the socket is no one's,
+// and its controller closes it.
+func (s *Service) ForTarget(c *Conn, instance string, request uint64) bool {
 	s.persist.mu.Lock()
-	s.persist.conns[target] = append(s.persist.conns[target], c)
-	for k, o := range s.persist.opens {
-		if o.taken && o.target == target {
-			c.mu.Lock()
-			c.place = o.place
-			c.mu.Unlock()
-			close(o.arrived)
-			delete(s.persist.opens, k)
-		}
+	defer s.persist.mu.Unlock()
+	o := s.persist.opens[openKey{instance, request}]
+	if o == nil || !o.taken || o.conn != nil {
+		return false
 	}
-	s.persist.mu.Unlock()
+	c.mu.Lock()
+	c.target, c.policy, c.build, c.operation, c.session, c.place = o.target, o.policy, o.build, o.operation, o.session, o.place
+	c.failures, c.downSince = o.failures, o.downSince
+	c.mu.Unlock()
+	o.conn = c
+	s.persist.conns[o.target] = append(s.persist.conns[o.target], c)
+	close(o.arrived)
+	return true
 }
 
-// awaitSocket waits for the socket that took the open key, when one did,
-// until it is its target's (ForTarget), socketWait at most. One no socket
-// took is not waited for: it came to nothing.
-func (s *Service) awaitSocket(ctx context.Context, key openKey) {
+// awaitSocket is the connection whose socket took the open key, once it is
+// its target's (ForTarget), socketWait at most; nil when none came. An
+// open no socket took is not waited for: it came to nothing. One given up
+// on is forgotten at once, so a socket that comes after is refused.
+func (s *Service) awaitSocket(ctx context.Context, key openKey) *Conn {
 	s.persist.mu.Lock()
 	o := s.persist.opens[key]
 	s.persist.mu.Unlock()
 	if o == nil || !o.taken {
-		return
+		return nil
 	}
 	timer := time.NewTimer(socketWait)
 	defer timer.Stop()
@@ -127,6 +160,10 @@ func (s *Service) awaitSocket(ctx context.Context, key openKey) {
 	case <-timer.C:
 	case <-ctx.Done():
 	}
+	s.persist.mu.Lock()
+	defer s.persist.mu.Unlock()
+	delete(s.persist.opens, key)
+	return o.conn
 }
 
 // dropOpen forgets the open key, whatever came of it.
@@ -180,6 +217,14 @@ func (s *Service) DisconnectTarget(ctx context.Context, targetID uuid.UUID) (*mo
 	}
 }
 
+// closeTargetConns closes the connections of a target that is gone (it was
+// removed during its open, or while one spoke).
+func (s *Service) closeTargetConns(target uuid.UUID) {
+	for _, c := range s.targetConns(target) {
+		c.closeBecause("its target was removed")
+	}
+}
+
 // closeBecause closes c, saying why for the target's state.
 func (c *Conn) closeBecause(why string) {
 	c.mu.Lock()
@@ -192,14 +237,169 @@ func (c *Conn) closeBecause(why string) {
 	}
 }
 
-func (c *Conn) closeWhy() string {
+// refuse closes c: a minion not its target's spoke over it, or nothing
+// did. why says which, for the target's state.
+func (c *Conn) refuse(why string) {
+	c.mu.Lock()
+	if c.why == "" {
+		c.why, c.refused = why, true
+	}
+	c.mu.Unlock()
+	if c.close != nil {
+		c.close()
+	}
+}
+
+// closeWhy is why core closed c ("" for the minion, the channel or the
+// network), and whether that was a minion not the target's.
+func (c *Conn) closeWhy() (string, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.why
+	return c.why, c.refused
+}
+
+// hear records the first message of the target's minion over c, at now.
+func (c *Conn) hear(now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.spokeAt.IsZero() {
+		c.spokeAt = now
+		close(c.heard)
+	}
+}
+
+// spoke is when the target's minion first spoke over c; zero before.
+func (c *Conn) spoke() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.spokeAt
+}
+
+// end records that c's socket closed.
+func (c *Conn) end() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.ended {
+		c.ended = true
+		close(c.gone)
+	}
+}
+
+// follow makes session the one c's target is linked to: true when it was
+// another.
+func (c *Conn) follow(session uuid.UUID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.session == session {
+		return false
+	}
+	c.session = session
+	return true
+}
+
+// ofTarget reports whether from, who a message over c came under, is the
+// minion c's target reaches: the session the target is linked to (which a
+// later build may have claimed), a session, staging or build id of the
+// target's build, or a later build's of the operation that claims the
+// target's session (one built to persist it). Another build's, of this
+// operation or another, is not.
+func (c *Conn) ofTarget(from *sender) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch {
+	case from.session != nil:
+		return from.session.SessionID == c.session || from.session.BuildID == c.build
+	case from.build == nil:
+		return false
+	case from.build.BuildID == c.build:
+		return true
+	}
+	p := from.build.PersistedSessionID
+	return c.session != uuid.Nil && p != nil && *p == c.session && from.build.OperationID == c.operation
+}
+
+// carry records the tasks items name as c's: a task core sends, a result
+// or an ack the minion sends. A task's last result ends its carry.
+func (c *Conn) carry(items []cbor.RawMessage) {
+	if c.target == uuid.Nil {
+		return
+	}
+	var add, drop []uuid.UUID
+	for _, raw := range items {
+		switch protocol.ItemType(raw) {
+		case protocol.ItemTask, protocol.ItemResult:
+			var it struct {
+				Task []byte `cbor:"1,keyasint"`
+				Done bool   `cbor:"3,keyasint,omitempty"`
+			}
+			if protocol.UnmarshalCBOR(raw, &it) != nil {
+				continue
+			}
+			id, err := uuid.FromBytes(it.Task)
+			switch {
+			case err != nil:
+			case protocol.ItemType(raw) == protocol.ItemResult && it.Done:
+				drop = append(drop, id)
+			default:
+				add = append(add, id)
+			}
+		case protocol.ItemAck:
+			var a struct {
+				Tasks [][]byte `cbor:"1,keyasint,omitempty"`
+			}
+			if protocol.UnmarshalCBOR(raw, &a) != nil {
+				continue
+			}
+			for _, t := range a.Tasks {
+				if id, err := uuid.FromBytes(t); err == nil {
+					add = append(add, id)
+				}
+			}
+		}
+	}
+	if len(add) == 0 && len(drop) == 0 {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, id := range add {
+		c.carried[id] = true
+	}
+	for _, id := range drop {
+		delete(c.carried, id)
+	}
+}
+
+// carriedRun reports whether a task c carried is still running: its
+// minion has it, and says more of it over c. Those that ended are
+// forgotten.
+func (s *Service) carriedRun(ctx context.Context, c *Conn) bool {
+	if s.tasks == nil {
+		return false
+	}
+	c.mu.Lock()
+	ids := make([]uuid.UUID, 0, len(c.carried))
+	for id := range c.carried {
+		ids = append(ids, id)
+	}
+	c.mu.Unlock()
+	for _, id := range ids {
+		task, err := s.tasks.FindByTaskID(ctx, id)
+		switch {
+		case err != nil && !repository.IsNotFound(err):
+			return true // not known now: kept as running
+		case err == nil && !task.Finished() && task.State != models.MinionTaskQueued:
+			return true
+		}
+		c.mu.Lock()
+		delete(c.carried, id)
+		c.mu.Unlock()
+	}
+	return false
 }
 
 // openTarget opens a bind-persistent target's connection, when its policy
-// takes why and none is open.
+// takes why and none is open, and waits for its minion to speak over it.
 func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bindTrigger) error {
 	if len(s.targetConns(t.TargetID)) > 0 {
 		return nil // open: core pushes over it
@@ -243,14 +443,25 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	if s.link == nil {
 		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, "core keeps no control links"))
 	}
+	kind, err := s.kindOf(ctx, t)
+	if err != nil {
+		return err
+	}
 	if err := s.saveCall(ctx, s.stateOnly(t, models.TargetConnecting, "")); err != nil {
 		return err
+	}
+	// The minion over the connection is the target's: of its build, or the
+	// session it is linked to.
+	o := &opening{target: t.TargetID, build: t.BuildID, operation: t.OperationID, policy: policy, place: t.Conn,
+		failures: t.Failures, downSince: t.UnreachableSince, arrived: make(chan struct{})}
+	if t.SessionID != nil {
+		o.session = *t.SessionID
 	}
 	var key openKey
 	sent := func(instance string, request uint64) {
 		key = openKey{instance, request}
 		s.persist.mu.Lock()
-		s.persist.opens[key] = &opening{target: t.TargetID, policy: policy, place: t.Conn, arrived: make(chan struct{})}
+		s.persist.opens[key] = o
 		s.persist.mu.Unlock()
 	}
 	defer func() { s.dropOpen(key) }()
@@ -267,11 +478,7 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	// A channel that acts as the minion seals and opens the connection's
 	// frames itself: the open gives it under's keys.
 	var keys *protocol.LinkKeys
-	agentless, err := s.agentless(ctx, t)
-	if err != nil {
-		return err
-	}
-	if agentless {
+	if kind.agentless {
 		from := &sender{session: session}
 		switch {
 		case session != nil:
@@ -285,7 +492,7 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 		keys = from.linkKeys()
 	}
 	t.Calls++
-	a, err := s.link.Open(ctx, t.ModuleName, callValues(buildConn(b, t), t), under, keys, openDeadline, sent)
+	a, err := s.link.Open(ctx, t.ModuleName, callValues(buildConn(b, t), t), under, keys, kind.open, sent)
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
 		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
@@ -305,18 +512,56 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	// The socket comes before the answer and takes its open, but becomes
 	// the target's only after its upgrade, which the answer can outrun:
 	// wait for it.
-	s.awaitSocket(ctx, key)
-	if len(s.targetConns(t.TargetID)) == 0 {
-		// The channel said it opened, and no socket came, or it closed
-		// already (the minion hung up at once).
+	c := s.awaitSocket(ctx, key)
+	if c == nil {
+		// The channel said it opened, and no socket came.
 		return s.saveCall(ctx, s.openFailed(t, models.TargetUnreachable, "the connection closed as soon as it opened"))
 	}
+	return s.firstWord(ctx, t, c, kind.open)
+}
+
+// firstWord waits, within at most, for the first word of the target's
+// minion over c, its connection just opened, and stores what came of the
+// open: connected once the minion spoke; not the minion when another
+// minion spoke, or nothing did; unreachable when the connection closed
+// first.
+func (s *Service) firstWord(ctx context.Context, t *models.MinionTarget, c *Conn, within time.Duration) error {
+	timer := time.NewTimer(within)
+	defer timer.Stop()
+	silent := false
+	select {
+	case <-c.heard:
+	case <-c.gone:
+	case <-timer.C:
+		silent = true
+	case <-ctx.Done():
+		silent = true
+	}
 	now := s.now()
-	t.State, t.StateDetail, t.StateAt = models.TargetConnected, "", now
-	t.Failures, t.UnreachableSince = 0, nil
-	t.LastCallAt, t.LastOKAt, t.NextCallAt = &now, &now, nil
-	s.logger.Info("targets: a connection opened", zap.String("target_id", t.TargetID.String()), zap.String("policy", policy))
-	return s.saveCall(ctx, t)
+	if !c.spoke().IsZero() {
+		t.State, t.StateDetail, t.StateAt = models.TargetConnected, "", now
+		t.Failures, t.UnreachableSince = 0, nil
+		t.LastCallAt, t.LastOKAt, t.NextCallAt = &now, &now, nil
+		s.logger.Info("targets: a connection opened, its minion spoke", zap.String("target_id", t.TargetID.String()),
+			zap.String("policy", t.PolicyOf()))
+		return s.saveCall(ctx, t)
+	}
+	why, refused := c.closeWhy()
+	switch {
+	case refused:
+		// Another minion spoke over it (Exchange closed it).
+		return s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, why))
+	case silent:
+		// Something took the connection, and said nothing: not the
+		// minion, which speaks first.
+		why = fmt.Sprintf("nothing spoke over the connection within %s", within)
+		c.refuse(why)
+		return s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, why))
+	case why != "":
+		// Core closed it (an operator's Disconnect).
+		return s.saveCall(ctx, s.stateOnly(t, models.TargetNotConnected, why))
+	}
+	return s.saveCall(ctx, s.openFailed(t, models.TargetUnreachable, "the connection closed before the minion spoke"))
 }
 
 // openFailed is t after an open that reached nothing: as a failed call,
@@ -330,8 +575,8 @@ func (s *Service) openFailed(t *models.MinionTarget, state, detail string) *mode
 }
 
 // persistentClosed is told a target's connection closed: the target is
-// not connected (once its last one went), and one of policy always is
-// opened again soon.
+// not connected (once its last one went), and opened again as its policy
+// says. A connection whose minion never spoke is its open's to tell.
 func (s *Service) persistentClosed(ctx context.Context, c *Conn) {
 	s.persist.mu.Lock()
 	left := s.persist.conns[c.target][:0]
@@ -346,27 +591,40 @@ func (s *Service) persistentClosed(ctx context.Context, c *Conn) {
 		s.persist.conns[c.target] = left
 	}
 	s.persist.mu.Unlock()
-	if len(left) > 0 || s.targets == nil {
+	spoke := c.spoke()
+	if spoke.IsZero() || len(left) > 0 || s.targets == nil {
 		return
 	}
+	// As the target's calls and opens: under its lock, so after the open
+	// that brought c stored it connected.
+	defer s.binds.lock(c.target)()
 	t, err := s.targets.FindByTargetID(ctx, c.target)
 	if err != nil {
 		return // removed with it
 	}
-	why := c.closeWhy()
-	if why == "" {
-		why = "closed by the minion, the channel or the network"
-	}
 	now := s.now()
-	t.State, t.StateDetail, t.StateAt, t.NextCallAt = models.TargetNotConnected, why, now, nil
-	switch t.PolicyOf() {
-	case models.PolicyAlways:
-		next := now.Add(alwaysReopen)
-		t.NextCallAt = &next
-	case models.PolicyOnDemand:
-		// Dropped with work waiting (tasks not sent, or sent and not
-		// acknowledged): opened again for it.
-		if s.workWaits(ctx, t) {
+	why, refused := c.closeWhy()
+	switch {
+	case refused:
+		t = s.answered(t, models.TargetNotTheMinion, why)
+	case why == "" && now.Sub(spoke) < steadyFor:
+		// Dropped soon after it opened: as an open that failed, counted on
+		// from the failures its open found, so its reopens back off (a
+		// minion that hangs up at once, a channel that cannot keep it).
+		last := t.LastCallAt
+		t.Failures, t.UnreachableSince = c.failures, c.downSince
+		t = s.failed(t, models.TargetUnreachable, fmt.Sprintf("the connection closed %s after its minion spoke (the minion, the channel or the network)",
+			now.Sub(spoke).Round(time.Second)))
+		t.LastCallAt = last
+		if !s.reopens(ctx, t, c) {
+			t.NextCallAt = nil
+		}
+	default:
+		if why == "" {
+			why = "closed by the minion, the channel or the network"
+		}
+		t.State, t.StateDetail, t.StateAt, t.NextCallAt = models.TargetNotConnected, why, now, nil
+		if s.reopens(ctx, t, c) {
 			next := now.Add(alwaysReopen)
 			t.NextCallAt = &next
 		}
@@ -374,7 +632,21 @@ func (s *Service) persistentClosed(ctx context.Context, c *Conn) {
 	if err := s.saveCall(ctx, t); err != nil {
 		s.logger.Warn("targets: a connection's close", zap.String("target_id", t.TargetID.String()), zap.Error(err))
 	}
-	s.logger.Info("targets: a connection closed", zap.String("target_id", t.TargetID.String()), zap.String("why", why))
+	s.logger.Info("targets: a connection closed", zap.String("target_id", t.TargetID.String()), zap.String("state", t.State),
+		zap.String("why", t.StateDetail))
+}
+
+// reopens reports whether t's connection c, closed, is opened again: one
+// of policy always is; one on demand when work waits for it, or a task it
+// carried runs (its minion may hold the result); a manual one never.
+func (s *Service) reopens(ctx context.Context, t *models.MinionTarget, c *Conn) bool {
+	switch t.PolicyOf() {
+	case models.PolicyAlways:
+		return true
+	case models.PolicyOnDemand:
+		return s.workWaits(ctx, t) || s.carriedRun(ctx, c)
+	}
+	return false
 }
 
 // Where a target's minion is, for an open core starts on its own.
@@ -415,64 +687,72 @@ func (s *Service) minionOn(ctx context.Context, t *models.MinionTarget) (int, st
 	return minionElsewhere, fmt.Sprintf("the minion uses connection %d: a switch to this one opens it", session.Conn)
 }
 
-// workWaits reports whether the target's session has tasks to send.
+// workWaits reports whether the target's session has something to send:
+// tasks not sent, or sent and not acknowledged, or a cancel.
 func (s *Service) workWaits(ctx context.Context, t *models.MinionTarget) bool {
 	if t.SessionID == nil || s.tasks == nil {
 		return false
 	}
-	waiting, err := s.tasks.ForDelivery(ctx, *t.SessionID, 1)
-	return err == nil && len(waiting) > 0
+	if waiting, err := s.tasks.ForDelivery(ctx, *t.SessionID, 1); err == nil && len(waiting) > 0 {
+		return true
+	}
+	n, err := s.tasks.CountCancelling(ctx, *t.SessionID)
+	return err == nil && n > 0
 }
 
-// linkTarget links a target to the session its connection's first message
-// came under: the minion's process, from its stage or its claim on.
-func (s *Service) linkTarget(ctx context.Context, target uuid.UUID, session *models.MinionSession) {
+// tasksRun reports whether the target's session has tasks its minion has
+// and has not ended.
+func (s *Service) tasksRun(ctx context.Context, t *models.MinionTarget) bool {
+	if t.SessionID == nil || s.tasks == nil {
+		return false
+	}
+	n, err := s.tasks.CountRunning(ctx, *t.SessionID)
+	return err == nil && n > 0
+}
+
+// linkTarget links c's target to session, the one its minion speaks under
+// over c now: from its stage, its claim on, or a check-in.
+func (s *Service) linkTarget(ctx context.Context, c *Conn, session *models.MinionSession) {
 	if s.targets == nil {
 		return
 	}
 	// As the target's calls and opens save it: under its lock.
-	defer s.binds.lock(target)()
-	t, err := s.targets.FindByTargetID(ctx, target)
-	if err != nil {
+	defer s.binds.lock(c.target)()
+	t, err := s.targets.FindByTargetID(ctx, c.target)
+	if repository.IsNotFound(err) {
+		c.closeBecause("its target was removed")
 		return
 	}
-	linked := t.SessionID != nil && *t.SessionID == session.SessionID
-	// Its minion speaks over its connection: the target is connected,
-	// whatever an open that came to nothing on its way said.
-	stale := t.State != models.TargetConnected && len(s.targetConns(target)) > 0
-	if linked && !stale {
+	if err != nil || (t.SessionID != nil && *t.SessionID == session.SessionID) {
 		return
 	}
 	sid := session.SessionID
 	t.SessionID = &sid
-	if stale {
-		now := s.now()
-		t.State, t.StateDetail, t.StateAt = models.TargetConnected, "", now
-		t.Failures, t.UnreachableSince, t.LastOKAt, t.NextCallAt = 0, nil, &now, nil
-	}
 	if err := s.saveCall(ctx, t); err != nil {
-		s.logger.Warn("targets: link a session", zap.String("target_id", target.String()), zap.Error(err))
+		s.logger.Warn("targets: link a session", zap.String("target_id", c.target.String()), zap.Error(err))
 		return
 	}
-	if !linked {
-		s.logger.Info("targets: a connection's minion is a session", zap.String("target_id", target.String()),
-			zap.Int64("number", session.Number), zap.String("session_id", sid.String()))
-	}
-	if stale {
-		s.logger.Info("targets: connected, as its connection's minion speaks", zap.String("target_id", target.String()))
-	}
+	s.logger.Info("targets: a connection's minion is a session", zap.String("target_id", c.target.String()),
+		zap.Int64("number", session.Number), zap.String("session_id", sid.String()))
 }
 
 // TargetConnected reports whether the bind-persistent target has a
-// connection open now: what its stored state may be behind on.
+// connection open now that its minion spoke over: what its stored state
+// may be behind on.
 func (s *Service) TargetConnected(target uuid.UUID) bool {
-	return len(s.targetConns(target)) > 0
+	for _, c := range s.targetConns(target) {
+		if !c.spoke().IsZero() {
+			return true
+		}
+	}
+	return false
 }
 
 // resetPersistent, as core starts, says the bind-persistent targets left
 // connected or connecting are not: their connections went with the process
 // that held them (core keeps them in memory, as one instance). Those of
-// policy always, and on demand with work waiting, are opened again.
+// policy always are opened again, and on demand ones whose session has
+// work waiting or tasks running (their minions may hold the results).
 func (s *Service) resetPersistent(ctx context.Context) {
 	stale, err := s.targets.FindByKindAndStates(ctx, protocol.KindBindPersistent,
 		[]string{models.TargetConnected, models.TargetConnecting})
@@ -487,7 +767,7 @@ func (s *Service) resetPersistent(ctx context.Context) {
 			continue // opened since
 		}
 		t.State, t.StateDetail, t.StateAt, t.NextCallAt = models.TargetNotConnected, "core restarted: its connection closed", now, nil
-		if p := t.PolicyOf(); p == models.PolicyAlways || (p == models.PolicyOnDemand && s.workWaits(ctx, t)) {
+		if p := t.PolicyOf(); p == models.PolicyAlways || (p == models.PolicyOnDemand && (s.workWaits(ctx, t) || s.tasksRun(ctx, t))) {
 			t.NextCallAt = &now
 		}
 		if err := s.saveCall(ctx, t); err != nil {
@@ -500,8 +780,9 @@ func (s *Service) resetPersistent(ctx context.Context) {
 }
 
 // closeIdle closes the bind-persistent connections idle past their
-// policy's time.
-func (s *Service) closeIdle() {
+// policy's time, but those a task they carried still runs on: its minion
+// has more to say over it.
+func (s *Service) closeIdle(ctx context.Context) {
 	now := s.now()
 	s.persist.mu.Lock()
 	var idle []*Conn
@@ -514,6 +795,9 @@ func (s *Service) closeIdle() {
 	}
 	s.persist.mu.Unlock()
 	for _, c := range idle {
+		if c.spoke().IsZero() || s.carriedRun(ctx, c) {
+			continue // its open waits for its minion's first word; a task it carried runs
+		}
 		c.closeBecause(fmt.Sprintf("idle for %s", models.IdleClose(c.policy)))
 	}
 }

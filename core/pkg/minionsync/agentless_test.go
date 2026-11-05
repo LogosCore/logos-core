@@ -18,12 +18,16 @@ import (
 // it is the minion itself, and opens core's messages and seals its own with
 // the keys each call and open gives it. Calls are answered as a page
 // answers them; an open opens the connection's socket at once, the frames
-// core sends on it kept.
+// core sends on it kept, and the channel speaks first over it, as the
+// minion (first: its hello alone under the id the open said, with the
+// open's keys), core's replies kept.
 type fakeAgentless struct {
 	t   *testing.T
 	svc *Service
 	// fail answers every call and open with it.
 	fail *protocol.LinkFailure
+	// first is the minion's first word over a connection; nil: a hello.
+	first []any
 
 	mu    sync.Mutex
 	calls []protocol.CoreMessage
@@ -31,9 +35,14 @@ type fakeAgentless struct {
 	conns []*Conn
 	sent  []protocol.ConnFrame
 	// keys are what each call and open gave, in order; unders the ids the
-	// opens said the minion speaks under.
-	keys   []*protocol.LinkKeys
-	unders []uuid.UUID
+	// opens said the minion speaks under; replies core's replies to the
+	// minion's first words.
+	keys    []*protocol.LinkKeys
+	unders  []uuid.UUID
+	replies [][]byte
+	spoken  sync.WaitGroup
+	// refused: a socket the channel opened late was refused (ForTarget).
+	refused bool
 }
 
 func (f *fakeAgentless) Call(_ context.Context, _ string, c channellink.Call) (protocol.LinkFrame, error) {
@@ -81,12 +90,29 @@ func (f *fakeAgentless) Open(_ context.Context, _ string, _ map[string]any, unde
 	if f.fail != nil {
 		return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: f.fail}, nil
 	}
-	sent("ssh-1", 88)
-	target, policy, ok := f.svc.OpenedFor("ssh-1", 88)
-	if !ok {
+	f.mu.Lock()
+	request := uint64(80 + len(f.unders))
+	f.mu.Unlock()
+	sent("ssh-1", request)
+	if _, _, ok := f.svc.OpenedFor("ssh-1", request); !ok {
 		f.t.Error("the socket's open is not waited for")
 	}
+	c := f.newConn()
+	if !f.svc.ForTarget(c, "ssh-1", request) {
+		f.t.Error("the socket is not the open's")
+	}
+	f.mu.Lock()
+	f.conns = append(f.conns, c)
+	f.mu.Unlock()
+	f.speak(c, under, keys)
+	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: request}, nil
+}
+
+// newConn is a connection's socket: what core sends on it kept, Closed once
+// when it closes.
+func (f *fakeAgentless) newConn() *Conn {
 	var c *Conn
+	var once sync.Once
 	c = NewConn(uuid.NewString(), protocol.KindBindPersistent, "ssh-1", "203.0.113.9",
 		func(_ context.Context, fr protocol.ConnFrame) error {
 			f.mu.Lock()
@@ -94,13 +120,45 @@ func (f *fakeAgentless) Open(_ context.Context, _ string, _ map[string]any, unde
 			f.mu.Unlock()
 			return nil
 		},
-		func() { go f.svc.Closed(context.Background(), c) })
-	f.svc.ForTarget(c, target, policy)
-	f.mu.Lock()
-	f.conns = append(f.conns, c)
-	f.mu.Unlock()
-	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 88}, nil
+		func() {
+			once.Do(func() {
+				f.spoken.Add(1)
+				go func() {
+					defer f.spoken.Done()
+					f.svc.Closed(context.Background(), c)
+				}()
+			})
+		})
+	return c
 }
+
+// speak is the minion's first word over c, as the channel says it: under
+// the id the open said, sealed with the open's keys.
+func (f *fakeAgentless) speak(c *Conn, under [16]byte, keys *protocol.LinkKeys) {
+	if keys == nil {
+		return
+	}
+	first := f.first
+	if first == nil {
+		first = []any{agentlessHello("server01")}
+	}
+	f.spoken.Add(1)
+	go func() {
+		defer f.spoken.Done()
+		reply, err := f.svc.Exchange(context.Background(), c, uuid.UUID(under).String(), "203.0.113.9",
+			sealedMinionMessage(f.t, keys.Material, under, nil, first...))
+		if err != nil {
+			f.t.Errorf("the minion's first word: %v", err)
+		}
+		f.mu.Lock()
+		f.replies = append(f.replies, reply)
+		f.mu.Unlock()
+	}()
+}
+
+// settle waits until the minion's first words were taken and the closed
+// sockets' handlers are done.
+func (f *fakeAgentless) settle() { f.spoken.Wait() }
 
 // frames are what core sent on the connections, so far.
 func (f *fakeAgentless) frames() []protocol.ConnFrame {
@@ -260,28 +318,27 @@ func TestCallKeysOnlyToAgentless(t *testing.T) {
 // hello opens one), under the session's after; a hello that names no
 // connection is the target's.
 func TestOpenSaysWhereToSpeak(t *testing.T) {
+	shortSteady(t, 0)
 	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
-	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+	tg, err := b.svc.CheckTarget(context.Background(), b.target)
+	if err != nil {
 		t.Fatal(err)
+	}
+	ch.settle()
+	if tg.State != models.TargetConnected {
+		t.Fatalf("target %+v", tg)
 	}
 	if len(ch.unders) != 1 || ch.unders[0] != b.build.BuildID || ch.keys[0] == nil ||
 		string(ch.keys[0].Material.EncKey) != string(b.keys.EncKey) {
 		t.Fatalf("the open said %v, keys %+v", ch.unders, ch.keys)
 	}
-	time.Sleep(100 * time.Millisecond)
 	if n := len(ch.frames()); n != 0 {
 		t.Fatalf("core spoke first (%d frames)", n)
 	}
-	c := ch.connAt(0)
-	reply, err := b.svc.Exchange(context.Background(), c, b.build.BuildID.String(), "203.0.113.9",
-		sealedMinionMessage(t, b.keys, b.build.BuildID, nil, agentlessHello("server01")))
-	if err != nil {
-		t.Fatalf("the hello: %v", err)
-	}
-	if resp := openCore(t, b.keys, b.build.BuildID, reply); len(resp.Items) != 1 || protocol.ItemType(resp.Items[0]) != protocol.ItemHelloResponse {
+	if resp := openCore(t, b.keys, b.build.BuildID, ch.replies[0]); len(resp.Items) != 1 || protocol.ItemType(resp.Items[0]) != protocol.ItemHelloResponse {
 		t.Fatalf("the hello's reply: %+v", resp)
 	}
-	tg := b.get(t)
+	tg = b.get(t)
 	if tg.SessionID == nil {
 		t.Fatal("the target is not linked to the session")
 	}
@@ -290,14 +347,19 @@ func TestOpenSaysWhereToSpeak(t *testing.T) {
 		t.Fatalf("session %+v", s)
 	}
 
-	// Closed, and opened again: under the session's id, with its keys.
-	c.closeBecause("")
+	// Closed, and opened again: under the session's id, with its keys; its
+	// hello there goes on with the session.
+	ch.connAt(0).closeBecause("")
 	waitFor(t, "not connected", func() bool { return b.get(t).State == models.TargetNotConnected })
-	if _, err := b.svc.ConnectTarget(context.Background(), b.target); err != nil {
-		t.Fatal(err)
+	if tg, err := b.svc.ConnectTarget(context.Background(), b.target); err != nil || tg.State != models.TargetConnected {
+		t.Fatalf("connect again: %+v %v", tg, err)
 	}
+	ch.settle()
 	if len(ch.unders) != 2 || ch.unders[1] != *tg.SessionID || ch.keys[1] == nil {
 		t.Fatalf("the second open said %v, keys %+v", ch.unders, ch.keys)
+	}
+	if got := b.get(t); got.SessionID == nil || *got.SessionID != *tg.SessionID {
+		t.Fatalf("the target's session %v, not %s", got.SessionID, *tg.SessionID)
 	}
 }
 
@@ -328,16 +390,13 @@ func TestAgentlessRefusals(t *testing.T) {
 // opens no session.
 func TestAgentlessHelloAlone(t *testing.T) {
 	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
+	max := uint64(4)
+	ch.first = []any{agentlessHello("server01"), protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &max}}
 	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
 		t.Fatal(err)
 	}
-	max := uint64(4)
-	reply, err := b.svc.Exchange(context.Background(), ch.connAt(0), b.build.BuildID.String(), "203.0.113.9",
-		sealedMinionMessage(t, b.keys, b.build.BuildID, nil, agentlessHello("server01"), protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &max}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m := openCore(t, b.keys, b.build.BuildID, reply); len(m.Items) != 1 || protocol.ItemType(m.Items[0]) != protocol.ItemErr {
+	ch.settle()
+	if m := openCore(t, b.keys, b.build.BuildID, ch.replies[0]); len(m.Items) != 1 || protocol.ItemType(m.Items[0]) != protocol.ItemErr {
 		t.Fatalf("reply %+v", m)
 	}
 	if tg := b.get(t); tg.SessionID != nil {

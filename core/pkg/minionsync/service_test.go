@@ -61,21 +61,30 @@ func (f *fakeStagings) Delete(_ context.Context, id uuid.UUID) error {
 // (the embedded nil interface panics if they are).
 type fakeSessions struct {
 	repository.IMinionSessionRepository
+	// mu: the service reaches its sessions from the goroutines of its
+	// connections, as from its callers'.
+	mu   sync.Mutex
 	rows []models.MinionSession
 	seq  int64
 }
 
 func (f *fakeSessions) NextNumber(context.Context, uuid.UUID) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.seq++
 	return f.seq, nil
 }
 
 func (f *fakeSessions) Insert(_ context.Context, s *models.MinionSession) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.rows = append(f.rows, *s)
 	return nil
 }
 
 func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models.MinionSession, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			row := f.rows[i]
@@ -86,6 +95,8 @@ func (f *fakeSessions) FindBySessionID(_ context.Context, id uuid.UUID) (*models
 }
 
 func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, c repository.MinionSessionCheckIn) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		r := &f.rows[i]
 		if r.SessionID != id {
@@ -110,6 +121,8 @@ func (f *fakeSessions) CheckIn(_ context.Context, id uuid.UUID, c repository.Min
 }
 
 func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.MinionHello, address string, picked bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].Hello, f.rows[i].Address, f.rows[i].AddressPicked = h, address, picked
@@ -119,6 +132,8 @@ func (f *fakeSessions) SetHello(_ context.Context, id uuid.UUID, h models.Minion
 }
 
 func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].Conn, f.rows[i].ConnKind, f.rows[i].ConnName = conn.Place, conn.Kind, conn.Name
@@ -135,6 +150,8 @@ func (f *fakeSessions) SetConn(_ context.Context, id uuid.UUID, conn models.Mini
 }
 
 func (f *fakeSessions) SetConnected(_ context.Context, id uuid.UUID, connected bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].Connected = connected
@@ -144,6 +161,8 @@ func (f *fakeSessions) SetConnected(_ context.Context, id uuid.UUID, connected b
 }
 
 func (f *fakeSessions) ClearConnected(context.Context) (int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	n := int64(0)
 	for i := range f.rows {
 		if f.rows[i].Connected {
@@ -155,6 +174,8 @@ func (f *fakeSessions) ClearConnected(context.Context) (int64, error) {
 }
 
 func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].Persisted = true
@@ -164,6 +185,8 @@ func (f *fakeSessions) SetPersisted(_ context.Context, id uuid.UUID) error {
 }
 
 func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.MinionSessionClaim) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		r := &f.rows[i]
 		if r.SessionID != id || r.ClosedAt != nil {
@@ -181,6 +204,8 @@ func (f *fakeSessions) Claim(_ context.Context, id uuid.UUID, c repository.Minio
 }
 
 func (f *fakeSessions) SetMaxTasks(_ context.Context, id uuid.UUID, max *int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].MaxTasks, f.rows[i].MaxTasksSends = max, 0
@@ -190,6 +215,8 @@ func (f *fakeSessions) SetMaxTasks(_ context.Context, id uuid.UUID, max *int) er
 }
 
 func (f *fakeSessions) SetMaxTasksWanted(_ context.Context, id uuid.UUID, max int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].MaxTasksSet, f.rows[i].MaxTasksSends = &max, 0
@@ -199,6 +226,8 @@ func (f *fakeSessions) SetMaxTasksWanted(_ context.Context, id uuid.UUID, max in
 }
 
 func (f *fakeSessions) MaxTasksSent(_ context.Context, id uuid.UUID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			f.rows[i].MaxTasksSends++

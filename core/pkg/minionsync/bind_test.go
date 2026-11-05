@@ -73,6 +73,9 @@ func (f *fakeTargets) SetValues(context.Context, uuid.UUID, models.JSONMap, stri
 func (f *fakeTargets) SetCallState(_ context.Context, t *models.MinionTarget) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if _, ok := f.rows[t.TargetID]; !ok {
+		return qmgo.ErrNoSuchDocuments // as an update of a removed target
+	}
 	f.rows[t.TargetID] = *t
 	return nil
 }
@@ -102,7 +105,13 @@ func (f *fakeTargets) FindByKindAndStates(_ context.Context, kind string, states
 	return out, nil
 }
 
-func (f *fakeTargets) Delete(context.Context, uuid.UUID) (bool, error)      { return false, nil }
+func (f *fakeTargets) Delete(_ context.Context, id uuid.UUID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	_, ok := f.rows[id]
+	delete(f.rows, id)
+	return ok, nil
+}
 func (f *fakeTargets) DeleteByOperationID(context.Context, uuid.UUID) error { return nil }
 
 // fakePage is a channel and the page it calls: it opens what core sends

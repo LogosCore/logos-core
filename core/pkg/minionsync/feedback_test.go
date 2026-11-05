@@ -32,6 +32,8 @@ func (f *fakeFeedback) Add(_ context.Context, e *models.MinionFeedback) (bool, e
 func (f *fakeFeedback) Trim(context.Context, uuid.UUID, int) error { f.trimmed++; return nil }
 
 func (f *fakeSessions) AddFeedback(_ context.Context, id uuid.UUID, errs, warns int, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if f.rows[i].SessionID == id {
 			r := &f.rows[i]

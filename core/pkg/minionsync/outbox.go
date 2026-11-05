@@ -17,8 +17,8 @@ import (
 // contracts/minion-messages/, Mechanics by connection kind).
 //
 // Everything core starts sending a minion comes from one place, outbox:
-// cancels, the operator's limit of tasks, resumes, the streams' acks and
-// tasks. The paths a message takes
+// cancels, reacks, the operator's limit of tasks, resumes, the streams'
+// acks and tasks. The paths a message takes
 // differ only in what one message may carry (a delivery) and in when it
 // goes (Nudge):
 //
@@ -108,7 +108,8 @@ func roomFor(limit int, answers []cbor.RawMessage) int {
 }
 
 // outbox is what goes to the session's minion in one message, as d allows,
-// most urgent first: cancels, the operator's limit of tasks (a max_tasks,
+// most urgent first: cancels, a reack (core asks which tasks the minion
+// still has), the operator's limit of tasks (a max_tasks,
 // in every message until the minion says it has it: whatever it runs, as a
 // cancel goes), resumes, the streams' acks, then tasks (those sent and not
 // acknowledged first). What does not fit waits for the next
@@ -137,6 +138,17 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 		if !add(c) {
 			break
 		}
+		o.fresh = true
+	}
+	// Which of the tasks core thinks it runs the minion still has, when
+	// core asks (reacks.go): those it lost end, and take no more of its
+	// room.
+	reack, asked, err := s.reackItem(session.SessionID, room)
+	if err != nil {
+		return o, err
+	}
+	if reack != nil && add(reack) {
+		s.reacked(session.SessionID, asked)
 		o.fresh = true
 	}
 	// A limit sent with MaxTasksTries messages and never answered: the

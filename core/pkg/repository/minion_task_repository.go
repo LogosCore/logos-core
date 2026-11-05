@@ -86,6 +86,9 @@ type IMinionTaskRepository interface {
 	// and not acknowledged are not counted: ForDelivery sends them again,
 	// within its limit; nor are core's own commands, which core runs.
 	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
+	// RunningIDs are the ids of the tasks CountRunning counts, oldest
+	// first, limit at most.
+	RunningIDs(ctx context.Context, sessionID uuid.UUID, limit int) ([]uuid.UUID, error)
 	// MarkSent records that these tasks went out at at.
 	MarkSent(ctx context.Context, taskIDs []uuid.UUID, at time.Time) error
 	// Ack records that the minion got these tasks of the session.
@@ -105,6 +108,9 @@ type IMinionTaskRepository interface {
 	// that are not over, and counts a cancel sent for each; one never acked
 	// that has had MinionCancelGiveUp is counted cancelled instead.
 	CancelsToSend(ctx context.Context, sessionID uuid.UUID, at time.Time) (send, gaveUp []models.MinionTask, err error)
+	// CountCancelling counts the session's tasks an operator asked to stop
+	// that are not over: CancelsToSend's, read only.
+	CountCancelling(ctx context.Context, sessionID uuid.UUID) (int, error)
 	// EndUnknown ends a task of the session its minion says it does not
 	// have (unknown_task): cancelled when an operator asked to stop it,
 	// failed otherwise, with why. IsNotFound for one that is not sent and
@@ -273,18 +279,39 @@ func uuidsIn(ids []uuid.UUID) bson.A {
 	return in
 }
 
-func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error) {
-	// Core's own commands (a connect waiting for its dial, a max_tasks for
-	// the minion's word) run in core: they take none of the minion's room.
+// runningFilter is the session's tasks its minion has and has not ended:
+// acknowledged, or with a result, and not finished. Core's own commands (a
+// connect waiting for its dial, a max_tasks for the minion's word) run in
+// core: they take none of the minion's room.
+func runningFilter(sessionID uuid.UUID) bson.M {
 	core := bson.A{}
 	for _, c := range protocol.CoreCommands() {
 		core = append(core, c)
 	}
-	n, err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "command": bson.M{"$nin": core}, "$or": bson.A{
+	return bson.M{"session_id": sessionID, "command": bson.M{"$nin": core}, "$or": bson.A{
 		bson.M{"state": models.MinionTaskRunning},
 		bson.M{"state": models.MinionTaskSent, "acked_at": bson.M{"$exists": true}},
-	}}).Count()
+	}}
+}
+
+func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error) {
+	n, err := r.tasks.Find(ctx, runningFilter(sessionID)).Count()
 	return int(n), err
+}
+
+func (r *minionTaskRepository) RunningIDs(ctx context.Context, sessionID uuid.UUID, limit int) ([]uuid.UUID, error) {
+	var rows []struct {
+		TaskID uuid.UUID `bson:"task_id"`
+	}
+	if err := r.tasks.Find(ctx, runningFilter(sessionID)).Select(bson.M{"task_id": 1}).Sort("queued_at").
+		Limit(int64(limit)).All(&rows); err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, len(rows))
+	for i, row := range rows {
+		ids[i] = row.TaskID
+	}
+	return ids, nil
 }
 
 func (r *minionTaskRepository) MarkSent(ctx context.Context, taskIDs []uuid.UUID, at time.Time) error {
@@ -471,10 +498,21 @@ func (r *minionTaskRepository) RequestCancel(ctx context.Context, taskID uuid.UU
 	return r.FindByTaskID(ctx, taskID)
 }
 
+// cancellingFilter is the session's tasks an operator asked to stop that
+// are not over.
+func cancellingFilter(sessionID uuid.UUID) bson.M {
+	return bson.M{"session_id": sessionID, "cancel_requested_at": bson.M{"$exists": true},
+		"state": bson.M{"$in": bson.A{models.MinionTaskSent, models.MinionTaskRunning}}}
+}
+
+func (r *minionTaskRepository) CountCancelling(ctx context.Context, sessionID uuid.UUID) (int, error) {
+	n, err := r.tasks.Find(ctx, cancellingFilter(sessionID)).Count()
+	return int(n), err
+}
+
 func (r *minionTaskRepository) CancelsToSend(ctx context.Context, sessionID uuid.UUID, at time.Time) ([]models.MinionTask, []models.MinionTask, error) {
 	var asked []models.MinionTask
-	if err := r.tasks.Find(ctx, bson.M{"session_id": sessionID, "cancel_requested_at": bson.M{"$exists": true},
-		"state": bson.M{"$in": bson.A{models.MinionTaskSent, models.MinionTaskRunning}}}).All(&asked); err != nil {
+	if err := r.tasks.Find(ctx, cancellingFilter(sessionID)).All(&asked); err != nil {
 		return nil, nil, err
 	}
 	var send, gaveUp []models.MinionTask

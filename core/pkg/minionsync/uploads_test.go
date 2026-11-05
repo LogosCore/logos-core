@@ -16,6 +16,8 @@ import (
 )
 
 func (f *fakeTasks) FindByUploadXfer(_ context.Context, sid uuid.UUID, xfer []byte) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for i := range f.rows {
 		if t := &f.rows[i]; t.SessionID == sid && t.Upload != nil && bytes.Equal(t.Upload.Xfer, xfer) {
 			c := *t
@@ -26,6 +28,8 @@ func (f *fakeTasks) FindByUploadXfer(_ context.Context, sid uuid.UUID, xfer []by
 }
 
 func (f *fakeTasks) UploadAcked(_ context.Context, id uuid.UUID, next int64, at time.Time) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	t := f.find(id)
 	t.Upload.Acked, t.Upload.LastAckAt = next, &at
 	if t.Upload.FirstAckAt == nil {
@@ -35,6 +39,8 @@ func (f *fakeTasks) UploadAcked(_ context.Context, id uuid.UUID, next int64, at 
 }
 
 func (f *fakeTasks) SetDataProblem(_ context.Context, id uuid.UUID, problem string) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	t := f.find(id)
 	if t.DataProblem == "" {
 		t.DataProblem = problem
@@ -43,6 +49,8 @@ func (f *fakeTasks) SetDataProblem(_ context.Context, id uuid.UUID, problem stri
 }
 
 func (f *fakeTasks) AddFeedback(_ context.Context, sid, id uuid.UUID, errs, warns int) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	t := f.find(id)
 	if t == nil || t.SessionID != sid {
 		return nil, qmgo.ErrNoSuchDocuments

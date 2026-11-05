@@ -34,16 +34,18 @@ export const TARGET_STATE_LABEL: Record<string, string> = {
 /** What each state means, for its tooltip. */
 export const TARGET_STATE_HELP: Record<string, string> = {
   new: "Added: the first call is on its way.",
-  connected: "The minion answered: its hello opened the session.",
-  unreachable: "Nothing answered (DNS, refused, timeout, TLS). Core calls again: 1 minute, 5, 30, then hourly, for a day.",
-  not_the_minion: "Something answered, but not the minion (an HTTP 404, a WAF's page, another server). Core does not retry: Check now once it is fixed.",
+  connected: "The minion answered: a call reached it, or it spoke over its connection.",
+  unreachable:
+    "Nothing answered (DNS, refused, timeout, TLS), or its connection dropped as soon as it opened. Core calls again: 1 minute, 5, 30, then hourly, for a day.",
+  not_the_minion:
+    "Something answered, but not the minion (an HTTP 404, a WAF's page, another server, a minion of another build, or a connection nothing spoke over). Core does not retry: Check now or Connect once it is fixed.",
   refused:
     "Refused: the login or the host key was not taken, the minion answered with an error, or its build or connection is gone. Core calls it again only on Check now or after an edit.",
   stopped: "Unreachable for a day: core stopped retrying. Check now calls it again.",
   no_channel: "No instance of the target's channel has its control link open.",
   needs_editing:
     "Its values no longer fit the channel's target fields (one it now requires is missing, one is gone or changed). Core does not call it until it is edited.",
-  connecting: "Core asked its channel to open the connection: the channel dials it.",
+  connecting: "Core asked its channel to open the connection: the channel dials it, and the minion speaks first.",
   not_connected:
     "Its connection is closed on purpose (idle, disconnected, or the minion hung up): core opens it again as its policy says.",
 }
@@ -89,9 +91,10 @@ export const TARGET_POLICY_LABEL: Record<string, string> = {
 }
 
 export const TARGET_POLICY_HELP: Record<string, string> = {
-  "on-demand": "Core opens it when the session has something to send, and closes it after 10 minutes without an exchange.",
+  "on-demand":
+    "Core opens it when the session has something to send, and closes it after 10 minutes without an exchange (not while a task it carried runs).",
   manual: "An operator opens it (Connect) and closes it (Disconnect); it closes after an hour without an exchange, as a safety net. Tasks wait meanwhile.",
-  always: "Core keeps it open, opening it again whenever it drops.",
+  always: "Core keeps it open, opening it again whenever it drops (later and later if it keeps dropping at once).",
 }
 
 /** Whether a target's minion is reached over a connection kept open (bind-persistent). */

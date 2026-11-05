@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
@@ -19,28 +18,26 @@ type lateSocket struct {
 	delay time.Duration
 }
 
-func (f lateSocket) Open(_ context.Context, _ string, _ map[string]any, _ [16]byte, _ *protocol.LinkKeys, _ time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
+func (f lateSocket) Open(_ context.Context, _ string, _ map[string]any, under [16]byte, keys *protocol.LinkKeys, _ time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
 	sent("ssh-1", 88)
-	target, policy, ok := f.svc.OpenedFor("ssh-1", 88)
-	if !ok {
+	if _, _, ok := f.svc.OpenedFor("ssh-1", 88); !ok {
 		f.t.Error("the socket's open is not waited for")
 	}
 	if f.delay >= 0 {
+		f.spoken.Add(1)
 		go func() {
+			defer f.spoken.Done()
 			time.Sleep(f.delay)
-			var c *Conn
-			c = NewConn(uuid.NewString(), protocol.KindBindPersistent, "ssh-1", "203.0.113.9",
-				func(_ context.Context, fr protocol.ConnFrame) error {
-					f.mu.Lock()
-					f.sent = append(f.sent, fr)
-					f.mu.Unlock()
-					return nil
-				},
-				func() { go f.svc.Closed(context.Background(), c) })
-			f.svc.ForTarget(c, target, policy)
+			c := f.newConn()
 			f.mu.Lock()
 			f.conns = append(f.conns, c)
+			f.refused = !f.svc.ForTarget(c, "ssh-1", 88)
 			f.mu.Unlock()
+			if f.refused {
+				// As its handler does: the socket is no one's.
+				return
+			}
+			f.speak(c, under, keys)
 		}()
 	}
 	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 88}, nil
@@ -63,7 +60,7 @@ func shortSocketWait(t *testing.T, d time.Duration) {
 // open waits for the socket that took it, and is connected.
 func TestOpenAnswerBeforeSocket(t *testing.T) {
 	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
-	b.svc.WithTargets(b.targets, lateSocket{ch, 50 * time.Millisecond})
+	b.svc.WithTargets(b.targets, lateSocket{fakeAgentless: ch, delay: 50 * time.Millisecond})
 	tg, err := b.svc.ConnectTarget(context.Background(), b.target)
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +75,7 @@ func TestOpenAnswerBeforeSocket(t *testing.T) {
 func TestOpenSocketNeverArrives(t *testing.T) {
 	shortSocketWait(t, 50*time.Millisecond)
 	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
-	b.svc.WithTargets(b.targets, lateSocket{ch, -1})
+	b.svc.WithTargets(b.targets, lateSocket{fakeAgentless: ch, delay: -1})
 	tg, err := b.svc.ConnectTarget(context.Background(), b.target)
 	if err != nil {
 		t.Fatal(err)
@@ -88,26 +85,48 @@ func TestOpenSocketNeverArrives(t *testing.T) {
 	}
 }
 
-// A target an open gave up on while its connection came is connected once
-// its minion speaks over that connection.
-func TestTargetConnectedAsItsMinionSpeaks(t *testing.T) {
+// A socket that comes after its open gave up on it is no one's: refused
+// (its handler closes it), the target left as the open said, retried.
+func TestLateSocketRefused(t *testing.T) {
 	shortSocketWait(t, 20*time.Millisecond)
 	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
-	b.svc.WithTargets(b.targets, lateSocket{ch, 150 * time.Millisecond})
+	b.svc.WithTargets(b.targets, lateSocket{fakeAgentless: ch, delay: 150 * time.Millisecond})
 	tg, err := b.svc.ConnectTarget(context.Background(), b.target)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tg.State != models.TargetUnreachable {
-		t.Fatalf("the open did not give up: %s", tg.State)
+	if tg.State != models.TargetUnreachable || tg.NextCallAt == nil {
+		t.Fatalf("the open did not give up: %+v", tg)
 	}
-	waitFor(t, "its connection", func() bool { ch.mu.Lock(); defer ch.mu.Unlock(); return len(ch.conns) == 1 })
-	if _, err := b.svc.Exchange(context.Background(), ch.connAt(0), b.build.BuildID.String(), "203.0.113.9",
-		sealedMinionMessage(t, b.keys, b.build.BuildID, nil, agentlessHello("server01"))); err != nil {
-		t.Fatal(err)
+	ch.settle()
+	ch.mu.Lock()
+	refused, conns := ch.refused, len(ch.conns)
+	ch.mu.Unlock()
+	if conns != 1 || !refused || b.svc.TargetConnected(b.target) || len(b.svc.targetConns(b.target)) != 0 {
+		t.Fatalf("the late socket: %d, refused %v", conns, refused)
 	}
-	waitFor(t, "connected", func() bool { return b.get(t).State == models.TargetConnected })
-	if tg := b.get(t); tg.SessionID == nil || tg.Failures != 0 || tg.NextCallAt != nil {
-		t.Fatalf("target %+v", tg)
+	if got := b.get(t); got.State != models.TargetUnreachable {
+		t.Fatalf("target %+v", got)
+	}
+}
+
+// An open that gave up waiting for its socket forgets it at once: a socket
+// ready even before the open stored what came of it is refused, not left
+// open with no open to tell.
+func TestOpenGivesUpAtOnce(t *testing.T) {
+	shortSocketWait(t, 10*time.Millisecond)
+	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
+	key := openKey{"ssh-1", 99}
+	b.svc.persist.mu.Lock()
+	b.svc.persist.opens[key] = &opening{target: b.target, arrived: make(chan struct{})}
+	b.svc.persist.mu.Unlock()
+	if _, _, ok := b.svc.OpenedFor("ssh-1", 99); !ok {
+		t.Fatal("the open is not waited for")
+	}
+	if c := b.svc.awaitSocket(context.Background(), key); c != nil {
+		t.Fatal("a socket arrived")
+	}
+	if b.svc.ForTarget(ch.newConn(), "ssh-1", 99) {
+		t.Fatal("a socket after its open gave up is the target's")
 	}
 }

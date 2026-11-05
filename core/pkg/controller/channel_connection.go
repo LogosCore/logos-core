@@ -105,12 +105,12 @@ func (ctrl *channelController) Connection(c *gin.Context) {
 	if err != nil {
 		return // the upgrader answered the client
 	}
-	ctrl.serveConnection(ws, instance, kind, peer, target, policy)
+	ctrl.serveConnection(ws, instance, kind, peer, target, policy, request)
 }
 
 // serveConnection reads the socket's frames into the sync service until it
 // closes, pinging it, and keeps the sessions it serves checked in.
-func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kind, peer string, target uuid.UUID, policy string) {
+func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kind, peer string, target uuid.UUID, policy string, request uint64) {
 	// The socket outlives the handshake's request: its context is its own.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -133,8 +133,14 @@ func (ctrl *channelController) serveConnection(ws *websocket.Conn, instance, kin
 	}, func() { _ = ws.Close() })
 	log = log.With(zap.String("conn", conn.ID))
 	if target != uuid.Nil {
-		ctrl.minions.ForTarget(conn, target, policy)
-		log = log.With(zap.String("target_id", target.String()))
+		log = log.With(zap.String("target_id", target.String()), zap.String("policy", policy))
+		if !ctrl.minions.ForTarget(conn, instance, request) {
+			// Its open gave up on it (it came too late), or its target's
+			// call ended: the socket is no one's.
+			log.Info("channel connection: its open no longer waits for it, closing")
+			_ = ws.Close()
+			return
+		}
 	}
 	log.Info("channel connection opened", zap.String("kind", kind))
 	defer func() {

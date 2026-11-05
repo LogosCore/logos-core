@@ -125,6 +125,8 @@ type Service struct {
 	// persist are bind-persistent targets' opens and connections
 	// (bind_persistent.go).
 	persist *persistent
+	// reacks are the tasks core asks minions about (reacks.go).
+	reacks *reacks
 	// channels are the channels' connection schemas: which kinds are
 	// agentless.
 	channels ChannelSchemas
@@ -139,7 +141,7 @@ func NewService(builds Builds, stagings repository.IMinionStagingRepository, ses
 	reservations repository.IMinionSessionReservationRepository, c cache.Cache, bus eventbus.IEventBus, logger *zap.Logger) *Service {
 	return &Service{builds: builds, stagings: stagings, sessions: sessions, reservations: reservations, cache: c, bus: bus,
 		logger: logger.Named("minionsync"), now: func() time.Time { return time.Now().UTC() },
-		conns: newConnections(), binds: newBinds(), persist: newPersistent()}
+		conns: newConnections(), binds: newBinds(), persist: newPersistent(), reacks: newReacks()}
 }
 
 // Handle opens a minion's sealed frame sent under id from peer (the IP
@@ -207,6 +209,19 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		}
 	}
 
+	if via != nil && via.target != uuid.Nil {
+		// Over a bind-persistent target's connection only its minion
+		// speaks: one of another build reached at its address is not it,
+		// and the connection closes.
+		if !via.ofTarget(from) {
+			s.logger.Info("targets: a minion of another build spoke over a target's connection", zap.String("target_id", via.target.String()),
+				zap.String("id", id))
+			via.refuse("a minion of another build spoke over the connection")
+			return nil, ErrUnopened
+		}
+		via.hear(s.now())
+		via.carry(msg.Items)
+	}
 	var items []cbor.RawMessage
 	switch {
 	case from.replaced:
@@ -236,6 +251,9 @@ func (s *Service) Exchange(ctx context.Context, via *Conn, id, peer string, fram
 		// connection serves it from now on (pushes can go at once), and a
 		// bind-persistent target's is linked to it.
 		s.seenOnHello(ctx, via, items)
+	}
+	if via != nil {
+		via.carry(items)
 	}
 	// Through a call, nothing to say is the sync call's 204. Over a
 	// connection socket a request always gets its reply, empty or not, so
@@ -479,6 +497,12 @@ func (s *Service) claim(ctx context.Context, from *sender, peer string, hello pr
 	s.logger.Info("minion claimed its persisted session", zap.Int64("number", sess.Number), zap.String("session_id", sid.String()),
 		zap.String("build_id", b.BuildID.String()), zap.String("host", hello.Host), zap.Uint64("pid", hello.PID))
 	s.bus.Publish(eventbus.NewMinionSessionUpdatedEvent(sessionPayload(sess)))
+	// A new process: the tasks the one before ran may be gone with it. Not
+	// a bind-call minion's: core holds where its tasks stand, and its calls
+	// carry them on (resume).
+	if sess.ConnKind != protocol.KindBindCall {
+		s.askTasks(ctx, sid, "a new process claimed its session")
+	}
 	items, err = helloResponse(sid)
 	return items, err == nil, err
 }

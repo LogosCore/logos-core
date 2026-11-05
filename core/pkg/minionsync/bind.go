@@ -76,18 +76,20 @@ func (s *Service) WithChannelSchemas(c ChannelSchemas) *Service {
 	return s
 }
 
-// callKind is what t's channel says of t's kind that its calls go by.
+// callKind is what t's channel says of t's kind that its calls and opens
+// go by.
 type callKind struct {
 	// agentless: the channel acts as the minion, so calls and opens carry
 	// their id's keys.
 	agentless bool
-	// deadline is how long a call may take (callDeadline).
-	deadline time.Duration
+	// deadline is how long a call may take (callDeadline), open how long
+	// an open may (openWithin).
+	deadline, open time.Duration
 }
 
 // kindOf is what t's channel's connection schema says of t's kind.
 func (s *Service) kindOf(ctx context.Context, t *models.MinionTarget) (callKind, error) {
-	k := callKind{deadline: callDeadline(0)}
+	k := callKind{deadline: callDeadline(0), open: openWithin(0)}
 	if s.channels == nil {
 		return k, nil
 	}
@@ -96,16 +98,9 @@ func (s *Service) kindOf(ctx context.Context, t *models.MinionTarget) (callKind,
 		return k, fmt.Errorf("load the %s channel's schema: %w", t.ModuleName, err)
 	}
 	if cs != nil {
-		k.agentless, k.deadline = cs.IsAgentless(t.Kind), callDeadline(cs.CallLimit(t.Kind))
+		k.agentless, k.deadline, k.open = cs.IsAgentless(t.Kind), callDeadline(cs.CallLimit(t.Kind)), openWithin(cs.OpenLimit(t.Kind))
 	}
 	return k, nil
-}
-
-// agentless reports whether t's channel acts as the minion on t's kind: its
-// calls and opens carry their id's keys.
-func (s *Service) agentless(ctx context.Context, t *models.MinionTarget) (bool, error) {
-	k, err := s.kindOf(ctx, t)
-	return k.agentless, err
 }
 
 const (
@@ -251,7 +246,7 @@ func (s *Service) RunTargets(ctx context.Context) {
 	t := time.NewTicker(bindTick)
 	defer t.Stop()
 	for {
-		s.closeIdle()
+		s.closeIdle(ctx)
 		for {
 			due, err := s.targets.ClaimDue(ctx, s.now())
 			if err != nil {
@@ -314,7 +309,12 @@ func (s *Service) callTarget(ctx context.Context, targetID uuid.UUID, why bindTr
 		// each call would be one more failed login on the target.
 		return
 	}
-	if err := s.callOf(ctx, t, why); err != nil {
+	err = s.callOf(ctx, t, why)
+	switch {
+	case repository.IsNotFound(err):
+		// Removed during its call: what its open brought closes with it.
+		s.closeTargetConns(targetID)
+	case err != nil:
 		s.failedInCore(ctx, targetID, err)
 	}
 }

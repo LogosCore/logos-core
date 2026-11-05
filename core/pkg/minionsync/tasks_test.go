@@ -3,6 +3,7 @@ package minionsync
 import (
 	"bytes"
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,9 @@ import (
 // service uses them (the real ones: TestIntegrationMinionTasks).
 type fakeTasks struct {
 	repository.IMinionTaskRepository
+	// mu: the service reaches its tasks from the goroutines of its
+	// connections, as from its callers'.
+	mu      sync.Mutex
 	rows    []models.MinionTask
 	results map[uuid.UUID][]repository.MinionTaskResult
 }
@@ -32,6 +36,8 @@ func (f *fakeTasks) find(id uuid.UUID) *models.MinionTask {
 }
 
 func (f *fakeTasks) ForDelivery(_ context.Context, sid uuid.UUID, limit int) ([]models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var resend, queued []models.MinionTask
 	for _, t := range f.rows {
 		if t.SessionID != sid || t.CancelRequestedAt != nil {
@@ -51,6 +57,8 @@ func (f *fakeTasks) ForDelivery(_ context.Context, sid uuid.UUID, limit int) ([]
 }
 
 func (f *fakeTasks) MarkSent(_ context.Context, ids []uuid.UUID, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, id := range ids {
 		t := f.find(id)
 		if t.State == models.MinionTaskQueued {
@@ -62,6 +70,8 @@ func (f *fakeTasks) MarkSent(_ context.Context, ids []uuid.UUID, at time.Time) e
 }
 
 func (f *fakeTasks) CountRunning(_ context.Context, sid uuid.UUID) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	n := 0
 	for _, t := range f.rows {
 		if t.SessionID == sid && !protocol.IsCoreCommand(t.Command) &&
@@ -72,7 +82,44 @@ func (f *fakeTasks) CountRunning(_ context.Context, sid uuid.UUID) (int, error) 
 	return n, nil
 }
 
+func (f *fakeTasks) RunningIDs(_ context.Context, sid uuid.UUID, limit int) ([]uuid.UUID, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var ids []uuid.UUID
+	for _, t := range f.rows {
+		if t.SessionID == sid && !protocol.IsCoreCommand(t.Command) && len(ids) < limit &&
+			(t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+			ids = append(ids, t.TaskID)
+		}
+	}
+	return ids, nil
+}
+
+func (f *fakeTasks) CountCancelling(_ context.Context, sid uuid.UUID) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, t := range f.rows {
+		if t.SessionID == sid && t.CancelRequestedAt != nil && (t.State == models.MinionTaskSent || t.State == models.MinionTaskRunning) {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeTasks) FindByTaskID(_ context.Context, id uuid.UUID) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if t := f.find(id); t != nil {
+		c := *t
+		return &c, nil
+	}
+	return nil, repository.ErrNotFound
+}
+
 func (f *fakeTasks) Ack(_ context.Context, _ uuid.UUID, ids []uuid.UUID, at time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, id := range ids {
 		if t := f.find(id); t != nil && t.AckedAt == nil {
 			t.AckedAt = &at
@@ -82,6 +129,8 @@ func (f *fakeTasks) Ack(_ context.Context, _ uuid.UUID, ids []uuid.UUID, at time
 }
 
 func (f *fakeTasks) AddResult(_ context.Context, sid, id uuid.UUID, r repository.MinionTaskResult) (*models.MinionTask, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	t := f.find(id)
 	if t == nil || t.SessionID != sid {
 		return nil, false, qmgo.ErrNoSuchDocuments
@@ -99,6 +148,8 @@ func (f *fakeTasks) AddResult(_ context.Context, sid, id uuid.UUID, r repository
 }
 
 func (f *fakeTasks) Resumable(_ context.Context, sid uuid.UUID) ([]models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []models.MinionTask
 	for _, t := range f.rows {
 		if t.SessionID == sid && t.ResumeCtx != nil && t.CancelRequestedAt == nil && !t.Finished() {
@@ -109,6 +160,8 @@ func (f *fakeTasks) Resumable(_ context.Context, sid uuid.UUID) ([]models.Minion
 }
 
 func (f *fakeTasks) CancelsToSend(_ context.Context, sid uuid.UUID, _ time.Time) ([]models.MinionTask, []models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var send []models.MinionTask
 	for _, t := range f.rows {
 		if t.SessionID == sid && t.CancelRequestedAt != nil && !t.Finished() {
@@ -119,6 +172,8 @@ func (f *fakeTasks) CancelsToSend(_ context.Context, sid uuid.UUID, _ time.Time)
 }
 
 func (f *fakeTasks) OpenOfCommand(_ context.Context, sid uuid.UUID, command string) ([]models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []models.MinionTask
 	for _, t := range f.rows {
 		if t.SessionID == sid && t.Command == command && !t.Finished() {
@@ -129,6 +184,8 @@ func (f *fakeTasks) OpenOfCommand(_ context.Context, sid uuid.UUID, command stri
 }
 
 func (f *fakeTasks) OpenWithAction(_ context.Context, sid uuid.UUID, action string) ([]models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var out []models.MinionTask
 	for _, t := range f.rows {
 		if t.SessionID == sid && t.Action == action && !t.Finished() {
@@ -139,6 +196,8 @@ func (f *fakeTasks) OpenWithAction(_ context.Context, sid uuid.UUID, action stri
 }
 
 func (f *fakeTasks) EndUnknown(_ context.Context, sid, id uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	t := f.find(id)
 	if t == nil || t.SessionID != sid || (t.State != models.MinionTaskSent && t.State != models.MinionTaskRunning) {
 		return nil, qmgo.ErrNoSuchDocuments
@@ -152,6 +211,8 @@ func (f *fakeTasks) EndUnknown(_ context.Context, sid, id uuid.UUID, why string,
 }
 
 func (f *fakeTasks) FailUndelivered(_ context.Context, sid, id uuid.UUID, why string, at time.Time) (*models.MinionTask, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	t := f.find(id)
 	if t == nil || t.SessionID != sid || t.AckedAt != nil || (t.State != models.MinionTaskQueued && t.State != models.MinionTaskSent) {
 		return nil, qmgo.ErrNoSuchDocuments

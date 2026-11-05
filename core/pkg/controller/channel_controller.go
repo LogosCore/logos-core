@@ -50,9 +50,10 @@ type MinionHandler interface {
 	Closed(ctx context.Context, c *minionsync.Conn)
 	// OpenedFor is the target an open a bind-persistent connection's socket
 	// names is for (taken: ok false for one core is not waiting for), and
-	// ForTarget makes a connection that target's.
+	// ForTarget makes a connection that open's target's once its socket is
+	// up (false: the open no longer waits, and the socket closes).
 	OpenedFor(instance string, request uint64) (target uuid.UUID, policy string, ok bool)
-	ForTarget(c *minionsync.Conn, target uuid.UUID, policy string)
+	ForTarget(c *minionsync.Conn, instance string, request uint64) bool
 }
 
 type channelController struct {

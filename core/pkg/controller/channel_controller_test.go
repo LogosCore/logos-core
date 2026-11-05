@@ -113,7 +113,7 @@ type fakeMinions struct {
 
 func (f *fakeMinions) OpenedFor(string, uint64) (uuid.UUID, string, bool) { return uuid.Nil, "", false }
 
-func (f *fakeMinions) ForTarget(*minionsync.Conn, uuid.UUID, string) {}
+func (f *fakeMinions) ForTarget(*minionsync.Conn, string, uint64) bool { return false }
 
 func (f *fakeMinions) Handle(_ context.Context, id, _ string, frame []byte) ([]byte, error) {
 	f.calls++

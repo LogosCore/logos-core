@@ -268,6 +268,11 @@ func (r *minionTargetResolver) BindTarget(ctx context.Context, s *model.MinionSe
 	if err != nil || t == nil {
 		return nil, err
 	}
+	if t.OperationID.String() != s.OperationID {
+		// A target is its operation's: one linked to another's session
+		// (core links only its own build's) is not shown there.
+		return nil, nil
+	}
 	return r.toModel(ctx, t, nil), nil
 }
 
