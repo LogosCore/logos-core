@@ -34,10 +34,11 @@ export const TARGET_STATE_LABEL: Record<string, string> = {
 /** What each state means, for its tooltip. */
 export const TARGET_STATE_HELP: Record<string, string> = {
   new: "Added: the first call is on its way.",
-  connected: "The page answered: its hello opened the session.",
+  connected: "The minion answered: its hello opened the session.",
   unreachable: "Nothing answered (DNS, refused, timeout, TLS). Core calls again: 1 minute, 5, 30, then hourly, for a day.",
-  not_the_minion: "Something answered, but not the page (a 404, a WAF's page). Core does not retry: Check now once it is fixed.",
-  refused: "The page answered with an error, or its build or connection is gone.",
+  not_the_minion: "Something answered, but not the minion (an HTTP 404, a WAF's page, another server). Core does not retry: Check now once it is fixed.",
+  refused:
+    "Refused: the login or the host key was not taken, the minion answered with an error, or its build or connection is gone. Core calls it again only on Check now or after an edit.",
   stopped: "Unreachable for a day: core stopped retrying. Check now calls it again.",
   no_channel: "No instance of the target's channel has its control link open.",
   needs_editing:

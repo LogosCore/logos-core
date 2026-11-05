@@ -357,52 +357,6 @@ func TestCreateBuildProblems(t *testing.T) {
 	}
 }
 
-// A factory whose minions talk unsealed (crypto none: an agentless
-// channel's, docs contracts/agentless-channels/) builds only through kinds
-// a channel declares agentless; its builds have the suite and no keys.
-func TestCreateBuildUnsealed(t *testing.T) {
-	r := newRig(t)
-	sc := protocol.BuildSchema{SchemaVersion: protocol.BuildSchemaV3, Version: 1, Crypto: protocol.CryptoNone,
-		Channels: []protocol.BuildChannel{{ModuleName: "ssh", Versions: []int{1},
-			Kinds: []protocol.BuildKind{{Kind: protocol.KindBindCall}, {Kind: protocol.KindBindPersistent}}}},
-		Targets: []protocol.BuildTarget{{ID: "ssh", Label: "SSH server", Format: "json", Platforms: []string{"any/any"}}}}
-	r.reg.schemas["ssh"] = &models.ModuleBuildSchema{BuildSchema: sc}
-	r.reg.setActive(bobInstance("bob-1", 1), models.Module{Type: protocol.ServiceFactory, Name: "ssh", Instance: "ssh-1", Version: "dev",
-		RPCQueue: "logos.factory.rpc.ssh-1", Status: models.ModuleStatusRegistered, Build: &models.ModuleBuildSchema{BuildSchema: sc}})
-	target := []protocol.FieldSpec{{Key: "host", Type: protocol.FieldString, Required: true}}
-	r.chs.schemas["ssh"] = &protocol.ConnectionSchema{SchemaVersion: protocol.ConnectionSchemaV2, Version: 1, Kinds: map[string]protocol.ConnectionKind{
-		protocol.KindBindCall:       {Agentless: true, Target: target},
-		protocol.KindBindPersistent: {Target: target},
-	}}
-	ssh := func(kind string) func(in *BuildInput) {
-		return func(in *BuildInput) {
-			in.ModuleName, in.Target, in.Values = "ssh", "ssh", nil
-			in.Connections = []ConnectionInput{{ModuleName: "ssh", Name: "servers", Kind: kind}}
-		}
-	}
-	b := r.queue(t, ssh(protocol.KindBindCall))
-	if b.Crypto == nil || b.Crypto.Suite != protocol.CryptoNone || b.Crypto.Material != nil {
-		t.Fatalf("crypto %+v", b.Crypto)
-	}
-	_, err := r.svc.CreateBuild(context.Background(), opID, r.input(ssh(protocol.KindBindPersistent)))
-	if p := problemsOf(err); !strings.Contains(p["connections[0].kind"], "does not act as the minion") {
-		t.Fatalf("a kind that is not agentless: %v (%v)", p, err)
-	}
-
-	// No kind named: the first agentless one, though the target lists
-	// another first; none agentless, refused.
-	sc.Targets[0].Channels = []protocol.ChannelVersions{{ModuleName: "ssh", Versions: []int{1}, Kinds: []string{protocol.KindBindPersistent, protocol.KindBindCall}}}
-	r.reg.schemas["ssh"] = &models.ModuleBuildSchema{BuildSchema: sc}
-	if b := r.queue(t, ssh("")); b.Connections.Items[0].Endpoint.Kind != protocol.KindBindCall {
-		t.Fatalf("picked %q", b.Connections.Items[0].Endpoint.Kind)
-	}
-	r.chs.schemas["ssh"].Kinds[protocol.KindBindCall] = protocol.ConnectionKind{Target: target}
-	_, err = r.svc.CreateBuild(context.Background(), opID, r.input(ssh("")))
-	if p := problemsOf(err); !strings.Contains(p["connections[0].kind"], "acts as the minion on none") {
-		t.Fatalf("no kind agentless: %v (%v)", p, err)
-	}
-}
-
 func TestCreateBuildRefusals(t *testing.T) {
 	for name, c := range map[string]struct {
 		setup func(r *rig)

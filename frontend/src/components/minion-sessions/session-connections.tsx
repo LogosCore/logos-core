@@ -27,8 +27,8 @@ import { useSwitchConnection } from "./use-connection-choices"
 // uses marked, as its hello or its last conn_update said; and the moves it
 // reported. Switch to runs the session's command for core's
 // switch_connection action, a task like any other: the minion moves once the
-// new connection answers, and says so. A bind-call session (a page core
-// calls) shows its target under its connection: where the page is, what
+// new connection answers, and says so. A bind-call session (a minion core
+// calls) shows its target under its connection: where the minion is, what
 // the latest call came to, and Check now; one whose target was removed
 // says core cannot reach it, and a target added there takes the session
 // over. A connection the minion listens on (bind-persistent) offers a target
@@ -107,14 +107,14 @@ export function ConnectionsCard({ s }: { s: Session }) {
   )
 }
 
-/** The page's target under its connection: its URL, state, and Check now. */
+/** The minion's target under its connection: where it is, its state, and Check now. */
 function TargetLine({ target: t }: { target: Target }) {
   const check = useCheckMinionTarget()
   const connect = useConnectMinionTarget()
   const disconnect = useDisconnectMinionTarget()
   const modals = useRecordModals()
   const [busy, setBusy] = useState(false)
-  // A connection kept open: Connect or Disconnect it; a page: Check now.
+  // A connection kept open: Connect or Disconnect it; a bind-call minion: Check now.
   const persistent = isPersistent(t)
   const connected = t.state === "connected"
   async function checkNow() {
@@ -163,7 +163,7 @@ function TargetLine({ target: t }: { target: Target }) {
 
 /**
  * A bind-call session with no target (it was removed): core cannot reach
- * the page. A target added here takes the session over.
+ * the minion. A target added here takes the session over.
  */
 function NoTargetLine({ s, place, open, inUse }: { s: Session; place: number; open: boolean; inUse: boolean }) {
   const [adding, setAdding] = useState(false)

@@ -67,7 +67,6 @@ export const BuildFields = graphql(`
     id
     operationId
     persistedSession
-    unsealed
     description
     moduleName
     target

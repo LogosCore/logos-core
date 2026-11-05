@@ -45,8 +45,8 @@ type ModuleConnectionKind {
   # is reached), never built into a minion. Empty for a reverse kind.
   target: [ModuleField!]!
   # The channel acts as the minion on this kind (a bind kind only): nothing
-  # runs on the target, and the channel reads what it carries. Only such a
-  # kind carries the unsealed messages of a factory whose crypto is none.
+  # runs on the target, and core gives the channel the keys of each call's
+  # and open's id.
   agentless: Boolean!
 }
 

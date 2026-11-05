@@ -13,7 +13,7 @@ import { TARGET_POLICY_LABEL, isPersistent, problemsText, shownState, type Targe
 const GRID_COLS = "grid-cols-[minmax(0,1.8fr)_minmax(0,1.4fr)_minmax(0,0.6fr)_minmax(0,1fr)_48px]"
 
 /**
- * Targets, newest first: where each page is, what the latest call to it came
+ * Targets, newest first: where each minion is, what the latest call to it came
  * to, its session, and its calls. A row opens its session; its menu calls it
  * now, edits it or removes it.
  */

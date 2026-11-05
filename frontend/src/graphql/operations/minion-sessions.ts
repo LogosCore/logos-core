@@ -39,7 +39,6 @@ export const MinionSessionFields = graphql(`
     lateAt
     lostAt
     persisted
-    unsealed
     restartCount
     restarts {
       at

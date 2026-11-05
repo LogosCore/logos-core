@@ -8,8 +8,10 @@ import (
 	"maps"
 	"math/rand/v2"
 	"net/netip"
+	"slices"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
@@ -22,34 +24,88 @@ import (
 )
 
 // bind-call minions (docs: contracts/channel-core-connections/, bind-call
-// minions): a page on a web server only answers, so core speaks first. It
-// asks a channel instance, over the instance's control link, to call the
-// page's target with a sealed message, and opens what came back.
+// minions): a minion that only answers (a page on a web server, a server
+// an agentless channel acts on), so core speaks first. It asks a channel
+// instance, over the instance's control link, to call the minion's target
+// with a sealed message, and opens what came back.
 //
 //   - The first call is a rehello under the build id, sealed with the
-//     build's keys: the page's hello opens a session with those keys (the
-//     page skips staging), and the target is linked to it.
+//     build's keys: the minion's hello opens a session with those keys (it
+//     skips staging), and the target is linked to it. What else the answer
+//     holds is taken under that session, as any later answer's.
 //   - After, calls go under the session id: when there is something to send
 //     (a task, a cancel, a stream that may go on: Nudge, coalesced), on the
 //     session's schedule when its hello said one, and on Check now. A call
-//     carries what the outbox has (outbox.go). The page's answer is taken
+//     carries what the outbox has (outbox.go). The minion's answer is taken
 //     as any message under the session (underSession), and what core has
 //     to say back goes in another call at once, while there is any and the
 //     calls make progress: a file moves a chunk a call, for as many calls
 //     as it takes. Two calls in a row that would carry the same items (a
-//     page answering the same thing over and over) end the exchange.
-//   - Every call says core's time (at): a page, which cannot remember
-//     message ids, refuses a call too old (a replay) with err stale, and
-//     the target says so.
+//     minion answering the same thing over and over) end the exchange.
+//   - Every call says core's time (at): a minion that cannot remember
+//     message ids refuses a call too old (a replay) with err stale, and the
+//     target says so. Every call says its deadline too: what the channel
+//     says its kind's calls may take (max_call), within core's cap.
+//   - A target's calls are core's own work: they go to their end whatever
+//     asked for them, and a call sent is always waited for.
 //   - A call that reaches nothing leaves the session open and the target
-//     unreachable, retried after 1 minute, 5, 30, then hourly, for a day.
+//     unreachable, retried after 1 minute, 5, 30, then hourly, for a day. A
+//     target refused (a login, a host key, an err) is called again only on
+//     Check now or an edit; one core itself could not call (a lookup, a
+//     store) is tried again in a minute.
 
 // Linker reaches channel instances over their control links. Satisfied by
 // *channellink.Hub.
 type Linker interface {
 	Call(ctx context.Context, module string, c channellink.Call) (protocol.LinkFrame, error)
-	Open(ctx context.Context, module string, values map[string]any, deadline time.Duration,
-		sent func(instance string, request uint64)) (protocol.LinkFrame, error)
+	Open(ctx context.Context, module string, values map[string]any, under [16]byte, keys *protocol.LinkKeys,
+		deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error)
+}
+
+// ChannelSchemas are the channels' connection schemas, by module name: nil
+// for a channel that declared none (channelendpoints.Service).
+type ChannelSchemas interface {
+	Schema(ctx context.Context, moduleName string) (*protocol.ConnectionSchema, error)
+}
+
+// WithChannelSchemas has core read the channels' connection schemas: a
+// call or an open to a kind a channel acts as the minion on (agentless)
+// carries the keys of its id. Without them no call carries keys.
+func (s *Service) WithChannelSchemas(c ChannelSchemas) *Service {
+	s.channels = c
+	return s
+}
+
+// callKind is what t's channel says of t's kind that its calls go by.
+type callKind struct {
+	// agentless: the channel acts as the minion, so calls and opens carry
+	// their id's keys.
+	agentless bool
+	// deadline is how long a call may take (callDeadline).
+	deadline time.Duration
+}
+
+// kindOf is what t's channel's connection schema says of t's kind.
+func (s *Service) kindOf(ctx context.Context, t *models.MinionTarget) (callKind, error) {
+	k := callKind{deadline: callDeadline(0)}
+	if s.channels == nil {
+		return k, nil
+	}
+	cs, err := s.channels.Schema(ctx, t.ModuleName)
+	if err != nil {
+		return k, fmt.Errorf("load the %s channel's schema: %w", t.ModuleName, err)
+	}
+	if cs != nil {
+		k.agentless, k.deadline = cs.IsAgentless(t.Kind), callDeadline(cs.CallLimit(t.Kind))
+	}
+	return k, nil
+}
+
+// agentless reports whether t's channel acts as the minion on t's kind: its
+// calls and opens carry their id's keys.
+func (s *Service) agentless(ctx context.Context, t *models.MinionTarget) (bool, error) {
+	k, err := s.kindOf(ctx, t)
+	return k.agentless, err
 }
 
 const (
@@ -59,9 +115,30 @@ const (
 	// bindTick is how often the scheduler looks for calls due.
 	bindTick = 5 * time.Second
 	// bindDefaultAllowance is how many tasks a call core starts brings when
-	// the page never said (docs: one task a call).
+	// the minion never said (docs: one task a call).
 	bindDefaultAllowance = 1
+	// bindCallDeadline is how long a call may take when its kind says
+	// nothing (ConnectionKind.MaxCall): what core waits for its answer, the
+	// link adding its slack. Every call says its deadline, and the channel
+	// keeps to the shorter of it and its own request timeout, so no call
+	// goes on past core's wait: one that did would run its tasks for an
+	// answer core no longer takes, and the next call would run them again.
+	bindCallDeadline = 2 * time.Minute
+	// bindMaxCallDeadline caps what a kind may ask for.
+	bindMaxCallDeadline = 10 * time.Minute
+	// internalRetry is how soon a target is called again after a call core
+	// itself could not make or finish (a lookup, a store).
+	internalRetry = time.Minute
 )
+
+// callDeadline is a call's deadline: what its kind asks for (limit; 0 for
+// nothing), within core's cap, else bindCallDeadline.
+func callDeadline(limit time.Duration) time.Duration {
+	if limit <= 0 {
+		return bindCallDeadline
+	}
+	return min(limit, bindMaxCallDeadline)
+}
 
 // Why a call is made.
 type bindTrigger int
@@ -132,13 +209,34 @@ func (s *Service) WithTargets(targets repository.IMinionTargetRepository, link L
 }
 
 // CheckTarget calls a target now (Check now, or a target just added) and
-// returns it as the call left it.
+// returns it as the call left it. The call is core's own: a caller that
+// goes first (an operator's request closed) gets ctx's error, and the call
+// goes on.
 func (s *Service) CheckTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error) {
 	if s.targets == nil {
 		return nil, errors.New("targets are not served")
 	}
-	s.callTarget(ctx, targetID, bindCheck)
+	if err := await(ctx, func(c context.Context) { s.callTarget(c, targetID, bindCheck) }); err != nil {
+		return nil, err
+	}
 	return s.targets.FindByTargetID(ctx, targetID)
+}
+
+// await runs work as core's own, its context free of ctx's end, and waits
+// for it while ctx lasts: ctx's error when the caller goes first, the work
+// going on.
+func await(ctx context.Context, work func(context.Context)) error {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		work(context.WithoutCancel(ctx))
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // RunTargets makes the calls due (retries, schedules) until ctx ends. As
@@ -198,8 +296,10 @@ type waitKey struct {
 }
 
 // callTarget makes a target's call: the first one, or one under its
-// session.
+// session, or its connection's open. It is core's own work: ctx's end does
+// not stop it, so an answer that comes is always taken.
 func (s *Service) callTarget(ctx context.Context, targetID uuid.UUID, why bindTrigger) {
+	ctx = context.WithoutCancel(ctx)
 	defer s.binds.lock(targetID)()
 	t, err := s.targets.FindByTargetID(ctx, targetID)
 	if err != nil {
@@ -208,56 +308,94 @@ func (s *Service) callTarget(ctx context.Context, targetID uuid.UUID, why bindTr
 		}
 		return
 	}
+	if t.State == models.TargetRefused && why != bindCheck && why != bindConnect {
+		// Refused (a login, a host key, an err): calling again changes
+		// nothing until an operator edits it or asks, and where it logs in
+		// each call would be one more failed login on the target.
+		return
+	}
+	if err := s.callOf(ctx, t, why); err != nil {
+		s.failedInCore(ctx, targetID, err)
+	}
+}
+
+// callOf makes t's call, as callTarget; an error is core's own (a lookup, a
+// store), the target's outcome being recorded on it.
+func (s *Service) callOf(ctx context.Context, t *models.MinionTarget, why bindTrigger) error {
 	if s.targetChecker != nil {
 		problems, err := s.targetChecker.Problems(ctx, t)
 		if err != nil {
-			s.logger.Warn("targets: check a target's values", zap.String("target_id", targetID.String()), zap.Error(err))
-			return
+			return fmt.Errorf("check the target's values: %w", err)
 		}
 		if len(problems) > 0 {
 			// Not called with values the channel no longer reads; an edit
 			// that fits calls it again.
 			if t.State != models.TargetNeedsEditing {
-				if err := s.saveCall(ctx, s.stateOnly(t, models.TargetNeedsEditing, s.problemsText(problems))); err != nil {
-					s.logger.Error("targets: a call", zap.String("target_id", targetID.String()), zap.Error(err))
-				}
+				return s.saveCall(ctx, s.stateOnly(t, models.TargetNeedsEditing, s.problemsText(problems)))
 			}
-			return
+			return nil
 		}
 	}
 	if t.Kind == protocol.KindBindPersistent {
 		// Its minion is reached by a connection kept open, not by calls.
-		if err := s.openTarget(ctx, t, why); err != nil {
-			s.logger.Error("targets: an open", zap.String("target_id", targetID.String()), zap.Error(err))
-		}
-		return
+		return s.openTarget(ctx, t, why)
 	}
 	var session *models.MinionSession
 	if t.SessionID != nil {
+		var err error
 		session, err = s.sessions.FindBySessionID(ctx, *t.SessionID)
 		switch {
 		case repository.IsNotFound(err):
 			session = nil
 		case err != nil:
-			s.logger.Warn("targets: load the session", zap.String("target_id", targetID.String()), zap.Error(err))
-			return
+			return fmt.Errorf("load the session: %w", err)
 		}
 		if session != nil && session.Closed(s.now()) {
-			// Its page is asked for a hello again, which opens another.
+			// Its minion is asked for a hello again, which opens another.
 			session, t.SessionID = nil, nil
 		}
 	}
 	if session == nil {
 		if why == bindNews || why == bindWake {
-			return
+			return nil
 		}
-		err = s.firstCall(ctx, t)
-	} else {
-		err = s.sessionCalls(ctx, t, session, why)
+		return s.firstCall(ctx, t)
 	}
+	return s.sessionCalls(ctx, t, session, why)
+}
+
+// failedInCore records a call core itself could not make or finish (a
+// lookup, a store failed): the target as it was, why in its state's detail,
+// and another call in a minute, so its schedule (a retry, its minion's own)
+// is not lost with the claim that cleared it. A manual target's connection
+// is an operator's to open: it is told, not called.
+func (s *Service) failedInCore(ctx context.Context, targetID uuid.UUID, cause error) {
+	s.logger.Error("targets: a call core could not make", zap.String("target_id", targetID.String()), zap.Error(cause))
+	t, err := s.targets.FindByTargetID(ctx, targetID)
 	if err != nil {
-		s.logger.Error("targets: a call", zap.String("target_id", targetID.String()), zap.Error(err))
+		return
 	}
+	t.StateDetail = clip("core could not make the call: "+cause.Error(), 400)
+	if t.Kind != protocol.KindBindPersistent || t.PolicyOf() != models.PolicyManual {
+		next := s.now().Add(internalRetry)
+		if t.NextCallAt == nil || t.NextCallAt.After(next) {
+			t.NextCallAt = &next
+		}
+	}
+	if err := s.saveCall(ctx, t); err != nil {
+		s.logger.Error("targets: store a call core could not make", zap.String("target_id", targetID.String()), zap.Error(err))
+	}
+}
+
+// clip is s cut to at most n bytes, on a character's edge.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n] + "…"
 }
 
 // buildConn is the build connection a target is of; nil when the build no
@@ -280,8 +418,9 @@ func callValues(conn *protocol.BuildConnection, t *models.MinionTarget) map[stri
 	return v
 }
 
-// firstCall asks the target's page for a hello, under the build id with the
-// build's keys: one that answers opens the session.
+// firstCall asks the target's minion for a hello, under the build id with
+// the build's keys: one that answers opens the session, and what else its
+// answer holds is taken under it.
 func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
 	if repository.IsNotFound(err) || (err == nil && (b.Crypto == nil || buildConn(b, t) == nil)) {
@@ -304,19 +443,28 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	if err != nil || done {
 		return err
 	}
+	// A hello opens the session; without one, an err says why the minion
+	// refused.
 	var hello cbor.RawMessage
+	var refused *protocol.ErrItem
 	for _, raw := range msg.Items {
 		switch protocol.ItemType(raw) {
 		case protocol.ItemHello:
-			hello = raw
+			if hello == nil {
+				hello = raw
+			}
 		case protocol.ItemErr:
 			var e protocol.ErrItem
-			_ = protocol.UnmarshalCBOR(raw, &e)
-			return s.saveCall(ctx, s.answered(t, models.TargetRefused, fmt.Sprintf("%s: %s", protocol.ErrCodeName(e.Code), e.Msg)))
+			if refused == nil && protocol.UnmarshalCBOR(raw, &e) == nil {
+				refused = &e
+			}
 		}
 	}
-	if hello == nil {
-		return s.saveCall(ctx, s.answered(t, models.TargetRefused, "the page answered without a hello"))
+	switch {
+	case hello == nil && refused != nil:
+		return s.saveCall(ctx, s.answered(t, models.TargetRefused, fmt.Sprintf("%s: %s", protocol.ErrCodeName(refused.Code), refused.Msg)))
+	case hello == nil:
+		return s.saveCall(ctx, s.answered(t, models.TargetRefused, "the minion answered without a hello"))
 	}
 	items, err := s.openSession(ctx, from, peer, hello)
 	if err != nil {
@@ -341,35 +489,42 @@ func (s *Service) firstCall(ctx context.Context, t *models.MinionTarget) error {
 	}
 	t.SessionID = &sid
 	s.allowanceOf(t, msg)
-	// The page answered core's own call: core holds the session's id, so
-	// nothing can lose it (as a hello_response can a minion's), and the
-	// call is the session's first check-in. A page given nothing to do for
-	// a day stays open.
-	if err := s.sessions.CheckIn(ctx, sid, checkIn(s.now(), peer, nil, session.Sleep, session.ConnKind)); err != nil {
-		return fmt.Errorf("check the page's session in: %w", err)
+	// The minion answered core's own call: core holds the session's id, so
+	// nothing can lose it (as a hello_response can a minion's), and the call
+	// is the session's first check-in, so a minion given nothing to do for a
+	// day stays open. The rest of the answer is the session's, as any later
+	// answer is: its feedback, a schedule, what it asks for.
+	rest := *msg
+	rest.Items = slices.DeleteFunc(slices.Clone(msg.Items), func(raw cbor.RawMessage) bool {
+		return protocol.ItemType(raw) == protocol.ItemHello
+	})
+	back, err := s.underSession(ctx, session, peer, rest, nil, pathCall)
+	if err != nil {
+		return fmt.Errorf("take the first answer under its session: %w", err)
 	}
-	s.logger.Info("targets: a page's hello opened a session", zap.String("target_id", t.TargetID.String()),
+	s.logger.Info("targets: a minion's hello opened a session", zap.String("target_id", t.TargetID.String()),
 		zap.Int64("number", session.Number), zap.String("session_id", sid.String()))
 	if err := s.saveCall(ctx, s.reached(t, session)); err != nil {
 		return err
+	}
+	if len(back) > 0 {
+		// What core says back to it goes at once, as after any answer.
+		conn, from, done, err := s.sessionSender(ctx, t, session)
+		if err != nil || done {
+			return err
+		}
+		return s.callWhileWorkRemains(ctx, t, session, conn, from, back)
 	}
 	// What waits already goes at once.
 	return s.sessionCalls(ctx, t, session, bindNews)
 }
 
-// sessionCalls calls the page under its session: what core has for it, and
-// again at once with what core has to say back, while there is any.
+// sessionCalls calls the minion under its session: what core has for it,
+// and again at once with what core has to say back, while there is any.
 func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, session *models.MinionSession, why bindTrigger) error {
-	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
-	if repository.IsNotFound(err) || (err == nil && buildConn(b, t) == nil) {
-		return s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "the build or its connection is gone"))
-	}
-	if err != nil {
-		return fmt.Errorf("load the build: %w", err)
-	}
-	from := &sender{session: session, crypto: session.Crypto}
-	if err := from.readKeys(); err != nil {
-		return s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "core does not implement the session's crypto"))
+	conn, from, done, err := s.sessionSender(ctx, t, session)
+	if err != nil || done {
+		return err
 	}
 	items, fresh, going, err := s.bindItems(ctx, t, session)
 	if err != nil {
@@ -378,11 +533,36 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 	if (why == bindNews && !fresh) || (why == bindWake && !going) {
 		return nil
 	}
-	// Calls go on while core has something to say back and it moves things
-	// on; no count bounds them, as a file takes a call a chunk.
+	return s.callWhileWorkRemains(ctx, t, session, conn, from, items)
+}
+
+// sessionSender is what calls under session go through and with: t's build
+// connection and the session's keys; done when there are none, which it
+// recorded on t.
+func (s *Service) sessionSender(ctx context.Context, t *models.MinionTarget, session *models.MinionSession) (*protocol.BuildConnection, *sender, bool, error) {
+	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
+	if repository.IsNotFound(err) || (err == nil && buildConn(b, t) == nil) {
+		return nil, nil, true, s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "the build or its connection is gone"))
+	}
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("load the build: %w", err)
+	}
+	from := &sender{session: session, crypto: session.Crypto}
+	if err := from.readKeys(); err != nil {
+		return nil, nil, true, s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "core does not implement the session's crypto"))
+	}
+	return buildConn(b, t), from, false, nil
+}
+
+// callWhileWorkRemains calls the minion under its session with items, and
+// again at once with what core has to say back, while there is any and the
+// calls move things on; no count bounds them, as a file takes a call a
+// chunk.
+func (s *Service) callWhileWorkRemains(ctx context.Context, t *models.MinionTarget, session *models.MinionSession,
+	conn *protocol.BuildConnection, from *sender, items []cbor.RawMessage) error {
 	var last []cbor.RawMessage
 	for {
-		msg, peer, done, err := s.exchange(ctx, t, buildConn(b, t), from, session.SessionID, items)
+		msg, peer, done, err := s.exchange(ctx, t, conn, from, session.SessionID, items)
 		if err != nil || done {
 			return err
 		}
@@ -396,7 +576,7 @@ func (s *Service) sessionCalls(ctx context.Context, t *models.MinionTarget, sess
 			break
 		}
 		if sameItems(items, last) {
-			s.logger.Info("targets: the page answers the same thing again, the exchange ends", zap.String("target_id", t.TargetID.String()))
+			s.logger.Info("targets: the minion answers the same thing again, the exchange ends", zap.String("target_id", t.TargetID.String()))
 			break
 		}
 	}
@@ -457,9 +637,9 @@ func (s *Service) allowanceOf(t *models.MinionTarget, msg *protocol.MinionMessag
 }
 
 // exchange makes one call: items under id, sealed as from's suite has
-// them, to the target through its channel. It returns the page's answer,
-// opened; or done, when the call reached nothing or not the page, which it
-// recorded.
+// them, to the target through its channel. It returns the minion's answer,
+// opened; or done, when the call reached nothing or not the minion, which
+// it recorded.
 func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *protocol.BuildConnection,
 	from *sender, id uuid.UUID, items []cbor.RawMessage) (*protocol.MinionMessage, string, bool, error) {
 	msgID := protocol.NewMessageID()
@@ -474,8 +654,21 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	if s.link == nil {
 		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, "core keeps no control links"))
 	}
+	kind, err := s.kindOf(ctx, t)
+	if err != nil {
+		return nil, "", false, err
+	}
 	t.Calls++
-	a, err := s.link.Call(ctx, t.ModuleName, channellink.Call{Values: callValues(conn, t), ID: id, Data: sealed})
+	call := channellink.Call{Values: callValues(conn, t), ID: id, Data: sealed, Deadline: kind.deadline}
+	// A channel that acts as the minion opens the message and seals the
+	// answer itself: it gets the id's keys with every call.
+	if kind.agentless {
+		call.Keys = from.linkKeys()
+	}
+	// A call sent is waited for, whatever asked for it: an answer not taken
+	// would leave the tasks it ran unacknowledged, and the next call would
+	// run them again.
+	a, err := s.link.Call(context.WithoutCancel(ctx), t.ModuleName, call)
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
 		return nil, "", true, s.saveCall(ctx, s.failed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))
@@ -494,7 +687,7 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	case a.ID == nil:
 		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, notTheMinion(a.Status, a.Excerpt)))
 	}
-	// The page answers under the id it was called under, sealed with the
+	// The minion answers under the id it was called under, sealed with the
 	// same keys, and answers this message: anything else is not it.
 	if !bytes.Equal(a.ID, id[:]) {
 		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer under another id"))
@@ -508,22 +701,22 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 		!bytes.Equal(msg.Re, msgID) {
 		return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetNotTheMinion, "an answer that is not one to this call"))
 	}
-	// A page whose clock is far from core's refuses the call as stale, as
+	// A minion whose clock is far from core's refuses the call as stale, as
 	// it would a replay: nothing goes until the clocks agree.
 	for _, raw := range msg.Items {
 		var e protocol.ErrItem
 		if protocol.ItemType(raw) == protocol.ItemErr && protocol.UnmarshalCBOR(raw, &e) == nil && e.Code == protocol.ErrItemStale {
 			return nil, "", true, s.saveCall(ctx, s.answered(t, models.TargetRefused,
-				"the page refused the call as stale: its clock is far from core's ("+e.Msg+")"))
+				"the minion refused the call as stale: its clock is far from core's ("+e.Msg+")"))
 		}
 	}
-	// The address the channel reached the page at: its external one.
+	// The address the channel reached the minion at: its external one.
 	return &msg, peerAddress(a.Peer), false, nil
 }
 
 // refusal reports whether a link failure is the target refusing the
-// channel (an agentless channel's: the login, the host key), which no retry
-// changes until the target is edited.
+// channel (the login, the host key), which no retry changes until the
+// target is edited.
 func refusal(kind int) bool {
 	return kind == protocol.LinkFailLogin || kind == protocol.LinkFailHostKey
 }
@@ -562,7 +755,7 @@ func nameUnknownTasks(msg *protocol.MinionMessage, sent []cbor.RawMessage) {
 	}
 }
 
-// notTheMinion says what answered instead of the page.
+// notTheMinion says what answered instead of the minion.
 func notTheMinion(status int, excerpt []byte) string {
 	out := "something else answered"
 	if status != 0 {
@@ -578,7 +771,7 @@ func notTheMinion(status int, excerpt []byte) string {
 	return out
 }
 
-// reached is t after a call that reached the page: connected, next called
+// reached is t after a call that reached the minion: connected, next called
 // on the session's schedule if it has one.
 func (s *Service) reached(t *models.MinionTarget, session *models.MinionSession) *models.MinionTarget {
 	now := s.now()
@@ -624,8 +817,8 @@ func (s *Service) failed(t *models.MinionTarget, state, detail string) *models.M
 	return t
 }
 
-// answered is t after a call something answered that is not the page's
-// session going on (not the page, an err): not retried, Check now calls
+// answered is t after a call something answered that is not the minion's
+// session going on (not the minion, an err): not retried, Check now calls
 // again.
 func (s *Service) answered(t *models.MinionTarget, state, detail string) *models.MinionTarget {
 	now := s.now()

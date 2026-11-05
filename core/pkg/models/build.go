@@ -185,11 +185,6 @@ func (f *BuildFailover) UnmarshalBSON(data []byte) error {
 	return nil
 }
 
-// Unsealed reports whether the build's minions talk unsealed
-// (protocol.CryptoNone): minions an agentless channel acts as, reached only
-// through its agentless kinds (docs: contracts/agentless-channels/).
-func (b *Build) Unsealed() bool { return b.Crypto != nil && b.Crypto.Suite == protocol.CryptoNone }
-
 // FailoverPolicy is the build's failover policy: its own, or the defaults
 // for a build made before builds had one.
 func (b *Build) FailoverPolicy() protocol.BuildFailover {

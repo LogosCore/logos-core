@@ -30,10 +30,10 @@ export interface TakenOverSession {
 
 /**
  * Adds a target to a build's bind connection, or edits one: the channel's
- * target fields (where the page is, how to reach it) and whether core
+ * target fields (where the minion is, how to reach it) and whether core
  * retries an unreachable one. Core calls it as soon as it is saved. Added
  * for a session (one whose target was removed), it takes that session over:
- * the page is called under the session's id and the session goes on.
+ * the minion is called under the session's id and the session goes on.
  */
 export function TargetDialog({
   open,
@@ -145,8 +145,8 @@ function TargetForm({
         })
         toast.success("Target added", {
           description: session
-            ? `Core calls it now, under session #${session.number}: once the page answers, the session goes on.`
-            : "Core calls it now: once the page answers, its session opens.",
+            ? `Core calls it now, under session #${session.number}: once the minion answers, the session goes on.`
+            : "Core calls it now: once the minion answers, its session opens.",
         })
       }
       onClose()
@@ -172,9 +172,9 @@ function TargetForm({
         </DialogTitle>
         <DialogDescription>
           {session
-            ? `Where the page is now: core calls it under session #${session.number}, and the session goes on with its history. The page must be this build's: it keeps nothing, so wherever it is, it answers under the session's id.`
-            : "Where the page is, once it is on a server: core calls it through the connection's channel, and the page's hello opens its session."}{" "}
-          Nothing here goes into the page.
+            ? `Where the minion is now: core calls it under session #${session.number}, and the session goes on with its history. It must be this build's: it keeps nothing, so wherever it is, it answers under the session's id.`
+            : "Where the minion is: core calls it through the connection's channel, and the minion's hello opens its session."}{" "}
+          Nothing here goes into the build: only the channel reads it.
         </DialogDescription>
       </DialogHeader>
 

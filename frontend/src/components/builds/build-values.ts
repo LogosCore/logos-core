@@ -235,36 +235,6 @@ export function pickedCommands(kind: FactoryKind, target: Target | undefined, pi
 /** A channel kind as the build form uses it: its connection kinds, each with its settings, sorted. */
 export type ChannelKind = Kind
 
-/**
- * The factory's minions talk unencrypted (crypto "none"): a channel acts as
- * them, and core sends their messages in the clear, only through the kinds a
- * channel declares agentless.
- */
-export function unsealedFactory(factory: Pick<FactoryKind, "crypto">): boolean {
-  return factory.crypto === "none"
-}
-
-/** What an unencrypted build's mark says. */
-export const UNENCRYPTED_BUILD = "Unencrypted: a channel acts as its minions, and reads what it carries"
-
-/** What an unencrypted session's mark says. */
-export const UNENCRYPTED_SESSION = "Unencrypted: a channel acts as the minion, and reads what it carries"
-
-/**
- * The channels as a build of factory connects through them: for a factory
- * whose minions talk unencrypted, each with only the connection kinds it
- * acts as the minion on, since core takes no other for them.
- */
-export function channelsForFactory(
-  factory: Pick<FactoryKind, "crypto">,
-  channels: ReadonlyMap<string, ChannelKind>,
-): ReadonlyMap<string, ChannelKind> {
-  if (!unsealedFactory(factory)) return channels
-  return new Map(
-    [...channels].map(([name, ch]) => [name, { ...ch, kinds: ch.kinds.filter((k) => k.agentless), agentlessOnly: true }]),
-  )
-}
-
 /** The channel's settings for a connection of kind (connection kind); none when it does not carry it. */
 export function settingFields(ch: ChannelKind | null | undefined, kind: string): FieldDef[] {
   return connectionKind(ch, kind)?.fields ?? []
@@ -306,9 +276,7 @@ export function channelUnusable(
     return `The ${moduleName} channel is at settings v${ch.version}; this factory reads v${supported.versions.join(", v")}`
   }
   if (usableKinds(target, ch, moduleName).length === 0) {
-    return ch.agentlessOnly
-      ? `The ${moduleName} channel acts as the minion on none of the kinds this target speaks, and this factory's minions talk unencrypted`
-      : `The ${moduleName} channel carries none of the kinds this target speaks`
+    return `The ${moduleName} channel carries none of the kinds this target speaks`
   }
   return null
 }
@@ -774,9 +742,7 @@ export function checkBuild(
     const why = channelUnusable(target, c.moduleName, channels)
     if (why) errors[at] = why
     else if (c.kind && !usableKinds(target, channels.get(c.moduleName), c.moduleName).includes(c.kind)) {
-      errors[`${at}.kind`] = channels.get(c.moduleName)?.agentlessOnly
-        ? `Not a kind this target speaks that the ${c.moduleName} channel acts as the minion on: this factory's minions talk unencrypted`
-        : `Not a kind both this target and the ${c.moduleName} channel support`
+      errors[`${at}.kind`] = `Not a kind both this target and the ${c.moduleName} channel support`
     }
     const name = c.name.trim()
     const resolved = name || defaultConnectionName(c.moduleName, i)

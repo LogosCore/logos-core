@@ -3,7 +3,9 @@ package minionsync
 import (
 	"bytes"
 	"context"
+	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -119,21 +121,40 @@ type fakePage struct {
 	// more, when set, are items the page adds to its answer to msg (a
 	// file's next chunk, say).
 	more func(msg protocol.CoreMessage) []any
+	// items, when set, are all its answer to msg says; re, what it answers.
+	items func(msg protocol.CoreMessage) []any
+	re    []byte
+	// hold, when set, keeps each call until it closes, the caller's ctx
+	// ending it first as the hub's does; held hears of each call held.
+	hold, held chan struct{}
 
-	mu       sync.Mutex
-	calls    []protocol.CoreMessage
-	ids      []uuid.UUID
-	values   []map[string]any
-	modules  []string
-	maxTasks uint64
+	mu        sync.Mutex
+	calls     []protocol.CoreMessage
+	ids       []uuid.UUID
+	values    []map[string]any
+	modules   []string
+	deadlines []time.Duration
+	maxTasks  uint64
 }
 
-func (p *fakePage) Call(_ context.Context, module string, c channellink.Call) (protocol.LinkFrame, error) {
+func (p *fakePage) Call(ctx context.Context, module string, c channellink.Call) (protocol.LinkFrame, error) {
+	if p.hold != nil {
+		select {
+		case p.held <- struct{}{}:
+		default:
+		}
+		select {
+		case <-p.hold:
+		case <-ctx.Done():
+			return protocol.LinkFrame{}, ctx.Err()
+		}
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.modules = append(p.modules, module)
 	p.values = append(p.values, c.Values)
 	p.ids = append(p.ids, c.ID)
+	p.deadlines = append(p.deadlines, c.Deadline)
 	if p.answer != nil {
 		return *p.answer, nil
 	}
@@ -173,7 +194,13 @@ func (p *fakePage) Call(_ context.Context, module string, c channellink.Call) (p
 		max := p.maxTasks
 		out = append(out, protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &max})
 	}
+	if p.items != nil {
+		out = p.items(msg)
+	}
 	reply := protocol.MinionMessage{V: protocol.MinionMessageV3, Re: msg.ID}
+	if p.re != nil {
+		reply.Re = p.re
+	}
 	for _, it := range out {
 		b, _ := protocol.MarshalCBOR(it)
 		reply.Items = append(reply.Items, cbor.RawMessage(b))
@@ -187,7 +214,7 @@ func (p *fakePage) Call(_ context.Context, module string, c channellink.Call) (p
 }
 
 // Open: a page is reached by calls, not connections.
-func (p *fakePage) Open(context.Context, string, map[string]any, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+func (p *fakePage) Open(context.Context, string, map[string]any, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: &protocol.LinkFailure{Kind: protocol.LinkFailOther, Msg: "a page"}}, nil
 }
 
@@ -267,9 +294,12 @@ func TestBindFirstCallOpensSession(t *testing.T) {
 	if s.LastSeenAt == nil || s.Closed(s.CreatedAt.Add(48*time.Hour)) {
 		t.Fatalf("not checked in by its hello: last seen %v", s.LastSeenAt)
 	}
-	// Every call says core's time.
+	// Every call says core's time, and how long core waits for it.
 	if at := b.page.calls[0].At; at == 0 || time.Since(time.Unix(int64(at), 0)) > time.Minute {
 		t.Fatalf("the call's at %d", at)
+	}
+	if d := b.page.deadlines[0]; d != bindCallDeadline {
+		t.Fatalf("the call's deadline %s", d)
 	}
 	// Nothing waited: no call under the session yet.
 	if n := b.page.callCount(); n != 1 {
@@ -395,7 +425,7 @@ func (noLink) Call(context.Context, string, channellink.Call) (protocol.LinkFram
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 
-func (noLink) Open(context.Context, string, map[string]any, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+func (noLink) Open(context.Context, string, map[string]any, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 
@@ -705,6 +735,199 @@ func TestNameUnknownTasks(t *testing.T) {
 		var e protocol.ErrItem
 		if protocol.UnmarshalCBOR(msg.Items[i], &e) != nil || !bytes.Equal(e.Task, want) {
 			t.Errorf("err %d: task %x, want %x", i, e.Task, want)
+		}
+	}
+}
+
+// A call's deadline is what its kind asks for (max_call), within core's
+// cap; without one, core's own.
+func TestBindCallDeadlineFromItsKind(t *testing.T) {
+	for _, c := range []struct {
+		maxCall string
+		want    time.Duration
+	}{{"", bindCallDeadline}, {"30s", 30 * time.Second}, {"1h", bindMaxCallDeadline}} {
+		b := newBindRig(t, true)
+		b.svc.WithChannelSchemas(fakeSchemas{"dumbo": {Kinds: map[string]protocol.ConnectionKind{protocol.KindBindCall: {MaxCall: c.maxCall}}}})
+		if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+			t.Fatal(err)
+		}
+		if d := b.page.deadlines[0]; d != c.want {
+			t.Errorf("max_call %q: the call's deadline %s, want %s", c.maxCall, d, c.want)
+		}
+	}
+}
+
+// A call sent is waited for even when what asked for it goes first (an
+// operator's request closed): its answer is taken, so the task it ran is
+// done, not left to run again in the next call.
+func TestBindCallAnsweredAfterItsCallerWent(t *testing.T) {
+	b := newBindRig(t, true)
+	tg, err := b.svc.CheckTarget(context.Background(), b.target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.tasks.rows = append(b.tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: *tg.SessionID, OperationID: b.build.OperationID,
+		State: models.MinionTaskQueued, Op: 3})
+	b.page.hold, b.page.held = make(chan struct{}), make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	gone := make(chan error, 1)
+	go func() {
+		_, err := b.svc.CheckTarget(ctx, b.target)
+		gone <- err
+	}()
+	<-b.page.held // the call is with its channel
+	cancel()
+	if err := <-gone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("the caller that went: %v", err)
+	}
+	close(b.page.hold) // the answer comes
+	// A Check now waits for the target's call under way, then makes its own.
+	if _, err := b.svc.CheckTarget(context.Background(), b.target); err != nil {
+		t.Fatal(err)
+	}
+	if task := b.tasks.rows[0]; task.State != models.MinionTaskDone {
+		t.Fatalf("the task its answer ran: %s", task.State)
+	}
+	if got := len(itemsOfCore(b.page.calls[2], protocol.ItemTask)); got != 0 {
+		t.Fatalf("the task went again: %d in the next call", got)
+	}
+}
+
+type failingSchemas struct{}
+
+func (failingSchemas) Schema(context.Context, string) (*protocol.ConnectionSchema, error) {
+	return nil, errors.New("the registry is down")
+}
+
+// A call core itself could not make (its channel's schema did not load)
+// leaves the target as it was, says why, and calls it again in a minute:
+// the claim that took it cleared its schedule.
+func TestBindInternalErrorKeepsTheSchedule(t *testing.T) {
+	ctx := context.Background()
+	b := newBindRig(t, true)
+	b.page.answer = &protocol.LinkFrame{Type: protocol.LinkAnswer, Failure: &protocol.LinkFailure{Kind: protocol.LinkFailUnreachable, Msg: "no route"}}
+	if _, err := b.svc.CheckTarget(ctx, b.target); err != nil {
+		t.Fatal(err)
+	}
+	b.svc.WithChannelSchemas(failingSchemas{})
+	claimed, err := b.targets.ClaimDue(ctx, b.svc.now().Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.svc.callTarget(ctx, claimed.TargetID, bindScheduled)
+	tg := b.get(t)
+	if tg.State != models.TargetUnreachable || !strings.Contains(tg.StateDetail, "core could not make the call: load the dumbo channel's schema") ||
+		tg.NextCallAt == nil || tg.NextCallAt.After(b.svc.now().Add(internalRetry)) {
+		t.Fatalf("target %+v", tg)
+	}
+	// The registry back, the next call goes.
+	b.svc.WithChannelSchemas(nil)
+	b.page.answer = nil
+	b.svc.callTarget(ctx, b.target, bindScheduled)
+	if tg := b.get(t); tg.State != models.TargetConnected || tg.StateDetail != "" {
+		t.Fatalf("after: %+v", tg)
+	}
+}
+
+// A refused target (its login refused) is not called for news, a task
+// queued or a stream that may go on: where it logs in, each call would be
+// one more failed login. Check now calls it, as an edit does.
+func TestBindRefusedTargetWaitsForCheckNow(t *testing.T) {
+	ctx := context.Background()
+	b := newBindRig(t, true)
+	tg, err := b.svc.CheckTarget(ctx, b.target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := func() {
+		b.tasks.rows = append(b.tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: *tg.SessionID, OperationID: b.build.OperationID,
+			State: models.MinionTaskQueued, Op: 3})
+	}
+	b.page.answer = &protocol.LinkFrame{Type: protocol.LinkAnswer, Failure: &protocol.LinkFailure{Kind: protocol.LinkFailLogin, Msg: "the server refused the login"}}
+	queue()
+	b.svc.callTarget(ctx, b.target, bindNews)
+	if tg := b.get(t); tg.State != models.TargetRefused || tg.NextCallAt != nil {
+		t.Fatalf("refused: %+v", tg)
+	}
+	calls := b.page.callCount()
+	queue()
+	b.svc.callTarget(ctx, b.target, bindNews)
+	b.svc.callTarget(ctx, b.target, bindWake)
+	b.svc.callTarget(ctx, b.target, bindScheduled)
+	if n := b.page.callCount(); n != calls {
+		t.Fatalf("a refused target called %d more times", n-calls)
+	}
+	b.page.answer = nil // the login works again
+	if tg, err := b.svc.CheckTarget(ctx, b.target); err != nil || tg.State != models.TargetConnected {
+		t.Fatalf("Check now: %+v %v", tg, err)
+	}
+	for _, task := range b.tasks.rows {
+		if task.State != models.MinionTaskDone {
+			t.Fatalf("task %s", task.State)
+		}
+	}
+}
+
+// The first answer's other items are the session's, as any later answer's
+// are: feedback said with the hello is kept.
+func TestBindFirstAnswerIsTheSessions(t *testing.T) {
+	b := newBindRig(t, true)
+	feedback := &fakeFeedback{}
+	b.svc.WithFeedback(feedback)
+	b.page.more = func(msg protocol.CoreMessage) []any {
+		if len(itemsOfCore(msg, protocol.ItemRehello)) == 0 {
+			return nil
+		}
+		return []any{protocol.FeedbackItem{T: protocol.ItemFeedback, ID: []byte("feedbak1"), Level: protocol.FeedbackWarning, Msg: "running without a shell"}}
+	}
+	tg, err := b.svc.CheckTarget(context.Background(), b.target)
+	if err != nil || tg.State != models.TargetConnected {
+		t.Fatalf("%+v %v", tg, err)
+	}
+	if len(feedback.rows) != 1 || feedback.rows[0].SessionID != *tg.SessionID || feedback.rows[0].Msg != "running without a shell" {
+		t.Fatalf("feedback %+v", feedback.rows)
+	}
+}
+
+// What a call's answer must be, or the target says why: under the id it
+// was called under, an answer to this call, not stale; a first answer with
+// a hello, or the err that says why not.
+func TestBindAnswerRefusals(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		set    func(p *fakePage)
+		state  string
+		detail string
+	}{
+		{"another id", func(p *fakePage) {
+			p.answer = &protocol.LinkFrame{Type: protocol.LinkAnswer, ID: bytes.Repeat([]byte{9}, 16), Data: []byte("frame"), Status: 200}
+		}, models.TargetNotTheMinion, "an answer under another id"},
+		{"another message", func(p *fakePage) { p.re = protocol.NewMessageID() }, models.TargetNotTheMinion, "not one to this call"},
+		{"stale", func(p *fakePage) {
+			p.more = func(protocol.CoreMessage) []any {
+				return []any{protocol.ErrItem{T: protocol.ItemErr, Code: protocol.ErrItemStale, Msg: "the minion's time is 1700000000"}}
+			}
+		}, models.TargetRefused, "refused the call as stale"},
+		{"an err, no hello", func(p *fakePage) {
+			p.items = func(protocol.CoreMessage) []any {
+				return []any{protocol.ErrItem{T: protocol.ItemErr, Code: protocol.ErrItemBadMessage, Msg: "keys of another build"}}
+			}
+		}, models.TargetRefused, "keys of another build"},
+		{"no hello", func(p *fakePage) {
+			max := uint64(1)
+			p.items = func(protocol.CoreMessage) []any {
+				return []any{protocol.GetTasksItem{T: protocol.ItemGetTasks, Max: &max}}
+			}
+		}, models.TargetRefused, "the minion answered without a hello"},
+	} {
+		b := newBindRig(t, true)
+		c.set(b.page)
+		tg, err := b.svc.CheckTarget(context.Background(), b.target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tg.State != c.state || !strings.Contains(tg.StateDetail, c.detail) || tg.NextCallAt != nil || tg.SessionID != nil {
+			t.Errorf("%s: %s %q", c.name, tg.State, tg.StateDetail)
 		}
 	}
 }

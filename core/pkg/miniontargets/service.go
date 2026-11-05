@@ -1,7 +1,8 @@
 // Package miniontargets manages the targets of bind minions (docs:
 // contracts/channel-core-connections/, bind-call minions: targets and
-// sessions): where an operator put a page a factory built, with what the
-// build connection's channel needs to call it. Adding one calls it at once;
+// sessions): where a minion a factory built is (a page an operator put on a
+// server, a server an agentless channel acts on), with what the build
+// connection's channel needs to call it. Adding one calls it at once;
 // pkg/minionsync makes the calls. Authorization is the caller's.
 package miniontargets
 
@@ -148,12 +149,12 @@ func hasKind(s *protocol.ConnectionSchema, kind string) bool {
 
 // Add adds a target to connection conn (its place) of build b, and calls it
 // at once, in the background: the target comes back new. With a session
-// (one of b's whose target was removed) the target takes it over: a page
-// keeps nothing, so core calls it under the session's id and the session
-// goes on, instead of a rehello opening another.
+// (one of b's whose target was removed) the target takes it over: a
+// bind-call minion keeps nothing, so core calls it under the session's id
+// and the session goes on, instead of a rehello opening another.
 func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *uuid.UUID, in Input) (*models.MinionTarget, error) {
 	if b.State != models.BuildStateSucceeded {
-		return nil, invalid("the build did not succeed: there is no page to reach")
+		return nil, invalid("the build did not succeed: there is no minion to reach")
 	}
 	if conn < 1 || conn > len(b.Connections.Items) {
 		return nil, invalid("the build has no connection %d", conn)
@@ -165,7 +166,7 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 			return nil, err
 		}
 	}
-	values, err := s.check(ctx, module, kind, in.Values, b.Unsealed())
+	values, err := s.check(ctx, module, kind, in.Values)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +192,7 @@ func (s *Service) Add(ctx context.Context, b *models.Build, conn int, session *u
 }
 
 // canTakeOver checks that a new target of b's connection conn may take
-// session over: b's, open, the page's session through that connection (a
+// session over: b's, open, the minion's session through that connection (a
 // minion that listens may be on another of its connections: it switches to
 // this one), and no target's now.
 func (s *Service) canTakeOver(ctx context.Context, b *models.Build, conn int, kind string, id uuid.UUID) error {
@@ -206,7 +207,7 @@ func (s *Service) canTakeOver(ctx context.Context, b *models.Build, conn int, ki
 	case sess.Closed(s.now()):
 		return invalid("the session is closed")
 	case sess.Conn != 0 && sess.Conn != conn && kind != protocol.KindBindPersistent:
-		return invalid("the session's page answers connection %d, not %d", sess.Conn, conn)
+		return invalid("the session's minion answers connection %d, not %d", sess.Conn, conn)
 	}
 	other, err := s.targets.FindBySessionID(ctx, id)
 	switch {
@@ -225,14 +226,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (*models.M
 	if err != nil {
 		return nil, err
 	}
-	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
-	if err != nil {
-		if repository.IsNotFound(err) {
-			return nil, invalid("the target's build is gone")
-		}
-		return nil, fmt.Errorf("load the build: %w", err)
-	}
-	values, err := s.check(ctx, t.ModuleName, t.Kind, in.Values, b.Unsealed())
+	values, err := s.check(ctx, t.ModuleName, t.Kind, in.Values)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +278,7 @@ func (s *Service) Check(ctx context.Context, id uuid.UUID) (*models.MinionTarget
 	return s.caller.CheckTarget(ctx, id)
 }
 
-// Remove removes a target: core stops calling it. The session its page
+// Remove removes a target: core stops calling it. The session its minion
 // opened stays, with its history, until an operator archives or deletes it
 // as any other; a target added to it later takes it over (Add).
 func (s *Service) Remove(ctx context.Context, id uuid.UUID) error {
@@ -319,7 +313,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (*models.MinionTarget, 
 	return t, err
 }
 
-// OfSession is the target whose page a session is; nil for a session no
+// OfSession is the target whose minion a session is; nil for a session no
 // target opened.
 func (s *Service) OfSession(ctx context.Context, sessionID uuid.UUID) (*models.MinionTarget, error) {
 	t, err := s.targets.FindBySessionID(ctx, sessionID)
@@ -352,11 +346,6 @@ func (s *Service) Problems(ctx context.Context, t *models.MinionTarget) (map[str
 	if schema == nil || !hasKind(schema, t.Kind) {
 		return map[string]string{"": fmt.Sprintf("no %s channel declares %s connections now", t.ModuleName, t.Kind)}, nil
 	}
-	// A build's unsealed messages go only to a channel that acts as the
-	// minion: never to one that stopped.
-	if b, err := s.builds.FindByBuildID(ctx, t.BuildID); err == nil && b.Unsealed() && !schema.IsAgentless(t.Kind) {
-		return map[string]string{"": fmt.Sprintf("the %s channel no longer acts as the minion on %s connections, and this build's minions talk unsealed", t.ModuleName, t.Kind)}, nil
-	}
 	values := map[string]any{}
 	for k, v := range t.Values {
 		if !empty(v) {
@@ -381,7 +370,7 @@ func ProblemsText(problems map[string]string) string {
 
 // check validates values against the channel's target fields for kind and
 // returns them over the fields' defaults.
-func (s *Service) check(ctx context.Context, module, kind string, values map[string]any, unsealed bool) (models.JSONMap, error) {
+func (s *Service) check(ctx context.Context, module, kind string, values map[string]any) (models.JSONMap, error) {
 	if kind != protocol.KindBindCall && kind != protocol.KindBindPersistent {
 		return nil, invalid("core does not reach %s minions yet", kind)
 	}
@@ -391,9 +380,6 @@ func (s *Service) check(ctx context.Context, module, kind string, values map[str
 	}
 	if schema == nil || !hasKind(schema, kind) {
 		return nil, invalid("no %s channel declares %s connections now", module, kind)
-	}
-	if unsealed && !schema.IsAgentless(kind) {
-		return nil, invalid("the %s channel does not act as the minion on %s connections, and the build's minions talk unsealed", module, kind)
 	}
 	clean := map[string]any{}
 	for k, v := range values {

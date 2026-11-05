@@ -65,20 +65,9 @@ type Conn struct {
 	policy string
 	linked bool
 	why    string
-	// build and place are the target's build and connection, once core
-	// spoke first on a connection of a build that talks unsealed (unsealed):
-	// its messages are taken unsealed over it, and nowhere else.
-	build    uuid.UUID
-	place    int
-	unsealed bool
-}
-
-// unsealedFor reports whether c carries build's unsealed messages: it is
-// the connection an open of one of its targets brought.
-func (c *Conn) unsealedFor(build uuid.UUID) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.unsealed && build != uuid.Nil && c.build == build
+	// place is the target's build connection, from the open that brought
+	// c: a hello over it that says none is of it.
+	place int
 }
 
 // placeOf is the build connection of c's target, once known; 0 otherwise.

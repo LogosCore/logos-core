@@ -48,7 +48,6 @@ import { SaveEndpointDialog } from "@/components/builds/save-endpoint-dialog"
 import { CommandPicker } from "@/components/builds/command-picker"
 import {
   channelUnusable,
-  channelsForFactory,
   connectionDraft,
   connectionNames,
   defaultCommands,
@@ -65,7 +64,6 @@ import {
   effectiveKind,
   targetCommands,
   targetFields,
-  unsealedFactory,
   usableKinds,
   withTarget,
   type BuildForm as Form,
@@ -151,8 +149,7 @@ function EditorLoader({
   if (kinds.isLoading || channelKinds.isLoading || filesQuery.isLoading) return null
   const kind = factoryKindsByName(kinds.data?.factoryKinds ?? []).get(kindName)
   if (!kind) return <NotFound text={`No "${kindName}" factory declares what it builds.`} />
-  // For a factory whose minions talk unencrypted, only the kinds a channel acts as the minion on.
-  const channels = channelsForFactory(kind, kindsByName(channelKinds.data?.channelKinds ?? []))
+  const channels = kindsByName(channelKinds.data?.channelKinds ?? [])
 
   return (
     <Editor
@@ -707,8 +704,6 @@ function Editor({
                 How the minion reaches its channels, tried in this order. Fill the settings in, or from one of the
                 operation's endpoints and then change what you need: they are copied, so editing the endpoint later
                 changes nothing here.
-                {unsealedFactory(kind) &&
-                  " This factory's minions talk unencrypted: a channel acts as the minion, and only the kinds it does so on are offered."}
               </p>
               {shown.connections && <p className="text-sm text-destructive">{shown.connections}</p>}
               {form.connections.map((c, i) => {

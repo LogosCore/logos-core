@@ -2,13 +2,12 @@
 # Minion targets — where bind minions are reached
 # =============================================================================
 #
-# A bind-call minion (a page on a web server) only answers: core calls it
-# through its build connection's channel (docs:
-# contracts/channel-core-connections, bind-call minions). An operator puts
-# the page on a server, then adds a target with what the channel needs to
-# call it (its URL, a host header, a proxy: the channel's target fields).
-# Core calls it at once: the page's hello opens a session, linked to the
-# target from then on. Viewers of an operation read targets; operators and
+# A bind-call minion (a page on a web server, a server an agentless channel
+# acts on) only answers: core calls it through its build connection's channel
+# (docs: contracts/channel-core-connections, bind-call minions). An operator
+# adds a target with what the channel needs to reach it (the channel's
+# target fields: a URL, a host and a login, a proxy). Core calls it at once:
+# the minion's hello opens a session, linked to the target from then on. Viewers of an operation read targets; operators and
 # admins change them.
 
 type MinionTarget {
@@ -46,10 +45,10 @@ type MinionTarget {
   # when they fit. Core does not call a target with problems: it shows
   # needs_editing until an operator edits it.
   problems: [ChannelEndpointProblem!]!
-  # More of the state: why a call failed, what answered instead of the page.
+  # More of the state: why a call failed, what answered instead of the minion.
   stateDetail: String
   stateAt: String!
-  # The session the page's hello opened; null until then.
+  # The session the minion's hello opened; null until then.
   sessionId: ID
   session: MinionSession
   # Calls that failed in a row, and when the first of them was.
@@ -58,7 +57,7 @@ type MinionTarget {
   # When core calls next by itself: a retry, or the session's schedule.
   nextCallAt: String
   lastCallAt: String
-  # When a call last reached the page.
+  # When a call last reached the minion.
   lastOkAt: String
   calls: Int!
   createdBy: ModuleActor!
@@ -114,7 +113,7 @@ extend type Build {
 }
 
 extend type MinionSession {
-  # The target whose page the session is (a bind-call minion's); null for
+  # The target whose minion the session is (a bind minion's); null for
   # any other session.
   bindTarget: MinionTarget
 }

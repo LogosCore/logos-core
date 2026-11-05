@@ -71,12 +71,14 @@ type link struct {
 }
 
 // Call is one request to a channel: deliver Data, sent under ID, to the
-// target Values say.
+// target Values say. Keys are ID's, for a channel that acts as the minion
+// (an agentless kind); nil for any other.
 type Call struct {
 	Values   map[string]any
 	ID       [16]byte
 	Data     []byte
 	Deadline time.Duration
+	Keys     *protocol.LinkKeys
 }
 
 // Up reports whether an instance of module has its link open.
@@ -113,7 +115,7 @@ func (h *Hub) Call(ctx context.Context, module string, c Call) (protocol.LinkFra
 	}
 	req := h.next.Add(1)
 	f := protocol.LinkFrame{Type: protocol.LinkCall, Request: req, Values: c.Values, ID: c.ID[:], Data: c.Data,
-		Deadline: uint64(c.Deadline / time.Millisecond)}
+		Deadline: uint64(c.Deadline / time.Millisecond), Keys: c.Keys}
 	b, err := protocol.EncodeLinkFrame(f)
 	if err != nil {
 		return protocol.LinkFrame{}, err
@@ -148,11 +150,13 @@ func (h *Hub) Call(ctx context.Context, module string, c Call) (protocol.LinkFra
 }
 
 // Open asks an instance of module to open a bind-persistent connection to
-// the target values say, and waits for its answer: as Call, deadline 30
-// seconds when it says none. sent is told the instance and the request
-// before the open goes out: the connection's socket names them, and may
-// come before the answer.
-func (h *Hub) Open(ctx context.Context, module string, values map[string]any, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error) {
+// the target values say, the minion to speak under under on it (keys are
+// under's, for a channel that acts as the minion; nil for any other), and
+// waits for its answer: as Call, deadline 30 seconds when it says none.
+// sent is told the instance and the request before the open goes out: the
+// connection's socket names them, and may come before the answer.
+func (h *Hub) Open(ctx context.Context, module string, values map[string]any, under [16]byte, keys *protocol.LinkKeys,
+	deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error) {
 	l := h.pick(module)
 	if l == nil {
 		return protocol.LinkFrame{}, ErrNoLink
@@ -161,8 +165,11 @@ func (h *Hub) Open(ctx context.Context, module string, values map[string]any, de
 		deadline = 30 * time.Second
 	}
 	req := h.next.Add(1)
-	b, err := protocol.EncodeLinkFrame(protocol.LinkFrame{Type: protocol.LinkOpen, Request: req, Values: values,
-		Deadline: uint64(deadline / time.Millisecond)})
+	f := protocol.LinkFrame{Type: protocol.LinkOpen, Request: req, Values: values, Deadline: uint64(deadline / time.Millisecond)}
+	if under != [16]byte{} {
+		f.Under, f.Keys = under[:], keys
+	}
+	b, err := protocol.EncodeLinkFrame(f)
 	if err != nil {
 		return protocol.LinkFrame{}, err
 	}

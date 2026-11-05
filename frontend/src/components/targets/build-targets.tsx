@@ -170,12 +170,12 @@ function RemoveTargetDialog({ target, onClose }: { target: Target | null; onClos
         <DialogHeader>
           <DialogTitle>Remove target {target?.name}?</DialogTitle>
           <DialogDescription>
-            Core stops calling it; the page stays on its server.
+            Core stops calling it; the minion stays where it is.
             {target?.session && (
               <>
                 {" "}
                 Session #{target.session.number} stays, with its history, showing no target: tasks queued for it wait. A
-                target added to it later (the page moved) carries it on.
+                target added to it later (the minion moved) carries it on.
               </>
             )}
           </DialogDescription>

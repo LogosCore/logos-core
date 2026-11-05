@@ -345,7 +345,7 @@ func (r *minionTaskResolver) reachable(ctx context.Context, s *models.MinionSess
 	switch {
 	case repository.IsNotFound(err):
 		return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf(
-			"session #%d has no target: core cannot reach its page. Add a target first (the session's Connections, or its build's Targets)", s.Number))
+			"session #%d has no target: core cannot reach its minion. Add a target first (the session's Connections, or its build's Targets)", s.Number))
 	case err != nil:
 		return fmt.Errorf("look for the session's target: %w", err)
 	}

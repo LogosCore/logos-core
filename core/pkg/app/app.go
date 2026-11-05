@@ -259,6 +259,7 @@ func NewApp() (*App, error) {
 	minionSync.WithTargets(repos.MinionTarget, links)
 	minionTargets := miniontargets.NewService(repos.MinionTarget, repos.MinionSession, repos.Build, endpoints, minionSync, bus)
 	minionSync.WithTargetChecker(minionTargets, miniontargets.ProblemsText)
+	minionSync.WithChannelSchemas(endpoints)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildProgress, buildSvc.HandleProgress)
 	rpcServer.RegisterHandler(protocol.TypeFactoryBuildResult, buildSvc.HandleResult)
 

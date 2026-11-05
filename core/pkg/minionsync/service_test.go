@@ -425,7 +425,7 @@ func TestStageRefusals(t *testing.T) {
 		"two stages":          {r.stage(t), r.stage(t)},
 		"short corr":          {protocol.StageItem{T: protocol.ItemStage, Key: r.stage(t).Key, Corr: []byte{1}}},
 		"a hello and a stage": {hello("web01"), r.stage(t)},
-		"a bad hello":         {protocol.HelloItem{T: protocol.ItemHello, OS: "linux", Arch: "amd64"}},
+		"a bad hello":         {protocol.HelloItem{T: protocol.ItemHello, PID: 1, OS: "linux"}},
 	} {
 		reply, err := r.send(t, protocol.NewMessageID(), items...)
 		if err != nil {

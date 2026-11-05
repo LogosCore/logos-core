@@ -7,11 +7,9 @@ import {
   acceptText,
   buildConnectionRows,
   channelUnusable,
-  channelsForFactory,
   connectionDraft,
   connectionNames,
   currentStage,
-  effectiveKind,
   endpointFromConnection,
   evaluateForm,
   factoryKindsByName,
@@ -25,7 +23,6 @@ import {
   sourceFromBuild,
   stageDuration,
   targetCommands,
-  usableKinds,
   withKind,
   withTarget,
   type BuildForm,
@@ -227,74 +224,6 @@ describe("channelUnusable", () => {
     expect(channelUnusable(undefined, "http", channels)).toMatch(/pick a target/i)
     const v3 = new Map([["http", { ...http, version: 3 }]])
     expect(channelUnusable(dummy, "http", v3)).toMatch(/settings v3; this factory reads v2/)
-  })
-})
-
-// The SSH factory's minions talk unencrypted (crypto none): its target speaks
-// both bind kinds, bind-persistent first; this ssh channel acts as the minion
-// on bind-call only.
-describe("a factory whose minions talk unencrypted", () => {
-  const ssh = factoryKindsByName([
-    {
-      moduleName: "ssh",
-      instances: 1,
-      schema: {
-        ...schema,
-        crypto: "none",
-        fields: [],
-        channels: [{ moduleName: "ssh", versions: [1], kinds: [{ kind: "bind-persistent", fields: [] }, { kind: "bind-call", fields: [] }] }],
-        targets: [
-          {
-            id: "ssh",
-            label: "SSH server",
-            description: null,
-            format: "json",
-            platforms: ["any/any"],
-            fields: [],
-            channels: [{ moduleName: "ssh", versions: [1], kinds: ["bind-persistent", "bind-call"] }],
-          },
-        ],
-        commands: [],
-      },
-    },
-  ]).get("ssh")!
-  const host = [field({ key: "host", type: "string", required: true })]
-  const declared = kindsByName([
-    {
-      moduleName: "ssh",
-      schema: {
-        version: 1,
-        kinds: [
-          { kind: "bind-call", agentless: true, fields: host },
-          { kind: "bind-persistent", fields: host },
-        ],
-      },
-    },
-  ])
-  const sshTarget = ssh.targets[0]
-
-  it("connects only through the kinds a channel acts as the minion on", () => {
-    const narrowed = channelsForFactory(ssh, declared)
-    expect(usableKinds(sshTarget, narrowed.get("ssh"), "ssh")).toEqual(["bind-call"])
-    // No kind picked: the first agentless one, as core picks it.
-    expect(effectiveKind({ moduleName: "ssh", kind: "" }, sshTarget, narrowed.get("ssh"))).toBe("bind-call")
-    expect(channelUnusable(sshTarget, "ssh", narrowed)).toBeNull()
-    // A sealed factory's channels stay as they are.
-    expect(channelsForFactory(kind, channels)).toBe(channels)
-  })
-
-  it("finds a channel unusable that acts as the minion on none of them", () => {
-    const sealedOnly = kindsByName([{ moduleName: "ssh", schema: { version: 1, kinds: [{ kind: "bind-call", fields: host }] } }])
-    expect(channelUnusable(sshTarget, "ssh", channelsForFactory(ssh, sealedOnly))).toMatch(/acts as the minion on none/)
-    expect(channelUnusable(sshTarget, "ssh", sealedOnly)).toBeNull()
-  })
-
-  it("refuses a connection of a kind the channel does not act as the minion on", () => {
-    const narrowed = channelsForFactory(ssh, declared)
-    const ch = narrowed.get("ssh")
-    const c = connectionDraft(ssh, ch, { moduleName: "ssh" }, sshTarget)
-    const form = { ...initialForm(ssh, null, narrowed), description: "x", connections: [{ ...c, kind: "bind-persistent" }] }
-    expect(evaluateForm(ssh, form, narrowed).errors["connections[0].kind"]).toMatch(/acts as the minion on: this factory's minions talk unencrypted/)
   })
 })
 

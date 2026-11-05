@@ -27,10 +27,9 @@ const kind: Kind = {
   icon: { icon: "", iconLight: "" },
   version: 2,
   kinds: [
-    { kind: RC, agentless: false, fields: callFields },
+    { kind: RC, fields: callFields },
     {
       kind: RP,
-      agentless: false,
       fields: [
         { key: "base_url", type: "url", label: "Base URL", order: 1, required: true },
         { key: "backoff", type: "duration", label: "Back-off", order: 2, required: false, default: "1m" },
@@ -148,7 +147,6 @@ describe("empty lists and maps", () => {
     kinds: [
       {
         kind: RC,
-        agentless: false,
         fields: [
           ...callFields,
           { key: "extra", type: "string_list", label: "Extra", order: 5, required: false },

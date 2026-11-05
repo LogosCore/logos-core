@@ -19,7 +19,7 @@ type lateSocket struct {
 	delay time.Duration
 }
 
-func (f lateSocket) Open(_ context.Context, _ string, _ map[string]any, _ time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
+func (f lateSocket) Open(_ context.Context, _ string, _ map[string]any, _ [16]byte, _ *protocol.LinkKeys, _ time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
 	sent("ssh-1", 88)
 	target, policy, ok := f.svc.OpenedFor("ssh-1", 88)
 	if !ok {
@@ -62,7 +62,7 @@ func shortSocketWait(t *testing.T, d time.Duration) {
 // The channel's answer may come before its socket is the target's: the
 // open waits for the socket that took it, and is connected.
 func TestOpenAnswerBeforeSocket(t *testing.T) {
-	b, ch := newUnsealedRig(t, protocol.KindBindPersistent)
+	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
 	b.svc.WithTargets(b.targets, lateSocket{ch, 50 * time.Millisecond})
 	tg, err := b.svc.ConnectTarget(context.Background(), b.target)
 	if err != nil {
@@ -77,7 +77,7 @@ func TestOpenAnswerBeforeSocket(t *testing.T) {
 // failed) is waited for socketWait, then the open came to nothing.
 func TestOpenSocketNeverArrives(t *testing.T) {
 	shortSocketWait(t, 50*time.Millisecond)
-	b, ch := newUnsealedRig(t, protocol.KindBindPersistent)
+	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
 	b.svc.WithTargets(b.targets, lateSocket{ch, -1})
 	tg, err := b.svc.ConnectTarget(context.Background(), b.target)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestOpenSocketNeverArrives(t *testing.T) {
 // its minion speaks over that connection.
 func TestTargetConnectedAsItsMinionSpeaks(t *testing.T) {
 	shortSocketWait(t, 20*time.Millisecond)
-	b, ch := newUnsealedRig(t, protocol.KindBindPersistent)
+	b, ch := newAgentlessRig(t, protocol.KindBindPersistent)
 	b.svc.WithTargets(b.targets, lateSocket{ch, 150 * time.Millisecond})
 	tg, err := b.svc.ConnectTarget(context.Background(), b.target)
 	if err != nil {
@@ -101,9 +101,9 @@ func TestTargetConnectedAsItsMinionSpeaks(t *testing.T) {
 	if tg.State != models.TargetUnreachable {
 		t.Fatalf("the open did not give up: %s", tg.State)
 	}
-	waitFor(t, "core's first word", func() bool { return len(ch.frames()) == 1 })
+	waitFor(t, "its connection", func() bool { ch.mu.Lock(); defer ch.mu.Unlock(); return len(ch.conns) == 1 })
 	if _, err := b.svc.Exchange(context.Background(), ch.connAt(0), b.build.BuildID.String(), "203.0.113.9",
-		minionMessage(t, nil, agentlessHello("server01"))); err != nil {
+		sealedMinionMessage(t, b.keys, b.build.BuildID, nil, agentlessHello("server01"))); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "connected", func() bool { return b.get(t).State == models.TargetConnected })

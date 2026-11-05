@@ -37,7 +37,6 @@ export const ChannelKindsQuery = graphql(`
         version
         kinds {
           kind
-          agentless
           fields {
             ...ModuleFieldDefFields
           }

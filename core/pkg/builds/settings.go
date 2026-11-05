@@ -167,34 +167,18 @@ func (s *Service) check(ctx context.Context, op uuid.UUID, schema protocol.Build
 			out.add(key, "target %q cannot connect through channel %q version %d", t.ID, conn.ModuleName, cs.Version)
 			continue
 		}
-		// The kind: one the target and the channel both support. A factory's
-		// minions that talk unsealed take only a kind the channel acts as
-		// the minion on (docs: contracts/agentless-channels/): no one else
-		// reaches unsealed messages.
-		both := protocol.UsableKinds(schema.TargetKinds(t, conn.ModuleName), cs.SupportedKinds())
-		usable := both
-		if schema.Crypto == protocol.CryptoNone {
-			usable = slices.DeleteFunc(slices.Clone(both), func(k string) bool { return !cs.IsAgentless(k) })
-		}
+		// The kind: one the target and the channel both support.
+		usable := protocol.UsableKinds(schema.TargetKinds(t, conn.ModuleName), cs.SupportedKinds())
 		kind := conn.Kind
 		switch {
 		case kind == "" && len(usable) > 0:
 			kind = usable[0]
-		case kind == "" && len(both) > 0:
-			out.add(key+".kind", "channel %q acts as the minion on none of the kinds target %q speaks with it (%s): "+
-				"this factory's minions talk unsealed, only through a kind a channel declares agentless", conn.ModuleName, t.ID,
-				strings.Join(both, ", "))
-			continue
 		case kind == "":
 			out.add(key+".kind", "target %q and channel %q share no connection kind", t.ID, conn.ModuleName)
 			continue
-		case !slices.Contains(both, kind):
-			out.add(key+".kind", "%q is not a kind target %q and channel %q both support (%s)", kind, t.ID,
-				conn.ModuleName, strings.Join(both, ", "))
-			continue
 		case !slices.Contains(usable, kind):
-			out.add(key+".kind", "channel %q does not act as the minion on %s connections: this factory's minions talk unsealed, "+
-				"only through a kind a channel declares agentless", conn.ModuleName, kind)
+			out.add(key+".kind", "%q is not a kind target %q and channel %q both support (%s)", kind, t.ID,
+				conn.ModuleName, strings.Join(usable, ", "))
 			continue
 		}
 		c.kinds[i] = kind

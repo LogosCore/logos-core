@@ -83,9 +83,6 @@ type MinionSession {
   # A build persists the session: its minions claim it when they start, so
   # a restarted process comes back here instead of opening a new session.
   persisted: Boolean!
-  # The session's messages go unsealed (crypto none): an agentless channel
-  # acts as its minion, and reads what it carries.
-  unsealed: Boolean!
   # The processes that claimed the session (restarts), most recent first, at
   # most 32; restartCount counts them all.
   restarts: [MinionSessionRestart!]!

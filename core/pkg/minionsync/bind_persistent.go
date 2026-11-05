@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
 	"github.com/logoscore/logos-core/core/pkg/channellink"
 	"github.com/logoscore/logos-core/core/pkg/models"
@@ -47,12 +46,13 @@ type openKey struct {
 	request  uint64
 }
 
-// opening is an open waiting for its socket: its target and policy; taken
-// once a socket named it (OpenedFor), and arrived closed once that socket
-// is the target's (ForTarget).
+// opening is an open waiting for its socket: its target, policy and build
+// connection (place); taken once a socket named it (OpenedFor), and arrived
+// closed once that socket is the target's (ForTarget).
 type opening struct {
 	target  uuid.UUID
 	policy  string
+	place   int
 	taken   bool
 	arrived chan struct{}
 }
@@ -92,19 +92,22 @@ func (s *Service) OpenedFor(instance string, request uint64) (target uuid.UUID, 
 // ForTarget makes c a bind-persistent connection of target (policy as it
 // was opened) and keeps it with the target's: its controller calls it once
 // the socket is up, before any frame. The open the socket took, waiting
-// for it, is told.
+// for it, is told, and gives c its target's build connection: a hello over
+// c that names none is of it.
 func (s *Service) ForTarget(c *Conn, target uuid.UUID, policy string) {
 	c.target, c.policy = target, policy
 	s.persist.mu.Lock()
 	s.persist.conns[target] = append(s.persist.conns[target], c)
 	for k, o := range s.persist.opens {
 		if o.taken && o.target == target {
+			c.mu.Lock()
+			c.place = o.place
+			c.mu.Unlock()
 			close(o.arrived)
 			delete(s.persist.opens, k)
 		}
 	}
 	s.persist.mu.Unlock()
-	go s.firstWord(c, target)
 }
 
 // awaitSocket waits for the socket that took the open key, when one did,
@@ -133,53 +136,6 @@ func (s *Service) dropOpen(key openKey) {
 	s.persist.mu.Unlock()
 }
 
-// firstWord speaks first on a connection of a build that talks unsealed
-// (docs: contracts/agentless-channels/): the minion its channel acts as
-// keeps nothing from one connection to the next, so it waits for core. A
-// target with an open session gets a message under the session's id, which
-// the minion's answer links to the connection; one without, a rehello under
-// the build id, which the minion answers with its hello. A minion that
-// listens speaks first itself: nothing is sent.
-func (s *Service) firstWord(c *Conn, targetID uuid.UUID) {
-	if s.targets == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), openDeadline)
-	defer cancel()
-	t, err := s.targets.FindByTargetID(ctx, targetID)
-	if err != nil {
-		s.logger.Info("targets: core's first word: the target does not load", zap.String("target_id", targetID.String()), zap.Error(err))
-		return
-	}
-	b, err := s.builds.FindByBuildID(ctx, t.BuildID)
-	if err != nil {
-		s.logger.Info("targets: core's first word: the build does not load", zap.String("target_id", targetID.String()), zap.Error(err))
-		return
-	}
-	if !b.Unsealed() {
-		return // its minion speaks first
-	}
-	c.mu.Lock()
-	c.build, c.place, c.unsealed = b.BuildID, t.Conn, true
-	c.mu.Unlock()
-	if t.SessionID != nil {
-		if from, err := s.sender(ctx, *t.SessionID); err == nil && from.session != nil && !from.session.Closed(s.now()) {
-			if err := s.push(ctx, c, from, nil); err != nil {
-				s.logger.Info("targets: core's first word did not go", zap.String("target_id", targetID.String()), zap.Error(err))
-			}
-			return
-		}
-	}
-	rehello, err := protocol.MarshalCBOR(protocol.RehelloItem{T: protocol.ItemRehello})
-	if err != nil {
-		return
-	}
-	from := &sender{build: b, crypto: *b.Crypto}
-	if err := s.pushUnder(ctx, c, from, b.BuildID, []cbor.RawMessage{rehello}); err != nil {
-		s.logger.Info("targets: core's first word did not go", zap.String("target_id", targetID.String()), zap.Error(err))
-	}
-}
-
 // targetConns are the target's open connections.
 func (s *Service) targetConns(target uuid.UUID) []*Conn {
 	s.persist.mu.Lock()
@@ -189,12 +145,14 @@ func (s *Service) targetConns(target uuid.UUID) []*Conn {
 
 // ConnectTarget opens a bind-persistent target's connection now (an
 // operator's Connect, whatever its policy) and returns the target as the
-// open left it.
+// open left it. The open is core's own, as CheckTarget's call is.
 func (s *Service) ConnectTarget(ctx context.Context, targetID uuid.UUID) (*models.MinionTarget, error) {
 	if s.targets == nil {
 		return nil, errors.New("targets are not served")
 	}
-	s.callTarget(ctx, targetID, bindConnect)
+	if err := await(ctx, func(c context.Context) { s.callTarget(c, targetID, bindConnect) }); err != nil {
+		return nil, err
+	}
 	return s.targets.FindByTargetID(ctx, targetID)
 }
 
@@ -292,12 +250,42 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 	sent := func(instance string, request uint64) {
 		key = openKey{instance, request}
 		s.persist.mu.Lock()
-		s.persist.opens[key] = &opening{target: t.TargetID, policy: policy, arrived: make(chan struct{})}
+		s.persist.opens[key] = &opening{target: t.TargetID, policy: policy, place: t.Conn, arrived: make(chan struct{})}
 		s.persist.mu.Unlock()
 	}
 	defer func() { s.dropOpen(key) }()
+	// The minion speaks first, under its target's open session's id, else
+	// its build's: one that keeps no ids of its own (a channel acting as
+	// it) takes them from the open.
+	under := b.BuildID
+	var session *models.MinionSession
+	if t.SessionID != nil {
+		if found, err := s.sessions.FindBySessionID(ctx, *t.SessionID); err == nil && !found.Closed(s.now()) {
+			under, session = found.SessionID, found
+		}
+	}
+	// A channel that acts as the minion seals and opens the connection's
+	// frames itself: the open gives it under's keys.
+	var keys *protocol.LinkKeys
+	agentless, err := s.agentless(ctx, t)
+	if err != nil {
+		return err
+	}
+	if agentless {
+		from := &sender{session: session}
+		switch {
+		case session != nil:
+			from.crypto = session.Crypto
+		case b.Crypto != nil:
+			from.build, from.crypto = b, *b.Crypto
+		}
+		if err := from.readKeys(); err != nil {
+			return s.saveCall(ctx, s.stateOnly(t, models.TargetRefused, "core does not implement the build's crypto"))
+		}
+		keys = from.linkKeys()
+	}
 	t.Calls++
-	a, err := s.link.Open(ctx, t.ModuleName, callValues(buildConn(b, t), t), openDeadline, sent)
+	a, err := s.link.Open(ctx, t.ModuleName, callValues(buildConn(b, t), t), under, keys, openDeadline, sent)
 	switch {
 	case errors.Is(err, channellink.ErrNoLink):
 		return s.saveCall(ctx, s.openFailed(t, models.TargetNoChannel, fmt.Sprintf("no %s channel has its control link open", t.ModuleName)))

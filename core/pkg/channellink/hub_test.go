@@ -180,7 +180,7 @@ func TestOpen(t *testing.T) {
 			return
 		}
 		f, _ := protocol.DecodeLinkFrame(b)
-		if f.Type != protocol.LinkOpen || f.Values["host"] != "10.0.0.5" || f.Deadline != 30000 {
+		if f.Type != protocol.LinkOpen || f.Values["host"] != "10.0.0.5" || f.Deadline != 30000 || len(f.Under) != 16 || f.Under[0] != 9 || f.Keys == nil {
 			t.Errorf("open %+v", f)
 		}
 		a, _ := protocol.EncodeLinkFrame(protocol.LinkFrame{Type: protocol.LinkAnswer, Request: f.Request})
@@ -188,13 +188,17 @@ func TestOpen(t *testing.T) {
 	}()
 	var gotInstance string
 	var gotReq uint64
-	a, err := h.Open(context.Background(), "dumbo", map[string]any{"host": "10.0.0.5"}, 0, func(instance string, req uint64) {
+	a, err := h.Open(context.Background(), "dumbo", map[string]any{"host": "10.0.0.5"}, [16]byte{9}, testKeys, 0, func(instance string, req uint64) {
 		gotInstance, gotReq = instance, req
 	})
 	if err != nil || a.Failure != nil || gotInstance != "dumbo-1" || gotReq == 0 || a.Request != gotReq {
 		t.Fatalf("open: %+v %v (sent %s %d)", a, err, gotInstance, gotReq)
 	}
-	if _, err := h.Open(context.Background(), "nope", nil, 0, nil); !errors.Is(err, ErrNoLink) {
+	if _, err := h.Open(context.Background(), "nope", nil, [16]byte{9}, nil, 0, nil); !errors.Is(err, ErrNoLink) {
 		t.Fatalf("no link: %v", err)
 	}
 }
+
+// testKeys are an agentless open's keys.
+var testKeys = &protocol.LinkKeys{Suite: protocol.CryptoAES256CBCHMACSHA256,
+	Material: protocol.AES256CBCHMACSHA256Material{EncKey: make([]byte, 32), MACKey: make([]byte, 32)}}

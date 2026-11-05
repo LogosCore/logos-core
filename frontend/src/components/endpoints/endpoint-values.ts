@@ -23,8 +23,6 @@ import { isRecord, sameJSON } from "@/lib/json-edit"
 export interface ConnectionKindDef {
   /** "reverse-call", "reverse-persistent", ... */
   kind: string
-  /** The channel acts as the minion on this kind: nothing runs on the target, and the channel reads what it carries. */
-  agentless: boolean
   fields: FieldDef[]
 }
 
@@ -39,11 +37,6 @@ export interface Kind {
   version: number
   /** The connection kinds the channel carries, in the protocol's order. */
   kinds: ConnectionKindDef[]
-  /**
-   * Narrowed to the kinds the channel acts as the minion on, for a factory
-   * whose minions talk unencrypted (build-values.ts channelsForFactory).
-   */
-  agentlessOnly?: boolean
 }
 
 /** What a connection kind is, for people. */
@@ -73,7 +66,7 @@ export function kindsByName(
     moduleName: string
     icon?: string
     iconLight?: string
-    schema: { version: number; kinds: readonly { kind: string; agentless?: boolean; fields: readonly FieldDef[] }[] }
+    schema: { version: number; kinds: readonly { kind: string; fields: readonly FieldDef[] }[] }
   }[],
 ): Map<string, Kind> {
   const out = new Map<string, Kind>()
@@ -84,7 +77,6 @@ export function kindsByName(
       version: k.schema.version,
       kinds: k.schema.kinds.map((c) => ({
         kind: c.kind,
-        agentless: c.agentless ?? false,
         fields: c.fields.map((f) => (f.type === "secret" ? { ...f, type: "string" } : f)).sort(compareFields),
       })),
     })
