@@ -9,12 +9,15 @@ import {
   useMinionSessionChangedSubscription,
   useMinionSessionsLayout,
   useMinionSession,
+  minionSessionKeys,
   useMinionSessionCount,
   useMinionSessionFolders,
   useMinionSessionFolderMutations,
   useSetMinionSessionsFolder,
 } from "@/graphql/hooks/minion-sessions"
 import { toast } from "sonner"
+import { useQueryClient } from "@tanstack/react-query"
+import type { MinionSessionQuery } from "@/graphql/gql/graphql"
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { SessionFolderTabs } from "@/components/minion-sessions/session-folder-tabs"
 import { SessionFolderDialog, type FolderDialogTarget } from "@/components/minion-sessions/session-folder-dialog"
@@ -59,6 +62,7 @@ function useSessionsTitle(operationName: string, active: string | null) {
 
 function MinionSessionsPageInner({ operationId, operationName }: { operationId: string; operationName: string }) {
   const icons = useFactoryIcons()
+  const queryClient = useQueryClient()
   const { canWrite } = useCanBuild(operationId)
   // Columns, sort and filters are the operator's layout, saved in core for
   // all operations; the column filters are the way to narrow the list.
@@ -194,7 +198,16 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
         second={
           <SessionWorkspace
             tabs={tabs}
-            onTabsChange={setTabs}
+            onTabsChange={(next) => {
+              setTabs(next)
+              // Another tab in front: the table shows its session's folder
+              // (All when it is in none). The pane has read its session.
+              if (next.active && next.active !== tabs.active) {
+                const s = queryClient.getQueryData<MinionSessionQuery>(minionSessionKeys.detail(workspaceTab(next.active).sessionId))?.minionSession
+                const folder = s?.folderId ?? null
+                if (s && folder !== currentFolder) setLayout(showFolder(layout, operationId, folder))
+              }
+            }}
             parked={layout.paneParked}
             onParkedChange={(paneParked) => setLayout({ ...layout, paneParked })}
           />
