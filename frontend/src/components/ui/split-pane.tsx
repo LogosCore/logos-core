@@ -23,7 +23,11 @@ export function SplitPane({
   onChange,
   label,
   className,
+  collapsed = false,
 }: {
+  /** The second pane folded to its own height (its header), at the end: the
+   *  first takes the rest, and there is no divider to move. split is kept. */
+  collapsed?: boolean
   /** The top pane, or the left one. */
   first: ReactNode
   /** The bottom pane, or the right one. */
@@ -103,38 +107,43 @@ export function SplitPane({
         className,
       )}
     >
-      <div className="flex min-h-0 min-w-0 flex-col" style={{ flexBasis: `${current * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+      <div
+        className="flex min-h-0 min-w-0 flex-col"
+        style={collapsed ? { flex: "1 1 0" } : { flexBasis: `${current * 100}%`, flexGrow: 0, flexShrink: 0 }}
+      >
         {first}
       </div>
-      <div
-        role="separator"
-        aria-orientation={across ? "vertical" : "horizontal"}
-        aria-label={label}
-        aria-valuemin={Math.round(min * 100)}
-        aria-valuemax={Math.round(max * 100)}
-        aria-valuenow={Math.round(current * 100)}
-        tabIndex={0}
-        title="Drag to resize; double-click to reset"
-        className={cn(
-          "group/divider flex shrink-0 touch-none items-center justify-center outline-none",
-          across ? "w-3 cursor-col-resize" : "h-3 cursor-row-resize",
-        )}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={() => setMoving(null)}
-        onKeyDown={onKeyDown}
-        onDoubleClick={() => commit(defaultSplit)}
-      >
+      {!collapsed && (
         <div
+          role="separator"
+          aria-orientation={across ? "vertical" : "horizontal"}
+          aria-label={label}
+          aria-valuemin={Math.round(min * 100)}
+          aria-valuemax={Math.round(max * 100)}
+          aria-valuenow={Math.round(current * 100)}
+          tabIndex={0}
+          title="Drag to resize; double-click to reset"
           className={cn(
-            "rounded-full bg-border transition-colors group-hover/divider:bg-muted-foreground/50 group-focus-visible/divider:bg-ring",
-            across ? "h-12 w-1" : "h-1 w-12",
-            moving !== null && "bg-muted-foreground/70",
+            "group/divider flex shrink-0 touch-none items-center justify-center outline-none",
+            across ? "w-3 cursor-col-resize" : "h-3 cursor-row-resize",
           )}
-        />
-      </div>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{second}</div>
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => setMoving(null)}
+          onKeyDown={onKeyDown}
+          onDoubleClick={() => commit(defaultSplit)}
+        >
+          <div
+            className={cn(
+              "rounded-full bg-border transition-colors group-hover/divider:bg-muted-foreground/50 group-focus-visible/divider:bg-ring",
+              across ? "h-12 w-1" : "h-1 w-12",
+              moving !== null && "bg-muted-foreground/70",
+            )}
+          />
+        </div>
+      )}
+      <div className={cn("flex min-h-0 min-w-0 flex-col", collapsed ? "shrink-0 border-t" : "flex-1")}>{second}</div>
     </div>
   )
 }

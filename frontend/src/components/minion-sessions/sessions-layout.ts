@@ -110,6 +110,8 @@ export interface SessionsLayout {
   promptFx: PromptFxName | null
   /** The columns the operator sized, in pixels; the rest take their min and grow. */
   widths: Partial<Record<SessionColumnId, number>>
+  /** The work pane is parked: its tab row alone, at the bottom; split kept for its return. */
+  paneParked: boolean
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -122,6 +124,7 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   paneTextSize: null,
   promptFx: null,
   widths: {},
+  paneParked: false,
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
@@ -139,7 +142,11 @@ const isColumn = (id: string): id is SessionColumnId => SESSION_COLUMN_BY_ID.has
  * left out, so an old layout never breaks the page.
  */
 export function readSessionsLayout(
-  stored: (Omit<MinionSessionsLayoutFieldsFragment, "widths"> & Partial<Pick<MinionSessionsLayoutFieldsFragment, "widths">>) | null | undefined,
+  stored:
+    | (Omit<MinionSessionsLayoutFieldsFragment, "widths" | "paneParked"> &
+        Partial<Pick<MinionSessionsLayoutFieldsFragment, "widths" | "paneParked">>)
+    | null
+    | undefined,
 ): SessionsLayout {
   if (!stored) return DEFAULT_SESSIONS_LAYOUT
   const columns = [...new Set(stored.columns.filter(isColumn))]
@@ -163,6 +170,7 @@ export function readSessionsLayout(
     paneTextSize: stored.paneTextSize != null && PANE_TEXT_SIZES.includes(stored.paneTextSize) ? stored.paneTextSize : null,
     promptFx: readPromptFx(stored.promptFx),
     widths: readWidths(stored.widths),
+    paneParked: stored.paneParked === true,
   }
 }
 
@@ -219,6 +227,7 @@ export function sessionsLayoutInput(layout: SessionsLayout) {
     paneTextSize: layout.paneTextSize,
     promptFx: layout.promptFx,
     widths: Object.entries(layout.widths).map(([column, px]) => ({ column, px: px! })),
+    paneParked: layout.paneParked,
   }
 }
 

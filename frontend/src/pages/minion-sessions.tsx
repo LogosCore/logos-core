@@ -68,6 +68,11 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
   // The sessions being worked with, below: an operator's own, in this browser.
   const [tabs, setTabs] = useSessionTabs(operationId)
   useSessionsTitle(operationName, tabs.active)
+  // A tab opened from the list: the pane comes back, parked or not.
+  const openShown = (next: typeof tabs) => {
+    setTabs(next)
+    if (layout.paneParked) setLayout({ ...layout, paneParked: false })
+  }
 
   return (
     // No padding: the table runs edge to edge, from the sidebar to the
@@ -77,6 +82,7 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
           between them is the operator's, kept with their layout. */}
       <SplitPane
         label="Resize the sessions list and the session below"
+        collapsed={layout.paneParked}
         split={layout.split ?? DEFAULT_SPLIT}
         defaultSplit={DEFAULT_SPLIT}
         min={MIN_SPLIT}
@@ -94,8 +100,8 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
                 onArchivedChange={setArchived}
                 layout={layout}
                 onLayoutChange={setLayout}
-                onInteract={(s) => setTabs(openTab(tabs, s.id))}
-                onFileBrowser={(s) => setTabs(openTab(tabs, fileBrowserTabId(s.id)))}
+                onInteract={(s) => openShown(openTab(tabs, s.id))}
+                onFileBrowser={(s) => openShown(openTab(tabs, fileBrowserTabId(s.id)))}
                 activeSessionId={tabs.active ? workspaceTab(tabs.active).sessionId : null}
                 sessions={sessions}
                 icons={icons}
@@ -124,7 +130,14 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
             )}
           </div>
         }
-        second={<SessionWorkspace tabs={tabs} onTabsChange={setTabs} />}
+        second={
+          <SessionWorkspace
+            tabs={tabs}
+            onTabsChange={setTabs}
+            parked={layout.paneParked}
+            onParkedChange={(paneParked) => setLayout({ ...layout, paneParked })}
+          />
+        }
       />
     </div>
   )

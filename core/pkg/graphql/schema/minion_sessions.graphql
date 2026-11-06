@@ -397,6 +397,9 @@ type MinionSessionsLayout {
   # The columns the operator sized, in pixels (32 to 1600); the others take
   # the app's widths.
   widths: [MinionSessionColumnWidth!]!
+  # The work pane below the list is parked: its tab row alone, at the page's
+  # bottom (split is kept for when it comes back).
+  paneParked: Boolean!
 }
 
 # One column's width, as the operator sized it.
@@ -420,6 +423,7 @@ input MinionSessionsLayoutInput {
   paneTextSize: Int
   promptFx: String
   widths: [MinionSessionColumnWidthInput!]
+  paneParked: Boolean
 }
 
 type MinionSessionEvent {

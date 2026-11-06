@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { FeedbackCounts } from "./feedback-parts"
-import { AArrowDownIcon, AArrowUpIcon, FolderTreeIcon, LoaderIcon, SquareTerminalIcon } from "lucide-react"
+import { AArrowDownIcon, AArrowUpIcon, FolderTreeIcon, LoaderIcon, SquareTerminalIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { preloadable, useLoaded, whenIdle } from "@/lib/preloadable"
 import { Button } from "@/components/ui/button"
 import { WorkPane } from "@/components/work-pane/work-pane"
@@ -20,7 +20,22 @@ import { fileBrowserTabId, workspaceTab, WorkspaceActionsContext, type Workspace
 // the tasks given its minion (session-console.tsx); and the file browsers
 // of their machines ("File Browser" in the menu, file-browser.tsx).
 
-export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; onTabsChange: (next: WorkPaneTabs) => void }) {
+export function SessionWorkspace({
+  tabs,
+  onTabsChange,
+  parked,
+  onParkedChange,
+}: {
+  tabs: WorkPaneTabs
+  onTabsChange: (next: WorkPaneTabs) => void
+  /** Folded to its tab row at the page's bottom (the owner's split folds it). */
+  parked: boolean
+  onParkedChange: (parked: boolean) => void
+}) {
+  // Opening a tab, or clicking one, while parked brings the pane back.
+  const show = useCallback(() => {
+    if (parked) onParkedChange(false)
+  }, [parked, onParkedChange])
   // The pane's text size is the operator's, kept with their sessions layout.
   const { layout, setLayout } = useMinionSessionsLayout()
   const textSize = layout.paneTextSize ?? DEFAULT_PANE_TEXT
@@ -49,10 +64,14 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
   }
   const actions = useMemo<WorkspaceActions>(
     () => ({
-      openConsole: (sessionId) => onTabsChange(openTab(tabs, sessionId)),
+      openConsole: (sessionId) => {
+        show()
+        onTabsChange(openTab(tabs, sessionId))
+      },
       openFileBrowser: (sessionId, path) => {
         const id = fileBrowserTabId(sessionId)
         if (path) setFileBrowserState(id, { path })
+        show()
         onTabsChange(openTab(tabs, id))
       },
       switchFileBrowser: (from, to) => {
@@ -64,7 +83,7 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
         onTabsChange(replaceTab(tabs, fromId, toId))
       },
     }),
-    [tabs, onTabsChange],
+    [tabs, onTabsChange, show],
   )
   return (
     <WorkspaceActionsContext value={actions}>
@@ -99,8 +118,20 @@ export function SessionWorkspace({ tabs, onTabsChange }: { tabs: WorkPaneTabs; o
           >
             <AArrowUpIcon className="size-4" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={parked ? "Bring the pane back" : "Park the pane"}
+            title={parked ? "Bring the pane back" : "Park the pane: its tabs alone, at the bottom"}
+            aria-expanded={!parked}
+            onClick={() => onParkedChange(!parked)}
+          >
+            {parked ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
+          </Button>
         </>
       }
+      parked={parked}
+      onTabPress={show}
       tabs={tabs.ids.map((id) => {
         // A tab looks as its session's row: the caller's mark, color or style.
         const color = sessionOf(id)?.mark?.color

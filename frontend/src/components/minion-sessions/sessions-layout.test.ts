@@ -60,7 +60,7 @@ describe("layout", () => {
   })
 
   test("columns move, show and hide; the last one stays", () => {
-    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {} }
+    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {}, paneParked: false }
     expect(moveColumn(l, "os", "number").columns).toEqual(["os", "number", "host"])
     expect(shiftColumn(l, "host", 1).columns).toEqual(["number", "os", "host"])
     expect(shiftColumn(l, "number", -1)).toBe(l)
@@ -68,7 +68,7 @@ describe("layout", () => {
     expect(toggleColumn(l, "pid", "host").columns).toEqual(["number", "host", "pid", "os"])
     expect(toggleColumn(l, "pid", "os").columns).toEqual(["number", "host", "os", "pid"])
     expect(toggleColumn(l, "host").columns).toEqual(["number", "os"])
-    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {} }
+    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {}, paneParked: false }
     expect(toggleColumn(one, "host")).toBe(one)
   })
 
@@ -324,6 +324,11 @@ describe("column widths", () => {
     expect(sessionsLayoutInput(sized).widths).toEqual([{ column: "host", px: 250 }])
     const stored = { ...sessionsLayoutInput(sized), widths: [{ column: "host", px: 250 }, { column: "gone", px: 90 }, { column: "pid", px: 5 }] }
     expect(readSessionsLayout(stored as never).widths).toEqual({ host: 250 })
+    // Parked, kept through a save and a read; a layout from before it, not.
+    const parked = { ...l, paneParked: true }
+    expect(sessionsLayoutInput(parked).paneParked).toBe(true)
+    expect(readSessionsLayout({ ...sessionsLayoutInput(parked), widths: [] } as never).paneParked).toBe(true)
+    expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null } as never).paneParked).toBe(false)
     // A layout set here, read back from the cache as stored: its map.
     expect(readSessionsLayout({ ...sized } as never).widths).toEqual({ host: 250 })
   })

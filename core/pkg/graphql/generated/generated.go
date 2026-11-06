@@ -842,6 +842,7 @@ type ComplexityRoot struct {
 		ConsoleSplit func(childComplexity int) int
 		FilesSplit   func(childComplexity int) int
 		Filters      func(childComplexity int) int
+		PaneParked   func(childComplexity int) int
 		PaneTextSize func(childComplexity int) int
 		PromptFx     func(childComplexity int) int
 		Sort         func(childComplexity int) int
@@ -5573,6 +5574,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSessionsLayout.Filters(childComplexity), true
+	case "MinionSessionsLayout.paneParked":
+		if e.ComplexityRoot.MinionSessionsLayout.PaneParked == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.PaneParked(childComplexity), true
 	case "MinionSessionsLayout.paneTextSize":
 		if e.ComplexityRoot.MinionSessionsLayout.PaneTextSize == nil {
 			break
@@ -13629,6 +13636,9 @@ type MinionSessionsLayout {
   # The columns the operator sized, in pixels (32 to 1600); the others take
   # the app's widths.
   widths: [MinionSessionColumnWidth!]!
+  # The work pane below the list is parked: its tab row alone, at the page's
+  # bottom (split is kept for when it comes back).
+  paneParked: Boolean!
 }
 
 # One column's width, as the operator sized it.
@@ -13652,6 +13662,7 @@ input MinionSessionsLayoutInput {
   paneTextSize: Int
   promptFx: String
   widths: [MinionSessionColumnWidthInput!]
+  paneParked: Boolean
 }
 
 type MinionSessionEvent {
@@ -38014,6 +38025,35 @@ func (ec *executionContext) fieldContext_MinionSessionsLayout_widths(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSessionsLayout_paneParked(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_paneParked,
+		func(ctx context.Context) (any, error) {
+			return obj.PaneParked, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_paneParked(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionStreamLink_path(ctx context.Context, field graphql.CollectedField, obj *model.MinionStreamLink) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -50668,6 +50708,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionsLayout(ctx co
 				return ec.fieldContext_MinionSessionsLayout_promptFx(ctx, field)
 			case "widths":
 				return ec.fieldContext_MinionSessionsLayout_widths(ctx, field)
+			case "paneParked":
+				return ec.fieldContext_MinionSessionsLayout_paneParked(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -59794,6 +59836,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionsLayout(_ context.Co
 				return ec.fieldContext_MinionSessionsLayout_promptFx(ctx, field)
 			case "widths":
 				return ec.fieldContext_MinionSessionsLayout_widths(ctx, field)
+			case "paneParked":
+				return ec.fieldContext_MinionSessionsLayout_paneParked(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -76554,7 +76598,7 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"columns", "sort", "filters", "split", "consoleSplit", "filesSplit", "paneTextSize", "promptFx", "widths"}
+	fieldsInOrder := [...]string{"columns", "sort", "filters", "split", "consoleSplit", "filesSplit", "paneTextSize", "promptFx", "widths", "paneParked"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -76624,6 +76668,13 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 				return it, err
 			}
 			it.Widths = data
+		case "paneParked":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("paneParked"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PaneParked = data
 		}
 	}
 	return it, nil
@@ -84458,6 +84509,11 @@ func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.S
 			out.Values[i] = ec._MinionSessionsLayout_promptFx(ctx, field, obj)
 		case "widths":
 			out.Values[i] = ec._MinionSessionsLayout_widths(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "paneParked":
+			out.Values[i] = ec._MinionSessionsLayout_paneParked(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

@@ -880,6 +880,7 @@ type MinionSessionsLayout struct {
 	PaneTextSize *int                        `json:"paneTextSize,omitempty"`
 	PromptFx     *string                     `json:"promptFx,omitempty"`
 	Widths       []*MinionSessionColumnWidth `json:"widths"`
+	PaneParked   bool                        `json:"paneParked"`
 }
 
 type MinionSessionsLayoutInput struct {
@@ -892,6 +893,7 @@ type MinionSessionsLayoutInput struct {
 	PaneTextSize *int                             `json:"paneTextSize,omitempty"`
 	PromptFx     *string                          `json:"promptFx,omitempty"`
 	Widths       []*MinionSessionColumnWidthInput `json:"widths,omitempty"`
+	PaneParked   *bool                            `json:"paneParked,omitempty"`
 }
 
 type MinionStreamLink struct {

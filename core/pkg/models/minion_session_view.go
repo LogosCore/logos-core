@@ -244,6 +244,9 @@ type MinionSessionsLayout struct {
 	// inferno): any name of PromptFxPattern's form, the app showing the
 	// ones it knows and none for another; nil for none.
 	PromptFx *string `bson:"prompt_fx,omitempty" json:"prompt_fx,omitempty"`
+	// PaneParked: the work pane below the list is parked, its tab row alone
+	// at the page's bottom; Split stays for when it comes back.
+	PaneParked bool `bson:"pane_parked,omitempty" json:"pane_parked,omitempty"`
 	// Widths are the columns the operator sized, in pixels
 	// (MinColumnWidth to MaxColumnWidth); the rest take the app's.
 	Widths []MinionSessionColumnWidth `bson:"widths,omitempty" json:"widths,omitempty"`

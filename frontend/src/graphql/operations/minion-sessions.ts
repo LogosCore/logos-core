@@ -221,6 +221,7 @@ export const MinionSessionsLayoutFields = graphql(`
       column
       px
     }
+    paneParked
   }
 `)
 

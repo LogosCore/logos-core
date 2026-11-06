@@ -543,7 +543,7 @@ func (r *minionSessionResolver) SetMinionSessionsLayout(ctx context.Context, in 
 	var layout *models.MinionSessionsLayout
 	if in != nil {
 		layout = &models.MinionSessionsLayout{Columns: in.Columns, Split: in.Split, ConsoleSplit: in.ConsoleSplit, FilesSplit: in.FilesSplit,
-			PaneTextSize: in.PaneTextSize, PromptFx: in.PromptFx}
+			PaneTextSize: in.PaneTextSize, PromptFx: in.PromptFx, PaneParked: in.PaneParked != nil && *in.PaneParked}
 		for _, w := range in.Widths {
 			layout.Widths = append(layout.Widths, models.MinionSessionColumnWidth{Column: w.Column, Px: w.Px})
 		}
@@ -603,7 +603,7 @@ func toSessionsLayoutModel(l *models.MinionSessionsLayout) *model.MinionSessions
 	}
 	out := &model.MinionSessionsLayout{Columns: l.Columns, Filters: []*model.MinionSessionFilter{}, Split: l.Split,
 		ConsoleSplit: l.ConsoleSplit, FilesSplit: l.FilesSplit, PaneTextSize: l.PaneTextSize, PromptFx: l.PromptFx,
-		Widths: []*model.MinionSessionColumnWidth{}}
+		Widths: []*model.MinionSessionColumnWidth{}, PaneParked: l.PaneParked}
 	for _, w := range l.Widths {
 		out.Widths = append(out.Widths, &model.MinionSessionColumnWidth{Column: w.Column, Px: w.Px})
 	}

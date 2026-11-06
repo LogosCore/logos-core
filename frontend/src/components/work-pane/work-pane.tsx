@@ -50,7 +50,13 @@ export function WorkPane({
   className,
   style,
   end,
+  parked = false,
+  onTabPress,
 }: {
+  /** Parked: the tab row alone, no panel (the owner folds the pane down to it). */
+  parked?: boolean
+  /** A tab was clicked (or brought to the front by the keys), even the one in front. */
+  onTabPress?: () => void
   /** The pane's accessible name. */
   label: string
   /** The open tabs, in state's order. */
@@ -91,17 +97,12 @@ export function WorkPane({
     if (to === undefined || to < 0 || to >= state.ids.length) return
     e.preventDefault()
     const id = state.ids[to]
+    onTabPress?.()
     onChange(activateTab(state, id))
     strip.current?.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(id)}"]`)?.focus()
   }
 
-  if (tabs.length === 0)
-    return (
-      <div className={cn("flex min-h-0 flex-1 flex-col", className)} style={style}>
-        {empty}
-      </div>
-    )
-
+  // The tab row is there with no tab open too: its controls (the end's) are.
   return (
     <div className={cn("flex min-h-0 flex-1 flex-col", className)} style={style}>
       <div className="flex shrink-0 items-stretch border-b bg-muted/40">
@@ -119,7 +120,10 @@ export function WorkPane({
                   key={tab.id}
                   tab={tab}
                   active={tab.id === state.active}
-                  onActivate={() => onChange(activateTab(state, tab.id))}
+                  onActivate={() => {
+                    onTabPress?.()
+                    onChange(activateTab(state, tab.id))
+                  }}
                   onClose={(which) => onChange(closeTabs(state, tabsToClose(state, tab.id, which)))}
                   last={tab.id === state.ids[state.ids.length - 1]}
                   alone={state.ids.length === 1}
@@ -137,12 +141,14 @@ export function WorkPane({
           id={panelId(tab.id)}
           aria-labelledby={tabId(tab.id)}
           // hidden wins over flex (Tailwind's preflight makes it !important).
-          hidden={tab.id !== state.active}
+          // Parked, all are: mounted still, so what runs in them goes on.
+          hidden={parked || tab.id !== state.active}
           className="flex min-h-0 flex-1 flex-col"
         >
           {shown.has(tab.id) && panel(tab.id)}
         </div>
       ))}
+      {tabs.length === 0 && !parked && empty}
     </div>
   )
 }
