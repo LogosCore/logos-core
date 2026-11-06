@@ -40,6 +40,7 @@ const TasksPage = page(pageLoaders["/tasks"], "TasksPage")
 const EndpointsPage = page(pageLoaders["/endpoints"], "EndpointsPage")
 const BuildsPage = page(pageLoaders["/builds"], "BuildsPage")
 const MinionSessionsPage = page(pageLoaders["/sessions"], "MinionSessionsPage")
+const PortsPage = page(pageLoaders["/ports"], "PortsPage")
 const AgentsPage = page(pageLoaders["/agents"], "AgentsPage")
 const TimelinePage = page(pageLoaders["/timeline"], "TimelinePage")
 
@@ -83,6 +84,7 @@ function AppRoutes() {
             <Route path="endpoints" element={<EndpointsPage />} />
             <Route path="builds" element={<BuildsPage />} />
             <Route path="sessions" element={<MinionSessionsPage />} />
+            <Route path="ports" element={<PortsPage />} />
             {/* Builds and endpoints open in modals now (?build=<id>, …);
                 their old pages, for anyone's bookmark. */}
             <Route path="endpoints/new" element={<RecordPageRedirect list="endpoints" />} />

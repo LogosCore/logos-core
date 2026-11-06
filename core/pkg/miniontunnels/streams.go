@@ -62,6 +62,17 @@ type tunnel struct {
 	handshaking map[net.Conn]bool
 	// closes go to the minion with the session's next message.
 	closes []protocol.TunnelCloseItem
+	// relay is its UDP relay (udp.go); nil when the port's UDP is taken.
+	relay net.PacketConn
+	// last is the last stream's number; up and down the bytes its tools
+	// sent through it and got back (since a restart: what its streams'
+	// records said then, and on).
+	last     uint64
+	up, down int64
+	// changed: its task's view changed since the last event said so;
+	// counted: its streams' numbers did (the Ports page's).
+	changed bool
+	counted bool
 }
 
 func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel {
@@ -74,7 +85,8 @@ func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel
 		timeout = DefaultConnectTimeout
 	}
 	return &tunnel{task: rec.TaskID, session: rec.SessionID, operation: rec.OperationID, port: rec.Port, ln: ln,
-		maxStreams: maxStreams, connectWait: timeout, acked: acked, streams: map[uint64]*stream{}, handshaking: map[net.Conn]bool{}}
+		maxStreams: maxStreams, connectWait: timeout, acked: acked, streams: map[uint64]*stream{}, handshaking: map[net.Conn]bool{},
+		last: rec.Streams}
 }
 
 // The command's defaults, as the docs give them, for a task whose args
@@ -119,6 +131,8 @@ type stream struct {
 	id     uint64
 	client net.Conn
 	rec    models.MinionTunnelStream
+	// udp: a UDP association's (udp.go); nil for a TCP stream.
+	udp *assoc
 
 	// opened: the minion's reply said open. openSent: when its tunnel
 	// item last went (zero: not yet).
@@ -220,8 +234,16 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 		_ = c.Close()
 		return
 	}
-	open := protocol.TunnelItem{T: protocol.ItemTunnel, Task: t.task[:], Stream: 1, Host: req.host, Port: uint64(req.port)}
-	if open.Validate() != nil {
+	if req.udp {
+		s.mu.Lock()
+		relayed := t.relay != nil
+		s.mu.Unlock()
+		if !relayed {
+			_ = req.reply(c, socks5CommandNotSupported, "")
+			_ = c.Close()
+			return
+		}
+	} else if open := (protocol.TunnelItem{T: protocol.ItemTunnel, Task: t.task[:], Stream: 1, Host: req.host, Port: uint64(req.port)}); open.Validate() != nil {
 		_ = req.reply(c, socks5HostUnreachable, "")
 		_ = c.Close()
 		return
@@ -243,7 +265,12 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 			s.mu.Unlock()
 			return
 		}
-		if err := req.reply(c, socks5Succeeded, r.Bound); err != nil {
+		bound := r.Bound
+		if req.udp {
+			// The tool's datagrams go to the relay, not the minion's socket.
+			bound = s.relayAddress(t, c)
+		}
+		if err := req.reply(c, socks5Succeeded, bound); err != nil {
 			s.mu.Lock()
 			s.abort(st, models.TunnelEndClientReset)
 			s.mu.Unlock()
@@ -257,6 +284,10 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 		return
 	case <-st.done:
 		_ = req.reply(c, socks5GeneralFailure, "")
+		return
+	}
+	if req.udp {
+		s.holdAssociation(st)
 		return
 	}
 	s.done.Add(1)
@@ -292,7 +323,16 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
 		upSignal: make(chan struct{}, 1), downSignal: make(chan struct{}, 1),
 		rec: models.MinionTunnelStream{TaskID: t.task, Stream: id, OperationID: t.operation, SessionID: t.session,
 			Client: c.RemoteAddr().String(), Host: req.host, Port: req.port, OpenedAt: s.now()}}
+	if req.udp {
+		var ip net.IP
+		if ra, ok := c.RemoteAddr().(*net.TCPAddr); ok {
+			ip = ra.IP
+		}
+		st.udp = &assoc{clientIP: ip}
+		st.rec.UDP, st.rec.Host, st.rec.Port = true, "", 0
+	}
 	t.streams[id] = st
+	t.last, t.changed, t.counted = max(t.last, id), true, true
 	s.record(st, true)
 	s.wake(t.session)
 	return st, 0
@@ -327,6 +367,8 @@ func (s *Service) readClient(st *stream) {
 		if k > 0 {
 			st.up = append(st.up, buf[:k]...)
 			st.upBytes += int64(k)
+			st.t.up += int64(k)
+			st.t.changed = true
 		}
 		switch {
 		case errors.Is(err, io.EOF):
@@ -403,6 +445,8 @@ func (s *Service) writeClient(st *stream) {
 			st.down = nil
 		}
 		st.downBytes += int64(len(piece))
+		st.t.down += int64(len(piece))
+		st.t.changed = true
 		// Room given back: said once it is worth an ack.
 		wake := st.roomGrew()
 		session := st.t.session
@@ -471,6 +515,7 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 	_ = st.client.Close()
 	now := s.now()
 	st.rec.EndedAt, st.rec.End = &now, end
+	st.t.changed, st.t.counted = true, true
 	s.record(st, false)
 }
 
@@ -520,6 +565,22 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 			moved = false
 			for i := range n {
 				st := open[(start+i)%n]
+				if st.udp != nil {
+					if len(st.udp.out) == 0 {
+						continue
+					}
+					if f.put(st.udp.out[0]) {
+						st.sentDatagram()
+						moved, work = true, true
+						continue
+					}
+					if f.n == 0 && f.most > 0 {
+						// It fits no message: dropped, as UDP is.
+						st.sentDatagram()
+						continue
+					}
+					break
+				}
 				d := st.dataItem(now, f.dataRoom(), s.cfg.ResendAfter)
 				if d == nil {
 					continue
@@ -537,7 +598,8 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 		pending = pending || len(t.closes) > 0
 		for _, st := range t.streams {
 			pending = pending || (t.acked && !st.opened && st.openDue(now, s.cfg.ResendAfter)) ||
-				(st.opened && (st.ackDue || st.dataItem(now, protocol.MaxTunnelData, s.cfg.ResendAfter) != nil))
+				(st.opened && st.udp != nil && len(st.udp.out) > 0) ||
+				(st.opened && st.udp == nil && (st.ackDue || st.dataItem(now, protocol.MaxTunnelData, s.cfg.ResendAfter) != nil))
 		}
 	}
 	if pending && f.n > 0 {
@@ -630,6 +692,9 @@ func (st *stream) openDue(now time.Time, resend time.Duration) bool {
 }
 
 func (st *stream) openItem() protocol.TunnelItem {
+	if st.udp != nil {
+		return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, UDP: true}
+	}
 	return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, Host: st.rec.Host, Port: uint64(st.rec.Port)}
 }
 
@@ -728,8 +793,7 @@ func (s *Service) Take(ctx context.Context, session uuid.UUID, raw cbor.RawMessa
 		if err := read(raw, &d); err != nil {
 			return nil, err
 		}
-		// No association is open until UDP lands.
-		return s.closeFor(session, d.Task, d.Stream)
+		return s.takeDatagram(session, d)
 	}
 	return nil, fmt.Errorf("item %d is not a tunnel item the minion sends", protocol.ItemType(raw))
 }
@@ -757,17 +821,6 @@ func (s *Service) find(session uuid.UUID, task []byte, id uint64) (*stream, int)
 		return nil, protocol.TunnelCloseUnknown
 	}
 	return st, 0
-}
-
-// closeFor answers an item about a stream core does not have.
-func (s *Service) closeFor(session uuid.UUID, task []byte, id uint64) ([]cbor.RawMessage, error) {
-	s.mu.Lock()
-	st, reason := s.find(session, task, id)
-	s.mu.Unlock()
-	if st != nil {
-		reason = protocol.TunnelCloseUnknown
-	}
-	return closeItem(task, id, reason)
 }
 
 func closeItem(task []byte, id uint64, reason int) ([]cbor.RawMessage, error) {
@@ -801,6 +854,7 @@ func (s *Service) takeReply(session uuid.UUID, r protocol.TunnelReplyItem) ([]cb
 		st.upLimit = protocol.TunnelRoom(r.Room)
 		st.ackedEnd = downWindow
 	}
+	st.t.changed = true
 	s.record(st, false)
 	st.replied <- r
 	return nil, nil

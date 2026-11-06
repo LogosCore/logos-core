@@ -572,3 +572,6 @@ models:
       # Read when asked, for a file_download task.
       file:
         resolver: true
+      # Read when asked, for a tunnel task.
+      tunnel:
+        resolver: true

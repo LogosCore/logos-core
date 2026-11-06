@@ -238,6 +238,8 @@ func extractOperationID(event eventbus.Event) string {
 		return p.OperationID
 	case eventbus.MinionTargetEventPayload:
 		return p.OperationID
+	case eventbus.OperationalPortEventPayload:
+		return p.OperationID
 	case eventbus.MinionTaskEventPayload:
 		return p.OperationID
 	case eventbus.FileBrowserEventPayload:
@@ -908,6 +910,31 @@ func applySessionStatusFromTopic(sess *models.Session, topic eventbus.Topic) {
 	case eventbus.TopicSessionTerminated:
 		sess.Status = models.SessionStatusInactive
 	}
+}
+
+// operationalPortEvent is an operational port's change: the port as it is
+// now, none once it closed.
+func (r *subscriptionResolver) operationalPortEvent(ctx context.Context, event eventbus.Event) *model.OperationalPortEvent {
+	p, ok := event.Payload.(eventbus.OperationalPortEventPayload)
+	if !ok {
+		return nil
+	}
+	evt := &model.OperationalPortEvent{Action: model.EventActionUpdated, ID: p.TaskID, OperationID: p.OperationID}
+	switch {
+	case p.Closed:
+		evt.Action = model.EventActionDeleted
+		return evt
+	case p.Opened:
+		evt.Action = model.EventActionCreated
+	}
+	if r.MinionTaskResolver != nil {
+		evt.Port = r.MinionTaskResolver.LoadPort(ctx, p.TaskID)
+	}
+	if evt.Port == nil {
+		// Gone meanwhile: closed.
+		evt.Action = model.EventActionDeleted
+	}
+	return evt
 }
 
 func (r *subscriptionResolver) minionTargetEvent(ctx context.Context, event eventbus.Event) *model.MinionTargetEvent {

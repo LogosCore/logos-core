@@ -16,7 +16,9 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/eventbus"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
@@ -51,8 +53,23 @@ func (f *fakePorts) All(context.Context) ([]models.OperationalPort, error) {
 	return out, nil
 }
 
-func (f *fakePorts) ListByOperation(ctx context.Context, _ uuid.UUID) ([]models.OperationalPort, error) {
+func (f *fakePorts) FindByOperationIDWithCursor(ctx context.Context, _ uuid.UUID, _ string, _ *pagination.Cursor, _ int64, _ bool) ([]models.OperationalPort, error) {
 	return f.All(ctx)
+}
+
+func (f *fakePorts) CountByOperationID(ctx context.Context, _ uuid.UUID, _ string) (int64, error) {
+	all, err := f.All(ctx)
+	return int64(len(all)), err
+}
+
+func (f *fakePorts) FindByTaskID(_ context.Context, task uuid.UUID) (*models.OperationalPort, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r := f.recs[task]; r != nil {
+		c := *r
+		return &c, nil
+	}
+	return nil, repository.ErrNotFound
 }
 
 func (f *fakePorts) NextStream(_ context.Context, task uuid.UUID) (uint64, error) {
@@ -96,8 +113,29 @@ func (f *fakeRecords) Update(_ context.Context, s *models.MinionTunnelStream) er
 	return f.Insert(context.Background(), s)
 }
 
-func (f *fakeRecords) ListByTask(context.Context, uuid.UUID, int) ([]models.MinionTunnelStream, error) {
-	return nil, nil
+func (f *fakeRecords) Page(_ context.Context, _ uuid.UUID, _ repository.TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []models.MinionTunnelStream
+	for n := uint64(len(f.recs) + 64); n > 0 && int64(len(out)) < limit; n-- {
+		if s, ok := f.recs[n]; ok && (before == 0 || n < before) {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRecords) Totals(context.Context, uuid.UUID) (repository.TunnelTotals, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var t repository.TunnelTotals
+	for n, s := range f.recs {
+		t.Streams++
+		t.Last = max(t.Last, n)
+		t.Up += s.Up
+		t.Down += s.Down
+	}
+	return t, nil
 }
 
 func (f *fakeRecords) DeleteByOperationID(context.Context, uuid.UUID) error { return nil }
@@ -144,6 +182,7 @@ func (f *fakeTasks) ack(id uuid.UUID) {
 
 // rig is a service with one tunnel task, its port free on 127.0.0.1.
 type rig struct {
+	bus     *recordingBus
 	svc     *Service
 	ports   *fakePorts
 	records *fakeRecords
@@ -169,11 +208,12 @@ func newRig(t *testing.T, maxStreams int, cfg func(*Config)) *rig {
 		tasks: &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}}, task: uuid.New(), session: uuid.New()}
 	c := DefaultConfig()
 	c.Ports, c.Bind = []int{freePort(t)}, "127.0.0.1"
-	c.ResendAfter, c.ConnectSlack = 200*time.Millisecond, 2*time.Second
+	c.ResendAfter, c.ConnectSlack, c.Tell = 200*time.Millisecond, 2*time.Second, 20*time.Millisecond
 	if cfg != nil {
 		cfg(&c)
 	}
-	r.svc = New(c, r.ports, r.records, r.tasks, nil, zap.NewNop())
+	r.bus = &recordingBus{}
+	r.svc = New(c, r.ports, r.records, r.tasks, r.bus, zap.NewNop())
 	r.svc.Start(context.Background())
 	t.Cleanup(r.svc.Stop)
 	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskSent, Action: protocol.ActionTunnel}
@@ -184,6 +224,45 @@ func newRig(t *testing.T, maxStreams int, cfg func(*Config)) *rig {
 	}
 	r.port = port
 	return r
+}
+
+// recordingBus keeps what is published.
+type recordingBus struct {
+	eventbus.NopEventBus
+	mu     sync.Mutex
+	events []eventbus.Event
+}
+
+func (b *recordingBus) Publish(e eventbus.Event) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.events = append(b.events, e)
+}
+
+// ports are the port changes published, in order.
+func (b *recordingBus) ports() []eventbus.OperationalPortEventPayload {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var out []eventbus.OperationalPortEventPayload
+	for _, e := range b.events {
+		if p, ok := e.Payload.(eventbus.OperationalPortEventPayload); ok {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// tasks counts the task changes published for task.
+func (b *recordingBus) tasks(task uuid.UUID) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	n := 0
+	for _, e := range b.events {
+		if p, ok := e.Payload.(eventbus.MinionTaskEventPayload); ok && p.TaskID == task.String() {
+			n++
+		}
+	}
+	return n
 }
 
 // fakeMinion relays the tunnel's streams as a minion does, checking in
@@ -197,13 +276,19 @@ type fakeMinion struct {
 	out     []cbor.RawMessage
 	lose    func(n int) bool
 	swap    bool
-	msgs    int
-	stop    chan struct{}
-	done    chan struct{}
+	// closed are core's closes the minion took.
+	closed []protocol.TunnelCloseItem
+	msgs   int
+	stop   chan struct{}
+	done   chan struct{}
 }
 
 type minionStream struct {
 	conn net.Conn
+	// A UDP association's socket, and its datagrams for core.
+	pc     net.PacketConn
+	dgrams []protocol.TunnelDatagramItem
+	dseq   uint64
 	// From core: taken up to next.
 	next  uint64
 	eofIn bool
@@ -291,6 +376,14 @@ func (m *fakeMinion) collect() []cbor.RawMessage {
 	m.out = nil
 	now := time.Now()
 	for id, st := range m.streams {
+		if st.pc != nil {
+			for _, d := range st.dgrams {
+				// Each twice: core takes it once.
+				items = append(items, m.marshal(d), m.marshal(d))
+			}
+			st.dgrams = nil
+			continue
+		}
 		end := st.base + uint64(len(st.buf))
 		quiet := now.Sub(st.sentAt) >= minionResend
 		if st.sent > st.base && quiet {
@@ -345,8 +438,27 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			return
 		}
 		if st := m.streams[it.Stream]; st != nil {
+			var bound string
+			if st.conn != nil {
+				bound = st.conn.LocalAddr().String()
+			} else {
+				bound = st.pc.LocalAddr().String()
+			}
 			m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream, Result: protocol.TunnelOpen,
-				Bound: st.conn.LocalAddr().String()}))
+				Bound: bound}))
+			return
+		}
+		if it.UDP {
+			pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+			if err != nil {
+				m.t.Errorf("a UDP socket: %v", err)
+				return
+			}
+			st := &minionStream{pc: pc}
+			m.streams[it.Stream] = st
+			m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream, Result: protocol.TunnelOpen,
+				Bound: pc.LocalAddr().String()}))
+			go m.readUDP(it.Stream, st)
 			return
 		}
 		c, err := net.DialTimeout("tcp", net.JoinHostPort(it.Host, strconv.Itoa(int(it.Port))), time.Second)
@@ -411,9 +523,43 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			return
 		}
 		if st := m.streams[c.Stream]; st != nil {
-			_ = st.conn.Close()
+			if st.conn != nil {
+				_ = st.conn.Close()
+			} else {
+				_ = st.pc.Close()
+			}
 			delete(m.streams, c.Stream)
+			m.closed = append(m.closed, c)
 		}
+	case protocol.ItemTunnelDatagram:
+		var d protocol.TunnelDatagramItem
+		if err := protocol.UnmarshalCBOR(raw, &d); err != nil || d.Validate() != nil {
+			m.t.Errorf("a datagram that does not read: %v", err)
+			return
+		}
+		if st := m.streams[d.Stream]; st != nil && st.pc != nil {
+			to, err := net.ResolveUDPAddr("udp", net.JoinHostPort(d.Host, strconv.Itoa(int(d.Port))))
+			if err == nil {
+				_, _ = st.pc.WriteTo(d.Data, to)
+			}
+		}
+	}
+}
+
+// readUDP takes what comes to an association's socket, for collect.
+func (m *fakeMinion) readUDP(id uint64, st *minionStream) {
+	buf := make([]byte, 64<<10)
+	for {
+		n, from, err := st.pc.ReadFrom(buf)
+		if err != nil {
+			return
+		}
+		ua := from.(*net.UDPAddr)
+		m.mu.Lock()
+		st.dgrams = append(st.dgrams, protocol.TunnelDatagramItem{T: protocol.ItemTunnelDatagram, Task: m.r.task[:], Stream: id, Seq: st.dseq,
+			Host: ua.IP.String(), Port: uint64(ua.Port), Data: bytes.Clone(buf[:n])})
+		st.dseq++
+		m.mu.Unlock()
 	}
 }
 
@@ -752,4 +898,140 @@ func TestRestartReopens(t *testing.T) {
 		t.Fatalf("after a restart: reply %d", code)
 	}
 	roundTrip(t, c, 1000)
+}
+
+// A port's opening, its streams coming and going, and its closing are said
+// to the operation (the Ports page), its streams' numbers once each Tell at
+// most; its task is told as its tunnel moves on.
+func TestTunnelEvents(t *testing.T) {
+	r := newRig(t, 0, nil)
+	r.tasks.ack(r.task)
+	startMinion(t, r)
+	if got := r.bus.ports(); len(got) != 1 || !got[0].Opened || got[0].TaskID != r.task.String() || got[0].OperationID == "" {
+		t.Fatalf("opened: %+v", got)
+	}
+	host, port := splitAddr(t, echo(t))
+	c, code := socks5(t, r.port, host, port)
+	if code != socks5Succeeded {
+		t.Fatalf("reply %d", code)
+	}
+	roundTrip(t, c, 1000)
+	_ = c.Close()
+	eventually(t, "the stream's numbers said", func() bool { return len(r.bus.ports()) >= 2 })
+	for _, p := range r.bus.ports()[1:] {
+		if p.Opened || p.Closed {
+			t.Errorf("a stream said as an opening or a closing: %+v", p)
+		}
+	}
+	eventually(t, "its task told", func() bool { return r.bus.tasks(r.task) > 0 })
+	r.svc.Close(context.Background(), r.task)
+	got := r.bus.ports()
+	if last := got[len(got)-1]; !last.Closed {
+		t.Errorf("closed: %+v", last)
+	}
+}
+
+// udpEcho is a UDP host that sends back what it gets.
+func udpEcho(t *testing.T) *net.UDPAddr {
+	t.Helper()
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pc.Close() })
+	go func() {
+		buf := make([]byte, 64<<10)
+		for {
+			n, from, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			_, _ = pc.WriteTo(buf[:n], from)
+		}
+	}()
+	return pc.LocalAddr().(*net.UDPAddr)
+}
+
+// socks5UDP asks core's proxy for a UDP association: its SOCKS connection,
+// and the relay the reply names.
+func socks5UDP(t *testing.T, port int) (net.Conn, *net.UDPAddr) {
+	t.Helper()
+	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = c.SetDeadline(time.Now().Add(10 * time.Second))
+	if _, err := c.Write([]byte{5, 1, 0, 5, 3, 0, 1, 0, 0, 0, 0, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	reply := make([]byte, 2+10)
+	if _, err := io.ReadFull(c, reply); err != nil {
+		t.Fatalf("socks reply: %v", err)
+	}
+	if reply[3] != socks5Succeeded || reply[5] != 1 {
+		t.Fatalf("reply % x", reply)
+	}
+	_ = c.SetDeadline(time.Time{})
+	return c, &net.UDPAddr{IP: net.IP(reply[6:10]), Port: int(binary.BigEndian.Uint16(reply[10:12]))}
+}
+
+// A UDP association carries a tool's datagrams to a host through the
+// minion and the host's back, each with the SOCKS header saying its source;
+// one the minion sends twice reaches the tool once. Closing the tool's SOCKS
+// connection ends the association: the minion is told, its socket goes.
+func TestTunnelCarriesDatagrams(t *testing.T) {
+	r := newRig(t, 0, nil)
+	r.tasks.ack(r.task)
+	m := startMinion(t, r)
+	echoAddr := udpEcho(t)
+	ctl, relay := socks5UDP(t, r.port)
+	if relay.Port != r.port {
+		t.Fatalf("the relay on port %d, not the proxy's %d", relay.Port, r.port)
+	}
+	u, err := net.DialUDP("udp", nil, relay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = u.Close() }()
+	// The first datagram binds the association to the tool's socket.
+	sent := []string{"one", "two", "three"}
+	for _, p := range sent {
+		if _, err := u.Write(datagram(echoAddr.IP.String(), echoAddr.Port, []byte(p))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := map[string]int{}
+	buf := make([]byte, 64<<10)
+	_ = u.SetReadDeadline(time.Now().Add(5 * time.Second))
+	for {
+		if len(got) == len(sent) {
+			// All came: a while more, for one coming twice.
+			_ = u.SetReadDeadline(time.Now().Add(300 * time.Millisecond))
+		}
+		n, err := u.Read(buf)
+		if err != nil {
+			break
+		}
+		host, port, data, ok := readDatagram(buf[:n])
+		if !ok || host != echoAddr.IP.String() || port != echoAddr.Port {
+			t.Fatalf("from %q %d (%v)", host, port, ok)
+		}
+		got[string(data)]++
+	}
+	for _, p := range sent {
+		if got[p] != 1 {
+			t.Errorf("%q came back %d times: %v", p, got[p], got)
+		}
+	}
+	_ = ctl.Close()
+	eventually(t, "the association ends", func() bool { return r.records.get(1).End == models.TunnelEndDone })
+	eventually(t, "the minion told", func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return len(m.closed) == 1 && m.closed[0].Reason == protocol.TunnelCloseDone
+	})
+	rec := r.records.get(1)
+	if !rec.UDP || rec.Up == 0 || rec.Down == 0 {
+		t.Errorf("record %+v", rec)
+	}
 }

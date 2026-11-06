@@ -21,6 +21,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
 	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/taskdata"
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -56,6 +57,13 @@ type IMinionTaskResolver interface {
 	MachineOfSession(ctx context.Context, sessionID string) (operationID, machine string, err error)
 	// MinionStreamLink is a signed link to download a task's stream.
 	MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error)
+	// Tunnels (minion_tunnel_resolver.go): a tunnel task's proxy, its
+	// streams, an operation's operational ports.
+	Tunnel(ctx context.Context, t *model.MinionTask) (*model.MinionTunnel, error)
+	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before, search, state *string) (*model.MinionTunnelStreamPage, error)
+	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
+	// LoadPort is a task's port, for a subscriber: nil when it has none.
+	LoadPort(ctx context.Context, taskID string) *model.OperationalPort
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -117,11 +125,20 @@ type minionTaskResolver struct {
 	tunnels TaskTunnels
 }
 
-// TaskTunnels opens a tunnel task's operational port, and closes it
-// (miniontunnels.Service).
+// TaskTunnels opens a tunnel task's operational port and closes it, and
+// says what its proxy carried (miniontunnels.Service).
 type TaskTunnels interface {
 	Open(ctx context.Context, o miniontunnels.Opening) (int, error)
 	Close(ctx context.Context, task uuid.UUID)
+	// Address is the host operators reach the ports at; "" for the web
+	// app's.
+	Address() string
+	View(ctx context.Context, task uuid.UUID) (miniontunnels.Summary, bool, error)
+	Summary(task uuid.UUID) (miniontunnels.Summary, bool)
+	Streams(ctx context.Context, task uuid.UUID, filter repository.TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error)
+	Port(ctx context.Context, task uuid.UUID) (*models.OperationalPort, error)
+	Ports(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error)
+	CountPorts(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
 }
 
 // TaskCredentials resolves the credentials a task's args name (credential
@@ -370,7 +387,8 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	}
 	asked, _ := protocol.ArgInt(wire, "port")
 	o := miniontunnels.Opening{Task: taskID, Session: s.SessionID, Operation: s.OperationID, By: uid, Port: int(max(min(asked, 65536), -1)),
-		MaxStreams: miniontunnels.DefaultMaxStreams, Timeout: miniontunnels.DefaultConnectTimeout}
+		MaxStreams: miniontunnels.DefaultMaxStreams, Timeout: miniontunnels.DefaultConnectTimeout, SessionNumber: int(s.Number),
+		ByName: gqlctx.AuthFromContext(ctx).Username}
 	if n, ok := protocol.ArgInt(wire, "max_streams"); ok && n > 0 {
 		o.MaxStreams = int(min(n, 1<<16))
 	}
@@ -790,7 +808,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
 		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
-		Result: strPtr(t.Result), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
+		Result: strPtr(t.Result), Action: strPtr(t.Action), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
 		FeedbackErrors: t.FeedbackErrors, FeedbackWarnings: t.FeedbackWarnings, As: toIdentityModel(t.As),
 	}

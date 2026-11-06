@@ -30,6 +30,7 @@ export const MinionTaskFields = graphql(`
     parts
     dataParts
     result
+    action
     dataSize
     dataTruncated
     dataProblem
@@ -84,6 +85,41 @@ export const MinionTaskFields = graphql(`
       from
       attachedAt
       readerAt
+    }
+    tunnel {
+      port
+      address
+      listening
+      open
+      streams
+      up
+      down
+    }
+  }
+`)
+
+// A tunnel task's streams, the latest first a page at a time: who reached
+// what through its proxy (core: minion_tasks.graphql).
+export const MinionTunnelStreamsQuery = graphql(`
+  query MinionTunnelStreams($taskId: ID!, $last: Int, $before: String, $search: String, $state: String) {
+    minionTunnelStreams(taskId: $taskId, last: $last, before: $before, search: $search, state: $state) {
+      streams {
+        stream
+        client
+        host
+        port
+        udp
+        openedAt
+        state
+        result
+        bound
+        msg
+        endedAt
+        end
+        up
+        down
+      }
+      before
     }
   }
 `)

@@ -21,6 +21,7 @@ export const pageLoaders = {
   "/endpoints": () => import("@/pages/endpoints"),
   "/builds": () => import("@/pages/builds"),
   "/sessions": () => import("@/pages/minion-sessions"),
+  "/ports": () => import("@/pages/ports"),
   "/agents": () => import("@/pages/agents"),
   "/timeline": () => import("@/pages/timeline"),
 } as const

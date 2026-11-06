@@ -1018,6 +1018,8 @@ type MinionTask struct {
 	Parts             int               `json:"parts"`
 	DataParts         int               `json:"dataParts"`
 	Result            *string           `json:"result,omitempty"`
+	Action            *string           `json:"action,omitempty"`
+	Tunnel            *MinionTunnel     `json:"tunnel,omitempty"`
 	Data              any               `json:"data,omitempty"`
 	DataSize          int               `json:"dataSize"`
 	DataTruncated     bool              `json:"dataTruncated"`
@@ -1063,6 +1065,38 @@ type MinionTaskUpload struct {
 	From          int     `json:"from"`
 	AttachedAt    *string `json:"attachedAt,omitempty"`
 	UploaderAt    *string `json:"uploaderAt,omitempty"`
+}
+
+type MinionTunnel struct {
+	Port      int     `json:"port"`
+	Address   *string `json:"address,omitempty"`
+	Listening bool    `json:"listening"`
+	Open      int     `json:"open"`
+	Streams   int     `json:"streams"`
+	Up        int     `json:"up"`
+	Down      int     `json:"down"`
+}
+
+type MinionTunnelStream struct {
+	Stream   int     `json:"stream"`
+	Client   string  `json:"client"`
+	Host     string  `json:"host"`
+	Port     int     `json:"port"`
+	UDP      bool    `json:"udp"`
+	OpenedAt string  `json:"openedAt"`
+	State    string  `json:"state"`
+	Result   *string `json:"result,omitempty"`
+	Bound    *string `json:"bound,omitempty"`
+	Msg      *string `json:"msg,omitempty"`
+	EndedAt  *string `json:"endedAt,omitempty"`
+	End      *string `json:"end,omitempty"`
+	Up       int     `json:"up"`
+	Down     int     `json:"down"`
+}
+
+type MinionTunnelStreamPage struct {
+	Streams []*MinionTunnelStream `json:"streams"`
+	Before  *string               `json:"before,omitempty"`
 }
 
 type ModuleAction struct {
@@ -1255,6 +1289,40 @@ type OperationMemberEvent struct {
 	Action      EventAction `json:"action"`
 	OperationID string      `json:"operationId"`
 	UserID      string      `json:"userId"`
+}
+
+type OperationalPort struct {
+	ID            string  `json:"id"`
+	Port          int     `json:"port"`
+	Purpose       string  `json:"purpose"`
+	Address       *string `json:"address,omitempty"`
+	SessionID     string  `json:"sessionId"`
+	SessionNumber int     `json:"sessionNumber"`
+	TaskID        string  `json:"taskId"`
+	OpenedBy      string  `json:"openedBy"`
+	OpenedByName  *string `json:"openedByName,omitempty"`
+	OpenedAt      string  `json:"openedAt"`
+	Listening     bool    `json:"listening"`
+	Open          int     `json:"open"`
+	Streams       int     `json:"streams"`
+}
+
+type OperationalPortConnection struct {
+	Edges      []*OperationalPortEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo   `json:"pageInfo"`
+	TotalCount int                    `json:"totalCount"`
+}
+
+type OperationalPortEdge struct {
+	Node   *OperationalPort `json:"node"`
+	Cursor string           `json:"cursor"`
+}
+
+type OperationalPortEvent struct {
+	Action      EventAction      `json:"action"`
+	ID          string           `json:"id"`
+	OperationID string           `json:"operationId"`
+	Port        *OperationalPort `json:"port,omitempty"`
 }
 
 type OperatorFocus struct {

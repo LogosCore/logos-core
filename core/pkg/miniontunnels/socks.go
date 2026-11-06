@@ -12,9 +12,9 @@ import (
 )
 
 // Core's SOCKS front (docs: contracts/minion-messages/tunnels.md, SOCKS):
-// SOCKS5 (RFC 1928) with "no authentication" only, and SOCKS4 / 4a, each
-// CONNECT. A name goes to the minion as it came; BIND and, until UDP
-// lands, UDP ASSOCIATE are refused as not supported.
+// SOCKS5 (RFC 1928) with "no authentication" only, CONNECT and UDP
+// ASSOCIATE, and SOCKS4 / 4a CONNECT. A name goes to the minion as it came;
+// BIND is refused as not supported.
 
 // The SOCKS5 replies core gives.
 const (
@@ -35,11 +35,14 @@ const (
 	socks4Rejected = 91
 )
 
-// request is what a SOCKS client asked for: a CONNECT to host:port.
+// request is what a SOCKS client asked for: a CONNECT to host:port, or
+// (udp) a UDP association, whose host and port are where the client says
+// it sends its datagrams from (zeros: it does not know).
 type request struct {
 	version int
 	host    string
 	port    int
+	udp     bool
 }
 
 // errRefused: the client asked for something core does not do, and was
@@ -116,8 +119,12 @@ func readSOCKS5(c io.ReadWriter) (request, error) {
 		return request{}, err
 	}
 	r.port = int(binary.BigEndian.Uint16(port[:]))
-	if req[1] != 1 {
-		// BIND, and UDP ASSOCIATE until it lands.
+	switch req[1] {
+	case 1:
+	case 3:
+		r.udp = true
+	default:
+		// BIND.
 		_ = r.reply(c, socks5CommandNotSupported, "")
 		return request{}, errRefused
 	}
@@ -138,6 +145,7 @@ func readSOCKS4(c io.ReadWriter) (request, error) {
 		return request{}, err
 	}
 	r := request{version: 4, port: int(binary.BigEndian.Uint16(req[1:3]))}
+	// SOCKS4 has no UDP.
 	if _, err := readZeroEnded(c); err != nil { // USERID, which core ignores
 		return request{}, err
 	}
@@ -218,6 +226,55 @@ func boundAddr(bound string) (net.IP, int) {
 		return net.IPv4zero, 0
 	}
 	return ip, port
+}
+
+// readDatagram reads a datagram a SOCKS client sends the relay: RSV (2),
+// FRAG, ATYP, the destination, then the payload. ok false for one to drop:
+// a fragment (as most SOCKS servers, core takes none), or a header that
+// does not read.
+func readDatagram(b []byte) (host string, port int, data []byte, ok bool) {
+	if len(b) < 4 || b[0] != 0 || b[1] != 0 || b[2] != 0 {
+		return "", 0, nil, false
+	}
+	rest := b[4:]
+	switch b[3] {
+	case 1:
+		if len(rest) < net.IPv4len+2 {
+			return "", 0, nil, false
+		}
+		host, rest = net.IP(rest[:net.IPv4len]).String(), rest[net.IPv4len:]
+	case 4:
+		if len(rest) < net.IPv6len+2 {
+			return "", 0, nil, false
+		}
+		host, rest = net.IP(rest[:net.IPv6len]).String(), rest[net.IPv6len:]
+	case 3:
+		if len(rest) < 1 || len(rest) < 1+int(rest[0])+2 {
+			return "", 0, nil, false
+		}
+		host, rest = string(rest[1:1+int(rest[0])]), rest[1+int(rest[0]):]
+	default:
+		return "", 0, nil, false
+	}
+	return host, int(binary.BigEndian.Uint16(rest[:2])), rest[2:], true
+}
+
+// datagram is what the relay sends a SOCKS client: the header saying the
+// datagram's source (an address, or a name), then its payload.
+func datagram(host string, port int, data []byte) []byte {
+	out := []byte{0, 0, 0}
+	ip := net.ParseIP(host)
+	switch {
+	case ip == nil:
+		name := host[:min(len(host), 255)]
+		out = append(append(out, 3, byte(len(name))), name...)
+	case ip.To4() != nil:
+		out = append(append(out, 1), ip.To4()...)
+	default:
+		out = append(append(out, 4), ip.To16()...)
+	}
+	out = binary.BigEndian.AppendUint16(out, uint16(port))
+	return append(out, data...)
 }
 
 // socksCode is the SOCKS5 reply for a tunnel_reply's result: one core does

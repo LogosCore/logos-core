@@ -321,6 +321,19 @@ func NewMinionTargetChangedEvent(p MinionTargetEventPayload) Event {
 	return NewEvent(TopicMinionTargetChanged, SystemActor(), p)
 }
 
+// OperationalPortEventPayload is an operational port of a tunnel task
+// changing: opened (Opened), its streams' numbers, or closed (Closed).
+type OperationalPortEventPayload struct {
+	TaskID      string
+	OperationID string
+	Opened      bool
+	Closed      bool
+}
+
+func NewOperationalPortChangedEvent(p OperationalPortEventPayload) Event {
+	return NewEvent(TopicOperationalPortChanged, SystemActor(), p)
+}
+
 // FileBrowserEventPayload is a machine's snapshot changing: its operation,
 // its key (models.FsMachineKey), and the folder that changed most.
 type FileBrowserEventPayload struct {

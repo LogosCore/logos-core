@@ -1,6 +1,7 @@
 import {
   BlocksIcon,
   BookOpenIcon,
+  EthernetPortIcon,
   FileCode2Icon,
   HammerIcon,
   KanbanSquareIcon,
@@ -79,6 +80,12 @@ export const navigationOperationItems: NavigationItem[] = [
     url: "/builds",
     permission: null,
     icon: HammerIcon,
+  },
+  {
+    title: "Ports",
+    url: "/ports",
+    permission: null,
+    icon: EthernetPortIcon,
   },
 ];
 

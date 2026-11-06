@@ -22,8 +22,8 @@ func (c *conn) Write(p []byte) (int, error) { return c.out.Write(p) }
 func client(b ...byte) *conn { return &conn{in: bytes.NewReader(b)} }
 
 // SOCKS5 CONNECT reads to an IPv4 address, an IPv6 one and a name, with
-// "no authentication" picked from the client's methods; SOCKS4 to an
-// address, 4a to a name. No byte past the request is read.
+// "no authentication" picked from the client's methods, and UDP ASSOCIATE;
+// SOCKS4 to an address, 4a to a name. No byte past the request is read.
 func TestReadRequest(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -31,11 +31,12 @@ func TestReadRequest(t *testing.T) {
 		want  request
 		reply []byte
 	}{
-		{"socks5 ipv4", []byte{5, 2, 2, 0, 5, 1, 0, 1, 10, 0, 0, 5, 1, 189, 'x'}, request{5, "10.0.0.5", 445}, []byte{5, 0}},
-		{"socks5 ipv6", append(append([]byte{5, 1, 0, 5, 1, 0, 4}, bytes.Repeat([]byte{0}, 15)...), 1, 0, 22, 'x'), request{5, "::1", 22}, []byte{5, 0}},
-		{"socks5 name", []byte{5, 1, 0, 5, 1, 0, 3, 8, 'i', 'n', 't', 'r', 'a', 'n', 'e', 't', 0x20, 0xfb, 'x'}, request{5, "intranet", 8443}, []byte{5, 0}},
-		{"socks4", []byte{4, 1, 0, 80, 192, 168, 1, 2, 'b', 'o', 'b', 0, 'x'}, request{4, "192.168.1.2", 80}, nil},
-		{"socks4a", []byte{4, 1, 1, 187, 0, 0, 0, 9, 0, 'd', 'c', '0', '1', 0, 'x'}, request{4, "dc01", 443}, nil},
+		{"socks5 ipv4", []byte{5, 2, 2, 0, 5, 1, 0, 1, 10, 0, 0, 5, 1, 189, 'x'}, request{version: 5, host: "10.0.0.5", port: 445}, []byte{5, 0}},
+		{"socks5 ipv6", append(append([]byte{5, 1, 0, 5, 1, 0, 4}, bytes.Repeat([]byte{0}, 15)...), 1, 0, 22, 'x'), request{version: 5, host: "::1", port: 22}, []byte{5, 0}},
+		{"socks5 name", []byte{5, 1, 0, 5, 1, 0, 3, 8, 'i', 'n', 't', 'r', 'a', 'n', 'e', 't', 0x20, 0xfb, 'x'}, request{version: 5, host: "intranet", port: 8443}, []byte{5, 0}},
+		{"socks4", []byte{4, 1, 0, 80, 192, 168, 1, 2, 'b', 'o', 'b', 0, 'x'}, request{version: 4, host: "192.168.1.2", port: 80}, nil},
+		{"socks4a", []byte{4, 1, 1, 187, 0, 0, 0, 9, 0, 'd', 'c', '0', '1', 0, 'x'}, request{version: 4, host: "dc01", port: 443}, nil},
+		{"socks5 udp associate", []byte{5, 1, 0, 5, 3, 0, 1, 0, 0, 0, 0, 0, 0, 'x'}, request{version: 5, host: "0.0.0.0", port: 0, udp: true}, []byte{5, 0}},
 	}
 	for _, c := range cases {
 		cl := client(c.in...)
@@ -54,8 +55,8 @@ func TestReadRequest(t *testing.T) {
 }
 
 // What core does not do is refused, and the client told: credentials only
-// (no acceptable method), BIND and UDP ASSOCIATE (not supported), an
-// address type it does not know, SOCKS4 BIND.
+// (no acceptable method), BIND (not supported), an address type it does not
+// know, SOCKS4 BIND.
 func TestReadRequestRefuses(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -64,7 +65,6 @@ func TestReadRequestRefuses(t *testing.T) {
 	}{
 		{"credentials only", []byte{5, 1, 2}, []byte{5, 0xff}},
 		{"bind", []byte{5, 1, 0, 5, 2, 0, 1, 10, 0, 0, 5, 0, 80}, []byte{5, 0, 5, socks5CommandNotSupported, 0, 1, 0, 0, 0, 0, 0, 0}},
-		{"udp associate", []byte{5, 1, 0, 5, 3, 0, 1, 0, 0, 0, 0, 0, 0}, []byte{5, 0, 5, socks5CommandNotSupported, 0, 1, 0, 0, 0, 0, 0, 0}},
 		{"address type", []byte{5, 1, 0, 5, 1, 0, 9}, []byte{5, 0, 5, socks5AddressNotSupported, 0, 1, 0, 0, 0, 0, 0, 0}},
 		{"socks4 bind", []byte{4, 2, 0, 80, 10, 0, 0, 1, 0}, []byte{0, socks4Rejected, 0, 0, 0, 0, 0, 0}},
 	}
@@ -119,6 +119,58 @@ func TestSocksCode(t *testing.T) {
 	} {
 		if got := socksCode(result); got != want {
 			t.Errorf("result %d: %d, want %d", result, got, want)
+		}
+	}
+}
+
+// A SOCKS UDP datagram reads its destination (an IPv4 or IPv6 address, or a
+// name) and payload; a fragment, or a header that does not read, is
+// dropped. What the relay sends back says the source the same way.
+func TestDatagrams(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []byte
+		host string
+		port int
+		data string
+	}{
+		{"ipv4", []byte{0, 0, 0, 1, 10, 0, 0, 53, 0, 53, 'q'}, "10.0.0.53", 53, "q"},
+		{"ipv6", append(append([]byte{0, 0, 0, 4}, append(bytes.Repeat([]byte{0}, 15), 1)...), 0, 123, 'n'), "::1", 123, "n"},
+		{"name", []byte{0, 0, 0, 3, 4, 'd', 'c', '0', '1', 0, 161, 's', 'n'}, "dc01", 161, "sn"},
+		{"empty payload", []byte{0, 0, 0, 1, 10, 0, 0, 53, 0, 53}, "10.0.0.53", 53, ""},
+	}
+	for _, c := range cases {
+		host, port, data, ok := readDatagram(c.in)
+		if !ok || host != c.host || port != c.port || string(data) != c.data {
+			t.Errorf("%s: %q %d %q %v", c.name, host, port, data, ok)
+		}
+		if back, _, _, ok := readDatagram(datagram(c.host, c.port, []byte(c.data))); !ok || back != c.host {
+			t.Errorf("%s: written back as %q", c.name, back)
+		}
+	}
+	for name, in := range map[string][]byte{
+		"a fragment":    {0, 0, 1, 1, 10, 0, 0, 53, 0, 53, 'q'},
+		"rsv set":       {0, 1, 0, 1, 10, 0, 0, 53, 0, 53},
+		"short":         {0, 0, 0, 1, 10, 0},
+		"name too long": {0, 0, 0, 3, 9, 'd', 'c', 0, 53},
+		"address type":  {0, 0, 0, 7, 1, 2, 3, 4, 0, 53},
+	} {
+		if _, _, _, ok := readDatagram(in); ok {
+			t.Errorf("%s: taken", name)
+		}
+	}
+}
+
+// Each number of a datagram sequence is taken once: the latest and the 64
+// before it are remembered, older ones dropped.
+func TestReplayWindow(t *testing.T) {
+	var w replayWindow
+	for _, c := range []struct {
+		seq  uint64
+		want bool
+	}{{5, true}, {5, false}, {7, true}, {6, true}, {6, false}, {100, true}, {40, true}, {36, false}, {99, true}, {40, false}} {
+		if got := w.take(c.seq); got != c.want {
+			t.Errorf("seq %d: %v, want %v", c.seq, got, c.want)
 		}
 	}
 }

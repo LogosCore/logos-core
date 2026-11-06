@@ -12,7 +12,7 @@ describe("pageOf", () => {
     expect(pageOf("/")).toBeNull()
   })
   it("has a loader for every page the sidebar links to", () => {
-    for (const path of ["/sessions", "/wiki", "/findings", "/tasks", "/timeline", "/endpoints", "/builds", "/operations", "/users", "/modules", "/skills"]) {
+    for (const path of ["/sessions", "/wiki", "/findings", "/tasks", "/timeline", "/endpoints", "/builds", "/ports", "/operations", "/users", "/modules", "/skills"]) {
       expect(pageOf(path), path).not.toBeNull()
       expect(typeof pageLoaders[pageOf(path)!]).toBe("function")
     }

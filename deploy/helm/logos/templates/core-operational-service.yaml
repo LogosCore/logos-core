@@ -1,7 +1,8 @@
 {{- /*
-Core's operational ports: tunnel tasks' SOCKS proxies, raw TCP. A Service of
-their own, one port each (a Service takes no ranges), apart from core's HTTP
-Service behind the Ingress.
+Core's operational ports: tunnel tasks' SOCKS proxies, raw TCP, and each
+one's UDP relay on the same port number. A Service of their own, one port
+each (a Service takes no ranges), apart from core's HTTP Service behind the
+Ingress. TCP and UDP in one LoadBalancer need Kubernetes 1.26 or later.
 */ -}}
 {{- with .Values.core.operationalPorts }}
 {{- if and $.Values.core.enabled (gt (int .count) 0) }}
@@ -30,6 +31,10 @@ spec:
       port: {{ $port }}
       targetPort: {{ $port }}
       protocol: TCP
+    - name: opu-{{ $port }}
+      port: {{ $port }}
+      targetPort: {{ $port }}
+      protocol: UDP
     {{- end }}
   selector:
     {{- include "logos.core.selectorLabels" $ | nindent 4 }}

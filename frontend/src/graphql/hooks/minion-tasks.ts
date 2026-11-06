@@ -1,4 +1,13 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData, type QueryClient } from "@tanstack/react-query"
+import { useEffect, useRef } from "react"
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from "@tanstack/react-query"
 import { graphqlClient } from "@/lib/graphql-client"
 import { isOlder } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
@@ -12,6 +21,7 @@ import {
   MinionTaskFeedbackDocument,
   MinionTaskOutputDocument,
   MinionTasksDocument,
+  MinionTunnelStreamsDocument,
   QueueMinionTaskDocument,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
@@ -30,6 +40,13 @@ export const minionTaskKeys = {
   feedback: (id: string) => [...minionTaskKeys.all, "feedback", id] as const,
   fileStrings: (fileId: string, filter: MinionFileStringsFilter) =>
     [...minionTaskKeys.all, "fileStrings", fileId, filter] as const,
+  tunnelStreams: (taskId: string, filter: TunnelStreamsFilter) => [...minionTaskKeys.all, "tunnelStreams", taskId, filter] as const,
+}
+
+/** What a tunnel task's streams are narrowed by: the server's search, and OPEN or ENDED ("" for all). */
+export interface TunnelStreamsFilter {
+  search: string
+  state: "" | "OPEN" | "ENDED"
 }
 
 /** What the strings of a file are read with: unset for core's defaults. */
@@ -123,6 +140,38 @@ export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFi
     staleTime: Infinity,
     gcTime: 60_000,
   })
+}
+
+/**
+ * A tunnel task's streams, the latest first a page at a time, as the server
+ * searches and filters them. The pages read are read again, in place, when
+ * version changes (the tunnel's numbers, which its task's live updates
+ * carry): a list scrolled down stays where it is.
+ */
+export function useMinionTunnelStreams(taskId: string, filter: TunnelStreamsFilter, version: string) {
+  const query = useInfiniteQuery({
+    queryKey: minionTaskKeys.tunnelStreams(taskId, filter),
+    queryFn: ({ pageParam }) =>
+      graphqlClient(MinionTunnelStreamsDocument, {
+        taskId,
+        last: 50,
+        before: pageParam,
+        search: filter.search || null,
+        state: filter.state || null,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.minionTunnelStreams.before ?? undefined,
+    // A new search shows the rows before it until its own come.
+    placeholderData: keepPreviousData,
+  })
+  const { refetch } = query
+  const seen = useRef(version)
+  useEffect(() => {
+    if (seen.current === version) return
+    seen.current = version
+    void refetch()
+  }, [version, refetch])
+  return query
 }
 
 /** A signed link to download a stream without a session (for curl): a

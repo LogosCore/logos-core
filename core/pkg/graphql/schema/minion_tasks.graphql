@@ -65,6 +65,13 @@ type MinionTask {
   # What its data is (dir_listing), as its command said when it was queued;
   # null: no declared shape.
   result: String
+  # What core does with it beyond carrying it (tunnel: core's SOCKS proxy
+  # in front), as its command said when it was queued; null for none
+  # (docs: contracts/task-results-and-actions.md).
+  action: String
+  # A tunnel task's proxy: its port and its streams' numbers; null for any
+  # other task.
+  tunnel: MinionTunnel
   # The command's structured output: the parts' data, kept as the CBOR it
   # came in, joined by its result's rule (or, with none, arrays appended)
   # and given as JSON by the contract's mapping (docs:
@@ -179,6 +186,63 @@ type MinionTaskStream {
   readerAt: String
 }
 
+# A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md):
+# core's SOCKS on one of its operational ports while the task runs, each
+# connection a tool makes through it a stream the minion connects from its
+# host.
+type MinionTunnel {
+  # The operational port, and the host operators reach it at (core's
+  # OPERATIONAL_ADDRESS); null: the host the web app is reached at.
+  port: Int!
+  address: String
+  # Core listens on it: the task runs.
+  listening: Boolean!
+  # Its streams now (opening or open), and how many it has had.
+  open: Int!
+  streams: Int!
+  # The bytes its tools sent through it (up), and got back (down).
+  up: Int!
+  down: Int!
+}
+
+# One stream of a tunnel task: a connection a tool made through its proxy,
+# who reached what through the minion. The bytes are never kept.
+type MinionTunnelStream {
+  # Its number in the task, from 1.
+  stream: Int!
+  # The tool's address (the SOCKS client's), and the destination as the
+  # tool named it; a UDP association (udp) has none, its datagrams each
+  # name their own.
+  client: String!
+  host: String!
+  port: Int!
+  udp: Boolean!
+  openedAt: String!
+  # OPENING (the minion connects), OPEN or ENDED.
+  state: String!
+  # The minion's reply: open, refused, host_unreachable, net_unreachable,
+  # timed_out, not_allowed or failed; its socket's address when open, and
+  # why not. Null before it came.
+  result: String
+  bound: String
+  msg: String
+  # When and how it ended: done, not_opened, no_reply, client_reset, reset
+  # (by the destination or the minion), lost (the minion no longer had it),
+  # task_ended or core_stopped.
+  endedAt: String
+  end: String
+  # The bytes the tool sent (up), and got back (down), so far.
+  up: Int!
+  down: Int!
+}
+
+# A page of a tunnel task's streams, the latest first.
+type MinionTunnelStreamPage {
+  streams: [MinionTunnelStream!]!
+  # Where the next (older) page starts; null on the last.
+  before: String
+}
+
 # A link to download a stream without a session (curl), valid while the
 # stream lasts and until expiresAt at most.
 type MinionStreamLink {
@@ -222,6 +286,13 @@ extend type Query {
   # A session's tasks, newest first, at most last (50 by default, 200 at
   # most), before a page's cursor. Needs at least viewer.
   minionTasks(sessionId: ID!, last: Int, before: String): MinionTaskPage!
+    @hasPermission(permission: "operation:member")
+
+  # A tunnel task's streams, the latest first, at most last (50 by default,
+  # 200 at most), before a page's cursor: search matches the tool's address
+  # and the destination, state (OPEN or ENDED) narrows them. Needs at least
+  # viewer.
+  minionTunnelStreams(taskId: ID!, last: Int, before: String, search: String, state: String): MinionTunnelStreamPage!
     @hasPermission(permission: "operation:member")
 
   # The commands a session's minion takes: its build's, with what a task of

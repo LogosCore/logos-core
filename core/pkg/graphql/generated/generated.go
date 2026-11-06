@@ -923,6 +923,7 @@ type ComplexityRoot struct {
 
 	MinionTask struct {
 		AckedAt           func(childComplexity int) int
+		Action            func(childComplexity int) int
 		Args              func(childComplexity int) int
 		As                func(childComplexity int) int
 		CancelRequestedAt func(childComplexity int) int
@@ -960,6 +961,7 @@ type ComplexityRoot struct {
 		StartedAt         func(childComplexity int) int
 		State             func(childComplexity int) int
 		Stream            func(childComplexity int) int
+		Tunnel            func(childComplexity int) int
 		Upload            func(childComplexity int) int
 	}
 
@@ -997,6 +999,38 @@ type ComplexityRoot struct {
 		Stream        func(childComplexity int) int
 		UploaderAt    func(childComplexity int) int
 		UploaderState func(childComplexity int) int
+	}
+
+	MinionTunnel struct {
+		Address   func(childComplexity int) int
+		Down      func(childComplexity int) int
+		Listening func(childComplexity int) int
+		Open      func(childComplexity int) int
+		Port      func(childComplexity int) int
+		Streams   func(childComplexity int) int
+		Up        func(childComplexity int) int
+	}
+
+	MinionTunnelStream struct {
+		Bound    func(childComplexity int) int
+		Client   func(childComplexity int) int
+		Down     func(childComplexity int) int
+		End      func(childComplexity int) int
+		EndedAt  func(childComplexity int) int
+		Host     func(childComplexity int) int
+		Msg      func(childComplexity int) int
+		OpenedAt func(childComplexity int) int
+		Port     func(childComplexity int) int
+		Result   func(childComplexity int) int
+		State    func(childComplexity int) int
+		Stream   func(childComplexity int) int
+		UDP      func(childComplexity int) int
+		Up       func(childComplexity int) int
+	}
+
+	MinionTunnelStreamPage struct {
+		Before  func(childComplexity int) int
+		Streams func(childComplexity int) int
 	}
 
 	Module struct {
@@ -1334,6 +1368,40 @@ type ComplexityRoot struct {
 		UserID      func(childComplexity int) int
 	}
 
+	OperationalPort struct {
+		Address       func(childComplexity int) int
+		ID            func(childComplexity int) int
+		Listening     func(childComplexity int) int
+		Open          func(childComplexity int) int
+		OpenedAt      func(childComplexity int) int
+		OpenedBy      func(childComplexity int) int
+		OpenedByName  func(childComplexity int) int
+		Port          func(childComplexity int) int
+		Purpose       func(childComplexity int) int
+		SessionID     func(childComplexity int) int
+		SessionNumber func(childComplexity int) int
+		Streams       func(childComplexity int) int
+		TaskID        func(childComplexity int) int
+	}
+
+	OperationalPortConnection struct {
+		Edges      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		TotalCount func(childComplexity int) int
+	}
+
+	OperationalPortEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
+	}
+
+	OperationalPortEvent struct {
+		Action      func(childComplexity int) int
+		ID          func(childComplexity int) int
+		OperationID func(childComplexity int) int
+		Port        func(childComplexity int) int
+	}
+
 	OperatorFocus struct {
 		CredentialID          func(childComplexity int) int
 		FindingsTab           func(childComplexity int) int
@@ -1395,6 +1463,7 @@ type ComplexityRoot struct {
 		MinionTargets                      func(childComplexity int, operationID string, search *string, buildID *string, states []string, first *int, after *string, last *int, before *string) int
 		MinionTask                         func(childComplexity int, id string) int
 		MinionTasks                        func(childComplexity int, sessionID string, last *int, before *string) int
+		MinionTunnelStreams                func(childComplexity int, taskID string, last *int, before *string, search *string, state *string) int
 		Minions                            func(childComplexity int, operationID string) int
 		Module                             func(childComplexity int, instance string) int
 		ModuleActionInvocations            func(childComplexity int, instance string, limit *int) int
@@ -1412,6 +1481,7 @@ type ComplexityRoot struct {
 		MyOperatorFocus                    func(childComplexity int) int
 		MySessions                         func(childComplexity int, activeOnly *bool, first *int, after *string, last *int, before *string) int
 		Operation                          func(childComplexity int, id string) int
+		OperationalPorts                   func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
 		Operations                         func(childComplexity int, search *string, sortBy *model.OperationSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) int
 		Session                            func(childComplexity int, id string) int
 		Sessions                           func(childComplexity int, userID *string, search *string, activeOnly *bool, first *int, after *string, last *int, before *string) int
@@ -1557,6 +1627,7 @@ type ComplexityRoot struct {
 		MySessionChanged            func(childComplexity int) int
 		OperationChanged            func(childComplexity int, operationID *string) int
 		OperationMemberChanged      func(childComplexity int, operationID *string) int
+		OperationalPortChanged      func(childComplexity int, operationID string) int
 		SessionChanged              func(childComplexity int, userID *string) int
 		SkillChanged                func(childComplexity int) int
 		TaskChanged                 func(childComplexity int, operationID string) int
@@ -1947,6 +2018,7 @@ type MinionTaskResolver interface {
 
 	OutputUtf8(ctx context.Context, obj *model.MinionTask) (bool, error)
 
+	Tunnel(ctx context.Context, obj *model.MinionTask) (*model.MinionTunnel, error)
 	Data(ctx context.Context, obj *model.MinionTask) (any, error)
 
 	File(ctx context.Context, obj *model.MinionTask) (*model.MinionFile, error)
@@ -2141,12 +2213,14 @@ type QueryResolver interface {
 	MinionTarget(ctx context.Context, id string) (*model.MinionTarget, error)
 	MinionTask(ctx context.Context, id string) (*model.MinionTask, error)
 	MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error)
+	MinionTunnelStreams(ctx context.Context, taskID string, last *int, before *string, search *string, state *string) (*model.MinionTunnelStreamPage, error)
 	MinionSessionCommands(ctx context.Context, sessionID string) ([]*model.BuildCommand, error)
 	MinionFileStrings(ctx context.Context, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) (*model.MinionFileStringPage, error)
 	Module(ctx context.Context, instance string) (*models.Module, error)
 	ModuleActionInvocations(ctx context.Context, instance string, limit *int) ([]*model.ModuleActionInvocation, error)
 	ModuleConfigChanges(ctx context.Context, instance string, limit *int) ([]*model.ModuleConfigChange, error)
 	Modules(ctx context.Context, search *string, status []string, typeArg []string, first *int, after *string, last *int, before *string) (*model.ModuleConnection, error)
+	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	MySessions(ctx context.Context, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Sessions(ctx context.Context, userID *string, search *string, activeOnly *bool, first *int, after *string, last *int, before *string) (*model.SessionConnection, error)
 	Session(ctx context.Context, id string) (*models.Session, error)
@@ -2211,6 +2285,7 @@ type SubscriptionResolver interface {
 	MinionTaskChanged(ctx context.Context, sessionID string) (<-chan *model.MinionTask, error)
 	ModuleLogs(ctx context.Context, instance string, minLevel *model.ModuleLogLevel) (<-chan *model.ModuleLogEvent, error)
 	ModuleChanged(ctx context.Context) (<-chan *model.ModuleEvent, error)
+	OperationalPortChanged(ctx context.Context, operationID string) (<-chan *model.OperationalPortEvent, error)
 	MySessionChanged(ctx context.Context) (<-chan *model.SessionEvent, error)
 	SessionChanged(ctx context.Context, userID *string) (<-chan *model.SessionEvent, error)
 	SkillChanged(ctx context.Context) (<-chan *model.SkillEvent, error)
@@ -5956,6 +6031,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.AckedAt(childComplexity), true
+	case "MinionTask.action":
+		if e.ComplexityRoot.MinionTask.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Action(childComplexity), true
 	case "MinionTask.args":
 		if e.ComplexityRoot.MinionTask.Args == nil {
 			break
@@ -6178,6 +6259,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.Stream(childComplexity), true
+	case "MinionTask.tunnel":
+		if e.ComplexityRoot.MinionTask.Tunnel == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.Tunnel(childComplexity), true
 	case "MinionTask.upload":
 		if e.ComplexityRoot.MinionTask.Upload == nil {
 			break
@@ -6349,6 +6436,147 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTaskUpload.UploaderState(childComplexity), true
+
+	case "MinionTunnel.address":
+		if e.ComplexityRoot.MinionTunnel.Address == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Address(childComplexity), true
+	case "MinionTunnel.down":
+		if e.ComplexityRoot.MinionTunnel.Down == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Down(childComplexity), true
+	case "MinionTunnel.listening":
+		if e.ComplexityRoot.MinionTunnel.Listening == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Listening(childComplexity), true
+	case "MinionTunnel.open":
+		if e.ComplexityRoot.MinionTunnel.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Open(childComplexity), true
+	case "MinionTunnel.port":
+		if e.ComplexityRoot.MinionTunnel.Port == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Port(childComplexity), true
+	case "MinionTunnel.streams":
+		if e.ComplexityRoot.MinionTunnel.Streams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Streams(childComplexity), true
+	case "MinionTunnel.up":
+		if e.ComplexityRoot.MinionTunnel.Up == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Up(childComplexity), true
+
+	case "MinionTunnelStream.bound":
+		if e.ComplexityRoot.MinionTunnelStream.Bound == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Bound(childComplexity), true
+	case "MinionTunnelStream.client":
+		if e.ComplexityRoot.MinionTunnelStream.Client == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Client(childComplexity), true
+	case "MinionTunnelStream.down":
+		if e.ComplexityRoot.MinionTunnelStream.Down == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Down(childComplexity), true
+	case "MinionTunnelStream.end":
+		if e.ComplexityRoot.MinionTunnelStream.End == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.End(childComplexity), true
+	case "MinionTunnelStream.endedAt":
+		if e.ComplexityRoot.MinionTunnelStream.EndedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.EndedAt(childComplexity), true
+	case "MinionTunnelStream.host":
+		if e.ComplexityRoot.MinionTunnelStream.Host == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Host(childComplexity), true
+	case "MinionTunnelStream.msg":
+		if e.ComplexityRoot.MinionTunnelStream.Msg == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Msg(childComplexity), true
+	case "MinionTunnelStream.openedAt":
+		if e.ComplexityRoot.MinionTunnelStream.OpenedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.OpenedAt(childComplexity), true
+	case "MinionTunnelStream.port":
+		if e.ComplexityRoot.MinionTunnelStream.Port == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Port(childComplexity), true
+	case "MinionTunnelStream.result":
+		if e.ComplexityRoot.MinionTunnelStream.Result == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Result(childComplexity), true
+	case "MinionTunnelStream.state":
+		if e.ComplexityRoot.MinionTunnelStream.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.State(childComplexity), true
+	case "MinionTunnelStream.stream":
+		if e.ComplexityRoot.MinionTunnelStream.Stream == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Stream(childComplexity), true
+	case "MinionTunnelStream.udp":
+		if e.ComplexityRoot.MinionTunnelStream.UDP == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.UDP(childComplexity), true
+	case "MinionTunnelStream.up":
+		if e.ComplexityRoot.MinionTunnelStream.Up == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Up(childComplexity), true
+
+	case "MinionTunnelStreamPage.before":
+		if e.ComplexityRoot.MinionTunnelStreamPage.Before == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStreamPage.Before(childComplexity), true
+	case "MinionTunnelStreamPage.streams":
+		if e.ComplexityRoot.MinionTunnelStreamPage.Streams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStreamPage.Streams(childComplexity), true
 
 	case "Module.blockReason":
 		if e.ComplexityRoot.Module.BlockReason == nil {
@@ -8453,6 +8681,142 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OperationMemberEvent.UserID(childComplexity), true
 
+	case "OperationalPort.address":
+		if e.ComplexityRoot.OperationalPort.Address == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Address(childComplexity), true
+	case "OperationalPort.id":
+		if e.ComplexityRoot.OperationalPort.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.ID(childComplexity), true
+	case "OperationalPort.listening":
+		if e.ComplexityRoot.OperationalPort.Listening == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Listening(childComplexity), true
+	case "OperationalPort.open":
+		if e.ComplexityRoot.OperationalPort.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Open(childComplexity), true
+	case "OperationalPort.openedAt":
+		if e.ComplexityRoot.OperationalPort.OpenedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.OpenedAt(childComplexity), true
+	case "OperationalPort.openedBy":
+		if e.ComplexityRoot.OperationalPort.OpenedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.OpenedBy(childComplexity), true
+	case "OperationalPort.openedByName":
+		if e.ComplexityRoot.OperationalPort.OpenedByName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.OpenedByName(childComplexity), true
+	case "OperationalPort.port":
+		if e.ComplexityRoot.OperationalPort.Port == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Port(childComplexity), true
+	case "OperationalPort.purpose":
+		if e.ComplexityRoot.OperationalPort.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Purpose(childComplexity), true
+	case "OperationalPort.sessionId":
+		if e.ComplexityRoot.OperationalPort.SessionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.SessionID(childComplexity), true
+	case "OperationalPort.sessionNumber":
+		if e.ComplexityRoot.OperationalPort.SessionNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.SessionNumber(childComplexity), true
+	case "OperationalPort.streams":
+		if e.ComplexityRoot.OperationalPort.Streams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Streams(childComplexity), true
+	case "OperationalPort.taskId":
+		if e.ComplexityRoot.OperationalPort.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.TaskID(childComplexity), true
+
+	case "OperationalPortConnection.edges":
+		if e.ComplexityRoot.OperationalPortConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortConnection.Edges(childComplexity), true
+	case "OperationalPortConnection.pageInfo":
+		if e.ComplexityRoot.OperationalPortConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortConnection.PageInfo(childComplexity), true
+	case "OperationalPortConnection.totalCount":
+		if e.ComplexityRoot.OperationalPortConnection.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortConnection.TotalCount(childComplexity), true
+
+	case "OperationalPortEdge.cursor":
+		if e.ComplexityRoot.OperationalPortEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortEdge.Cursor(childComplexity), true
+	case "OperationalPortEdge.node":
+		if e.ComplexityRoot.OperationalPortEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortEdge.Node(childComplexity), true
+
+	case "OperationalPortEvent.action":
+		if e.ComplexityRoot.OperationalPortEvent.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortEvent.Action(childComplexity), true
+	case "OperationalPortEvent.id":
+		if e.ComplexityRoot.OperationalPortEvent.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortEvent.ID(childComplexity), true
+	case "OperationalPortEvent.operationId":
+		if e.ComplexityRoot.OperationalPortEvent.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortEvent.OperationID(childComplexity), true
+	case "OperationalPortEvent.port":
+		if e.ComplexityRoot.OperationalPortEvent.Port == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPortEvent.Port(childComplexity), true
+
 	case "OperatorFocus.credentialId":
 		if e.ComplexityRoot.OperatorFocus.CredentialID == nil {
 			break
@@ -8935,6 +9299,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MinionTasks(childComplexity, args["sessionId"].(string), args["last"].(*int), args["before"].(*string)), true
+	case "Query.minionTunnelStreams":
+		if e.ComplexityRoot.Query.MinionTunnelStreams == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionTunnelStreams_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionTunnelStreams(childComplexity, args["taskId"].(string), args["last"].(*int), args["before"].(*string), args["search"].(*string), args["state"].(*string)), true
 	case "Query.minions":
 		if e.ComplexityRoot.Query.Minions == nil {
 			break
@@ -9102,6 +9477,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Operation(childComplexity, args["id"].(string)), true
+	case "Query.operationalPorts":
+		if e.ComplexityRoot.Query.OperationalPorts == nil {
+			break
+		}
+
+		args, err := ec.field_Query_operationalPorts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.OperationalPorts(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.operations":
 		if e.ComplexityRoot.Query.Operations == nil {
 			break
@@ -10018,6 +10404,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.OperationMemberChanged(childComplexity, args["operationId"].(*string)), true
+	case "Subscription.operationalPortChanged":
+		if e.ComplexityRoot.Subscription.OperationalPortChanged == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_operationalPortChanged_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.OperationalPortChanged(childComplexity, args["operationId"].(string)), true
 	case "Subscription.sessionChanged":
 		if e.ComplexityRoot.Subscription.SessionChanged == nil {
 			break
@@ -14296,6 +14693,13 @@ type MinionTask {
   # What its data is (dir_listing), as its command said when it was queued;
   # null: no declared shape.
   result: String
+  # What core does with it beyond carrying it (tunnel: core's SOCKS proxy
+  # in front), as its command said when it was queued; null for none
+  # (docs: contracts/task-results-and-actions.md).
+  action: String
+  # A tunnel task's proxy: its port and its streams' numbers; null for any
+  # other task.
+  tunnel: MinionTunnel
   # The command's structured output: the parts' data, kept as the CBOR it
   # came in, joined by its result's rule (or, with none, arrays appended)
   # and given as JSON by the contract's mapping (docs:
@@ -14410,6 +14814,63 @@ type MinionTaskStream {
   readerAt: String
 }
 
+# A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md):
+# core's SOCKS on one of its operational ports while the task runs, each
+# connection a tool makes through it a stream the minion connects from its
+# host.
+type MinionTunnel {
+  # The operational port, and the host operators reach it at (core's
+  # OPERATIONAL_ADDRESS); null: the host the web app is reached at.
+  port: Int!
+  address: String
+  # Core listens on it: the task runs.
+  listening: Boolean!
+  # Its streams now (opening or open), and how many it has had.
+  open: Int!
+  streams: Int!
+  # The bytes its tools sent through it (up), and got back (down).
+  up: Int!
+  down: Int!
+}
+
+# One stream of a tunnel task: a connection a tool made through its proxy,
+# who reached what through the minion. The bytes are never kept.
+type MinionTunnelStream {
+  # Its number in the task, from 1.
+  stream: Int!
+  # The tool's address (the SOCKS client's), and the destination as the
+  # tool named it; a UDP association (udp) has none, its datagrams each
+  # name their own.
+  client: String!
+  host: String!
+  port: Int!
+  udp: Boolean!
+  openedAt: String!
+  # OPENING (the minion connects), OPEN or ENDED.
+  state: String!
+  # The minion's reply: open, refused, host_unreachable, net_unreachable,
+  # timed_out, not_allowed or failed; its socket's address when open, and
+  # why not. Null before it came.
+  result: String
+  bound: String
+  msg: String
+  # When and how it ended: done, not_opened, no_reply, client_reset, reset
+  # (by the destination or the minion), lost (the minion no longer had it),
+  # task_ended or core_stopped.
+  endedAt: String
+  end: String
+  # The bytes the tool sent (up), and got back (down), so far.
+  up: Int!
+  down: Int!
+}
+
+# A page of a tunnel task's streams, the latest first.
+type MinionTunnelStreamPage {
+  streams: [MinionTunnelStream!]!
+  # Where the next (older) page starts; null on the last.
+  before: String
+}
+
 # A link to download a stream without a session (curl), valid while the
 # stream lasts and until expiresAt at most.
 type MinionStreamLink {
@@ -14453,6 +14914,13 @@ extend type Query {
   # A session's tasks, newest first, at most last (50 by default, 200 at
   # most), before a page's cursor. Needs at least viewer.
   minionTasks(sessionId: ID!, last: Int, before: String): MinionTaskPage!
+    @hasPermission(permission: "operation:member")
+
+  # A tunnel task's streams, the latest first, at most last (50 by default,
+  # 200 at most), before a page's cursor: search matches the tool's address
+  # and the destination, state (OPEN or ENDED) narrows them. Needs at least
+  # viewer.
+  minionTunnelStreams(taskId: ID!, last: Int, before: String, search: String, state: String): MinionTunnelStreamPage!
     @hasPermission(permission: "operation:member")
 
   # The commands a session's minion takes: its build's, with what a task of
@@ -14920,6 +15388,69 @@ extend type Subscription {
   # admin Modules page. Not operation-scoped — admin-only via module:read.
   moduleChanged: ModuleEvent!
     @hasPermission(permission: "module:read")
+}
+`, BuiltIn: false},
+	{Name: "../schema/operational_ports.graphql", Input: `# One of core's operational ports in use (docs:
+# contracts/minion-messages/tunnels.md, Operational ports): a tunnel task's
+# SOCKS proxy, until its task ends.
+type OperationalPort {
+  # The task's id: a port serves one task.
+  id: ID!
+  port: Int!
+  # What it serves: socks.
+  purpose: String!
+  # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
+  # host the web app is reached at.
+  address: String
+  sessionId: ID!
+  # The session's number when it opened.
+  sessionNumber: Int!
+  taskId: ID!
+  openedBy: ID!
+  # Who opened it, by name when it opened; null for one gone.
+  openedByName: String
+  openedAt: String!
+  # Core listens on it (it does not between a restart and its task's
+  # check).
+  listening: Boolean!
+  # Its streams now, and how many it has had.
+  open: Int!
+  streams: Int!
+}
+
+type OperationalPortEdge {
+  node: OperationalPort!
+  cursor: String!
+}
+
+type OperationalPortConnection {
+  edges: [OperationalPortEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# An operational port changing: opened (CREATED), its streams' numbers
+# (UPDATED), closed with its task (DELETED: no port).
+type OperationalPortEvent {
+  action: EventAction!
+  # The port's id: its task's.
+  id: ID!
+  operationId: ID!
+  port: OperationalPort
+}
+
+extend type Subscription {
+  # An operation's operational ports as they change. Needs at least viewer.
+  operationalPortChanged(operationId: ID!): OperationalPortEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Query {
+  # An operation's operational ports in use, the latest opened first, a
+  # page at a time; search matches the port, the session's number and who
+  # opened it. Needs at least viewer.
+  operationalPorts(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): OperationalPortConnection!
+    @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
 	{Name: "../schema/schema.graphql", Input: `# =============================================================================
@@ -19174,6 +19705,37 @@ func (ec *executionContext) field_Query_minionTasks_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_minionTunnelStreams_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "taskId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["taskId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "state", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["state"] = arg4
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_minions_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -19509,6 +20071,42 @@ func (ec *executionContext) field_Query_operation_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_operationalPorts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg5
 	return args, nil
 }
 
@@ -20410,6 +21008,17 @@ func (ec *executionContext) field_Subscription_operationMemberChanged_args(ctx c
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_operationalPortChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
 	if err != nil {
 		return nil, err
 	}
@@ -41043,6 +41652,80 @@ func (ec *executionContext) fieldContext_MinionTask_result(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_action(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_action,
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTask_tunnel(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_tunnel,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionTask().Tunnel(ctx, obj)
+		},
+		nil,
+		ec.marshalOMinionTunnel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnel,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "port":
+				return ec.fieldContext_MinionTunnel_port(ctx, field)
+			case "address":
+				return ec.fieldContext_MinionTunnel_address(ctx, field)
+			case "listening":
+				return ec.fieldContext_MinionTunnel_listening(ctx, field)
+			case "open":
+				return ec.fieldContext_MinionTunnel_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_MinionTunnel_streams(ctx, field)
+			case "up":
+				return ec.fieldContext_MinionTunnel_up(ctx, field)
+			case "down":
+				return ec.fieldContext_MinionTunnel_down(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTunnel", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_data(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -41464,6 +42147,10 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
 			case "dataSize":
@@ -42233,6 +42920,703 @@ func (ec *executionContext) _MinionTaskUpload_uploaderAt(ctx context.Context, fi
 func (ec *executionContext) fieldContext_MinionTaskUpload_uploaderAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTaskUpload",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_port(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_port,
+		func(ctx context.Context) (any, error) {
+			return obj.Port, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_port(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_address(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_address,
+		func(ctx context.Context) (any, error) {
+			return obj.Address, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_listening(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_listening,
+		func(ctx context.Context) (any, error) {
+			return obj.Listening, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_listening(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_open(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_open,
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_streams(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_streams,
+		func(ctx context.Context) (any, error) {
+			return obj.Streams, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_up(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_up,
+		func(ctx context.Context) (any, error) {
+			return obj.Up, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_up(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_down(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_down,
+		func(ctx context.Context) (any, error) {
+			return obj.Down, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_down(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_stream(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_stream,
+		func(ctx context.Context) (any, error) {
+			return obj.Stream, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_stream(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_client(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_client,
+		func(ctx context.Context) (any, error) {
+			return obj.Client, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_client(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_host(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_host,
+		func(ctx context.Context) (any, error) {
+			return obj.Host, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_host(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_port(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_port,
+		func(ctx context.Context) (any, error) {
+			return obj.Port, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_port(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_udp(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_udp,
+		func(ctx context.Context) (any, error) {
+			return obj.UDP, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_udp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_openedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_openedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_openedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_state(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_state,
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_result(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_result,
+		func(ctx context.Context) (any, error) {
+			return obj.Result, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_result(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_bound(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_bound,
+		func(ctx context.Context) (any, error) {
+			return obj.Bound, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_bound(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_msg(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_msg,
+		func(ctx context.Context) (any, error) {
+			return obj.Msg, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_msg(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_endedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_endedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.EndedAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_endedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_end(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_end,
+		func(ctx context.Context) (any, error) {
+			return obj.End, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_end(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_up(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_up,
+		func(ctx context.Context) (any, error) {
+			return obj.Up, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_up(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStream_down(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_down,
+		func(ctx context.Context) (any, error) {
+			return obj.Down, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_down(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStreamPage_streams(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStreamPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStreamPage_streams,
+		func(ctx context.Context) (any, error) {
+			return obj.Streams, nil
+		},
+		nil,
+		ec.marshalNMinionTunnelStream2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStreamᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStreamPage_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStreamPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "stream":
+				return ec.fieldContext_MinionTunnelStream_stream(ctx, field)
+			case "client":
+				return ec.fieldContext_MinionTunnelStream_client(ctx, field)
+			case "host":
+				return ec.fieldContext_MinionTunnelStream_host(ctx, field)
+			case "port":
+				return ec.fieldContext_MinionTunnelStream_port(ctx, field)
+			case "udp":
+				return ec.fieldContext_MinionTunnelStream_udp(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_MinionTunnelStream_openedAt(ctx, field)
+			case "state":
+				return ec.fieldContext_MinionTunnelStream_state(ctx, field)
+			case "result":
+				return ec.fieldContext_MinionTunnelStream_result(ctx, field)
+			case "bound":
+				return ec.fieldContext_MinionTunnelStream_bound(ctx, field)
+			case "msg":
+				return ec.fieldContext_MinionTunnelStream_msg(ctx, field)
+			case "endedAt":
+				return ec.fieldContext_MinionTunnelStream_endedAt(ctx, field)
+			case "end":
+				return ec.fieldContext_MinionTunnelStream_end(ctx, field)
+			case "up":
+				return ec.fieldContext_MinionTunnelStream_up(ctx, field)
+			case "down":
+				return ec.fieldContext_MinionTunnelStream_down(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTunnelStream", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnelStreamPage_before(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStreamPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStreamPage_before,
+		func(ctx context.Context) (any, error) {
+			return obj.Before, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStreamPage_before(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStreamPage",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -52557,6 +53941,10 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
 			case "dataSize":
@@ -52696,6 +54084,10 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
 			case "dataSize":
@@ -57182,6 +58574,716 @@ func (ec *executionContext) fieldContext_OperationMemberEvent_userId(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _OperationalPort_id(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_port(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_port,
+		func(ctx context.Context) (any, error) {
+			return obj.Port, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_port(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_purpose(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_purpose,
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_address(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_address,
+		func(ctx context.Context) (any, error) {
+			return obj.Address, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_sessionId(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_sessionId,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_sessionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_sessionNumber(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_sessionNumber,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionNumber, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_sessionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_taskId(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_openedBy(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_openedBy,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedBy, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_openedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_openedByName(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_openedByName,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedByName, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_openedByName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_openedAt(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_openedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_openedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_listening(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_listening,
+		func(ctx context.Context) (any, error) {
+			return obj.Listening, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_listening(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_open(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_open,
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPort_streams(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_streams,
+		func(ctx context.Context) (any, error) {
+			return obj.Streams, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortConnection_edges,
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		ec.marshalNOperationalPortEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEdgeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "node":
+				return ec.fieldContext_OperationalPortEdge_node(ctx, field)
+			case "cursor":
+				return ec.fieldContext_OperationalPortEdge_cursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type OperationalPortEdge", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortConnection_pageInfo,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNPageInfo2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋpaginationᚐPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_PageInfo_hasPreviousPage(ctx, field)
+			case "startCursor":
+				return ec.fieldContext_PageInfo_startCursor(ctx, field)
+			case "endCursor":
+				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortConnection_totalCount,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortConnection_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortEdge_node,
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		ec.marshalNOperationalPort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPort,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_OperationalPort_id(ctx, field)
+			case "port":
+				return ec.fieldContext_OperationalPort_port(ctx, field)
+			case "purpose":
+				return ec.fieldContext_OperationalPort_purpose(ctx, field)
+			case "address":
+				return ec.fieldContext_OperationalPort_address(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_OperationalPort_sessionId(ctx, field)
+			case "sessionNumber":
+				return ec.fieldContext_OperationalPort_sessionNumber(ctx, field)
+			case "taskId":
+				return ec.fieldContext_OperationalPort_taskId(ctx, field)
+			case "openedBy":
+				return ec.fieldContext_OperationalPort_openedBy(ctx, field)
+			case "openedByName":
+				return ec.fieldContext_OperationalPort_openedByName(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_OperationalPort_openedAt(ctx, field)
+			case "listening":
+				return ec.fieldContext_OperationalPort_listening(ctx, field)
+			case "open":
+				return ec.fieldContext_OperationalPort_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_OperationalPort_streams(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type OperationalPort", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortEdge_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortEvent_action(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortEvent_action,
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		ec.marshalNEventAction2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐEventAction,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortEvent_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type EventAction does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortEvent_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortEvent_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortEvent_operationId(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortEvent_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortEvent_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OperationalPortEvent_port(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPortEvent_port,
+		func(ctx context.Context) (any, error) {
+			return obj.Port, nil
+		},
+		nil,
+		ec.marshalOOperationalPort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPort,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPortEvent_port(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPortEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_OperationalPort_id(ctx, field)
+			case "port":
+				return ec.fieldContext_OperationalPort_port(ctx, field)
+			case "purpose":
+				return ec.fieldContext_OperationalPort_purpose(ctx, field)
+			case "address":
+				return ec.fieldContext_OperationalPort_address(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_OperationalPort_sessionId(ctx, field)
+			case "sessionNumber":
+				return ec.fieldContext_OperationalPort_sessionNumber(ctx, field)
+			case "taskId":
+				return ec.fieldContext_OperationalPort_taskId(ctx, field)
+			case "openedBy":
+				return ec.fieldContext_OperationalPort_openedBy(ctx, field)
+			case "openedByName":
+				return ec.fieldContext_OperationalPort_openedByName(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_OperationalPort_openedAt(ctx, field)
+			case "listening":
+				return ec.fieldContext_OperationalPort_listening(ctx, field)
+			case "open":
+				return ec.fieldContext_OperationalPort_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_OperationalPort_streams(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type OperationalPort", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OperatorFocus_route(ctx context.Context, field graphql.CollectedField, obj *model.OperatorFocus) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -61356,6 +63458,10 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
 			case "dataSize":
@@ -61451,6 +63557,71 @@ func (ec *executionContext) fieldContext_Query_minionTasks(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_minionTasks_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_minionTunnelStreams(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionTunnelStreams,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionTunnelStreams(ctx, fc.Args["taskId"].(string), fc.Args["last"].(*int), fc.Args["before"].(*string), fc.Args["search"].(*string), fc.Args["state"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionTunnelStreamPage
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionTunnelStreamPage
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionTunnelStreamPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStreamPage,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionTunnelStreams(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "streams":
+				return ec.fieldContext_MinionTunnelStreamPage_streams(ctx, field)
+			case "before":
+				return ec.fieldContext_MinionTunnelStreamPage_before(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionTunnelStreamPage", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionTunnelStreams_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -61921,6 +64092,73 @@ func (ec *executionContext) fieldContext_Query_modules(ctx context.Context, fiel
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_modules_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_operationalPorts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_operationalPorts,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().OperationalPorts(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.OperationalPortConnection
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.OperationalPortConnection
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNOperationalPortConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortConnection,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_operationalPorts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "edges":
+				return ec.fieldContext_OperationalPortConnection_edges(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_OperationalPortConnection_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_OperationalPortConnection_totalCount(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type OperationalPortConnection", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_operationalPorts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -67622,6 +69860,10 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_dataParts(ctx, field)
 			case "result":
 				return ec.fieldContext_MinionTask_result(ctx, field)
+			case "action":
+				return ec.fieldContext_MinionTask_action(ctx, field)
+			case "tunnel":
+				return ec.fieldContext_MinionTask_tunnel(ctx, field)
 			case "data":
 				return ec.fieldContext_MinionTask_data(ctx, field)
 			case "dataSize":
@@ -67784,6 +70026,75 @@ func (ec *executionContext) fieldContext_Subscription_moduleChanged(_ context.Co
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ModuleEvent", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_operationalPortChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Subscription_operationalPortChanged,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().OperationalPortChanged(ctx, fc.Args["operationId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.OperationalPortEvent
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.OperationalPortEvent
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNOperationalPortEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEvent,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Subscription_operationalPortChanged(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "action":
+				return ec.fieldContext_OperationalPortEvent_action(ctx, field)
+			case "id":
+				return ec.fieldContext_OperationalPortEvent_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_OperationalPortEvent_operationId(ctx, field)
+			case "port":
+				return ec.fieldContext_OperationalPortEvent_port(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type OperationalPortEvent", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_operationalPortChanged_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -86560,6 +88871,41 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			}
 		case "result":
 			out.Values[i] = ec._MinionTask_result(ctx, field, obj)
+		case "action":
+			out.Values[i] = ec._MinionTask_action(ctx, field, obj)
+		case "tunnel":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionTask_tunnel(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "data":
 			field := field
 
@@ -86893,6 +89239,202 @@ func (ec *executionContext) _MinionTaskUpload(ctx context.Context, sel ast.Selec
 			out.Values[i] = ec._MinionTaskUpload_attachedAt(ctx, field, obj)
 		case "uploaderAt":
 			out.Values[i] = ec._MinionTaskUpload_uploaderAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionTunnelImplementors = []string{"MinionTunnel"}
+
+func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.SelectionSet, obj *model.MinionTunnel) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionTunnelImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionTunnel")
+		case "port":
+			out.Values[i] = ec._MinionTunnel_port(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "address":
+			out.Values[i] = ec._MinionTunnel_address(ctx, field, obj)
+		case "listening":
+			out.Values[i] = ec._MinionTunnel_listening(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "open":
+			out.Values[i] = ec._MinionTunnel_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "streams":
+			out.Values[i] = ec._MinionTunnel_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "up":
+			out.Values[i] = ec._MinionTunnel_up(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "down":
+			out.Values[i] = ec._MinionTunnel_down(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionTunnelStreamImplementors = []string{"MinionTunnelStream"}
+
+func (ec *executionContext) _MinionTunnelStream(ctx context.Context, sel ast.SelectionSet, obj *model.MinionTunnelStream) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionTunnelStreamImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionTunnelStream")
+		case "stream":
+			out.Values[i] = ec._MinionTunnelStream_stream(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "client":
+			out.Values[i] = ec._MinionTunnelStream_client(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "host":
+			out.Values[i] = ec._MinionTunnelStream_host(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "port":
+			out.Values[i] = ec._MinionTunnelStream_port(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "udp":
+			out.Values[i] = ec._MinionTunnelStream_udp(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedAt":
+			out.Values[i] = ec._MinionTunnelStream_openedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._MinionTunnelStream_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "result":
+			out.Values[i] = ec._MinionTunnelStream_result(ctx, field, obj)
+		case "bound":
+			out.Values[i] = ec._MinionTunnelStream_bound(ctx, field, obj)
+		case "msg":
+			out.Values[i] = ec._MinionTunnelStream_msg(ctx, field, obj)
+		case "endedAt":
+			out.Values[i] = ec._MinionTunnelStream_endedAt(ctx, field, obj)
+		case "end":
+			out.Values[i] = ec._MinionTunnelStream_end(ctx, field, obj)
+		case "up":
+			out.Values[i] = ec._MinionTunnelStream_up(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "down":
+			out.Values[i] = ec._MinionTunnelStream_down(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionTunnelStreamPageImplementors = []string{"MinionTunnelStreamPage"}
+
+func (ec *executionContext) _MinionTunnelStreamPage(ctx context.Context, sel ast.SelectionSet, obj *model.MinionTunnelStreamPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionTunnelStreamPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionTunnelStreamPage")
+		case "streams":
+			out.Values[i] = ec._MinionTunnelStreamPage_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "before":
+			out.Values[i] = ec._MinionTunnelStreamPage_before(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -89599,6 +92141,243 @@ func (ec *executionContext) _OperationMemberEvent(ctx context.Context, sel ast.S
 	return out
 }
 
+var operationalPortImplementors = []string{"OperationalPort"}
+
+func (ec *executionContext) _OperationalPort(ctx context.Context, sel ast.SelectionSet, obj *model.OperationalPort) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, operationalPortImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OperationalPort")
+		case "id":
+			out.Values[i] = ec._OperationalPort_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "port":
+			out.Values[i] = ec._OperationalPort_port(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "purpose":
+			out.Values[i] = ec._OperationalPort_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "address":
+			out.Values[i] = ec._OperationalPort_address(ctx, field, obj)
+		case "sessionId":
+			out.Values[i] = ec._OperationalPort_sessionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessionNumber":
+			out.Values[i] = ec._OperationalPort_sessionNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "taskId":
+			out.Values[i] = ec._OperationalPort_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedBy":
+			out.Values[i] = ec._OperationalPort_openedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedByName":
+			out.Values[i] = ec._OperationalPort_openedByName(ctx, field, obj)
+		case "openedAt":
+			out.Values[i] = ec._OperationalPort_openedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "listening":
+			out.Values[i] = ec._OperationalPort_listening(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "open":
+			out.Values[i] = ec._OperationalPort_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "streams":
+			out.Values[i] = ec._OperationalPort_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var operationalPortConnectionImplementors = []string{"OperationalPortConnection"}
+
+func (ec *executionContext) _OperationalPortConnection(ctx context.Context, sel ast.SelectionSet, obj *model.OperationalPortConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, operationalPortConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OperationalPortConnection")
+		case "edges":
+			out.Values[i] = ec._OperationalPortConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._OperationalPortConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._OperationalPortConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var operationalPortEdgeImplementors = []string{"OperationalPortEdge"}
+
+func (ec *executionContext) _OperationalPortEdge(ctx context.Context, sel ast.SelectionSet, obj *model.OperationalPortEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, operationalPortEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OperationalPortEdge")
+		case "node":
+			out.Values[i] = ec._OperationalPortEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._OperationalPortEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var operationalPortEventImplementors = []string{"OperationalPortEvent"}
+
+func (ec *executionContext) _OperationalPortEvent(ctx context.Context, sel ast.SelectionSet, obj *model.OperationalPortEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, operationalPortEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OperationalPortEvent")
+		case "action":
+			out.Values[i] = ec._OperationalPortEvent_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._OperationalPortEvent_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationId":
+			out.Values[i] = ec._OperationalPortEvent_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "port":
+			out.Values[i] = ec._OperationalPortEvent_port(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var operatorFocusImplementors = []string{"OperatorFocus"}
 
 func (ec *executionContext) _OperatorFocus(ctx context.Context, sel ast.SelectionSet, obj *model.OperatorFocus) graphql.Marshaler {
@@ -90826,6 +93605,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionTunnelStreams":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionTunnelStreams(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "minionSessionCommands":
 			field := field
 
@@ -90943,6 +93744,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_modules(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "operationalPorts":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_operationalPorts(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -92678,6 +95501,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_moduleLogs(ctx, fields[0])
 	case "moduleChanged":
 		return ec._Subscription_moduleChanged(ctx, fields[0])
+	case "operationalPortChanged":
+		return ec._Subscription_operationalPortChanged(ctx, fields[0])
 	case "mySessionChanged":
 		return ec._Subscription_mySessionChanged(ctx, fields[0])
 	case "sessionChanged":
@@ -99022,6 +101847,46 @@ func (ec *executionContext) marshalNMinionTaskPage2ᚖgithubᚗcomᚋlogoscore�
 	return ec._MinionTaskPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionTunnelStream2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStreamᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionTunnelStream) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionTunnelStream2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStream(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionTunnelStream2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStream(ctx context.Context, sel ast.SelectionSet, v *model.MinionTunnelStream) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionTunnelStream(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionTunnelStreamPage2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStreamPage(ctx context.Context, sel ast.SelectionSet, v model.MinionTunnelStreamPage) graphql.Marshaler {
+	return ec._MinionTunnelStreamPage(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionTunnelStreamPage2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnelStreamPage(ctx context.Context, sel ast.SelectionSet, v *model.MinionTunnelStreamPage) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionTunnelStreamPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNModule2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v models.Module) graphql.Marshaler {
 	return ec._Module(ctx, sel, &v)
 }
@@ -99589,6 +102454,70 @@ func (ec *executionContext) unmarshalNOperationRole2githubᚗcomᚋlogoscoreᚋl
 
 func (ec *executionContext) marshalNOperationRole2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐOperationRole(ctx context.Context, sel ast.SelectionSet, v models.OperationRole) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNOperationalPort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPort(ctx context.Context, sel ast.SelectionSet, v *model.OperationalPort) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OperationalPort(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOperationalPortConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortConnection(ctx context.Context, sel ast.SelectionSet, v model.OperationalPortConnection) graphql.Marshaler {
+	return ec._OperationalPortConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNOperationalPortConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortConnection(ctx context.Context, sel ast.SelectionSet, v *model.OperationalPortConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OperationalPortConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOperationalPortEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.OperationalPortEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNOperationalPortEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNOperationalPortEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEdge(ctx context.Context, sel ast.SelectionSet, v *model.OperationalPortEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OperationalPortEdge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNOperationalPortEvent2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEvent(ctx context.Context, sel ast.SelectionSet, v model.OperationalPortEvent) graphql.Marshaler {
+	return ec._OperationalPortEvent(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNOperationalPortEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPortEvent(ctx context.Context, sel ast.SelectionSet, v *model.OperationalPortEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._OperationalPortEvent(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNOperatorFocusInput2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperatorFocusInput(ctx context.Context, v any) (model.OperatorFocusInput, error) {
@@ -101588,6 +104517,13 @@ func (ec *executionContext) marshalOMinionTaskUpload2ᚖgithubᚗcomᚋlogoscore
 	return ec._MinionTaskUpload(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOMinionTunnel2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionTunnel(ctx context.Context, sel ast.SelectionSet, v *model.MinionTunnel) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionTunnel(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalOModule2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋmodelsᚐModule(ctx context.Context, sel ast.SelectionSet, v *models.Module) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -101722,6 +104658,13 @@ func (ec *executionContext) marshalOOperationSortField2ᚖgithubᚗcomᚋlogosco
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOOperationalPort2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperationalPort(ctx context.Context, sel ast.SelectionSet, v *model.OperationalPort) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._OperationalPort(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOOperatorFocus2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐOperatorFocus(ctx context.Context, sel ast.SelectionSet, v *model.OperatorFocus) graphql.Marshaler {

@@ -1,0 +1,62 @@
+# One of core's operational ports in use (docs:
+# contracts/minion-messages/tunnels.md, Operational ports): a tunnel task's
+# SOCKS proxy, until its task ends.
+type OperationalPort {
+  # The task's id: a port serves one task.
+  id: ID!
+  port: Int!
+  # What it serves: socks.
+  purpose: String!
+  # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
+  # host the web app is reached at.
+  address: String
+  sessionId: ID!
+  # The session's number when it opened.
+  sessionNumber: Int!
+  taskId: ID!
+  openedBy: ID!
+  # Who opened it, by name when it opened; null for one gone.
+  openedByName: String
+  openedAt: String!
+  # Core listens on it (it does not between a restart and its task's
+  # check).
+  listening: Boolean!
+  # Its streams now, and how many it has had.
+  open: Int!
+  streams: Int!
+}
+
+type OperationalPortEdge {
+  node: OperationalPort!
+  cursor: String!
+}
+
+type OperationalPortConnection {
+  edges: [OperationalPortEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# An operational port changing: opened (CREATED), its streams' numbers
+# (UPDATED), closed with its task (DELETED: no port).
+type OperationalPortEvent {
+  action: EventAction!
+  # The port's id: its task's.
+  id: ID!
+  operationId: ID!
+  port: OperationalPort
+}
+
+extend type Subscription {
+  # An operation's operational ports as they change. Needs at least viewer.
+  operationalPortChanged(operationId: ID!): OperationalPortEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Query {
+  # An operation's operational ports in use, the latest opened first, a
+  # page at a time; search matches the port, the session's number and who
+  # opened it. Needs at least viewer.
+  operationalPorts(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): OperationalPortConnection!
+    @hasPermission(permission: "operation:member")
+}

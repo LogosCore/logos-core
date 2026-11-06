@@ -33,6 +33,7 @@ import { DirListingView } from "./dir-listing-view"
 import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
 import { StreamView } from "./stream-view"
+import { TunnelView } from "./tunnel-view"
 import type { DeleteTarget } from "./delete-dialog"
 import type { UploadTarget } from "./upload-target"
 import { TabButton } from "./tab-button"
@@ -171,8 +172,14 @@ export function TaskDetail({
   const isUpload = t.result === "file_upload" && t.upload != null
   // A file_stream task's stream shows from the minion's announcement.
   const isStream = t.result === "file_stream" && t.stream != null
+  // A tunnel task's proxy shows from its queueing: core took its port then.
+  const isTunnel = t.tunnel != null
   const hasData =
-    (isFile && t.file != null) || isUpload || isStream || (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
+    (isFile && t.file != null) ||
+    isUpload ||
+    isStream ||
+    isTunnel ||
+    (detail ? data !== null : t.dataSize > 0 || (t.outputSize === 0 && t.parts > 0))
   // The result's view, for data that fits it; the rest shows raw.
   const listing = t.result === "dir_listing" && !t.dataProblem ? readDirListing(data) : null
   const walk = t.result === "dir_walk" && !t.dataProblem ? readDirWalk(data) : null
@@ -200,7 +207,7 @@ export function TaskDetail({
         ? "feedback"
         : tab === "data" && hasData
         ? "data"
-        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream)
+        : tab === "output" || !hasData || (t.outputSize > 0 && !isUpload && !isStream && !isTunnel)
           ? "output"
           : "data"
   const [wrap, setWrap] = useState(() => readFlag(WRAP_KEY, true))
@@ -225,7 +232,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : "Data"}
+              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? "Proxy" : "Data"}
             </TabButton>
           )}
           {hasFeedback && (
@@ -268,7 +275,7 @@ export function TaskDetail({
               <BracesIcon />
             </Button>
           )}
-          {shown === "data" ? (
+          {shown === "data" && isTunnel ? null : shown === "data" ? (
             <>
               <Button variant="ghost" size="icon-xs" title="Copy the data as JSON" aria-label="Copy the data" disabled={!data}
                 onClick={() => void copyToClipboard(JSON.stringify(data, null, 2), "data")}>
@@ -335,7 +342,9 @@ export function TaskDetail({
           {dataNotes.length > 0 && (
             <p className="border-b px-3 py-1 text-xs text-amber-700 dark:text-amber-400">{dataNotes.join(" ")}</p>
           )}
-          {isFile && t.file && !rawData ? (
+          {isTunnel && t.tunnel ? (
+            <TunnelView key={t.id} task={t} tunnel={t.tunnel} />
+          ) : isFile && t.file && !rawData ? (
             <FileView key={t.file.id} file={t.file} />
           ) : isUpload && !(rawData && data) ? (
             <UploadView task={t} data={data} />

@@ -101,10 +101,11 @@ Architecture page, "One core instance".
 ### Operational ports get a Service of their own
 A tunnel task's SOCKS proxy listens on one of core's operational ports
 (`core.operationalPorts`: `count` ports from `first`, none by default),
-raw TCP that an Ingress does not carry. The chart gives core the range
-(`OPERATIONAL_PORTS`) and publishes it with a Service of its own,
-`<release>-core-operational`, one port each (a Service takes no ranges),
-a LoadBalancer by default. Core's SOCKS takes no credentials: whoever
+raw TCP that an Ingress does not carry, and its UDP relay on the same
+port number. The chart gives core the range (`OPERATIONAL_PORTS`) and
+publishes it with a Service of its own, `<release>-core-operational`, one
+port each, TCP and UDP (a Service takes no ranges), a LoadBalancer by
+default: TCP and UDP in one LoadBalancer need Kubernetes 1.26 or later. Core's SOCKS takes no credentials: whoever
 reaches a port uses its minion, so keep the Service to the operators'
 networks (`service.loadBalancerSourceRanges`, or the network in front).
 Set `address` to the host they reach it at, which the web app shows.

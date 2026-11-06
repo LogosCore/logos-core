@@ -39,6 +39,15 @@ func (r *minionTaskResolver) OutputUtf8(ctx context.Context, obj *model.MinionTa
 	return utf8.Valid(out), nil
 }
 
+// Tunnel is the resolver for the tunnel field.
+func (r *minionTaskResolver) Tunnel(ctx context.Context, obj *model.MinionTask) (*model.MinionTunnel, error) {
+	// Only a tunnel task has one: no read for the others.
+	if obj.Action == nil || *obj.Action != protocol.ActionTunnel {
+		return nil, nil
+	}
+	return r.MinionTaskResolver.Tunnel(ctx, obj)
+}
+
 // Data is the resolver for the data field.
 func (r *minionTaskResolver) Data(ctx context.Context, obj *model.MinionTask) (any, error) {
 	return r.MinionTaskResolver.Data(ctx, obj.ID)
@@ -81,6 +90,11 @@ func (r *queryResolver) MinionTask(ctx context.Context, id string) (*model.Minio
 // MinionTasks is the resolver for the minionTasks field.
 func (r *queryResolver) MinionTasks(ctx context.Context, sessionID string, last *int, before *string) (*model.MinionTaskPage, error) {
 	return r.MinionTaskResolver.MinionTasks(ctx, sessionID, last, before)
+}
+
+// MinionTunnelStreams is the resolver for the minionTunnelStreams field.
+func (r *queryResolver) MinionTunnelStreams(ctx context.Context, taskID string, last *int, before *string, search *string, state *string) (*model.MinionTunnelStreamPage, error) {
+	return r.MinionTaskResolver.MinionTunnelStreams(ctx, taskID, last, before, search, state)
 }
 
 // MinionSessionCommands is the resolver for the minionSessionCommands field.

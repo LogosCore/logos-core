@@ -106,6 +106,8 @@ services:
       # OPERATIONAL_PUBLISH to an address of the host to open them to its
       # network.
       - "${OPERATIONAL_PUBLISH:-127.0.0.1}:41000-41009:41000-41009/tcp"
+      # UDP too: a proxy's relay for its UDP associations, on the same port.
+      - "${OPERATIONAL_PUBLISH:-127.0.0.1}:41000-41009:41000-41009/udp"
     depends_on:
       mongodb:
         condition: service_healthy

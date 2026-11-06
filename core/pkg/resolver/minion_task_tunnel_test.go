@@ -9,16 +9,23 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
 	"github.com/logoscore/logos-core/core/pkg/models"
+	"github.com/logoscore/logos-core/core/pkg/pagination"
+	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
 // fakeTaskTunnels opens the ports asked for: 41000 for any, the one asked
 // for otherwise; err refuses.
 type fakeTaskTunnels struct {
-	opened []miniontunnels.Opening
-	closed []uuid.UUID
-	err    error
+	opened  []miniontunnels.Opening
+	closed  []uuid.UUID
+	err     error
+	address string
+	live    map[uuid.UUID]miniontunnels.Summary
+	ended   miniontunnels.Summary
 }
 
 func (f *fakeTaskTunnels) Open(_ context.Context, o miniontunnels.Opening) (int, error) {
@@ -33,6 +40,77 @@ func (f *fakeTaskTunnels) Open(_ context.Context, o miniontunnels.Opening) (int,
 }
 
 func (f *fakeTaskTunnels) Close(_ context.Context, task uuid.UUID) { f.closed = append(f.closed, task) }
+
+func (f *fakeTaskTunnels) Address() string { return f.address }
+
+func (f *fakeTaskTunnels) View(_ context.Context, task uuid.UUID) (miniontunnels.Summary, bool, error) {
+	if sum, ok := f.live[task]; ok {
+		return sum, true, nil
+	}
+	return f.ended, false, nil
+}
+
+func (f *fakeTaskTunnels) Summary(task uuid.UUID) (miniontunnels.Summary, bool) {
+	sum, ok := f.live[task]
+	return sum, ok
+}
+
+func (f *fakeTaskTunnels) Streams(context.Context, uuid.UUID, repository.TunnelStreamFilter, uint64, int64) ([]models.MinionTunnelStream, error) {
+	return nil, nil
+}
+
+func (f *fakeTaskTunnels) Port(context.Context, uuid.UUID) (*models.OperationalPort, error) {
+	return nil, repository.ErrNotFound
+}
+
+func (f *fakeTaskTunnels) Ports(context.Context, uuid.UUID, string, *pagination.Cursor, int64, bool) ([]models.OperationalPort, error) {
+	return nil, nil
+}
+
+func (f *fakeTaskTunnels) CountPorts(context.Context, uuid.UUID, string) (int64, error) {
+	return 0, nil
+}
+
+// A tunnel task's proxy is live while core listens for it (its port, its
+// streams now); once it ended, its records' totals, the port its args say.
+// The address is core's, null for the web app's host.
+func TestTaskTunnel(t *testing.T) {
+	ctx := context.Background()
+	live := uuid.New()
+	f := &fakeTaskTunnels{live: map[uuid.UUID]miniontunnels.Summary{live: {Port: 41003, Open: 2, Streams: 9, Up: 100, Down: 2000}},
+		ended: miniontunnels.Summary{Streams: 4, Up: 7, Down: 8}}
+	r := &minionTaskResolver{tunnels: f}
+	got, err := r.Tunnel(ctx, &model.MinionTask{ID: live.String()})
+	if err != nil || got.Port != 41003 || !got.Listening || got.Open != 2 || got.Streams != 9 || got.Up != 100 || got.Down != 2000 || got.Address != nil {
+		t.Fatalf("live: %+v %v", got, err)
+	}
+	f.address = "ops.example.org"
+	got, err = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Args: map[string]any{"port": float64(41007)}})
+	if err != nil || got.Port != 41007 || got.Listening || got.Open != 0 || got.Streams != 4 || got.Up != 7 || got.Down != 8 ||
+		got.Address == nil || *got.Address != "ops.example.org" {
+		t.Fatalf("ended: %+v %v", got, err)
+	}
+}
+
+// A stream reads OPENING until the minion's reply, OPEN after it, ENDED
+// once it ended; its result by name.
+func TestTunnelStreamModel(t *testing.T) {
+	at := time.Date(2026, 11, 6, 10, 0, 0, 0, time.UTC)
+	s := models.MinionTunnelStream{Stream: 3, Client: "10.9.0.2:50122", Host: "dc01", Port: 445, OpenedAt: at, Up: 5, Down: 6}
+	if m := tunnelStreamModel(&s); m.State != "OPENING" || m.Result != nil || m.Stream != 3 || m.OpenedAt != "2026-11-06T10:00:00Z" {
+		t.Errorf("opening: %+v", m)
+	}
+	open := protocol.TunnelOpen
+	s.Result, s.Bound = &open, "10.0.0.7:51234"
+	if m := tunnelStreamModel(&s); m.State != "OPEN" || m.Result == nil || *m.Result != "open" || m.Bound == nil || *m.Bound != "10.0.0.7:51234" {
+		t.Errorf("open: %+v", m)
+	}
+	refused := protocol.TunnelRefused
+	s.Result, s.Bound, s.EndedAt, s.End = &refused, "", &at, models.TunnelEndNotOpened
+	if m := tunnelStreamModel(&s); m.State != "ENDED" || *m.Result != "refused" || m.Bound != nil || m.End == nil || *m.End != "not_opened" {
+		t.Errorf("refused: %+v", m)
+	}
+}
 
 // A tunnel task takes its port before it is queued, for any free one (0)
 // or the one asked for; its args then carry the port, and its max_streams
