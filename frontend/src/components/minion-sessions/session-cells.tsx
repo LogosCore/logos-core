@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { CableIcon, PhoneIncomingIcon, PinIcon, PlugIcon, RefreshCwIcon, UnplugIcon, type LucideIcon } from "lucide-react"
+import { CableIcon, PhoneIncomingIcon, PinIcon, PlugIcon, RefreshCwIcon, UnplugIcon, VenetianMaskIcon, type LucideIcon } from "lucide-react"
 import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
@@ -13,7 +13,7 @@ import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { FeedbackCounts } from "./feedback-parts"
-import { ELEVATED, identityLabel, identityUser } from "./identity-values"
+import { ELEVATED, identityLabel, identityUser, shortUser } from "./identity-values"
 import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
@@ -144,7 +144,7 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       )
     case "host":
       return (
-        <div className="truncate font-medium" title={s.host ?? undefined}>
+        <div className="truncate font-medium" title={s.host || undefined}>
           {s.host || muted("unknown host")}
         </div>
       )
@@ -154,23 +154,26 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           className="truncate"
           title={
             [
-              userOf(s),
-              s.integrity && `integrity: ${s.integrity}`,
-              s.acting && `tasks run as ${identityLabel(s.acting)}${s.acting.integrity ? `, integrity ${s.acting.integrity}` : ""}`,
+              userOf(s) && `Process: ${userOf(s)}${s.integrity ? `, integrity ${s.integrity}` : ""}`,
+              s.acting && `Tasks run as: ${identityLabel(s.acting)}${s.acting.integrity ? `, integrity ${s.acting.integrity}` : ""}`,
             ]
               .filter(Boolean)
               .join("\n") || undefined
           }
         >
-          {userOf(s) || none}
           {s.acting ? (
+            // Its tasks run as another: that one, behind a mark it changed;
+            // who the process is stays in the title.
             <>
-              {" → "}
-              <span className="font-medium">{identityUser(s.acting)}</span>
+              <VenetianMaskIcon className="mr-1 inline size-3.5 align-[-2px] text-muted-foreground" aria-label="Identity changed" />
+              <span className="font-medium">{shortUser(identityUser(s.acting), s.host)}</span>
               {s.acting.integrity && ELEVATED.has(s.acting.integrity) && <span className="font-medium"> · {s.acting.integrity}</span>}
             </>
           ) : (
-            s.integrity && ELEVATED.has(s.integrity) && <span className="font-medium"> · {s.integrity}</span>
+            <>
+              {userOf(s) ? shortUser(userOf(s), s.host) : none}
+              {s.integrity && ELEVATED.has(s.integrity) && <span className="font-medium"> · {s.integrity}</span>}
+            </>
           )}
         </div>
       )

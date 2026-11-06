@@ -14,6 +14,20 @@ export function identityUser(i: IdentityLike): string {
   return i.domain && !i.user.includes("\\") ? `${i.domain}\\${i.user}` : i.user
 }
 
+/**
+ * A user as a cell shows it: "HOST\\name" as "name" when HOST is the session's
+ * own machine (a local account: the Host column says where). A domain's
+ * prefix stays (CORP\\alice), and so does Windows' NT AUTHORITY: its SYSTEM
+ * is not a local account. host may be a full name; its first label counts.
+ */
+export function shortUser(user: string, host: string | null | undefined): string {
+  const i = user.indexOf("\\")
+  if (i <= 0 || !host) return user
+  const prefix = user.slice(0, i).toLowerCase()
+  const machine = host.split(".")[0].toLowerCase()
+  return prefix === machine || prefix === host.toLowerCase() ? user.slice(i + 1) : user
+}
+
 const HOW: Record<string, string> = {
   impersonation: "impersonating",
   network: "network only",
