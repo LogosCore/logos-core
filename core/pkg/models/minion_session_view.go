@@ -247,6 +247,9 @@ type MinionSessionsLayout struct {
 	// PaneParked: the work pane below the list is parked, its tab row alone
 	// at the page's bottom; Split stays for when it comes back.
 	PaneParked bool `bson:"pane_parked,omitempty" json:"pane_parked,omitempty"`
+	// Folders are the folder the operator last showed of each operation
+	// (none listed: All), at most MaxSessionFolderChoices.
+	Folders []MinionSessionFolderChoice `bson:"folders,omitempty" json:"folders,omitempty"`
 	// Widths are the columns the operator sized, in pixels
 	// (MinColumnWidth to MaxColumnWidth); the rest take the app's.
 	Widths []MinionSessionColumnWidth `bson:"widths,omitempty" json:"widths,omitempty"`
@@ -257,6 +260,9 @@ type MinionSessionColumnWidth struct {
 	Column string `bson:"column" json:"column"`
 	Px     int    `bson:"px" json:"px"`
 }
+
+// MaxSessionFolderChoices caps a layout's Folders: the operations it remembers.
+const MaxSessionFolderChoices = 200
 
 // The widths a column takes when sized.
 const (
@@ -317,6 +323,9 @@ func (l MinionSessionsLayout) Validate() error {
 	}
 	if l.PromptFx != nil && !PromptFxPattern.MatchString(*l.PromptFx) {
 		return fmt.Errorf("layout: promptFx must match %s", PromptFxPattern)
+	}
+	if len(l.Folders) > MaxSessionFolderChoices {
+		return fmt.Errorf("layout: at most %d folder choices", MaxSessionFolderChoices)
 	}
 	sized := map[string]bool{}
 	for _, w := range l.Widths {

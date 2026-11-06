@@ -13,6 +13,14 @@ import { graphqlClient } from "@/lib/graphql-client"
 import { mapListRows, mergeRow, scheduleRefresh, setNewer } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
+  MinionSessionFoldersDocument,
+  CreateMinionSessionFolderDocument,
+  UpdateMinionSessionFolderDocument,
+  MoveMinionSessionFolderDocument,
+  DeleteMinionSessionFolderDocument,
+  SetMinionSessionsFolderDocument,
+  type MinionSessionFolderInput,
+  type SetMinionSessionsFolderMutationVariables,
   MinionSessionsDocument,
   MinionSessionChangedDocument,
   MinionSessionValuesDocument,
@@ -54,6 +62,8 @@ export interface MinionSessionListParams {
   operationId: string
   /** The archived sessions instead of the others. */
   archived: boolean
+  /** The folder's sessions; null: all (All). */
+  folderId: string | null
   search: string | null
   filters: SessionFilter[]
   sort: SessionSort | null
@@ -67,6 +77,7 @@ export const minionSessionKeys = {
   layout: () => [...minionSessionKeys.all, "layout"] as const,
   details: () => [...minionSessionKeys.all, "detail"] as const,
   detail: (id: string) => [...minionSessionKeys.details(), id] as const,
+  folders: (operationId: string) => [...minionSessionKeys.all, "folders", operationId] as const,
   connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
   runningTasks: (id: string, rev: number) => [...minionSessionKeys.all, "running-tasks", id, rev] as const,
   feedback: (id: string) => [...minionSessionKeys.all, "feedback", id] as const,
@@ -85,6 +96,7 @@ export function useInfiniteMinionSessions(params: MinionSessionListParams, optio
       graphqlClient(MinionSessionsDocument, {
         operationId: params.operationId,
         archived: params.archived,
+        folderId: params.folderId,
         search: params.search,
         filters: params.filters,
         sort: params.sort,
@@ -193,6 +205,8 @@ export function applyMinionSessionEvent(
 ) {
   if (action === "CREATED" || !session) {
     scheduleRefresh(queryClient, minionSessionKeys.lists())
+    // A change naming no session may be the folders' (made, moved, filled).
+    if (!session) void queryClient.invalidateQueries({ queryKey: [...minionSessionKeys.all, "folders"] })
     return
   }
   // The session's own query (its Details), where loaded.
@@ -208,7 +222,8 @@ export function applyMinionSessionEvent(
       scheduleRefresh(queryClient, minionSessionKeys.lists())
       continue
     }
-    const narrowed = params.archived || params.search !== null || params.filters.length > 0 || params.sort !== null
+    const narrowed =
+      params.archived || params.folderId !== null || params.search !== null || params.filters.length > 0 || params.sort !== null
     if (!before) {
       // Not loaded here: it may belong now, unless the list is every
       // session newest first, which nothing but a new session changes.
@@ -423,6 +438,56 @@ export function useSetMinionSessionsMark() {
       scheduleRefresh(queryClient, minionSessionKeys.lists())
       // The sessions read one by one (the work pane's tabs, a Details) are
       // read again too: which of them the marks reached, the answer does not say.
+      void queryClient.invalidateQueries({ queryKey: minionSessionKeys.details() })
+    },
+  })
+}
+
+/** An operation's folders of sessions, in their order. */
+export function useMinionSessionFolders(operationId: string) {
+  return useQuery({
+    queryKey: minionSessionKeys.folders(operationId),
+    queryFn: () => graphqlClient(MinionSessionFoldersDocument, { operationId }),
+    enabled: operationId !== "",
+    select: (d) => d.minionSessionFolders,
+  })
+}
+
+/** Makes, changes, moves and deletes an operation's folders; the folders and lists are read again. */
+export function useMinionSessionFolderMutations(operationId: string) {
+  const queryClient = useQueryClient()
+  const done = () => {
+    void queryClient.invalidateQueries({ queryKey: minionSessionKeys.folders(operationId) })
+  }
+  const create = useMutation({
+    mutationFn: (input: MinionSessionFolderInput) => graphqlClient(CreateMinionSessionFolderDocument, { operationId, input }),
+    onSuccess: done,
+  })
+  const update = useMutation({
+    mutationFn: (vars: { id: string; input: MinionSessionFolderInput }) => graphqlClient(UpdateMinionSessionFolderDocument, vars),
+    onSuccess: done,
+  })
+  const move = useMutation({
+    mutationFn: (vars: { id: string; before: string | null }) => graphqlClient(MoveMinionSessionFolderDocument, vars),
+    onSuccess: done,
+  })
+  const remove = useMutation({
+    mutationFn: (id: string) => graphqlClient(DeleteMinionSessionFolderDocument, { id }),
+    onSuccess: () => {
+      done()
+      scheduleRefresh(queryClient, minionSessionKeys.lists())
+    },
+  })
+  return { create, update, move, remove }
+}
+
+/** Puts sessions in a folder (null: out of theirs), by ids or all a list matches; how many moved. */
+export function useSetMinionSessionsFolder() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (vars: SetMinionSessionsFolderMutationVariables) => graphqlClient(SetMinionSessionsFolderDocument, vars),
+    onSuccess: () => {
+      scheduleRefresh(queryClient, minionSessionKeys.lists())
       void queryClient.invalidateQueries({ queryKey: minionSessionKeys.details() })
     },
   })

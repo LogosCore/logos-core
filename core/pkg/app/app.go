@@ -87,6 +87,7 @@ type Repositories struct {
 	MinionTarget       repository.IMinionTargetRepository
 	MinionReservation  repository.IMinionSessionReservationRepository
 	MinionMark         repository.IMinionSessionMarkRepository
+	MinionFolder       repository.IMinionSessionFolderRepository
 	MinionTask         repository.IMinionTaskRepository
 	MinionFile         repository.IMinionFileRepository
 	FsEntry            repository.IFsEntryRepository

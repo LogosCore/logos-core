@@ -112,6 +112,8 @@ export interface SessionsLayout {
   widths: Partial<Record<SessionColumnId, number>>
   /** The work pane is parked: its tab row alone, at the bottom; split kept for its return. */
   paneParked: boolean
+  /** The folder shown of each operation, by its id; none: All. */
+  folders: Record<string, string>
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -125,6 +127,7 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   promptFx: null,
   widths: {},
   paneParked: false,
+  folders: {},
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
@@ -143,8 +146,8 @@ const isColumn = (id: string): id is SessionColumnId => SESSION_COLUMN_BY_ID.has
  */
 export function readSessionsLayout(
   stored:
-    | (Omit<MinionSessionsLayoutFieldsFragment, "widths" | "paneParked"> &
-        Partial<Pick<MinionSessionsLayoutFieldsFragment, "widths" | "paneParked">>)
+    | (Omit<MinionSessionsLayoutFieldsFragment, "widths" | "paneParked" | "folders"> &
+        Partial<Pick<MinionSessionsLayoutFieldsFragment, "widths" | "paneParked" | "folders">>)
     | null
     | undefined,
 ): SessionsLayout {
@@ -171,7 +174,28 @@ export function readSessionsLayout(
     promptFx: readPromptFx(stored.promptFx),
     widths: readWidths(stored.widths),
     paneParked: stored.paneParked === true,
+    folders: readFolderChoices(stored.folders),
   }
+}
+
+// The wire's list, or the map a layout set here keeps (the query's cache can
+// hand that back, as readWidths says).
+function readFolderChoices(
+  stored: readonly { operationId: string; folderId: string }[] | Record<string, string> | null | undefined,
+): Record<string, string> {
+  if (!stored) return {}
+  if (!Array.isArray(stored)) return { ...(stored as Record<string, string>) }
+  const out: Record<string, string> = {}
+  for (const c of stored) if (c.operationId && c.folderId) out[c.operationId] = c.folderId
+  return out
+}
+
+/** The layout showing an operation's folder (null: All). */
+export function showFolder(layout: SessionsLayout, operationId: string, folderId: string | null): SessionsLayout {
+  const folders = { ...layout.folders }
+  if (folderId === null) delete folders[operationId]
+  else folders[operationId] = folderId
+  return { ...layout, folders }
 }
 
 /** The widths a column may be sized to (core's MinColumnWidth, MaxColumnWidth). */
@@ -228,6 +252,7 @@ export function sessionsLayoutInput(layout: SessionsLayout) {
     promptFx: layout.promptFx,
     widths: Object.entries(layout.widths).map(([column, px]) => ({ column, px: px! })),
     paneParked: layout.paneParked,
+    folders: Object.entries(layout.folders).map(([operationId, folderId]) => ({ operationId, folderId })),
   }
 }
 

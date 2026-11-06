@@ -9,10 +9,18 @@ import {
   useMinionSessionChangedSubscription,
   useMinionSessionsLayout,
   useMinionSession,
+  useMinionSessionFolders,
+  useMinionSessionFolderMutations,
+  useSetMinionSessionsFolder,
 } from "@/graphql/hooks/minion-sessions"
+import { toast } from "sonner"
+import { errorMessage } from "@/components/modules/management/api-errors"
+import { SessionFolderTabs } from "@/components/minion-sessions/session-folder-tabs"
+import { SessionFolderDialog, type FolderDialogTarget } from "@/components/minion-sessions/session-folder-dialog"
+import type { FolderControls } from "@/components/minion-sessions/sessions-datatable"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { SessionsDatatable } from "@/components/minion-sessions/sessions-datatable"
-import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT } from "@/components/minion-sessions/sessions-layout"
+import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT, showFolder } from "@/components/minion-sessions/sessions-layout"
 import { SplitPane } from "@/components/ui/split-pane"
 import { useCanBuild } from "@/components/builds/build-access"
 import { SessionWorkspace } from "@/components/minion-sessions/session-workspace"
@@ -57,8 +65,41 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
   // The archived sessions instead of the others: the page's, not the layout's,
   // so it always opens on the live ones.
   const [archived, setArchived] = useState(false)
+  // The operation's folders, and the one shown (the layout's; one gone: All).
+  const { data: folderList } = useMinionSessionFolders(operationId)
+  const folderMutations = useMinionSessionFolderMutations(operationId)
+  const moveSessions = useSetMinionSessionsFolder()
+  const [folderDialog, setFolderDialog] = useState<FolderDialogTarget | null>(null)
+  // Sessions to put in the folder New folder makes (its row's Move to folder).
+  const [moveIntoNew, setMoveIntoNew] = useState<{ ids: string[] } | null>(null)
+  const chosen = layout.folders[operationId] ?? null
+  const currentFolder = chosen && folderList?.some((f) => f.id === chosen) ? chosen : null
+  const selectFolder = (id: string | null) => setLayout(showFolder(layout, operationId, id))
+  const folderControls: FolderControls = {
+    list: folderList ?? [],
+    current: currentFolder,
+    canWrite,
+    onSelect: selectFolder,
+    onNew: (move) => {
+      setMoveIntoNew(move ?? null)
+      setFolderDialog({ kind: "new" })
+    },
+    moveTo: (folderId, which, done) =>
+      moveSessions.mutate(
+        { operationId, folderId, ...which },
+        {
+          onSuccess: (d) => {
+            const n = d.setMinionSessionsFolder
+            const name = folderList?.find((f) => f.id === folderId)?.name ?? "the new folder"
+            toast.success(`${folderId ? `Moved ${n} ${n === 1 ? "session" : "sessions"} to ${name}` : `Took ${n} ${n === 1 ? "session" : "sessions"} out of its folder`}`)
+            done?.()
+          },
+          onError: (e) => toast.error(errorMessage(e, "Failed to move the sessions")),
+        },
+      ),
+  }
   const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } = useInfiniteMinionSessions(
-    { operationId, archived, search: null, filters: layout.filters, sort: layout.sort },
+    { operationId, archived, folderId: currentFolder, search: null, filters: layout.filters, sort: layout.sort },
     // The first page waits for the layout, so it is fetched once, as kept.
     { enabled: !layoutLoading },
   )
@@ -93,7 +134,19 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
             {error ? (
               <div className="m-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive">{error.message}</div>
             ) : (
+              <>
+              <SessionFolderTabs
+                folders={folderList ?? []}
+                current={currentFolder}
+                onSelect={selectFolder}
+                canWrite={canWrite}
+                onNew={() => folderControls.onNew()}
+                onEdit={(folder) => setFolderDialog({ kind: "edit", folder })}
+                onDelete={(folder) => setFolderDialog({ kind: "delete", folder })}
+                onMove={(id, before) => folderMutations.move.mutate({ id, before })}
+              />
               <SessionsDatatable
+                folders={folderControls}
                 operationId={operationId}
                 canWrite={canWrite}
                 archived={archived}
@@ -127,6 +180,7 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
                   )
                 }
               />
+              </>
             )}
           </div>
         }
@@ -138,6 +192,18 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
             onParkedChange={(paneParked) => setLayout({ ...layout, paneParked })}
           />
         }
+      />
+      <SessionFolderDialog
+        operationId={operationId}
+        target={folderDialog}
+        onClose={() => {
+          setFolderDialog(null)
+          setMoveIntoNew(null)
+        }}
+        onCreated={(folder) => {
+          if (moveIntoNew) folderControls.moveTo(folder.id, moveIntoNew)
+          selectFolder(folder.id)
+        }}
       />
     </div>
   )

@@ -81,6 +81,8 @@ type MinionSession {
   # Hidden from the operation's sessions, listed with archived: true. A
   # check-in restores it.
   archived: Boolean!
+  # The operation's folder the session is in; null: none (it is in All).
+  folderId: ID
   # How the caller marked it for themselves; null when they did not. Nobody
   # else sees it.
   mark: MinionSessionMark
@@ -353,6 +355,8 @@ type MinionSessionFilter {
 # (archived or not), the search and the filters.
 input MinionSessionMatchInput {
   archived: Boolean
+  # The folder's sessions; null: all (All).
+  folderId: ID
   search: String
   filters: [MinionSessionFilterInput!]
 }
@@ -397,6 +401,9 @@ type MinionSessionsLayout {
   # The columns the operator sized, in pixels (32 to 1600); the others take
   # the app's widths.
   widths: [MinionSessionColumnWidth!]!
+  # The folder the operator last showed of each operation (none listed:
+  # All).
+  folders: [MinionSessionFolderChoice!]!
   # The work pane below the list is parked: its tab row alone, at the page's
   # bottom (split is kept for when it comes back).
   paneParked: Boolean!
@@ -424,6 +431,38 @@ input MinionSessionsLayoutInput {
   promptFx: String
   widths: [MinionSessionColumnWidthInput!]
   paneParked: Boolean
+  folders: [MinionSessionFolderChoiceInput!]
+}
+
+# An operation's folder of sessions, its operators' to share: a view of the
+# Sessions table. Every session is in All; in one folder at most.
+type MinionSessionFolder {
+  id: ID!
+  operationId: ID!
+  name: String!
+  # A lucide name, or an emoji (one of the two, or neither); color the
+  # icon's (#rrggbb), as a wiki page's.
+  icon: String
+  emoji: String
+  color: String
+  order: Int!
+}
+
+input MinionSessionFolderInput {
+  name: String!
+  icon: String
+  emoji: String
+  color: String
+}
+
+type MinionSessionFolderChoice {
+  operationId: ID!
+  folderId: ID!
+}
+
+input MinionSessionFolderChoiceInput {
+  operationId: ID!
+  folderId: ID!
 }
 
 type MinionSessionEvent {
@@ -434,6 +473,10 @@ type MinionSessionEvent {
 }
 
 extend type Query {
+  # An operation's folders of sessions, in their order. Needs at least viewer.
+  minionSessionFolders(operationId: ID!): [MinionSessionFolder!]!
+    @hasPermission(permission: "operation:member")
+
   # A session's feedback, newest first, a page at a time (first: 200 by
   # default, 500 at most; after: a page's next). level keeps one level's
   # (warning, error); search the entries whose message or code holds it, any
@@ -455,6 +498,8 @@ extend type Query {
     operationId: ID!
     # The archived sessions instead of the others.
     archived: Boolean = false
+    # The sessions in this folder; null: all of them (the table's All).
+    folderId: ID
     search: String
     filters: [MinionSessionFilterInput!]
     sort: MinionSessionSortInput
@@ -482,6 +527,22 @@ extend type Query {
 }
 
 extend type Mutation {
+  # An operation's folders: made, changed, moved (before another, or last
+  # when null) and deleted (its sessions stay, in All). Needs operator.
+  createMinionSessionFolder(operationId: ID!, input: MinionSessionFolderInput!): MinionSessionFolder!
+    @hasPermission(permission: "operation:member")
+  updateMinionSessionFolder(id: ID!, input: MinionSessionFolderInput!): MinionSessionFolder!
+    @hasPermission(permission: "operation:member")
+  moveMinionSessionFolder(id: ID!, before: ID): [MinionSessionFolder!]!
+    @hasPermission(permission: "operation:member")
+  deleteMinionSessionFolder(id: ID!): Boolean!
+    @hasPermission(permission: "operation:member")
+  # Puts sessions in a folder (null: out of theirs), by ids or all a list
+  # matches, as setMinionSessionsArchived names them; how many moved.
+  # Needs operator.
+  setMinionSessionsFolder(operationId: ID!, ids: [ID!], matching: MinionSessionMatchInput, folderId: ID): Int!
+    @hasPermission(permission: "operation:member")
+
   # Archives a session (hidden from the operation's sessions) or restores it,
   # for everyone in the operation; a check-in restores it too. Needs at least
   # operator; agent API keys are rejected.

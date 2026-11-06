@@ -135,6 +135,9 @@ type MinionSession struct {
 	// Archived view lists it); an operator archives and restores it, and a
 	// check-in restores it: a minion that comes back is never hidden.
 	Archived bool `bson:"archived,omitempty" json:"archived,omitempty"`
+	// FolderID is the operation's folder the session is in, nil for none
+	// (it is in All, as every session is: models.MinionSessionFolder).
+	FolderID *uuid.UUID `bson:"folder_id,omitempty" json:"folder_id,omitempty"`
 	// Persisted is set once a build names the session (Build.PersistedSessionID):
 	// that build's minions claim it when they start.
 	Persisted bool `bson:"persisted,omitempty" json:"persisted,omitempty"`

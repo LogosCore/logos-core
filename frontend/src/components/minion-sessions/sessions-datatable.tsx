@@ -33,6 +33,10 @@ import {
   MonitorDotIcon,
   CopyIcon,
   ListRestartIcon,
+  FolderIcon,
+  FolderInputIcon,
+  FolderMinusIcon,
+  FolderPlusIcon,
   MoveHorizontalIcon,
   ListChecksIcon,
   LoaderIcon,
@@ -68,7 +72,7 @@ import {
 import { ContextMenuRow } from "@/components/ui/context-menu-row"
 import { Popover, PopoverContent } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
+import type { MinionSessionFieldsFragment, MinionSessionFolderFieldsFragment, SetMinionSessionsFolderMutationVariables } from "@/graphql/gql/graphql"
 import { PLACEHOLDER_DELAY_MS, useDelayedFlag } from "@/hooks/use-delayed-flag"
 import { useNow } from "@/hooks/use-now"
 import { cn } from "@/lib/utils"
@@ -123,6 +127,7 @@ import {
   type SessionsLayout,
 } from "./sessions-layout"
 import { SwitchConnectionMenu } from "./switch-connection-menu"
+import { FolderGlyph } from "./session-folder-tabs"
 import { ConnectTargetMenu } from "./connect-target-menu"
 
 // The Sessions table: the operators' main view. Unlike the app's other
@@ -133,6 +138,19 @@ import { ConnectTargetMenu } from "./connect-target-menu"
 // sorts; the layout is saved on the operator (useMinionSessionsLayout).
 
 const SKELETON_ROWS = 5
+/** The operation's folders, as the table's menus use them (the page's). */
+export interface FolderControls {
+  list: readonly MinionSessionFolderFieldsFragment[]
+  /** The folder shown; null: All. */
+  current: string | null
+  canWrite: boolean
+  onSelect: (folderId: string | null) => void
+  /** Opens New folder; with sessions, they go in it once it is made. */
+  onNew: (move?: { ids: string[] }) => void
+  /** Puts sessions in a folder (null: out of theirs), by ids or all a list matches; then done. */
+  moveTo: (folderId: string | null, which: { ids: string[] } | { matching: SetMinionSessionsFolderMutationVariables["matching"] }, done?: () => void) => void
+}
+
 const MENU_PX = 36
 const CHECK_PX = 20
 const MENU_TRACK = `${MENU_PX}px`
@@ -172,7 +190,10 @@ export function SessionsDatatable({
   fetchNextPage,
   total,
   emptyState,
+  folders,
 }: {
+  /** The operation's folders: the one shown, and showing, making and filling them. */
+  folders: FolderControls
   operationId: string
   /** How many sessions the list matches, every page: for "select all matching". */
   total: number
@@ -396,6 +417,7 @@ export function SessionsDatatable({
         </DndContext>
       </ContextMenuTrigger>
       <HeaderMenu
+        folders={folders}
         column={menuColumn}
         archived={archived}
         onArchivedChange={onArchivedChange}
@@ -414,6 +436,7 @@ export function SessionsDatatable({
         selectionBar={
           selecting ? (
             <SelectionBar
+              folders={folders}
               operationId={operationId}
               archived={archived}
               canWrite={canWrite}
@@ -433,7 +456,7 @@ export function SessionsDatatable({
                     const { setMinionSessionsMark: marked } = await markMany({
                       operationId,
                       mark,
-                      ...(selection.all ? { matching: { archived, filters: layout.filters } } : { ids: picked }),
+                      ...(selection.all ? { matching: { archived, folderId: folders.current, filters: layout.filters } } : { ids: picked }),
                     })
                     toast.success(`${mark ? "Marked" : "Cleared the marks of"} ${marked} ${marked === 1 ? "session" : "sessions"}`)
                     clearSelection()
@@ -501,7 +524,8 @@ export function SessionsDatatable({
                   menu={
                     <SessionMenu
                       copyCell={copyCell}
-                      table={{ column: copyColumn, archived, onArchivedChange, layout, onLayoutChange }}
+                      folders={folders}
+                      table={{ column: copyColumn, archived, onArchivedChange, layout, onLayoutChange, folders }}
                       session={s}
                       canWrite={canWrite}
                       persistable={persistable(s)}
@@ -770,6 +794,7 @@ function titleIfCut(cell: HTMLElement) {
 
 /** The header's right-click menu: about the column clicked, then the table. */
 function HeaderMenu({
+  folders,
   column,
   archived,
   onArchivedChange,
@@ -777,6 +802,7 @@ function HeaderMenu({
   onLayoutChange,
   onFilter,
 }: {
+  folders: FolderControls
   column: SessionColumnId | null
   archived: boolean
   onArchivedChange: (archived: boolean) => void
@@ -861,6 +887,7 @@ function HeaderMenu({
         onArchivedChange={onArchivedChange}
         layout={layout}
         onLayoutChange={onLayoutChange}
+        folders={folders}
       />
     </ContextMenuContent>
   )
@@ -877,7 +904,9 @@ function TableMenuItems({
   onArchivedChange,
   layout,
   onLayoutChange,
+  folders,
 }: {
+  folders: FolderControls
   column: SessionColumnId | null
   archived: boolean
   onArchivedChange: (archived: boolean) => void
@@ -886,6 +915,32 @@ function TableMenuItems({
 }) {
   return (
     <>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <FolderIcon />
+          Folder
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent className="max-h-80 overflow-y-auto">
+          <ContextMenuCheckboxItem checked={folders.current === null} closeOnClick onCheckedChange={() => folders.onSelect(null)}>
+            All
+          </ContextMenuCheckboxItem>
+          {folders.list.map((f) => (
+            <ContextMenuCheckboxItem key={f.id} checked={folders.current === f.id} closeOnClick onCheckedChange={() => folders.onSelect(f.id)}>
+              <FolderGlyph folder={f} />
+              {f.name}
+            </ContextMenuCheckboxItem>
+          ))}
+          {folders.canWrite && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => folders.onNew()}>
+                <FolderPlusIcon />
+                New folder…
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuSubContent>
+      </ContextMenuSub>
       <ContextMenuSub>
         <ContextMenuSubTrigger>
           <Columns3Icon />
@@ -1046,9 +1101,18 @@ function SessionMenu({
   onFileBrowser,
   copyCell,
   table,
+  folders,
 }: {
+  folders: FolderControls
   /** The table's items, after the session's (TableMenuItems). */
-  table: { column: SessionColumnId | null; archived: boolean; onArchivedChange: (archived: boolean) => void; layout: SessionsLayout; onLayoutChange: (layout: SessionsLayout | null) => void }
+  table: {
+    column: SessionColumnId | null
+    archived: boolean
+    onArchivedChange: (archived: boolean) => void
+    layout: SessionsLayout
+    onLayoutChange: (layout: SessionsLayout | null) => void
+    folders: FolderControls
+  }
   /** The cell a right click opened the menu from: its value to copy. */
   copyCell?: { label: string; text: string } | null
   session: MinionSessionFieldsFragment
@@ -1130,6 +1194,33 @@ function SessionMenu({
         <TagIcon />
         Mark…
       </ContextMenuItem>
+      {canWrite && (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <FolderInputIcon />
+            Move to folder
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="max-h-80 overflow-y-auto">
+            {folders.list.map((f) => (
+              <ContextMenuItem key={f.id} disabled={s.folderId === f.id} onClick={() => folders.moveTo(f.id, { ids: [s.id] })}>
+                <FolderGlyph folder={f} />
+                {f.name}
+              </ContextMenuItem>
+            ))}
+            {folders.list.length > 0 && <ContextMenuSeparator />}
+            <ContextMenuItem onClick={() => folders.onNew({ ids: [s.id] })}>
+              <FolderPlusIcon />
+              New folder…
+            </ContextMenuItem>
+            {s.folderId && (
+              <ContextMenuItem onClick={() => folders.moveTo(null, { ids: [s.id] })}>
+                <FolderMinusIcon />
+                Remove from folder
+              </ContextMenuItem>
+            )}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      )}
       <ContextMenuItem
         disabled={why !== undefined}
         title={why}
@@ -1175,7 +1266,9 @@ function SelectionBar({
   onSelectAll,
   onMark,
   onDone,
+  folders,
 }: {
+  folders: FolderControls
   operationId: string
   archived: boolean
   canWrite: boolean
@@ -1199,7 +1292,7 @@ function SelectionBar({
       {
         operationId,
         archived: !archived,
-        ...(selection.all ? { matching: { archived, filters } } : { ids: picked }),
+        ...(selection.all ? { matching: { archived, folderId: folders.current, filters } } : { ids: picked }),
       },
       {
         onSuccess: (data) => {
@@ -1250,6 +1343,40 @@ function SelectionBar({
         <TagIcon />
         Mark…
       </Button>
+      {canWrite && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button size="xs" variant="outline" disabled={count === 0}>
+                <FolderInputIcon />
+                Move to folder
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+            {folders.list.map((f) => (
+              <DropdownMenuItem
+                key={f.id}
+                onClick={() =>
+                  folders.moveTo(f.id, selection.all ? { matching: { archived, folderId: folders.current, filters } } : { ids: picked }, onDone)
+                }
+              >
+                <FolderGlyph folder={f} />
+                {f.name}
+              </DropdownMenuItem>
+            ))}
+            {folders.list.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onClick={() =>
+                folders.moveTo(null, selection.all ? { matching: { archived, folderId: folders.current, filters } } : { ids: picked }, onDone)
+              }
+            >
+              <FolderMinusIcon />
+              Remove from folder
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Button size="xs" variant="ghost" onClick={onDone} title="Done (Esc)">
         Done
       </Button>

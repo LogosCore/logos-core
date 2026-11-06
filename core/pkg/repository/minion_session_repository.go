@@ -69,6 +69,11 @@ type IMinionSessionRepository interface {
 	// many changed.
 	SetArchivedMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, archived bool) (int64, error)
 	SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error)
+	// SetFolderMany and SetFolderMatching put sessions in a folder (nil:
+	// none); ClearFolder takes every session out of one (it is gone).
+	SetFolderMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, folder *uuid.UUID) (int64, error)
+	SetFolderMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, folder *uuid.UUID) (int64, error)
+	ClearFolder(ctx context.Context, operationID, folder uuid.UUID) (int64, error)
 	// SessionIDs are the ids of the sessions q lists (not its sort), at most
 	// limit: what a bulk change names by matching.
 	SessionIDs(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, limit int64) ([]uuid.UUID, error)
@@ -133,6 +138,7 @@ func NewMinionSessionRepository(db database.Database) IMinionSessionRepository {
 		{Key: []string{"operation_id", "hello.machine_id"}},
 		{Key: []string{"operation_id", "late_at"}},
 		{Key: []string{"operation_id", "lost_at"}},
+		{Key: []string{"operation_id", "folder_id"}},
 		// A session without purge_at (checked in, open) stays.
 		{Key: []string{"purge_at"}, IndexOptions: new(options.IndexOptions).SetExpireAfterSeconds(0)},
 	})
@@ -461,6 +467,44 @@ func (r *minionSessionRepository) SetArchivedMany(ctx context.Context, operation
 
 func (r *minionSessionRepository) SetArchivedMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, archived bool) (int64, error) {
 	res, err := r.coll.UpdateAll(ctx, minionSessionFilter(operationID, q, time.Now().UTC()), archiveUpdate(archived))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func folderUpdate(folder *uuid.UUID) bson.M {
+	if folder != nil {
+		return withRev(bson.M{"$set": bson.M{"folder_id": *folder}})
+	}
+	return withRev(bson.M{"$unset": bson.M{"folder_id": ""}})
+}
+
+func (r *minionSessionRepository) SetFolderMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, folder *uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	in := make(bson.A, len(ids))
+	for i, id := range ids {
+		in[i] = id
+	}
+	res, err := r.coll.UpdateAll(ctx, bson.M{"operation_id": operationID, "session_id": bson.M{"$in": in}}, folderUpdate(folder))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) SetFolderMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, folder *uuid.UUID) (int64, error) {
+	res, err := r.coll.UpdateAll(ctx, minionSessionFilter(operationID, q, time.Now().UTC()), folderUpdate(folder))
+	if err != nil {
+		return 0, err
+	}
+	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) ClearFolder(ctx context.Context, operationID, folder uuid.UUID) (int64, error) {
+	res, err := r.coll.UpdateAll(ctx, bson.M{"operation_id": operationID, "folder_id": folder}, folderUpdate(nil))
 	if err != nil {
 		return 0, err
 	}

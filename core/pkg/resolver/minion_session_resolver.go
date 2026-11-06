@@ -26,7 +26,7 @@ type IMinionSessionResolver interface {
 	// Connections is MinionSession.connections: its build's, read when
 	// asked (the session was authorized with it).
 	Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error)
-	MinionSessions(ctx context.Context, operationID string, archived *bool, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
+	MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error)
 	MinionSessionValues(ctx context.Context, operationID string, column string) ([]string, error)
 	MinionSession(ctx context.Context, id string) (*model.MinionSession, error)
 	// MinionSessionsLayout and SetMinionSessionsLayout are the caller's own
@@ -58,6 +58,13 @@ type IMinionSessionResolver interface {
 	// SetMinionSessionsArchived archives or restores many: by ids, or every
 	// one matching a list's view, search and filters.
 	SetMinionSessionsArchived(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) (int, error)
+	// An operation's folders of sessions (minion_session_folders.go).
+	MinionSessionFolders(ctx context.Context, operationID string) ([]*model.MinionSessionFolder, error)
+	CreateMinionSessionFolder(ctx context.Context, operationID string, in model.MinionSessionFolderInput) (*model.MinionSessionFolder, error)
+	UpdateMinionSessionFolder(ctx context.Context, id string, in model.MinionSessionFolderInput) (*model.MinionSessionFolder, error)
+	MoveMinionSessionFolder(ctx context.Context, id string, before *string) ([]*model.MinionSessionFolder, error)
+	DeleteMinionSessionFolder(ctx context.Context, id string) (bool, error)
+	SetMinionSessionsFolder(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, folderID *string) (int, error)
 	// Load reads one session for a subscription event, already authorized
 	// by the subscription's filter; nil when it cannot be read.
 	Load(ctx context.Context, sessionID string) *model.MinionSession
@@ -70,6 +77,7 @@ type minionSessionResolver struct {
 	preferences   repository.IUserPreferencesRepository
 	reservations  repository.IMinionSessionReservationRepository
 	marks         repository.IMinionSessionMarkRepository
+	folders       repository.IMinionSessionFolderRepository
 	builds        repository.IBuildRepository
 	bus           eventbus.IEventBus
 	tasks         SessionTasks
@@ -94,9 +102,10 @@ func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, oper
 	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
 	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
 	builds repository.IBuildRepository, bus eventbus.IEventBus, tasks SessionTasks, limits MaxTasksSetter,
-	feedback repository.IMinionFeedbackRepository, identities repository.IMinionIdentityRepository) IMinionSessionResolver {
+	feedback repository.IMinionFeedbackRepository, identities repository.IMinionIdentityRepository,
+	folders repository.IMinionSessionFolderRepository) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
-		reservations: reservations, marks: marks, builds: builds, bus: bus, tasks: tasks, limits: limits, feedback: feedback,
+		reservations: reservations, marks: marks, folders: folders, builds: builds, bus: bus, tasks: tasks, limits: limits, feedback: feedback,
 		identities: identities}
 }
 
@@ -140,12 +149,15 @@ func (r *minionSessionResolver) viewer(ctx context.Context, operationID string) 
 	return op, authorization.AuthorizeOperationRole(ctx, &operation, models.OperationRoleViewer)
 }
 
-func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
+func (r *minionSessionResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
 	op, err := r.viewer(ctx, operationID)
 	if err != nil {
 		return nil, err
 	}
 	q := repository.MinionSessionQuery{Archived: archived != nil && *archived, Search: strings.TrimSpace(deref(search)), Sort: models.DefaultMinionSessionSort}
+	if q.Folder, err = folderOf(ctx, folderID); err != nil {
+		return nil, err
+	}
 	if sort != nil {
 		q.Sort = fromSessionSortInput(sort)
 	}
@@ -355,6 +367,9 @@ func bulkTargets(ctx context.Context, ids []string, matching *model.MinionSessio
 		q := repository.MinionSessionQuery{Archived: matching.Archived != nil && *matching.Archived,
 			Search: strings.TrimSpace(deref(matching.Search)), Sort: models.DefaultMinionSessionSort}
 		var err error
+		if q.Folder, err = folderOf(ctx, matching.FolderID); err != nil {
+			return nil, nil, err
+		}
 		if q.Filters, err = fromSessionFilterInputs(matching.Filters); err != nil {
 			return nil, nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 		}
@@ -544,6 +559,14 @@ func (r *minionSessionResolver) SetMinionSessionsLayout(ctx context.Context, in 
 	if in != nil {
 		layout = &models.MinionSessionsLayout{Columns: in.Columns, Split: in.Split, ConsoleSplit: in.ConsoleSplit, FilesSplit: in.FilesSplit,
 			PaneTextSize: in.PaneTextSize, PromptFx: in.PromptFx, PaneParked: in.PaneParked != nil && *in.PaneParked}
+		for _, c := range in.Folders {
+			op, err1 := uuid.Parse(c.OperationID)
+			fid, err2 := uuid.Parse(c.FolderID)
+			if err1 != nil || err2 != nil {
+				return nil, moduleGQLError(ctx, errCodeBadUserInput, "layout: a folder choice is an operation's id and a folder's")
+			}
+			layout.Folders = append(layout.Folders, models.MinionSessionFolderChoice{OperationID: op, FolderID: fid})
+		}
 		for _, w := range in.Widths {
 			layout.Widths = append(layout.Widths, models.MinionSessionColumnWidth{Column: w.Column, Px: w.Px})
 		}
@@ -603,7 +626,10 @@ func toSessionsLayoutModel(l *models.MinionSessionsLayout) *model.MinionSessions
 	}
 	out := &model.MinionSessionsLayout{Columns: l.Columns, Filters: []*model.MinionSessionFilter{}, Split: l.Split,
 		ConsoleSplit: l.ConsoleSplit, FilesSplit: l.FilesSplit, PaneTextSize: l.PaneTextSize, PromptFx: l.PromptFx,
-		Widths: []*model.MinionSessionColumnWidth{}, PaneParked: l.PaneParked}
+		Widths: []*model.MinionSessionColumnWidth{}, PaneParked: l.PaneParked, Folders: []*model.MinionSessionFolderChoice{}}
+	for _, c := range l.Folders {
+		out.Folders = append(out.Folders, &model.MinionSessionFolderChoice{OperationID: c.OperationID.String(), FolderID: c.FolderID.String()})
+	}
 	for _, w := range l.Widths {
 		out.Widths = append(out.Widths, &model.MinionSessionColumnWidth{Column: w.Column, Px: w.Px})
 	}
@@ -679,7 +705,7 @@ func (r *minionSessionResolver) withMark(ctx context.Context, s *models.MinionSe
 func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 	h := s.Hello
 	out := &model.MinionSession{
-		ID: s.SessionID.String(), Rev: int(s.Rev), State: sessionState(s), Archived: s.Archived, Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
+		ID: s.SessionID.String(), Rev: int(s.Rev), State: sessionState(s), Archived: s.Archived, FolderID: uuidPtr(s.FolderID), Number: int(s.Number), OperationID: s.OperationID.String(), BuildID: s.BuildID.String(),
 		BuildDescription: s.BuildDescription, Description: s.Description, ModuleName: s.ModuleName, Target: s.Target, Platform: s.Platform,
 		Staged: s.Staged, Pid: int(h.PID), Os: h.OS, Arch: h.Arch, Host: strPtr(h.Host), User: strPtr(h.User),
 		Domain: strPtr(h.Domain), Proc: strPtr(h.Proc), MachineID: strPtr(h.MachineID), Integrity: strPtr(h.Integrity), Addrs: orEmpty(h.Addrs),

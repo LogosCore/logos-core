@@ -8,6 +8,7 @@ export const MinionSessionFields = graphql(`
     rev
     state
     archived
+    folderId
     mark {
       color
       icon
@@ -145,6 +146,7 @@ export const MinionSessionsQuery = graphql(`
   query MinionSessions(
     $operationId: ID!
     $archived: Boolean
+    $folderId: ID
     $search: String
     $filters: [MinionSessionFilterInput!]
     $sort: MinionSessionSortInput
@@ -154,6 +156,7 @@ export const MinionSessionsQuery = graphql(`
     minionSessions(
       operationId: $operationId
       archived: $archived
+      folderId: $folderId
       search: $search
       filters: $filters
       sort: $sort
@@ -222,6 +225,10 @@ export const MinionSessionsLayoutFields = graphql(`
       px
     }
     paneParked
+    folders {
+      operationId
+      folderId
+    }
   }
 `)
 
@@ -336,5 +343,61 @@ export const SetMinionSessionsMarkMutation = graphql(`
     $mark: MinionSessionMarkInput
   ) {
     setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)
+  }
+`)
+
+export const MinionSessionFolderFieldsFragment = graphql(`
+  fragment MinionSessionFolderFields on MinionSessionFolder {
+    id
+    operationId
+    name
+    icon
+    emoji
+    color
+    order
+  }
+`)
+
+export const MinionSessionFoldersQuery = graphql(`
+  query MinionSessionFolders($operationId: ID!) {
+    minionSessionFolders(operationId: $operationId) {
+      ...MinionSessionFolderFields
+    }
+  }
+`)
+
+export const CreateMinionSessionFolderMutation = graphql(`
+  mutation CreateMinionSessionFolder($operationId: ID!, $input: MinionSessionFolderInput!) {
+    createMinionSessionFolder(operationId: $operationId, input: $input) {
+      ...MinionSessionFolderFields
+    }
+  }
+`)
+
+export const UpdateMinionSessionFolderMutation = graphql(`
+  mutation UpdateMinionSessionFolder($id: ID!, $input: MinionSessionFolderInput!) {
+    updateMinionSessionFolder(id: $id, input: $input) {
+      ...MinionSessionFolderFields
+    }
+  }
+`)
+
+export const MoveMinionSessionFolderMutation = graphql(`
+  mutation MoveMinionSessionFolder($id: ID!, $before: ID) {
+    moveMinionSessionFolder(id: $id, before: $before) {
+      ...MinionSessionFolderFields
+    }
+  }
+`)
+
+export const DeleteMinionSessionFolderMutation = graphql(`
+  mutation DeleteMinionSessionFolder($id: ID!) {
+    deleteMinionSessionFolder(id: $id)
+  }
+`)
+
+export const SetMinionSessionsFolderMutation = graphql(`
+  mutation SetMinionSessionsFolder($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $folderId: ID) {
+    setMinionSessionsFolder(operationId: $operationId, ids: $ids, matching: $matching, folderId: $folderId)
   }
 `)

@@ -58,22 +58,23 @@ type IOperationResolver interface {
 
 type operationResolver struct {
 	operationRepo  repository.IOperationRepository
-	userRepo       repository.IUserRepository               // needed for Members field resolver
-	wikiDocRepo    repository.IWikiDocumentRepository       // needed for cascade delete
-	wikiBackupRepo repository.IWikiDocumentBackupRepository // needed for cascade delete
-	credRepo       repository.ICredentialRepository         // needed for cascade delete
-	hostRepo       repository.IHostRepository               // needed for cascade delete
-	endpointRepo   repository.IChannelEndpointRepository    // needed for cascade delete
-	targetRepo     repository.IMinionTargetRepository       // needed for cascade delete
-	buildCleanup   BuildCleanup                             // needed for cascade delete
-	sessionRepo    repository.IMinionSessionRepository      // needed for cascade delete
-	markRepo       repository.IMinionSessionMarkRepository  // needed for cascade delete
-	minionTaskRepo repository.IMinionTaskRepository         // needed for cascade delete
-	fsEntryRepo    repository.IFsEntryRepository            // needed for cascade delete
-	feedbackRepo   repository.IMinionFeedbackRepository     // needed for cascade delete
-	identityRepo   repository.IMinionIdentityRepository     // needed for cascade delete
-	minionFiles    MinionFileCleanup                        // needed for cascade delete
-	eventBus       eventbus.IEventBus                       // async event publishing
+	userRepo       repository.IUserRepository                // needed for Members field resolver
+	wikiDocRepo    repository.IWikiDocumentRepository        // needed for cascade delete
+	wikiBackupRepo repository.IWikiDocumentBackupRepository  // needed for cascade delete
+	credRepo       repository.ICredentialRepository          // needed for cascade delete
+	hostRepo       repository.IHostRepository                // needed for cascade delete
+	endpointRepo   repository.IChannelEndpointRepository     // needed for cascade delete
+	targetRepo     repository.IMinionTargetRepository        // needed for cascade delete
+	buildCleanup   BuildCleanup                              // needed for cascade delete
+	sessionRepo    repository.IMinionSessionRepository       // needed for cascade delete
+	markRepo       repository.IMinionSessionMarkRepository   // needed for cascade delete
+	folderRepo     repository.IMinionSessionFolderRepository // needed for cascade delete
+	minionTaskRepo repository.IMinionTaskRepository          // needed for cascade delete
+	fsEntryRepo    repository.IFsEntryRepository             // needed for cascade delete
+	feedbackRepo   repository.IMinionFeedbackRepository      // needed for cascade delete
+	identityRepo   repository.IMinionIdentityRepository      // needed for cascade delete
+	minionFiles    MinionFileCleanup                         // needed for cascade delete
+	eventBus       eventbus.IEventBus                        // async event publishing
 }
 
 // NewOperationResolver creates a new operation resolver with the given dependencies.
@@ -156,6 +157,13 @@ func WithBuildCleanup(c BuildCleanup) OperationResolverOption {
 func WithMinionSessionRepo(repo repository.IMinionSessionRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.sessionRepo = repo
+	}
+}
+
+// WithMinionSessionFolderRepo adds the session folder repository for cascade delete.
+func WithMinionSessionFolderRepo(repo repository.IMinionSessionFolderRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.folderRepo = repo
 	}
 }
 
@@ -385,6 +393,13 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.markRepo != nil {
 		if err := r.markRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's session marks: %w", err)
+		}
+	}
+
+	// Cascade delete: its folders of sessions
+	if r.folderRepo != nil {
+		if err := r.folderRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's session folders: %w", err)
 		}
 	}
 	if r.minionTaskRepo != nil {

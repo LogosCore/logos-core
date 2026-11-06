@@ -32,6 +32,31 @@ func (r *minionSessionResolver) RunningTasks(ctx context.Context, obj *model.Min
 	return r.MinionSessionResolver.RunningTasks(ctx, obj)
 }
 
+// CreateMinionSessionFolder is the resolver for the createMinionSessionFolder field.
+func (r *mutationResolver) CreateMinionSessionFolder(ctx context.Context, operationID string, input model.MinionSessionFolderInput) (*model.MinionSessionFolder, error) {
+	return r.MinionSessionResolver.CreateMinionSessionFolder(ctx, operationID, input)
+}
+
+// UpdateMinionSessionFolder is the resolver for the updateMinionSessionFolder field.
+func (r *mutationResolver) UpdateMinionSessionFolder(ctx context.Context, id string, input model.MinionSessionFolderInput) (*model.MinionSessionFolder, error) {
+	return r.MinionSessionResolver.UpdateMinionSessionFolder(ctx, id, input)
+}
+
+// MoveMinionSessionFolder is the resolver for the moveMinionSessionFolder field.
+func (r *mutationResolver) MoveMinionSessionFolder(ctx context.Context, id string, before *string) ([]*model.MinionSessionFolder, error) {
+	return r.MinionSessionResolver.MoveMinionSessionFolder(ctx, id, before)
+}
+
+// DeleteMinionSessionFolder is the resolver for the deleteMinionSessionFolder field.
+func (r *mutationResolver) DeleteMinionSessionFolder(ctx context.Context, id string) (bool, error) {
+	return r.MinionSessionResolver.DeleteMinionSessionFolder(ctx, id)
+}
+
+// SetMinionSessionsFolder is the resolver for the setMinionSessionsFolder field.
+func (r *mutationResolver) SetMinionSessionsFolder(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, folderID *string) (int, error) {
+	return r.MinionSessionResolver.SetMinionSessionsFolder(ctx, operationID, ids, matching, folderID)
+}
+
 // SetMinionSessionArchived is the resolver for the setMinionSessionArchived field.
 func (r *mutationResolver) SetMinionSessionArchived(ctx context.Context, id string, archived bool) (*model.MinionSession, error) {
 	return r.MinionSessionResolver.SetMinionSessionArchived(ctx, id, archived)
@@ -77,6 +102,11 @@ func (r *mutationResolver) SetMinionSessionsLayout(ctx context.Context, layout *
 	return r.MinionSessionResolver.SetMinionSessionsLayout(ctx, layout)
 }
 
+// MinionSessionFolders is the resolver for the minionSessionFolders field.
+func (r *queryResolver) MinionSessionFolders(ctx context.Context, operationID string) ([]*model.MinionSessionFolder, error) {
+	return r.MinionSessionResolver.MinionSessionFolders(ctx, operationID)
+}
+
 // MinionFeedback is the resolver for the minionFeedback field.
 func (r *queryResolver) MinionFeedback(ctx context.Context, sessionID string, level *string, search *string, after *string, first *int) (*model.MinionFeedbackPage, error) {
 	return r.MinionSessionResolver.MinionFeedback(ctx, sessionID, level, search, after, first)
@@ -88,8 +118,8 @@ func (r *queryResolver) MinionIdentities(ctx context.Context, sessionID string, 
 }
 
 // MinionSessions is the resolver for the minionSessions field.
-func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
-	return r.MinionSessionResolver.MinionSessions(ctx, operationID, archived, search, filters, sort, first, after, last, before)
+func (r *queryResolver) MinionSessions(ctx context.Context, operationID string, archived *bool, folderID *string, search *string, filters []*model.MinionSessionFilterInput, sort *model.MinionSessionSortInput, first *int, after *string, last *int, before *string) (*model.MinionSessionConnection, error) {
+	return r.MinionSessionResolver.MinionSessions(ctx, operationID, archived, folderID, search, filters, sort, first, after, last, before)
 }
 
 // MinionSession is the resolver for the minionSession field.

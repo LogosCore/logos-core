@@ -748,6 +748,7 @@ type MinionSession struct {
 	X                any                     `json:"x,omitempty"`
 	CreatedAt        string                  `json:"createdAt"`
 	Archived         bool                    `json:"archived"`
+	FolderID         *string                 `json:"folderId,omitempty"`
 	Mark             *MinionSessionMark      `json:"mark,omitempty"`
 	Persisted        bool                    `json:"persisted"`
 	Restarts         []*MinionSessionRestart `json:"restarts"`
@@ -828,6 +829,33 @@ type MinionSessionFilterInput struct {
 	To      *string               `json:"to,omitempty"`
 }
 
+type MinionSessionFolder struct {
+	ID          string  `json:"id"`
+	OperationID string  `json:"operationId"`
+	Name        string  `json:"name"`
+	Icon        *string `json:"icon,omitempty"`
+	Emoji       *string `json:"emoji,omitempty"`
+	Color       *string `json:"color,omitempty"`
+	Order       int     `json:"order"`
+}
+
+type MinionSessionFolderChoice struct {
+	OperationID string `json:"operationId"`
+	FolderID    string `json:"folderId"`
+}
+
+type MinionSessionFolderChoiceInput struct {
+	OperationID string `json:"operationId"`
+	FolderID    string `json:"folderId"`
+}
+
+type MinionSessionFolderInput struct {
+	Name  string  `json:"name"`
+	Icon  *string `json:"icon,omitempty"`
+	Emoji *string `json:"emoji,omitempty"`
+	Color *string `json:"color,omitempty"`
+}
+
 type MinionSessionMark struct {
 	Color *string `json:"color,omitempty"`
 	Icon  *string `json:"icon,omitempty"`
@@ -842,6 +870,7 @@ type MinionSessionMarkInput struct {
 
 type MinionSessionMatchInput struct {
 	Archived *bool                       `json:"archived,omitempty"`
+	FolderID *string                     `json:"folderId,omitempty"`
 	Search   *string                     `json:"search,omitempty"`
 	Filters  []*MinionSessionFilterInput `json:"filters,omitempty"`
 }
@@ -871,29 +900,31 @@ type MinionSessionSortInput struct {
 }
 
 type MinionSessionsLayout struct {
-	Columns      []string                    `json:"columns"`
-	Sort         *MinionSessionSort          `json:"sort,omitempty"`
-	Filters      []*MinionSessionFilter      `json:"filters"`
-	Split        *float64                    `json:"split,omitempty"`
-	ConsoleSplit *float64                    `json:"consoleSplit,omitempty"`
-	FilesSplit   *float64                    `json:"filesSplit,omitempty"`
-	PaneTextSize *int                        `json:"paneTextSize,omitempty"`
-	PromptFx     *string                     `json:"promptFx,omitempty"`
-	Widths       []*MinionSessionColumnWidth `json:"widths"`
-	PaneParked   bool                        `json:"paneParked"`
+	Columns      []string                     `json:"columns"`
+	Sort         *MinionSessionSort           `json:"sort,omitempty"`
+	Filters      []*MinionSessionFilter       `json:"filters"`
+	Split        *float64                     `json:"split,omitempty"`
+	ConsoleSplit *float64                     `json:"consoleSplit,omitempty"`
+	FilesSplit   *float64                     `json:"filesSplit,omitempty"`
+	PaneTextSize *int                         `json:"paneTextSize,omitempty"`
+	PromptFx     *string                      `json:"promptFx,omitempty"`
+	Widths       []*MinionSessionColumnWidth  `json:"widths"`
+	Folders      []*MinionSessionFolderChoice `json:"folders"`
+	PaneParked   bool                         `json:"paneParked"`
 }
 
 type MinionSessionsLayoutInput struct {
-	Columns      []string                         `json:"columns"`
-	Sort         *MinionSessionSortInput          `json:"sort,omitempty"`
-	Filters      []*MinionSessionFilterInput      `json:"filters"`
-	Split        *float64                         `json:"split,omitempty"`
-	ConsoleSplit *float64                         `json:"consoleSplit,omitempty"`
-	FilesSplit   *float64                         `json:"filesSplit,omitempty"`
-	PaneTextSize *int                             `json:"paneTextSize,omitempty"`
-	PromptFx     *string                          `json:"promptFx,omitempty"`
-	Widths       []*MinionSessionColumnWidthInput `json:"widths,omitempty"`
-	PaneParked   *bool                            `json:"paneParked,omitempty"`
+	Columns      []string                          `json:"columns"`
+	Sort         *MinionSessionSortInput           `json:"sort,omitempty"`
+	Filters      []*MinionSessionFilterInput       `json:"filters"`
+	Split        *float64                          `json:"split,omitempty"`
+	ConsoleSplit *float64                          `json:"consoleSplit,omitempty"`
+	FilesSplit   *float64                          `json:"filesSplit,omitempty"`
+	PaneTextSize *int                              `json:"paneTextSize,omitempty"`
+	PromptFx     *string                           `json:"promptFx,omitempty"`
+	Widths       []*MinionSessionColumnWidthInput  `json:"widths,omitempty"`
+	PaneParked   *bool                             `json:"paneParked,omitempty"`
+	Folders      []*MinionSessionFolderChoiceInput `json:"folders,omitempty"`
 }
 
 type MinionStreamLink struct {

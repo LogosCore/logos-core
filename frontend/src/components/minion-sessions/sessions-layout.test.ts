@@ -11,6 +11,7 @@ import {
   columnTrack,
   rowMinWidth,
   sessionsLayoutInput,
+  showFolder,
   sizeColumn,
   addressMatcher,
   formatAgo,
@@ -60,7 +61,7 @@ describe("layout", () => {
   })
 
   test("columns move, show and hide; the last one stays", () => {
-    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {}, paneParked: false }
+    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {}, paneParked: false, folders: {} }
     expect(moveColumn(l, "os", "number").columns).toEqual(["os", "number", "host"])
     expect(shiftColumn(l, "host", 1).columns).toEqual(["number", "os", "host"])
     expect(shiftColumn(l, "number", -1)).toBe(l)
@@ -68,7 +69,7 @@ describe("layout", () => {
     expect(toggleColumn(l, "pid", "host").columns).toEqual(["number", "host", "pid", "os"])
     expect(toggleColumn(l, "pid", "os").columns).toEqual(["number", "host", "os", "pid"])
     expect(toggleColumn(l, "host").columns).toEqual(["number", "os"])
-    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {}, paneParked: false }
+    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {}, paneParked: false, folders: {} }
     expect(toggleColumn(one, "host")).toBe(one)
   })
 
@@ -223,6 +224,7 @@ describe("live updates", () => {
   const params = (patch: Partial<MinionSessionListParams> = {}): MinionSessionListParams => ({
     operationId: "op",
     archived: false,
+    folderId: null,
     search: null,
     filters: [],
     sort: null,
@@ -331,5 +333,22 @@ describe("column widths", () => {
     expect(readSessionsLayout({ columns: ["host"], sort: null, filters: [], split: null } as never).paneParked).toBe(false)
     // A layout set here, read back from the cache as stored: its map.
     expect(readSessionsLayout({ ...sized } as never).widths).toEqual({ host: 250 })
+  })
+})
+
+describe("folders", () => {
+  test("the folder shown, per operation, kept through a save and a read", () => {
+    let l = showFolder(readSessionsLayout(null), "op1", "f1")
+    l = showFolder(l, "op2", "f9")
+    expect(l.folders).toEqual({ op1: "f1", op2: "f9" })
+    expect(showFolder(l, "op1", null).folders).toEqual({ op2: "f9" })
+    const input = sessionsLayoutInput(l)
+    expect(input.folders).toEqual([
+      { operationId: "op1", folderId: "f1" },
+      { operationId: "op2", folderId: "f9" },
+    ])
+    expect(readSessionsLayout({ ...input, widths: [] } as never).folders).toEqual({ op1: "f1", op2: "f9" })
+    // A layout set here, read back from the cache: its map.
+    expect(readSessionsLayout({ ...l } as never).folders).toEqual({ op1: "f1", op2: "f9" })
   })
 })

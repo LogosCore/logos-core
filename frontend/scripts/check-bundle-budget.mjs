@@ -42,7 +42,10 @@ import zlib from "node:zlib"
 // operation switcher's list and the user menu's two dialogs load when first
 // opened (react-virtuoso, 58 KB, and the dialog primitives' chunk, 51 KB, came
 // to first paint through them); room for ordinary feature work kept.
-const BUDGET_RAW_KB = 1_030
+// Raised to 1 040 at 1 031.9 / 275.8 with the Sessions table's folders: their
+// GraphQL documents (six operations) are in the generated document map,
+// which first paint carries.
+const BUDGET_RAW_KB = 1_040
 const BUDGET_SERVED_KB = 280
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")
