@@ -30,6 +30,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/minionstreams"
 	"github.com/logoscore/logos-core/core/pkg/minionsync"
 	"github.com/logoscore/logos-core/core/pkg/miniontargets"
+	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
 	"github.com/logoscore/logos-core/core/pkg/modulegate"
 	"github.com/logoscore/logos-core/core/pkg/modulelogs"
 	"github.com/logoscore/logos-core/core/pkg/modulemgmt"
@@ -93,6 +94,8 @@ type Repositories struct {
 	FsEntry            repository.IFsEntryRepository
 	MinionFeedback     repository.IMinionFeedbackRepository
 	MinionIdentity     repository.IMinionIdentityRepository
+	OperationalPort    repository.IOperationalPortRepository
+	MinionTunnelStream repository.IMinionTunnelStreamRepository
 	FsListing          repository.IFsListingRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
@@ -161,6 +164,8 @@ type App struct {
 	minionFiles *minionfiles.Service
 	// minionStreams relays the files minions stream (stream_file tasks).
 	minionStreams *minionstreams.Service
+	// minionTunnels holds tunnel tasks' SOCKS ports and their streams.
+	minionTunnels *miniontunnels.Service
 	// fileBrowser keeps the snapshots of machines' file systems.
 	fileBrowser *filebrowser.Service
 	// minionSync takes minions' messages, through the sync call and
@@ -257,12 +262,17 @@ func NewApp() (*App, error) {
 	fileBrowser := filebrowser.NewService(repos.FsEntry, repos.FsListing, repos.MinionTask, repos.MinionSession, minionFiles, bus, l)
 	minionStreams := minionstreams.NewService(repos.MinionTask, infra.cache, bus, auth.DeriveKey(e.JWTSecretKey, "minion-stream"),
 		minionstreams.DefaultConfig(), l)
+	tunnelsCfg := miniontunnels.DefaultConfig()
+	tunnelsCfg.Ports, tunnelsCfg.Bind, tunnelsCfg.Address = e.OperationalPorts, e.OperationalBind, e.OperationalAddress
+	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTunnelStream, repos.MinionTask, bus, l)
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser).
-		WithFeedback(repos.MinionFeedback).WithIdentities(repos.MinionIdentity).WithCredentials(credentialRefs)
+		WithFeedback(repos.MinionFeedback).WithIdentities(repos.MinionIdentity).WithCredentials(credentialRefs).
+		WithTunnels(minionTunnels)
 	// A downloader or an uploader coming wakes a stream the minion holds,
-	// over its persistent connection.
+	// over its persistent connection; a tunnel's bytes, the session's.
 	minionStreams.WithWaker(minionSync)
+	minionTunnels.WithWaker(minionSync)
 	// Bind minions: core calls their targets over the channels' control
 	// links.
 	links := channellink.New(l)
@@ -329,6 +339,7 @@ func NewApp() (*App, error) {
 		builds:          buildSvc,
 		minionFiles:     minionFiles,
 		minionStreams:   minionStreams,
+		minionTunnels:   minionTunnels,
 		fileBrowser:     fileBrowser,
 		minionSync:      minionSync,
 		links:           links,
@@ -433,6 +444,7 @@ func (a *App) startLifecycle() {
 	a.builds.Start()
 	a.minionFiles.Start()
 	a.minionStreams.Start()
+	a.minionTunnels.Start(context.Background())
 	a.stopTaskWatch = a.minionSync.WatchTasks()
 	targetsCtx, stopTargets := context.WithCancel(context.Background())
 	a.stopTargets = stopTargets
@@ -457,6 +469,9 @@ func (a *App) stopLifecycle() {
 	}
 	if a.minionStreams != nil {
 		a.minionStreams.Stop()
+	}
+	if a.minionTunnels != nil {
+		a.minionTunnels.Stop()
 	}
 	if a.stopTaskWatch != nil {
 		a.stopTaskWatch()

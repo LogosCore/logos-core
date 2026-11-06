@@ -73,6 +73,7 @@ type operationResolver struct {
 	fsEntryRepo    repository.IFsEntryRepository             // needed for cascade delete
 	feedbackRepo   repository.IMinionFeedbackRepository      // needed for cascade delete
 	identityRepo   repository.IMinionIdentityRepository      // needed for cascade delete
+	tunnelRepo     repository.IMinionTunnelStreamRepository  // needed for cascade delete
 	minionFiles    MinionFileCleanup                         // needed for cascade delete
 	eventBus       eventbus.IEventBus                        // async event publishing
 }
@@ -199,6 +200,15 @@ func WithMinionFeedbackRepo(repo repository.IMinionFeedbackRepository) Operation
 func WithMinionIdentityRepo(repo repository.IMinionIdentityRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.identityRepo = repo
+	}
+}
+
+// WithMinionTunnelStreamRepo adds tunnel tasks' streams' records for
+// cascade delete. The tasks' ports close on their own: the tunnels find
+// their tasks gone.
+func WithMinionTunnelStreamRepo(repo repository.IMinionTunnelStreamRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.tunnelRepo = repo
 	}
 }
 
@@ -425,6 +435,11 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.identityRepo != nil {
 		if err := r.identityRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's minion identity histories: %w", err)
+		}
+	}
+	if r.tunnelRepo != nil {
+		if err := r.tunnelRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's tunnel streams: %w", err)
 		}
 	}
 

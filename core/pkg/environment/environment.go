@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -105,6 +108,17 @@ type EnvironmentSettings struct {
 	// request's body, the ciphertext.
 	ChannelSyncMaxSize int64
 
+	// Operational ports (contracts/minion-messages/tunnels.md): the ports
+	// core may listen on for operators, a SOCKS proxy of a tunnel task
+	// each, sorted; none (the default): no tunnel opens.
+	OperationalPorts []int
+	// OperationalBind is the address their listeners bind: 0.0.0.0, every
+	// interface, by default.
+	OperationalBind string
+	// OperationalAddress is the host operators reach them at, as the web
+	// app shows it; empty: the host the web app is reached at.
+	OperationalAddress string
+
 	// Wiki transfer (export/import jobs)
 	WikiImportZipMaxSize    int64         // bytes; cap on an uploaded import archive
 	WikiTransferArtifactTTL time.Duration // how long finished jobs and their archives are kept
@@ -199,6 +213,9 @@ func init() {
 	viper.SetDefault("MINION_FILE_MAX_SIZE", int64(2<<30))
 	viper.SetDefault("BUILD_ARTIFACT_MAX_SIZE", int64(256<<20))
 	viper.SetDefault("CHANNEL_SYNC_MAX_SIZE", int64(16<<20))
+	viper.SetDefault("OPERATIONAL_PORTS", "")
+	viper.SetDefault("OPERATIONAL_BIND", "0.0.0.0")
+	viper.SetDefault("OPERATIONAL_ADDRESS", "")
 	viper.SetDefault("WIKI_FILE_BUCKET", "wiki-files")
 	viper.SetDefault("WIKI_FILE_MAX_SIZE", int64(50*1024*1024))
 	viper.SetDefault("WIKI_FILE_DENIED_CONTENT_TYPES", "")
@@ -307,6 +324,10 @@ func init() {
 		BuildArtifactMaxSize: sizeUpTo("BUILD_ARTIFACT_MAX_SIZE", viper.GetInt64("BUILD_ARTIFACT_MAX_SIZE"), 1<<30),
 
 		ChannelSyncMaxSize: sizeUpTo("CHANNEL_SYNC_MAX_SIZE", viper.GetInt64("CHANNEL_SYNC_MAX_SIZE"), 1<<30),
+
+		OperationalPorts:   portsOrFatal("OPERATIONAL_PORTS", viper.GetString("OPERATIONAL_PORTS")),
+		OperationalBind:    bindOrFatal("OPERATIONAL_BIND", viper.GetString("OPERATIONAL_BIND")),
+		OperationalAddress: strings.TrimSpace(viper.GetString("OPERATIONAL_ADDRESS")),
 
 		// Wiki transfer
 		WikiImportZipMaxSize:    viper.GetInt64("WIKI_IMPORT_ZIP_MAX_SIZE"),
@@ -457,6 +478,65 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// portsOrFatal reads a list of ports and ranges ("41000-41063,42000").
+func portsOrFatal(key, raw string) []int {
+	ports, err := ParsePorts(raw)
+	if err != nil {
+		log.Fatalf("%s (%q): %v", key, raw, err)
+	}
+	return ports
+}
+
+// ParsePorts reads ports and ranges of them, comma-separated
+// ("41000-41063,42000"), as the ports sorted, each once; empty: none.
+func ParsePorts(raw string) ([]int, error) {
+	seen := map[int]bool{}
+	for _, part := range parseCSV(raw) {
+		first, last, isRange := strings.Cut(part, "-")
+		from, err := portNumber(first)
+		if err != nil {
+			return nil, err
+		}
+		to := from
+		if isRange {
+			if to, err = portNumber(last); err != nil {
+				return nil, err
+			}
+			if to < from {
+				return nil, fmt.Errorf("%q runs backwards", part)
+			}
+		}
+		for p := from; p <= to; p++ {
+			seen[p] = true
+		}
+	}
+	ports := make([]int, 0, len(seen))
+	for p := range seen {
+		ports = append(ports, p)
+	}
+	slices.Sort(ports)
+	return ports, nil
+}
+
+// portNumber is a port, 1 to 65535.
+func portNumber(s string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < 1 || n > 65535 {
+		return 0, fmt.Errorf("%q is not a port (1 to 65535)", strings.TrimSpace(s))
+	}
+	return n, nil
+}
+
+// bindOrFatal is an address to listen on: an IP, or empty for every
+// interface.
+func bindOrFatal(key, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw != "" && net.ParseIP(raw) == nil {
+		log.Fatalf("%s must be an IP address, got %q", key, raw)
+	}
+	return raw
 }
 
 // sizeUpTo is a byte size setting from 1 to limit (sizes reach the GraphQL

@@ -64,6 +64,12 @@ type delivery struct {
 	answered map[string]bool
 	// room is how many bytes the outbox's items may take.
 	room int
+	// tunnelRoom, when not 0, is the most the tunnels' items take of it.
+	tunnelRoom int
+	// count is how many items the message has besides the outbox's (and
+	// those to come after them): the tunnels keep within
+	// protocol.MaxMinionMessageItems.
+	count int
 }
 
 // outcome is what the outbox gave one message.
@@ -77,8 +83,26 @@ type outcome struct {
 	// soon: a stream is held while its downloader or uploader is there: a
 	// minion that starts its exchanges is told to come back soon (a poll).
 	soon bool
+	// tunnelPoll, with tunnelPolls: how soon a minion that polls should
+	// come back for its tunnels.
+	tunnelPoll  time.Duration
+	tunnelPolls bool
 	// used is how many bytes the items took.
 	used int
+}
+
+// pollWithin is how soon a minion that polls is told to come back, if at
+// all: the sooner of its streams' and its tunnels'.
+func (o outcome) pollWithin() (time.Duration, bool) {
+	switch {
+	case o.soon && o.tunnelPolls:
+		return min(pollSoon, o.tunnelPoll), true
+	case o.soon:
+		return pollSoon, true
+	case o.tunnelPolls:
+		return o.tunnelPoll, true
+	}
+	return 0, false
 }
 
 const (
@@ -112,9 +136,9 @@ func roomFor(limit int, answers []cbor.RawMessage) int {
 // still has), the operator's limit of tasks (a max_tasks,
 // in every message until the minion says it has it: whatever it runs, as a
 // cancel goes), resumes, the streams' acks, then tasks (those sent and not
-// acknowledged first). What does not fit waits for the next
-// message; a task too large for any message of the connection ends failed,
-// saying so.
+// acknowledged first), then the tunnels' items. What does not fit waits
+// for the next message; a task too large for any message of the
+// connection ends failed, saying so.
 func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d delivery) (outcome, error) {
 	var o outcome
 	if s.tasks == nil {
@@ -208,6 +232,16 @@ func (s *Service) outbox(ctx context.Context, session *models.MinionSession, d d
 			return o, err
 		}
 		o.fresh = o.fresh || fresh
+	}
+	if s.tunnels != nil {
+		most := protocol.MaxMinionMessageItems - d.count - len(o.items)
+		tunnelRoom := room
+		if d.tunnelRoom > 0 {
+			tunnelRoom = min(room, d.tunnelRoom)
+		}
+		added, poll, polls := s.tunnels.Fill(ctx, session.SessionID, tunnelRoom, max(most, 0), add)
+		o.fresh = o.fresh || added > 0
+		o.tunnelPoll, o.tunnelPolls = poll, polls
 	}
 	o.used = d.room - room
 	return o, nil
@@ -322,7 +356,7 @@ func (s *Service) WakeStreams(session uuid.UUID) { s.Nudge(session, true) }
 func unixNow(t time.Time) uint64 { return uint64(max(t.Unix(), 0)) }
 
 // pollItem is the poll a reply carries to a minion that starts its
-// exchanges, when something of its may go on soon.
-func pollItem() (cbor.RawMessage, error) {
-	return protocol.MarshalCBOR(protocol.PollItem{T: protocol.ItemPoll, Within: uint64(pollSoon.Milliseconds())})
+// exchanges, when something of its may go on soon: within that long.
+func pollItem(within time.Duration) (cbor.RawMessage, error) {
+	return protocol.MarshalCBOR(protocol.PollItem{T: protocol.ItemPoll, Within: uint64(max(within.Milliseconds(), 0))})
 }

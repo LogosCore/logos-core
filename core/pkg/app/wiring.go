@@ -196,6 +196,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithFsEntryRepo(a.repos.FsEntry),
 			resolver.WithMinionFeedbackRepo(a.repos.MinionFeedback),
 			resolver.WithMinionIdentityRepo(a.repos.MinionIdentity),
+			resolver.WithMinionTunnelStreamRepo(a.repos.MinionTunnelStream),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -227,7 +228,7 @@ func (a *App) buildResolvers() *resolvers {
 			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity, a.repos.MinionFolder),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
-			a.credentialRefs),
+			a.credentialRefs, a.minionTunnels),
 		minionTargets: resolver.NewMinionTargetResolver(a.minionTargets, a.repos.Build, a.repos.Operation),
 	}
 }

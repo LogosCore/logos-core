@@ -72,6 +72,13 @@ data:
   MINION_FILE_BUCKET: {{ .Values.core.config.minionFile.bucket | quote }}
   MINION_FILE_MAX_SIZE: {{ .Values.core.config.minionFile.maxSize | int64 | quote }}
 
+  # ----- Operational ports (tunnels' SOCKS proxies) -----
+  {{- with .Values.core.operationalPorts }}
+  OPERATIONAL_PORTS: {{ if gt (int .count) 0 }}{{ printf "%d-%d" (int .first) (add (int .first) (int .count) -1) | quote }}{{ else }}""{{ end }}
+  OPERATIONAL_BIND: "0.0.0.0"
+  OPERATIONAL_ADDRESS: {{ .address | quote }}
+  {{- end }}
+
   # ----- Auth -----
   AUTH_ACCESS_TTL: {{ .Values.core.config.auth.accessTtl | quote }}
   AUTH_REFRESH_TTL: {{ .Values.core.config.auth.refreshTtl | quote }}

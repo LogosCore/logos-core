@@ -127,6 +127,8 @@ type Service struct {
 	// streams relays the files minions stream (streams.go); nil relays
 	// none.
 	streams Streams
+	// tunnels carries tunnel tasks' streams (tunnels.go); nil carries none.
+	tunnels Tunnels
 	// fileBrowser is told of tasks' ends (streams.go); nil: nothing is.
 	fileBrowser FileBrowser
 	cache       cache.Cache
@@ -834,6 +836,10 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 					err = s.endUnknown(ctx, session, e)
 				}
 			}
+		case protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose, protocol.ItemTunnelDatagram:
+			out, err = s.takeTunnel(ctx, session, raw, i)
+		case protocol.ItemTunnel:
+			out, err = errItem(protocol.ErrItemBadMessage, "a tunnel opens from core", i)
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
 		}
@@ -852,7 +858,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 	if s.tasks != nil {
 		// After the answers, what the outbox has (cancels whenever core has
 		// them, tasks only when asked), in the room the answers leave.
-		d := delivery{streams: true, answered: answered, room: roomFor(session.MessageLimit(), items)}
+		// The items the message has, and the chunks and poll to come.
+		d := delivery{streams: true, answered: answered, room: roomFor(session.MessageLimit(), items), count: len(items) + len(pulls) + 1}
+		if len(pulls) > 0 {
+			// Tunnels leave uploads half the message.
+			d.tunnelRoom = d.room / 2
+		}
 		if wantTasks {
 			// Through a request (the sync call, a call's answer) get_tasks's
 			// max bounds this message; over a socket it is a standing
@@ -878,10 +889,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 		}
 		items = append(items, o.items...)
 		left := d.room - o.used
-		if p == pathSync && o.soon {
-			// A stream of its may go on any moment: a minion that polls
-			// comes back soon rather than on its schedule.
-			poll, err := pollItem()
+		if within, ok := o.pollWithin(); p == pathSync && ok {
+			// A stream of its may go on any moment, or a tunnel's: a
+			// minion that polls comes back soon rather than on its
+			// schedule.
+			poll, err := pollItem(within)
 			if err != nil {
 				return nil, err
 			}

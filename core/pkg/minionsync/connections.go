@@ -404,6 +404,12 @@ func (s *Service) WatchTasks() func() {
 // pushSoon pushes to the session after notifyDelay, once for what comes
 // meanwhile, with the streams' acks when any nudge asked for them.
 func (s *Service) pushSoon(session uuid.UUID, streams bool) {
+	s.pushAfter(session, streams, notifyDelay)
+}
+
+// pushAfter is pushSoon after delay; a push due already goes when it was
+// to.
+func (s *Service) pushAfter(session uuid.UUID, streams bool, delay time.Duration) {
 	s.conns.mu.Lock()
 	withStreams, due := s.conns.scheduled[session]
 	s.conns.scheduled[session] = withStreams || streams
@@ -411,7 +417,7 @@ func (s *Service) pushSoon(session uuid.UUID, streams bool) {
 	if due {
 		return
 	}
-	time.AfterFunc(notifyDelay, func() {
+	time.AfterFunc(delay, func() {
 		s.conns.mu.Lock()
 		streams := s.conns.scheduled[session]
 		delete(s.conns.scheduled, session)

@@ -94,6 +94,18 @@ services:
       APP_RABBITMQ_VHOST: ${APP_RABBITMQ_VHOST:-/}
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      # Operational ports: tunnel tasks' SOCKS proxies, published below
+      # (keep the two ranges the same). Inside the container core listens
+      # on every interface, for Docker to reach it.
+      OPERATIONAL_PORTS: ${OPERATIONAL_PORTS:-41000-41009}
+      OPERATIONAL_BIND: 0.0.0.0
+      OPERATIONAL_ADDRESS: ${OPERATIONAL_ADDRESS:-}
+    ports:
+      # The host's loopback only by default: core's SOCKS takes no
+      # credentials, so whoever reaches a port uses its minion. Set
+      # OPERATIONAL_PUBLISH to an address of the host to open them to its
+      # network.
+      - "${OPERATIONAL_PUBLISH:-127.0.0.1}:41000-41009:41000-41009/tcp"
     depends_on:
       mongodb:
         condition: service_healthy

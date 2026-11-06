@@ -1,0 +1,37 @@
+{{- /*
+Core's operational ports: tunnel tasks' SOCKS proxies, raw TCP. A Service of
+their own, one port each (a Service takes no ranges), apart from core's HTTP
+Service behind the Ingress.
+*/ -}}
+{{- with .Values.core.operationalPorts }}
+{{- if and $.Values.core.enabled (gt (int .count) 0) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "logos.core.fullname" $ }}-operational
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "logos.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: core
+  {{- with .service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .service.type }}
+  {{- with .service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  ports:
+    {{- range $i := until (int .count) }}
+    {{- $port := add (int $.Values.core.operationalPorts.first) $i }}
+    - name: op-{{ $port }}
+      port: {{ $port }}
+      targetPort: {{ $port }}
+      protocol: TCP
+    {{- end }}
+  selector:
+    {{- include "logos.core.selectorLabels" $ | nindent 4 }}
+{{- end }}
+{{- end }}

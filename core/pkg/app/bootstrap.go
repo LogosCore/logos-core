@@ -96,6 +96,8 @@ func newInfrastructure(ctx context.Context, e *environment.EnvironmentSettings, 
 		FsEntry:            repository.NewFsEntryRepository(db),
 		MinionFeedback:     repository.NewMinionFeedbackRepository(db),
 		MinionIdentity:     repository.NewMinionIdentityRepository(db),
+		OperationalPort:    repository.NewOperationalPortRepository(db),
+		MinionTunnelStream: repository.NewMinionTunnelStreamRepository(db),
 		FsListing:          repository.NewFsListingRepository(db),
 	}
 

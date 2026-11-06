@@ -110,6 +110,24 @@ core:
     type: ClusterIP
     port: 8002
 
+  # Operational ports (docs: contracts/minion-messages/tunnels.md): the
+  # ports core listens on for operators, a tunnel task's SOCKS proxy each.
+  # None by default: no tunnel opens. The range is `first` and the `count`
+  # after it; a Service of its own publishes it (raw TCP, which an Ingress
+  # does not carry), and core is given it as OPERATIONAL_PORTS.
+  operationalPorts:
+    first: 41000
+    count: 0
+    # The host operators reach the ports at, as the web app shows it
+    # (the proxy's address, proxychains lines); empty: the web app's host.
+    address: ""
+    service:
+      type: LoadBalancer
+      annotations: {}
+      # Core's SOCKS takes no credentials: keep the ports to the operators'
+      # networks, here or with the network in front.
+      loadBalancerSourceRanges: []
+
   # Application configuration — non-secret env vars. These map 1:1 to the
   # variables consumed by core/pkg/environment/environment.go.
   config:

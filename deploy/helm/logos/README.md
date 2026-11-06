@@ -98,6 +98,17 @@ pod beside the old one for a few seconds before the old one stops; that is
 harmless. Scaling core out is planned, not supported: see the docs'
 Architecture page, "One core instance".
 
+### Operational ports get a Service of their own
+A tunnel task's SOCKS proxy listens on one of core's operational ports
+(`core.operationalPorts`: `count` ports from `first`, none by default),
+raw TCP that an Ingress does not carry. The chart gives core the range
+(`OPERATIONAL_PORTS`) and publishes it with a Service of its own,
+`<release>-core-operational`, one port each (a Service takes no ranges),
+a LoadBalancer by default. Core's SOCKS takes no credentials: whoever
+reaches a port uses its minion, so keep the Service to the operators'
+networks (`service.loadBalancerSourceRanges`, or the network in front).
+Set `address` to the host they reach it at, which the web app shows.
+
 ### Hocuspocus runs as a single replica
 Hocuspocus holds Y.Doc state in process memory. Two replicas without
 sticky sessions cause split-brain editing. The chart pins
@@ -217,6 +228,8 @@ Credentials still come from `secrets.values` or `secrets.existingSecret`.
 | `core.config.oidc.*` | Optional OpenID Connect login (Keycloak etc.). Set `enabled` and `issuerUrl`, register `https://<ingress host>/api/v1/auth/oidc/callback` at the provider, and put the client secret in `secrets.values.oidcClientSecret` (key `oidcClientSecret` in an existing Secret) |
 | `core.config.auth.localLoginEnabled` | `false` hides the password form; only valid with `oidc.enabled=true` |
 | `core.config.minionFile.maxSize` | Largest file a minion sends core, or core sends a minion (2 GiB; at most 64 GiB); the minion-files Ingress follows it |
+| `core.operationalPorts.count` / `.first` / `.address` | [Operational ports](#operational-ports-get-a-service-of-their-own) for tunnel tasks' SOCKS proxies: `count` ports from `first` (none by default), and the host operators reach them at |
+| `core.operationalPorts.service.*` | Their Service: `type` (LoadBalancer), `annotations`, `loadBalancerSourceRanges` |
 | `ingress.minionTransfers.enabled` / `.annotations` | The minion transfer Ingresses (above), and annotations for them only |
 | `secrets.values.*` | Inline secret values (development only) |
 | `global.storageClass` | StorageClass applied to all PVCs |

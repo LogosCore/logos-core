@@ -19,6 +19,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
 	"github.com/logoscore/logos-core/core/pkg/minionfiles"
+	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/taskdata"
@@ -111,6 +112,16 @@ type minionTaskResolver struct {
 	// creds resolves the credentials credential params name; nil, a
 	// command with one takes no task.
 	creds TaskCredentials
+	// tunnels opens tunnel tasks' ports; nil, a tunnel command takes no
+	// task.
+	tunnels TaskTunnels
+}
+
+// TaskTunnels opens a tunnel task's operational port, and closes it
+// (miniontunnels.Service).
+type TaskTunnels interface {
+	Open(ctx context.Context, o miniontunnels.Opening) (int, error)
+	Close(ctx context.Context, task uuid.UUID)
 }
 
 // TaskCredentials resolves the credentials a task's args name (credential
@@ -133,10 +144,10 @@ type TaskFiles interface {
 func NewMinionTaskResolver(tasks repository.IMinionTaskRepository, sessions repository.IMinionSessionRepository, builds TaskBuilds,
 	schemas TaskSchemas, users repository.IUserRepository, operationRepo repository.IOperationRepository, bus eventbus.IEventBus,
 	files TaskFiles, streams TaskStreams, fileBrowser TaskFileBrowser, targets TaskTargets, connector TaskConnector,
-	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository, creds TaskCredentials) IMinionTaskResolver {
+	limits MaxTasksSetter, feedback repository.IMinionFeedbackRepository, creds TaskCredentials, tunnels TaskTunnels) IMinionTaskResolver {
 	return &minionTaskResolver{tasks: tasks, sessions: sessions, builds: builds, schemas: schemas, users: users,
 		operationRepo: operationRepo, bus: bus, files: files, streams: streams, fileBrowser: fileBrowser, targets: targets, connector: connector,
-		limits: limits, feedback: feedback, creds: creds}
+		limits: limits, feedback: feedback, creds: creds, tunnels: tunnels}
 }
 
 const (
@@ -317,21 +328,64 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	if err != nil {
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
+	taskID := uuid.New()
+	tunnel := commands[i].Action == protocol.ActionTunnel
+	if tunnel {
+		port, err := r.openTunnel(ctx, s, uid, taskID, wire)
+		if err != nil {
+			return nil, err
+		}
+		// The task shows the port it serves on.
+		values["port"] = port
+	}
 	// On the wire the args go by their params' numbers.
 	var wireBytes []byte
 	if numbered := protocol.WireArgs(commands[i].Params, wire); len(numbered) > 0 {
 		if wireBytes, err = protocol.MarshalCBOR(numbered); err != nil {
+			if tunnel {
+				r.tunnels.Close(ctx, taskID)
+			}
 			return nil, fmt.Errorf("encode the args: %w", err)
 		}
 	}
-	t := &models.MinionTask{TaskID: uuid.New(), OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
+	t := &models.MinionTask{TaskID: taskID, OperationID: s.OperationID, SessionID: s.SessionID, Command: command,
 		Op: commands[i].Op, Args: values, CredentialIDs: credentialIDs, WireArgs: wireBytes, Result: commands[i].Result, Action: commands[i].Action,
 		IssuedBy: uid, State: models.MinionTaskQueued, QueuedAt: time.Now().UTC(), Upload: upload}
 	if err := r.tasks.Insert(ctx, t); err != nil {
+		if tunnel {
+			r.tunnels.Close(ctx, taskID)
+		}
 		return nil, fmt.Errorf("queue the task: %w", err)
 	}
 	r.publish(t)
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// openTunnel takes an operational port for a tunnel task about to be
+// queued (its port arg: 0 for any free one) and puts it in the task's
+// args: core's SOCKS proxy listens there while the task runs.
+func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSession, uid, taskID uuid.UUID, wire map[string]any) (int, error) {
+	if r.tunnels == nil {
+		return 0, moduleGQLError(ctx, errCodeBadUserInput, "core opens no tunnels")
+	}
+	asked, _ := protocol.ArgInt(wire, "port")
+	o := miniontunnels.Opening{Task: taskID, Session: s.SessionID, Operation: s.OperationID, By: uid, Port: int(max(min(asked, 65536), -1)),
+		MaxStreams: miniontunnels.DefaultMaxStreams, Timeout: miniontunnels.DefaultConnectTimeout}
+	if n, ok := protocol.ArgInt(wire, "max_streams"); ok && n > 0 {
+		o.MaxStreams = int(min(n, 1<<16))
+	}
+	if d, ok := protocol.ArgDuration(wire, "timeout"); ok && d > 0 {
+		o.Timeout = d
+	}
+	port, err := r.tunnels.Open(ctx, o)
+	if errors.Is(err, miniontunnels.ErrNoPort) {
+		return 0, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+	}
+	if err != nil {
+		return 0, err
+	}
+	wire["port"] = int64(port)
+	return port, nil
 }
 
 // overKind refuses a task of a command that does not work over the kind of
