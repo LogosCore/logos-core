@@ -8,6 +8,7 @@ export const OperationalPortFields = graphql(`
     id
     port
     purpose
+    to
     address
     sessionId
     sessionNumber

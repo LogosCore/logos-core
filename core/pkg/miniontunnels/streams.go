@@ -43,10 +43,14 @@ const (
 	readPiece = 32 << 10
 )
 
-// tunnel is a tunnel task's: its port and its streams.
+// tunnel is a tunnel task's: its port, what core puts in front of it (a
+// SOCKS proxy, or a forward to fwdHost:fwdPort), and its streams.
 type tunnel struct {
 	task, session, operation uuid.UUID
 	port                     int
+	purpose                  string
+	fwdHost                  string
+	fwdPort                  int
 	ln                       net.Listener
 	maxStreams               int
 	connectWait              time.Duration
@@ -84,7 +88,12 @@ func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel
 	if timeout <= 0 {
 		timeout = DefaultConnectTimeout
 	}
+	purpose := rec.Purpose
+	if purpose == "" {
+		purpose = models.OperationalPurposeSOCKS
+	}
 	return &tunnel{task: rec.TaskID, session: rec.SessionID, operation: rec.OperationID, port: rec.Port, ln: ln,
+		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort,
 		maxStreams: maxStreams, connectWait: timeout, acked: acked, streams: map[uint64]*stream{}, handshaking: map[net.Conn]bool{},
 		last: rec.Streams}
 }
@@ -223,6 +232,10 @@ func (s *Service) accept(t *tunnel) {
 // it, then its bytes.
 func (s *Service) serve(t *tunnel, c net.Conn) {
 	defer s.done.Done()
+	if t.purpose == models.OperationalPurposeForward {
+		s.serveForward(t, c)
+		return
+	}
 	_ = c.SetDeadline(time.Now().Add(s.cfg.HandshakeWait))
 	req, err := readRequest(c)
 	_ = c.SetDeadline(time.Time{})
@@ -288,6 +301,53 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 	}
 	if req.udp {
 		s.holdAssociation(st)
+		return
+	}
+	s.done.Add(1)
+	go s.writeClient(st)
+	s.readClient(st)
+}
+
+// serveForward is one client of a port forward: no handshake, a stream to
+// the forward's destination at once; its bytes flow once the minion has
+// connected, and a connect that fails resets the client's connection, as
+// the destination refusing it would.
+func (s *Service) serveForward(t *tunnel, c net.Conn) {
+	s.mu.Lock()
+	delete(t.handshaking, c)
+	closing := t.closing
+	s.mu.Unlock()
+	reset := func() {
+		if tc, ok := c.(*net.TCPConn); ok {
+			_ = tc.SetLinger(0)
+		}
+		_ = c.Close()
+	}
+	if closing {
+		reset()
+		return
+	}
+	st, _ := s.newStream(t, c, request{host: t.fwdHost, port: t.fwdPort})
+	if st == nil {
+		reset()
+		return
+	}
+	timer := time.NewTimer(t.connectWait + s.cfg.ConnectSlack)
+	defer timer.Stop()
+	select {
+	case r := <-st.replied:
+		if r.Result != protocol.TunnelOpen {
+			s.mu.Lock()
+			s.drop(st, models.TunnelEndNotOpened, true)
+			s.mu.Unlock()
+			return
+		}
+	case <-timer.C:
+		s.mu.Lock()
+		s.abort(st, models.TunnelEndNoReply)
+		s.mu.Unlock()
+		return
+	case <-st.done:
 		return
 	}
 	s.done.Add(1)

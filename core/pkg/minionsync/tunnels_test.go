@@ -9,6 +9,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-golang-protocol/protocol"
 )
 
@@ -187,5 +188,29 @@ func TestTunnelItemsInTheReply(t *testing.T) {
 	}
 	if msg := r.openUnder(t, sid, r.keys, reply); len(itemsOf(msg, protocol.ItemPoll)) != 0 {
 		t.Fatal("a poll over a socket")
+	}
+}
+
+// A tunnel task holds no place in the minion's max_tasks: a standing
+// allowance of 1 leaves room for a task beside a running SOCKS proxy, and
+// for none beside a running shell.
+func TestTunnelsHoldNoPlace(t *testing.T) {
+	r := newRig(t)
+	sid, tasks := openSession(t, r)
+	session := r.sessionRow(t, sid)
+	one := uint64(1)
+	now := time.Now()
+	run := func(command, action string) {
+		tasks.rows = append(tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: sid, Command: command, Action: action,
+			State: models.MinionTaskRunning, AckedAt: &now})
+	}
+	run("socks_proxy", protocol.ActionSocksProxy)
+	run("port_forward", protocol.ActionPortForward)
+	if n, err := r.svc.room(context.Background(), session, &one); err != nil || n != 1 {
+		t.Fatalf("beside two tunnels: room %d %v", n, err)
+	}
+	run("shell", "")
+	if n, err := r.svc.room(context.Background(), session, &one); err != nil || n != 0 {
+		t.Fatalf("beside a shell: room %d %v", n, err)
 	}
 }

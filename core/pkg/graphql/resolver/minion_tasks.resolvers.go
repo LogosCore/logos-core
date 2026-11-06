@@ -42,7 +42,7 @@ func (r *minionTaskResolver) OutputUtf8(ctx context.Context, obj *model.MinionTa
 // Tunnel is the resolver for the tunnel field.
 func (r *minionTaskResolver) Tunnel(ctx context.Context, obj *model.MinionTask) (*model.MinionTunnel, error) {
 	// Only a tunnel task has one: no read for the others.
-	if obj.Action == nil || *obj.Action != protocol.ActionTunnel {
+	if obj.Action == nil || !protocol.IsTunnelAction(*obj.Action) {
 		return nil, nil
 	}
 	return r.MinionTaskResolver.Tunnel(ctx, obj)

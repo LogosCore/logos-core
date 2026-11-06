@@ -139,6 +139,12 @@ type Opening struct {
 	// and of who opened it.
 	SessionNumber int
 	ByName        string
+	// Purpose is what core puts in front of the port: a SOCKS proxy
+	// (models.OperationalPurposeSOCKS, the default) or a port forward to
+	// Host:HostPort (models.OperationalPurposeForward).
+	Purpose  string
+	Host     string
+	HostPort int
 }
 
 // Open takes an operational port for a tunnel task about to be queued, and
@@ -160,7 +166,11 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 		if s.inUse(port) {
 			continue
 		}
-		rec := &models.OperationalPort{Port: port, Purpose: models.OperationalPurposeSOCKS, OperationID: o.Operation, SessionID: o.Session,
+		purpose := o.Purpose
+		if purpose == "" {
+			purpose = models.OperationalPurposeSOCKS
+		}
+		rec := &models.OperationalPort{Port: port, Purpose: purpose, Host: o.Host, HostPort: o.HostPort, OperationID: o.Operation, SessionID: o.Session,
 			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout,
 			SessionNumber: o.SessionNumber, OpenedByName: o.ByName}
 		err := s.ports.Insert(ctx, rec)
@@ -211,7 +221,10 @@ func (s *Service) listen(rec *models.OperationalPort, acked bool) (*tunnel, erro
 	s.mu.Unlock()
 	s.done.Add(1)
 	go s.accept(t)
-	s.openRelay(t)
+	if t.purpose == models.OperationalPurposeSOCKS {
+		// UDP ASSOCIATE's relay: SOCKS's alone.
+		s.openRelay(t)
+	}
 	s.logger.Info("tunnels: SOCKS port open", zap.Int("port", rec.Port), zap.String("task_id", rec.TaskID.String()),
 		zap.String("session_id", rec.SessionID.String()))
 	return t, nil

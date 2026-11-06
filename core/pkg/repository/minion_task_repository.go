@@ -91,6 +91,11 @@ type IMinionTaskRepository interface {
 	// and not acknowledged are not counted: ForDelivery sends them again,
 	// within its limit; nor are core's own commands, which core runs.
 	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
+	// CountSlots counts those of them that hold a place in the minion's
+	// max_tasks: all but tunnels' (protocol.TunnelActions), which hold
+	// none as long as they run. CountTunnels counts those.
+	CountSlots(ctx context.Context, sessionID uuid.UUID) (int, error)
+	CountTunnels(ctx context.Context, sessionID uuid.UUID) (int, error)
 	// RunningIDs are the ids of the tasks CountRunning counts, oldest
 	// first, limit at most.
 	RunningIDs(ctx context.Context, sessionID uuid.UUID, limit int) ([]uuid.UUID, error)
@@ -311,6 +316,20 @@ func runningFilter(sessionID uuid.UUID) bson.M {
 
 func (r *minionTaskRepository) CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error) {
 	n, err := r.tasks.Find(ctx, runningFilter(sessionID)).Count()
+	return int(n), err
+}
+
+func (r *minionTaskRepository) CountSlots(ctx context.Context, sessionID uuid.UUID) (int, error) {
+	q := runningFilter(sessionID)
+	q["action"] = bson.M{"$nin": protocol.TunnelActions()}
+	n, err := r.tasks.Find(ctx, q).Count()
+	return int(n), err
+}
+
+func (r *minionTaskRepository) CountTunnels(ctx context.Context, sessionID uuid.UUID) (int, error) {
+	q := runningFilter(sessionID)
+	q["action"] = bson.M{"$in": protocol.TunnelActions()}
+	n, err := r.tasks.Find(ctx, q).Count()
 	return int(n), err
 }
 

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { hostPort, proxyState, proxyURL, proxychainsLine, streamState, tunnelVersion, type Tunnel, type TunnelStream } from "./tunnel-values"
+import {
+  frontLabel,
+  hostPort,
+  proxyState,
+  proxyURL,
+  proxychainsLine,
+  streamState,
+  tunnelVersion,
+  type Tunnel,
+  type TunnelStream,
+} from "./tunnel-values"
 
 const stream = (s: Partial<TunnelStream>): TunnelStream => ({
   stream: 1,
@@ -19,7 +29,18 @@ const stream = (s: Partial<TunnelStream>): TunnelStream => ({
   ...s,
 })
 
-const tunnel = (t: Partial<Tunnel>): Tunnel => ({ port: 41000, address: null, listening: true, open: 0, streams: 0, up: 0, down: 0, ...t })
+const tunnel = (t: Partial<Tunnel>): Tunnel => ({
+  port: 41000,
+  address: null,
+  purpose: "socks_proxy",
+  to: null,
+  listening: true,
+  open: 0,
+  streams: 0,
+  up: 0,
+  down: 0,
+  ...t,
+})
 
 describe("the proxy's address", () => {
   it("brackets an IPv6 address, as URLs and tools take it", () => {
@@ -56,6 +77,12 @@ describe("the proxy's state", () => {
     expect(proxyState(tunnel({ listening: false }), "DONE").label).toBe("Closed")
     expect(proxyState(tunnel({}), "SENT")).toMatchObject({ label: "Listening", tone: "pending" })
     expect(proxyState(tunnel({}), "RUNNING")).toEqual({ label: "Listening", tone: "good", detail: null })
+  })
+
+  it("names what is in front of the port", () => {
+    expect(frontLabel("socks_proxy")).toBe("SOCKS proxy")
+    expect(frontLabel("port_forward")).toBe("Port forward")
+    expect(frontLabel("http_proxy")).toBe("http proxy")
   })
 
   it("changes its version as the tunnel moves on", () => {

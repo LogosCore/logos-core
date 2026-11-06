@@ -474,12 +474,12 @@ func (s *Service) pushNow(ctx context.Context, session uuid.UUID, streams bool) 
 
 // room is how many tasks an allowance of max leaves room for: max less the
 // tasks the minion has and has not ended (those sent and not acknowledged
-// go again within it).
+// go again within it), but tunnels, which hold no place.
 func (s *Service) room(ctx context.Context, session *models.MinionSession, allowance *uint64) (int, error) {
 	if allowance == nil {
 		return models.MaxMinionTasksPerReply, nil
 	}
-	running, err := s.tasks.CountRunning(ctx, session.SessionID)
+	running, err := s.tasks.CountSlots(ctx, session.SessionID)
 	if err != nil {
 		return 0, err
 	}

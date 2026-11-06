@@ -101,6 +101,8 @@ models:
         resolver: true
       runningTasks:
         resolver: true
+      runningTunnels:
+        resolver: true
 
   Build:
     fields:

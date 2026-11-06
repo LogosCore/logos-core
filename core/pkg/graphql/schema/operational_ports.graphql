@@ -5,8 +5,10 @@ type OperationalPort {
   # The task's id: a port serves one task.
   id: ID!
   port: Int!
-  # What it serves: socks.
+  # What it serves: socks (a SOCKS proxy) or forward (a port forward to
+  # to, host:port; null for socks).
   purpose: String!
+  to: String
   # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
   # host the web app is reached at.
   address: String

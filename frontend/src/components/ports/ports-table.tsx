@@ -4,14 +4,13 @@ import type { OperationalPortFieldsFragment } from "@/graphql/gql/graphql"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { formatDateTime } from "@/lib/date-format"
 import { cn } from "@/lib/utils"
-import { hostPort } from "@/components/minion-sessions/tunnel-values"
+import { frontLabel, hostPort } from "@/components/minion-sessions/tunnel-values"
 
 export type OperationalPort = OperationalPortFieldsFragment
 
 const GRID_COLS = "grid-cols-[minmax(0,1.2fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]"
 
-/** What a port serves, for a person. */
-const PURPOSE: Record<string, string> = { socks: "SOCKS proxy" }
+
 
 /**
  * The operation's operational ports in use, the latest opened first: each
@@ -66,7 +65,10 @@ export function PortsTable({
               </span>
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="truncate">{PURPOSE[p.purpose] ?? p.purpose}</span>
+              <span className="truncate" title={p.to ? `to ${p.to}` : undefined}>
+                {frontLabel(p.purpose)}
+                {p.to && <span className="font-mono text-xs text-muted-foreground"> → {p.to}</span>}
+              </span>
               <span className={cn("text-xs", p.listening ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
                 {p.listening ? "listening" : "opening again"}
               </span>

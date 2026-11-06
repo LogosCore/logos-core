@@ -768,6 +768,7 @@ type ComplexityRoot struct {
 		Restarts         func(childComplexity int) int
 		Rev              func(childComplexity int) int
 		RunningTasks     func(childComplexity int) int
+		RunningTunnels   func(childComplexity int) int
 		SleepInterval    func(childComplexity int) int
 		SleepJitter      func(childComplexity int) int
 		Staged           func(childComplexity int) int
@@ -1007,7 +1008,9 @@ type ComplexityRoot struct {
 		Listening func(childComplexity int) int
 		Open      func(childComplexity int) int
 		Port      func(childComplexity int) int
+		Purpose   func(childComplexity int) int
 		Streams   func(childComplexity int) int
+		To        func(childComplexity int) int
 		Up        func(childComplexity int) int
 	}
 
@@ -1382,6 +1385,7 @@ type ComplexityRoot struct {
 		SessionNumber func(childComplexity int) int
 		Streams       func(childComplexity int) int
 		TaskID        func(childComplexity int) int
+		To            func(childComplexity int) int
 	}
 
 	OperationalPortConnection struct {
@@ -2005,6 +2009,7 @@ type MinionSessionResolver interface {
 	Connections(ctx context.Context, obj *model.MinionSession) ([]*model.MinionConnection, error)
 
 	RunningTasks(ctx context.Context, obj *model.MinionSession) (int, error)
+	RunningTunnels(ctx context.Context, obj *model.MinionSession) (int, error)
 
 	BindTarget(ctx context.Context, obj *model.MinionSession) (*model.MinionTarget, error)
 }
@@ -5407,6 +5412,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSession.RunningTasks(childComplexity), true
+	case "MinionSession.runningTunnels":
+		if e.ComplexityRoot.MinionSession.RunningTunnels == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSession.RunningTunnels(childComplexity), true
 	case "MinionSession.sleepInterval":
 		if e.ComplexityRoot.MinionSession.SleepInterval == nil {
 			break
@@ -6467,12 +6478,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Port(childComplexity), true
+	case "MinionTunnel.purpose":
+		if e.ComplexityRoot.MinionTunnel.Purpose == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Purpose(childComplexity), true
 	case "MinionTunnel.streams":
 		if e.ComplexityRoot.MinionTunnel.Streams == nil {
 			break
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Streams(childComplexity), true
+	case "MinionTunnel.to":
+		if e.ComplexityRoot.MinionTunnel.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.To(childComplexity), true
 	case "MinionTunnel.up":
 		if e.ComplexityRoot.MinionTunnel.Up == nil {
 			break
@@ -8759,6 +8782,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OperationalPort.TaskID(childComplexity), true
+	case "OperationalPort.to":
+		if e.ComplexityRoot.OperationalPort.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.To(childComplexity), true
 
 	case "OperationalPortConnection.edges":
 		if e.ComplexityRoot.OperationalPortConnection.Edges == nil {
@@ -13961,8 +13990,12 @@ type MinionSession {
   # messages and the minion never said it has it (a minion that does not
   # know the item). null otherwise; setting it again tries again.
   maxTasksNotTaken: Int
-  # The tasks the minion has and has not ended (sent, started).
+  # The tasks the minion has and has not ended (sent, started) that hold a
+  # place in its max tasks: all but tunnels' (SOCKS proxies, port
+  # forwards), which hold none as long as they run; runningTunnels counts
+  # those.
   runningTasks: Int!
+  runningTunnels: Int!
   # Its minion's feedback since it was last marked read (for everyone of the
   # operation): errors and warnings; when the latest came, and when it was
   # marked read. Entries: minionFeedback.
@@ -14823,6 +14856,11 @@ type MinionTunnel {
   # OPERATIONAL_ADDRESS); null: the host the web app is reached at.
   port: Int!
   address: String
+  # What core puts in front of the port: socks (its SOCKS proxy) or
+  # forward (every connection a stream to to, the forward's destination,
+  # host:port; null for socks).
+  purpose: String!
+  to: String
   # Core listens on it: the task runs.
   listening: Boolean!
   # Its streams now (opening or open), and how many it has had.
@@ -15397,8 +15435,10 @@ type OperationalPort {
   # The task's id: a port serves one task.
   id: ID!
   port: Int!
-  # What it serves: socks.
+  # What it serves: socks (a SOCKS proxy) or forward (a port forward to
+  # to, host:port; null for socks).
   purpose: String!
+  to: String
   # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
   # host the web app is reached at.
   address: String
@@ -37327,6 +37367,35 @@ func (ec *executionContext) fieldContext_MinionSession_runningTasks(_ context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSession_runningTunnels(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSession_runningTunnels,
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.MinionSession().RunningTunnels(ctx, obj)
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSession_runningTunnels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSession",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_feedbackErrors(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37819,6 +37888,8 @@ func (ec *executionContext) fieldContext_MinionSessionEdge_node(_ context.Contex
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -38082,6 +38153,8 @@ func (ec *executionContext) fieldContext_MinionSessionEvent_session(_ context.Co
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -40071,6 +40144,8 @@ func (ec *executionContext) fieldContext_MinionTarget_session(_ context.Context,
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -41709,6 +41784,10 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_port(ctx, field)
 			case "address":
 				return ec.fieldContext_MinionTunnel_address(ctx, field)
+			case "purpose":
+				return ec.fieldContext_MinionTunnel_purpose(ctx, field)
+			case "to":
+				return ec.fieldContext_MinionTunnel_to(ctx, field)
 			case "listening":
 				return ec.fieldContext_MinionTunnel_listening(ctx, field)
 			case "open":
@@ -42976,6 +43055,64 @@ func (ec *executionContext) _MinionTunnel_address(ctx context.Context, field gra
 }
 
 func (ec *executionContext) fieldContext_MinionTunnel_address(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_purpose(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_purpose,
+		func(ctx context.Context) (any, error) {
+			return obj.Purpose, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_purpose(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_to(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_to,
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTunnel",
 		Field:      field,
@@ -52084,6 +52221,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionArchived(ctx c
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -52320,6 +52459,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionDescription(ct
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -52497,6 +52638,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMark(ctx conte
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -52733,6 +52876,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionAddress(ctx co
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -52910,6 +53055,8 @@ func (ec *executionContext) fieldContext_Mutation_markMinionFeedbackRead(ctx con
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -53087,6 +53234,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionMaxTasks(ctx c
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -58661,6 +58810,35 @@ func (ec *executionContext) fieldContext_OperationalPort_purpose(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _OperationalPort_to(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_to,
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OperationalPort_address(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -59084,6 +59262,8 @@ func (ec *executionContext) fieldContext_OperationalPortEdge_node(_ context.Cont
 				return ec.fieldContext_OperationalPort_port(ctx, field)
 			case "purpose":
 				return ec.fieldContext_OperationalPort_purpose(ctx, field)
+			case "to":
+				return ec.fieldContext_OperationalPort_to(ctx, field)
 			case "address":
 				return ec.fieldContext_OperationalPort_address(ctx, field)
 			case "sessionId":
@@ -59257,6 +59437,8 @@ func (ec *executionContext) fieldContext_OperationalPortEvent_port(_ context.Con
 				return ec.fieldContext_OperationalPort_port(ctx, field)
 			case "purpose":
 				return ec.fieldContext_OperationalPort_purpose(ctx, field)
+			case "to":
+				return ec.fieldContext_OperationalPort_to(ctx, field)
 			case "address":
 				return ec.fieldContext_OperationalPort_address(ctx, field)
 			case "sessionId":
@@ -63015,6 +63197,8 @@ func (ec *executionContext) fieldContext_Query_minionSession(ctx context.Context
 				return ec.fieldContext_MinionSession_maxTasksNotTaken(ctx, field)
 			case "runningTasks":
 				return ec.fieldContext_MinionSession_runningTasks(ctx, field)
+			case "runningTunnels":
+				return ec.fieldContext_MinionSession_runningTunnels(ctx, field)
 			case "feedbackErrors":
 				return ec.fieldContext_MinionSession_feedbackErrors(ctx, field)
 			case "feedbackWarnings":
@@ -87610,6 +87794,42 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "runningTunnels":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._MinionSession_runningTunnels(ctx, field, obj)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "feedbackErrors":
 			out.Values[i] = ec._MinionSession_feedbackErrors(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -89280,6 +89500,13 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			}
 		case "address":
 			out.Values[i] = ec._MinionTunnel_address(ctx, field, obj)
+		case "purpose":
+			out.Values[i] = ec._MinionTunnel_purpose(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._MinionTunnel_to(ctx, field, obj)
 		case "listening":
 			out.Values[i] = ec._MinionTunnel_listening(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -92167,6 +92394,8 @@ func (ec *executionContext) _OperationalPort(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "to":
+			out.Values[i] = ec._OperationalPort_to(ctx, field, obj)
 		case "address":
 			out.Values[i] = ec._OperationalPort_address(ctx, field, obj)
 		case "sessionId":

@@ -47,6 +47,9 @@ type IMinionSessionResolver interface {
 	// RunningTasks is MinionSession.runningTasks: its tasks the minion has
 	// and has not ended.
 	RunningTasks(ctx context.Context, s *model.MinionSession) (int, error)
+	// RunningTunnels counts its tunnel tasks running, which RunningTasks
+	// leaves out: they hold no place in max_tasks.
+	RunningTunnels(ctx context.Context, s *model.MinionSession) (int, error)
 	// SetMinionSessionMark and SetMinionSessionsMark mark sessions for the
 	// caller alone.
 	SetMinionSessionMark(ctx context.Context, id string, mark *model.MinionSessionMarkInput) (*model.MinionSession, error)
@@ -90,7 +93,8 @@ type minionSessionResolver struct {
 // SessionTasks counts a session's tasks under way (the minion task
 // repository).
 type SessionTasks interface {
-	CountRunning(ctx context.Context, sessionID uuid.UUID) (int, error)
+	CountSlots(ctx context.Context, sessionID uuid.UUID) (int, error)
+	CountTunnels(ctx context.Context, sessionID uuid.UUID) (int, error)
 }
 
 // MaxTasksSetter sets the operator's limit of tasks a session's minion runs
@@ -483,7 +487,18 @@ func (r *minionSessionResolver) RunningTasks(ctx context.Context, s *model.Minio
 	if err != nil {
 		return 0, fmt.Errorf("session id %q: %w", s.ID, err)
 	}
-	return r.tasks.CountRunning(ctx, id)
+	return r.tasks.CountSlots(ctx, id)
+}
+
+func (r *minionSessionResolver) RunningTunnels(ctx context.Context, s *model.MinionSession) (int, error) {
+	if r.tasks == nil || s.State == "RESERVED" {
+		return 0, nil
+	}
+	id, err := uuid.Parse(s.ID)
+	if err != nil {
+		return 0, fmt.Errorf("session id %q: %w", s.ID, err)
+	}
+	return r.tasks.CountTunnels(ctx, id)
 }
 
 func (r *minionSessionResolver) MinionSession(ctx context.Context, id string) (*model.MinionSession, error) {

@@ -264,13 +264,15 @@ export const SetMinionSessionMaxTasksMutation = graphql(`
   }
 `)
 
-// How many of the session's tasks the minion has and has not ended: read
-// apart from the session (a count, for one session at a time).
+// How many of the session's tasks the minion has and has not ended, those
+// holding a place in its max tasks, and its tunnels apart: read apart from
+// the session (counts, for one session at a time).
 export const MinionSessionRunningTasksQuery = graphql(`
   query MinionSessionRunningTasks($id: ID!) {
     minionSession(id: $id) {
       id
       runningTasks
+      runningTunnels
     }
   }
 `)

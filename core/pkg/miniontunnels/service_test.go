@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"syscall"
@@ -202,7 +203,7 @@ func freePort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port
 }
 
-func newRig(t *testing.T, maxStreams int, cfg func(*Config)) *rig {
+func newRig(t *testing.T, maxStreams int, cfg func(*Config), opening ...func(*Opening)) *rig {
 	t.Helper()
 	r := &rig{ports: &fakePorts{recs: map[uuid.UUID]*models.OperationalPort{}}, records: &fakeRecords{recs: map[uint64]models.MinionTunnelStream{}},
 		tasks: &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}}, task: uuid.New(), session: uuid.New()}
@@ -216,9 +217,12 @@ func newRig(t *testing.T, maxStreams int, cfg func(*Config)) *rig {
 	r.svc = New(c, r.ports, r.records, r.tasks, r.bus, zap.NewNop())
 	r.svc.Start(context.Background())
 	t.Cleanup(r.svc.Stop)
-	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskSent, Action: protocol.ActionTunnel}
-	port, err := r.svc.Open(context.Background(), Opening{Task: r.task, Session: r.session, Operation: uuid.New(), By: uuid.New(),
-		MaxStreams: maxStreams, Timeout: time.Second})
+	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskSent, Action: protocol.ActionSocksProxy}
+	o := Opening{Task: r.task, Session: r.session, Operation: uuid.New(), By: uuid.New(), MaxStreams: maxStreams, Timeout: time.Second}
+	for _, f := range opening {
+		f(&o)
+	}
+	port, err := r.svc.Open(context.Background(), o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1032,6 +1036,58 @@ func TestTunnelCarriesDatagrams(t *testing.T) {
 	})
 	rec := r.records.get(1)
 	if !rec.UDP || rec.Up == 0 || rec.Down == 0 {
+		t.Errorf("record %+v", rec)
+	}
+}
+
+// forwardTo makes a rig's tunnel a port forward to host:port.
+func forwardTo(host string, port int) func(*Opening) {
+	return func(o *Opening) { o.Purpose, o.Host, o.HostPort = models.OperationalPurposeForward, host, port }
+}
+
+// A port forward takes a plain connection, no SOCKS: each one is a stream
+// to the forward's destination, the same items as a proxy's, its record
+// naming the destination. Its port has no UDP relay.
+func TestForwardCarriesAStream(t *testing.T) {
+	host, port := splitAddr(t, echo(t))
+	r := newRig(t, 0, nil, forwardTo(host, port))
+	r.tasks.ack(r.task)
+	startMinion(t, r)
+	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(r.port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	roundTrip(t, c, 256<<10)
+	eventually(t, "the stream ends done", func() bool { return r.records.get(1).End == models.TunnelEndDone })
+	if rec := r.records.get(1); rec.Host != host || rec.Port != port || rec.UDP || rec.Up != 256<<10 || rec.Down != 256<<10 {
+		t.Errorf("record %+v", rec)
+	}
+	r.svc.mu.Lock()
+	relay := r.svc.tunnels[r.task].relay
+	r.svc.mu.Unlock()
+	if relay != nil {
+		t.Error("a forward with a UDP relay")
+	}
+}
+
+// A forward whose destination refuses resets the client's connection, as
+// the destination would.
+func TestForwardRefused(t *testing.T) {
+	r := newRig(t, 0, nil, forwardTo("127.0.0.1", freePort(t)))
+	r.tasks.ack(r.task)
+	startMinion(t, r)
+	c, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(r.port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, err := c.Read(make([]byte, 1)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Errorf("the client's connection stays: %v", err)
+	}
+	eventually(t, "its record ends", func() bool { return r.records.get(1).End == models.TunnelEndNotOpened })
+	if rec := r.records.get(1); rec.Result == nil || *rec.Result != protocol.TunnelRefused {
 		t.Errorf("record %+v", rec)
 	}
 }

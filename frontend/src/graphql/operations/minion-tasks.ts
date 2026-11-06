@@ -89,6 +89,8 @@ export const MinionTaskFields = graphql(`
     tunnel {
       port
       address
+      purpose
+      to
       listening
       open
       streams

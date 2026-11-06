@@ -32,6 +32,11 @@ func (r *minionSessionResolver) RunningTasks(ctx context.Context, obj *model.Min
 	return r.MinionSessionResolver.RunningTasks(ctx, obj)
 }
 
+// RunningTunnels is the resolver for the runningTunnels field.
+func (r *minionSessionResolver) RunningTunnels(ctx context.Context, obj *model.MinionSession) (int, error) {
+	return r.MinionSessionResolver.RunningTunnels(ctx, obj)
+}
+
 // CreateMinionSessionFolder is the resolver for the createMinionSessionFolder field.
 func (r *mutationResolver) CreateMinionSessionFolder(ctx context.Context, operationID string, input model.MinionSessionFolderInput) (*model.MinionSessionFolder, error) {
 	return r.MinionSessionResolver.CreateMinionSessionFolder(ctx, operationID, input)

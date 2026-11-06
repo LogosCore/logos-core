@@ -27,6 +27,10 @@ type OperationalPort struct {
 	SessionNumber int    `bson:"session_number" json:"session_number"`
 	OpenedByName  string `bson:"opened_by_name,omitempty" json:"opened_by_name,omitempty"`
 	SearchText    string `bson:"search_text" json:"-"`
+	// Host and HostPort are a forward's destination (OperationalPurposeForward):
+	// every connection to the port is a stream to it.
+	Host     string `bson:"host,omitempty" json:"host,omitempty"`
+	HostPort int    `bson:"host_port,omitempty" json:"host_port,omitempty"`
 	// Streams is how many streams the task has opened, the last one's
 	// number: a stream's is never used again in the task, a restart's
 	// streams' neither.
@@ -38,13 +42,23 @@ type OperationalPort struct {
 	Timeout    time.Duration `bson:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
-// OperationalPurposeSOCKS: a tunnel task's SOCKS proxy.
-const OperationalPurposeSOCKS = "socks"
+// What an operational port serves: its task's tunnel action's name.
+const (
+	// OperationalPurposeSOCKS: a SOCKS proxy (protocol.ActionSocksProxy).
+	OperationalPurposeSOCKS = "socks_proxy"
+	// OperationalPurposeForward: a port forward, to its destination
+	// (protocol.ActionPortForward).
+	OperationalPurposeForward = "port_forward"
+)
 
 // OperationalPortSearchText is what the Ports list's search matches: the
 // port, the session's number, who opened it and for what.
 func OperationalPortSearchText(p *OperationalPort) string {
-	return fmt.Sprintf("%d #%d %s %s", p.Port, p.SessionNumber, p.OpenedByName, p.Purpose)
+	text := fmt.Sprintf("%d #%d %s %s", p.Port, p.SessionNumber, p.OpenedByName, p.Purpose)
+	if p.Host != "" {
+		text += fmt.Sprintf(" %s:%d", p.Host, p.HostPort)
+	}
+	return text
 }
 
 // MinionTunnelStream is one stream of a tunnel task, as the operation's

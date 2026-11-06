@@ -82,6 +82,25 @@ func (f *fakeTasks) CountRunning(_ context.Context, sid uuid.UUID) (int, error) 
 	return n, nil
 }
 
+func (f *fakeTasks) CountSlots(ctx context.Context, sid uuid.UUID) (int, error) {
+	all, _ := f.CountRunning(ctx, sid)
+	tunnels, _ := f.CountTunnels(ctx, sid)
+	return all - tunnels, nil
+}
+
+func (f *fakeTasks) CountTunnels(_ context.Context, sid uuid.UUID) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, t := range f.rows {
+		if t.SessionID == sid && protocol.IsTunnelAction(t.Action) &&
+			(t.State == models.MinionTaskRunning || t.State == models.MinionTaskSent && t.AckedAt != nil) {
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (f *fakeTasks) RunningIDs(_ context.Context, sid uuid.UUID, limit int) ([]uuid.UUID, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

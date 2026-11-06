@@ -12,6 +12,8 @@ import { formatDateTime } from "@/lib/date-format"
 import { formatBytes } from "@/lib/format-bytes"
 import { cn } from "@/lib/utils"
 import {
+  PORT_FORWARD,
+  frontLabel,
   hostPort,
   proxyState,
   proxyURL,
@@ -46,6 +48,9 @@ export function TunnelView({ task: t, tunnel }: { task: Task; tunnel: Tunnel }) 
   const host = tunnel.address ?? window.location.hostname
   const address = hostPort(host, tunnel.port)
   const state = proxyState(tunnel, t.state)
+  // A forward: every connection goes to its destination; a SOCKS proxy:
+  // where each tool says.
+  const forward = tunnel.purpose === PORT_FORWARD
   const [filter, setFilter] = useState<TunnelStreamsFilter>({ search: "", state: "" })
   const streamsQ = useMinionTunnelStreams(t.id, filter, tunnelVersion(tunnel))
   const streams = streamsQ.data?.pages.flatMap((p) => p.minionTunnelStreams.streams) ?? []
@@ -56,8 +61,9 @@ export function TunnelView({ task: t, tunnel }: { task: Task; tunnel: Tunnel }) 
       <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 border-b px-2 py-1">
         <span className="flex min-w-0 flex-1 items-baseline gap-1.5 px-1">
           <EthernetPortIcon className="size-3.5 shrink-0 self-center text-muted-foreground" aria-hidden />
-          <span className="truncate text-xs font-medium">SOCKS proxy</span>
+          <span className="truncate text-xs font-medium">{frontLabel(tunnel.purpose)}</span>
           <span className="truncate font-mono text-xs">{address}</span>
+          {forward && tunnel.to && <span className="truncate font-mono text-xs text-muted-foreground">→ {tunnel.to}</span>}
           <span className={cn("shrink-0 text-xs", TONE[state.tone])} title={state.detail ?? undefined}>
             {state.label}
           </span>
@@ -68,24 +74,28 @@ export function TunnelView({ task: t, tunnel }: { task: Task; tunnel: Tunnel }) 
               <CopyIcon />
               Address
             </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              title={`Copy ${proxyURL(host, tunnel.port)}: for curl -x, ALL_PROXY or a browser (names resolve on the minion's host)`}
-              onClick={() => void copyToClipboard(proxyURL(host, tunnel.port), "proxy URL")}
-            >
-              <LinkIcon />
-              URL
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              title={`Copy "${proxychainsLine(host, tunnel.port)}": a line of proxychains' [ProxyList]`}
-              onClick={() => void copyToClipboard(proxychainsLine(host, tunnel.port), "proxychains line")}
-            >
-              <TerminalIcon />
-              proxychains
-            </Button>
+            {!forward && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  title={`Copy ${proxyURL(host, tunnel.port)}: for curl -x, ALL_PROXY or a browser (names resolve on the minion's host)`}
+                  onClick={() => void copyToClipboard(proxyURL(host, tunnel.port), "proxy URL")}
+                >
+                  <LinkIcon />
+                  URL
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  title={`Copy "${proxychainsLine(host, tunnel.port)}": a line of proxychains' [ProxyList]`}
+                  onClick={() => void copyToClipboard(proxychainsLine(host, tunnel.port), "proxychains line")}
+                >
+                  <TerminalIcon />
+                  proxychains
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -97,7 +107,14 @@ export function TunnelView({ task: t, tunnel }: { task: Task; tunnel: Tunnel }) 
               <span className="font-mono text-xs break-all">{address}</span>
               {!tunnel.address && <span className="text-muted-foreground"> · this page's host</span>}
             </LabelRow>
-            <LabelRow label="Speaks">SOCKS5 (connect, UDP associate), SOCKS4 and 4a (connect); no credentials</LabelRow>
+            {forward ? (
+              <LabelRow label="Forwards to">
+                <span className="font-mono text-xs break-all">{tunnel.to ?? "?"}</span>
+                <span className="text-muted-foreground"> · from the minion&apos;s host, each connection</span>
+              </LabelRow>
+            ) : (
+              <LabelRow label="Speaks">SOCKS5 (connect, UDP associate), SOCKS4 and 4a (connect); no credentials</LabelRow>
+            )}
             <LabelRow label="State">
               <span className={TONE[state.tone]}>{state.label}</span>
               {state.detail && <span className="text-muted-foreground">: {state.detail}</span>}
@@ -171,9 +188,11 @@ export function TunnelView({ task: t, tunnel }: { task: Task; tunnel: Tunnel }) 
                     <WaypointsIcon className="size-8 opacity-50" />
                     <p className="text-sm">No stream yet.</p>
                     <p className="max-w-md text-center text-xs">
-                      {tunnel.listening
-                        ? `Each connection a tool makes through ${address} is one: the minion connects to its destination from its host.`
-                        : "No tool connected through it."}
+                      {!tunnel.listening
+                        ? "No tool connected through it."
+                        : forward
+                          ? `Each connection to ${address} is one: the minion connects to ${tunnel.to ?? "the destination"} from its host.`
+                          : `Each connection a tool makes through ${address} is one: the minion connects to its destination from its host.`}
                     </p>
                   </>
                 )

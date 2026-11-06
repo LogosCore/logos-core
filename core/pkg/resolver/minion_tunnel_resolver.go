@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -42,16 +43,26 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 	if err != nil {
 		return nil, fmt.Errorf("the task's tunnel: %w", err)
 	}
+	args, _ := t.Args.(map[string]any)
 	port := sum.Port
 	if !listening {
-		if args, ok := t.Args.(map[string]any); ok {
-			if p, ok := protocol.ArgInt(args, "port"); ok {
-				port = int(p)
-			}
+		if p, ok := protocol.ArgInt(args, "port"); ok {
+			port = int(p)
 		}
 	}
-	return &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Listening: listening, Open: sum.Open,
-		Streams: int(sum.Streams), Up: int(sum.Up), Down: int(sum.Down)}, nil
+	m := &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Purpose: models.OperationalPurposeSOCKS, Listening: listening,
+		Open: sum.Open, Streams: int(sum.Streams), Up: int(sum.Up), Down: int(sum.Down)}
+	if t.Action != nil && *t.Action == protocol.ActionPortForward {
+		// Its destination, as its args say (core checked them when it
+		// queued the task).
+		m.Purpose = models.OperationalPurposeForward
+		host, _ := protocol.ArgString(args, "host")
+		if to, ok := protocol.ArgInt(args, "to"); ok && host != "" {
+			dest := net.JoinHostPort(host, strconv.FormatInt(to, 10))
+			m.To = &dest
+		}
+	}
+	return m, nil
 }
 
 // MinionTunnelStreams is a page of a tunnel task's streams, the latest
@@ -72,7 +83,7 @@ func (r *minionTaskResolver) MinionTunnelStreams(ctx context.Context, taskID str
 		return nil, err
 	}
 	page := &model.MinionTunnelStreamPage{Streams: []*model.MinionTunnelStream{}}
-	if r.tunnels == nil || t.Action != protocol.ActionTunnel {
+	if r.tunnels == nil || !protocol.IsTunnelAction(t.Action) {
 		return page, nil
 	}
 	limit := defaultTunnelStreamPage
@@ -173,7 +184,12 @@ func (r *minionTaskResolver) OperationalPorts(ctx context.Context, operationID s
 
 // portModel is a port as GraphQL has it: its task's tunnel as it is now.
 func (r *minionTaskResolver) portModel(p *models.OperationalPort) *model.OperationalPort {
-	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Purpose: p.Purpose, Address: strPtr(r.tunnels.Address()),
+	var to *string
+	if p.Host != "" {
+		dest := net.JoinHostPort(p.Host, strconv.Itoa(p.HostPort))
+		to = &dest
+	}
+	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Purpose: p.Purpose, To: to, Address: strPtr(r.tunnels.Address()),
 		SessionID: p.SessionID.String(), SessionNumber: p.SessionNumber, TaskID: p.TaskID.String(), OpenedBy: p.OpenedBy.String(),
 		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Streams)}
 	if sum, ok := r.tunnels.Summary(p.TaskID); ok {

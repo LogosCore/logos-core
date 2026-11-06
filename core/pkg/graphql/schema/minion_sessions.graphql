@@ -140,8 +140,12 @@ type MinionSession {
   # messages and the minion never said it has it (a minion that does not
   # know the item). null otherwise; setting it again tries again.
   maxTasksNotTaken: Int
-  # The tasks the minion has and has not ended (sent, started).
+  # The tasks the minion has and has not ended (sent, started) that hold a
+  # place in its max tasks: all but tunnels' (SOCKS proxies, port
+  # forwards), which hold none as long as they run; runningTunnels counts
+  # those.
   runningTasks: Int!
+  runningTunnels: Int!
   # Its minion's feedback since it was last marked read (for everyone of the
   # operation): errors and warnings; when the latest came, and when it was
   # marked read. Entries: minionFeedback.

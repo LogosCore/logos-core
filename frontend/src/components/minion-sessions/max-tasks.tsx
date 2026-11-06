@@ -19,9 +19,14 @@ import { MAX_TASKS_LIMIT, parseMaxTasks } from "./max-tasks-values"
 // it, never changed.
 
 export function MaxTasksValue({ s }: { s: MinionSessionFieldsFragment }) {
-  const running = useMinionSessionRunningTasks(s.id, s.rev).data?.minionSession?.runningTasks
+  const counts = useMinionSessionRunningTasks(s.id, s.rev).data?.minionSession
+  const running = counts?.runningTasks
   const editable = s.maxTasksSettable && s.state !== "CLOSED" && s.state !== "RESERVED"
-  const runningText = running != null ? `${running} running` : null
+  // Tunnels (SOCKS proxies, port forwards) run beside the limit: they hold
+  // no place in it.
+  const tunnels = counts?.runningTunnels ?? 0
+  const runningText =
+    running != null ? `${running} running${tunnels > 0 ? ` · ${tunnels} ${tunnels === 1 ? "tunnel" : "tunnels"} beside the limit` : ""}` : null
   if (s.maxTasks == null) {
     return (
       <span className="tabular-nums">

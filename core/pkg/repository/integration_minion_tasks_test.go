@@ -523,11 +523,22 @@ func TestIntegrationMinionTasksCoreCommands(t *testing.T) {
 		return id
 	}
 	insert("shell", models.MinionTaskRunning)
+	if err := repo.Insert(ctx, &models.MinionTask{TaskID: uuid.New(), OperationID: uuid.New(), SessionID: session, Command: "socks_proxy",
+		Action: protocol.ActionSocksProxy, IssuedBy: uuid.New(), State: models.MinionTaskRunning, QueuedAt: now, AckedAt: &now, StartedAt: &now}); err != nil {
+		t.Fatal(err)
+	}
 	open := insert(protocol.CommandMaxTasks, models.MinionTaskRunning)
 	insert(protocol.CommandConnect, models.MinionTaskRunning)
 	insert(protocol.CommandMaxTasks, models.MinionTaskDone)
-	if n, err := repo.CountRunning(ctx, session); err != nil || n != 1 {
+	if n, err := repo.CountRunning(ctx, session); err != nil || n != 2 {
 		t.Fatalf("running: %d %v", n, err)
+	}
+	// A tunnel holds no place in max_tasks.
+	if n, err := repo.CountSlots(ctx, session); err != nil || n != 1 {
+		t.Fatalf("holding a place: %d %v", n, err)
+	}
+	if n, err := repo.CountTunnels(ctx, session); err != nil || n != 1 {
+		t.Fatalf("tunnels: %d %v", n, err)
 	}
 	if got, err := repo.OpenOfCommand(ctx, session, protocol.CommandMaxTasks); err != nil || len(got) != 1 || got[0].TaskID != open {
 		t.Fatalf("open max_tasks: %+v %v", got, err)

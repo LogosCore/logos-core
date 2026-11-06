@@ -346,9 +346,9 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		return nil, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
 	}
 	taskID := uuid.New()
-	tunnel := commands[i].Action == protocol.ActionTunnel
+	tunnel := protocol.IsTunnelAction(commands[i].Action)
 	if tunnel {
-		port, err := r.openTunnel(ctx, s, uid, taskID, wire)
+		port, err := r.openTunnel(ctx, s, uid, taskID, commands[i].Action, wire)
 		if err != nil {
 			return nil, err
 		}
@@ -380,15 +380,26 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 
 // openTunnel takes an operational port for a tunnel task about to be
 // queued (its port arg: 0 for any free one) and puts it in the task's
-// args: core's SOCKS proxy listens there while the task runs.
-func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSession, uid, taskID uuid.UUID, wire map[string]any) (int, error) {
+// args: core's SOCKS proxy, or a forward to the task's host and to,
+// listens there while the task runs.
+func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSession, uid, taskID uuid.UUID, action string, wire map[string]any) (int, error) {
 	if r.tunnels == nil {
 		return 0, moduleGQLError(ctx, errCodeBadUserInput, "core opens no tunnels")
 	}
 	asked, _ := protocol.ArgInt(wire, "port")
 	o := miniontunnels.Opening{Task: taskID, Session: s.SessionID, Operation: s.OperationID, By: uid, Port: int(max(min(asked, 65536), -1)),
 		MaxStreams: miniontunnels.DefaultMaxStreams, Timeout: miniontunnels.DefaultConnectTimeout, SessionNumber: int(s.Number),
-		ByName: gqlctx.AuthFromContext(ctx).Username}
+		ByName: gqlctx.AuthFromContext(ctx).Username, Purpose: models.OperationalPurposeSOCKS}
+	if action == protocol.ActionPortForward {
+		host, _ := protocol.ArgString(wire, "host")
+		to, _ := protocol.ArgInt(wire, "to")
+		dest := protocol.TunnelItem{T: protocol.ItemTunnel, Task: taskID[:], Stream: 1, Host: strings.TrimSpace(host), Port: uint64(max(to, 0))}
+		if err := dest.Validate(); err != nil {
+			return 0, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the forward's destination: %v", err))
+		}
+		o.Purpose, o.Host, o.HostPort = models.OperationalPurposeForward, dest.Host, int(to)
+		wire["host"] = dest.Host
+	}
 	if n, ok := protocol.ArgInt(wire, "max_streams"); ok && n > 0 {
 		o.MaxStreams = int(min(n, 1<<16))
 	}

@@ -770,6 +770,7 @@ type MinionSession struct {
 	MaxTasksPending  *int                    `json:"maxTasksPending,omitempty"`
 	MaxTasksNotTaken *int                    `json:"maxTasksNotTaken,omitempty"`
 	RunningTasks     int                     `json:"runningTasks"`
+	RunningTunnels   int                     `json:"runningTunnels"`
 	FeedbackErrors   int                     `json:"feedbackErrors"`
 	FeedbackWarnings int                     `json:"feedbackWarnings"`
 	FeedbackAt       *string                 `json:"feedbackAt,omitempty"`
@@ -1070,6 +1071,8 @@ type MinionTaskUpload struct {
 type MinionTunnel struct {
 	Port      int     `json:"port"`
 	Address   *string `json:"address,omitempty"`
+	Purpose   string  `json:"purpose"`
+	To        *string `json:"to,omitempty"`
 	Listening bool    `json:"listening"`
 	Open      int     `json:"open"`
 	Streams   int     `json:"streams"`
@@ -1295,6 +1298,7 @@ type OperationalPort struct {
 	ID            string  `json:"id"`
 	Port          int     `json:"port"`
 	Purpose       string  `json:"purpose"`
+	To            *string `json:"to,omitempty"`
 	Address       *string `json:"address,omitempty"`
 	SessionID     string  `json:"sessionId"`
 	SessionNumber int     `json:"sessionNumber"`

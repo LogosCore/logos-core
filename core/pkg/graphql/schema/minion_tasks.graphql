@@ -195,6 +195,11 @@ type MinionTunnel {
   # OPERATIONAL_ADDRESS); null: the host the web app is reached at.
   port: Int!
   address: String
+  # What core puts in front of the port: socks (its SOCKS proxy) or
+  # forward (every connection a stream to to, the forward's destination,
+  # host:port; null for socks).
+  purpose: String!
+  to: String
   # Core listens on it: the task runs.
   listening: Boolean!
   # Its streams now (opening or open), and how many it has had.

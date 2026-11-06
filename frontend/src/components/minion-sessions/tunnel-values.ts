@@ -71,6 +71,15 @@ export function proxyState(t: Tunnel, taskState: string): { label: string; tone:
   return { label: "Listening", tone: "good", detail: null }
 }
 
+/** What core puts in front of a tunnel's port (its task's tunnel action): a port forward, or else a SOCKS proxy. */
+export const PORT_FORWARD = "port_forward"
+export const SOCKS_PROXY = "socks_proxy"
+
+/** What core puts in front of a tunnel's port, for a person. */
+export function frontLabel(purpose: string): string {
+  return purpose === PORT_FORWARD ? "Port forward" : purpose === SOCKS_PROXY ? "SOCKS proxy" : purpose.replaceAll("_", " ")
+}
+
 /** The version a task's live updates bring: the streams list is read again when it changes. */
 export function tunnelVersion(t: Tunnel): string {
   return [t.listening, t.open, t.streams, t.up, t.down].join(":")
