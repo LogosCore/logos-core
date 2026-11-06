@@ -13,6 +13,7 @@ import { graphqlClient } from "@/lib/graphql-client"
 import { mapListRows, mergeRow, scheduleRefresh, setNewer } from "@/lib/live-lists"
 import { useSubscription } from "@/hooks/use-subscription"
 import {
+  MinionSessionCountDocument,
   MinionSessionFoldersDocument,
   CreateMinionSessionFolderDocument,
   UpdateMinionSessionFolderDocument,
@@ -78,6 +79,8 @@ export const minionSessionKeys = {
   details: () => [...minionSessionKeys.all, "detail"] as const,
   detail: (id: string) => [...minionSessionKeys.details(), id] as const,
   folders: (operationId: string) => [...minionSessionKeys.all, "folders", operationId] as const,
+  // Under folders: read again with them (every count the tabs show).
+  count: (operationId: string) => [...minionSessionKeys.all, "folders", operationId, "count"] as const,
   connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
   runningTasks: (id: string, rev: number) => [...minionSessionKeys.all, "running-tasks", id, rev] as const,
   feedback: (id: string) => [...minionSessionKeys.all, "feedback", id] as const,
@@ -205,8 +208,9 @@ export function applyMinionSessionEvent(
 ) {
   if (action === "CREATED" || !session) {
     scheduleRefresh(queryClient, minionSessionKeys.lists())
-    // A change naming no session may be the folders' (made, moved, filled).
-    if (!session) void queryClient.invalidateQueries({ queryKey: [...minionSessionKeys.all, "folders"] })
+    // The folders' counts change with a new session; a change naming no
+    // session may be the folders' own (made, moved, filled).
+    scheduleRefresh(queryClient, [...minionSessionKeys.all, "folders"])
     return
   }
   // The session's own query (its Details), where loaded.
@@ -217,9 +221,11 @@ export function applyMinionSessionEvent(
     if (!data) continue
     const params = key[key.length - 1] as MinionSessionListParams
     const before = data.pages.flatMap((p) => p.minionSessions.edges).find((e) => e.node.id === session.id)?.node
-    // Archiving or restoring moves the row between the two lists.
+    // Archiving or restoring moves the row between the two lists, and
+    // changes the folders' counts.
     if (before && before.archived !== session.archived) {
       scheduleRefresh(queryClient, minionSessionKeys.lists())
+      scheduleRefresh(queryClient, [...minionSessionKeys.all, "folders"])
       continue
     }
     const narrowed =
@@ -389,7 +395,10 @@ export function useSetMinionSessionsArchived() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (vars: SetMinionSessionsArchivedMutationVariables) => graphqlClient(SetMinionSessionsArchivedDocument, vars),
-    onSuccess: () => scheduleRefresh(queryClient, minionSessionKeys.lists()),
+    onSuccess: () => {
+      scheduleRefresh(queryClient, minionSessionKeys.lists())
+      scheduleRefresh(queryClient, [...minionSessionKeys.all, "folders"])
+    },
   })
 }
 
@@ -488,7 +497,18 @@ export function useSetMinionSessionsFolder() {
     mutationFn: (vars: SetMinionSessionsFolderMutationVariables) => graphqlClient(SetMinionSessionsFolderDocument, vars),
     onSuccess: () => {
       scheduleRefresh(queryClient, minionSessionKeys.lists())
+      scheduleRefresh(queryClient, [...minionSessionKeys.all, "folders"])
       void queryClient.invalidateQueries({ queryKey: minionSessionKeys.details() })
     },
+  })
+}
+
+/** How many sessions an operation has, not archived: All's count. */
+export function useMinionSessionCount(operationId: string) {
+  return useQuery({
+    queryKey: minionSessionKeys.count(operationId),
+    queryFn: () => graphqlClient(MinionSessionCountDocument, { operationId }),
+    enabled: operationId !== "",
+    select: (d) => d.minionSessionCount,
   })
 }

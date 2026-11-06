@@ -32,7 +32,10 @@ export function SessionFolderTabs({
   onEdit,
   onDelete,
   onMove,
+  allCount,
 }: {
+  /** All's count: the operation's sessions, not archived. */
+  allCount?: number
   folders: readonly Folder[]
   /** The folder shown; null: All. */
   current: string | null
@@ -58,6 +61,7 @@ export function SessionFolderTabs({
       <FolderTab active={current === null} onClick={() => onSelect(null)} title="Every session of the operation">
         <LayersIcon className="size-3.5 shrink-0" aria-hidden />
         All
+        {allCount !== undefined && <Count n={allCount} />}
       </FolderTab>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
@@ -143,9 +147,10 @@ function SortableFolder({
           />
         }
       >
-        <FolderTab active={active} onClick={onClick} title={folder.name}>
+        <FolderTab active={active} onClick={onClick} title={`${folder.name}: ${folder.sessions} ${folder.sessions === 1 ? "session" : "sessions"}, not archived`}>
           <FolderGlyph folder={folder} />
           <span className="max-w-[16ch] truncate">{folder.name}</span>
+          <Count n={folder.sessions} />
         </FolderTab>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -160,4 +165,9 @@ function SortableFolder({
       </ContextMenuContent>
     </ContextMenu>
   )
+}
+
+/** A tab's count of sessions, not archived. */
+function Count({ n }: { n: number }) {
+  return <span className="rounded-full bg-muted px-1.5 text-xs leading-4 font-normal text-muted-foreground tabular-nums">{n}</span>
 }

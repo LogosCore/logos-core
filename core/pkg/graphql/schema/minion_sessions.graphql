@@ -446,6 +446,8 @@ type MinionSessionFolder {
   emoji: String
   color: String
   order: Int!
+  # Its sessions, not archived.
+  sessions: Int!
 }
 
 input MinionSessionFolderInput {
@@ -475,6 +477,9 @@ type MinionSessionEvent {
 extend type Query {
   # An operation's folders of sessions, in their order. Needs at least viewer.
   minionSessionFolders(operationId: ID!): [MinionSessionFolder!]!
+    @hasPermission(permission: "operation:member")
+  # How many sessions an operation has, not archived: All's count.
+  minionSessionCount(operationId: ID!): Int!
     @hasPermission(permission: "operation:member")
 
   # A session's feedback, newest first, a page at a time (first: 200 by

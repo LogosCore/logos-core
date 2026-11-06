@@ -837,6 +837,7 @@ type MinionSessionFolder struct {
 	Emoji       *string `json:"emoji,omitempty"`
 	Color       *string `json:"color,omitempty"`
 	Order       int     `json:"order"`
+	Sessions    int     `json:"sessions"`
 }
 
 type MinionSessionFolderChoice struct {

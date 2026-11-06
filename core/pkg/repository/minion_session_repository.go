@@ -74,6 +74,9 @@ type IMinionSessionRepository interface {
 	SetFolderMany(ctx context.Context, operationID uuid.UUID, ids []uuid.UUID, folder *uuid.UUID) (int64, error)
 	SetFolderMatching(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, folder *uuid.UUID) (int64, error)
 	ClearFolder(ctx context.Context, operationID, folder uuid.UUID) (int64, error)
+	// FolderCounts are the operation's open sessions not archived: all of
+	// them, and by folder.
+	FolderCounts(ctx context.Context, operationID uuid.UUID) (int64, map[uuid.UUID]int64, error)
 	// SessionIDs are the ids of the sessions q lists (not its sort), at most
 	// limit: what a bulk change names by matching.
 	SessionIDs(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, limit int64) ([]uuid.UUID, error)
@@ -544,6 +547,30 @@ func (r *minionSessionRepository) BackfillProcessNames(ctx context.Context) (int
 		return 0, err
 	}
 	return res.ModifiedCount, nil
+}
+
+func (r *minionSessionRepository) FolderCounts(ctx context.Context, operationID uuid.UUID) (int64, map[uuid.UUID]int64, error) {
+	var rows []struct {
+		Folder *uuid.UUID `bson:"_id"`
+		N      int64      `bson:"n"`
+	}
+	match := minionSessionFilter(operationID, MinionSessionQuery{}, time.Now().UTC())
+	err := r.coll.Aggregate(ctx, bson.A{
+		bson.M{"$match": match},
+		bson.M{"$group": bson.M{"_id": "$folder_id", "n": bson.M{"$sum": 1}}},
+	}).All(&rows)
+	if err != nil {
+		return 0, nil, err
+	}
+	var all int64
+	by := map[uuid.UUID]int64{}
+	for _, row := range rows {
+		all += row.N
+		if row.Folder != nil {
+			by[*row.Folder] = row.N
+		}
+	}
+	return all, by, nil
 }
 
 func (r *minionSessionRepository) SessionIDs(ctx context.Context, operationID uuid.UUID, q MinionSessionQuery, limit int64) ([]uuid.UUID, error) {

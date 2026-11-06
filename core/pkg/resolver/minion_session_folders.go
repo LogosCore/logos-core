@@ -79,11 +79,28 @@ func (r *minionSessionResolver) MinionSessionFolders(ctx context.Context, operat
 	if err != nil {
 		return nil, fmt.Errorf("list the folders: %w", err)
 	}
+	_, counts, err := r.sessions.FolderCounts(ctx, op)
+	if err != nil {
+		return nil, fmt.Errorf("count the folders' sessions: %w", err)
+	}
 	out := make([]*model.MinionSessionFolder, len(list))
 	for i, f := range list {
 		out[i] = toFolderModel(f)
+		out[i].Sessions = int(counts[f.FolderID])
 	}
 	return out, nil
+}
+
+func (r *minionSessionResolver) MinionSessionCount(ctx context.Context, operationID string) (int, error) {
+	op, err := r.viewer(ctx, operationID)
+	if err != nil {
+		return 0, err
+	}
+	all, _, err := r.sessions.FolderCounts(ctx, op)
+	if err != nil {
+		return 0, fmt.Errorf("count the sessions: %w", err)
+	}
+	return int(all), nil
 }
 
 func (r *minionSessionResolver) CreateMinionSessionFolder(ctx context.Context, operationID string, in model.MinionSessionFolderInput) (*model.MinionSessionFolder, error) {

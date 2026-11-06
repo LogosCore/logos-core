@@ -9,6 +9,7 @@ import {
   useMinionSessionChangedSubscription,
   useMinionSessionsLayout,
   useMinionSession,
+  useMinionSessionCount,
   useMinionSessionFolders,
   useMinionSessionFolderMutations,
   useSetMinionSessionsFolder,
@@ -67,6 +68,7 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
   const [archived, setArchived] = useState(false)
   // The operation's folders, and the one shown (the layout's; one gone: All).
   const { data: folderList } = useMinionSessionFolders(operationId)
+  const { data: allCount } = useMinionSessionCount(operationId)
   const folderMutations = useMinionSessionFolderMutations(operationId)
   const moveSessions = useSetMinionSessionsFolder()
   const [folderDialog, setFolderDialog] = useState<FolderDialogTarget | null>(null)
@@ -115,6 +117,10 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
     if (layout.paneParked) setLayout({ ...layout, paneParked: false })
   }
 
+  // Until the layout is in, nothing: drawn with the defaults first, a parked
+  // pane showed unparked for a moment (and the divider jumped to its place).
+  if (layoutLoading) return <div className="flex min-h-0 flex-1 flex-col" />
+
   return (
     // No padding: the table runs edge to edge, from the sidebar to the
     // window's edge, where the page's padding and a card's border ate space.
@@ -136,6 +142,7 @@ function MinionSessionsPageInner({ operationId, operationName }: { operationId: 
             ) : (
               <>
               <SessionFolderTabs
+                allCount={allCount}
                 folders={folderList ?? []}
                 current={currentFolder}
                 onSelect={selectFolder}

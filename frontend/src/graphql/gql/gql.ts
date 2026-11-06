@@ -131,13 +131,14 @@ type Documents = {
     "\n  mutation SetMinionSessionDescription($id: ID!, $description: String!) {\n    setMinionSessionDescription(id: $id, description: $description) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionDescriptionDocument,
     "\n  mutation SetMinionSessionMark($id: ID!, $mark: MinionSessionMarkInput) {\n    setMinionSessionMark(id: $id, mark: $mark) {\n      ...MinionSessionFields\n    }\n  }\n": typeof types.SetMinionSessionMarkDocument,
     "\n  mutation SetMinionSessionsMark(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $mark: MinionSessionMarkInput\n  ) {\n    setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)\n  }\n": typeof types.SetMinionSessionsMarkDocument,
-    "\n  fragment MinionSessionFolderFields on MinionSessionFolder {\n    id\n    operationId\n    name\n    icon\n    emoji\n    color\n    order\n  }\n": typeof types.MinionSessionFolderFieldsFragmentDoc,
+    "\n  fragment MinionSessionFolderFields on MinionSessionFolder {\n    id\n    operationId\n    name\n    icon\n    emoji\n    color\n    order\n    sessions\n  }\n": typeof types.MinionSessionFolderFieldsFragmentDoc,
     "\n  query MinionSessionFolders($operationId: ID!) {\n    minionSessionFolders(operationId: $operationId) {\n      ...MinionSessionFolderFields\n    }\n  }\n": typeof types.MinionSessionFoldersDocument,
     "\n  mutation CreateMinionSessionFolder($operationId: ID!, $input: MinionSessionFolderInput!) {\n    createMinionSessionFolder(operationId: $operationId, input: $input) {\n      ...MinionSessionFolderFields\n    }\n  }\n": typeof types.CreateMinionSessionFolderDocument,
     "\n  mutation UpdateMinionSessionFolder($id: ID!, $input: MinionSessionFolderInput!) {\n    updateMinionSessionFolder(id: $id, input: $input) {\n      ...MinionSessionFolderFields\n    }\n  }\n": typeof types.UpdateMinionSessionFolderDocument,
     "\n  mutation MoveMinionSessionFolder($id: ID!, $before: ID) {\n    moveMinionSessionFolder(id: $id, before: $before) {\n      ...MinionSessionFolderFields\n    }\n  }\n": typeof types.MoveMinionSessionFolderDocument,
     "\n  mutation DeleteMinionSessionFolder($id: ID!) {\n    deleteMinionSessionFolder(id: $id)\n  }\n": typeof types.DeleteMinionSessionFolderDocument,
     "\n  mutation SetMinionSessionsFolder($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $folderId: ID) {\n    setMinionSessionsFolder(operationId: $operationId, ids: $ids, matching: $matching, folderId: $folderId)\n  }\n": typeof types.SetMinionSessionsFolderDocument,
+    "\n  query MinionSessionCount($operationId: ID!) {\n    minionSessionCount(operationId: $operationId)\n  }\n": typeof types.MinionSessionCountDocument,
     "\n  fragment MinionTargetFields on MinionTarget {\n    id\n    operationId\n    buildId\n    buildDescription\n    conn\n    connName\n    moduleName\n    kind\n    values\n    name\n    retries\n    policy\n    state\n    stateDetail\n    stateAt\n    problems {\n      key\n      message\n    }\n    sessionId\n    session {\n      id\n      number\n    }\n    failures\n    unreachableSince\n    nextCallAt\n    lastCallAt\n    lastOkAt\n    calls\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": typeof types.MinionTargetFieldsFragmentDoc,
     "\n  query MinionTargets(\n    $operationId: ID!\n    $search: String\n    $buildId: ID\n    $states: [String!]\n    $first: Int\n    $after: String\n  ) {\n    minionTargets(\n      operationId: $operationId\n      search: $search\n      buildId: $buildId\n      states: $states\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...MinionTargetFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": typeof types.MinionTargetsDocument,
     "\n  query BuildBindConnections($id: ID!) {\n    build(id: $id) {\n      id\n      bindConnections {\n        place\n        name\n        moduleName\n        kind\n        problem\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": typeof types.BuildBindConnectionsDocument,
@@ -409,13 +410,14 @@ const documents: Documents = {
     "\n  mutation SetMinionSessionDescription($id: ID!, $description: String!) {\n    setMinionSessionDescription(id: $id, description: $description) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionDescriptionDocument,
     "\n  mutation SetMinionSessionMark($id: ID!, $mark: MinionSessionMarkInput) {\n    setMinionSessionMark(id: $id, mark: $mark) {\n      ...MinionSessionFields\n    }\n  }\n": types.SetMinionSessionMarkDocument,
     "\n  mutation SetMinionSessionsMark(\n    $operationId: ID!\n    $ids: [ID!]\n    $matching: MinionSessionMatchInput\n    $mark: MinionSessionMarkInput\n  ) {\n    setMinionSessionsMark(operationId: $operationId, ids: $ids, matching: $matching, mark: $mark)\n  }\n": types.SetMinionSessionsMarkDocument,
-    "\n  fragment MinionSessionFolderFields on MinionSessionFolder {\n    id\n    operationId\n    name\n    icon\n    emoji\n    color\n    order\n  }\n": types.MinionSessionFolderFieldsFragmentDoc,
+    "\n  fragment MinionSessionFolderFields on MinionSessionFolder {\n    id\n    operationId\n    name\n    icon\n    emoji\n    color\n    order\n    sessions\n  }\n": types.MinionSessionFolderFieldsFragmentDoc,
     "\n  query MinionSessionFolders($operationId: ID!) {\n    minionSessionFolders(operationId: $operationId) {\n      ...MinionSessionFolderFields\n    }\n  }\n": types.MinionSessionFoldersDocument,
     "\n  mutation CreateMinionSessionFolder($operationId: ID!, $input: MinionSessionFolderInput!) {\n    createMinionSessionFolder(operationId: $operationId, input: $input) {\n      ...MinionSessionFolderFields\n    }\n  }\n": types.CreateMinionSessionFolderDocument,
     "\n  mutation UpdateMinionSessionFolder($id: ID!, $input: MinionSessionFolderInput!) {\n    updateMinionSessionFolder(id: $id, input: $input) {\n      ...MinionSessionFolderFields\n    }\n  }\n": types.UpdateMinionSessionFolderDocument,
     "\n  mutation MoveMinionSessionFolder($id: ID!, $before: ID) {\n    moveMinionSessionFolder(id: $id, before: $before) {\n      ...MinionSessionFolderFields\n    }\n  }\n": types.MoveMinionSessionFolderDocument,
     "\n  mutation DeleteMinionSessionFolder($id: ID!) {\n    deleteMinionSessionFolder(id: $id)\n  }\n": types.DeleteMinionSessionFolderDocument,
     "\n  mutation SetMinionSessionsFolder($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $folderId: ID) {\n    setMinionSessionsFolder(operationId: $operationId, ids: $ids, matching: $matching, folderId: $folderId)\n  }\n": types.SetMinionSessionsFolderDocument,
+    "\n  query MinionSessionCount($operationId: ID!) {\n    minionSessionCount(operationId: $operationId)\n  }\n": types.MinionSessionCountDocument,
     "\n  fragment MinionTargetFields on MinionTarget {\n    id\n    operationId\n    buildId\n    buildDescription\n    conn\n    connName\n    moduleName\n    kind\n    values\n    name\n    retries\n    policy\n    state\n    stateDetail\n    stateAt\n    problems {\n      key\n      message\n    }\n    sessionId\n    session {\n      id\n      number\n    }\n    failures\n    unreachableSince\n    nextCallAt\n    lastCallAt\n    lastOkAt\n    calls\n    createdBy {\n      type\n      id\n      name\n    }\n    createdAt\n    updatedAt\n  }\n": types.MinionTargetFieldsFragmentDoc,
     "\n  query MinionTargets(\n    $operationId: ID!\n    $search: String\n    $buildId: ID\n    $states: [String!]\n    $first: Int\n    $after: String\n  ) {\n    minionTargets(\n      operationId: $operationId\n      search: $search\n      buildId: $buildId\n      states: $states\n      first: $first\n      after: $after\n    ) {\n      edges {\n        node {\n          ...MinionTargetFields\n        }\n        cursor\n      }\n      pageInfo {\n        hasNextPage\n        endCursor\n      }\n      totalCount\n    }\n  }\n": types.MinionTargetsDocument,
     "\n  query BuildBindConnections($id: ID!) {\n    build(id: $id) {\n      id\n      bindConnections {\n        place\n        name\n        moduleName\n        kind\n        problem\n        fields {\n          ...ModuleFieldDefFields\n        }\n      }\n    }\n  }\n": types.BuildBindConnectionsDocument,
@@ -1038,7 +1040,7 @@ export function graphql(source: "\n  mutation SetMinionSessionsMark(\n    $opera
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  fragment MinionSessionFolderFields on MinionSessionFolder {\n    id\n    operationId\n    name\n    icon\n    emoji\n    color\n    order\n  }\n"): typeof import('./graphql').MinionSessionFolderFieldsFragmentDoc;
+export function graphql(source: "\n  fragment MinionSessionFolderFields on MinionSessionFolder {\n    id\n    operationId\n    name\n    icon\n    emoji\n    color\n    order\n    sessions\n  }\n"): typeof import('./graphql').MinionSessionFolderFieldsFragmentDoc;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -1063,6 +1065,10 @@ export function graphql(source: "\n  mutation DeleteMinionSessionFolder($id: ID!
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  mutation SetMinionSessionsFolder($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $folderId: ID) {\n    setMinionSessionsFolder(operationId: $operationId, ids: $ids, matching: $matching, folderId: $folderId)\n  }\n"): typeof import('./graphql').SetMinionSessionsFolderDocument;
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query MinionSessionCount($operationId: ID!) {\n    minionSessionCount(operationId: $operationId)\n  }\n"): typeof import('./graphql').MinionSessionCountDocument;
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

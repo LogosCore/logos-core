@@ -1070,6 +1070,7 @@ export type MinionSessionFolder = {
   name: Scalars['String']['output'];
   operationId: Scalars['ID']['output'];
   order: Scalars['Int']['output'];
+  sessions: Scalars['Int']['output'];
 };
 
 export type MinionSessionFolderChoice = {
@@ -2369,6 +2370,7 @@ export type Query = {
   minionIdentities: MinionIdentityPage;
   minionSession?: Maybe<MinionSession>;
   minionSessionCommands: Array<BuildCommand>;
+  minionSessionCount: Scalars['Int']['output'];
   minionSessionFolders: Array<MinionSessionFolder>;
   minionSessionValues: Array<Scalars['String']['output']>;
   minionSessions: MinionSessionConnection;
@@ -2614,6 +2616,11 @@ export type QueryMinionSessionArgs = {
 
 export type QueryMinionSessionCommandsArgs = {
   sessionId: Scalars['ID']['input'];
+};
+
+
+export type QueryMinionSessionCountArgs = {
+  operationId: Scalars['ID']['input'];
 };
 
 
@@ -4457,14 +4464,14 @@ export type SetMinionSessionsMarkMutationVariables = Exact<{
 
 export type SetMinionSessionsMarkMutation = { setMinionSessionsMark: number };
 
-export type MinionSessionFolderFieldsFragment = { id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number };
+export type MinionSessionFolderFieldsFragment = { id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number, sessions: number };
 
 export type MinionSessionFoldersQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type MinionSessionFoldersQuery = { minionSessionFolders: Array<{ id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number }> };
+export type MinionSessionFoldersQuery = { minionSessionFolders: Array<{ id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number, sessions: number }> };
 
 export type CreateMinionSessionFolderMutationVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4472,7 +4479,7 @@ export type CreateMinionSessionFolderMutationVariables = Exact<{
 }>;
 
 
-export type CreateMinionSessionFolderMutation = { createMinionSessionFolder: { id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number } };
+export type CreateMinionSessionFolderMutation = { createMinionSessionFolder: { id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number, sessions: number } };
 
 export type UpdateMinionSessionFolderMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4480,7 +4487,7 @@ export type UpdateMinionSessionFolderMutationVariables = Exact<{
 }>;
 
 
-export type UpdateMinionSessionFolderMutation = { updateMinionSessionFolder: { id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number } };
+export type UpdateMinionSessionFolderMutation = { updateMinionSessionFolder: { id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number, sessions: number } };
 
 export type MoveMinionSessionFolderMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4488,7 +4495,7 @@ export type MoveMinionSessionFolderMutationVariables = Exact<{
 }>;
 
 
-export type MoveMinionSessionFolderMutation = { moveMinionSessionFolder: Array<{ id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number }> };
+export type MoveMinionSessionFolderMutation = { moveMinionSessionFolder: Array<{ id: string, operationId: string, name: string, icon?: string | null, emoji?: string | null, color?: string | null, order: number, sessions: number }> };
 
 export type DeleteMinionSessionFolderMutationVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4506,6 +4513,13 @@ export type SetMinionSessionsFolderMutationVariables = Exact<{
 
 
 export type SetMinionSessionsFolderMutation = { setMinionSessionsFolder: number };
+
+export type MinionSessionCountQueryVariables = Exact<{
+  operationId: Scalars['ID']['input'];
+}>;
+
+
+export type MinionSessionCountQuery = { minionSessionCount: number };
 
 export type MinionTargetFieldsFragment = { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } };
 
@@ -6206,6 +6220,7 @@ export const MinionSessionFolderFieldsFragmentDoc = new TypedDocumentString(`
   emoji
   color
   order
+  sessions
 }
     `, {"fragmentName":"MinionSessionFolderFields"}) as unknown as TypedDocumentString<MinionSessionFolderFieldsFragment, unknown>;
 export const MinionTargetFieldsFragmentDoc = new TypedDocumentString(`
@@ -10434,6 +10449,7 @@ export const MinionSessionFoldersDocument = new TypedDocumentString(`
   emoji
   color
   order
+  sessions
 }`) as unknown as TypedDocumentString<MinionSessionFoldersQuery, MinionSessionFoldersQueryVariables>;
 export const CreateMinionSessionFolderDocument = new TypedDocumentString(`
     mutation CreateMinionSessionFolder($operationId: ID!, $input: MinionSessionFolderInput!) {
@@ -10449,6 +10465,7 @@ export const CreateMinionSessionFolderDocument = new TypedDocumentString(`
   emoji
   color
   order
+  sessions
 }`) as unknown as TypedDocumentString<CreateMinionSessionFolderMutation, CreateMinionSessionFolderMutationVariables>;
 export const UpdateMinionSessionFolderDocument = new TypedDocumentString(`
     mutation UpdateMinionSessionFolder($id: ID!, $input: MinionSessionFolderInput!) {
@@ -10464,6 +10481,7 @@ export const UpdateMinionSessionFolderDocument = new TypedDocumentString(`
   emoji
   color
   order
+  sessions
 }`) as unknown as TypedDocumentString<UpdateMinionSessionFolderMutation, UpdateMinionSessionFolderMutationVariables>;
 export const MoveMinionSessionFolderDocument = new TypedDocumentString(`
     mutation MoveMinionSessionFolder($id: ID!, $before: ID) {
@@ -10479,6 +10497,7 @@ export const MoveMinionSessionFolderDocument = new TypedDocumentString(`
   emoji
   color
   order
+  sessions
 }`) as unknown as TypedDocumentString<MoveMinionSessionFolderMutation, MoveMinionSessionFolderMutationVariables>;
 export const DeleteMinionSessionFolderDocument = new TypedDocumentString(`
     mutation DeleteMinionSessionFolder($id: ID!) {
@@ -10495,6 +10514,11 @@ export const SetMinionSessionsFolderDocument = new TypedDocumentString(`
   )
 }
     `) as unknown as TypedDocumentString<SetMinionSessionsFolderMutation, SetMinionSessionsFolderMutationVariables>;
+export const MinionSessionCountDocument = new TypedDocumentString(`
+    query MinionSessionCount($operationId: ID!) {
+  minionSessionCount(operationId: $operationId)
+}
+    `) as unknown as TypedDocumentString<MinionSessionCountQuery, MinionSessionCountQueryVariables>;
 export const MinionTargetsDocument = new TypedDocumentString(`
     query MinionTargets($operationId: ID!, $search: String, $buildId: ID, $states: [String!], $first: Int, $after: String) {
   minionTargets(

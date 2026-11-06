@@ -107,6 +107,11 @@ func (r *queryResolver) MinionSessionFolders(ctx context.Context, operationID st
 	return r.MinionSessionResolver.MinionSessionFolders(ctx, operationID)
 }
 
+// MinionSessionCount is the resolver for the minionSessionCount field.
+func (r *queryResolver) MinionSessionCount(ctx context.Context, operationID string) (int, error) {
+	return r.MinionSessionResolver.MinionSessionCount(ctx, operationID)
+}
+
 // MinionFeedback is the resolver for the minionFeedback field.
 func (r *queryResolver) MinionFeedback(ctx context.Context, sessionID string, level *string, search *string, after *string, first *int) (*model.MinionFeedbackPage, error) {
 	return r.MinionSessionResolver.MinionFeedback(ctx, sessionID, level, search, after, first)

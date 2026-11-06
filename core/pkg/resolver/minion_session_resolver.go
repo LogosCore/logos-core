@@ -60,6 +60,7 @@ type IMinionSessionResolver interface {
 	SetMinionSessionsArchived(ctx context.Context, operationID string, ids []string, matching *model.MinionSessionMatchInput, archived bool) (int, error)
 	// An operation's folders of sessions (minion_session_folders.go).
 	MinionSessionFolders(ctx context.Context, operationID string) ([]*model.MinionSessionFolder, error)
+	MinionSessionCount(ctx context.Context, operationID string) (int, error)
 	CreateMinionSessionFolder(ctx context.Context, operationID string, in model.MinionSessionFolderInput) (*model.MinionSessionFolder, error)
 	UpdateMinionSessionFolder(ctx context.Context, id string, in model.MinionSessionFolderInput) (*model.MinionSessionFolder, error)
 	MoveMinionSessionFolder(ctx context.Context, id string, before *string) ([]*model.MinionSessionFolder, error)

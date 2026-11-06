@@ -355,6 +355,7 @@ export const MinionSessionFolderFieldsFragment = graphql(`
     emoji
     color
     order
+    sessions
   }
 `)
 
@@ -399,5 +400,11 @@ export const DeleteMinionSessionFolderMutation = graphql(`
 export const SetMinionSessionsFolderMutation = graphql(`
   mutation SetMinionSessionsFolder($operationId: ID!, $ids: [ID!], $matching: MinionSessionMatchInput, $folderId: ID) {
     setMinionSessionsFolder(operationId: $operationId, ids: $ids, matching: $matching, folderId: $folderId)
+  }
+`)
+
+export const MinionSessionCountQuery = graphql(`
+  query MinionSessionCount($operationId: ID!) {
+    minionSessionCount(operationId: $operationId)
   }
 `)
