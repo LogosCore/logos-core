@@ -194,6 +194,7 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithMinionFiles(a.minionFiles),
 			resolver.WithFsEntryRepo(a.repos.FsEntry),
 			resolver.WithMinionFeedbackRepo(a.repos.MinionFeedback),
+			resolver.WithMinionIdentityRepo(a.repos.MinionIdentity),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,
@@ -222,7 +223,7 @@ func (a *App) buildResolvers() *resolvers {
 		// Builds too: operation data, authorized by operation role.
 		builds: resolver.NewBuildResolver(a.builds, a.repos.Operation),
 		minionSessions: resolver.NewMinionSessionResolver(a.repos.MinionSession, a.repos.Operation, a.repos.User, a.repos.UserPreferences, a.repos.MinionReservation, a.repos.MinionMark, a.repos.Build, a.eventBus,
-			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback),
+			a.repos.MinionTask, a.minionSync, a.repos.MinionFeedback, a.repos.MinionIdentity),
 		minionTasks: resolver.NewMinionTaskResolver(a.repos.MinionTask, a.repos.MinionSession, a.repos.Build, a.repos.ModuleRegistry,
 			a.repos.User, a.repos.Operation, a.eventBus, a.minionFiles, a.minionStreams, a.fileBrowser, a.repos.MinionTarget, a.minionSync, a.minionSync, a.repos.MinionFeedback,
 			a.credentialRefs),

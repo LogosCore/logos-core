@@ -13,6 +13,7 @@ import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { useRecordModals } from "@/hooks/use-record-modals"
 import { FeedbackCounts } from "./feedback-parts"
+import { ELEVATED, identityLabel, identityUser } from "./identity-values"
 import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
 // How each Sessions column shows a session: one line each, the full value on
@@ -38,9 +39,6 @@ function text(value: string | null | undefined, className = "truncate"): ReactNo
   )
 }
 
-// Integrity levels the User cell names: elevated ones. The usual (user,
-// medium, low) go unsaid.
-const ELEVATED = new Set(["root", "system", "high"])
 
 /** The user as the OS reports it, with the domain when the minion sent one apart. */
 function userOf(s: MinionSessionFieldsFragment): string {
@@ -152,9 +150,28 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       )
     case "user":
       return (
-        <div className="truncate" title={[userOf(s), s.integrity && `integrity: ${s.integrity}`].filter(Boolean).join("\n") || undefined}>
+        <div
+          className="truncate"
+          title={
+            [
+              userOf(s),
+              s.integrity && `integrity: ${s.integrity}`,
+              s.acting && `tasks run as ${identityLabel(s.acting)}${s.acting.integrity ? `, integrity ${s.acting.integrity}` : ""}`,
+            ]
+              .filter(Boolean)
+              .join("\n") || undefined
+          }
+        >
           {userOf(s) || none}
-          {s.integrity && ELEVATED.has(s.integrity) && <span className="font-medium"> · {s.integrity}</span>}
+          {s.acting ? (
+            <>
+              {" → "}
+              <span className="font-medium">{identityUser(s.acting)}</span>
+              {s.acting.integrity && ELEVATED.has(s.acting.integrity) && <span className="font-medium"> · {s.acting.integrity}</span>}
+            </>
+          ) : (
+            s.integrity && ELEVATED.has(s.integrity) && <span className="font-medium"> · {s.integrity}</span>
+          )}
         </div>
       )
     case "domain":

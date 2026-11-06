@@ -500,7 +500,11 @@ func (s *Service) openTarget(ctx context.Context, t *models.MinionTarget, why bi
 		return err
 	}
 	t.Calls++
-	a, err := s.link.Open(ctx, t.ModuleName, values, creds, under, keys, kind.open, sent)
+	var acting *protocol.LinkActing
+	if kind.agentless {
+		acting = s.actingOf(ctx, session)
+	}
+	a, err := s.link.Open(ctx, t.ModuleName, values, creds, under, keys, acting, kind.open, sent)
 	if err == nil {
 		s.noteLogins(ctx, t, creds, a.Logins)
 	}

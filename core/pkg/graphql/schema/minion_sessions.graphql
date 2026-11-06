@@ -52,8 +52,12 @@ type MinionSession {
   # contracts/minion-messages.md, Machine identity). Null from minions built
   # before hellos had it.
   machineId: String
-  # low | medium | high | system (Windows) | root | user
+  # low | medium | high | system (Windows) | root | user. The process's own,
+  # as the hello says: who its tasks run as instead is acting.
   integrity: String
+  # Who the session's tasks run as when its minion said another than its
+  # process's own (a become, a stolen token); null for the process's own.
+  acting: MinionIdentity
   addrs: [String!]!
   # The one of addrs the session shows, and sorts by in the addrs column: an
   # operator's pick (addressPicked), shared by the whole team, or core's
@@ -164,6 +168,46 @@ type MinionFeedback {
   receivedAt: String!
   # Came after the session's feedback was last marked read.
   unread: Boolean!
+}
+
+# Who a session's tasks run as, or a task ran as, when its minion said
+# another than its process's own (docs: contracts/minion-messages/identity).
+type MinionIdentity {
+  user: String
+  domain: String
+  # As the hello's integrity: low | medium | high | system | root | user.
+  integrity: String
+  # impersonation | network | become; null for the process's own (a task
+  # that ran as it whatever the session's).
+  how: String
+  # The credential it took, when one of a task's did.
+  credentialId: ID
+  # The task that made it (a session's: a become).
+  taskId: ID
+  since: String!
+}
+
+# One change in a session's identity history.
+type MinionIdentityEvent {
+  id: ID!
+  at: String!
+  # process (the process's own changed: a hello, a rehello) | session (who
+  # its tasks run as) | task (one task ran as another).
+  scope: String!
+  user: String
+  domain: String
+  integrity: String
+  # null: the process's own (a session back to it).
+  how: String
+  credentialId: ID
+  # The task (scope task), or the task that made it (session).
+  taskId: ID
+}
+
+# A page of a session's identity history, newest first.
+type MinionIdentityPage {
+  entries: [MinionIdentityEvent!]!
+  next: String
 }
 
 # A page of feedback, newest first; next is the cursor of the next, null on
@@ -376,6 +420,9 @@ extend type Query {
   # (warning, error); search the entries whose message or code holds it, any
   # case. Needs at least viewer.
   minionFeedback(sessionId: ID!, level: String, search: String, after: String, first: Int): MinionFeedbackPage!
+  # A session's identity history, newest first, a page at a time (first:
+  # 100 by default, 500 at most).
+  minionIdentities(sessionId: ID!, after: String, first: Int): MinionIdentityPage!
     @hasPermission(permission: "operation:member")
 
   # An operation's sessions, newest first, a page at a time. search is the

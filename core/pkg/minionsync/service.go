@@ -122,6 +122,8 @@ type Service struct {
 	// feedback keeps minions' warnings and errors (feedback.go); nil drops
 	// them.
 	feedback repository.IMinionFeedbackRepository
+	// identities keeps sessions' identity histories (identity.go).
+	identities repository.IMinionIdentityRepository
 	// streams relays the files minions stream (streams.go); nil relays
 	// none.
 	streams Streams
@@ -552,6 +554,7 @@ func (s *Service) newSession(ctx context.Context, from *sender, peer string, hel
 	s.logger.Info("minion session opened", zap.Int64("number", session.Number), zap.String("session_id", session.SessionID.String()),
 		zap.String("build_id", b.BuildID.String()), zap.Bool("staged", session.Staged),
 		zap.String("host", hello.Host), zap.Uint64("pid", hello.PID))
+	s.processIdentity(ctx, session, nil)
 	s.bus.Publish(eventbus.NewMinionSessionCreatedEvent(sessionPayload(session)))
 	return helloResponse(session.SessionID)
 }
@@ -710,9 +713,12 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			if session.AddressPicked && slices.Contains(hello.AddrStrings(), session.Address) {
 				address, picked = session.Address, true
 			}
+			was := session.Hello
 			if err = s.sessions.SetHello(ctx, session.SessionID, models.MinionHelloFrom(hello), address, picked); err != nil {
 				return nil, fmt.Errorf("rehello: %w", err)
 			}
+			session.Hello = models.MinionHelloFrom(hello)
+			s.processIdentity(ctx, session, &was)
 			// The limit of tasks it says now (the operator's goes again
 			// while it says another: the outbox).
 			session.MaxTasks, session.MaxTasksSends = models.MaxTasksOf(hello), 0
@@ -736,6 +742,8 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 			}
 			s.logger.Info("minion rehello", zap.String("session_id", session.SessionID.String()))
 			out, err = helloResponse(session.SessionID)
+		case protocol.ItemIdentity:
+			out, err = s.takeIdentity(ctx, session, raw, i)
 		case protocol.ItemSleepUpdate:
 			// Taken with the check-in above; nothing to answer.
 			if _, rErr := readSleepUpdate(raw); rErr != nil {

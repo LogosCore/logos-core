@@ -129,12 +129,12 @@ func TestOutboxKeepsWithinTheConnection(t *testing.T) {
 	ids := map[uuid.UUID]bool{}
 	for _, ti := range first {
 		ids[uuid.UUID(ti.Task)] = true
-		_ = tasks.Ack(context.Background(), sid, []uuid.UUID{uuid.UUID(ti.Task)}, time.Now())
+		_ = tasks.Ack(context.Background(), sid, []uuid.UUID{uuid.UUID(ti.Task)}, time.Now(), nil)
 	}
 	for range 5 {
 		for _, ti := range ask() {
 			ids[uuid.UUID(ti.Task)] = true
-			_ = tasks.Ack(context.Background(), sid, []uuid.UUID{uuid.UUID(ti.Task)}, time.Now())
+			_ = tasks.Ack(context.Background(), sid, []uuid.UUID{uuid.UUID(ti.Task)}, time.Now(), nil)
 		}
 	}
 	for _, id := range small {

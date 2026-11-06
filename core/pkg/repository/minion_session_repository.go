@@ -42,6 +42,9 @@ type IMinionSessionRepository interface {
 	// SetHello replaces what the session's hello said (a rehello), with the
 	// address the session shows now.
 	SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error
+	// SetActing keeps who the session's tasks run as; nil for its
+	// process's own.
+	SetActing(ctx context.Context, sessionID uuid.UUID, acting *models.MinionIdentity) error
 	// SetConn records the connection the minion uses (its place in the
 	// build's connections, kind and name), and with change, the move it
 	// reported, first in the session's ConnChanges (capped at
@@ -283,6 +286,14 @@ func checkInPipeline(at time.Time, peer string, set bson.M, unset []string) bson
 func (r *minionSessionRepository) SetHello(ctx context.Context, sessionID uuid.UUID, hello models.MinionHello, address string, picked bool) error {
 	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID},
 		withRev(bson.M{"$set": bson.M{"hello": hello, "address": address, "address_picked": picked}}))
+}
+
+func (r *minionSessionRepository) SetActing(ctx context.Context, sessionID uuid.UUID, acting *models.MinionIdentity) error {
+	update := bson.M{"$unset": bson.M{"acting": ""}}
+	if acting != nil {
+		update = bson.M{"$set": bson.M{"acting": acting}}
+	}
+	return r.coll.UpdateOne(ctx, bson.M{"session_id": sessionID}, withRev(update))
 }
 
 func (r *minionSessionRepository) SetConn(ctx context.Context, sessionID uuid.UUID, conn models.MinionSessionConn, change *models.MinionSessionConnChange) error {

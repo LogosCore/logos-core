@@ -92,7 +92,7 @@ func TestIntegrationMinionTasks(t *testing.T) {
 	if sentRev <= 1 {
 		t.Fatalf("rev after sending: %d", sentRev)
 	}
-	if err := repo.Ack(ctx, session, []uuid.UUID{ids[0]}, t0); err != nil {
+	if err := repo.Ack(ctx, session, []uuid.UUID{ids[0]}, t0, nil); err != nil {
 		t.Fatal(err)
 	}
 	if r := rev(ids[0]); r <= sentRev {

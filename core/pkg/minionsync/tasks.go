@@ -56,7 +56,7 @@ func (s *Service) takeAck(ctx context.Context, session *models.MinionSession, ra
 		ids = append(ids, id)
 	}
 	if len(ids) > 0 {
-		if err := s.tasks.Ack(ctx, session.SessionID, ids, s.now()); err != nil {
+		if err := s.tasks.Ack(ctx, session.SessionID, ids, s.now(), session.Acting); err != nil {
 			return nil, nil, fmt.Errorf("ack tasks: %w", err)
 		}
 	}
@@ -87,7 +87,7 @@ func (s *Service) takeResult(ctx context.Context, session *models.MinionSession,
 		ls[j] = p.Named(session.Hello.OS)
 	}
 	task, fresh, err := s.tasks.AddResult(ctx, session.SessionID, id, repository.MinionTaskResult{
-		Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(), Ctx: res.Ctx,
+		As: session.Acting, Seq: res.Seq, Done: res.Done, OK: res.OK, Exit: res.Exit, Err: res.Err, Out: res.Out, Data: res.Data, At: s.now(), Ctx: res.Ctx,
 		Named: func(result string, data []byte) ([]byte, error) {
 			return protocol.NamedResultData(result, data)
 		},

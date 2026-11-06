@@ -12,6 +12,7 @@ import { FeedbackLevelIcon } from "./feedback-parts"
 import { feedbackSummary } from "./feedback-values"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
+import { TaskAs } from "./task-as"
 
 // The left of a session's console: its tasks, a row each, oldest at the
 // top and the newest at the bottom by the command line, under a heading
@@ -187,6 +188,7 @@ function TaskRow({
         <StateIcon t={t} held={held} className="self-center" />
         <span className="shrink-0 font-mono text-muted-foreground tabular-nums">{clock(t.queuedAt)}</span>
         <code className="min-w-0 flex-1 truncate font-mono">{line}</code>
+        <TaskAs as={t.as} />
         {t.feedbackErrors + t.feedbackWarnings > 0 && (
           <span className="self-center" title={`What the minion said of it: ${feedbackSummary(t.feedbackErrors, t.feedbackWarnings)}`}>
             <FeedbackLevelIcon level={t.feedbackErrors > 0 ? "error" : "warning"} />

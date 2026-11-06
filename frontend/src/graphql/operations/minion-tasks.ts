@@ -36,6 +36,15 @@ export const MinionTaskFields = graphql(`
     missingParts
     feedbackErrors
     feedbackWarnings
+    as {
+      user
+      domain
+      integrity
+      how
+      credentialId
+      taskId
+      since
+    }
     file {
       id
       name

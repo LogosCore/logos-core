@@ -71,6 +71,7 @@ type operationResolver struct {
 	minionTaskRepo repository.IMinionTaskRepository         // needed for cascade delete
 	fsEntryRepo    repository.IFsEntryRepository            // needed for cascade delete
 	feedbackRepo   repository.IMinionFeedbackRepository     // needed for cascade delete
+	identityRepo   repository.IMinionIdentityRepository     // needed for cascade delete
 	minionFiles    MinionFileCleanup                        // needed for cascade delete
 	eventBus       eventbus.IEventBus                       // async event publishing
 }
@@ -182,6 +183,14 @@ func WithMinionFiles(files MinionFileCleanup) OperationResolverOption {
 func WithMinionFeedbackRepo(repo repository.IMinionFeedbackRepository) OperationResolverOption {
 	return func(r *operationResolver) {
 		r.feedbackRepo = repo
+	}
+}
+
+// WithMinionIdentityRepo adds minions' identity histories for cascade
+// delete.
+func WithMinionIdentityRepo(repo repository.IMinionIdentityRepository) OperationResolverOption {
+	return func(r *operationResolver) {
+		r.identityRepo = repo
 	}
 }
 
@@ -396,6 +405,11 @@ func (r *operationResolver) DeleteOperation(ctx context.Context, id string) (boo
 	if r.feedbackRepo != nil {
 		if err := r.feedbackRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
 			return false, fmt.Errorf("failed to delete operation's minion feedback: %w", err)
+		}
+	}
+	if r.identityRepo != nil {
+		if err := r.identityRepo.DeleteByOperationID(ctx, op.OperationID); err != nil {
+			return false, fmt.Errorf("failed to delete operation's minion identity histories: %w", err)
 		}
 	}
 

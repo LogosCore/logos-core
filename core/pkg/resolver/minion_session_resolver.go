@@ -42,6 +42,7 @@ type IMinionSessionResolver interface {
 	// MinionFeedback is a session's feedback, a page at a time;
 	// MarkMinionFeedbackRead marks it read for everyone.
 	MinionFeedback(ctx context.Context, sessionID string, level, search, after *string, first *int) (*model.MinionFeedbackPage, error)
+	MinionIdentities(ctx context.Context, sessionID string, after *string, first *int) (*model.MinionIdentityPage, error)
 	MarkMinionFeedbackRead(ctx context.Context, id string) (*model.MinionSession, error)
 	// RunningTasks is MinionSession.runningTasks: its tasks the minion has
 	// and has not ended.
@@ -74,6 +75,7 @@ type minionSessionResolver struct {
 	tasks         SessionTasks
 	limits        MaxTasksSetter
 	feedback      repository.IMinionFeedbackRepository
+	identities    repository.IMinionIdentityRepository
 }
 
 // SessionTasks counts a session's tasks under way (the minion task
@@ -92,9 +94,10 @@ func NewMinionSessionResolver(sessions repository.IMinionSessionRepository, oper
 	userRepo repository.IUserRepository, preferences repository.IUserPreferencesRepository,
 	reservations repository.IMinionSessionReservationRepository, marks repository.IMinionSessionMarkRepository,
 	builds repository.IBuildRepository, bus eventbus.IEventBus, tasks SessionTasks, limits MaxTasksSetter,
-	feedback repository.IMinionFeedbackRepository) IMinionSessionResolver {
+	feedback repository.IMinionFeedbackRepository, identities repository.IMinionIdentityRepository) IMinionSessionResolver {
 	return &minionSessionResolver{sessions: sessions, operationRepo: operationRepo, userRepo: userRepo, preferences: preferences,
-		reservations: reservations, marks: marks, builds: builds, bus: bus, tasks: tasks, limits: limits, feedback: feedback}
+		reservations: reservations, marks: marks, builds: builds, bus: bus, tasks: tasks, limits: limits, feedback: feedback,
+		identities: identities}
 }
 
 func (r *minionSessionResolver) Connections(ctx context.Context, s *model.MinionSession) ([]*model.MinionConnection, error) {
@@ -677,6 +680,7 @@ func toMinionSessionModel(s *models.MinionSession) *model.MinionSession {
 		PeerAddress: strPtr(s.PeerAddress), Peers: toSessionPeerModels(s.Peers),
 		Persisted: s.Persisted, RestartCount: int(s.RestartCount), Restarts: toSessionRestartModels(s.Restarts),
 		LateAt: timePtr(s.LateAt), LostAt: timePtr(s.LostAt), CreatedAt: s.CreatedAt.Format(time.RFC3339), LastSeenAt: timePtr(s.LastSeenAt),
+		Acting: toIdentityModel(s.Acting),
 	}
 	if len(h.X) > 0 {
 		out.X = h.X

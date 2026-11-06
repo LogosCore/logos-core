@@ -60,7 +60,7 @@ import (
 type Linker interface {
 	Call(ctx context.Context, module string, c channellink.Call) (protocol.LinkFrame, error)
 	Open(ctx context.Context, module string, values map[string]any, creds map[string]protocol.Credential, under [16]byte,
-		keys *protocol.LinkKeys, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error)
+		keys *protocol.LinkKeys, acting *protocol.LinkActing, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error)
 }
 
 // Credentials resolves the credentials a call's values name, and learns
@@ -753,6 +753,7 @@ func (s *Service) exchange(ctx context.Context, t *models.MinionTarget, conn *pr
 	// answer itself: it gets the id's keys with every call.
 	if kind.agentless {
 		call.Keys = from.linkKeys()
+		call.Acting = s.actingOf(ctx, from.session)
 	}
 	// A call sent is waited for, whatever asked for it: an answer not taken
 	// would leave the tasks it ran unacknowledged, and the next call would

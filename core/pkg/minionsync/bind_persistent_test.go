@@ -42,7 +42,7 @@ func (f *fakeListener) Call(context.Context, string, channellink.Call) (protocol
 	return protocol.LinkFrame{}, nil
 }
 
-func (f *fakeListener) Open(ctx context.Context, module string, values map[string]any, _ map[string]protocol.Credential, _ [16]byte, keys *protocol.LinkKeys, deadline time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
+func (f *fakeListener) Open(ctx context.Context, module string, values map[string]any, _ map[string]protocol.Credential, _ [16]byte, keys *protocol.LinkKeys, _ *protocol.LinkActing, deadline time.Duration, sent func(string, uint64)) (protocol.LinkFrame, error) {
 	if keys != nil {
 		f.t.Error("keys to a channel that does not act as the minion")
 	}

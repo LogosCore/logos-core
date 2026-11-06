@@ -35,6 +35,11 @@ type MinionTask struct {
 	// CredentialIDs are the credentials Args name (credential params): the
 	// task carries them in their place.
 	CredentialIDs []uuid.UUID `bson:"credential_ids,omitempty" json:"credential_ids,omitempty"`
+	// As is who the task ran as when not its process's own: what its
+	// minion said of it, else the session's acting identity when the task
+	// was acked. How "" (the process's own) when the minion said so whatever
+	// the session's; nil when nothing was said.
+	As *MinionIdentity `bson:"as,omitempty" json:"as,omitempty"`
 	// Result is the command's result when it was queued
 	// (protocol.BuildCommand.Result): the shape its data is checked
 	// against and joined by. Empty: no declared shape.

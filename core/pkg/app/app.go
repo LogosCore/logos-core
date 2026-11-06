@@ -91,6 +91,7 @@ type Repositories struct {
 	MinionFile         repository.IMinionFileRepository
 	FsEntry            repository.IFsEntryRepository
 	MinionFeedback     repository.IMinionFeedbackRepository
+	MinionIdentity     repository.IMinionIdentityRepository
 	FsListing          repository.IFsListingRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
@@ -257,7 +258,7 @@ func NewApp() (*App, error) {
 		minionstreams.DefaultConfig(), l)
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser).
-		WithFeedback(repos.MinionFeedback).WithCredentials(credentialRefs)
+		WithFeedback(repos.MinionFeedback).WithIdentities(repos.MinionIdentity).WithCredentials(credentialRefs)
 	// A downloader or an uploader coming wakes a stream the minion holds,
 	// over its persistent connection.
 	minionStreams.WithWaker(minionSync)

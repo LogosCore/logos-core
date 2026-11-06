@@ -88,7 +88,7 @@ func (f *fakeAgentless) Call(_ context.Context, _ string, c channellink.Call) (p
 }
 
 func (f *fakeAgentless) Open(_ context.Context, _ string, _ map[string]any, _ map[string]protocol.Credential, under [16]byte,
-	keys *protocol.LinkKeys, _ time.Duration,
+	keys *protocol.LinkKeys, acting *protocol.LinkActing, _ time.Duration,
 	sent func(string, uint64)) (protocol.LinkFrame, error) {
 	f.mu.Lock()
 	f.unders = append(f.unders, uuid.UUID(under))

@@ -24,6 +24,9 @@ const (
 
 // MinionTaskResult is what a result part brings to its task.
 type MinionTaskResult struct {
+	// As is the session's acting identity: the task's when this part acks
+	// it and it has none of its own.
+	As   *models.MinionIdentity
 	Seq  uint64
 	Done bool
 	OK   *bool
@@ -94,7 +97,12 @@ type IMinionTaskRepository interface {
 	// MarkSent records that these tasks went out at at.
 	MarkSent(ctx context.Context, taskIDs []uuid.UUID, at time.Time) error
 	// Ack records that the minion got these tasks of the session.
-	Ack(ctx context.Context, sessionID uuid.UUID, taskIDs []uuid.UUID, at time.Time) error
+	// Ack marks tasks acked at at; those without an identity of their own
+	// take as (the session's acting one) when it is not nil.
+	Ack(ctx context.Context, sessionID uuid.UUID, taskIDs []uuid.UUID, at time.Time, as *models.MinionIdentity) error
+	// SetAs keeps who a task of the session ran as (its minion said so);
+	// false when the session has no such task.
+	SetAs(ctx context.Context, sessionID, taskID uuid.UUID, as models.MinionIdentity) (bool, error)
 	// AddResult keeps a result part of a task of the session and brings the
 	// task up to it. It returns the task after, and whether the part was
 	// new: a part sent again changes nothing. IsNotFound for a task the
@@ -334,14 +342,30 @@ func (r *minionTaskRepository) MarkSent(ctx context.Context, taskIDs []uuid.UUID
 	return err
 }
 
-func (r *minionTaskRepository) Ack(ctx context.Context, sessionID uuid.UUID, taskIDs []uuid.UUID, at time.Time) error {
+func (r *minionTaskRepository) Ack(ctx context.Context, sessionID uuid.UUID, taskIDs []uuid.UUID, at time.Time, as *models.MinionIdentity) error {
 	if len(taskIDs) == 0 {
 		return nil
 	}
-	_, err := r.tasks.UpdateAll(ctx,
-		bson.M{"session_id": sessionID, "task_id": bson.M{"$in": uuidsIn(taskIDs)}, "acked_at": bson.M{"$exists": false}},
-		bson.M{"$set": bson.M{"acked_at": at}, "$inc": bumpRev})
+	filter := bson.M{"session_id": sessionID, "task_id": bson.M{"$in": uuidsIn(taskIDs)}, "acked_at": bson.M{"$exists": false}}
+	if as != nil {
+		// The tasks acked now without an identity of their own run as the
+		// session does.
+		stamped := bson.M{"$and": bson.A{filter, bson.M{"as": bson.M{"$exists": false}}}}
+		if _, err := r.tasks.UpdateAll(ctx, stamped, bson.M{"$set": bson.M{"acked_at": at, "as": as}, "$inc": bumpRev}); err != nil {
+			return err
+		}
+	}
+	_, err := r.tasks.UpdateAll(ctx, filter, bson.M{"$set": bson.M{"acked_at": at}, "$inc": bumpRev})
 	return err
+}
+
+func (r *minionTaskRepository) SetAs(ctx context.Context, sessionID, taskID uuid.UUID, as models.MinionIdentity) (bool, error) {
+	res, err := r.tasks.UpdateAll(ctx, bson.M{"session_id": sessionID, "task_id": taskID},
+		bson.M{"$set": bson.M{"as": as}, "$inc": bumpRev})
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
 }
 
 func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID uuid.UUID, res MinionTaskResult) (*models.MinionTask, bool, error) {
@@ -421,6 +445,9 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 	if !late {
 		if t.AckedAt == nil {
 			set["acked_at"] = res.At
+			if t.As == nil && res.As != nil {
+				set["as"] = res.As
+			}
 		}
 		if t.StartedAt == nil {
 			set["started_at"] = res.At

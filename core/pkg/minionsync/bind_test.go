@@ -254,7 +254,7 @@ func (p *fakePage) Call(ctx context.Context, module string, c channellink.Call) 
 }
 
 // Open: a page is reached by calls, not connections.
-func (p *fakePage) Open(context.Context, string, map[string]any, map[string]protocol.Credential, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+func (p *fakePage) Open(context.Context, string, map[string]any, map[string]protocol.Credential, [16]byte, *protocol.LinkKeys, *protocol.LinkActing, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{Type: protocol.LinkAnswer, Request: 1, Failure: &protocol.LinkFailure{Kind: protocol.LinkFailOther, Msg: "a page"}}, nil
 }
 
@@ -465,7 +465,7 @@ func (noLink) Call(context.Context, string, channellink.Call) (protocol.LinkFram
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 
-func (noLink) Open(context.Context, string, map[string]any, map[string]protocol.Credential, [16]byte, *protocol.LinkKeys, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
+func (noLink) Open(context.Context, string, map[string]any, map[string]protocol.Credential, [16]byte, *protocol.LinkKeys, *protocol.LinkActing, time.Duration, func(string, uint64)) (protocol.LinkFrame, error) {
 	return protocol.LinkFrame{}, channellink.ErrNoLink
 }
 

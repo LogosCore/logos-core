@@ -57,6 +57,10 @@ type MinionSession struct {
 	Crypto protocol.BuildCrypto `bson:"crypto" json:"-"`
 	// Hello is what the latest hello said, as it said it.
 	Hello MinionHello `bson:"hello" json:"hello"`
+	// Acting is who the session's tasks run as when its minion said another
+	// than its process's own (an identity of the session's: a become, a
+	// steal_token); nil for the process's own.
+	Acting *MinionIdentity `bson:"acting,omitempty" json:"acting,omitempty"`
 	// Address is the one of Hello.Addrs the session shows: an operator's
 	// pick (AddressPicked), shared by the whole team, or else core's guess at
 	// the host's real one (DefaultAddress). Empty when the hello sent none.

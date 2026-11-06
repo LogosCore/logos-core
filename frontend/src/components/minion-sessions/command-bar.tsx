@@ -16,6 +16,7 @@ import { commandOf, lineOf, lineTexts, parseCommandLine, usage, valueCompletion,
 import { CONNECTION_FORMAT, choiceDetail, connectionText, type ConnectionChoice } from "./connection-choices"
 import { ConnectionChoicesProvider } from "./session-connection-choices"
 import { useSessionConnectionChoices } from "./use-connection-choices"
+import { resolveCredentialArgs } from "./console-credentials"
 import { commandKindsNote } from "./command-kinds"
 import { builtinCompletion, builtinNotice, isBuiltinLine, parseBuiltin } from "./console-builtins"
 import { prefersReducedMotion, usePromptFx } from "./prompt-fx"
@@ -211,10 +212,28 @@ export function CommandBar({
       if (el) fx?.refused(el)
       return
     }
+    const fields = c?.fields ?? []
+    if (fields.some((f) => (f.type === "credential" || f.type === "credential_list") && f.key in p.args)) {
+      // Credentials by name: core says which they are.
+      void resolveCredentialArgs(fields, p.args, operationId).then((r) => {
+        if (!r.ok) {
+          setError(r.error)
+          if (input.current) fx?.refused(input.current)
+          return
+        }
+        queueParsed(p.command.id, r.args)
+      }, (err: unknown) => setError(errorMessage(err, "Could not look the credential up")))
+      return
+    }
+    queueParsed(p.command.id, p.args)
+  }
+
+  const queueParsed = (command: string, args: Record<string, unknown>) => {
+    const el = input.current
     setError(null)
     if (el) fx?.ran(el)
     queue.mutate(
-      { sessionId, command: p.command.id, args: Object.keys(p.args).length > 0 ? p.args : null },
+      { sessionId, command, args: Object.keys(args).length > 0 ? args : null },
       {
         onSuccess: (data) => {
           onQueued?.(data.queueMinionTask)

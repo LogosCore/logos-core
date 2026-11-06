@@ -31,6 +31,8 @@ import { ConnectionsCard } from "./session-connections"
 import { MaxTasksValue } from "./max-tasks"
 import { FeedbackCounts } from "./feedback-parts"
 import { FeedbackView } from "./feedback-view"
+import { IdentityView } from "./identity-view"
+import { identityLabel } from "./identity-values"
 
 // One minion session (?session=<id>[&sessionTab=]), over any page: Overview,
 // what it is and where it runs, in cards; JSON, its record as the API gives
@@ -75,7 +77,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
     <Tabs
       value={tab}
       onValueChange={(v) => {
-        if (v === "overview" || v === "feedback" || v === "json") open({ kind: "session", id: s.id, tab: v })
+        if (v === "overview" || v === "feedback" || v === "identity" || v === "json") open({ kind: "session", id: s.id, tab: v })
       }}
       className="min-h-0 flex-1 gap-0"
     >
@@ -98,6 +100,7 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
               Feedback
               <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} className="text-xs" />
             </TabsTrigger>
+            <TabsTrigger value="identity">Identity</TabsTrigger>
             <TabsTrigger value="json">JSON</TabsTrigger>
           </TabsList>
         </div>
@@ -121,6 +124,10 @@ function SessionDetail({ s, tab }: { s: Session; tab: SessionTab }) {
 
       <TabsContent value="feedback" className="flex min-h-0 flex-col">
         <FeedbackView s={s} />
+      </TabsContent>
+
+      <TabsContent value="identity" className="flex min-h-0 flex-col">
+        <IdentityView s={s} />
       </TabsContent>
 
       <TabsContent value="json" className="flex min-h-0 flex-col px-4 py-4">
@@ -228,6 +235,7 @@ function HostCard({ s }: { s: Session }) {
       <LabelRow label="User">{user || none}</LabelRow>
       <LabelRow label="Domain">{s.domain || none}</LabelRow>
       <LabelRow label="Integrity">{s.integrity || none}</LabelRow>
+      {s.acting && <LabelRow label="Tasks run as">{identityLabel(s.acting)}</LabelRow>}
       <LabelRow label="OS">
         {s.os} · {s.arch}
       </LabelRow>

@@ -117,15 +117,30 @@ func (f *fakeTasks) FindByTaskID(_ context.Context, id uuid.UUID) (*models.Minio
 	return nil, repository.ErrNotFound
 }
 
-func (f *fakeTasks) Ack(_ context.Context, _ uuid.UUID, ids []uuid.UUID, at time.Time) error {
+func (f *fakeTasks) Ack(_ context.Context, _ uuid.UUID, ids []uuid.UUID, at time.Time, as *models.MinionIdentity) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, id := range ids {
 		if t := f.find(id); t != nil && t.AckedAt == nil {
 			t.AckedAt = &at
+			if t.As == nil && as != nil {
+				a := *as
+				t.As = &a
+			}
 		}
 	}
 	return nil
+}
+
+func (f *fakeTasks) SetAs(_ context.Context, sid, id uuid.UUID, as models.MinionIdentity) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t := f.find(id)
+	if t == nil || t.SessionID != sid {
+		return false, nil
+	}
+	t.As = &as
+	return true, nil
 }
 
 func (f *fakeTasks) AddResult(_ context.Context, sid, id uuid.UUID, r repository.MinionTaskResult) (*models.MinionTask, bool, error) {
@@ -136,6 +151,10 @@ func (f *fakeTasks) AddResult(_ context.Context, sid, id uuid.UUID, r repository
 		return nil, false, qmgo.ErrNoSuchDocuments
 	}
 	f.results[id] = append(f.results[id], r)
+	if t.AckedAt == nil && t.As == nil && r.As != nil {
+		a := *r.As
+		t.As = &a
+	}
 	t.AckedAt, t.State = &r.At, models.MinionTaskRunning
 	if r.Done {
 		t.State = models.MinionTaskDone

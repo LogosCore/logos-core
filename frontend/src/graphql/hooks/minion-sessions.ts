@@ -23,6 +23,7 @@ import {
   SetMinionSessionAddressDocument,
   SetMinionSessionMaxTasksDocument,
   MinionFeedbackDocument,
+  MinionIdentitiesDocument,
   MarkMinionFeedbackReadDocument,
   MinionSessionRunningTasksDocument,
   SetMinionSessionArchivedDocument,
@@ -68,6 +69,7 @@ export const minionSessionKeys = {
   connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
   runningTasks: (id: string, rev: number) => [...minionSessionKeys.all, "running-tasks", id, rev] as const,
   feedback: (id: string) => [...minionSessionKeys.all, "feedback", id] as const,
+  identities: (id: string) => [...minionSessionKeys.all, "identities", id] as const,
 }
 
 // How often a list with a filter on the clock ("seen within 5m") refetches:
@@ -274,6 +276,21 @@ export function useMinionFeedback(sessionId: string, filter: FeedbackFilter, fee
       }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.minionFeedback.next ?? null,
+    enabled: sessionId !== "",
+    placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * A session's identity history, newest first, a page at a time. rev (the
+ * session's) asks again when it changes: a new identity is a session change.
+ */
+export function useMinionIdentities(sessionId: string, rev: number) {
+  return useInfiniteQuery({
+    queryKey: [...minionSessionKeys.identities(sessionId), rev],
+    queryFn: ({ pageParam }) => graphqlClient(MinionIdentitiesDocument, { sessionId, after: pageParam, first: 100 }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.minionIdentities.next ?? null,
     enabled: sessionId !== "",
     placeholderData: keepPreviousData,
   })

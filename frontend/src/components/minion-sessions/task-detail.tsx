@@ -42,6 +42,7 @@ import { FINISHED, useTaskActions, type Task } from "./task-actions"
 import { StateLabel, TaskTimes } from "./task-state"
 import { useTaskWaiting } from "@/components/targets/use-task-waiting"
 import { useSessionConnectionChoices } from "./use-connection-choices"
+import { TaskAs } from "./task-as"
 
 // The right of a session's console: the task picked in the list, whole
 // (its command is the list's row): where it stands and who gave it, what can be done with it,
@@ -244,6 +245,7 @@ export function TaskDetail({
           <span className="text-xs text-muted-foreground" title={`Queued ${formatAbsolute(t.queuedAt)}`}>
             by {t.issuedByName ?? "someone gone"}
           </span>
+          <TaskAs as={t.as} />
           <TaskTimes t={t} />
         </div>
         <div className="flex shrink-0 items-center gap-0.5">

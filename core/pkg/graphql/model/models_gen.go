@@ -689,6 +689,33 @@ type MinionFileStringPage struct {
 	Done    bool                `json:"done"`
 }
 
+type MinionIdentity struct {
+	User         *string `json:"user,omitempty"`
+	Domain       *string `json:"domain,omitempty"`
+	Integrity    *string `json:"integrity,omitempty"`
+	How          *string `json:"how,omitempty"`
+	CredentialID *string `json:"credentialId,omitempty"`
+	TaskID       *string `json:"taskId,omitempty"`
+	Since        string  `json:"since"`
+}
+
+type MinionIdentityEvent struct {
+	ID           string  `json:"id"`
+	At           string  `json:"at"`
+	Scope        string  `json:"scope"`
+	User         *string `json:"user,omitempty"`
+	Domain       *string `json:"domain,omitempty"`
+	Integrity    *string `json:"integrity,omitempty"`
+	How          *string `json:"how,omitempty"`
+	CredentialID *string `json:"credentialId,omitempty"`
+	TaskID       *string `json:"taskId,omitempty"`
+}
+
+type MinionIdentityPage struct {
+	Entries []*MinionIdentityEvent `json:"entries"`
+	Next    *string                `json:"next,omitempty"`
+}
+
 type MinionSession struct {
 	ID               string                  `json:"id"`
 	Rev              int                     `json:"rev"`
@@ -711,6 +738,7 @@ type MinionSession struct {
 	Proc             *string                 `json:"proc,omitempty"`
 	MachineID        *string                 `json:"machineId,omitempty"`
 	Integrity        *string                 `json:"integrity,omitempty"`
+	Acting           *MinionIdentity         `json:"acting,omitempty"`
 	Addrs            []string                `json:"addrs"`
 	Address          *string                 `json:"address,omitempty"`
 	AddressPicked    bool                    `json:"addressPicked"`
@@ -923,6 +951,7 @@ type MinionTask struct {
 	OperationID       string            `json:"operationId"`
 	Command           string            `json:"command"`
 	Args              any               `json:"args,omitempty"`
+	As                *MinionIdentity   `json:"as,omitempty"`
 	IssuedBy          string            `json:"issuedBy"`
 	IssuedByName      *string           `json:"issuedByName,omitempty"`
 	State             string            `json:"state"`

@@ -31,6 +31,15 @@ export const MinionSessionFields = graphql(`
     proc
     machineId
     integrity
+    acting {
+      user
+      domain
+      integrity
+      how
+      credentialId
+      taskId
+      since
+    }
     addrs
     address
     addressPicked
@@ -99,6 +108,25 @@ export const MinionFeedbackQuery = graphql(`
     minionFeedback(sessionId: $sessionId, level: $level, search: $search, after: $after, first: $first) {
       entries {
         ...MinionFeedbackFields
+      }
+      next
+    }
+  }
+`)
+
+export const MinionIdentitiesQuery = graphql(`
+  query MinionIdentities($sessionId: ID!, $after: String, $first: Int) {
+    minionIdentities(sessionId: $sessionId, after: $after, first: $first) {
+      entries {
+        id
+        at
+        scope
+        user
+        domain
+        integrity
+        how
+        credentialId
+        taskId
       }
       next
     }

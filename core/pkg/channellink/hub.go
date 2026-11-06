@@ -82,6 +82,10 @@ type Call struct {
 	Data        []byte
 	Deadline    time.Duration
 	Keys        *protocol.LinkKeys
+	// Acting, with Keys, is the task whose identity is in effect for the
+	// session ID is (a become): a channel acting as the minion takes it up
+	// again. nil for none.
+	Acting *protocol.LinkActing
 }
 
 // Up reports whether an instance of module has its link open.
@@ -118,7 +122,7 @@ func (h *Hub) Call(ctx context.Context, module string, c Call) (protocol.LinkFra
 	}
 	req := h.next.Add(1)
 	f := protocol.LinkFrame{Type: protocol.LinkCall, Request: req, Values: c.Values, ID: c.ID[:], Data: c.Data,
-		Deadline: uint64(c.Deadline / time.Millisecond), Keys: c.Keys, Credentials: c.Credentials}
+		Deadline: uint64(c.Deadline / time.Millisecond), Keys: c.Keys, Credentials: c.Credentials, Acting: c.Acting}
 	b, err := protocol.EncodeLinkFrame(f)
 	if err != nil {
 		return protocol.LinkFrame{}, err
@@ -160,7 +164,7 @@ func (h *Hub) Call(ctx context.Context, module string, c Call) (protocol.LinkFra
 // sent is told the instance and the request before the open goes out: the
 // connection's socket names them, and may come before the answer.
 func (h *Hub) Open(ctx context.Context, module string, values map[string]any, creds map[string]protocol.Credential, under [16]byte,
-	keys *protocol.LinkKeys, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error) {
+	keys *protocol.LinkKeys, acting *protocol.LinkActing, deadline time.Duration, sent func(instance string, request uint64)) (protocol.LinkFrame, error) {
 	l := h.pick(module)
 	if l == nil {
 		return protocol.LinkFrame{}, ErrNoLink
@@ -173,6 +177,9 @@ func (h *Hub) Open(ctx context.Context, module string, values map[string]any, cr
 		Deadline: uint64(deadline / time.Millisecond)}
 	if under != [16]byte{} {
 		f.Under, f.Keys = under[:], keys
+		if keys != nil {
+			f.Acting = acting
+		}
 	}
 	b, err := protocol.EncodeLinkFrame(f)
 	if err != nil {

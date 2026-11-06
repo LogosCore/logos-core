@@ -22,6 +22,10 @@ type MinionTask {
   # Its params' values as the operator gave them; the task carries them
   # with the params' defaults filled in.
   args: JSON
+  # Who it ran as when not its process's own: what its minion said, else the
+  # session's acting identity when it was acked. how null: the process's own
+  # whatever the session's (an SSH file command while the session became).
+  as: MinionIdentity
   issuedBy: ID!
   # The operator's username; null when the user is gone.
   issuedByName: String

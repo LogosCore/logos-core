@@ -738,7 +738,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
 		Result: strPtr(t.Result), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),
-		FeedbackErrors: t.FeedbackErrors, FeedbackWarnings: t.FeedbackWarnings,
+		FeedbackErrors: t.FeedbackErrors, FeedbackWarnings: t.FeedbackWarnings, As: toIdentityModel(t.As),
 	}
 	if name, ok := names[t.IssuedBy]; ok {
 		m.IssuedByName = &name
