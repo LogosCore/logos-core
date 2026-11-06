@@ -825,7 +825,8 @@ func (s *Service) takeData(session uuid.UUID, d protocol.TunnelDataItem) ([]cbor
 	case st.downEOF || d.End() <= st.downNext:
 		return nil, nil
 	case d.Off > st.downNext:
-		if d.End() <= st.downNext+uint64(downWindow-len(st.down)) && st.aheadBytes+len(d.Data) <= downWindow {
+		// Its bytes within the room (its eof needs none).
+		if d.Off+uint64(len(d.Data)) <= st.downNext+uint64(downWindow-len(st.down)) && st.aheadBytes+len(d.Data) <= downWindow {
 			d.Data = slices.Clone(d.Data)
 			st.ahead = append(st.ahead, d)
 			st.aheadBytes += len(d.Data)
