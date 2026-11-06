@@ -21,30 +21,17 @@ export type SessionColumnKind = "text" | "list" | "enum" | "bool" | "number" | "
 
 export type SessionColumnId =
   | "number"
-  | "sessionId"
   | "addrs"
   | "peer"
   | "host"
   | "user"
   | "domain"
   | "proc"
-  | "machine"
   | "pid"
   | "os"
-  | "arch"
-  | "version"
   | "lastSeen"
-  | "opened"
   | "build"
-  | "target"
-  | "platform"
-  | "buildDescription"
   | "description"
-  | "buildId"
-  | "staged"
-  | "persisted"
-  | "restarts"
-  | "feedback"
 
 export interface SessionColumnDef {
   id: SessionColumnId
@@ -67,7 +54,7 @@ export interface SessionColumnDef {
 }
 
 export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
-  { id: "number", label: "#", kind: "number", sortable: true, initialDirection: "DESC", min: 56, grow: 0, value: (s) => s.number },
+  { id: "number", label: "#", kind: "number", sortable: true, initialDirection: "DESC", min: 64, grow: 0, value: (s) => s.number },
   // Sorts by the address each row shows (MinionSession.address).
   { id: "addrs", label: "Addresses", kind: "list", sortable: true, initialDirection: "ASC", min: 120, grow: 1, value: (s) => [s.address, s.addrs] },
   // The address the latest message came from (the channel saw it); sorts by
@@ -85,36 +72,13 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
   { id: "host", label: "Host", kind: "text", sortable: true, initialDirection: "ASC", min: 140, grow: 1.2, value: (s) => s.host },
   // The user, with the integrity level it runs at: its filter matches either.
   { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", min: 120, grow: 1, value: (s) => [s.user, s.integrity] },
-  { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", min: 100, grow: 0.9, value: (s) => s.domain },
+  { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", min: 100, grow: 0.5, value: (s) => s.domain },
   { id: "proc", label: "Process", kind: "text", sortable: true, initialDirection: "ASC", min: 120, grow: 1.1, value: (s) => s.proc },
-  // What tells apart machines with the same host and user (source:value).
-  { id: "machine", label: "Machine", kind: "text", sortable: true, initialDirection: "ASC", min: 150, grow: 1.2, value: (s) => s.machineId },
-  { id: "pid", label: "PID", kind: "number", sortable: true, initialDirection: "ASC", min: 64, grow: 0.5, value: (s) => s.pid },
-  { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", min: 110, grow: 0.9, value: (s) => s.os },
-  { id: "arch", label: "Arch", kind: "enum", sortable: true, initialDirection: "ASC", min: 70, grow: 0.6, value: (s) => s.arch },
-  { id: "version", label: "Minion version", kind: "enum", sortable: true, initialDirection: "DESC", min: 100, grow: 0.7, value: (s) => s.version },
+  { id: "pid", label: "PID", kind: "number", sortable: true, initialDirection: "ASC", min: 64, grow: 0, value: (s) => s.pid },
+  { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", min: 80, grow: 0, value: (s) => s.os },
   { id: "lastSeen", label: "Last seen", kind: "time", sortable: true, initialDirection: "DESC", min: 100, grow: 0.9, value: (s) => [s.lastSeenAt, s.lateAt, s.lostAt] },
-  { id: "opened", label: "Opened", kind: "time", sortable: true, initialDirection: "DESC", min: 100, grow: 0.9, value: (s) => s.createdAt },
   { id: "build", label: "Build", kind: "enum", sortable: true, initialDirection: "ASC", min: 140, grow: 1.4, value: (s) => s.moduleName },
-  { id: "target", label: "Target", kind: "enum", sortable: true, initialDirection: "ASC", min: 90, grow: 0.8, value: (s) => s.target },
-  { id: "platform", label: "Build platform", kind: "enum", sortable: true, initialDirection: "ASC", min: 110, grow: 0.9, value: (s) => s.platform },
-  { id: "description", label: "Description", kind: "text", sortable: true, initialDirection: "ASC", min: 160, grow: 1.4, value: (s) => s.description },
-  { id: "buildDescription", label: "Build description", kind: "text", sortable: true, initialDirection: "ASC", min: 160, grow: 1.4, value: (s) => s.buildDescription },
-  { id: "buildId", label: "Build id", kind: "id", sortable: false, initialDirection: "ASC", min: 110, grow: 1.6, value: (s) => s.buildId },
-  { id: "sessionId", label: "Session id", kind: "id", sortable: false, initialDirection: "ASC", min: 110, grow: 1.6, value: (s) => s.id },
-  { id: "persisted", label: "Persisted", kind: "bool", sortable: true, initialDirection: "DESC", min: 80, grow: 0.6, value: (s) => s.persisted },
-  { id: "restarts", label: "Restarts", kind: "number", sortable: true, initialDirection: "DESC", min: 80, grow: 0.6, value: (s) => s.restartCount },
-  // Its minion's unread feedback, errors and warnings together.
-  {
-    id: "feedback",
-    label: "Feedback",
-    kind: "number",
-    sortable: true,
-    initialDirection: "DESC",
-    min: 90, grow: 0.7,
-    value: (s) => s.feedbackErrors + s.feedbackWarnings,
-  },
-  { id: "staged", label: "Staged", kind: "bool", sortable: true, initialDirection: "DESC", min: 70, grow: 0.5, value: (s) => s.staged },
+  { id: "description", label: "Description", kind: "text", sortable: true, initialDirection: "ASC", min: 160, grow: 2, value: (s) => s.description },
 ]
 
 export const SESSION_COLUMN_BY_ID: ReadonlyMap<string, SessionColumnDef> = new Map(
@@ -149,7 +113,7 @@ export interface SessionsLayout {
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
-  columns: ["number", "peer", "addrs", "user", "host", "domain", "pid", "proc", "os", "lastSeen", "build", "feedback", "description"],
+  columns: ["number", "peer", "addrs", "user", "host", "domain", "pid", "proc", "os", "lastSeen", "build", "description"],
   sort: null,
   filters: [],
   split: null,
@@ -395,12 +359,9 @@ export function describeFilter(f: SessionFilter): string {
   return f.op
 }
 
-/** How an enum or bool value reads: platforms named, staged as yes / no. */
+/** How an enum value reads: an OS named. */
 export function enumLabel(column: SessionColumnId, value: string): string {
-  if (column === "staged") return value === "true" ? "staged" : "not staged"
-  if (column === "persisted") return value === "true" ? "persisted" : "not persisted"
   if (column === "os") return platformLabel(`${value}/any`).replace(" (any arch)", "")
-  if (column === "platform") return platformLabel(value)
   return value
 }
 
@@ -431,7 +392,8 @@ export function lateness(
  */
 export function dependentColumns(params: { filters: SessionFilter[]; sort: SessionSort | null }): SessionColumnId[] {
   const out = new Set<SessionColumnId>(params.filters.map((f) => f.column))
-  out.add(params.sort?.column ?? "opened")
+  // No sort: newest first, by when it opened, which an update never changes.
+  if (params.sort) out.add(params.sort.column)
   return [...out]
 }
 

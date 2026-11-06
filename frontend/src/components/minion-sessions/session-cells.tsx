@@ -1,5 +1,16 @@
 import type { ReactNode } from "react"
-import { CableIcon, PhoneIncomingIcon, PinIcon, PlugIcon, RefreshCwIcon, UnplugIcon, VenetianMaskIcon, type LucideIcon } from "lucide-react"
+import {
+  CableIcon,
+  CircleAlertIcon,
+  PhoneIncomingIcon,
+  PinIcon,
+  PlugIcon,
+  RefreshCwIcon,
+  TriangleAlertIcon,
+  UnplugIcon,
+  VenetianMaskIcon,
+  type LucideIcon,
+} from "lucide-react"
 import { kindLabels } from "@/components/endpoints/endpoint-values"
 import { FormattedDateTimeText } from "@/components/ui/formatted-date-time-text"
 import type { MinionSessionFieldsFragment } from "@/graphql/gql/graphql"
@@ -9,10 +20,11 @@ import { platformLabel } from "@/components/builds/build-values"
 import { formatAbsolute } from "@/lib/relative-time"
 import { ListCell } from "./list-cell"
 import { MarkIcon } from "./mark-icon"
+import { OsIcon } from "./os-icon"
 import { MARK_TONE_CLASSES, isMarkColor } from "./session-mark-colors"
 import { cn } from "@/lib/utils"
 import { useRecordModals } from "@/hooks/use-record-modals"
-import { FeedbackCounts } from "./feedback-parts"
+import { FEEDBACK_TONE, feedbackSummary } from "./feedback-values"
 import { ELEVATED, identityLabel, identityUser, shortUser } from "./identity-values"
 import { formatAgo, formatAgoExact, formatInterval, lateness, shownAddress, type SessionColumnId } from "./sessions-layout"
 
@@ -111,16 +123,16 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
       return (
         <div className="flex min-w-0 items-baseline gap-1.5" title={`Session ${s.number}, ${s.id}`}>
           <span className="truncate font-mono font-medium">{s.number}</span>
-          {/* The caller's mark, in its color's tone (the row sets it). */}
-          {(s.mark?.icon || s.mark?.emoji) && (
+          {/* The caller's mark, in its color's tone (the row sets it); two
+              icons at most: with errors and warnings both, theirs. */}
+          {(s.mark?.icon || s.mark?.emoji) && !(s.feedbackErrors > 0 && s.feedbackWarnings > 0) && (
             <span data-mark-icon className={cn("self-center", isMarkColor(s.mark.color) && MARK_TONE_CLASSES)}>
               <MarkIcon icon={s.mark.icon} emoji={s.mark.emoji} size={14} className="block" />
             </span>
           )}
+          <FeedbackFlag s={s} />
         </div>
       )
-    case "sessionId":
-      return text(s.id, "truncate font-mono text-xs")
     case "addrs":
       return (
         <ListCell
@@ -182,17 +194,17 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
     case "proc":
       // The name alone: the PID has a column of its own.
       return text(s.proc)
-    case "machine":
-      return text(s.machineId, "truncate font-mono text-xs")
     case "pid":
       // 0: no process of its own.
       return s.pid === 0 ? <div className="truncate">{muted("—")}</div> : <div className="truncate font-mono">{s.pid}</div>
     case "os":
-      return <div className="truncate">{platformLabel(`${s.os}/${s.arch}`)}</div>
-    case "arch":
-      return text(s.arch, "truncate font-mono")
-    case "version":
-      return text(s.version, "truncate font-mono")
+      // Its mark, then the arch; the name in the title.
+      return (
+        <div className="flex min-w-0 items-center gap-1.5" title={platformLabel(`${s.os}/${s.arch}`)}>
+          <OsIcon os={s.os} size={18} />
+          <span className="truncate font-mono text-xs text-muted-foreground">{s.arch}</span>
+        </div>
+      )
     case "lastSeen": {
       // Green while on time by its schedule, yellow once late, red once
       // lost; plain when the minion never said its schedule.
@@ -227,15 +239,9 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
         </div>
       )
     }
-    case "opened":
-      return (
-        <div className="truncate text-muted-foreground" title={`Opened ${formatAbsolute(s.createdAt)}`}>
-          <Ago at={s.createdAt} now={ctx.now} />
-        </div>
-      )
     case "build":
       return (
-        <div className="flex min-w-0 items-baseline" title={`Build ${s.buildId}${s.staged ? "" : ", without staging"}`}>
+        <div className="flex min-w-0 items-baseline" title={buildTitle(s)}>
           <KindName type="factory" name={s.moduleName} icon={ctx.icons.get(s.moduleName)} className="font-medium" />
           <span className="truncate text-muted-foreground">&nbsp;· {s.target}</span>
           {s.persisted && (
@@ -248,50 +254,58 @@ export function SessionCell({ id, session: s, ctx }: { id: SessionColumnId; sess
           )}
         </div>
       )
-    case "target":
-      return text(s.target, "truncate font-mono")
-    case "platform":
-      return <div className="truncate">{platformLabel(s.platform)}</div>
-    case "buildDescription":
-      return text(s.buildDescription)
     case "description":
       return text(s.description)
-    case "buildId":
-      return text(s.buildId, "truncate font-mono text-xs")
-    case "staged":
-      return <div className="truncate">{s.staged ? "Yes" : muted("No")}</div>
-    case "persisted":
-      return <div className="truncate">{s.persisted ? "Yes" : muted("No")}</div>
-    case "feedback":
-      return <FeedbackCell s={s} />
-    case "restarts":
-      return (
-        <div
-          className="truncate font-mono"
-          title={s.restarts.map((r) => `${formatAbsolute(r.at)}: pid ${r.pid}${r.host ? ` on ${r.host}` : ""}`).join("\n") || undefined}
-        >
-          {s.restartCount > 0 ? s.restartCount : muted("0")}
-        </div>
-      )
   }
 }
 
-/** A session's unread feedback: its counts, which open its Feedback. */
-function FeedbackCell({ s }: { s: MinionSessionFieldsFragment }) {
+/** The Build cell's title: the build, and what the columns it took the place of showed. */
+function buildTitle(s: MinionSessionFieldsFragment): string {
+  return [
+    `Build ${s.buildId}`,
+    s.buildDescription && `Description: ${s.buildDescription}`,
+    `Target: ${s.target}`,
+    `Platform: ${platformLabel(s.platform)}`,
+    s.version && `Minion version: ${s.version}`,
+    s.staged ? "Staged" : "Not staged: the session keeps the build's keys",
+    s.persisted && `Persisted (${s.restartCount} ${s.restartCount === 1 ? "restart" : "restarts"})`,
+  ]
+    .filter(Boolean)
+    .join("\n")
+}
+
+/**
+ * A session's unread feedback beside its number, only when there is some: an
+ * error's icon if any is an error, a warning's if any is a warning (how many
+ * in their title); each opens the session's Feedback.
+ */
+function FeedbackFlag({ s }: { s: MinionSessionFieldsFragment }) {
   const { open } = useRecordModals()
+  if (s.feedbackErrors + s.feedbackWarnings === 0) return null
   const id = s.id
-  if (s.feedbackErrors + s.feedbackWarnings === 0) return <div className="truncate text-muted-foreground">0</div>
+  const summary = feedbackSummary(s.feedbackErrors, s.feedbackWarnings)
+  const levels = [...(s.feedbackErrors > 0 ? (["error"] as const) : []), ...(s.feedbackWarnings > 0 ? (["warning"] as const) : [])]
   return (
-    <button
-      type="button"
-      className="flex min-w-0 cursor-pointer items-center rounded hover:bg-muted"
-      title="Open the session's feedback"
-      onClick={(e) => {
-        e.stopPropagation()
-        open({ kind: "session", id, tab: "feedback" })
-      }}
-    >
-      <FeedbackCounts errors={s.feedbackErrors} warnings={s.feedbackWarnings} />
-    </button>
+    <span className="inline-flex shrink-0 items-center self-center">
+      {levels.map((level) => {
+        const Icon = level === "error" ? CircleAlertIcon : TriangleAlertIcon
+        return (
+          <button
+            key={level}
+            type="button"
+            className={cn("inline-flex cursor-pointer items-center rounded p-0.5 hover:bg-muted", FEEDBACK_TONE[level])}
+            title={`Unread feedback: ${summary}. Open it`}
+            aria-label={`Unread feedback: ${summary}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              open({ kind: "session", id, tab: "feedback" })
+            }}
+          >
+            <Icon className="size-3.5" aria-hidden />
+          </button>
+        )
+      })}
+    </span>
   )
 }
+

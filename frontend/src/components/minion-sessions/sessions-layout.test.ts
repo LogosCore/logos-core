@@ -80,7 +80,6 @@ describe("layout", () => {
     expect(l.sort).toEqual({ column: "lastSeen", direction: "ASC" })
     expect(cycleSort(l, "lastSeen").sort).toBeNull()
     expect(cycleSort(l, "host").sort).toEqual({ column: "host", direction: "ASC" })
-    expect(cycleSort(l, "buildId")).toBe(l)
   })
 
   test("one filter per column", () => {
@@ -93,15 +92,12 @@ describe("layout", () => {
   test("filters read in words and know when they are complete", () => {
     expect(describeFilter({ column: "host", op: "CONTAINS", text: "web" })).toBe('contains "web"')
     expect(describeFilter({ column: "os", op: "NOT_IN", values: ["linux", "windows"] })).toBe("is not Linux, Windows")
-    expect(describeFilter({ column: "staged", op: "IN", values: ["false"] })).toBe("is not staged")
     expect(describeFilter({ column: "pid", op: "RANGE", min: 5, max: 20 })).toBe("5–20")
     expect(describeFilter({ column: "pid", op: "RANGE", min: 5 })).toBe("≥ 5")
     expect(describeFilter({ column: "lastSeen", op: "WITHIN", seconds: 300 })).toBe("within 5m")
     expect(describeFilter({ column: "lastSeen", op: "OLDER_THAN", seconds: 86400 })).toBe("over 1d ago")
     const col = (id: string) => SESSION_COLUMN_BY_ID.get(id)!
     expect(isComplete({ column: "host", op: "CONTAINS", text: "" }, col("host"))).toBe(false)
-    expect(isComplete({ column: "buildId", op: "EQUALS", text: "nope" }, col("buildId"))).toBe(false)
-    expect(isComplete({ column: "buildId", op: "EQUALS", text: "160a41b2-e202-4841-9766-5dedfb861947" }, col("buildId"))).toBe(true)
     expect(isComplete({ column: "lastSeen", op: "NEVER" }, col("lastSeen"))).toBe(true)
     expect(isComplete({ column: "pid", op: "RANGE" }, col("pid"))).toBe(false)
   })

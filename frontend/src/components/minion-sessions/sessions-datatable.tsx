@@ -726,21 +726,31 @@ function ResizeHandle({
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => {
         e.stopPropagation()
-        const label = e.currentTarget.parentElement!.querySelector("span")
-        let widest = (label?.scrollWidth ?? 0) + 40
+        // The header's own (its label, the sort arrow, the funnel), then
+        // each row on screen's; the header cell overhangs its column by 8px.
+        let widest = naturalWidth(e.currentTarget.parentElement!) - 8
         for (const el of document.querySelectorAll<HTMLElement>(`[data-cell][data-column="${column.id}"]`)) {
-          widest = Math.max(widest, contentWidth(el))
+          widest = Math.max(widest, naturalWidth(el.firstElementChild as HTMLElement | null))
         }
-        onSized(widest + 8)
+        onSized(Math.ceil(widest) + 2)
       }}
     />
   )
 }
 
-/** How wide a cell's content would be uncut. */
-function contentWidth(cell: HTMLElement): number {
-  let w = cell.scrollWidth
-  for (const el of cell.querySelectorAll<HTMLElement>("*")) w = Math.max(w, el.scrollWidth)
+/**
+ * How wide an element would be uncut: laid out at max-content for a moment
+ * (its parts side by side, none truncated), then put back.
+ */
+function naturalWidth(el: HTMLElement | null): number {
+  if (!el) return 0
+  const { width, minWidth, maxWidth, flex } = el.style
+  el.style.width = "max-content"
+  el.style.minWidth = "max-content"
+  el.style.maxWidth = "none"
+  el.style.flex = "none"
+  const w = el.getBoundingClientRect().width
+  Object.assign(el.style, { width, minWidth, maxWidth, flex })
   return w
 }
 
