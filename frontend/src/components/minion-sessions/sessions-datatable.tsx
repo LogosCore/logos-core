@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities"
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
+  ArchiveXIcon,
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -277,7 +278,8 @@ export function SessionsDatatable({
   const minWidth = rowMinWidth(columns, widths, [...(selecting ? [CHECK_PX] : []), MENU_PX])
   const grid = { gridTemplateColumns: template, minWidth }
   // The cell a right click came from: its value to copy, from the row's menu.
-  const [copyCell, setCopyCell] = useState<{ label: string; text: string } | null>(null)
+  const [copyCell, setCopyCell] = useState<{ label: string; text: string; column: SessionColumnId } | null>(null)
+  const copyColumn = copyCell?.column ?? null
   const pinned = (col: SessionColumnDef, i: number) => col.id === "number" && i === 0
   const pinnedFirst = columns.length > 0 && pinned(columns[0], 0)
 
@@ -442,8 +444,6 @@ export function SessionsDatatable({
             />
           ) : null
         }
-        archived={archived}
-        onShowLive={() => onArchivedChange(false)}
         layout={layout}
         onEdit={(column, anchor) => openFilter(column, anchor)}
         onRemove={(column) => onLayoutChange(setFilter(layout, column, null))}
@@ -501,6 +501,7 @@ export function SessionsDatatable({
                   menu={
                     <SessionMenu
                       copyCell={copyCell}
+                      table={{ column: copyColumn, archived, onArchivedChange, layout, onLayoutChange }}
                       session={s}
                       canWrite={canWrite}
                       persistable={persistable(s)}
@@ -540,7 +541,7 @@ export function SessionsDatatable({
                             data-column={col.id}
                             className="min-w-0"
                             // Its value, for the menu's Copy, and in a title when it is cut.
-                            onContextMenu={(e) => setCopyCell({ label: col.label, text: cellText(e.currentTarget) })}
+                            onContextMenu={(e) => setCopyCell({ label: col.label, text: cellText(e.currentTarget), column: col.id })}
                             onPointerOver={(e) => titleIfCut(e.currentTarget)}
                           >
                             <SessionCell id={col.id} session={s} ctx={ctx} />
@@ -854,6 +855,37 @@ function HeaderMenu({
           <ContextMenuSeparator />
         </>
       )}
+      <TableMenuItems
+        column={column}
+        archived={archived}
+        onArchivedChange={onArchivedChange}
+        layout={layout}
+        onLayoutChange={onLayoutChange}
+      />
+    </ContextMenuContent>
+  )
+}
+
+/**
+ * The table's own items, the same in the header's menu and a row's, last in
+ * both: which columns show (one added beside the column the menu is about),
+ * archived sessions, the filters, the layout's reset.
+ */
+function TableMenuItems({
+  column,
+  archived,
+  onArchivedChange,
+  layout,
+  onLayoutChange,
+}: {
+  column: SessionColumnId | null
+  archived: boolean
+  onArchivedChange: (archived: boolean) => void
+  layout: SessionsLayout
+  onLayoutChange: (layout: SessionsLayout | null) => void
+}) {
+  return (
+    <>
       <ContextMenuSub>
         <ContextMenuSubTrigger>
           <Columns3Icon />
@@ -873,9 +905,11 @@ function HeaderMenu({
           ))}
         </ContextMenuSubContent>
       </ContextMenuSub>
-      <ContextMenuCheckboxItem checked={archived} onCheckedChange={(on) => onArchivedChange(on)}>
-        Show archived sessions
-      </ContextMenuCheckboxItem>
+      {/* Says what it does: the other view. */}
+      <ContextMenuItem onClick={() => onArchivedChange(!archived)}>
+        {archived ? <ArchiveXIcon /> : <ArchiveIcon />}
+        {archived ? "Hide archived sessions" : "Show archived sessions"}
+      </ContextMenuItem>
       {layout.filters.length > 0 && (
         <ContextMenuItem onClick={() => onLayoutChange({ ...layout, filters: [] })}>
           <FilterXIcon />
@@ -886,7 +920,7 @@ function HeaderMenu({
         <ListRestartIcon />
         Reset to default
       </ContextMenuItem>
-    </ContextMenuContent>
+    </>
   )
 }
 
@@ -928,9 +962,10 @@ function ColumnsButton({
           ))}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem checked={archived} onCheckedChange={(on) => onArchivedChange(on)}>
-          Show archived sessions
-        </DropdownMenuCheckboxItem>
+        <DropdownMenuItem onClick={() => onArchivedChange(!archived)}>
+          {archived ? <ArchiveXIcon /> : <ArchiveIcon />}
+          {archived ? "Hide archived sessions" : "Show archived sessions"}
+        </DropdownMenuItem>
         <DropdownMenuItem disabled={isDefault} onClick={() => onLayoutChange(null)}>
           <ListRestartIcon />
           Reset to default
@@ -943,8 +978,6 @@ function ColumnsButton({
 /** The filters in force, above the table: a click edits one, × removes it. */
 function FilterChips({
   selectionBar,
-  archived,
-  onShowLive,
   layout,
   onEdit,
   onRemove,
@@ -952,35 +985,16 @@ function FilterChips({
 }: {
   /** The bulk-action bar while rows are selected; it leads the row. */
   selectionBar: ReactNode
-  archived: boolean
-  onShowLive: () => void
   layout: SessionsLayout
   onEdit: (column: SessionColumnId, anchor: HTMLElement) => void
   onRemove: (column: SessionColumnId) => void
   onClearAll: () => void
 }) {
-  if (layout.filters.length === 0 && !archived && !selectionBar) return null
+  if (layout.filters.length === 0 && !selectionBar) return null
   return (
     // A strip across the top of the table, as wide as it.
     <div className="flex flex-wrap items-center gap-1.5 border-b px-2 py-1.5">
       {selectionBar}
-      {archived && (
-        <span className="inline-flex items-center rounded-md border border-foreground/30 bg-muted text-xs">
-          <span className="flex items-center gap-1 py-1 pr-1 pl-2">
-            <ArchiveIcon className="size-3 shrink-0" />
-            <span className="font-medium">Archived sessions</span>
-          </span>
-          <button
-            type="button"
-            aria-label="Back to the sessions"
-            title="Back to the sessions"
-            className="cursor-pointer rounded p-1 text-muted-foreground hover:text-foreground"
-            onClick={onShowLive}
-          >
-            <XIcon className="size-3" />
-          </button>
-        </span>
-      )}
       {layout.filters.map((f) => {
         const col = SESSION_COLUMN_BY_ID.get(f.column)!
         const hidden = !layout.columns.includes(f.column)
@@ -1031,7 +1045,10 @@ function SessionMenu({
   onInteract,
   onFileBrowser,
   copyCell,
+  table,
 }: {
+  /** The table's items, after the session's (TableMenuItems). */
+  table: { column: SessionColumnId | null; archived: boolean; onArchivedChange: (archived: boolean) => void; layout: SessionsLayout; onLayoutChange: (layout: SessionsLayout | null) => void }
   /** The cell a right click opened the menu from: its value to copy. */
   copyCell?: { label: string; text: string } | null
   session: MinionSessionFieldsFragment
@@ -1134,6 +1151,8 @@ function SessionMenu({
         <CopyIcon />
         Copy session id
       </ContextMenuItem>
+      <ContextMenuSeparator />
+      <TableMenuItems {...table} />
     </>
   )
 }
