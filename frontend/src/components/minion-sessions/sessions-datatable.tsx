@@ -32,6 +32,7 @@ import {
   MonitorDotIcon,
   CopyIcon,
   ListRestartIcon,
+  MoveHorizontalIcon,
   ListChecksIcon,
   LoaderIcon,
   PencilIcon,
@@ -109,9 +110,12 @@ import {
   describeFilter,
   filterOf,
   moveColumn,
+  columnTrack,
+  rowMinWidth,
   setFilter,
   setSort,
   shiftColumn,
+  sizeColumn,
   toggleColumn,
   type SessionColumnDef,
   type SessionColumnId,
@@ -128,8 +132,20 @@ import { ConnectTargetMenu } from "./connect-target-menu"
 // sorts; the layout is saved on the operator (useMinionSessionsLayout).
 
 const SKELETON_ROWS = 5
-const MENU_TRACK = "2.25rem"
-const CHECK_TRACK = "1.25rem"
+const MENU_PX = 36
+const CHECK_PX = 20
+const MENU_TRACK = `${MENU_PX}px`
+const CHECK_TRACK = `${CHECK_PX}px`
+// A pinned cell ([data-pinned]) covers what scrolls under it, under any mark
+// (session-mark-styles.css).
+// Pinned at the scroller's edge, over the row's px-4: the cell takes the
+// padding in (margin out, padding in), so it keeps its space and covers what
+// scrolls under it; the row's py-2 too, so it is the row's height.
+// The bar down the left edge of the row whose tab is in front.
+const ACTIVE_BAR = "before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary"
+const PIN_LEFT = "left-0 -ml-4 pl-4 -my-2 py-2 grid items-center self-stretch"
+const PIN_RIGHT = "right-0 -mr-4 pr-4 -my-2 py-2 flex items-center self-stretch"
+const PINNED_HEADER = "sticky z-[2] bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]"
 
 /** Where a column's filter editor is open: the column, and the element it hangs from. */
 interface FilterTarget {
@@ -249,8 +265,21 @@ export function SessionsDatatable({
   }, [activeSessionId])
 
   const columns = useMemo(() => layout.columns.map((id) => SESSION_COLUMN_BY_ID.get(id)!), [layout.columns])
-  const template = [...(selecting ? [CHECK_TRACK] : []), ...columns.map((c) => c.width), MENU_TRACK].join(" ")
-  const grid = { gridTemplateColumns: template }
+  // A column being sized: its width as dragged, kept in the layout on release.
+  const [sizing, setSizing] = useState<{ id: SessionColumnId; px: number; dragging?: boolean } | null>(null)
+  const widths = sizing ? { ...layout.widths, [sizing.id]: sizing.px } : layout.widths
+  // The layout caught up with a released size: the width is its own now
+  // (state adjusted while rendering, as React has it for state from props).
+  if (sizing !== null && !sizing.dragging && layout.widths[sizing.id] === sizing.px) setSizing(null)
+  const template = [...(selecting ? [CHECK_TRACK] : []), ...columns.map((c) => columnTrack(c, widths)), MENU_TRACK].join(" ")
+  // Past the room the window has, the table scrolls sideways, the header with
+  // the rows; # and the menu stay in view.
+  const minWidth = rowMinWidth(columns, widths, [...(selecting ? [CHECK_PX] : []), MENU_PX])
+  const grid = { gridTemplateColumns: template, minWidth }
+  // The cell a right click came from: its value to copy, from the row's menu.
+  const [copyCell, setCopyCell] = useState<{ label: string; text: string } | null>(null)
+  const pinned = (col: SessionColumnDef, i: number) => col.id === "number" && i === 0
+  const pinnedFirst = columns.length > 0 && pinned(columns[0], 0)
 
   const sensors = useSensors(
     // A click sorts; only a drag past 6px moves the column.
@@ -272,8 +301,9 @@ export function SessionsDatatable({
   const showEmpty = !isLoading && sessions.length === 0
   const showList = !isLoading && sessions.length > 0
 
-  const footer = useMemo(
+  const components = useMemo(
     () => ({
+      Header: ListHeader,
       Footer: () => {
         if (isFetchingNextPage) {
           return (
@@ -296,6 +326,85 @@ export function SessionsDatatable({
   )
 
   const filterColumn = filterTarget ? SESSION_COLUMN_BY_ID.get(filterTarget.column)! : null
+
+  // The header: in the list, at its top (it scrolls sideways with the rows,
+  // the browser's own scroll); above the list's place when there is none.
+  const headerBlock = (
+    <ContextMenu>
+      <ContextMenuTrigger
+        // A right click past the cells is about the table, not a column.
+        onContextMenu={(e) => {
+          if (e.target === e.currentTarget) setMenuColumn(null)
+        }}
+        // Opaque: the rows scroll under it. As wide as they are, to the end.
+        className="w-fit min-w-full shrink-0 border-b bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-card))]"
+        render={<div />}
+      >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={layout.columns} strategy={horizontalListSortingStrategy}>
+            <div
+              className="grid gap-3 px-4 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+              style={grid}
+              onContextMenu={(e) => {
+                if (e.target === e.currentTarget) setMenuColumn(null)
+              }}
+            >
+              {selecting && (
+                <Checkbox
+                  aria-label="Select every loaded session"
+                  className="self-center"
+                  checked={selection.all || (order.length > 0 && picked.length === order.length)}
+                  indeterminate={!selection.all && picked.length > 0 && picked.length < order.length}
+                  onCheckedChange={(on) => setSelection(selectLoaded(selection, order, on))}
+                />
+              )}
+              {columns.map((col, i) => (
+                <HeaderCell
+                  key={col.id}
+                  column={col}
+                  pinned={pinned(col, i)}
+                  onSize={(px) => setSizing({ id: col.id, px, dragging: true })}
+                  onSized={(px) => {
+                    const next = sizeColumn(layout, col.id, px)
+                    // Held until the layout has it (it comes a moment later):
+                    // dropped now, the old width showed for a frame.
+                    setSizing(px === null ? null : { id: col.id, px: next.widths[col.id]! })
+                    onLayoutChange(next)
+                  }}
+                  layout={layout}
+                  cellRef={(el) => {
+                    if (el) cells.current.set(col.id, el)
+                    else cells.current.delete(col.id)
+                  }}
+                  onSort={() => onLayoutChange(cycleSort(layout, col.id))}
+                  onFilter={() => openFilter(col.id)}
+                  onContextMenu={() => setMenuColumn(col.id)}
+                />
+              ))}
+              <div className={cn(PINNED_HEADER, PIN_RIGHT, "-my-1.5 py-1.5 justify-self-end")}>
+                <ColumnsButton
+                  layout={layout}
+                  onLayoutChange={onLayoutChange}
+                  archived={archived}
+                  onArchivedChange={onArchivedChange}
+                />
+              </div>
+            </div>
+          </SortableContext>
+        </DndContext>
+      </ContextMenuTrigger>
+      <HeaderMenu
+        column={menuColumn}
+        archived={archived}
+        onArchivedChange={onArchivedChange}
+        layout={layout}
+        onLayoutChange={onLayoutChange}
+        onFilter={(column) => openFilter(column)}
+      />
+    </ContextMenu>
+  )
+  const listContext = { header: headerBlock }
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -342,66 +451,7 @@ export function SessionsDatatable({
       />
       {/* Edge to edge: no card around it, a line where the divider below starts. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-b bg-card">
-        <ContextMenu>
-          <ContextMenuTrigger
-            // A right click past the cells is about the table, not a column.
-            onContextMenu={(e) => {
-              if (e.target === e.currentTarget) setMenuColumn(null)
-            }}
-            className="shrink-0 border-b bg-muted/50"
-            render={<div />}
-          >
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={layout.columns} strategy={horizontalListSortingStrategy}>
-                <div
-                  className="grid gap-3 px-4 py-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                  style={grid}
-                  onContextMenu={(e) => {
-                    if (e.target === e.currentTarget) setMenuColumn(null)
-                  }}
-                >
-                  {selecting && (
-                    <Checkbox
-                      aria-label="Select every loaded session"
-                      className="self-center"
-                      checked={selection.all || (order.length > 0 && picked.length === order.length)}
-                      indeterminate={!selection.all && picked.length > 0 && picked.length < order.length}
-                      onCheckedChange={(on) => setSelection(selectLoaded(selection, order, on))}
-                    />
-                  )}
-                  {columns.map((col) => (
-                    <HeaderCell
-                      key={col.id}
-                      column={col}
-                      layout={layout}
-                      cellRef={(el) => {
-                        if (el) cells.current.set(col.id, el)
-                        else cells.current.delete(col.id)
-                      }}
-                      onSort={() => onLayoutChange(cycleSort(layout, col.id))}
-                      onFilter={() => openFilter(col.id)}
-                      onContextMenu={() => setMenuColumn(col.id)}
-                    />
-                  ))}
-                  <ColumnsButton
-                    layout={layout}
-                    onLayoutChange={onLayoutChange}
-                    archived={archived}
-                    onArchivedChange={onArchivedChange}
-                  />
-                </div>
-              </SortableContext>
-            </DndContext>
-          </ContextMenuTrigger>
-          <HeaderMenu
-            column={menuColumn}
-            archived={archived}
-            onArchivedChange={onArchivedChange}
-            layout={layout}
-            onLayoutChange={onLayoutChange}
-            onFilter={(column) => openFilter(column)}
-          />
-        </ContextMenu>
+        {!showList && headerBlock}
 
         {slowLoad && (
           <div className="space-y-3 p-4 animate-in duration-200 fade-in-0">
@@ -426,7 +476,8 @@ export function SessionsDatatable({
               overscan={200}
               style={{ height: "100%" }}
               className="min-h-0 flex-1"
-              components={footer}
+              components={components}
+              context={listContext}
               itemContent={(_, s) => (
                 <ContextMenuRow
                   gridCols=""
@@ -435,12 +486,13 @@ export function SessionsDatatable({
                   style={{ ...grid, ...markColorVars(s.mark?.color) }}
                   // While selecting, a drag or shift-click does not select text.
                   className={cn(
+                    "group/row",
                     selecting && "select-none",
                     markRowClass(s.mark?.color),
                     pickedSet.has(s.id) && "ring-2 ring-primary/60 ring-inset",
                     // Its tab is in front: a bar down its left edge.
-                    s.id === activeSessionId &&
-                      "relative before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary",
+                    // (On the pinned # cell when there is one: the row's edge scrolls away under it.)
+                    s.id === activeSessionId && !pinnedFirst && cn("relative", ACTIVE_BAR),
                   )}
                   // While selecting, a click picks the row (shift: a range).
                   onOpen={selecting ? (e) => setSelection(toggleSelected(selection, order, s.id, e.shiftKey)) : undefined}
@@ -448,6 +500,7 @@ export function SessionsDatatable({
                   menuButtonSize="icon-xs"
                   menu={
                     <SessionMenu
+                      copyCell={copyCell}
                       session={s}
                       canWrite={canWrite}
                       persistable={persistable(s)}
@@ -479,12 +532,38 @@ export function SessionsDatatable({
                           tabIndex={-1}
                         />
                       )}
-                      {columns.map((col) => (
-                        <div key={col.id} data-cell data-column={col.id} className="min-w-0">
-                          <SessionCell id={col.id} session={s} ctx={ctx} />
-                        </div>
-                      ))}
-                      <div className="justify-self-end">{menuButton}</div>
+                      {columns.map((col, i) => {
+                        const cell = (
+                          <div
+                            key={col.id}
+                            data-cell
+                            data-column={col.id}
+                            className="min-w-0"
+                            // Its value, for the menu's Copy, and in a title when it is cut.
+                            onContextMenu={(e) => setCopyCell({ label: col.label, text: cellText(e.currentTarget) })}
+                            onPointerOver={(e) => titleIfCut(e.currentTarget)}
+                          >
+                            <SessionCell id={col.id} session={s} ctx={ctx} />
+                          </div>
+                        )
+                        // Pinned: in a wrapper that covers what scrolls under it.
+                        return pinned(col, i) ? (
+                          <div key={col.id} data-pinned className={cn(PIN_LEFT, s.id === activeSessionId && ACTIVE_BAR)}>
+                            {s.mark?.color === "on-fire" && <SessionFire />}
+                            {cell}
+                          </div>
+                        ) : (
+                          cell
+                        )
+                      })}
+                      <div
+                        className={cn("justify-self-end", PIN_RIGHT)}
+                        data-pinned
+                        onPointerDownCapture={() => setCopyCell(null)}
+                      >
+                        {s.mark?.color === "on-fire" && <SessionFire />}
+                        {menuButton}
+                      </div>
                       {/* Positioned behind the cells, it takes no place in the grid. */}
                       {s.mark?.color === "on-fire" && <SessionFire />}
                     </>
@@ -530,6 +609,9 @@ export function SessionsDatatable({
  */
 function HeaderCell({
   column,
+  pinned,
+  onSize,
+  onSized,
   layout,
   cellRef,
   onSort,
@@ -537,6 +619,11 @@ function HeaderCell({
   onContextMenu,
 }: {
   column: SessionColumnDef
+  /** Stays in view as the table scrolls sideways. */
+  pinned: boolean
+  /** Its width as dragged; onSized on release (null: back to its own). */
+  onSize: (px: number) => void
+  onSized: (px: number | null) => void
   layout: SessionsLayout
   cellRef: (el: HTMLElement | null) => void
   onSort: () => void
@@ -554,7 +641,9 @@ function HeaderCell({
       }}
       style={{ transform: CSS.Translate.toString(transform), transition }}
       className={cn(
-        "group/header -mx-1 flex min-w-0 cursor-grab items-center gap-0.5 rounded px-1 py-0.5 select-none hover:bg-muted active:cursor-grabbing",
+        "group/header relative -mx-1 flex min-w-0 cursor-grab items-center gap-0.5 rounded px-1 py-0.5 select-none hover:bg-muted active:cursor-grabbing",
+        // Its -mx-1 and the row's padding, as the cells' PIN_LEFT.
+        pinned && cn(PINNED_HEADER, "left-0 -ml-5 pl-5"),
         isDragging && "z-10 bg-muted shadow-sm",
         (sorted || filtered) && "text-foreground",
       )}
@@ -586,8 +675,86 @@ function HeaderCell({
       >
         <FilterIcon className={cn("size-3", filtered && "fill-current")} />
       </button>
+      <ResizeHandle column={column} onSize={onSize} onSized={onSized} />
     </div>
   )
+}
+
+/**
+ * A header's right edge: dragged, it sizes the column; a double click fits
+ * it to the widest value on screen (and its label).
+ */
+function ResizeHandle({
+  column,
+  onSize,
+  onSized,
+}: {
+  column: SessionColumnDef
+  onSize: (px: number) => void
+  onSized: (px: number | null) => void
+}) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${column.label}`}
+      title="Drag to resize; double-click to fit"
+      className="absolute inset-y-0 -right-2 z-[3] w-3 cursor-col-resize after:absolute after:inset-y-1 after:left-1/2 after:w-px after:bg-border after:opacity-0 group-hover/header:after:opacity-100 hover:after:bg-primary"
+      // Its own drag, not the column's move nor a sort.
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        e.preventDefault()
+        const cell = e.currentTarget.parentElement!
+        const start = e.clientX
+        // The column's width: the header cell overhangs it by its -mx-1, 4px a side.
+        const from = cell.getBoundingClientRect().width - 8
+        let px: number | null = null
+        const move = (ev: PointerEvent) => {
+          // A click (or a double click's) is no drag: nothing changes.
+          if (px === null && Math.abs(ev.clientX - start) < 3) return
+          px = Math.max(column.min / 2, from + ev.clientX - start)
+          onSize(px)
+        }
+        const up = () => {
+          window.removeEventListener("pointermove", move)
+          window.removeEventListener("pointerup", up)
+          if (px !== null) onSized(px)
+        }
+        window.addEventListener("pointermove", move)
+        window.addEventListener("pointerup", up)
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.stopPropagation()
+        const label = e.currentTarget.parentElement!.querySelector("span")
+        let widest = (label?.scrollWidth ?? 0) + 40
+        for (const el of document.querySelectorAll<HTMLElement>(`[data-cell][data-column="${column.id}"]`)) {
+          widest = Math.max(widest, contentWidth(el))
+        }
+        onSized(widest + 8)
+      }}
+    />
+  )
+}
+
+/** How wide a cell's content would be uncut. */
+function contentWidth(cell: HTMLElement): number {
+  let w = cell.scrollWidth
+  for (const el of cell.querySelectorAll<HTMLElement>("*")) w = Math.max(w, el.scrollWidth)
+  return w
+}
+
+/** A cell's value as text, for Copy. */
+function cellText(cell: HTMLElement): string {
+  const t = (cell.title || cell.querySelector<HTMLElement>("[title]")?.title || cell.innerText).trim()
+  return t === "—" ? "" : t
+}
+
+/** Gives a cell whose text is cut its whole text as a title, unless it has one. */
+function titleIfCut(cell: HTMLElement) {
+  if (cell.querySelector("[title]") || cell.title) return
+  const cut = [...cell.querySelectorAll<HTMLElement>("*")].some((el) => el.scrollWidth > el.clientWidth + 1)
+  if (cut) cell.title = cell.innerText.trim()
 }
 
 /** The header's right-click menu: about the column clicked, then the table. */
@@ -661,6 +828,12 @@ function HeaderMenu({
             <ArrowRightIcon />
             Move right
           </ContextMenuItem>
+          {layout.widths[col.id] && (
+            <ContextMenuItem onClick={() => onLayoutChange(sizeColumn(layout, col.id, null))}>
+              <MoveHorizontalIcon />
+              Reset width
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             disabled={layout.columns.length === 1}
             onClick={() => onLayoutChange(toggleColumn(layout, col.id))}
@@ -847,7 +1020,10 @@ function SessionMenu({
   onMark,
   onInteract,
   onFileBrowser,
+  copyCell,
 }: {
+  /** The cell a right click opened the menu from: its value to copy. */
+  copyCell?: { label: string; text: string } | null
   session: MinionSessionFieldsFragment
   canWrite: boolean
   persistable: boolean
@@ -872,6 +1048,15 @@ function SessionMenu({
       : undefined
   return (
     <>
+      {copyCell?.text && (
+        <>
+          <ContextMenuItem onClick={() => void copyToClipboard(copyCell.text, copyCell.label.toLowerCase())}>
+            <CopyIcon />
+            Copy {copyCell.label.toLowerCase()}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      )}
       <ContextMenuItem onClick={onInteract}>
         <SquareTerminalIcon />
         Interact
@@ -1048,4 +1233,9 @@ const markDialogCode = preloadable(() => import("./session-mark-dialog"))
 function MarkDialog({ target, onClose }: { target: SessionMarkTarget | null; onClose: () => void }) {
   const code = useLoaded(markDialogCode)
   return code && <code.SessionMarkDialog target={target} onClose={onClose} />
+}
+
+/** The list's header, pinned to its top as the rows scroll under it (Virtuoso's Header, its context's). */
+function ListHeader({ context }: { context?: { header: ReactNode } }) {
+  return <div className="sticky top-0 z-[5]">{context?.header}</div>
 }

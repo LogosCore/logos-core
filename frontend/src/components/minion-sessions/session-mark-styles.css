@@ -35,7 +35,8 @@
 .mark-fx-solid * {
   color: var(--fx-fg);
 }
-.mark-fx-ink > [data-cell] {
+.mark-fx-ink > [data-cell],
+.mark-fx-ink > [data-pinned] > [data-cell] {
   background-image: var(--fx-ink);
   background-size: var(--fx-ink-size, auto);
   -webkit-background-clip: text;
@@ -206,7 +207,10 @@
 }
 /* The scanlines, over the text as on a screen. */
 .mark-fx-haxor::after,
-.mark-fx-amber-crt::after {
+.mark-fx-amber-crt::after,
+/* A pinned cell (over the row's lines) has them too: the row's height, so in step. */
+.mark-fx-haxor [data-pinned]::after,
+.mark-fx-amber-crt [data-pinned]::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -466,14 +470,17 @@
 
 /* Ghost: faded and blurred, back in focus on hover. For the dead. Cell by
  * cell, not the row: Last seen stays sharp. */
-.mark-fx-ghost > :not([data-column="lastSeen"]) {
+/* A pinned cell's cover stays solid: what is in it fades. */
+.mark-fx-ghost > :not([data-column="lastSeen"], [data-pinned]),
+.mark-fx-ghost > [data-pinned] > * {
   opacity: 0.45;
   filter: blur(0.6px) grayscale(1);
   transition:
     opacity 0.3s,
     filter 0.3s;
 }
-.mark-fx-ghost:hover > * {
+.mark-fx-ghost:hover > :not([data-pinned]),
+.mark-fx-ghost:hover > [data-pinned] > * {
   opacity: 1;
   filter: none;
 }
@@ -524,4 +531,28 @@
   .mark-fx *::after {
     animation-play-state: paused !important;
   }
+}
+
+/*
+ * A pinned cell (the table's # and ⋯, sticky as it scrolls sideways) covers
+ * what scrolls under it, always: its own background (the card) with the
+ * row's mark applied to it apart (a fire of its own, in the table): the card, and the row's tint over it (a color
+ * mark's, a style's, the hover's). It is a wrapper of the cell, not the cell:
+ * an ink style paints the cell's own background, clipped to its text, which
+ * a cover in the cell hid, and which showed what was under it.
+ */
+[data-pinned] {
+  position: sticky;
+  z-index: 1;
+  --pin-tint: var(--fx-bg, var(--mark-row, transparent));
+  --pin-tint-hover: var(--fx-bg-hover, var(--mark-row-hover, color-mix(in oklab, var(--muted) 50%, transparent)));
+  background-color: var(--card);
+  background-image: linear-gradient(var(--pin-tint), var(--pin-tint)), var(--fx-wash, none);
+}
+.dark [data-pinned] {
+  --pin-tint: var(--fx-bg, var(--mark-row-dark, transparent));
+  --pin-tint-hover: var(--fx-bg-hover, var(--mark-row-dark-hover, color-mix(in oklab, var(--muted) 50%, transparent)));
+}
+:hover > [data-pinned] {
+  background-image: linear-gradient(var(--pin-tint-hover), var(--pin-tint-hover)), var(--fx-wash-hover, var(--fx-wash, none));
 }

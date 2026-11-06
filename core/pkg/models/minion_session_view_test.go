@@ -43,7 +43,8 @@ func TestMinionSessionsLayoutValidate(t *testing.T) {
 	textTooBig := 20
 	badFx, longFx := "Lightning!", "a"+strings.Repeat("b", 32)
 	fx := "lightning"
-	ok := MinionSessionsLayout{Columns: []string{"number", "host"}, Sort: &MinionSessionSort{Column: "lastSeen", Desc: true}, PromptFx: &fx}
+	ok := MinionSessionsLayout{Columns: []string{"number", "host"}, Sort: &MinionSessionSort{Column: "lastSeen", Desc: true}, PromptFx: &fx,
+		Widths: []MinionSessionColumnWidth{{Column: "host", Px: 240}, {Column: "buildId", Px: 90}}}
 	if err := ok.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +60,10 @@ func TestMinionSessionsLayoutValidate(t *testing.T) {
 		"text too big":          {Columns: []string{"host"}, PaneTextSize: &textTooBig},
 		"prompt fx not a name":  {Columns: []string{"host"}, PromptFx: &badFx},
 		"prompt fx too long":    {Columns: []string{"host"}, PromptFx: &longFx},
+		"width of no column":    {Columns: []string{"host"}, Widths: []MinionSessionColumnWidth{{Column: "nope", Px: 100}}},
+		"width too small":       {Columns: []string{"host"}, Widths: []MinionSessionColumnWidth{{Column: "host", Px: 10}}},
+		"width too big":         {Columns: []string{"host"}, Widths: []MinionSessionColumnWidth{{Column: "host", Px: 5000}}},
+		"sized twice":           {Columns: []string{"host"}, Widths: []MinionSessionColumnWidth{{Column: "host", Px: 100}, {Column: "host", Px: 120}}},
 	} {
 		if l.Validate() == nil {
 			t.Errorf("%s passed", name)

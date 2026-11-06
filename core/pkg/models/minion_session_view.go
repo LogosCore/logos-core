@@ -244,7 +244,22 @@ type MinionSessionsLayout struct {
 	// inferno): any name of PromptFxPattern's form, the app showing the
 	// ones it knows and none for another; nil for none.
 	PromptFx *string `bson:"prompt_fx,omitempty" json:"prompt_fx,omitempty"`
+	// Widths are the columns the operator sized, in pixels
+	// (MinColumnWidth to MaxColumnWidth); the rest take the app's.
+	Widths []MinionSessionColumnWidth `bson:"widths,omitempty" json:"widths,omitempty"`
 }
+
+// MinionSessionColumnWidth is one column's width, as the operator sized it.
+type MinionSessionColumnWidth struct {
+	Column string `bson:"column" json:"column"`
+	Px     int    `bson:"px" json:"px"`
+}
+
+// The widths a column takes when sized.
+const (
+	MinColumnWidth = 32
+	MaxColumnWidth = 1600
+)
 
 // PromptFxPattern is the form of a layout's PromptFx: core keeps the name,
 // the app knows the effects.
@@ -299,6 +314,19 @@ func (l MinionSessionsLayout) Validate() error {
 	}
 	if l.PromptFx != nil && !PromptFxPattern.MatchString(*l.PromptFx) {
 		return fmt.Errorf("layout: promptFx must match %s", PromptFxPattern)
+	}
+	sized := map[string]bool{}
+	for _, w := range l.Widths {
+		if _, ok := MinionSessionColumns[w.Column]; !ok {
+			return fmt.Errorf("layout: a width for no column %q", w.Column)
+		}
+		if sized[w.Column] {
+			return fmt.Errorf("layout: column %q sized twice", w.Column)
+		}
+		sized[w.Column] = true
+		if w.Px < MinColumnWidth || w.Px > MaxColumnWidth {
+			return fmt.Errorf("layout: a column is %d to %d pixels wide", MinColumnWidth, MaxColumnWidth)
+		}
 	}
 	for _, f := range l.Filters {
 		if err := f.Validate(); err != nil {

@@ -394,6 +394,20 @@ type MinionSessionsLayout {
   # none. Core keeps any name of its form (^[a-z][a-z0-9-]{0,31}$); the app
   # shows the effects it knows, none for another.
   promptFx: String
+  # The columns the operator sized, in pixels (32 to 1600); the others take
+  # the app's widths.
+  widths: [MinionSessionColumnWidth!]!
+}
+
+# One column's width, as the operator sized it.
+type MinionSessionColumnWidth {
+  column: String!
+  px: Int!
+}
+
+input MinionSessionColumnWidthInput {
+  column: String!
+  px: Int!
 }
 
 input MinionSessionsLayoutInput {
@@ -405,6 +419,7 @@ input MinionSessionsLayoutInput {
   filesSplit: Float
   paneTextSize: Int
   promptFx: String
+  widths: [MinionSessionColumnWidthInput!]
 }
 
 type MinionSessionEvent {

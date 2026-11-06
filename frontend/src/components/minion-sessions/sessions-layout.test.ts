@@ -5,7 +5,13 @@ import { applyMinionSessionEvent, minionSessionKeys, type MinionSessionListParam
 import { REFRESH_WINDOW_MS } from "@/lib/live-lists"
 import {
   DEFAULT_SESSIONS_LAYOUT,
+  MAX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
   SESSION_COLUMN_BY_ID,
+  columnTrack,
+  rowMinWidth,
+  sessionsLayoutInput,
+  sizeColumn,
   addressMatcher,
   formatAgo,
   formatAgoExact,
@@ -54,7 +60,7 @@ describe("layout", () => {
   })
 
   test("columns move, show and hide; the last one stays", () => {
-    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null }
+    const l: SessionsLayout = { columns: ["number", "host", "os"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {} }
     expect(moveColumn(l, "os", "number").columns).toEqual(["os", "number", "host"])
     expect(shiftColumn(l, "host", 1).columns).toEqual(["number", "os", "host"])
     expect(shiftColumn(l, "number", -1)).toBe(l)
@@ -62,7 +68,7 @@ describe("layout", () => {
     expect(toggleColumn(l, "pid", "host").columns).toEqual(["number", "host", "pid", "os"])
     expect(toggleColumn(l, "pid", "os").columns).toEqual(["number", "host", "os", "pid"])
     expect(toggleColumn(l, "host").columns).toEqual(["number", "os"])
-    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null }
+    const one: SessionsLayout = { columns: ["host"], sort: null, filters: [], split: null, consoleSplit: null, filesSplit: null, paneTextSize: null, promptFx: null, widths: {} }
     expect(toggleColumn(one, "host")).toBe(one)
   })
 
@@ -295,5 +301,34 @@ describe("live updates", () => {
     applyMinionSessionEvent(qc, "CREATED", session("b"))
     vi.advanceTimersByTime(REFRESH_WINDOW_MS)
     expect(invalidate).toHaveBeenCalledWith({ queryKey: minionSessionKeys.lists(), exact: false })
+  })
+})
+
+describe("column widths", () => {
+  const host = SESSION_COLUMN_BY_ID.get("host")!
+  const number = SESSION_COLUMN_BY_ID.get("number")!
+
+  test("a track: the sized width, else the min and a share", () => {
+    expect(columnTrack(host, {})).toBe(`minmax(${host.min}px,${host.grow}fr)`)
+    expect(columnTrack(host, { host: 300 })).toBe("300px")
+    expect(columnTrack(number, {})).toBe(`${number.min}px`)
+  })
+
+  test("the row's min width: tracks, gaps and padding", () => {
+    expect(rowMinWidth([number, host], { host: 300 }, [36])).toBe(number.min + 300 + 36 + 12 * 2 + 32)
+  })
+
+  test("sized within bounds, reset, and kept through a save", () => {
+    const l = readSessionsLayout(null)
+    expect(sizeColumn(l, "host", 10).widths.host).toBe(MIN_COLUMN_WIDTH)
+    expect(sizeColumn(l, "host", 99999).widths.host).toBe(MAX_COLUMN_WIDTH)
+    const sized = sizeColumn(l, "host", 250.4)
+    expect(sized.widths.host).toBe(250)
+    expect(sizeColumn(sized, "host", null).widths).toEqual({})
+    expect(sessionsLayoutInput(sized).widths).toEqual([{ column: "host", px: 250 }])
+    const stored = { ...sessionsLayoutInput(sized), widths: [{ column: "host", px: 250 }, { column: "gone", px: 90 }, { column: "pid", px: 5 }] }
+    expect(readSessionsLayout(stored as never).widths).toEqual({ host: 250 })
+    // A layout set here, read back from the cache as stored: its map.
+    expect(readSessionsLayout({ ...sized } as never).widths).toEqual({ host: 250 })
   })
 })

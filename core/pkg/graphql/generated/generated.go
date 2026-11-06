@@ -777,6 +777,11 @@ type ComplexityRoot struct {
 		X                func(childComplexity int) int
 	}
 
+	MinionSessionColumnWidth struct {
+		Column func(childComplexity int) int
+		Px     func(childComplexity int) int
+	}
+
 	MinionSessionConnection struct {
 		Edges      func(childComplexity int) int
 		PageInfo   func(childComplexity int) int
@@ -841,6 +846,7 @@ type ComplexityRoot struct {
 		PromptFx     func(childComplexity int) int
 		Sort         func(childComplexity int) int
 		Split        func(childComplexity int) int
+		Widths       func(childComplexity int) int
 	}
 
 	MinionStreamLink struct {
@@ -5336,6 +5342,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionSession.X(childComplexity), true
 
+	case "MinionSessionColumnWidth.column":
+		if e.ComplexityRoot.MinionSessionColumnWidth.Column == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionColumnWidth.Column(childComplexity), true
+	case "MinionSessionColumnWidth.px":
+		if e.ComplexityRoot.MinionSessionColumnWidth.Px == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionColumnWidth.Px(childComplexity), true
+
 	case "MinionSessionConnection.edges":
 		if e.ComplexityRoot.MinionSessionConnection.Edges == nil {
 			break
@@ -5578,6 +5597,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionSessionsLayout.Split(childComplexity), true
+	case "MinionSessionsLayout.widths":
+		if e.ComplexityRoot.MinionSessionsLayout.Widths == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionSessionsLayout.Widths(childComplexity), true
 
 	case "MinionStreamLink.expiresAt":
 		if e.ComplexityRoot.MinionStreamLink.ExpiresAt == nil {
@@ -11012,6 +11037,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputImportLocalPreferencesInput,
 		ec.unmarshalInputLoginInput,
 		ec.unmarshalInputMarkHashCrackedInput,
+		ec.unmarshalInputMinionSessionColumnWidthInput,
 		ec.unmarshalInputMinionSessionFilterInput,
 		ec.unmarshalInputMinionSessionMarkInput,
 		ec.unmarshalInputMinionSessionMatchInput,
@@ -13600,6 +13626,20 @@ type MinionSessionsLayout {
   # none. Core keeps any name of its form (^[a-z][a-z0-9-]{0,31}$); the app
   # shows the effects it knows, none for another.
   promptFx: String
+  # The columns the operator sized, in pixels (32 to 1600); the others take
+  # the app's widths.
+  widths: [MinionSessionColumnWidth!]!
+}
+
+# One column's width, as the operator sized it.
+type MinionSessionColumnWidth {
+  column: String!
+  px: Int!
+}
+
+input MinionSessionColumnWidthInput {
+  column: String!
+  px: Int!
 }
 
 input MinionSessionsLayoutInput {
@@ -13611,6 +13651,7 @@ input MinionSessionsLayoutInput {
   filesSplit: Float
   paneTextSize: Int
   promptFx: String
+  widths: [MinionSessionColumnWidthInput!]
 }
 
 type MinionSessionEvent {
@@ -36475,6 +36516,64 @@ func (ec *executionContext) fieldContext_MinionSession_bindTarget(_ context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionSessionColumnWidth_column(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionColumnWidth) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionColumnWidth_column,
+		func(ctx context.Context) (any, error) {
+			return obj.Column, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionColumnWidth_column(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionColumnWidth",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionColumnWidth_px(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionColumnWidth) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionColumnWidth_px,
+		func(ctx context.Context) (any, error) {
+			return obj.Px, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionColumnWidth_px(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionColumnWidth",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSessionConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37875,6 +37974,41 @@ func (ec *executionContext) fieldContext_MinionSessionsLayout_promptFx(_ context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionSessionsLayout_widths(ctx context.Context, field graphql.CollectedField, obj *model.MinionSessionsLayout) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionSessionsLayout_widths,
+		func(ctx context.Context) (any, error) {
+			return obj.Widths, nil
+		},
+		nil,
+		ec.marshalNMinionSessionColumnWidth2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidthᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionSessionsLayout_widths(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionSessionsLayout",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "column":
+				return ec.fieldContext_MinionSessionColumnWidth_column(ctx, field)
+			case "px":
+				return ec.fieldContext_MinionSessionColumnWidth_px(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionSessionColumnWidth", field.Name)
 		},
 	}
 	return fc, nil
@@ -50532,6 +50666,8 @@ func (ec *executionContext) fieldContext_Mutation_setMinionSessionsLayout(ctx co
 				return ec.fieldContext_MinionSessionsLayout_paneTextSize(ctx, field)
 			case "promptFx":
 				return ec.fieldContext_MinionSessionsLayout_promptFx(ctx, field)
+			case "widths":
+				return ec.fieldContext_MinionSessionsLayout_widths(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -59656,6 +59792,8 @@ func (ec *executionContext) fieldContext_Query_minionSessionsLayout(_ context.Co
 				return ec.fieldContext_MinionSessionsLayout_paneTextSize(ctx, field)
 			case "promptFx":
 				return ec.fieldContext_MinionSessionsLayout_promptFx(ctx, field)
+			case "widths":
+				return ec.fieldContext_MinionSessionsLayout_widths(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MinionSessionsLayout", field.Name)
 		},
@@ -76157,6 +76295,43 @@ func (ec *executionContext) unmarshalInputMarkHashCrackedInput(ctx context.Conte
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputMinionSessionColumnWidthInput(ctx context.Context, obj any) (model.MinionSessionColumnWidthInput, error) {
+	var it model.MinionSessionColumnWidthInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"column", "px"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "column":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("column"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Column = data
+		case "px":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("px"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Px = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputMinionSessionFilterInput(ctx context.Context, obj any) (model.MinionSessionFilterInput, error) {
 	var it model.MinionSessionFilterInput
 	if obj == nil {
@@ -76379,7 +76554,7 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"columns", "sort", "filters", "split", "consoleSplit", "filesSplit", "paneTextSize", "promptFx"}
+	fieldsInOrder := [...]string{"columns", "sort", "filters", "split", "consoleSplit", "filesSplit", "paneTextSize", "promptFx", "widths"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -76442,6 +76617,13 @@ func (ec *executionContext) unmarshalInputMinionSessionsLayoutInput(ctx context.
 				return it, err
 			}
 			it.PromptFx = data
+		case "widths":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("widths"))
+			data, err := ec.unmarshalOMinionSessionColumnWidthInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidthInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Widths = data
 		}
 	}
 	return it, nil
@@ -83806,6 +83988,50 @@ func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.Selectio
 	return out
 }
 
+var minionSessionColumnWidthImplementors = []string{"MinionSessionColumnWidth"}
+
+func (ec *executionContext) _MinionSessionColumnWidth(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionColumnWidth) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionSessionColumnWidthImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionSessionColumnWidth")
+		case "column":
+			out.Values[i] = ec._MinionSessionColumnWidth_column(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "px":
+			out.Values[i] = ec._MinionSessionColumnWidth_px(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionSessionConnectionImplementors = []string{"MinionSessionConnection"}
 
 func (ec *executionContext) _MinionSessionConnection(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSessionConnection) graphql.Marshaler {
@@ -84230,6 +84456,11 @@ func (ec *executionContext) _MinionSessionsLayout(ctx context.Context, sel ast.S
 			out.Values[i] = ec._MinionSessionsLayout_paneTextSize(ctx, field, obj)
 		case "promptFx":
 			out.Values[i] = ec._MinionSessionsLayout_promptFx(ctx, field, obj)
+		case "widths":
+			out.Values[i] = ec._MinionSessionsLayout_widths(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -96822,6 +97053,37 @@ func (ec *executionContext) marshalNMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋ
 	return ec._MinionSession(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionSessionColumnWidth2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidthᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionSessionColumnWidth) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionSessionColumnWidth2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidth(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionSessionColumnWidth2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidth(ctx context.Context, sel ast.SelectionSet, v *model.MinionSessionColumnWidth) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionSessionColumnWidth(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNMinionSessionColumnWidthInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidthInput(ctx context.Context, v any) (*model.MinionSessionColumnWidthInput, error) {
+	res, err := ec.unmarshalInputMinionSessionColumnWidthInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNMinionSessionConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionConnection(ctx context.Context, sel ast.SelectionSet, v model.MinionSessionConnection) graphql.Marshaler {
 	return ec._MinionSessionConnection(ctx, sel, &v)
 }
@@ -99544,6 +99806,24 @@ func (ec *executionContext) marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋ
 		return graphql.Null
 	}
 	return ec._MinionSession(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOMinionSessionColumnWidthInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidthInputᚄ(ctx context.Context, v any) ([]*model.MinionSessionColumnWidthInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*model.MinionSessionColumnWidthInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNMinionSessionColumnWidthInput2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionColumnWidthInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) unmarshalOMinionSessionFilterInput2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSessionFilterInputᚄ(ctx context.Context, v any) ([]*model.MinionSessionFilterInput, error) {

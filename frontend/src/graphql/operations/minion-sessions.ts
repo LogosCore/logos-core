@@ -217,6 +217,10 @@ export const MinionSessionsLayoutFields = graphql(`
     filesSplit
     paneTextSize
     promptFx
+    widths {
+      column
+      px
+    }
   }
 `)
 

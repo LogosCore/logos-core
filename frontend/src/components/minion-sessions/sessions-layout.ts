@@ -55,7 +55,10 @@ export interface SessionColumnDef {
   /** The first click on the header: newest or largest first for times. */
   initialDirection: SortDirection
   /** A CSS grid track. */
-  width: string
+  /** The narrowest it gets, in pixels: what it shows fits there, mostly. */
+  min: number
+  /** Its share of the room left over (0: none); a sized column takes none. */
+  grow: number
   /**
    * The row's value as the filters and sort read it: a change to it can move
    * the row in or out of, or within, a filtered or sorted list.
@@ -63,12 +66,10 @@ export interface SessionColumnDef {
   value: (s: MinionSessionFieldsFragment) => unknown
 }
 
-const fr = (n: number) => `minmax(0,${n}fr)`
-
 export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
-  { id: "number", label: "#", kind: "number", sortable: true, initialDirection: "DESC", width: "3.5rem", value: (s) => s.number },
+  { id: "number", label: "#", kind: "number", sortable: true, initialDirection: "DESC", min: 56, grow: 0, value: (s) => s.number },
   // Sorts by the address each row shows (MinionSession.address).
-  { id: "addrs", label: "Addresses", kind: "list", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => [s.address, s.addrs] },
+  { id: "addrs", label: "Addresses", kind: "list", sortable: true, initialDirection: "ASC", min: 120, grow: 1, value: (s) => [s.address, s.addrs] },
   // The address the latest message came from (the channel saw it); sorts by
   // that one, filters on any it was seen from. A check-in from the same
   // address moves nothing.
@@ -78,31 +79,31 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
     kind: "list",
     sortable: true,
     initialDirection: "ASC",
-    width: fr(1),
+    min: 120, grow: 1,
     value: (s) => [s.peerAddress, s.peers.map((p) => p.address)],
   },
-  { id: "host", label: "Host", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.2), value: (s) => s.host },
+  { id: "host", label: "Host", kind: "text", sortable: true, initialDirection: "ASC", min: 140, grow: 1.2, value: (s) => s.host },
   // The user, with the integrity level it runs at: its filter matches either.
-  { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1), value: (s) => [s.user, s.integrity] },
-  { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.domain },
-  { id: "proc", label: "Process", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.1), value: (s) => s.proc },
+  { id: "user", label: "User", kind: "text", sortable: true, initialDirection: "ASC", min: 120, grow: 1, value: (s) => [s.user, s.integrity] },
+  { id: "domain", label: "Domain", kind: "text", sortable: true, initialDirection: "ASC", min: 100, grow: 0.9, value: (s) => s.domain },
+  { id: "proc", label: "Process", kind: "text", sortable: true, initialDirection: "ASC", min: 120, grow: 1.1, value: (s) => s.proc },
   // What tells apart machines with the same host and user (source:value).
-  { id: "machine", label: "Machine", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.2), value: (s) => s.machineId },
-  { id: "pid", label: "PID", kind: "number", sortable: true, initialDirection: "ASC", width: fr(0.5), value: (s) => s.pid },
-  { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.os },
-  { id: "arch", label: "Arch", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.6), value: (s) => s.arch },
-  { id: "version", label: "Minion version", kind: "enum", sortable: true, initialDirection: "DESC", width: fr(0.7), value: (s) => s.version },
-  { id: "lastSeen", label: "Last seen", kind: "time", sortable: true, initialDirection: "DESC", width: fr(0.9), value: (s) => [s.lastSeenAt, s.lateAt, s.lostAt] },
-  { id: "opened", label: "Opened", kind: "time", sortable: true, initialDirection: "DESC", width: fr(0.9), value: (s) => s.createdAt },
-  { id: "build", label: "Build", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.moduleName },
-  { id: "target", label: "Target", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.8), value: (s) => s.target },
-  { id: "platform", label: "Build platform", kind: "enum", sortable: true, initialDirection: "ASC", width: fr(0.9), value: (s) => s.platform },
-  { id: "description", label: "Description", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.description },
-  { id: "buildDescription", label: "Build description", kind: "text", sortable: true, initialDirection: "ASC", width: fr(1.4), value: (s) => s.buildDescription },
-  { id: "buildId", label: "Build id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.buildId },
-  { id: "sessionId", label: "Session id", kind: "id", sortable: false, initialDirection: "ASC", width: fr(1.6), value: (s) => s.id },
-  { id: "persisted", label: "Persisted", kind: "bool", sortable: true, initialDirection: "DESC", width: fr(0.6), value: (s) => s.persisted },
-  { id: "restarts", label: "Restarts", kind: "number", sortable: true, initialDirection: "DESC", width: fr(0.6), value: (s) => s.restartCount },
+  { id: "machine", label: "Machine", kind: "text", sortable: true, initialDirection: "ASC", min: 150, grow: 1.2, value: (s) => s.machineId },
+  { id: "pid", label: "PID", kind: "number", sortable: true, initialDirection: "ASC", min: 64, grow: 0.5, value: (s) => s.pid },
+  { id: "os", label: "OS", kind: "enum", sortable: true, initialDirection: "ASC", min: 110, grow: 0.9, value: (s) => s.os },
+  { id: "arch", label: "Arch", kind: "enum", sortable: true, initialDirection: "ASC", min: 70, grow: 0.6, value: (s) => s.arch },
+  { id: "version", label: "Minion version", kind: "enum", sortable: true, initialDirection: "DESC", min: 100, grow: 0.7, value: (s) => s.version },
+  { id: "lastSeen", label: "Last seen", kind: "time", sortable: true, initialDirection: "DESC", min: 100, grow: 0.9, value: (s) => [s.lastSeenAt, s.lateAt, s.lostAt] },
+  { id: "opened", label: "Opened", kind: "time", sortable: true, initialDirection: "DESC", min: 100, grow: 0.9, value: (s) => s.createdAt },
+  { id: "build", label: "Build", kind: "enum", sortable: true, initialDirection: "ASC", min: 140, grow: 1.4, value: (s) => s.moduleName },
+  { id: "target", label: "Target", kind: "enum", sortable: true, initialDirection: "ASC", min: 90, grow: 0.8, value: (s) => s.target },
+  { id: "platform", label: "Build platform", kind: "enum", sortable: true, initialDirection: "ASC", min: 110, grow: 0.9, value: (s) => s.platform },
+  { id: "description", label: "Description", kind: "text", sortable: true, initialDirection: "ASC", min: 160, grow: 1.4, value: (s) => s.description },
+  { id: "buildDescription", label: "Build description", kind: "text", sortable: true, initialDirection: "ASC", min: 160, grow: 1.4, value: (s) => s.buildDescription },
+  { id: "buildId", label: "Build id", kind: "id", sortable: false, initialDirection: "ASC", min: 110, grow: 1.6, value: (s) => s.buildId },
+  { id: "sessionId", label: "Session id", kind: "id", sortable: false, initialDirection: "ASC", min: 110, grow: 1.6, value: (s) => s.id },
+  { id: "persisted", label: "Persisted", kind: "bool", sortable: true, initialDirection: "DESC", min: 80, grow: 0.6, value: (s) => s.persisted },
+  { id: "restarts", label: "Restarts", kind: "number", sortable: true, initialDirection: "DESC", min: 80, grow: 0.6, value: (s) => s.restartCount },
   // Its minion's unread feedback, errors and warnings together.
   {
     id: "feedback",
@@ -110,10 +111,10 @@ export const SESSION_COLUMNS: readonly SessionColumnDef[] = [
     kind: "number",
     sortable: true,
     initialDirection: "DESC",
-    width: fr(0.7),
+    min: 90, grow: 0.7,
     value: (s) => s.feedbackErrors + s.feedbackWarnings,
   },
-  { id: "staged", label: "Staged", kind: "bool", sortable: true, initialDirection: "DESC", width: fr(0.5), value: (s) => s.staged },
+  { id: "staged", label: "Staged", kind: "bool", sortable: true, initialDirection: "DESC", min: 70, grow: 0.5, value: (s) => s.staged },
 ]
 
 export const SESSION_COLUMN_BY_ID: ReadonlyMap<string, SessionColumnDef> = new Map(
@@ -143,6 +144,8 @@ export interface SessionsLayout {
   paneTextSize: number | null
   /** The console prompt's effect (its /fx); null: none. */
   promptFx: PromptFxName | null
+  /** The columns the operator sized, in pixels; the rest take their min and grow. */
+  widths: Partial<Record<SessionColumnId, number>>
 }
 
 export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
@@ -154,6 +157,7 @@ export const DEFAULT_SESSIONS_LAYOUT: SessionsLayout = {
   filesSplit: null,
   paneTextSize: null,
   promptFx: null,
+  widths: {},
 }
 
 /** Where the divider sits by default, and the range it keeps to (core's too). */
@@ -170,7 +174,9 @@ const isColumn = (id: string): id is SessionColumnId => SESSION_COLUMN_BY_ID.has
  * anything this build does not know (a column renamed or dropped since)
  * left out, so an old layout never breaks the page.
  */
-export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | null | undefined): SessionsLayout {
+export function readSessionsLayout(
+  stored: (Omit<MinionSessionsLayoutFieldsFragment, "widths"> & Partial<Pick<MinionSessionsLayoutFieldsFragment, "widths">>) | null | undefined,
+): SessionsLayout {
   if (!stored) return DEFAULT_SESSIONS_LAYOUT
   const columns = [...new Set(stored.columns.filter(isColumn))]
   const sort =
@@ -192,7 +198,49 @@ export function readSessionsLayout(stored: MinionSessionsLayoutFieldsFragment | 
     filesSplit: share(stored.filesSplit),
     paneTextSize: stored.paneTextSize != null && PANE_TEXT_SIZES.includes(stored.paneTextSize) ? stored.paneTextSize : null,
     promptFx: readPromptFx(stored.promptFx),
+    widths: readWidths(stored.widths),
   }
+}
+
+/** The widths a column may be sized to (core's MinColumnWidth, MaxColumnWidth). */
+export const MIN_COLUMN_WIDTH = 32
+export const MAX_COLUMN_WIDTH = 1600
+
+// The wire's list, or the map a layout set in this app keeps (the query's
+// cache can hand that back as stored, a copy and not the layout set).
+function readWidths(
+  stored: readonly { column: string; px: number }[] | Partial<Record<string, number>> | null | undefined,
+): SessionsLayout["widths"] {
+  const out: SessionsLayout["widths"] = {}
+  const list: readonly { column: string; px: number }[] = Array.isArray(stored)
+    ? stored
+    : Object.entries(stored ?? {}).map(([column, px]) => ({ column, px: Number(px) }))
+  for (const w of list) {
+    if (isColumn(w.column) && w.px >= MIN_COLUMN_WIDTH && w.px <= MAX_COLUMN_WIDTH) out[w.column] = Math.round(w.px)
+  }
+  return out
+}
+
+/** A column's grid track: the width it was sized to, else its min and its share of the rest. */
+export function columnTrack(col: SessionColumnDef, widths: SessionsLayout["widths"]): string {
+  const px = widths[col.id]
+  if (px) return `${px}px`
+  return col.grow > 0 ? `minmax(${col.min}px,${col.grow}fr)` : `${col.min}px`
+}
+
+/** The narrowest a row of these columns gets, in pixels: below it the table scrolls sideways. */
+export function rowMinWidth(columns: readonly SessionColumnDef[], widths: SessionsLayout["widths"], extraTracks: number[]): number {
+  const tracks = [...columns.map((c) => widths[c.id] ?? c.min), ...extraTracks]
+  // gap-3 between tracks, px-4 on both sides.
+  return tracks.reduce((a, b) => a + b, 0) + 12 * (tracks.length - 1) + 32
+}
+
+/** The layout with one column sized (null: back to its own width). */
+export function sizeColumn(layout: SessionsLayout, id: SessionColumnId, px: number | null): SessionsLayout {
+  const widths = { ...layout.widths }
+  if (px === null) delete widths[id]
+  else widths[id] = Math.round(Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, px)))
+  return { ...layout, widths }
 }
 
 /** The layout as the mutation takes it. */
@@ -206,6 +254,7 @@ export function sessionsLayoutInput(layout: SessionsLayout) {
     filesSplit: layout.filesSplit,
     paneTextSize: layout.paneTextSize,
     promptFx: layout.promptFx,
+    widths: Object.entries(layout.widths).map(([column, px]) => ({ column, px: px! })),
   }
 }
 
