@@ -57,7 +57,14 @@ export function SessionFolderTabs({
     onMove(String(active.id), next[at + 1] ?? null)
   }
   return (
-    <div role="tablist" aria-label="Folders" className="flex shrink-0 items-stretch gap-0.5 overflow-x-auto border-b px-2 [scrollbar-width:thin]">
+    // Its bottom line drawn inside it (an inset shadow), under the tabs'
+    // underlines: a tab hanging 1px over a border made it overflow down, and
+    // where scrollbars take room a 1px vertical one showed.
+    <div
+      role="tablist"
+      aria-label="Folders"
+      className="flex shrink-0 items-stretch gap-0.5 overflow-x-auto overflow-y-hidden px-2 shadow-[inset_0_-1px_0_var(--color-border)] [scrollbar-width:thin]"
+    >
       <FolderTab active={current === null} onClick={() => onSelect(null)} title="Every session of the operation">
         <LayersIcon className="size-3.5 shrink-0" aria-hidden />
         All
@@ -108,7 +115,7 @@ function FolderTab({
       title={title}
       onClick={onClick}
       className={cn(
-        "-mb-px flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors",
+        "flex shrink-0 cursor-pointer items-center gap-1.5 border-b-2 px-2.5 py-1.5 text-sm whitespace-nowrap transition-colors",
         active ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
         className,
       )}
