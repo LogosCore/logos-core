@@ -65,7 +65,8 @@ export const minionSessionKeys = {
   infiniteList: (params: MinionSessionListParams) => [...minionSessionKeys.lists(), params] as const,
   values: (operationId: string, column: string) => [...minionSessionKeys.all, "values", operationId, column] as const,
   layout: () => [...minionSessionKeys.all, "layout"] as const,
-  detail: (id: string) => [...minionSessionKeys.all, "detail", id] as const,
+  details: () => [...minionSessionKeys.all, "detail"] as const,
+  detail: (id: string) => [...minionSessionKeys.details(), id] as const,
   connections: (id: string) => [...minionSessionKeys.all, "connections", id] as const,
   runningTasks: (id: string, rev: number) => [...minionSessionKeys.all, "running-tasks", id, rev] as const,
   feedback: (id: string) => [...minionSessionKeys.all, "feedback", id] as const,
@@ -418,6 +419,11 @@ export function useSetMinionSessionsMark() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (vars: SetMinionSessionsMarkMutationVariables) => graphqlClient(SetMinionSessionsMarkDocument, vars),
-    onSuccess: () => scheduleRefresh(queryClient, minionSessionKeys.lists()),
+    onSuccess: () => {
+      scheduleRefresh(queryClient, minionSessionKeys.lists())
+      // The sessions read one by one (the work pane's tabs, a Details) are
+      // read again too: which of them the marks reached, the answer does not say.
+      void queryClient.invalidateQueries({ queryKey: minionSessionKeys.details() })
+    },
   })
 }

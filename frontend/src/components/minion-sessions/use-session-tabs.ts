@@ -2,27 +2,38 @@ import { useCallback, useState } from "react"
 import { NO_TABS, readTabs, type WorkPaneTabs } from "@/components/work-pane/work-pane-tabs"
 
 // The session tabs of an operation's work pane, kept in this browser: an
-// operator's desk, not the team's, and a reload or a later visit finds them
-// as left. Storage can be missing or refuse (a private window): the tabs
-// then last as long as the page.
+// operator's desk, not the team's. Each browser tab keeps its own
+// (sessionStorage: a reload finds them as left, another browser tab has
+// others); a new browser tab, or a later visit, starts from the last a tab
+// left (localStorage). Storage can be missing or refuse (a private window):
+// the tabs then last as long as the page.
 
 const key = (operationId: string) => `logos.sessionTabs.${operationId}`
 
-function load(operationId: string): WorkPaneTabs {
+function read(storage: Storage, operationId: string): WorkPaneTabs | null {
+  const raw = storage.getItem(key(operationId))
+  return raw === null ? null : readTabs(JSON.parse(raw))
+}
+
+/** The tabs this browser tab had, else those the last one left. */
+export function load(operationId: string): WorkPaneTabs {
   try {
-    const raw = localStorage.getItem(key(operationId))
-    return raw ? readTabs(JSON.parse(raw)) : NO_TABS
+    return read(sessionStorage, operationId) ?? read(localStorage, operationId) ?? NO_TABS
   } catch {
     return NO_TABS
   }
 }
 
-function save(operationId: string, tabs: WorkPaneTabs) {
-  try {
-    if (tabs.ids.length === 0) localStorage.removeItem(key(operationId))
-    else localStorage.setItem(key(operationId), JSON.stringify(tabs))
-  } catch {
-    // Kept for the page only.
+/** Keeps the tabs for this browser tab, and for the next one to open. */
+export function save(operationId: string, tabs: WorkPaneTabs) {
+  for (const storage of [sessionStorage, localStorage]) {
+    try {
+      // This tab's, even with none open: a reload keeps it empty, as left.
+      if (tabs.ids.length === 0 && storage === localStorage) storage.removeItem(key(operationId))
+      else storage.setItem(key(operationId), JSON.stringify(tabs))
+    } catch {
+      // Kept for the page only.
+    }
   }
 }
 

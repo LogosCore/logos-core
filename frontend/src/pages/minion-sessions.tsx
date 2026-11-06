@@ -8,6 +8,7 @@ import {
   useInfiniteMinionSessions,
   useMinionSessionChangedSubscription,
   useMinionSessionsLayout,
+  useMinionSession,
 } from "@/graphql/hooks/minion-sessions"
 import { GettingStartedPanel } from "@/components/onboarding/getting-started-panel"
 import { SessionsDatatable } from "@/components/minion-sessions/sessions-datatable"
@@ -25,17 +26,29 @@ import { fileBrowserTabId, workspaceTab } from "@/components/minion-sessions/wor
  */
 export function MinionSessionsPage() {
   const scopedOperation = useScopedOperation()
-
-  usePageMetadata({
-    title: scopedOperation ? `Sessions · ${scopedOperation.name}` : "Sessions",
-    icon: { kind: "lucide", component: MonitorDotIcon },
-  })
-
-  if (!scopedOperation) return <GettingStartedPanel />
-  return <MinionSessionsPageInner operationId={scopedOperation.id} />
+  if (!scopedOperation) return <NoOperation />
+  return <MinionSessionsPageInner operationId={scopedOperation.id} operationName={scopedOperation.name} />
 }
 
-function MinionSessionsPageInner({ operationId }: { operationId: string }) {
+function NoOperation() {
+  usePageMetadata({ title: "Sessions", icon: { kind: "lucide", component: MonitorDotIcon } })
+  return <GettingStartedPanel />
+}
+
+/** The page's title: the tab in front's session (or its file browser), then the page's. */
+function useSessionsTitle(operationName: string, active: string | null) {
+  const tab = active ? workspaceTab(active) : null
+  const { data } = useMinionSession(tab?.sessionId ?? "")
+  const s = tab ? data?.minionSession : null
+  const page = `Sessions · ${operationName}`
+  const who = s ? [String(s.number), s.host].filter(Boolean).join(" ") : null
+  usePageMetadata({
+    title: who ? `${tab?.kind === "files" ? `Files ${who}` : who} · ${page}` : page,
+    icon: { kind: "lucide", component: MonitorDotIcon },
+  })
+}
+
+function MinionSessionsPageInner({ operationId, operationName }: { operationId: string; operationName: string }) {
   const icons = useFactoryIcons()
   const { canWrite } = useCanBuild(operationId)
   // Columns, sort and filters are the operator's layout, saved in core for
@@ -54,6 +67,7 @@ function MinionSessionsPageInner({ operationId }: { operationId: string }) {
   const narrowed = layout.filters.length > 0
   // The sessions being worked with, below: an operator's own, in this browser.
   const [tabs, setTabs] = useSessionTabs(operationId)
+  useSessionsTitle(operationName, tabs.active)
 
   return (
     // No padding: the table runs edge to edge, from the sidebar to the
