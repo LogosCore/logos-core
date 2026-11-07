@@ -11,6 +11,7 @@ export const MinionListenerFields = graphql(`
     listen
     bound
     udp
+    front
     to
     sessionId
     sessionNumber

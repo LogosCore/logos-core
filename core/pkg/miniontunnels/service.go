@@ -117,8 +117,10 @@ type Service struct {
 	// tunnels by task.
 	tunnels map[uuid.UUID]*tunnel
 	// rotation: where each session's next message starts sending data,
-	// so every stream has its turn.
+	// so every stream has its turn; rtt, each session's round trip, and
+	// its wake for what goes again (rtt.go).
 	rotation map[uuid.UUID]int
+	rtt      map[uuid.UUID]*rttState
 
 	unsubscribe func()
 	stop        chan struct{}
@@ -129,7 +131,7 @@ type Service struct {
 func New(cfg Config, ports repository.IOperationalPortRepository, tasks Tasks, bus eventbus.IEventBus, logger *zap.Logger) *Service {
 	return &Service{cfg: cfg, ports: ports, tasks: tasks, bus: bus, logger: logger.Named("miniontunnels"),
 		now: func() time.Time { return time.Now().UTC() }, tunnels: map[uuid.UUID]*tunnel{}, rotation: map[uuid.UUID]int{},
-		stop: make(chan struct{})}
+		rtt: map[uuid.UUID]*rttState{}, stop: make(chan struct{})}
 }
 
 // WithWaker gives the service the waker: without one, a session's items
@@ -156,18 +158,26 @@ type Opening struct {
 	// and of who opened it.
 	SessionNumber int
 	ByName        string
-	// Purpose is what core puts in front of the port: a SOCKS proxy
-	// (models.OperationalPurposeSOCKS, the default) or a port forward to
-	// Host:HostPort (models.OperationalPurposeForward). A reverse port
-	// forward (OpenReverse) has no port: the minion listens at Bind:Listen,
-	// and core connects its streams to Host:HostPort.
+	// Purpose is what core puts in front of the port, the task's front: a
+	// SOCKS proxy (models.OperationalPurposeSOCKS, the default), an HTTP
+	// proxy (OperationalPurposeHTTP) or a port forward to Host:HostPort
+	// (OperationalPurposeForward). A reverse tunnel (OpenReverse) has no
+	// port: the minion listens at Bind:Listen, and core does with its
+	// streams what Front says (protocol.FrontForward: connect each to
+	// Host:HostPort; protocol.FrontSOCKS: a SOCKS5 proxy behind a password
+	// core makes).
 	Purpose  string
+	Front    string
 	Host     string
 	HostPort int
 	Bind     string
 	Listen   int
-	// UDP: the minion listens for datagrams (a reverse port forward's).
+	// UDP: a SOCKS proxy takes UDP ASSOCIATE (its command opens udp); a
+	// reverse tunnel's minion listens for datagrams.
 	UDP bool
+	// Cap is the tunnel's bandwidth cap, bytes a second each way; 0 for
+	// none.
+	Cap int64
 	// StopIdle stops the task once no stream has been open that long (its
 	// stop_idle); 0, never.
 	StopIdle time.Duration
@@ -198,7 +208,7 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 		}
 		rec := &models.OperationalPort{Port: port, Purpose: purpose, Host: o.Host, HostPort: o.HostPort, OperationID: o.Operation, SessionID: o.Session,
 			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle,
-			SessionNumber: o.SessionNumber, OpenedByName: o.ByName}
+			SessionNumber: o.SessionNumber, OpenedByName: o.ByName, UDP: o.UDP && purpose == models.OperationalPurposeSOCKS, Cap: o.Cap}
 		err := s.ports.Insert(ctx, rec)
 		if errors.Is(err, repository.ErrPortTaken) {
 			continue
@@ -247,11 +257,12 @@ func (s *Service) listen(rec *models.OperationalPort, acked bool) (*tunnel, erro
 	s.mu.Unlock()
 	s.done.Add(1)
 	go s.accept(t)
-	if t.purpose == models.OperationalPurposeSOCKS {
-		// UDP ASSOCIATE's relay: SOCKS's alone.
+	if t.purpose == models.OperationalPurposeSOCKS && t.udpRelay {
+		// UDP ASSOCIATE's relay: SOCKS's alone, through a command that
+		// opens udp.
 		s.openRelay(t)
 	}
-	s.logger.Info("tunnels: SOCKS port open", zap.Int("port", rec.Port), zap.String("task_id", rec.TaskID.String()),
+	s.logger.Info("tunnels: port open", zap.Int("port", rec.Port), zap.String("front", rec.Purpose), zap.String("task_id", rec.TaskID.String()),
 		zap.String("session_id", rec.SessionID.String()))
 	return t, nil
 }
@@ -275,7 +286,7 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 			s.drop(st, models.TunnelEndTaskEnded, false)
 		}
 		waiting = t.everyClient()
-		totals = models.MinionTaskTunnel{Streams: t.last, Up: t.up, Down: t.down}
+		totals = models.MinionTaskTunnel{Streams: t.opened, Up: t.up, Down: t.down}
 	}
 	s.mu.Unlock()
 	if t != nil {
@@ -288,6 +299,10 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 		delete(s.tunnels, task)
 		if len(s.ofSession(t.session)) == 0 {
 			delete(s.rotation, t.session)
+			if r := s.rtt[t.session]; r != nil && r.wake != nil {
+				r.wake.Stop()
+			}
+			delete(s.rtt, t.session)
 		}
 		s.mu.Unlock()
 		if t.ln != nil {
@@ -300,7 +315,7 @@ func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 		if t.reverse {
 			s.logger.Info("tunnels: reverse port forward ended", zap.String("task_id", task.String()))
 		} else {
-			s.logger.Info("tunnels: SOCKS port closed", zap.Int("port", t.port), zap.String("task_id", task.String()))
+			s.logger.Info("tunnels: port closed", zap.Int("port", t.port), zap.String("task_id", task.String()))
 		}
 	}
 	if t == nil || !t.reverse {
@@ -380,7 +395,7 @@ func (s *Service) reopen(ctx context.Context, rec *models.OperationalPort) {
 		if err == nil {
 			// It ended while core was down: what it came to, as its port
 			// last kept it.
-			s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Streams, Up: rec.Up, Down: rec.Down})
+			s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Opened, Up: rec.Up, Down: rec.Down})
 		}
 		if err := s.ports.Release(ctx, rec.TaskID); err != nil {
 			s.logger.Warn("tunnels: give back an ended task's port", zap.Error(err))
@@ -395,7 +410,7 @@ func (s *Service) reopen(ctx context.Context, rec *models.OperationalPort) {
 		s.logger.Warn("tunnels: a running tunnel's port does not open again, its task ends", zap.Int("port", rec.Port),
 			zap.String("task_id", rec.TaskID.String()), zap.Error(err))
 		s.cancel(ctx, rec.TaskID, fmt.Sprintf("stopped by core: its port %d did not open again after core restarted", rec.Port))
-		s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Streams, Up: rec.Up, Down: rec.Down})
+		s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Opened, Up: rec.Up, Down: rec.Down})
 		_ = s.ports.Release(ctx, rec.TaskID)
 		s.portChanged(rec.TaskID, rec.OperationID, false, true)
 		return
@@ -589,9 +604,13 @@ func (s *Service) tell() {
 type Summary struct {
 	Port int
 	// Open: its streams now, opening or open; Streams: how many it has
-	// had (the last one's number).
+	// had.
 	Open    int
 	Streams uint64
+	// Cap is its bandwidth cap now, bytes a second each way (0: none).
+	Cap int64
+	// User and Password are what a reverse SOCKS proxy's clients give.
+	User, Password string
 	// Up and Down: the bytes its tools sent through it, and got back.
 	Up, Down int64
 	// Bound is where a reverse port forward's minion says it listens, ""
@@ -612,7 +631,8 @@ func (s *Service) Summary(task uuid.UUID) (Summary, bool) {
 	if t == nil {
 		return Summary{}, false
 	}
-	return Summary{Port: t.port, Open: len(t.streams), Streams: t.last, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt()}, true
+	return Summary{Port: t.port, Open: len(t.streams), Streams: t.opened, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt(),
+		Cap: t.cap, User: t.user, Password: t.password}, true
 }
 
 // View is the task's tunnel as its task shows it: live while core listens

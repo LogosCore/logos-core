@@ -201,12 +201,21 @@ type MinionTunnel {
   # a reverse port forward, which has none.
   port: Int!
   address: String
-  # What it is: socks_proxy (core's SOCKS proxy in front of the port),
-  # port_forward (every connection a stream to to, the forward's
-  # destination, host:port; null for socks) or reverse_port_forward (the
-  # minion listens; core connects each of its streams to to).
-  purpose: String!
+  # What core puts in front, the task's front: socks (core's SOCKS proxy
+  # on the port), http (its HTTP proxy) or forward (every connection a
+  # stream to to, host:port). A reverse tunnel's (reverse: the minion
+  # listens): forward (core connects each of its streams to to) or socks
+  # (a SOCKS5 proxy into core's network, behind user and password).
+  front: String!
+  reverse: Boolean!
   to: String
+  # A reverse SOCKS proxy's clients' user and password, while it runs;
+  # null for any other tunnel, and once it ended.
+  user: String
+  password: String
+  # Its bandwidth cap, bytes a second each way, over all of its streams;
+  # 0 for none. setMinionTunnelCap changes it while it runs.
+  cap: Int!
   # A reverse port forward's: where the minion is to listen, as the task
   # asked (listen 0: any free port), and where it says it does (null until
   # it says). Null for any other tunnel.
@@ -354,6 +363,11 @@ extend type Mutation {
   # to stop (it still sends its end). Nothing for one that ended. Needs
   # operator.
   cancelMinionTask(id: ID!): MinionTask!
+    @hasPermission(permission: "operation:member")
+
+  # Changes a running tunnel task's bandwidth cap: bytes a second each way,
+  # over all of its streams, 0 for none. Needs operator.
+  setMinionTunnelCap(taskId: ID!, cap: Int!): MinionTask!
     @hasPermission(permission: "operation:member")
 
   # A signed link to download a stream_file task's stream (for curl).

@@ -1,4 +1,5 @@
 import type { MinionTaskFieldsFragment, MinionTunnelStreamsQuery } from "@/graphql/gql/graphql"
+import { formatBytes } from "@/lib/format-bytes"
 
 // What a tunnel task's view says (docs: contracts/minion-messages/tunnels.md):
 // the proxy's address in the forms tools take, where it stands, and how
@@ -17,9 +18,19 @@ export function proxyURL(host: string, port: number): string {
   return `socks5h://${hostPort(host, port)}`
 }
 
-/** The proxy as a line of proxychains' [ProxyList]. */
-export function proxychainsLine(host: string, port: number): string {
-  return `socks5 ${host.replace(/^\[|\]$/g, "")} ${port}`
+/** The proxy as a line of proxychains' [ProxyList]: socks5, or http for the HTTP proxy. */
+export function proxychainsLine(host: string, port: number, kind: "socks5" | "http" = "socks5"): string {
+  return `${kind} ${host.replace(/^\[|\]$/g, "")} ${port}`
+}
+
+/** The HTTP proxy as a URL: for HTTP_PROXY and HTTPS_PROXY, curl -x, or a browser. */
+export function httpProxyURL(host: string, port: number): string {
+  return `http://${hostPort(host, port)}`
+}
+
+/** A reverse SOCKS proxy as a URL for a tool on the minion's side: its user and password in it, names resolved at core's end. */
+export function reverseSocksURL(address: string, user: string, password: string): string {
+  return `socks5h://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${address}`
 }
 
 /** Why the minion could not connect, by its reply's result. */
@@ -31,6 +42,7 @@ export const RESULT_LABEL: Record<string, string> = {
   timed_out: "timed out connecting",
   not_allowed: "not allowed: as many streams open as the task takes",
   failed: "failed",
+  unsupported: "unsupported: the minion does not take this open",
 }
 
 /** How a stream ended. */
@@ -86,22 +98,45 @@ export function proxyState(t: Tunnel, taskState: string): { label: string; tone:
   return { label: "Listening", tone: "good", detail: null }
 }
 
-/** What core puts in front of a tunnel's port (its task's tunnel action): a port forward, or else a SOCKS proxy; a reverse port forward listens on the minion's host. */
-export const PORT_FORWARD = "port_forward"
-export const SOCKS_PROXY = "socks_proxy"
-export const REVERSE_PORT_FORWARD = "reverse_port_forward"
+/** What core puts in front of a tunnel (its task's front): a SOCKS proxy, an HTTP proxy, or a port forward; a reverse tunnel's minion listens on its host, and core forwards each connection or speaks SOCKS on it. */
+export const FRONT_SOCKS = "socks"
+export const FRONT_HTTP = "http"
+export const FRONT_FORWARD = "forward"
 
-/** What a tunnel is, for a person. */
-export function frontLabel(purpose: string): string {
-  switch (purpose) {
-    case PORT_FORWARD:
+/** What a tunnel is, for a person: its front, and which way it goes. */
+export function frontLabel(front: string, reverse = false): string {
+  if (reverse) return front === FRONT_SOCKS ? "Reverse SOCKS" : "Reverse port forward"
+  switch (front) {
+    case FRONT_FORWARD:
       return "Port forward"
-    case SOCKS_PROXY:
+    case FRONT_SOCKS:
       return "SOCKS proxy"
-    case REVERSE_PORT_FORWARD:
-      return "Reverse port forward"
+    case FRONT_HTTP:
+      return "HTTP proxy"
   }
-  return purpose.replaceAll("_", " ")
+  return front.replaceAll("_", " ")
+}
+
+/** The most a cap may be: GraphQL's Int, 2 GiB a second. */
+export const MAX_CAP = 2 ** 31 - 1
+
+/** A tunnel's bandwidth cap, for a person: bytes a second each way, or none. */
+export function capLabel(cap: number): string {
+  return cap > 0 ? `${formatBytes(cap)}/s each way` : "none"
+}
+
+/**
+ * A cap as an operator types it: bytes a second, with k, M or G (1024s),
+ * "B" and "/s" optional ("512k", "2 MB/s"); empty, 0 or "none" for none.
+ */
+export function parseCap(text: string): { ok: true; value: number } | { ok: false; error: string } {
+  const t = text.trim().toLowerCase()
+  if (t === "" || t === "none") return { ok: true, value: 0 }
+  const m = /^(\d+(?:\.\d+)?)\s*([kmg]?)i?b?(?:\/s)?$/.exec(t)
+  if (!m) return { ok: false, error: "Bytes a second: 512k, 2M, or 0 for none" }
+  const value = Math.round(Number(m[1]) * 1024 ** "_kmg".indexOf(m[2] || "_"))
+  if (value > MAX_CAP) return { ok: false, error: "2 GiB a second at most" }
+  return { ok: true, value }
 }
 
 /** Where a reverse port forward's minion listens: where it said, else where its task asked. */

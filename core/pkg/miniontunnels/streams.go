@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -43,11 +44,12 @@ const (
 	readPiece = 32 << 10
 )
 
-// tunnel is a tunnel task's: its port, what core puts in front of it (a
-// SOCKS proxy, or a forward to fwdHost:fwdPort), and its streams. A
-// reverse port forward's (reverse) has no port and no listener of core's:
-// the minion listens, at bind:listen as asked and bound as it says, and
-// opens its streams, each of which core connects to fwdHost:fwdPort.
+// tunnel is a tunnel task's: its port, what core puts in front of it (its
+// purpose: a SOCKS proxy, an HTTP proxy, or a forward to fwdHost:fwdPort),
+// and its streams. A reverse tunnel's (reverse) has no port and no
+// listener of core's: the minion listens, at bind:listen as asked and
+// bound as it says, and opens its streams, each of which core connects to
+// fwdHost:fwdPort (its front forward), or serves SOCKS on (socks).
 type tunnel struct {
 	task, session, operation uuid.UUID
 	port                     int
@@ -86,15 +88,36 @@ type tunnel struct {
 	idleSince time.Time
 	idleArmed bool
 	stopping  bool
-	// relay is its UDP relay (udp.go); nil when the port's UDP is taken.
-	relay net.PacketConn
-	// last is the last stream's number; up and down the bytes its tools
-	// sent through it and got back (since a restart: what its port or
-	// listener kept, and on); keptUp and keptDown what was last kept
-	// (keepBytes).
-	last             uint64
-	up, down         int64
-	keptUp, keptDown int64
+	// relay is its UDP relay (udp.go); nil when the port's UDP is taken, or
+	// it takes none (udpRelay: its SOCKS proxy takes UDP ASSOCIATE, as its
+	// command opens udp).
+	relay    net.PacketConn
+	udpRelay bool
+	// front is a reverse tunnel's: what core does with its streams
+	// (protocol.FrontForward, protocol.FrontSOCKS behind user and
+	// password).
+	front, user, password string
+	// last is the last stream's number; blockEnd the last core took for it
+	// (a port's streams are numbered from blocks: nextNumber), numMu
+	// numbering one at a time. opened is how many streams it has opened
+	// (keptOpened, as last kept). up and down the bytes its tools sent
+	// through it and got back (since a restart: what its port or listener
+	// kept, and on); keptUp and keptDown what was last kept (keepBytes).
+	last               uint64
+	blockEnd           uint64
+	numMu              sync.Mutex
+	opened, keptOpened uint64
+	up, down           int64
+	keptUp, keptDown   int64
+	// cap is its bandwidth cap, bytes a second each way (0: none); out and
+	// in what it may still send the minion, and let it send (cap.go);
+	// capWake: a wake is set for when the cap lets it go on.
+	cap     int64
+	out, in bucket
+	capWake bool
+	// extra is what its streams' windows grew past downWindow, together:
+	// at most maxTunnelExtra (rtt.go).
+	extra int
 	// ended are its latest ended streams, to list (kept.go).
 	ended endedStreams
 	// changed: its task's view changed since the last event said so;
@@ -117,9 +140,10 @@ func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel
 		purpose = models.OperationalPurposeSOCKS
 	}
 	return &tunnel{task: rec.TaskID, session: rec.SessionID, operation: rec.OperationID, port: rec.Port, ln: ln,
-		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort, stopIdle: rec.StopIdle,
+		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort, stopIdle: rec.StopIdle, udpRelay: rec.UDP, cap: rec.Cap,
 		maxStreams: maxStreams, connectWait: timeout, acked: acked, streams: map[uint64]*stream{}, handshaking: map[net.Conn]bool{},
-		last: rec.Streams, up: rec.Up, down: rec.Down, keptUp: rec.Up, keptDown: rec.Down}
+		last: rec.Streams, blockEnd: rec.Streams, opened: rec.Opened, keptOpened: rec.Opened, up: rec.Up, down: rec.Down,
+		keptUp: rec.Up, keptDown: rec.Down}
 }
 
 // The command's defaults, as the docs give them, for a task whose args
@@ -159,14 +183,31 @@ func compareUint(a, b uint64) int {
 }
 
 // stream is one of a tunnel's streams, carried by the minion: a client's
-// connection to the port (a SOCKS proxy's or a forward's) or a UDP
-// association, or a connection the minion took at a reverse port forward's
-// listener (a source's datagrams, for a UDP one).
+// connection to the port (a SOCKS proxy's, an HTTP proxy's, a forward's)
+// or a UDP association, or a connection the minion took at a reverse
+// tunnel's listener (a source's datagrams, for a UDP one).
 type stream struct {
 	t      *tunnel
 	id     uint64
 	client net.Conn
 	rec    models.MinionTunnelStream
+	// early: its client's bytes go with its open, before the minion's
+	// reply (a forward's, a plain HTTP request's): a client that speaks
+	// first waits no round trip.
+	early bool
+	// answer is core's reply to a stream the minion opened, said again
+	// should the minion ask again.
+	answer *protocol.TunnelReplyItem
+	// window is the room core gives the minion past its next: downWindow,
+	// grown while the minion fills it and the client keeps up (rtt.go).
+	// capHeld: an ack gave none for the tunnel's cap; another goes once
+	// the cap allows.
+	window  int
+	capHeld bool
+	// rttEnd and rttAt: a round trip being measured, the offset whose ack
+	// ends it and when its bytes went (zero: none).
+	rttEnd uint64
+	rttAt  time.Time
 	// udp: a UDP association's (udp.go); nil for a TCP stream.
 	udp *assoc
 
@@ -265,12 +306,16 @@ func (s *Service) accept(t *tunnel) {
 // it, then its bytes.
 func (s *Service) serve(t *tunnel, c net.Conn) {
 	defer s.done.Done()
-	if t.purpose == models.OperationalPurposeForward {
+	switch t.purpose {
+	case models.OperationalPurposeForward:
 		s.serveForward(t, c)
+		return
+	case models.OperationalPurposeHTTP:
+		s.serveHTTP(t, c)
 		return
 	}
 	_ = c.SetDeadline(time.Now().Add(s.cfg.HandshakeWait))
-	req, err := readRequest(c)
+	req, err := readRequest(c, nil)
 	_ = c.SetDeadline(time.Time{})
 	s.mu.Lock()
 	delete(t.handshaking, c)
@@ -294,7 +339,7 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 		_ = c.Close()
 		return
 	}
-	st, code := s.newStream(t, c, req)
+	st, code := s.newStream(t, c, req, false)
 	if st == nil {
 		_ = req.reply(c, code, "")
 		_ = c.Close()
@@ -342,9 +387,10 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 }
 
 // serveForward is one client of a port forward: no handshake, a stream to
-// the forward's destination at once; its bytes flow once the minion has
-// connected, and a connect that fails resets the client's connection, as
-// the destination refusing it would.
+// the forward's destination at once, its bytes going with the open (the
+// client may speak first: RDP, HTTP, SMB); what comes back flows once the
+// minion has connected, and a connect that fails resets the client's
+// connection, as the destination refusing it would.
 func (s *Service) serveForward(t *tunnel, c net.Conn) {
 	s.mu.Lock()
 	delete(t.handshaking, c)
@@ -360,11 +406,17 @@ func (s *Service) serveForward(t *tunnel, c net.Conn) {
 		reset()
 		return
 	}
-	st, _ := s.newStream(t, c, request{host: t.fwdHost, port: t.fwdPort})
+	st, _ := s.newStream(t, c, request{host: t.fwdHost, port: t.fwdPort}, true)
 	if st == nil {
 		reset()
 		return
 	}
+	// Its bytes go with the open: read on while the minion connects.
+	s.done.Add(1)
+	go func() {
+		defer s.done.Done()
+		s.readClient(st)
+	}()
 	timer := time.NewTimer(t.connectWait + s.cfg.ConnectSlack)
 	defer timer.Stop()
 	select {
@@ -385,12 +437,41 @@ func (s *Service) serveForward(t *tunnel, c net.Conn) {
 	}
 	s.done.Add(1)
 	go s.writeClient(st)
-	s.readClient(st)
+}
+
+// StreamBlock is how many stream numbers core takes for a port's task at a
+// time: one write for that many streams. A restart goes on past the last
+// block taken, so a number is still never used twice.
+const StreamBlock = 1000
+
+// nextNumber is the tunnel's next stream number, from its block, taking
+// another block when it ran out.
+func (s *Service) nextNumber(t *tunnel) (uint64, error) {
+	t.numMu.Lock()
+	defer t.numMu.Unlock()
+	s.mu.Lock()
+	if t.last < t.blockEnd {
+		t.last++
+		id := t.last
+		s.mu.Unlock()
+		return id, nil
+	}
+	s.mu.Unlock()
+	end, err := s.ports.ReserveStreams(context.Background(), t.task, StreamBlock)
+	if err != nil {
+		return 0, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t.blockEnd = end
+	t.last = max(t.last, end-min(end, StreamBlock)) + 1
+	return t.last, nil
 }
 
 // newStream gives the client's connection a stream of the tunnel, to open:
-// nil and the SOCKS code when it may not have one.
-func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
+// nil and the SOCKS code when it may not have one. An early one's bytes go
+// with its open, within the minion's default room.
+func (s *Service) newStream(t *tunnel, c net.Conn, req request, early bool) (*stream, int) {
 	s.mu.Lock()
 	switch {
 	case t.closing:
@@ -402,7 +483,7 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
 	}
 	t.numbering++
 	s.mu.Unlock()
-	id, err := s.ports.NextStream(context.Background(), t.task)
+	id, err := s.nextNumber(t)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t.numbering--
@@ -413,7 +494,7 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
 		return nil, socks5GeneralFailure
 	}
 	st := &stream{t: t, id: id, client: c, replied: make(chan protocol.TunnelReplyItem, 1), done: make(chan struct{}),
-		upSignal: make(chan struct{}, 1), downSignal: make(chan struct{}, 1),
+		upSignal: make(chan struct{}, 1), downSignal: make(chan struct{}, 1), window: downWindow, early: early,
 		rec: models.MinionTunnelStream{TaskID: t.task, Stream: id, Client: c.RemoteAddr().String(), Host: req.host, Port: req.port,
 			OpenedAt: s.now()}}
 	if req.udp {
@@ -424,8 +505,12 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
 		st.udp = &assoc{clientIP: ip}
 		st.rec.UDP, st.rec.Host, st.rec.Port = true, "", 0
 	}
+	if early {
+		st.upLimit = protocol.DefaultTunnelRoom
+	}
 	st.rec.SearchText = models.TunnelStreamSearchText(&st.rec)
 	t.streams[id] = st
+	t.opened++
 	t.streamsChanged(s.now())
 	t.last, t.changed, t.counted = max(t.last, id), true, true
 	s.wake(t.session)
@@ -541,8 +626,12 @@ func (s *Service) writeClient(st *stream) {
 		st.downBytes += int64(len(piece))
 		st.t.down += int64(len(piece))
 		st.t.changed = true
-		// Room given back: said once it is worth an ack.
+		// Room given back: said once it is worth an ack, or more of it
+		// once the window holds the stream back.
 		wake := st.roomGrew()
+		if len(st.down) == 0 && st.grow() {
+			wake = true
+		}
 		session := st.t.session
 		s.mu.Unlock()
 		if wake {
@@ -557,9 +646,9 @@ func (st *stream) roomGrew() bool {
 	if st.ackDue || st.downEOF {
 		return false
 	}
-	room := uint64(downWindow - len(st.down))
+	room := uint64(max(st.window-len(st.down), 0))
 	end := st.downNext + room
-	if end >= st.ackedEnd+downWindow/4 {
+	if end >= st.ackedEnd+uint64(st.window/4) {
 		st.ackDue = true
 		return true
 	}
@@ -601,6 +690,7 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 	st.gone = true
 	close(st.done)
 	delete(st.t.streams, st.id)
+	st.shrink()
 	st.t.streamsChanged(s.now())
 	if st.client != nil {
 		if reset {
@@ -619,10 +709,13 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 }
 
 // Fill adds to a message for the session's minion, through add, what its
-// tunnels have to send, in room bytes and most items: closes, opens, acks,
-// then data, a stream's item in turn while room lasts. It says how many it
-// added, and how soon a minion that polls should come back; polls false:
-// no tunnel of the session's runs.
+// tunnels have to send, in room bytes and most items: replies, closes,
+// opens, acks, then data, a stream's item in turn while room lasts, an
+// early stream's with its open, and no tunnel past its cap. It says how
+// many it added, and how soon a minion that polls should come back; polls
+// false: no tunnel of the session's runs. When something is to go again
+// unasked (an open, bytes the minion did not ack), it has the session
+// woken then.
 func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, add func(cbor.RawMessage) bool) (added int, poll time.Duration, polls bool) {
 	s.checkAcks(ctx, session)
 	s.mu.Lock()
@@ -632,6 +725,7 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 		return 0, 0, false
 	}
 	now := s.now()
+	resend := s.resendAfter(session)
 	f := &filler{room: room, most: most, add: add}
 	work := false
 	for _, t := range tunnels {
@@ -654,14 +748,24 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 			}
 			// The minion's own streams open from its side: core answers
 			// once its connect ends.
-			if !t.reverse && t.acked && st.openDue(now, s.cfg.ResendAfter) && f.put(st.openItem()) {
+			if !t.reverse && t.acked && st.openDue(now, resend) && f.put(st.openItem()) {
 				st.openSent, work = now, true
+			}
+			// An early stream's bytes go once its open went.
+			if st.early && !st.openSent.IsZero() && st.rec.Result == nil {
+				open = append(open, st)
 			}
 		}
 	}
 	for _, st := range open {
-		if st.ackDue && f.put(st.ackItem()) {
-			st.acked()
+		if st.opened && st.ackDue {
+			if a := st.ackItem(now); f.put(a) {
+				st.acked(*a.Room)
+			}
+			if st.capHeld {
+				// No room for the cap: another ack once it allows.
+				s.capLater(st.t, now)
+			}
 		}
 	}
 	if n := len(open); n > 0 {
@@ -671,11 +775,18 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 			moved = false
 			for i := range n {
 				st := open[(start+i)%n]
+				t := st.t
 				if st.udp != nil {
 					if len(st.udp.out) == 0 {
 						continue
 					}
+					if size := len(st.udp.out[0].Data); t.outAllows(now) < size {
+						// Over the tunnel's cap: dropped, as UDP is.
+						st.sentDatagram()
+						continue
+					}
 					if f.put(st.udp.out[0]) {
+						t.sentOut(len(st.udp.out[0].Data))
 						st.sentDatagram()
 						moved, work = true, true
 						continue
@@ -687,30 +798,47 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 					}
 					break
 				}
-				d := st.dataItem(now, f.dataRoom(), s.cfg.ResendAfter)
+				allows := t.outAllows(now)
+				if allows < minPiece {
+					// Over the tunnel's cap: its bytes wait.
+					s.capLater(t, now)
+				}
+				d := st.dataItem(now, min(f.dataRoom(), allows), resend)
 				if d == nil {
 					continue
 				}
 				if !f.put(*d) {
 					break
 				}
+				st.measure(d.End(), d.Off < st.upSent, now)
 				st.sent(*d, now)
+				t.sentOut(len(d.Data))
 				moved, work = true, true
 			}
 		}
 	}
 	pending := false
+	var due time.Time
 	for _, t := range tunnels {
 		pending = pending || len(t.closes) > 0 || len(t.replies) > 0
+		allows := t.outAllows(now)
 		for _, st := range t.streams {
-			pending = pending || (!t.reverse && t.acked && !st.opened && st.openDue(now, s.cfg.ResendAfter)) ||
+			early := st.early && !st.opened && !st.openSent.IsZero() && st.rec.Result == nil
+			pending = pending || (!t.reverse && t.acked && !st.opened && st.openDue(now, resend)) ||
 				(st.opened && st.udp != nil && len(st.udp.out) > 0) ||
-				(st.opened && st.udp == nil && (st.ackDue || st.dataItem(now, protocol.MaxTunnelData, s.cfg.ResendAfter) != nil))
+				(st.opened && st.udp == nil && st.ackDue) ||
+				((st.opened || early) && st.udp == nil && allows >= minPiece && st.dataItem(now, protocol.MaxTunnelData, resend) != nil)
+			if at := st.dueAt(resend); !at.IsZero() && (due.IsZero() || at.Before(due)) {
+				due = at
+			}
 		}
 	}
 	if pending && f.n > 0 {
 		// More than one message holds: the next goes as soon as it may.
 		s.wake(session)
+	}
+	if !due.IsZero() {
+		s.wakeAt(session, due)
 	}
 	switch {
 	case pending || work:
@@ -804,16 +932,21 @@ func (st *stream) openItem() protocol.TunnelItem {
 	return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, Host: st.rec.Host, Port: uint64(st.rec.Port)}
 }
 
-// ackItem says how far core has the minion's bytes, and the room past.
-func (st *stream) ackItem() protocol.TunnelAckItem {
-	room := uint64(downWindow - len(st.down))
+// ackItem says how far core has the minion's bytes, and the room past: no
+// more than the tunnel's cap allows now, none while it is over it (another
+// ack gives more once the cap allows).
+func (st *stream) ackItem(now time.Time) protocol.TunnelAckItem {
+	room := uint64(max(st.window-len(st.down), 0))
+	if allows := st.t.inAllowsNow(now); allows < room {
+		room, st.capHeld = allows, true
+	}
 	return protocol.TunnelAckItem{T: protocol.ItemTunnelAck, Task: st.t.task[:], Stream: st.id, Next: st.downNext, Room: &room}
 }
 
 // acked notes the ack went: the window's end as it said.
-func (st *stream) acked() {
+func (st *stream) acked(room uint64) {
 	st.ackDue = false
-	st.ackedEnd = st.downNext + uint64(downWindow-len(st.down))
+	st.ackedEnd = st.downNext + room
 }
 
 // dataItem is the stream's next tunnel_data in room bytes: what was not
@@ -870,9 +1003,14 @@ func (st *stream) sent(d protocol.TunnelDataItem, now time.Time) {
 func (s *Service) Take(ctx context.Context, session uuid.UUID, raw cbor.RawMessage) (answers []cbor.RawMessage, bad error) {
 	switch protocol.ItemType(raw) {
 	case protocol.ItemTunnel:
-		var it protocol.TunnelItem
-		if err := read(raw, &it); err != nil {
-			return nil, err
+		// Read strictly: an open core does not take as it is gets
+		// unsupported, never a connect it misread.
+		it, err := protocol.ReadTunnel(raw)
+		if err != nil {
+			if !it.Answerable() {
+				return nil, err
+			}
+			return s.refuseOpen(session, it, err)
 		}
 		return s.takeOpen(session, it)
 	case protocol.ItemTunnelListen:
@@ -974,8 +1112,9 @@ func (s *Service) takeReply(session uuid.UUID, r protocol.TunnelReplyItem) ([]cb
 	st.rec.Result, st.rec.Bound, st.rec.Msg = &result, r.Bound, r.Msg
 	if r.Result == protocol.TunnelOpen {
 		st.opened = true
-		st.upLimit = protocol.TunnelRoom(r.Room)
-		st.ackedEnd = downWindow
+		// An early stream's bytes went within the default room already.
+		st.upLimit = max(st.upLimit, protocol.TunnelRoom(r.Room))
+		st.ackedEnd = uint64(st.window)
 	}
 	st.t.changed = true
 	st.replied <- r
@@ -1002,13 +1141,14 @@ func (s *Service) takeData(session uuid.UUID, d protocol.TunnelDataItem) ([]cbor
 		return nil, nil
 	case d.Off > st.downNext:
 		// Its bytes within the room (its eof needs none).
-		if d.Off+uint64(len(d.Data)) <= st.downNext+uint64(downWindow-len(st.down)) && st.aheadBytes+len(d.Data) <= downWindow {
+		if d.Off+uint64(len(d.Data)) <= st.downNext+uint64(max(st.window-len(st.down), 0)) && st.aheadBytes+len(d.Data) <= st.window {
 			d.Data = slices.Clone(d.Data)
 			st.ahead = append(st.ahead, d)
 			st.aheadBytes += len(d.Data)
 		}
 		return nil, nil
 	}
+	before := st.downNext
 	st.take(d)
 	// What came ahead, now at next.
 	for moved := true; moved && !st.downEOF; {
@@ -1028,6 +1168,7 @@ func (s *Service) takeData(session uuid.UUID, d protocol.TunnelDataItem) ([]cbor
 		}
 		st.ahead = kept
 	}
+	st.t.tookIn(int(st.downNext-before), s.now())
 	signal(st.downSignal)
 	return nil, nil
 }
@@ -1037,7 +1178,7 @@ func (s *Service) takeData(session uuid.UUID, d protocol.TunnelDataItem) ([]cbor
 func (st *stream) take(d protocol.TunnelDataItem) {
 	data := d.Data[min(st.downNext-d.Off, uint64(len(d.Data))):]
 	eof := d.EOF
-	if free := downWindow - len(st.down); len(data) > free {
+	if free := max(st.window-len(st.down), 0); len(data) > free {
 		// Past the room core gave: not taken.
 		data, eof = data[:free], false
 	}
@@ -1061,9 +1202,10 @@ func (s *Service) takeAck(session uuid.UUID, a protocol.TunnelAckItem) ([]cbor.R
 		return closeItem(a.Task, a.Stream, reason)
 	}
 	end := st.upBase + uint64(len(st.up))
-	if !st.opened || st.upDone || a.Next < st.upBase || a.Next > end+1 || (a.Next == end+1 && !st.upEOF) {
+	if !(st.opened || st.early) || st.upDone || a.Next < st.upBase || a.Next > end+1 || (a.Next == end+1 && !st.upEOF) {
 		return nil, nil
 	}
+	s.measured(st, a.Next)
 	room := st.upLimit - min(st.upLimit, st.upBase)
 	if a.Room != nil {
 		room = *a.Room

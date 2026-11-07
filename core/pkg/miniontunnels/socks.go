@@ -14,7 +14,8 @@ import (
 // Core's SOCKS front (docs: contracts/minion-messages/tunnels.md, SOCKS):
 // SOCKS5 (RFC 1928) with "no authentication" only, CONNECT and UDP
 // ASSOCIATE, and SOCKS4 / 4a CONNECT. A name goes to the minion as it came;
-// BIND is refused as not supported.
+// BIND is refused as not supported. A reverse SOCKS proxy (rsocks.go) takes
+// SOCKS5 alone, with a user and password (RFC 1929).
 
 // The SOCKS5 replies core gives.
 const (
@@ -51,22 +52,61 @@ var errRefused = errors.New("socks: refused")
 
 // readRequest reads a SOCKS greeting and its CONNECT from c, reading no
 // byte past them (what follows is the stream's). What core does not do it
-// answers itself, and returns errRefused.
-func readRequest(c io.ReadWriter) (request, error) {
+// answers itself, and returns errRefused. With auth, the client must give
+// its user and password: SOCKS5 alone, which has them.
+func readRequest(c io.ReadWriter, auth *socksAuth) (request, error) {
 	var head [2]byte
 	if _, err := io.ReadFull(c, head[:1]); err != nil {
 		return request{}, err
 	}
-	switch head[0] {
-	case 5:
-		return readSOCKS5(c)
-	case 4:
+	switch {
+	case head[0] == 5:
+		return readSOCKS5(c, auth)
+	case head[0] == 4 && auth == nil:
 		return readSOCKS4(c)
+	case head[0] == 4:
+		// SOCKS4 has no password: rejected, once its request is read (a
+		// close with bytes unread would reset the rejection away).
+		if _, err := readSOCKS4(c); err != nil {
+			return request{}, err
+		}
+		_, _ = c.Write([]byte{0, socks4Rejected, 0, 0, 0, 0, 0, 0})
+		return request{}, errRefused
 	}
 	return request{}, fmt.Errorf("socks: version %d", head[0])
 }
 
-func readSOCKS5(c io.ReadWriter) (request, error) {
+// readAuth reads a SOCKS5 user and password (RFC 1929) and answers whether
+// they are auth's.
+func readAuth(c io.ReadWriter, auth *socksAuth) error {
+	var head [2]byte // VER ULEN
+	if _, err := io.ReadFull(c, head[:]); err != nil {
+		return err
+	}
+	if head[0] != 1 {
+		return fmt.Errorf("socks5: auth version %d", head[0])
+	}
+	user := make([]byte, head[1])
+	if _, err := io.ReadFull(c, user); err != nil {
+		return err
+	}
+	var n [1]byte
+	if _, err := io.ReadFull(c, n[:]); err != nil {
+		return err
+	}
+	password := make([]byte, n[0])
+	if _, err := io.ReadFull(c, password); err != nil {
+		return err
+	}
+	if !auth.ok(user, password) {
+		_, _ = c.Write([]byte{1, 1})
+		return errRefused
+	}
+	_, err := c.Write([]byte{1, 0})
+	return err
+}
+
+func readSOCKS5(c io.ReadWriter, auth *socksAuth) (request, error) {
 	var n [1]byte
 	if _, err := io.ReadFull(c, n[:]); err != nil {
 		return request{}, err
@@ -75,17 +115,28 @@ func readSOCKS5(c io.ReadWriter) (request, error) {
 	if _, err := io.ReadFull(c, methods); err != nil {
 		return request{}, err
 	}
-	noAuth := false
-	for _, m := range methods {
-		noAuth = noAuth || m == 0
+	// No authentication (0), or a user and password (2) where core asks
+	// for them.
+	want := byte(0)
+	if auth != nil {
+		want = 2
 	}
-	if !noAuth {
-		// No acceptable method: core takes no credentials.
+	offered := false
+	for _, m := range methods {
+		offered = offered || m == want
+	}
+	if !offered {
+		// No acceptable method.
 		_, _ = c.Write([]byte{5, 0xff})
 		return request{}, errRefused
 	}
-	if _, err := c.Write([]byte{5, 0}); err != nil {
+	if _, err := c.Write([]byte{5, want}); err != nil {
 		return request{}, err
+	}
+	if auth != nil {
+		if err := readAuth(c, auth); err != nil {
+			return request{}, err
+		}
 	}
 	var req [4]byte // VER CMD RSV ATYP
 	if _, err := io.ReadFull(c, req[:]); err != nil {
@@ -293,6 +344,8 @@ func socksCode(result int) int {
 		return socks5TTLExpired
 	case protocol.TunnelNotAllowed:
 		return socks5NotAllowed
+	case protocol.TunnelUnsupported:
+		return socks5CommandNotSupported
 	}
 	return socks5GeneralFailure
 }

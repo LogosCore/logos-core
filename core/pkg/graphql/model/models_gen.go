@@ -722,7 +722,8 @@ type MinionListener struct {
 	Listen        int     `json:"listen"`
 	Bound         *string `json:"bound,omitempty"`
 	UDP           bool    `json:"udp"`
-	To            string  `json:"to"`
+	Front         string  `json:"front"`
+	To            *string `json:"to,omitempty"`
 	SessionID     string  `json:"sessionId"`
 	SessionNumber int     `json:"sessionNumber"`
 	TaskID        string  `json:"taskId"`
@@ -1109,8 +1110,12 @@ type MinionTaskUpload struct {
 type MinionTunnel struct {
 	Port      int     `json:"port"`
 	Address   *string `json:"address,omitempty"`
-	Purpose   string  `json:"purpose"`
+	Front     string  `json:"front"`
+	Reverse   bool    `json:"reverse"`
 	To        *string `json:"to,omitempty"`
+	User      *string `json:"user,omitempty"`
+	Password  *string `json:"password,omitempty"`
+	Cap       int     `json:"cap"`
 	Bind      *string `json:"bind,omitempty"`
 	Listen    *int    `json:"listen,omitempty"`
 	Bound     *string `json:"bound,omitempty"`
@@ -1341,7 +1346,7 @@ type OperationMemberEvent struct {
 type OperationalPort struct {
 	ID            string  `json:"id"`
 	Port          int     `json:"port"`
-	Purpose       string  `json:"purpose"`
+	Front         string  `json:"front"`
 	To            *string `json:"to,omitempty"`
 	Address       *string `json:"address,omitempty"`
 	SessionID     string  `json:"sessionId"`

@@ -90,8 +90,12 @@ export const MinionTaskFields = graphql(`
     tunnel {
       port
       address
-      purpose
+      front
+      reverse
       to
+      user
+      password
+      cap
       bind
       listen
       bound
@@ -221,6 +225,16 @@ export const CancelMinionTaskMutation = graphql(`
   mutation CancelMinionTask($id: ID!) {
     cancelMinionTask(id: $id) {
       ...MinionTaskFields
+    }
+  }
+`)
+
+// A running tunnel's bandwidth cap, bytes a second each way (0: none). The
+// task's live updates bring the tunnel as it is then: its id is enough.
+export const SetMinionTunnelCapMutation = graphql(`
+  mutation SetMinionTunnelCap($taskId: ID!, $cap: Int!) {
+    setMinionTunnelCap(taskId: $taskId, cap: $cap) {
+      id
     }
   }
 `)

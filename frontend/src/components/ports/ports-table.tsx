@@ -66,7 +66,7 @@ export function PortsTable({
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="truncate" title={p.to ? `to ${p.to}` : undefined}>
-                {frontLabel(p.purpose)}
+                {frontLabel(p.front)}
                 {p.to && <span className="font-mono text-xs text-muted-foreground"> → {p.to}</span>}
               </span>
               <span className={cn("text-xs", p.listening ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>

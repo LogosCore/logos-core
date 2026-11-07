@@ -29,9 +29,9 @@ const (
 	maxTunnelStreamPage     = 200
 )
 
-// Tunnel is a tunnel task's proxy: live while core listens for it, from its
-// streams' records once it ended. The task's port is its args' (core put it
-// there when it queued the task).
+// Tunnel is a tunnel task's tunnel: live while core listens for it, what
+// it came to once it ended. Its front, port and destination are its
+// args' (core put them there when it queued the task).
 func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*model.MinionTunnel, error) {
 	if r.tunnels == nil {
 		return nil, nil
@@ -45,28 +45,40 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		return nil, fmt.Errorf("the task's tunnel: %w", err)
 	}
 	args, _ := t.Args.(map[string]any)
+	reverse := t.Action != nil && *t.Action == protocol.ActionReverseTunnel
+	front, _ := protocol.ArgString(args, protocol.ParamFront)
+	if front == "" {
+		front = protocol.FrontSOCKS
+		if reverse {
+			front = protocol.FrontForward
+		}
+	}
 	port := sum.Port
 	if !listening {
-		if p, ok := protocol.ArgInt(args, "port"); ok {
+		if p, ok := protocol.ArgInt(args, protocol.ParamPort); ok {
 			port = int(p)
 		}
 	}
-	m := &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Purpose: models.OperationalPurposeSOCKS, Listening: listening,
-		Open: sum.Open, Streams: int(sum.Streams), Kept: miniontunnels.KeptStreams, Up: int(sum.Up), Down: int(sum.Down), StopsAt: taskTime(stopsAt(sum))}
-	if t.Action != nil && (*t.Action == protocol.ActionPortForward || *t.Action == protocol.ActionReversePortForward) {
+	capNow := sum.Cap
+	if !listening {
+		capNow, _ = protocol.ArgInt(args, protocol.ParamCap)
+	}
+	m := &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Front: front, Reverse: reverse, Listening: listening,
+		Open: sum.Open, Streams: int(sum.Streams), Kept: miniontunnels.KeptStreams, Up: int(sum.Up), Down: int(sum.Down),
+		StopsAt: taskTime(stopsAt(sum)), Cap: int(max(capNow, 0))}
+	if front == protocol.FrontForward {
 		// Its destination, as its args say (core checked them when it
 		// queued the task).
-		m.Purpose = models.OperationalPurposeForward
-		host, _ := protocol.ArgString(args, "host")
-		if to, ok := protocol.ArgInt(args, "to"); ok && host != "" {
+		host, _ := protocol.ArgString(args, protocol.ParamHost)
+		if to, ok := protocol.ArgInt(args, protocol.ParamTo); ok && host != "" {
 			dest := net.JoinHostPort(host, strconv.FormatInt(to, 10))
 			m.To = &dest
 		}
 	}
-	if t.Action != nil && *t.Action == protocol.ActionReversePortForward {
+	if reverse {
 		// No operational port: the minion listens, where its args ask and
 		// where it says it does.
-		m.Purpose, m.Port, m.Address = models.OperationalPurposeReverse, 0, nil
+		m.Port, m.Address = 0, nil
 		bind, _ := protocol.ArgString(args, "bind")
 		m.Bind = strPtr(bind)
 		if l, ok := protocol.ArgInt(args, "listen"); ok {
@@ -77,8 +89,45 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		m.Listening = listening && sum.Bound != ""
 		udp, _ := protocol.ArgBool(args, "udp")
 		m.UDP = &udp
+		// A reverse SOCKS proxy's clients' user and password, while it runs.
+		m.User, m.Password = strPtr(sum.User), strPtr(sum.Password)
 	}
 	return m, nil
+}
+
+// SetMinionTunnelCap changes a running tunnel task's bandwidth cap, bytes a
+// second each way (0: none), for an operator of its session's operation.
+func (r *minionTaskResolver) SetMinionTunnelCap(ctx context.Context, taskID string, limit int) (*model.MinionTask, error) {
+	tid, err := uuid.Parse(taskID)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid task ID")
+	}
+	t, err := r.tasks.FindByTaskID(ctx, tid)
+	if err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeNotFound, "task not found")
+		}
+		return nil, err
+	}
+	if _, err := r.session(ctx, t.SessionID.String(), models.OperationRoleOperator); err != nil {
+		return nil, err
+	}
+	switch {
+	case !protocol.IsTunnelAction(t.Action):
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "not a tunnel task")
+	case limit < 0:
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "a cap is bytes a second, 0 for none")
+	case r.tunnels == nil:
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "core opens no tunnels")
+	}
+	if err := r.tunnels.SetCap(ctx, tid, int64(limit)); err != nil {
+		if repository.IsNotFound(err) {
+			return nil, moduleGQLError(ctx, errCodeBadUserInput, "the tunnel is not running")
+		}
+		return nil, fmt.Errorf("set the tunnel's cap: %w", err)
+	}
+	r.publish(t)
+	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
 // MinionTunnelStreams is a page of a tunnel task's streams, the latest
@@ -205,11 +254,11 @@ func (r *minionTaskResolver) portModel(p *models.OperationalPort) *model.Operati
 		dest := net.JoinHostPort(p.Host, strconv.Itoa(p.HostPort))
 		to = &dest
 	}
-	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Purpose: p.Purpose, To: to, Address: strPtr(r.tunnels.Address()),
+	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Front: p.Purpose, To: to, Address: strPtr(r.tunnels.Address()),
 		SessionID: p.SessionID.String(), SessionNumber: p.SessionNumber, TaskID: p.TaskID.String(), OpenedBy: p.OpenedBy.String(),
-		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Streams)}
+		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Opened)}
 	if sum, ok := r.tunnels.Summary(p.TaskID); ok {
-		node.Listening, node.Open, node.Streams = true, sum.Open, int(max(sum.Streams, p.Streams))
+		node.Listening, node.Open, node.Streams = true, sum.Open, int(max(sum.Streams, p.Opened))
 		node.StopsAt = taskTime(stopsAt(sum))
 	}
 	return node
@@ -269,12 +318,21 @@ func (r *minionTaskResolver) MinionListeners(ctx context.Context, operationID st
 // listenerModel is a listener as GraphQL has it: its task's tunnel as it is
 // now.
 func (r *minionTaskResolver) listenerModel(l *models.MinionListener) *model.MinionListener {
-	node := &model.MinionListener{ID: l.TaskID.String(), Bind: l.Bind, Listen: l.Listen, Bound: strPtr(l.Bound), UDP: l.UDP,
-		To: net.JoinHostPort(l.Host, strconv.Itoa(l.HostPort)), SessionID: l.SessionID.String(), SessionNumber: l.SessionNumber,
+	var to *string
+	if l.Host != "" {
+		dest := net.JoinHostPort(l.Host, strconv.Itoa(l.HostPort))
+		to = &dest
+	}
+	front := l.Front
+	if front == "" {
+		front = protocol.FrontForward
+	}
+	node := &model.MinionListener{ID: l.TaskID.String(), Bind: l.Bind, Listen: l.Listen, Bound: strPtr(l.Bound), UDP: l.UDP, Front: front,
+		To: to, SessionID: l.SessionID.String(), SessionNumber: l.SessionNumber,
 		TaskID: l.TaskID.String(), OpenedBy: l.OpenedBy.String(), OpenedByName: strPtr(l.OpenedByName),
-		OpenedAt: l.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(l.Streams)}
+		OpenedAt: l.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(l.Opened)}
 	if sum, ok := r.tunnels.Summary(l.TaskID); ok {
-		node.Open, node.Streams = sum.Open, int(max(sum.Streams, l.Streams))
+		node.Open, node.Streams = sum.Open, int(max(sum.Streams, l.Opened))
 		if sum.Bound != "" {
 			node.Bound = strPtr(sum.Bound)
 		}

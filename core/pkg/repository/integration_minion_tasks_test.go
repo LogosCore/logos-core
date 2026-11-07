@@ -523,8 +523,8 @@ func TestIntegrationMinionTasksCoreCommands(t *testing.T) {
 		return id
 	}
 	insert("shell", models.MinionTaskRunning)
-	if err := repo.Insert(ctx, &models.MinionTask{TaskID: uuid.New(), OperationID: uuid.New(), SessionID: session, Command: "socks_proxy",
-		Action: protocol.ActionSocksProxy, IssuedBy: uuid.New(), State: models.MinionTaskRunning, QueuedAt: now, AckedAt: &now, StartedAt: &now}); err != nil {
+	if err := repo.Insert(ctx, &models.MinionTask{TaskID: uuid.New(), OperationID: uuid.New(), SessionID: session, Command: "tunnel",
+		Action: protocol.ActionTunnel, IssuedBy: uuid.New(), State: models.MinionTaskRunning, QueuedAt: now, AckedAt: &now, StartedAt: &now}); err != nil {
 		t.Fatal(err)
 	}
 	open := insert(protocol.CommandMaxTasks, models.MinionTaskRunning)

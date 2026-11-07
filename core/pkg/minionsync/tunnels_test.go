@@ -205,8 +205,8 @@ func TestTunnelsHoldNoPlace(t *testing.T) {
 		tasks.rows = append(tasks.rows, models.MinionTask{TaskID: uuid.New(), SessionID: sid, Command: command, Action: action,
 			State: models.MinionTaskRunning, AckedAt: &now})
 	}
-	run("socks_proxy", protocol.ActionSocksProxy)
-	run("port_forward", protocol.ActionPortForward)
+	run("tunnel", protocol.ActionTunnel)
+	run("reverse_tunnel", protocol.ActionReverseTunnel)
 	if n, err := r.svc.room(context.Background(), session, &one); err != nil || n != 1 {
 		t.Fatalf("beside two tunnels: room %d %v", n, err)
 	}

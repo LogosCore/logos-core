@@ -3,12 +3,21 @@ import {
   CopyIcon,
   EthernetPortIcon,
   LinkIcon,
+  PencilIcon,
   SearchXIcon,
   TerminalIcon,
   WaypointsIcon,
 } from "lucide-react";
+import { toast } from "sonner";
+import { errorMessage } from "@/components/modules/management/api-errors";
 import { Button } from "@/components/ui/button";
 import { InfoCard, LabelRow } from "@/components/ui/info-card";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { SearchInput } from "@/components/ui/search-input";
 import {
   Select,
@@ -24,6 +33,7 @@ import {
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql";
 import {
   useMinionTunnelStreams,
+  useSetMinionTunnelCap,
   type TunnelStreamsFilter,
 } from "@/graphql/hooks/minion-tasks";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";
@@ -32,14 +42,19 @@ import { formatBytes } from "@/lib/format-bytes";
 import { cn } from "@/lib/utils";
 import { FINISHED } from "./task-actions";
 import {
-  PORT_FORWARD,
-  REVERSE_PORT_FORWARD,
+  FRONT_FORWARD,
+  FRONT_HTTP,
+  FRONT_SOCKS,
+  capLabel,
   frontLabel,
   hostPort,
+  httpProxyURL,
   listenAddress,
+  parseCap,
   proxyState,
   proxyURL,
   proxychainsLine,
+  reverseSocksURL,
   reverseState,
   stopIdleOf,
   streamState,
@@ -50,8 +65,8 @@ import {
 } from "./tunnel-values";
 
 // A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md, What
-// core keeps and shows): core's SOCKS on one of its operational ports while
-// the task runs. The strip says where it is and copies it in the forms
+// core keeps and shows): what core puts in front of one of its operational
+// ports while the task runs (its front: SOCKS, HTTP, a forward). The strip says where it is and copies it in the forms
 // tools take; the cards, what it is and what went through it; the table,
 // each connection a tool made through it, live, the latest first, searched
 // and filtered by the server, while the task runs: core keeps no stream
@@ -78,8 +93,12 @@ export function TunnelView({
   task: Task;
   tunnel: Tunnel;
 }) {
-  // A reverse port forward listens on the minion's host: no port of core's.
-  const reverse = tunnel.purpose === REVERSE_PORT_FORWARD;
+  // A reverse tunnel listens on the minion's host: no port of core's. Its
+  // front: a forward to one destination, or SOCKS behind a password.
+  const reverse = tunnel.reverse;
+  const front = tunnel.front;
+  const http = !reverse && front === FRONT_HTTP;
+  const reverseSocks = reverse && front === FRONT_SOCKS;
   // Core's address for its ports, else the host this page came from; a
   // reverse port forward's, where its minion listens.
   const host = tunnel.address ?? window.location.hostname;
@@ -88,8 +107,11 @@ export function TunnelView({
     ? reverseState(tunnel, t.state)
     : proxyState(tunnel, t.state);
   // A forward (either way): every connection goes to its destination; a
-  // SOCKS proxy: where each tool says.
-  const forward = tunnel.purpose === PORT_FORWARD || reverse;
+  // proxy: where each tool says.
+  const forward = front === FRONT_FORWARD;
+  // A proxy's URL and proxychains line, by what it speaks.
+  const url = http ? httpProxyURL(host, tunnel.port) : proxyURL(host, tunnel.port);
+  const line = proxychainsLine(host, tunnel.port, http ? "http" : "socks5");
   const [filter, setFilter] = useState<TunnelStreamsFilter>({
     search: "",
     state: "",
@@ -120,7 +142,7 @@ export function TunnelView({
             aria-hidden
           />
           <span className="truncate text-xs font-medium">
-            {frontLabel(tunnel.purpose)}
+            {frontLabel(front, reverse)}
           </span>
           {tunnel.udp && (
             <span className="shrink-0 text-xs text-muted-foreground">UDP</span>
@@ -149,18 +171,17 @@ export function TunnelView({
               <CopyIcon />
               Address
             </Button>
-            {!forward && (
+            {!forward && !reverse && (
               <>
                 <Button
                   variant="ghost"
                   size="xs"
-                  title={`Copy ${proxyURL(host, tunnel.port)}: for curl -x, ALL_PROXY or a browser (names resolve on the minion's host)`}
-                  onClick={() =>
-                    void copyToClipboard(
-                      proxyURL(host, tunnel.port),
-                      "proxy URL",
-                    )
+                  title={
+                    http
+                      ? `Copy ${url}: for HTTP_PROXY and HTTPS_PROXY, curl -x or a browser (names resolve on the minion's host)`
+                      : `Copy ${url}: for curl -x, ALL_PROXY or a browser (names resolve on the minion's host)`
                   }
+                  onClick={() => void copyToClipboard(url, "proxy URL")}
                 >
                   <LinkIcon />
                   URL
@@ -168,18 +189,29 @@ export function TunnelView({
                 <Button
                   variant="ghost"
                   size="xs"
-                  title={`Copy "${proxychainsLine(host, tunnel.port)}": a line of proxychains' [ProxyList]`}
-                  onClick={() =>
-                    void copyToClipboard(
-                      proxychainsLine(host, tunnel.port),
-                      "proxychains line",
-                    )
-                  }
+                  title={`Copy "${line}": a line of proxychains' [ProxyList]`}
+                  onClick={() => void copyToClipboard(line, "proxychains line")}
                 >
                   <TerminalIcon />
                   proxychains
                 </Button>
               </>
+            )}
+            {reverseSocks && tunnel.user && tunnel.password && (
+              <Button
+                variant="ghost"
+                size="xs"
+                title="Copy its URL, user and password in it: for a tool on the minion's side (names resolve at core's end)"
+                onClick={() =>
+                  void copyToClipboard(
+                    reverseSocksURL(address, tunnel.user ?? "", tunnel.password ?? ""),
+                    "proxy URL",
+                  )
+                }
+              >
+                <LinkIcon />
+                URL
+              </Button>
             )}
           </div>
         )}
@@ -218,10 +250,43 @@ export function TunnelView({
                     : " · from the minion's host, each connection"}
                 </span>
               </LabelRow>
+            ) : reverseSocks ? (
+              <>
+                <LabelRow label="Speaks">
+                  SOCKS5 (connect), with a user and password, into core&apos;s
+                  network
+                </LabelRow>
+                <LabelRow label="Login">
+                  {tunnel.user && tunnel.password ? (
+                    <>
+                      <span className="font-mono text-xs break-all">
+                        {tunnel.user} / {tunnel.password}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="ml-1 align-middle"
+                        title="Copy the password"
+                        aria-label="Copy the password"
+                        onClick={() =>
+                          void copyToClipboard(tunnel.password ?? "", "password")
+                        }
+                      >
+                        <CopyIcon />
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      core keeps it while the task runs
+                    </span>
+                  )}
+                </LabelRow>
+              </>
             ) : (
               <LabelRow label="Speaks">
-                SOCKS5 (connect, UDP associate), SOCKS4 and 4a (connect); no
-                credentials
+                {http
+                  ? "HTTP: CONNECT, and plain requests (one a connection); no credentials"
+                  : "SOCKS5 (connect, UDP associate), SOCKS4 and 4a (connect); no credentials"}
               </LabelRow>
             )}
             <LabelRow label="State">
@@ -229,6 +294,10 @@ export function TunnelView({
               {state.detail && (
                 <span className="text-muted-foreground">: {state.detail}</span>
               )}
+            </LabelRow>
+            <LabelRow label="Bandwidth cap">
+              {capLabel(tunnel.cap)}
+              {tunnel.listening && keeps && <ChangeCap task={t} cap={tunnel.cap} />}
             </LabelRow>
             <LabelRow label="Stops when idle">
               {stopIdle ? (
@@ -294,7 +363,9 @@ export function TunnelView({
               onValueChange={(search) => setFilter((f) => ({ ...f, search }))}
               placeholder={
                 reverse
-                  ? "Search who connected, or the destination..."
+                  ? reverseSocks
+                    ? "Search who connected, or where they asked..."
+                    : "Search who connected, or the destination..."
                   : "Search the tool or the destination..."
               }
             />
@@ -366,7 +437,9 @@ export function TunnelView({
                     <WaypointsIcon className="size-8 opacity-50" />
                     <p className="text-sm">No stream yet.</p>
                     <p className="max-w-md text-center text-xs">
-                      {reverse && tunnel.udp
+                      {reverseSocks
+                        ? `Each connection to ${address} on the minion's host is one: its tool says where to go in core's network, with the task's user and password.`
+                        : reverse && tunnel.udp
                         ? `Each address that sends datagrams to ${address} on the minion's host is one: core sends them on to ${tunnel.to ?? "the destination"} from its own network.`
                         : reverse
                           ? `Each connection to ${address} on the minion's host is one: core connects it to ${tunnel.to ?? "the destination"} from its own network.`
@@ -393,7 +466,11 @@ function StreamRow({ s, reverse }: { s: TunnelStream; reverse: boolean }) {
   // A UDP association's datagrams each name their own destination; a UDP
   // reverse forward's stream has one, core's.
   const destination =
-    s.udp && !reverse ? "UDP: each datagram its own" : hostPort(s.host, s.port);
+    s.udp && !reverse
+      ? "UDP: each datagram its own"
+      : s.host
+        ? hostPort(s.host, s.port)
+        : "as its tool asks";
   return (
     <div className={dataTableRowClass(GRID_COLS)}>
       <span className="font-mono text-xs text-muted-foreground tabular-nums">
@@ -435,5 +512,89 @@ function StreamRow({ s, reverse }: { s: TunnelStream; reverse: boolean }) {
         {formatBytes(reverse ? s.up : s.down)}
       </span>
     </div>
+  );
+}
+
+/** Changes a running tunnel's bandwidth cap, live. */
+function ChangeCap({ task, cap }: { task: Task; cap: number }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const set = useSetMinionTunnelCap();
+  const parsed = parseCap(text);
+  const taskId = task.id;
+  const submit = () => {
+    if (!parsed.ok) return;
+    const value = parsed.value;
+    set.mutate(
+      { taskId, cap: value },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          toast.success(value > 0 ? `Capped at ${capLabel(value)}` : "No cap");
+        },
+        onError: (err) => toast.error(errorMessage(err, "Could not set it")),
+      },
+    );
+  };
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setText(cap > 0 ? String(cap) : "");
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="ml-1 align-middle"
+            title="Change the bandwidth cap"
+            aria-label="Change the bandwidth cap"
+          >
+            <PencilIcon />
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-72">
+        <form
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <label htmlFor={`cap-${taskId}`} className="text-sm font-medium">
+            Bytes a second, each way
+          </label>
+          <div className="flex items-center gap-2">
+            <Input
+              id={`cap-${taskId}`}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="none"
+              className="w-32"
+              aria-invalid={!parsed.ok}
+              autoFocus
+            />
+            <Button type="submit" size="sm" disabled={!parsed.ok || set.isPending}>
+              Set
+            </Button>
+          </div>
+          <p
+            className={
+              !parsed.ok
+                ? "text-xs text-red-600 dark:text-red-400"
+                : "text-xs text-muted-foreground"
+            }
+          >
+            {!parsed.ok
+              ? parsed.error
+              : "512k, 2M, or empty for none: over all of the tunnel's streams together, at once."}
+          </p>
+        </form>
+      </PopoverContent>
+    </Popover>
   );
 }

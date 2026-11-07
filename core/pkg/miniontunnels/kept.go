@@ -101,6 +101,7 @@ func (s *Service) keepBytes(ctx context.Context, tunnels []*tunnel) {
 	type due struct {
 		t        *tunnel
 		up, down int64
+		opened   uint64
 	}
 	s.mu.Lock()
 	if tunnels == nil {
@@ -110,9 +111,9 @@ func (s *Service) keepBytes(ctx context.Context, tunnels []*tunnel) {
 	}
 	var dues []due
 	for _, t := range tunnels {
-		if t.up != t.keptUp || t.down != t.keptDown {
-			t.keptUp, t.keptDown = t.up, t.down
-			dues = append(dues, due{t: t, up: t.up, down: t.down})
+		if t.up != t.keptUp || t.down != t.keptDown || t.opened != t.keptOpened {
+			t.keptUp, t.keptDown, t.keptOpened = t.up, t.down, t.opened
+			dues = append(dues, due{t: t, up: t.up, down: t.down, opened: t.opened})
 		}
 	}
 	s.mu.Unlock()
@@ -120,9 +121,9 @@ func (s *Service) keepBytes(ctx context.Context, tunnels []*tunnel) {
 		var err error
 		switch {
 		case !d.t.reverse:
-			err = s.ports.SetBytes(ctx, d.t.task, d.up, d.down)
+			err = s.ports.SetCounts(ctx, d.t.task, d.up, d.down, d.opened)
 		case s.listeners != nil:
-			err = s.listeners.SetBytes(ctx, d.t.task, d.up, d.down)
+			err = s.listeners.SetCounts(ctx, d.t.task, d.up, d.down, d.opened)
 		}
 		if err != nil && !repository.IsNotFound(err) {
 			s.logger.Warn("tunnels: keep a tunnel's bytes", zap.String("task_id", d.t.task.String()), zap.Error(err))

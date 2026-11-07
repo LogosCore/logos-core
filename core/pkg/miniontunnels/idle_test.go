@@ -92,7 +92,7 @@ func TestIdleStopReverse(t *testing.T) {
 		{Task: never},
 	} {
 		tasks.tasks[o.Task] = models.MinionTask{TaskID: o.Task, SessionID: session, State: models.MinionTaskSent,
-			Action: protocol.ActionReversePortForward}
+			Action: protocol.ActionReverseTunnel}
 		o.Session, o.Bind, o.Listen, o.Host, o.HostPort = session, "0.0.0.0", 8080, host, port
 		if err := svc.OpenReverse(context.Background(), o); err != nil {
 			t.Fatal(err)

@@ -32,8 +32,11 @@ type IMinionListenerRepository interface {
 	SetBound(ctx context.Context, taskID uuid.UUID, bound string) error
 	// SeenStream raises the highest stream number the minion opened to n.
 	SeenStream(ctx context.Context, taskID uuid.UUID, n uint64) error
-	// SetBytes keeps the task's tunnel's bytes so far, each way.
-	SetBytes(ctx context.Context, taskID uuid.UUID, up, down int64) error
+	// SetCounts keeps the task's tunnel's bytes so far, each way, and how
+	// many streams it opened.
+	SetCounts(ctx context.Context, taskID uuid.UUID, up, down int64, opened uint64) error
+	// SetCap keeps the task's tunnel's bandwidth cap (0: none).
+	SetCap(ctx context.Context, taskID uuid.UUID, limit int64) error
 	// Release forgets the task's listener.
 	Release(ctx context.Context, taskID uuid.UUID) error
 }
@@ -119,8 +122,12 @@ func (r *minionListenerRepository) SeenStream(ctx context.Context, taskID uuid.U
 	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$max": bson.M{"streams": n}})
 }
 
-func (r *minionListenerRepository) SetBytes(ctx context.Context, taskID uuid.UUID, up, down int64) error {
-	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"up": up, "down": down}})
+func (r *minionListenerRepository) SetCounts(ctx context.Context, taskID uuid.UUID, up, down int64, opened uint64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"up": up, "down": down, "opened": int64(opened)}})
+}
+
+func (r *minionListenerRepository) SetCap(ctx context.Context, taskID uuid.UUID, limit int64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"cap": limit}})
 }
 
 func (r *minionListenerRepository) Release(ctx context.Context, taskID uuid.UUID) error {

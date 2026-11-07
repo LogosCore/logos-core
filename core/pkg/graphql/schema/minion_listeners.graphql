@@ -13,8 +13,11 @@ type MinionListener {
   # It listens for UDP datagrams, a stream for each address they come
   # from; else for TCP connections.
   udp: Boolean!
-  # The destination core connects each stream to, host:port.
-  to: String!
+  # What core does with each stream, its task's front: forward (connects
+  # it to to, host:port, from its own network) or socks (a SOCKS5 proxy
+  # behind a password: to is null).
+  front: String!
+  to: String
   sessionId: ID!
   # The session's number when it opened.
   sessionNumber: Int!

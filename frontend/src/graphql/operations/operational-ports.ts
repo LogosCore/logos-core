@@ -7,7 +7,7 @@ export const OperationalPortFields = graphql(`
   fragment OperationalPortFields on OperationalPort {
     id
     port
-    purpose
+    front
     to
     address
     sessionId

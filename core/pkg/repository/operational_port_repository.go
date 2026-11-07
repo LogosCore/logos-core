@@ -43,10 +43,14 @@ type IOperationalPortRepository interface {
 	CountByOperationID(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
 	// FindByTaskID is the task's port; IsNotFound for none.
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.OperationalPort, error)
-	// NextStream counts a new stream of the task's: its number.
-	NextStream(ctx context.Context, taskID uuid.UUID) (uint64, error)
-	// SetBytes keeps the task's tunnel's bytes so far, each way.
-	SetBytes(ctx context.Context, taskID uuid.UUID, up, down int64) error
+	// ReserveStreams takes n more stream numbers for the task: the last of
+	// them (the highest the task has taken).
+	ReserveStreams(ctx context.Context, taskID uuid.UUID, n uint64) (uint64, error)
+	// SetCounts keeps the task's tunnel's bytes so far, each way, and how
+	// many streams it opened.
+	SetCounts(ctx context.Context, taskID uuid.UUID, up, down int64, opened uint64) error
+	// SetCap keeps the task's tunnel's bandwidth cap (0: none).
+	SetCap(ctx context.Context, taskID uuid.UUID, limit int64) error
 	// Release gives the task's port back.
 	Release(ctx context.Context, taskID uuid.UUID) error
 }
@@ -123,17 +127,21 @@ func (r *operationalPortRepository) FindByTaskID(ctx context.Context, taskID uui
 	return &p, nil
 }
 
-func (r *operationalPortRepository) NextStream(ctx context.Context, taskID uuid.UUID) (uint64, error) {
+func (r *operationalPortRepository) ReserveStreams(ctx context.Context, taskID uuid.UUID, n uint64) (uint64, error) {
 	var p models.OperationalPort
-	err := r.coll.Find(ctx, bson.M{"task_id": taskID}).Apply(qmgo.Change{Update: bson.M{"$inc": bson.M{"streams": 1}}, ReturnNew: true}, &p)
+	err := r.coll.Find(ctx, bson.M{"task_id": taskID}).Apply(qmgo.Change{Update: bson.M{"$inc": bson.M{"streams": int64(n)}}, ReturnNew: true}, &p)
 	if err != nil {
 		return 0, err
 	}
 	return p.Streams, nil
 }
 
-func (r *operationalPortRepository) SetBytes(ctx context.Context, taskID uuid.UUID, up, down int64) error {
-	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"up": up, "down": down}})
+func (r *operationalPortRepository) SetCounts(ctx context.Context, taskID uuid.UUID, up, down int64, opened uint64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"up": up, "down": down, "opened": int64(opened)}})
+}
+
+func (r *operationalPortRepository) SetCap(ctx context.Context, taskID uuid.UUID, limit int64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"cap": limit}})
 }
 
 func (r *operationalPortRepository) Release(ctx context.Context, taskID uuid.UUID) error {

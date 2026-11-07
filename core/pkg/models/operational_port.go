@@ -31,10 +31,17 @@ type OperationalPort struct {
 	// every connection to the port is a stream to it.
 	Host     string `bson:"host,omitempty" json:"host,omitempty"`
 	HostPort int    `bson:"host_port,omitempty" json:"host_port,omitempty"`
-	// Streams is how many streams the task has opened, the last one's
-	// number: a stream's is never used again in the task, a restart's
-	// streams' neither.
+	// UDP: its SOCKS proxy takes UDP ASSOCIATE (its command opens udp).
+	UDP bool `bson:"udp,omitempty" json:"udp,omitempty"`
+	// Streams is the highest stream number core took for the task, a
+	// thousand at a time (miniontunnels.StreamBlock): a stream's is never
+	// used again in the task, a restart's streams' neither, as a restart
+	// goes on past it. Opened is how many streams it has opened, as core
+	// last kept it (with its bytes).
 	Streams uint64 `bson:"streams" json:"streams"`
+	Opened  uint64 `bson:"opened,omitempty" json:"opened,omitempty"`
+	// Cap is its bandwidth cap, bytes a second each way; 0 for none.
+	Cap int64 `bson:"cap,omitempty" json:"cap,omitempty"`
 	// Up and Down are its tools' bytes so far, each way, as core last kept
 	// them (every sweep, and when it stops): where a restart's count goes
 	// on from.
@@ -50,17 +57,19 @@ type OperationalPort struct {
 	StopIdle time.Duration `bson:"stop_idle,omitempty" json:"stop_idle,omitempty"`
 }
 
-// What an operational port serves: its task's tunnel action's name.
+// What an operational port serves: its task's front (protocol.ParamFront).
 const (
-	// OperationalPurposeSOCKS: a SOCKS proxy (protocol.ActionSocksProxy).
-	OperationalPurposeSOCKS = "socks_proxy"
+	// OperationalPurposeSOCKS: a SOCKS proxy (protocol.FrontSOCKS).
+	OperationalPurposeSOCKS = "socks"
+	// OperationalPurposeHTTP: an HTTP proxy (protocol.FrontHTTP).
+	OperationalPurposeHTTP = "http"
 	// OperationalPurposeForward: a port forward, to its destination
-	// (protocol.ActionPortForward).
-	OperationalPurposeForward = "port_forward"
-	// OperationalPurposeReverse: a reverse port forward, which listens on
-	// the minion's host (protocol.ActionReversePortForward): no operational
-	// port, a MinionListener.
-	OperationalPurposeReverse = "reverse_port_forward"
+	// (protocol.FrontForward).
+	OperationalPurposeForward = "forward"
+	// OperationalPurposeReverse: a reverse tunnel, which listens on the
+	// minion's host (protocol.ActionReverseTunnel): no operational port, a
+	// MinionListener, whose Front says what core does with its streams.
+	OperationalPurposeReverse = "reverse"
 )
 
 // MinionListener is a reverse port forward's listener
@@ -90,14 +99,24 @@ type MinionListener struct {
 	// UDP: the minion listens for datagrams, a stream for each address
 	// they come from.
 	UDP bool `bson:"udp,omitempty" json:"udp,omitempty"`
-	// Host and HostPort are the destination core connects each stream to,
-	// from its own network: the minion never learns them.
-	Host     string `bson:"host" json:"host"`
-	HostPort int    `bson:"host_port" json:"host_port"`
+	// Front is what core does with each stream (protocol.FrontForward,
+	// protocol.FrontSOCKS): forward connects it to Host:HostPort, from its
+	// own network (the minion never learns it); socks reads a SOCKS5
+	// request from it, behind User and Password, and connects where it
+	// asks.
+	Front    string `bson:"front" json:"front"`
+	Host     string `bson:"host,omitempty" json:"host,omitempty"`
+	HostPort int    `bson:"host_port,omitempty" json:"host_port,omitempty"`
+	User     string `bson:"user,omitempty" json:"user,omitempty"`
+	Password string `bson:"password,omitempty" json:"password,omitempty"`
 	// Streams is the highest stream number the minion has opened: a tunnel
 	// item for one at or below it that core no longer has is an old one's
-	// (sent again, or a restart's), never connected again.
+	// (sent again, or a restart's), never connected again. Opened is how
+	// many it has opened, as core last kept it.
 	Streams uint64 `bson:"streams" json:"streams"`
+	Opened  uint64 `bson:"opened,omitempty" json:"opened,omitempty"`
+	// Cap is its bandwidth cap, bytes a second each way; 0 for none.
+	Cap int64 `bson:"cap,omitempty" json:"cap,omitempty"`
 	// Up and Down are its bytes so far, as an operational port's.
 	Up   int64 `bson:"up,omitempty" json:"up,omitempty"`
 	Down int64 `bson:"down,omitempty" json:"down,omitempty"`
@@ -113,7 +132,10 @@ type MinionListener struct {
 // MinionListenerSearchText is what the Ports list's search matches: the
 // port, the session's number, who opened it, where it listens and what to.
 func MinionListenerSearchText(l *MinionListener) string {
-	text := fmt.Sprintf("%d #%d %s %s %s:%d %s", l.Listen, l.SessionNumber, l.OpenedByName, l.Bind, l.Host, l.HostPort, l.Bound)
+	text := fmt.Sprintf("%d #%d %s %s %s %s", l.Listen, l.SessionNumber, l.OpenedByName, l.Bind, l.Bound, l.Front)
+	if l.Host != "" {
+		text += fmt.Sprintf(" %s:%d", l.Host, l.HostPort)
+	}
 	if l.UDP {
 		text += " udp"
 	}

@@ -23,6 +23,7 @@ import {
   MinionTasksDocument,
   MinionTunnelStreamsDocument,
   QueueMinionTaskDocument,
+  SetMinionTunnelCapDocument,
   type MinionTaskFieldsFragment,
   type MinionTasksQuery,
 } from "@/graphql/gql/graphql"
@@ -236,6 +237,13 @@ export function useCancelMinionTask() {
   return useMutation({
     mutationFn: (id: string) => graphqlClient(CancelMinionTaskDocument, { id }),
     onSuccess: (data) => upsertMinionTask(queryClient, data.cancelMinionTask),
+  })
+}
+
+/** Changes a running tunnel's bandwidth cap: bytes a second each way, 0 for none. Its task's live update says the new one. */
+export function useSetMinionTunnelCap() {
+  return useMutation({
+    mutationFn: (vars: { taskId: string; cap: number }) => graphqlClient(SetMinionTunnelCapDocument, vars),
   })
 }
 

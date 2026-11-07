@@ -26,6 +26,7 @@ type fakeTaskTunnels struct {
 	address string
 	live    map[uuid.UUID]miniontunnels.Summary
 	ended   miniontunnels.Summary
+	caps    []int64
 }
 
 func (f *fakeTaskTunnels) Open(_ context.Context, o miniontunnels.Opening) (int, error) {
@@ -87,6 +88,11 @@ func (f *fakeTaskTunnels) Listeners(context.Context, uuid.UUID, string, *paginat
 	return nil, nil
 }
 
+func (f *fakeTaskTunnels) SetCap(_ context.Context, _ uuid.UUID, limit int64) error {
+	f.caps = append(f.caps, limit)
+	return f.err
+}
+
 func (f *fakeTaskTunnels) CountListeners(context.Context, uuid.UUID, string) (int64, error) {
 	return 0, nil
 }
@@ -132,10 +138,21 @@ func TestTunnelStreamModel(t *testing.T) {
 	}
 }
 
+// The tunnel commands a build's factory declares: one that opens TCP and
+// UDP, one TCP alone, and a reverse one.
+var (
+	tunnelCmd    = protocol.BuildCommand{ID: "tunnel", Op: 15, Action: protocol.ActionTunnel, Opens: []string{protocol.OpenTCP, protocol.OpenUDP}}
+	tcpTunnelCmd = protocol.BuildCommand{ID: "tunnel", Op: 15, Action: protocol.ActionTunnel}
+	reverseCmd   = protocol.BuildCommand{ID: "reverse_tunnel", Op: 17, Action: protocol.ActionReverseTunnel,
+		Opens: []string{protocol.OpenTCP, protocol.OpenUDP}}
+)
+
 // A tunnel task takes its port before it is queued, for any free one (0)
-// or the one asked for; its args then carry the port, and its max_streams
-// and timeout (the command's defaults when it has none) bound the proxy.
-// No port free, or no tunnels in core, is the operator's to fix.
+// or the one asked for, its front its action's first unless it names
+// another; its args then carry the port, and its max_streams and timeout
+// (the command's defaults when it has none) bound the proxy. A SOCKS
+// proxy takes UDP when its command opens udp. No port free, a front the
+// action has not, or no tunnels in core, is the operator's to fix.
 func TestOpenTunnel(t *testing.T) {
 	ctx := context.Background()
 	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New()}
@@ -143,31 +160,36 @@ func TestOpenTunnel(t *testing.T) {
 	r := &minionTaskResolver{tunnels: f}
 	task, uid := uuid.New(), uuid.New()
 	wire := map[string]any{"port": int64(0)}
-	port, err := r.openTunnel(ctx, s, uid, task, protocol.ActionSocksProxy, wire)
-	if err != nil || port != 41000 || wire["port"] != int64(41000) {
-		t.Fatalf("any port: %d %v, args %v", port, err, wire)
+	port, front, err := r.openTunnel(ctx, s, uid, task, tunnelCmd, wire)
+	if err != nil || port != 41000 || front != protocol.FrontSOCKS || wire["port"] != int64(41000) || wire["front"] != protocol.FrontSOCKS {
+		t.Fatalf("any port: %d %s %v, args %v", port, front, err, wire)
 	}
 	o := f.opened[0]
 	if o.Task != task || o.Session != s.SessionID || o.Operation != s.OperationID || o.By != uid || o.Port != 0 ||
-		o.MaxStreams != miniontunnels.DefaultMaxStreams || o.Timeout != miniontunnels.DefaultConnectTimeout {
+		o.MaxStreams != miniontunnels.DefaultMaxStreams || o.Timeout != miniontunnels.DefaultConnectTimeout ||
+		o.Purpose != models.OperationalPurposeSOCKS || !o.UDP || o.Cap != 0 {
 		t.Errorf("opened %+v", o)
 	}
-	wire = map[string]any{"port": int64(41007), "max_streams": int64(8), "timeout": int64(3000), protocol.ParamStopIdle: int64(3600000)}
-	if port, err = r.openTunnel(ctx, s, uid, uuid.New(), protocol.ActionSocksProxy, wire); err != nil || port != 41007 {
+	wire = map[string]any{"port": int64(41007), "max_streams": int64(8), "timeout": int64(3000), protocol.ParamStopIdle: int64(3600000),
+		protocol.ParamCap: int64(1 << 20)}
+	if port, _, err = r.openTunnel(ctx, s, uid, uuid.New(), tcpTunnelCmd, wire); err != nil || port != 41007 {
 		t.Fatalf("the port asked for: %d %v", port, err)
 	}
-	if o := f.opened[1]; o.Port != 41007 || o.MaxStreams != 8 || o.Timeout != 3*time.Second || o.StopIdle != time.Hour {
+	if o := f.opened[1]; o.Port != 41007 || o.MaxStreams != 8 || o.Timeout != 3*time.Second || o.StopIdle != time.Hour || o.UDP || o.Cap != 1<<20 {
 		t.Errorf("opened %+v", o)
 	}
+	if _, _, err := r.openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{"front": "vpn"}); err == nil || !strings.Contains(err.Error(), "front: one of socks, http, forward") {
+		t.Errorf("a front the action has not: %v", err)
+	}
 	f.err = fmt.Errorf("%w: all 64 are in use", miniontunnels.ErrNoPort)
-	if _, err := r.openTunnel(ctx, s, uid, uuid.New(), protocol.ActionSocksProxy, map[string]any{}); err == nil || !strings.Contains(err.Error(), "all 64 are in use") {
+	if _, _, err := r.openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{}); err == nil || !strings.Contains(err.Error(), "all 64 are in use") {
 		t.Errorf("no port free: %v", err)
 	}
 	f.err = errors.New("mongo down")
-	if _, err := r.openTunnel(ctx, s, uid, uuid.New(), protocol.ActionSocksProxy, map[string]any{}); err == nil || !strings.Contains(err.Error(), "mongo down") {
+	if _, _, err := r.openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{}); err == nil || !strings.Contains(err.Error(), "mongo down") {
 		t.Errorf("a store failing: %v", err)
 	}
-	if _, err := (&minionTaskResolver{}).openTunnel(ctx, s, uid, uuid.New(), protocol.ActionSocksProxy, map[string]any{}); err == nil || !strings.Contains(err.Error(), "core opens no tunnels") {
+	if _, _, err := (&minionTaskResolver{}).openTunnel(ctx, s, uid, uuid.New(), tunnelCmd, map[string]any{}); err == nil || !strings.Contains(err.Error(), "core opens no tunnels") {
 		t.Errorf("no tunnels: %v", err)
 	}
 }
@@ -177,9 +199,10 @@ func TestOpenTunnel(t *testing.T) {
 // given stays, and a command with none, or none by default, has none.
 func TestTunnelStopIdleDefault(t *testing.T) {
 	params := []protocol.FieldSpec{
-		{Key: "port", Type: protocol.FieldInt, Num: 1, Default: 0},
+		{Key: "timeout", Type: protocol.FieldDuration, Num: 2, Default: "10s"},
 		{Key: protocol.ParamStopIdle, Type: protocol.FieldDuration, Default: "1h"},
 	}
+	params = append(params, protocol.TunnelCoreParams(protocol.ActionTunnel)...)
 	values := map[string]any{"port": 41000}
 	wire, problems := protocol.TaskArgs(params, values)
 	if problems != nil {
@@ -188,11 +211,11 @@ func TestTunnelStopIdleDefault(t *testing.T) {
 	f := &fakeTaskTunnels{}
 	r := &minionTaskResolver{tunnels: f}
 	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New()}
-	if _, err := r.openTunnel(context.Background(), s, uuid.New(), uuid.New(), protocol.ActionSocksProxy, wire); err != nil {
+	if _, _, err := r.openTunnel(context.Background(), s, uuid.New(), uuid.New(), tunnelCmd, wire); err != nil {
 		t.Fatal(err)
 	}
-	if o := f.opened[0]; o.StopIdle != time.Hour {
-		t.Errorf("stops after %v, not the default", o.StopIdle)
+	if o := f.opened[0]; o.StopIdle != time.Hour || o.Port != 41000 || o.Purpose != models.OperationalPurposeSOCKS {
+		t.Errorf("stops after %v, not the default (%+v)", o.StopIdle, o)
 	}
 	withDefault(values, params, protocol.ParamStopIdle)
 	if values[protocol.ParamStopIdle] != "1h" || values["port"] != 41000 {
@@ -217,126 +240,194 @@ func TestTunnelStopIdleDefault(t *testing.T) {
 	}
 }
 
-// A port forward's task opens its port onto its destination, its host and
-// to, checked as a stream's destination is; one that does not read is the
-// operator's to fix.
+// A forward front opens its port onto its destination, its host and to,
+// checked as a stream's destination is; one that does not read is the
+// operator's to fix. The HTTP front opens a port with core's HTTP proxy.
 func TestOpenForward(t *testing.T) {
 	ctx := context.Background()
 	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New(), Number: 7}
 	f := &fakeTaskTunnels{}
 	r := &minionTaskResolver{tunnels: f}
-	wire := map[string]any{"port": int64(0), "host": " 10.0.0.5 ", "to": int64(3389)}
-	port, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), protocol.ActionPortForward, wire)
-	if err != nil || port != 41000 {
+	wire := map[string]any{"front": protocol.FrontForward, "port": int64(0), "host": " 10.0.0.5 ", "to": int64(3389)}
+	port, front, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, wire)
+	if err != nil || port != 41000 || front != protocol.FrontForward {
 		t.Fatalf("forward: %d %v", port, err)
 	}
-	if o := f.opened[0]; o.Purpose != models.OperationalPurposeForward || o.Host != "10.0.0.5" || o.HostPort != 3389 || o.SessionNumber != 7 {
+	if o := f.opened[0]; o.Purpose != models.OperationalPurposeForward || o.Host != "10.0.0.5" || o.HostPort != 3389 || o.SessionNumber != 7 || o.UDP {
 		t.Errorf("opened %+v", o)
 	}
 	if wire["host"] != "10.0.0.5" {
 		t.Errorf("args %v", wire)
 	}
 	for name, w := range map[string]map[string]any{
-		"no host":    {"to": int64(22)},
-		"port 0":     {"host": "dc01"},
-		"port 65536": {"host": "dc01", "to": int64(65536)},
-		"a control":  {"host": "dc\x0001", "to": int64(22)},
+		"no host":    {"front": "forward", "to": int64(22)},
+		"port 0":     {"front": "forward", "host": "dc01"},
+		"port 65536": {"front": "forward", "host": "dc01", "to": int64(65536)},
+		"a control":  {"front": "forward", "host": "dc\x0001", "to": int64(22)},
 	} {
-		if _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), protocol.ActionPortForward, w); err == nil || !strings.Contains(err.Error(), "destination") {
+		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, w); err == nil || !strings.Contains(err.Error(), "destination") {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if o := f.opened[0]; len(f.opened) != 1 {
-		t.Errorf("a bad forward opened a port: %+v", o)
+	if len(f.opened) != 1 {
+		t.Errorf("a bad forward opened a port: %+v", f.opened)
 	}
-	socks, _ := r.openTunnel(ctx, s, uuid.New(), uuid.New(), protocol.ActionSocksProxy, map[string]any{})
-	if o := f.opened[1]; socks != 41000 || o.Purpose != models.OperationalPurposeSOCKS || o.Host != "" {
-		t.Errorf("socks: %+v", o)
+	if _, front, _ := r.openTunnel(ctx, s, uuid.New(), uuid.New(), tunnelCmd, map[string]any{"front": protocol.FrontHTTP}); front != protocol.FrontHTTP {
+		t.Errorf("http: %s", front)
+	}
+	if o := f.opened[1]; o.Purpose != models.OperationalPurposeHTTP || o.Host != "" || o.UDP {
+		t.Errorf("http: %+v", o)
 	}
 }
 
-// A forward's tunnel says what it serves and where to, from its task's
-// args; a SOCKS proxy's names no destination.
-func TestForwardTunnel(t *testing.T) {
+// A tunnel says what is in front, and where a forward goes, from its
+// task's args; a proxy's names no destination; its cap is live while it
+// runs, its args' once it ended.
+func TestTunnelFront(t *testing.T) {
 	ctx := context.Background()
-	r := &minionTaskResolver{tunnels: &fakeTaskTunnels{}}
-	forward := protocol.ActionPortForward
-	got, err := r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Action: &forward,
-		Args: map[string]any{"port": float64(41001), "host": "fe80::1", "to": float64(22)}})
-	if err != nil || got.Purpose != models.OperationalPurposeForward || got.To == nil || *got.To != "[fe80::1]:22" || got.Port != 41001 {
+	live := uuid.New()
+	r := &minionTaskResolver{tunnels: &fakeTaskTunnels{live: map[uuid.UUID]miniontunnels.Summary{live: {Port: 41001, Cap: 4096}}}}
+	tunnel := protocol.ActionTunnel
+	got, err := r.Tunnel(ctx, &model.MinionTask{ID: live.String(), Action: &tunnel,
+		Args: map[string]any{"front": "forward", "port": float64(41001), "host": "fe80::1", "to": float64(22), "cap": float64(1)}})
+	if err != nil || got.Front != protocol.FrontForward || got.Reverse || got.To == nil || *got.To != "[fe80::1]:22" || got.Port != 41001 || got.Cap != 4096 {
 		t.Fatalf("forward: %+v %v", got, err)
 	}
-	tunnel := protocol.ActionSocksProxy
-	got, err = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Action: &tunnel, Args: map[string]any{"port": float64(41000)}})
-	if err != nil || got.Purpose != models.OperationalPurposeSOCKS || got.To != nil {
-		t.Fatalf("socks: %+v %v", got, err)
+	got, err = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Action: &tunnel, Args: map[string]any{"port": float64(41000), "cap": float64(9)}})
+	if err != nil || got.Front != protocol.FrontSOCKS || got.To != nil || got.Cap != 9 {
+		t.Fatalf("socks, ended: %+v %v", got, err)
+	}
+	got, _ = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Action: &tunnel, Args: map[string]any{"front": "http", "host": "x", "to": float64(1)}})
+	if got.Front != protocol.FrontHTTP || got.To != nil {
+		t.Errorf("http: %+v", got)
 	}
 }
 
-// A reverse port forward's task takes no operational port: the minion
-// listens where its args say (checked), and core keeps the destination,
-// checked as a stream's. One whose listen address or destination does not
-// read is the operator's to fix.
+// A reverse tunnel's task takes no operational port: the minion listens
+// where its args say (checked); a forward's destination is core's,
+// checked as a stream's; SOCKS needs none, and takes TCP alone. UDP only
+// through a command that opens it. One that does not read is the
+// operator's to fix.
 func TestOpenReverse(t *testing.T) {
 	ctx := context.Background()
 	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New(), Number: 3}
 	f := &fakeTaskTunnels{}
 	r := &minionTaskResolver{tunnels: f}
 	wire := map[string]any{"bind": " 0.0.0.0 ", "listen": int64(8080), "udp": true, "host": " 10.8.0.2 ", "to": int64(4444), "max_streams": int64(4)}
-	port, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), protocol.ActionReversePortForward, wire)
-	if err != nil || port != 0 {
-		t.Fatalf("reverse: %d %v", port, err)
+	port, front, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), reverseCmd, wire)
+	if err != nil || port != 0 || front != protocol.FrontForward {
+		t.Fatalf("reverse: %d %s %v", port, front, err)
 	}
 	o := f.opened[0]
-	if o.Purpose != models.OperationalPurposeReverse || o.Bind != "0.0.0.0" || o.Listen != 8080 || !o.UDP || o.Host != "10.8.0.2" || o.HostPort != 4444 ||
-		o.MaxStreams != 4 || o.SessionNumber != 3 || o.Port != 0 {
+	if o.Purpose != models.OperationalPurposeReverse || o.Front != protocol.FrontForward || o.Bind != "0.0.0.0" || o.Listen != 8080 || !o.UDP ||
+		o.Host != "10.8.0.2" || o.HostPort != 4444 || o.MaxStreams != 4 || o.SessionNumber != 3 || o.Port != 0 {
 		t.Errorf("opened %+v", o)
 	}
 	if wire["bind"] != "0.0.0.0" || wire["host"] != "10.8.0.2" {
 		t.Errorf("args %v", wire)
 	}
+	if _, front, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), reverseCmd, map[string]any{"front": "socks", "bind": "0.0.0.0",
+		"listen": int64(1080)}); err != nil || front != protocol.FrontSOCKS {
+		t.Fatalf("reverse socks: %s %v", front, err)
+	}
+	if o := f.opened[1]; o.Front != protocol.FrontSOCKS || o.Host != "" || o.UDP {
+		t.Errorf("reverse socks: %+v", o)
+	}
+	tcpOnly := reverseCmd
+	tcpOnly.Opens = nil
 	for name, c := range map[string]struct {
+		cmd  protocol.BuildCommand
 		wire map[string]any
 		want string
 	}{
-		"no bind":      {map[string]any{"listen": int64(1), "host": "h", "to": int64(1)}, "where the minion listens"},
-		"listen -1":    {map[string]any{"bind": "0.0.0.0", "listen": int64(-1), "host": "h", "to": int64(1)}, "where the minion listens"},
-		"listen 70000": {map[string]any{"bind": "0.0.0.0", "listen": int64(70000), "host": "h", "to": int64(1)}, "where the minion listens"},
-		"no host":      {map[string]any{"bind": "0.0.0.0", "listen": int64(1), "to": int64(1)}, "destination"},
-		"to 0":         {map[string]any{"bind": "0.0.0.0", "listen": int64(1), "host": "h"}, "destination"},
+		"no bind":       {reverseCmd, map[string]any{"listen": int64(1), "host": "h", "to": int64(1)}, "where the minion listens"},
+		"listen -1":     {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(-1), "host": "h", "to": int64(1)}, "where the minion listens"},
+		"listen 70000":  {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(70000), "host": "h", "to": int64(1)}, "where the minion listens"},
+		"no host":       {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "to": int64(1)}, "destination"},
+		"to 0":          {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "host": "h"}, "destination"},
+		"udp socks":     {reverseCmd, map[string]any{"front": "socks", "bind": "0.0.0.0", "listen": int64(1), "udp": true}, "TCP alone"},
+		"udp, tcp only": {tcpOnly, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "udp": true, "host": "h", "to": int64(1)}, "TCP alone"},
+		"http":          {reverseCmd, map[string]any{"front": "http", "bind": "0.0.0.0", "listen": int64(1)}, "front: one of forward, socks"},
 	} {
-		if _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), protocol.ActionReversePortForward, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
+		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), c.cmd, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if len(f.opened) != 1 {
-		t.Errorf("a bad reverse forward kept: %+v", f.opened)
+	if len(f.opened) != 2 {
+		t.Errorf("a bad reverse tunnel kept: %+v", f.opened)
 	}
 	f.err = miniontunnels.ErrNoListeners
-	if _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), protocol.ActionReversePortForward,
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), reverseCmd,
 		map[string]any{"bind": "0.0.0.0", "listen": int64(1), "host": "h", "to": int64(1)}); err == nil || !strings.Contains(err.Error(), "no reverse port forwards") {
 		t.Errorf("no listeners: %v", err)
 	}
 }
 
-// A reverse port forward's tunnel has no port: it says where the minion is
-// to listen, where it says it does (live), and the destination; it
-// listens only once the minion said so.
+// A reverse tunnel's tunnel has no port: it says where the minion is to
+// listen, where it says it does (live), and the destination; it listens
+// only once the minion said so. A reverse SOCKS proxy's says its user and
+// password while it runs.
 func TestReverseTunnel(t *testing.T) {
 	ctx := context.Background()
-	live, quiet := uuid.New(), uuid.New()
+	live, quiet, socks := uuid.New(), uuid.New(), uuid.New()
 	r := &minionTaskResolver{tunnels: &fakeTaskTunnels{address: "core.example", live: map[uuid.UUID]miniontunnels.Summary{
-		live: {Open: 1, Streams: 3, Bound: "0.0.0.0:8080"}, quiet: {}}}}
-	reverse := protocol.ActionReversePortForward
+		live: {Open: 1, Streams: 3, Bound: "0.0.0.0:8080"}, quiet: {}, socks: {Bound: "0.0.0.0:1080", User: "logos", Password: "pw"}}}}
+	reverse := protocol.ActionReverseTunnel
 	args := map[string]any{"bind": "0.0.0.0", "listen": float64(8080), "udp": true, "host": "10.8.0.2", "to": float64(4444)}
 	got, err := r.Tunnel(ctx, &model.MinionTask{ID: live.String(), Action: &reverse, Args: args})
-	if err != nil || got.Purpose != models.OperationalPurposeReverse || got.Port != 0 || got.Address != nil || got.To == nil ||
+	if err != nil || got.Front != protocol.FrontForward || !got.Reverse || got.Port != 0 || got.Address != nil || got.To == nil ||
 		*got.To != "10.8.0.2:4444" || got.Bind == nil || *got.Bind != "0.0.0.0" || got.Listen == nil || *got.Listen != 8080 ||
-		got.Bound == nil || *got.Bound != "0.0.0.0:8080" || !got.Listening || got.Open != 1 || got.Streams != 3 || got.UDP == nil || !*got.UDP {
+		got.Bound == nil || *got.Bound != "0.0.0.0:8080" || !got.Listening || got.Open != 1 || got.Streams != 3 || got.UDP == nil || !*got.UDP ||
+		got.User != nil || got.Password != nil {
 		t.Fatalf("reverse: %+v %v", got, err)
 	}
 	got, err = r.Tunnel(ctx, &model.MinionTask{ID: quiet.String(), Action: &reverse, Args: args})
 	if err != nil || got.Listening || got.Bound != nil {
 		t.Fatalf("not listening yet: %+v %v", got, err)
+	}
+	got, _ = r.Tunnel(ctx, &model.MinionTask{ID: socks.String(), Action: &reverse, Args: map[string]any{"front": "socks", "bind": "0.0.0.0",
+		"listen": float64(1080)}})
+	if got.Front != protocol.FrontSOCKS || got.To != nil || got.User == nil || *got.User != "logos" || got.Password == nil || *got.Password != "pw" {
+		t.Errorf("reverse socks: %+v", got)
+	}
+}
+
+type fakeTaskBuilds struct{ b *models.Build }
+
+func (f fakeTaskBuilds) FindByBuildID(context.Context, uuid.UUID) (*models.Build, error) {
+	return f.b, nil
+}
+
+type fakeTaskSchemas struct{ s *models.ModuleBuildSchema }
+
+func (f fakeTaskSchemas) LatestBuildSchema(context.Context, string) (*models.ModuleBuildSchema, error) {
+	return f.s, nil
+}
+
+// A session's tunnel commands come with core's own params beside the
+// command's (the front, the port, a forward's destination, the cap): no
+// num, so they never go to the minion; others come as they are.
+func TestCommandsHaveCoreParams(t *testing.T) {
+	timeout := protocol.FieldSpec{Key: "timeout", Num: 2, Type: protocol.FieldDuration, Default: "10s"}
+	cmd := tunnelCmd
+	cmd.Params = []protocol.FieldSpec{timeout}
+	ls := protocol.BuildCommand{ID: "ls", Op: 4, Action: protocol.ActionListDir, Params: []protocol.FieldSpec{{Key: "path", Num: 1, Type: protocol.FieldString}}}
+	sc := &models.ModuleBuildSchema{BuildSchema: protocol.BuildSchema{Commands: []protocol.BuildCommand{cmd, ls}}}
+	r := &minionTaskResolver{builds: fakeTaskBuilds{b: &models.Build{ModuleName: "bob", Commands: []string{"tunnel", "ls"}}},
+		schemas: fakeTaskSchemas{s: sc}}
+	_, commands, err := r.commandsOf(context.Background(), &models.MinionSession{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, p := range commands[0].Params {
+		keys = append(keys, p.Key)
+	}
+	if strings.Join(keys, ",") != "timeout,front,port,host,to,cap" || len(commands[1].Params) != 1 || len(sc.Commands[0].Params) != 1 {
+		t.Errorf("tunnel %v; ls %d; the schema's own %d", keys, len(commands[1].Params), len(sc.Commands[0].Params))
+	}
+	wire, problems := protocol.TaskArgs(commands[0].Params, map[string]any{"front": "http"})
+	if problems != nil || wire["front"] != "http" || wire["cap"] == nil || len(protocol.WireArgs(commands[0].Params, wire)) != 1 {
+		t.Errorf("args %v %v", wire, problems)
 	}
 }

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 import {
+  capLabel,
   frontLabel,
   hostPort,
+  httpProxyURL,
+  parseCap,
+  reverseSocksURL,
   listenAddress,
   proxyState,
   stopIdleOf,
@@ -35,8 +39,10 @@ const stream = (s: Partial<TunnelStream>): TunnelStream => ({
 const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   port: 41000,
   address: null,
-  purpose: "socks_proxy",
+  front: "socks",
+  reverse: false,
   to: null,
+  cap: 0,
   listening: true,
   open: 0,
   streams: 0,
@@ -54,6 +60,34 @@ describe("the proxy's address", () => {
     expect(proxyURL("10.0.0.1", 41003)).toBe("socks5h://10.0.0.1:41003")
     expect(proxychainsLine("fe80::1", 41000)).toBe("socks5 fe80::1 41000")
     expect(proxychainsLine("[fe80::1]", 41000)).toBe("socks5 fe80::1 41000")
+    expect(proxychainsLine("10.0.0.1", 41001, "http")).toBe("http 10.0.0.1 41001")
+    expect(httpProxyURL("fe80::1", 41001)).toBe("http://[fe80::1]:41001")
+    expect(reverseSocksURL("10.0.0.7:1080", "logos", "a/b")).toBe("socks5h://logos:a%2Fb@10.0.0.7:1080")
+  })
+})
+
+describe("a tunnel's bandwidth cap", () => {
+  it("says it, or none", () => {
+    expect(capLabel(0)).toBe("none")
+    expect(capLabel(512 * 1024)).toBe("512 KB/s each way")
+  })
+
+  it("reads as an operator types it", () => {
+    for (const [text, value] of [
+      ["", 0],
+      ["none", 0],
+      ["0", 0],
+      ["1048576", 1048576],
+      ["512k", 512 * 1024],
+      ["2M", 2 * 1024 * 1024],
+      ["1.5 MiB/s", 1.5 * 1024 * 1024],
+      ["1g", 1024 ** 3],
+    ] as const) {
+      expect(parseCap(text)).toEqual({ ok: true, value })
+    }
+    expect(parseCap("fast").ok).toBe(false)
+    expect(parseCap("-5").ok).toBe(false)
+    expect(parseCap("3g").ok).toBe(false)
   })
 })
 
@@ -84,9 +118,12 @@ describe("the proxy's state", () => {
   })
 
   it("names what is in front of the port", () => {
-    expect(frontLabel("socks_proxy")).toBe("SOCKS proxy")
-    expect(frontLabel("port_forward")).toBe("Port forward")
-    expect(frontLabel("http_proxy")).toBe("http proxy")
+    expect(frontLabel("socks")).toBe("SOCKS proxy")
+    expect(frontLabel("http")).toBe("HTTP proxy")
+    expect(frontLabel("forward")).toBe("Port forward")
+    expect(frontLabel("a_later_one")).toBe("a later one")
+    expect(frontLabel("forward", true)).toBe("Reverse port forward")
+    expect(frontLabel("socks", true)).toBe("Reverse SOCKS")
   })
 
   it("changes its version as the tunnel moves on", () => {
@@ -99,8 +136,10 @@ describe("reverse port forwards", () => {
     ({
       port: 0,
       address: null,
-      purpose: "reverse_port_forward",
+      front: "forward",
+      reverse: true,
       to: "10.8.0.2:4444",
+      cap: 0,
       bind: "0.0.0.0",
       listen: 8080,
       bound: null,
@@ -114,7 +153,7 @@ describe("reverse port forwards", () => {
     }) as Tunnel
 
   it("says what it is", () => {
-    expect(frontLabel("reverse_port_forward")).toBe("Reverse port forward")
+    expect(frontLabel(reverse({}).front, true)).toBe("Reverse port forward")
   })
 
   it("listens where the minion said, else where the task asked", () => {

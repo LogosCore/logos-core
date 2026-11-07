@@ -88,14 +88,26 @@ func (f *fakeListeners) SeenStream(_ context.Context, task uuid.UUID, n uint64) 
 	return nil
 }
 
-func (f *fakeListeners) SetBytes(_ context.Context, task uuid.UUID, up, down int64) error {
+func (f *fakeListeners) SetCounts(_ context.Context, task uuid.UUID, up, down int64, opened uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	l, ok := f.recs[task]
 	if !ok {
 		return repository.ErrNotFound
 	}
-	l.Up, l.Down = up, down
+	l.Up, l.Down, l.Opened = up, down, opened
+	f.recs[task] = l
+	return nil
+}
+
+func (f *fakeListeners) SetCap(_ context.Context, task uuid.UUID, limit int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l, ok := f.recs[task]
+	if !ok {
+		return repository.ErrNotFound
+	}
+	l.Cap = limit
 	f.recs[task] = l
 	return nil
 }
@@ -155,7 +167,7 @@ func newReverseRigWith(t *testing.T, dest string, maxStreams int, udp bool, cfg 
 		operation: uuid.New()}
 	r.svc = newReverseService(t, r.listeners, r.tasks, r.bus, cfg...)
 	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskRunning,
-		Action: protocol.ActionReversePortForward}
+		Action: protocol.ActionReverseTunnel}
 	err := r.svc.OpenReverse(context.Background(), Opening{Task: r.task, Session: r.session, Operation: r.operation, By: uuid.New(),
 		Purpose: models.OperationalPurposeReverse, Bind: "0.0.0.0", Listen: 8080, UDP: udp, Host: host, HostPort: port, MaxStreams: maxStreams,
 		Timeout: time.Second})
@@ -404,9 +416,10 @@ func TestReverseCloseAndRestart(t *testing.T) {
 	listeners := &fakeListeners{recs: map[uuid.UUID]models.MinionListener{}}
 	tasks := &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}}
 	running, ended, session := uuid.New(), uuid.New(), uuid.New()
-	listeners.recs[running] = models.MinionListener{TaskID: running, SessionID: session, Host: host, HostPort: port, Streams: 5, Up: 3, Down: 4,
-		Bound: "0.0.0.0:8080"}
-	listeners.recs[ended] = models.MinionListener{TaskID: ended, SessionID: session, Host: host, HostPort: port, Streams: 2, Up: 20, Down: 200}
+	listeners.recs[running] = models.MinionListener{TaskID: running, SessionID: session, Host: host, HostPort: port, Streams: 5, Opened: 5,
+		Up: 3, Down: 4, Bound: "0.0.0.0:8080"}
+	listeners.recs[ended] = models.MinionListener{TaskID: ended, SessionID: session, Host: host, HostPort: port, Streams: 2, Opened: 2, Up: 20,
+		Down: 200}
 	tasks.tasks[running] = models.MinionTask{TaskID: running, SessionID: session, State: models.MinionTaskRunning}
 	tasks.tasks[ended] = models.MinionTask{TaskID: ended, SessionID: session, State: models.MinionTaskDone}
 	svc := newReverseService(t, listeners, tasks, &recordingBus{})

@@ -77,6 +77,11 @@ func (r *mutationResolver) CancelMinionTask(ctx context.Context, id string) (*mo
 	return r.MinionTaskResolver.CancelMinionTask(ctx, id)
 }
 
+// SetMinionTunnelCap is the resolver for the setMinionTunnelCap field.
+func (r *mutationResolver) SetMinionTunnelCap(ctx context.Context, taskID string, cap int) (*model.MinionTask, error) {
+	return r.MinionTaskResolver.SetMinionTunnelCap(ctx, taskID, cap)
+}
+
 // MinionStreamLink is the resolver for the minionStreamLink field.
 func (r *mutationResolver) MinionStreamLink(ctx context.Context, taskID string) (*model.MinionStreamLink, error) {
 	return r.MinionTaskResolver.MinionStreamLink(ctx, taskID)

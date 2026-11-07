@@ -33,7 +33,7 @@ export const operationalPortKeys = {
 const portLists: LiveListSpec<OperationalPortFieldsFragment> = {
   lists: operationalPortKeys.lists(),
   sensitive: (params) => !!(params as PortListParams).search,
-  membership: (p) => [p.port, p.sessionNumber, p.openedByName, p.purpose],
+  membership: (p) => [p.port, p.sessionNumber, p.openedByName, p.front],
 }
 
 export function useOperationalPorts(params: PortListParams) {

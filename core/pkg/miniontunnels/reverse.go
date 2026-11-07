@@ -43,16 +43,26 @@ func (s *Service) WithListeners(l repository.IMinionListenerRepository) *Service
 	return s
 }
 
-// OpenReverse keeps a reverse port forward's listener for a task about to
-// be queued: the minion listens at o.Bind:o.Listen once it has the task,
-// and core connects its streams to o.Host:o.HostPort.
+// OpenReverse keeps a reverse tunnel's listener for a task about to be
+// queued: the minion listens at o.Bind:o.Listen once it has the task, and
+// core connects its streams to o.Host:o.HostPort (o.Front forward), or
+// serves SOCKS5 on them behind a password it makes now (socks).
 func (s *Service) OpenReverse(ctx context.Context, o Opening) error {
 	if s.listeners == nil {
 		return ErrNoListeners
 	}
+	front := o.Front
+	if front == "" {
+		front = protocol.FrontForward
+	}
 	rec := &models.MinionListener{TaskID: o.Task, OperationID: o.Operation, SessionID: o.Session, OpenedBy: o.By, OpenedAt: s.now(),
-		SessionNumber: o.SessionNumber, OpenedByName: o.ByName, Bind: o.Bind, Listen: o.Listen, UDP: o.UDP, Host: o.Host, HostPort: o.HostPort,
-		MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle}
+		SessionNumber: o.SessionNumber, OpenedByName: o.ByName, Bind: o.Bind, Listen: o.Listen, UDP: o.UDP, Front: front,
+		MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle, Cap: o.Cap}
+	if front == protocol.FrontSOCKS {
+		rec.User, rec.Password = ReverseSOCKSUser, newPassword()
+	} else {
+		rec.Host, rec.HostPort = o.Host, o.HostPort
+	}
 	if err := s.listeners.Insert(ctx, rec); err != nil {
 		return fmt.Errorf("keep a reverse port forward: %w", err)
 	}
@@ -65,9 +75,10 @@ func (s *Service) OpenReverse(ctx context.Context, o Opening) error {
 // minion, numbered past rec.Streams.
 func (s *Service) takeUp(rec *models.MinionListener) *tunnel {
 	t := newTunnel(&models.OperationalPort{TaskID: rec.TaskID, SessionID: rec.SessionID, OperationID: rec.OperationID,
-		Purpose: models.OperationalPurposeReverse, Host: rec.Host, HostPort: rec.HostPort, Streams: rec.Streams, Up: rec.Up, Down: rec.Down,
-		MaxStreams: rec.MaxStreams, Timeout: rec.Timeout, StopIdle: rec.StopIdle}, nil, true)
+		Purpose: models.OperationalPurposeReverse, Host: rec.Host, HostPort: rec.HostPort, Streams: rec.Streams, Opened: rec.Opened,
+		Up: rec.Up, Down: rec.Down, MaxStreams: rec.MaxStreams, Timeout: rec.Timeout, StopIdle: rec.StopIdle, Cap: rec.Cap}, nil, true)
 	t.reverse, t.bind, t.listen, t.bound, t.reverseUDP = true, rec.Bind, rec.Listen, rec.Bound, rec.UDP
+	t.front, t.user, t.password = rec.Front, rec.User, rec.Password
 	s.mu.Lock()
 	s.tunnels[rec.TaskID] = t
 	s.mu.Unlock()
@@ -85,7 +96,7 @@ func (s *Service) reopenReverse(ctx context.Context, rec *models.MinionListener)
 	switch {
 	case repository.IsNotFound(err) || (err == nil && (task.Finished() || task.CancelRequestedAt != nil)):
 		if err == nil {
-			s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Streams, Up: rec.Up, Down: rec.Down})
+			s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Opened, Up: rec.Up, Down: rec.Down})
 		}
 		if err := s.listeners.Release(ctx, rec.TaskID); err != nil {
 			s.logger.Warn("tunnels: forget an ended task's reverse port forward", zap.Error(err))
@@ -150,8 +161,8 @@ func (s *Service) takeOpen(session uuid.UUID, it protocol.TunnelItem) ([]cbor.Ra
 		return closeItem(it.Task, it.Stream, protocol.TunnelCloseTaskEnded)
 	}
 	if st := t.streams[it.Stream]; st != nil {
-		if st.rec.Result != nil {
-			t.replies = append(t.replies, st.replyItem())
+		if st.answer != nil {
+			t.replies = append(t.replies, *st.answer)
 			s.wake(t.session)
 		}
 		return nil, nil
@@ -162,14 +173,16 @@ func (s *Service) takeOpen(session uuid.UUID, it protocol.TunnelItem) ([]cbor.Ra
 	t.last, t.counted = it.Stream, true
 	refuse := 0
 	switch {
-	case it.UDP != t.reverseUDP, it.UDP && it.Host == "":
+	case it.UDP != t.reverseUDP, it.UDP && it.Host == "", it.UDP && t.front == protocol.FrontSOCKS:
 		// A TCP stream of a UDP forward, or the other way; a UDP one that
-		// names no source to send back to.
+		// names no source to send back to; any but TCP for SOCKS.
 		refuse = protocol.TunnelFailed
 	case len(t.streams) >= t.maxStreams:
 		refuse = protocol.TunnelNotAllowed
 	}
 	if refuse != 0 {
+		// A stream it had, if not opened.
+		t.opened++
 		t.replies = append(t.replies, protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: t.task[:], Stream: it.Stream, Result: refuse})
 		s.wake(t.session)
 		s.done.Add(1)
@@ -180,6 +193,7 @@ func (s *Service) takeOpen(session uuid.UUID, it protocol.TunnelItem) ([]cbor.Ra
 		return nil, nil
 	}
 	st := &stream{t: t, id: it.Stream, done: make(chan struct{}), upSignal: make(chan struct{}, 1), downSignal: make(chan struct{}, 1),
+		window: downWindow,
 		rec: models.MinionTunnelStream{TaskID: t.task, Stream: it.Stream, Client: net.JoinHostPort(it.Host, strconv.FormatUint(it.Port, 10)),
 			Host: t.fwdHost, Port: t.fwdPort, OpenedAt: s.now()}}
 	if it.UDP {
@@ -187,14 +201,50 @@ func (s *Service) takeOpen(session uuid.UUID, it protocol.TunnelItem) ([]cbor.Ra
 	}
 	st.rec.SearchText = models.TunnelStreamSearchText(&st.rec)
 	t.streams[it.Stream] = st
+	t.opened++
 	t.streamsChanged(s.now())
 	t.changed = true
 	s.done.Add(1)
-	if it.UDP {
+	switch {
+	case it.UDP:
 		go s.connectUDP(st)
+	case t.front == protocol.FrontSOCKS:
+		go s.takeSOCKS(st, protocol.TunnelRoom(it.Room))
+	default:
+		go s.connect(st, protocol.TunnelRoom(it.Room))
+	}
+	return nil, nil
+}
+
+// refuseOpen answers an open of the minion's that core does not take as
+// it is (why: a key it does not know, an item that does not read): a
+// reverse tunnel's stream gets unsupported, and its number is used up; any
+// other task's, a close, as takeOpen gives one.
+func (s *Service) refuseOpen(session uuid.UUID, it protocol.TunnelItem, why error) ([]cbor.RawMessage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tid, err := uuid.FromBytes(it.Task)
+	if err != nil {
+		return closeItem(it.Task, it.Stream, protocol.TunnelCloseTaskEnded)
+	}
+	t := s.tunnels[tid]
+	if t == nil || t.session != session || t.closing || !t.reverse {
+		return closeItem(it.Task, it.Stream, protocol.TunnelCloseTaskEnded)
+	}
+	if t.streams[it.Stream] != nil || it.Stream <= t.last {
 		return nil, nil
 	}
-	go s.connect(st, protocol.TunnelRoom(it.Room))
+	t.last, t.counted = it.Stream, true
+	t.opened++
+	s.logger.Info("tunnels: an open core does not take", zap.String("task_id", tid.String()), zap.Uint64("stream", it.Stream), zap.Error(why))
+	t.replies = append(t.replies, protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: t.task[:], Stream: it.Stream,
+		Result: protocol.TunnelUnsupported})
+	s.wake(t.session)
+	s.done.Add(1)
+	go func() {
+		defer s.done.Done()
+		s.seen(t.task, it.Stream)
+	}()
 	return nil, nil
 }
 
@@ -239,7 +289,9 @@ func (s *Service) connectUDP(st *stream) {
 	}
 	st.client, st.opened, st.lastActive = c, true, s.now()
 	st.rec.Bound = c.LocalAddr().String()
-	t.replies = append(t.replies, st.replyItem())
+	answer := st.replyItem()
+	st.answer = &answer
+	t.replies = append(t.replies, answer)
 	t.changed = true
 	s.mu.Unlock()
 	s.wake(session)
@@ -275,7 +327,9 @@ func (s *Service) connectUDP(st *stream) {
 // sends none before core's reply.
 func (s *Service) takeReverseDatagram(st *stream, d protocol.TunnelDatagramItem) {
 	a, c := st.udp, st.client
-	if a == nil || !st.opened || c == nil || !a.in.take(d.Seq) {
+	if a == nil || !st.opened || c == nil || !a.in.take(d.Seq) || !st.t.inAllows(len(d.Data), s.now()) {
+		// Taken already, not open yet, or over the tunnel's cap: dropped,
+		// as UDP is.
 		s.mu.Unlock()
 		return
 	}
@@ -361,8 +415,10 @@ func (s *Service) connect(st *stream, room uint64) {
 	}
 	st.client, st.opened = c, true
 	st.rec.Bound = c.LocalAddr().String()
-	st.upLimit, st.ackedEnd = room, downWindow
-	t.replies = append(t.replies, st.replyItem())
+	st.upLimit, st.ackedEnd = room, uint64(st.window)
+	answer := st.replyItem()
+	st.answer = &answer
+	t.replies = append(t.replies, answer)
 	t.changed = true
 	s.mu.Unlock()
 	s.wake(session)

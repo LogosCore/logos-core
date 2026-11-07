@@ -193,7 +193,7 @@ func (s *Service) takeDatagram(session uuid.UUID, d protocol.TunnelDatagramItem)
 		return nil, nil
 	}
 	a := st.udp
-	if a == nil || !st.opened || !a.in.take(d.Seq) || a.from == nil || st.t.relay == nil {
+	if a == nil || !st.opened || !a.in.take(d.Seq) || a.from == nil || st.t.relay == nil || !st.t.inAllows(len(d.Data), s.now()) {
 		s.mu.Unlock()
 		return nil, nil
 	}

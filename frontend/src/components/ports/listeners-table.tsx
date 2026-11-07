@@ -68,9 +68,15 @@ export function ListenersTable({
               </span>
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="truncate font-mono text-sm" title={`core connects to ${l.to}`}>
-                {l.to}
-              </span>
+              {l.to ? (
+                <span className="truncate font-mono text-sm" title={`core connects to ${l.to}`}>
+                  {l.to}
+                </span>
+              ) : (
+                <span className="truncate text-sm" title="A SOCKS5 proxy into core's network, behind the task's password">
+                  SOCKS: where each tool asks
+                </span>
+              )}
               <span className={cn("text-xs", l.listening ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
                 {l.listening ? "listening" : "the minion listens once it has the task"}
               </span>

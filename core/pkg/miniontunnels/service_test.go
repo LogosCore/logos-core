@@ -29,6 +29,8 @@ import (
 type fakePorts struct {
 	mu   sync.Mutex
 	recs map[uuid.UUID]*models.OperationalPort
+	// reserved counts the blocks of stream numbers taken (writes).
+	reserved int
 }
 
 func (f *fakePorts) Insert(_ context.Context, p *models.OperationalPort) error {
@@ -73,25 +75,37 @@ func (f *fakePorts) FindByTaskID(_ context.Context, task uuid.UUID) (*models.Ope
 	return nil, repository.ErrNotFound
 }
 
-func (f *fakePorts) NextStream(_ context.Context, task uuid.UUID) (uint64, error) {
+func (f *fakePorts) ReserveStreams(_ context.Context, task uuid.UUID, n uint64) (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r := f.recs[task]
 	if r == nil {
 		return 0, repository.ErrNotFound
 	}
-	r.Streams++
+	r.Streams += n
+	f.reserved++
 	return r.Streams, nil
 }
 
-func (f *fakePorts) SetBytes(_ context.Context, task uuid.UUID, up, down int64) error {
+func (f *fakePorts) SetCounts(_ context.Context, task uuid.UUID, up, down int64, opened uint64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	r := f.recs[task]
 	if r == nil {
 		return repository.ErrNotFound
 	}
-	r.Up, r.Down = up, down
+	r.Up, r.Down, r.Opened = up, down, opened
+	return nil
+}
+
+func (f *fakePorts) SetCap(_ context.Context, task uuid.UUID, limit int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.recs[task]
+	if r == nil {
+		return repository.ErrNotFound
+	}
+	r.Cap = limit
 	return nil
 }
 
@@ -219,8 +233,9 @@ func newRig(t *testing.T, maxStreams int, cfg func(*Config), opening ...func(*Op
 	r.svc = New(c, r.ports, r.tasks, r.bus, zap.NewNop())
 	r.svc.Start(context.Background())
 	t.Cleanup(r.svc.Stop)
-	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskSent, Action: protocol.ActionSocksProxy}
-	o := Opening{Task: r.task, Session: r.session, Operation: uuid.New(), By: uuid.New(), MaxStreams: maxStreams, Timeout: time.Second}
+	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskSent, Action: protocol.ActionTunnel}
+	// Its command opens udp: its SOCKS proxy takes UDP ASSOCIATE.
+	o := Opening{Task: r.task, Session: r.session, Operation: uuid.New(), By: uuid.New(), MaxStreams: maxStreams, Timeout: time.Second, UDP: true}
 	for _, f := range opening {
 		f(&o)
 	}
@@ -893,7 +908,7 @@ func TestRestartReopens(t *testing.T) {
 	r := newRig(t, 0, nil)
 	r.tasks.ack(r.task)
 	ended := uuid.New()
-	r.ports.recs[ended] = &models.OperationalPort{Port: freePort(t), TaskID: ended, Streams: 7, Up: 70, Down: 700}
+	r.ports.recs[ended] = &models.OperationalPort{Port: freePort(t), TaskID: ended, Streams: 7, Opened: 7, Up: 70, Down: 700}
 	r.tasks.tasks[ended] = models.MinionTask{TaskID: ended, State: models.MinionTaskDone}
 	r.svc.mu.Lock()
 	r.svc.tunnels[r.task].up, r.svc.tunnels[r.task].down = 100, 200

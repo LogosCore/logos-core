@@ -40,7 +40,7 @@ func TestReadRequest(t *testing.T) {
 	}
 	for _, c := range cases {
 		cl := client(c.in...)
-		got, err := readRequest(cl)
+		got, err := readRequest(cl, nil)
 		if err != nil || got != c.want {
 			t.Errorf("%s: %+v %v, want %+v", c.name, got, err, c.want)
 			continue
@@ -70,7 +70,7 @@ func TestReadRequestRefuses(t *testing.T) {
 	}
 	for _, c := range cases {
 		cl := client(c.in...)
-		if _, err := readRequest(cl); !errors.Is(err, errRefused) {
+		if _, err := readRequest(cl, nil); !errors.Is(err, errRefused) {
 			t.Errorf("%s: %v, want refused", c.name, err)
 		}
 		if !bytes.Equal(cl.out.Bytes(), c.reply) {
@@ -80,7 +80,7 @@ func TestReadRequestRefuses(t *testing.T) {
 	for name, in := range map[string][]byte{
 		"version 6": {6, 1, 0}, "cut short": {5, 1, 0, 5, 1, 0, 1, 10}, "socks4 user id too long": append([]byte{4, 1, 0, 80, 10, 0, 0, 1}, bytes.Repeat([]byte{'u'}, 300)...),
 	} {
-		if _, err := readRequest(client(in...)); err == nil || errors.Is(err, errRefused) {
+		if _, err := readRequest(client(in...), nil); err == nil || errors.Is(err, errRefused) {
 			t.Errorf("%s: %v, want an error", name, err)
 		}
 	}
