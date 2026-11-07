@@ -1,14 +1,19 @@
 // Package miniontunnels carries minions' tunnels (docs:
-// contracts/minion-messages/tunnels.md): a tunnel task's SOCKS proxy on one
-// of core's operational ports, whose clients' connections become streams
-// the minion opens from its host, their bytes carried in the session's
-// messages (items 21 to 25) with offsets and a window each way.
+// contracts/minion-messages/tunnels.md): what core puts in front of one of
+// its operational ports for a tunnel task (a SOCKS proxy, or a port forward
+// to one destination), whose clients' connections become streams the
+// minion opens from its host; and a reverse port forward's streams, which
+// the minion opens for each connection to its listener and core connects
+// to the task's destination. Their bytes go in the session's messages
+// (items 21 to 27) with offsets and a window each way, a UDP stream's as
+// datagrams.
 //
 // The service holds the listeners and the streams; minionsync puts what it
 // has for a session in the session's messages (Fill) and hands it the
-// minion's tunnel items (Take), and the task resolver opens the port when
-// it queues a tunnel task (Open). One core instance holds them all: the
-// ports, and what goes on them, live in its process.
+// minion's tunnel items (Take), and the task resolver opens the port (Open),
+// or keeps a reverse forward's listener (OpenReverse), when it queues a
+// tunnel task. One core instance holds them all: the ports, and what goes
+// on them, live in its process.
 package miniontunnels
 
 import (

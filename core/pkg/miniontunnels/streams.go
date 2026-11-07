@@ -158,7 +158,10 @@ func compareUint(a, b uint64) int {
 	return 0
 }
 
-// stream is one SOCKS client's connection, carried by the minion.
+// stream is one of a tunnel's streams, carried by the minion: a client's
+// connection to the port (a SOCKS proxy's or a forward's) or a UDP
+// association, or a connection the minion took at a reverse port forward's
+// listener (a source's datagrams, for a UDP one).
 type stream struct {
 	t      *tunnel
 	id     uint64
