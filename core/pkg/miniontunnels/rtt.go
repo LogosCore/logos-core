@@ -116,8 +116,20 @@ func (s *Service) wakeAt(session uuid.UUID, when time.Time) {
 }
 
 // dueAt is when the stream sends again unasked, should no ack come (its
-// open, its unacked bytes, a probe of a window shut): zero for never.
+// open, its unacked bytes, a probe of a window shut, its ctls): zero for
+// never.
 func (st *stream) dueAt(resend time.Duration) time.Time {
+	at := st.dataDueAt(resend)
+	if st.opened && st.ctlSent > st.ctlBase && !st.ctlSentAt.IsZero() {
+		if c := st.ctlSentAt.Add(resend); at.IsZero() || c.Before(at) {
+			at = c
+		}
+	}
+	return at
+}
+
+// dataDueAt is dueAt for its open and its bytes.
+func (st *stream) dataDueAt(resend time.Duration) time.Time {
 	switch {
 	case st.udp != nil:
 		return time.Time{}

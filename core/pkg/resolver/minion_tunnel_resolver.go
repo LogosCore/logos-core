@@ -83,6 +83,22 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		source, _ := protocol.ArgString(args, protocol.ParamSource)
 		m.Source = strPtr(source)
 	}
+	m.SocksBind = listening && front == protocol.FrontSOCKS && sum.Accept
+	if front == protocol.FrontTerminal {
+		// Its program and size, as its args say (core put the defaults
+		// there when it queued the task).
+		program, _ := protocol.ArgString(args, protocol.ParamProgram)
+		line, _ := protocol.ArgString(args, protocol.ParamArgs)
+		m.Program, m.Args = strPtr(program), strPtr(line)
+		if rows, ok := protocol.ArgInt(args, protocol.ParamRows); ok {
+			n := int(rows)
+			m.Rows = &n
+		}
+		if cols, ok := protocol.ArgInt(args, protocol.ParamCols); ok {
+			n := int(cols)
+			m.Cols = &n
+		}
+	}
 	if reverse {
 		// No operational port: the minion listens, where its args ask and
 		// where it says it does.
@@ -199,11 +215,28 @@ func (r *minionTaskResolver) MinionTunnelStreams(ctx context.Context, taskID str
 	return page, nil
 }
 
+// tunnelKindNames are a stream's kinds past TCP and UDP, as GraphQL names
+// them.
+var tunnelKindNames = map[int]string{
+	protocol.TunnelKindUnix: "unix", protocol.TunnelKindPipe: "pipe", protocol.TunnelKindProcess: "process", protocol.TunnelKindAccept: "accept",
+}
+
 // tunnelStreamModel is a stream as GraphQL has it.
 func tunnelStreamModel(s *models.MinionTunnelStream) *model.MinionTunnelStream {
 	m := &model.MinionTunnelStream{Stream: int(s.Stream), Client: s.Client, Host: s.Host, Port: s.Port, Path: strPtr(s.Path), UDP: s.UDP,
 		OpenedAt: s.OpenedAt.UTC().Format(time.RFC3339Nano),
 		State:    "OPENING", Bound: strPtr(s.Bound), Msg: strPtr(s.Msg), EndedAt: taskTime(s.EndedAt), End: strPtr(s.End), Up: int(s.Up), Down: int(s.Down)}
+	if name, ok := tunnelKindNames[s.Kind]; ok {
+		m.Kind = &name
+	}
+	if s.Kind == protocol.TunnelKindProcess {
+		m.Program, m.Terminal = strPtr(s.Program), s.Terminal
+		if s.Exit != nil {
+			n := int(*s.Exit)
+			m.Exit = &n
+		}
+	}
+	m.Came = strPtr(s.Came)
 	if s.Result != nil {
 		name := protocol.TunnelResultName(*s.Result)
 		m.Result, m.State = &name, "OPEN"
@@ -263,7 +296,7 @@ func (r *minionTaskResolver) portModel(p *models.OperationalPort) *model.Operati
 		dest := net.JoinHostPort(p.Host, strconv.Itoa(p.HostPort))
 		to = &dest
 	}
-	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Front: p.Purpose, To: to, Path: strPtr(p.Path), Address: strPtr(r.tunnels.Address()),
+	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Front: p.Purpose, To: to, Path: strPtr(p.Path), Program: strPtr(p.Program), Address: strPtr(r.tunnels.Address()),
 		SessionID: p.SessionID.String(), SessionNumber: p.SessionNumber, TaskID: p.TaskID.String(), OpenedBy: p.OpenedBy.String(),
 		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Opened)}
 	if sum, ok := r.tunnels.Summary(p.TaskID); ok {

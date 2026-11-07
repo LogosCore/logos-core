@@ -34,7 +34,7 @@ import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
 import { StreamView } from "./stream-view"
 import { TunnelView } from "./tunnel-view"
-import { FRONT_FORWARD } from "./tunnel-values"
+import { FRONT_FORWARD, FRONT_TERMINAL } from "./tunnel-values"
 import type { DeleteTarget } from "./delete-dialog"
 import type { UploadTarget } from "./upload-target"
 import { TabButton } from "./tab-button"
@@ -233,7 +233,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : "Proxy") : "Data"}
+              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.front === FRONT_FORWARD ? "Forward" : t.tunnel?.front === FRONT_TERMINAL ? "Terminal" : "Proxy") : "Data"}
             </TabButton>
           )}
           {hasFeedback && (

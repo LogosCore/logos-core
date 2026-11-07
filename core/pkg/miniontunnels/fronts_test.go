@@ -790,7 +790,8 @@ func TestOpensSayTheirOptions(t *testing.T) {
 	if open.Host != "intranet.corp" || open.Port != 443 || open.Source != "10.0.0.7" || !open.TLS || open.Kind != 0 {
 		t.Errorf("open %+v", open)
 	}
-	st := &stream{t: &tunnel{source: "10.0.0.7", tls: true, fwdKind: protocol.TunnelKindPipe}, id: 1, rec: models.MinionTunnelStream{Path: `\\.\pipe\x`}}
+	st := &stream{t: &tunnel{source: "10.0.0.7", tls: true, fwdKind: protocol.TunnelKindPipe}, id: 1, kind: protocol.TunnelKindPipe,
+		rec: models.MinionTunnelStream{Path: `\\.\pipe\x`}}
 	if it := st.openItem(); it.Kind != protocol.TunnelKindPipe || it.Path != `\\.\pipe\x` || it.Source != "" || it.TLS || it.Validate() != nil {
 		t.Errorf("a pipe's open %+v", it)
 	}

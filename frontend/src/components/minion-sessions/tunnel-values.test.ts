@@ -14,7 +14,10 @@ import {
   reverseState,
   proxyURL,
   proxychainsLine,
+  socatCommand,
+  streamDestination,
   streamState,
+  terminalProgram,
   tunnelVersion,
   type Tunnel,
   type TunnelStream,
@@ -47,6 +50,7 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   path: null,
   source: null,
   tls: false,
+  socksBind: false,
   cap: 0,
   listening: true,
   open: 0,
@@ -208,5 +212,32 @@ describe("stopIdleOf", () => {
     expect(stopIdleOf({ stop_idle: 0 })).toBeNull()
     expect(stopIdleOf({})).toBeNull()
     expect(stopIdleOf(null)).toBeNull()
+  })
+})
+
+describe("terminals", () => {
+  it("names the front and what it runs", () => {
+    expect(frontLabel("terminal")).toBe("Terminal")
+    expect(terminalProgram({ program: null, args: null })).toBe("the host's shell")
+    expect(terminalProgram({ program: "/bin/bash", args: "-l" })).toBe("/bin/bash -l")
+    expect(socatCommand("ops", 41000)).toBe("socat file:`tty`,raw,echo=0 tcp:ops:41000")
+  })
+
+  it("says a process's stream: its program, a terminal or pipes, its exit", () => {
+    const shell = stream({ kind: "process", host: "", port: 0, program: null, terminal: true, bound: null })
+    expect(streamDestination(shell)).toBe("the host's shell")
+    expect(streamState(shell)).toEqual({ label: "Open", tone: "good", detail: "in a terminal" })
+    expect(streamState({ ...shell, terminal: false }).detail).toBe("on pipes: the host gave no terminal")
+    expect(streamState({ ...shell, state: "ENDED", exit: 0, end: "done" })).toEqual({ label: "Exited 0", tone: "muted", detail: "closed by both ends" })
+    expect(streamState({ ...shell, state: "ENDED", exit: 130, end: "done" })).toMatchObject({ label: "Exited 130", tone: "bad" })
+    expect(streamDestination({ ...shell, program: "cmd.exe" })).toBe("cmd.exe")
+  })
+
+  it("says a BIND's stream: where the minion listens, who came", () => {
+    const bind = stream({ kind: "accept", host: "10.0.0.9", port: 21, bound: "0.0.0.0:40001" })
+    expect(streamDestination(bind)).toBe("BIND: listens at 0.0.0.0:40001")
+    expect(streamState(bind).detail).toBe("listening at 0.0.0.0:40001")
+    expect(streamState({ ...bind, came: "10.0.0.9:20" }).detail).toBe("10.0.0.9:20 came")
+    expect(streamState(stream({ state: "ENDED", result: "in_use", end: "not_opened" })).detail).toBe("in use: something listens there already")
   })
 })

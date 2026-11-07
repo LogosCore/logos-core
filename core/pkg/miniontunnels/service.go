@@ -189,6 +189,13 @@ type Opening struct {
 	Path   string
 	Source string
 	TLS    bool
+	// Accept: a SOCKS proxy takes BIND (its command opens accept). A
+	// terminal's (OperationalPurposeTerminal): its Program (none: the
+	// host's shell), Args, and the raw port's Rows and Cols.
+	Accept     bool
+	Program    string
+	Args       []string
+	Rows, Cols int
 }
 
 // Open takes an operational port for a tunnel task about to be queued, and
@@ -217,7 +224,8 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 		rec := &models.OperationalPort{Port: port, Purpose: purpose, Host: o.Host, HostPort: o.HostPort, OperationID: o.Operation, SessionID: o.Session,
 			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle,
 			SessionNumber: o.SessionNumber, OpenedByName: o.ByName, UDP: o.UDP && purpose == models.OperationalPurposeSOCKS, Cap: o.Cap,
-			Kind: o.Kind, Path: o.Path, Source: o.Source, TLS: o.TLS}
+			Kind: o.Kind, Path: o.Path, Source: o.Source, TLS: o.TLS, Accept: o.Accept && purpose == models.OperationalPurposeSOCKS,
+			Program: o.Program, Args: o.Args, Rows: o.Rows, Cols: o.Cols}
 		err := s.ports.Insert(ctx, rec)
 		if errors.Is(err, repository.ErrPortTaken) {
 			continue
@@ -625,6 +633,8 @@ type Summary struct {
 	// Bound is where a reverse port forward's minion says it listens, ""
 	// until it says.
 	Bound string
+	// Accept: its SOCKS proxy takes BIND.
+	Accept bool
 	// StopsAt is when core stops the task, unless a stream opens first:
 	// zero while a stream is open, before the minion has the task, or with
 	// no stop_idle.
@@ -641,7 +651,7 @@ func (s *Service) Summary(task uuid.UUID) (Summary, bool) {
 		return Summary{}, false
 	}
 	return Summary{Port: t.port, Open: len(t.streams), Streams: t.opened, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt(),
-		Cap: t.cap, User: t.user, Password: t.password}, true
+		Cap: t.cap, User: t.user, Password: t.password, Accept: t.accept}, true
 }
 
 // View is the task's tunnel as its task shows it: live while core listens

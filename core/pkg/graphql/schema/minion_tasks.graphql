@@ -216,6 +216,17 @@ type MinionTunnel {
   # as the host routes. tls: a forward's speak TLS to its destination.
   source: String
   tls: Boolean!
+  # A terminal's (front terminal): the program each connection runs on the
+  # minion's host (null: its shell), its args as a command line, and the
+  # terminal's size on the raw port (a web terminal says its own). Null for
+  # any other front.
+  program: String
+  args: String
+  rows: Int
+  cols: Int
+  # A SOCKS proxy's: it takes BIND (its command opens accept), while it
+  # runs.
+  socksBind: Boolean!
   # A reverse SOCKS proxy's clients' user and password, while it runs;
   # null for any other tunnel, and once it ended.
   user: String
@@ -268,12 +279,24 @@ type MinionTunnelStream {
   # port.
   path: String
   udp: Boolean!
+  # What it opens past a TCP connection or a UDP association: unix, pipe,
+  # process (a terminal's) or accept (a SOCKS BIND); null for those.
+  kind: String
+  # A process's: its program (null: the host's shell), whether it runs in
+  # a terminal (false: on pipes; null until it started), and its exit code
+  # once the minion said it.
+  program: String
+  terminal: Boolean
+  exit: Int
+  # An accept's: who connected, host:port.
+  came: String
   openedAt: String!
   # OPENING (the minion connects), OPEN or ENDED.
   state: String!
   # The minion's reply: open, refused, host_unreachable, net_unreachable,
-  # timed_out, not_allowed or failed; its socket's address when open, and
-  # why not. Null before it came.
+  # timed_out, not_allowed, failed, unsupported, not_found, denied or
+  # in_use; its socket's address when open (an accept's: where it
+  # listens), and why not. Null before it came.
   result: String
   bound: String
   msg: String

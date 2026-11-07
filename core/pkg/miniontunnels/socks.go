@@ -44,9 +44,19 @@ type request struct {
 	host    string
 	port    int
 	udp     bool
-	// path: a forward's to a unix socket or a pipe, instead of host and
-	// port.
-	path string
+	// bind: SOCKS5 BIND, the minion listening for one connection (an
+	// accept), host and port the peer the client expects.
+	bind bool
+	// kind: what the stream opens past TCP (protocol.TunnelKind...); path a
+	// forward's unix socket or pipe, instead of host and port; program,
+	// args, rows and cols a terminal's process. client names who asked,
+	// when not the connection's address (the web app's terminal).
+	kind       int
+	path       string
+	program    string
+	args       []string
+	rows, cols int
+	client     string
 }
 
 // errRefused: the client asked for something core does not do, and was
@@ -175,10 +185,11 @@ func readSOCKS5(c io.ReadWriter, auth *socksAuth) (request, error) {
 	r.port = int(binary.BigEndian.Uint16(port[:]))
 	switch req[1] {
 	case 1:
+	case 2:
+		r.bind, r.kind = true, protocol.TunnelKindAccept
 	case 3:
 		r.udp = true
 	default:
-		// BIND.
 		_ = r.reply(c, socks5CommandNotSupported, "")
 		return request{}, errRefused
 	}

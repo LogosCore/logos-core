@@ -45,7 +45,11 @@ import zlib from "node:zlib"
 // Raised to 1 040 at 1 031.9 / 275.8 with the Sessions table's folders: their
 // GraphQL documents (six operations) are in the generated document map,
 // which first paint carries.
-const BUDGET_RAW_KB = 1_040
+// Raised to 1 050 at 1 040.0 / 277.7 with the tunnels' terminals and SOCKS
+// BIND: the new tunnel and stream fields in the generated document map and
+// the classes the terminal front's view uses (xterm.js itself, 337 KB, is
+// a lazy chunk: web-terminal-code.ts).
+const BUDGET_RAW_KB = 1_050
 const BUDGET_SERVED_KB = 280
 
 const dist = path.resolve(import.meta.dirname, "..", "dist")

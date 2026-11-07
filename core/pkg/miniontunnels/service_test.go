@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -299,9 +300,14 @@ type fakeMinion struct {
 	swap    bool
 	// closed are core's closes the minion took.
 	closed []protocol.TunnelCloseItem
-	msgs   int
-	stop   chan struct{}
-	done   chan struct{}
+	// opens are core's opens it took; ctls core's ctls, in the order taken;
+	// dropCtl, how many of core's ctls it loses first (no ack).
+	opens   []protocol.TunnelItem
+	ctls    []protocol.TunnelCtlItem
+	dropCtl int
+	msgs    int
+	stop    chan struct{}
+	done    chan struct{}
 }
 
 type minionStream struct {
@@ -321,6 +327,11 @@ type minionStream struct {
 	sentAt time.Time
 	limit  uint64
 	eofOut bool
+	// Its ctls for core, sent in every message until acked (from ctlBase);
+	// ctlIn, the next of core's it takes.
+	ctlOut  []protocol.TunnelCtlItem
+	ctlBase uint64
+	ctlIn   uint64
 }
 
 // minionResend is how long the fake minion waits for an ack before it
@@ -338,7 +349,9 @@ func startMinion(t *testing.T, r *rig, opts ...func(*fakeMinion)) *fakeMinion {
 		<-m.done
 		m.mu.Lock()
 		for _, st := range m.streams {
-			_ = st.conn.Close()
+			if st.conn != nil {
+				_ = st.conn.Close()
+			}
 		}
 		m.mu.Unlock()
 	})
@@ -396,7 +409,16 @@ func (m *fakeMinion) collect() []cbor.RawMessage {
 	items := m.out
 	m.out = nil
 	now := time.Now()
+	for _, st := range m.streams {
+		for _, c := range st.ctlOut {
+			items = append(items, m.marshal(c))
+		}
+	}
 	for id, st := range m.streams {
+		if st.conn == nil && st.pc == nil {
+			// An accept no one came to yet.
+			continue
+		}
 		if st.pc != nil {
 			for _, d := range st.dgrams {
 				// Each twice: core takes it once.
@@ -458,11 +480,13 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			m.t.Errorf("a tunnel item that does not read: %v", err)
 			return
 		}
+		m.opens = append(m.opens, it)
 		if st := m.streams[it.Stream]; st != nil {
 			var bound string
-			if st.conn != nil {
+			switch {
+			case st.conn != nil:
 				bound = st.conn.LocalAddr().String()
-			} else {
+			case st.pc != nil:
 				bound = st.pc.LocalAddr().String()
 			}
 			m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream, Result: protocol.TunnelOpen,
@@ -480,6 +504,14 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream, Result: protocol.TunnelOpen,
 				Bound: pc.LocalAddr().String()}))
 			go m.readUDP(it.Stream, st)
+			return
+		}
+		if it.Kind == protocol.TunnelKindProcess {
+			m.startProcess(it)
+			return
+		}
+		if it.Kind == protocol.TunnelKindAccept {
+			m.startAccept(it)
 			return
 		}
 		network, address := "tcp", net.JoinHostPort(it.Host, strconv.Itoa(int(it.Port)))
@@ -527,7 +559,10 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			return
 		}
 		st := m.streams[a.Stream]
-		if st == nil || a.Next < st.base {
+		if st != nil && a.Ctl > st.ctlBase && a.Ctl <= st.ctlBase+uint64(len(st.ctlOut)) {
+			st.ctlOut, st.ctlBase = st.ctlOut[a.Ctl-st.ctlBase:], a.Ctl
+		}
+		if st == nil || st.conn == nil || a.Next < st.base {
 			return
 		}
 		k := min(a.Next-st.base, uint64(len(st.buf)))
@@ -541,6 +576,25 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 		if st.sent < st.base {
 			st.sent = st.base
 		}
+	case protocol.ItemTunnelCtl:
+		var c protocol.TunnelCtlItem
+		if err := protocol.UnmarshalCBOR(raw, &c); err != nil || c.Validate() != nil {
+			m.t.Errorf("a ctl that does not read: %v", err)
+			return
+		}
+		if m.dropCtl > 0 {
+			m.dropCtl--
+			return
+		}
+		st := m.streams[c.Stream]
+		if st == nil {
+			return
+		}
+		if c.Seq == st.ctlIn {
+			m.ctls = append(m.ctls, c)
+			st.ctlIn++
+		}
+		m.out = append(m.out, m.marshal(protocol.TunnelAckItem{T: protocol.ItemTunnelAck, Task: task, Stream: c.Stream, Next: st.next, Ctl: st.ctlIn}))
 	case protocol.ItemTunnelClose:
 		var c protocol.TunnelCloseItem
 		if err := protocol.UnmarshalCBOR(raw, &c); err != nil {
@@ -548,9 +602,10 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			return
 		}
 		if st := m.streams[c.Stream]; st != nil {
-			if st.conn != nil {
+			switch {
+			case st.conn != nil:
 				_ = st.conn.Close()
-			} else {
+			case st.pc != nil:
 				_ = st.pc.Close()
 			}
 			delete(m.streams, c.Stream)
@@ -1133,4 +1188,80 @@ func TestForwardRefused(t *testing.T) {
 	if rec := r.stream(1); rec.Result == nil || *rec.Result != protocol.TunnelRefused {
 		t.Errorf("record %+v", rec)
 	}
+}
+
+// startProcess runs a fake process for core's open: it sends back what it
+// gets, and ends on "exit N" saying N (an exit ctl, then its eof). A
+// program named "missing" is not found.
+func (m *fakeMinion) startProcess(it protocol.TunnelItem) {
+	task := m.r.task[:]
+	if it.Path == "missing" {
+		m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream,
+			Result: protocol.TunnelNotFound, Msg: "no such program"}))
+		return
+	}
+	host, minion := newPipe()
+	st := &minionStream{conn: minion, limit: protocol.TunnelRoom(it.Room)}
+	m.streams[it.Stream] = st
+	m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream,
+		Result: protocol.TunnelOpen, Terminal: it.Rows > 0}))
+	go m.read(st)
+	go func() {
+		defer func() { _ = host.Close() }()
+		buf := make([]byte, 4<<10)
+		var line []byte
+		for {
+			n, err := host.Read(buf)
+			if n > 0 {
+				_, _ = host.Write(buf[:n])
+				line = append(line, buf[:n]...)
+				if i := bytes.IndexByte(line, '\n'); i >= 0 {
+					var code int64
+					if _, scanErr := fmt.Sscanf(string(line[:i]), "exit %d", &code); scanErr == nil {
+						m.mu.Lock()
+						st.ctlOut = append(st.ctlOut, protocol.TunnelCtlItem{T: protocol.ItemTunnelCtl, Task: task, Stream: it.Stream,
+							Seq: st.ctlBase + uint64(len(st.ctlOut)), Exit: &code})
+						m.mu.Unlock()
+						// Its exit goes before its eof.
+						time.Sleep(50 * time.Millisecond)
+						_ = host.CloseWrite()
+						return
+					}
+					line = line[i+1:]
+				}
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+}
+
+// startAccept listens for one connection, on the loopback whatever core
+// asked; who comes is said in a ctl, then the stream is theirs.
+func (m *fakeMinion) startAccept(it protocol.TunnelItem) {
+	task := m.r.task[:]
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		m.t.Errorf("an accept: %v", err)
+		return
+	}
+	st := &minionStream{limit: protocol.TunnelRoom(it.Room)}
+	m.streams[it.Stream] = st
+	m.out = append(m.out, m.marshal(protocol.TunnelReplyItem{T: protocol.ItemTunnelReply, Task: task, Stream: it.Stream,
+		Result: protocol.TunnelOpen, Bound: ln.Addr().String()}))
+	go func() {
+		defer func() { _ = ln.Close() }()
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		from := c.RemoteAddr().(*net.TCPAddr)
+		m.mu.Lock()
+		st.conn = c
+		st.ctlOut = append(st.ctlOut, protocol.TunnelCtlItem{T: protocol.ItemTunnelCtl, Task: task, Stream: it.Stream,
+			Seq: st.ctlBase + uint64(len(st.ctlOut)), Host: from.IP.String(), Port: uint64(from.Port)})
+		m.mu.Unlock()
+		m.read(st)
+	}()
 }

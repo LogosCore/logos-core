@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CopyIcon,
   EthernetPortIcon,
   LinkIcon,
   PencilIcon,
   SearchXIcon,
+  SquareTerminalIcon,
   TerminalIcon,
   WaypointsIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import {
   dataTableRowClass,
 } from "@/components/ui/virtualized-data-table";
 import type { MinionTaskFieldsFragment } from "@/graphql/gql/graphql";
+import { useMinionSession } from "@/graphql/hooks/minion-sessions";
 import {
   useMinionTunnelStreams,
   useSetMinionTunnelCap,
@@ -40,11 +42,15 @@ import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { formatDateTime } from "@/lib/date-format";
 import { formatBytes } from "@/lib/format-bytes";
 import { cn } from "@/lib/utils";
+import { LazyWebTerminal } from "./lazy-web-terminal";
+import { preloadWebTerminal } from "./web-terminal-code";
 import { FINISHED } from "./task-actions";
+import { laggyKind } from "./terminal-socket";
 import {
   FRONT_FORWARD,
   FRONT_HTTP,
   FRONT_SOCKS,
+  FRONT_TERMINAL,
   capLabel,
   forwardTo,
   frontLabel,
@@ -58,8 +64,11 @@ import {
   proxychainsLine,
   reverseSocksURL,
   reverseState,
+  socatCommand,
   stopIdleOf,
+  streamDestination,
   streamState,
+  terminalProgram,
   tunnelVersion,
   type Tone,
   type Tunnel,
@@ -68,7 +77,9 @@ import {
 
 // A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md, What
 // core keeps and shows): what core puts in front of one of its operational
-// ports while the task runs (its front: SOCKS, HTTP, a forward). The strip says where it is and copies it in the forms
+// ports while the task runs (its front: SOCKS, HTTP, a forward, a terminal:
+// a process on the minion's host for each connection, raw on the port or in
+// the web terminal here). The strip says where it is and copies it in the forms
 // tools take; the cards, what it is and what went through it; the table,
 // each connection a tool made through it, live, the latest first, searched
 // and filtered by the server, while the task runs: core keeps no stream
@@ -100,6 +111,7 @@ export function TunnelView({
   const reverse = tunnel.reverse;
   const front = tunnel.front;
   const http = !reverse && front === FRONT_HTTP;
+  const terminal = !reverse && front === FRONT_TERMINAL;
   const reverseSocks = reverse && front === FRONT_SOCKS;
   // Core's address for its ports, else the host this page came from; a
   // reverse port forward's, where its minion listens.
@@ -116,6 +128,7 @@ export function TunnelView({
   // A proxy's URL and proxychains line, by what it speaks.
   const url = http ? httpProxyURL(host, tunnel.port) : proxyURL(host, tunnel.port);
   const line = proxychainsLine(host, tunnel.port, http ? "http" : "socks5");
+  const socat = socatCommand(host, tunnel.port);
   const [filter, setFilter] = useState<TunnelStreamsFilter>({
     search: "",
     state: "",
@@ -136,6 +149,17 @@ export function TunnelView({
   // Core stops the task once no stream has been open this long (its
   // stop_idle; none: never).
   const stopIdle = stopIdleOf(t.args);
+  // The web terminal: open or not, and which (New opens another stream).
+  // Over a connection that waits for the minion's calls, every key does.
+  const [webTerminal, setWebTerminal] = useState<number | null>(null);
+  const connKind = useMinionSession(terminal ? t.sessionId : "").data?.minionSession?.connKind;
+  const laggy = laggyKind(connKind)
+    ? "slow: this session's connection waits for the minion's calls"
+    : null;
+  const canTerminal = terminal && tunnel.listening && keeps;
+  useEffect(() => {
+    if (terminal) preloadWebTerminal();
+  }, [terminal]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -175,7 +199,31 @@ export function TunnelView({
               <CopyIcon />
               Address
             </Button>
-            {!forward && !reverse && (
+            {terminal && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  title={`Copy "${socat}": a terminal of yours on its raw port`}
+                  onClick={() => void copyToClipboard(socat, "socat command")}
+                >
+                  <TerminalIcon />
+                  socat
+                </Button>
+                {canTerminal && webTerminal === null && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    title="Open a terminal here: a process on the minion's host"
+                    onClick={() => setWebTerminal(1)}
+                  >
+                    <SquareTerminalIcon />
+                    Open terminal
+                  </Button>
+                )}
+              </>
+            )}
+            {!forward && !reverse && !terminal && (
               <>
                 <Button
                   variant="ghost"
@@ -222,6 +270,17 @@ export function TunnelView({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-3 @container">
+        {canTerminal && webTerminal !== null && (
+          <div className="flex h-[28rem] shrink-0 flex-col">
+            <LazyWebTerminal
+              key={webTerminal}
+              taskId={t.id}
+              warning={laggy}
+              onClose={() => setWebTerminal(null)}
+              onRestart={() => setWebTerminal((n) => (n ?? 0) + 1)}
+            />
+          </div>
+        )}
         <div className="grid shrink-0 items-start gap-3 @3xl:grid-cols-2">
           <InfoCard labelWidth="w-28">
             <LabelRow label={reverse ? "Listens on" : "Address"}>
@@ -258,6 +317,18 @@ export function TunnelView({
                         : " · from the minion's host, each connection"}
                 </span>
               </LabelRow>
+            ) : terminal ? (
+              <>
+                <LabelRow label="Runs">
+                  <span className="font-mono text-xs break-all">{terminalProgram(tunnel)}</span>
+                  <span className="text-muted-foreground"> · on the minion&apos;s host, a process for each connection</span>
+                </LabelRow>
+                <LabelRow label="Speaks">
+                  raw bytes, in a terminal of {tunnel.rows ?? 24}×{tunnel.cols ?? 80} on the port (socat, nc); the web
+                  terminal here says its own size
+                  {laggy && <span className="text-amber-600 dark:text-amber-400"> · {laggy}</span>}
+                </LabelRow>
+              </>
             ) : reverseSocks ? (
               <>
                 <LabelRow label="Speaks">
@@ -294,7 +365,9 @@ export function TunnelView({
               <LabelRow label="Speaks">
                 {http
                   ? "HTTP: CONNECT, and plain requests (one a connection); no credentials"
-                  : "SOCKS5 (connect, UDP associate), SOCKS4 and 4a (connect); no credentials"}
+                  : tunnel.socksBind
+                    ? "SOCKS5 (connect, bind, UDP associate), SOCKS4 and 4a (connect); no credentials"
+                    : "SOCKS5 (connect, UDP associate), SOCKS4 and 4a (connect); no credentials"}
               </LabelRow>
             )}
             <LabelRow label="State">
@@ -380,7 +453,9 @@ export function TunnelView({
                   ? reverseSocks
                     ? "Search who connected, or where they asked..."
                     : "Search who connected, or the destination..."
-                  : "Search the tool or the destination..."
+                  : terminal
+                    ? "Search who opened it, or the program..."
+                    : "Search the tool or the destination..."
               }
             />
             <Select
@@ -421,8 +496,8 @@ export function TunnelView({
               header={
                 <>
                   <div>#</div>
-                  <div>{reverse ? "From" : "Tool"}</div>
-                  <div>Destination</div>
+                  <div>{reverse ? "From" : terminal ? "Opened by" : "Tool"}</div>
+                  <div>{terminal ? "Runs" : "Destination"}</div>
                   <div>State</div>
                   <div>Opened</div>
                   <div className="text-right">Sent</div>
@@ -459,7 +534,9 @@ export function TunnelView({
                           ? `Each connection to ${address} on the minion's host is one: core connects it to ${tunnel.to ?? "the destination"} from its own network.`
                           : !tunnel.listening
                             ? "No tool connected through it."
-                            : forward
+                            : terminal
+                              ? `Each connection to ${address}, and each terminal opened here, is one: a process on the minion's host.`
+                              : forward
                               ? `Each connection to ${address} is one: the minion connects to ${destination ?? "the destination"} from its host.`
                               : `Each connection a tool makes through ${address} is one: the minion connects to its destination from its host.`}
                     </p>
@@ -479,14 +556,7 @@ function StreamRow({ s, reverse }: { s: TunnelStream; reverse: boolean }) {
   const state = streamState(s, reverse);
   // A UDP association's datagrams each name their own destination; a UDP
   // reverse forward's stream has one, core's.
-  const destination =
-    s.udp && !reverse
-      ? "UDP: each datagram its own"
-      : s.path
-        ? s.path
-        : s.host
-          ? hostPort(s.host, s.port)
-          : "as its tool asks";
+  const destination = streamDestination(s, reverse);
   return (
     <div className={dataTableRowClass(GRID_COLS)}>
       <span className="font-mono text-xs text-muted-foreground tabular-nums">

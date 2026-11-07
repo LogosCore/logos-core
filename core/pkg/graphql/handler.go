@@ -168,7 +168,7 @@ func NewHandler(
 	upgrader := gws.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
-		CheckOrigin:     buildWSOriginCheck(allowedOrigins),
+		CheckOrigin:     WSOriginCheck(allowedOrigins),
 	}
 	srv.AddTransport(transport.Websocket{
 		Upgrader:              upgrader,
@@ -282,7 +282,7 @@ func NewHandler(
 	}
 }
 
-// buildWSOriginCheck returns a CheckOrigin function for the gorilla websocket
+// WSOriginCheck returns a CheckOrigin function for the gorilla websocket
 // upgrader. It accepts:
 //   - empty Origin (non-browser clients like curl/wscat for debugging)
 //   - same-origin (Origin == request scheme://Host)
@@ -290,7 +290,7 @@ func NewHandler(
 //
 // The allow-list is fed from CORS_ALLOWED_ORIGINS so a single env var continues
 // to govern cross-origin policy across HTTP and WS.
-func buildWSOriginCheck(allowed []string) func(r *http.Request) bool {
+func WSOriginCheck(allowed []string) func(r *http.Request) bool {
 	allowSet := make(map[string]struct{}, len(allowed))
 	for _, o := range allowed {
 		allowSet[o] = struct{}{}

@@ -96,6 +96,11 @@ export const MinionTaskFields = graphql(`
       path
       source
       tls
+      program
+      args
+      rows
+      cols
+      socksBind
       user
       password
       cap
@@ -126,6 +131,11 @@ export const MinionTunnelStreamsQuery = graphql(`
         port
         path
         udp
+        kind
+        program
+        terminal
+        exit
+        came
         openedAt
         state
         result

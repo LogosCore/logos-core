@@ -385,6 +385,13 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 				values[key] = v
 			}
 		}
+		if front == protocol.FrontTerminal {
+			for _, key := range []string{protocol.ParamProgram, protocol.ParamArgs, protocol.ParamRows, protocol.ParamCols} {
+				if v, ok := wire[key]; ok && v != "" {
+					values[key] = v
+				}
+			}
+		}
 		// And when core stops it: a command line that leaves stop_idle out
 		// runs by its default, as the form (which sends every field) does.
 		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
@@ -412,10 +419,17 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
+// terminalParam: one of a terminal's params, offered where the minion runs
+// processes.
+func terminalParam(key string) bool {
+	return key == protocol.ParamProgram || key == protocol.ParamArgs || key == protocol.ParamRows || key == protocol.ParamCols
+}
+
 // tunnelCommand is a tunnel command as a build of target has it: what it
 // opens narrowed by the target, and core's own params beside the command's
-// (no num): its front, port, destination and cap, and a path, a source
-// address and TLS where its minion opens them.
+// (no num): its front, port, destination and cap, a path, a source address
+// and TLS where its minion opens them, and the terminal front with its
+// program, args and size where it runs processes.
 func tunnelCommand(sc protocol.BuildSchema, c protocol.BuildCommand, target string) protocol.BuildCommand {
 	c.Opens = sc.CommandOpens(c, target)
 	params := slices.Clone(c.Params)
@@ -423,8 +437,13 @@ func tunnelCommand(sc protocol.BuildSchema, c protocol.BuildCommand, target stri
 		switch {
 		case p.Key == protocol.ParamPath && !c.CanOpen(protocol.OpenUnix) && !c.CanOpen(protocol.OpenPipe),
 			p.Key == protocol.ParamSource && !c.CanOpen(protocol.OpenSource),
-			p.Key == protocol.ParamTLS && !c.CanOpen(protocol.OpenTLS):
+			p.Key == protocol.ParamTLS && !c.CanOpen(protocol.OpenTLS),
+			terminalParam(p.Key) && !c.CanOpen(protocol.OpenProcess):
 			continue
+		}
+		if p.Key == protocol.ParamFront && !c.CanOpen(protocol.OpenProcess) {
+			// No terminal where the minion runs no processes.
+			p.Options = slices.DeleteFunc(slices.Clone(p.Options), func(o protocol.EnumOption) bool { return o.Value == protocol.FrontTerminal })
 		}
 		params = append(params, p)
 	}
@@ -556,6 +575,8 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: an address of the minion's host, an IP")
 		case path != "":
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: a TCP connection's, not a path's")
+		case front == protocol.FrontTerminal:
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: a TCP connection's, not a terminal's")
 		}
 		o.Source = ip.String()
 		wire[protocol.ParamSource] = o.Source
@@ -569,10 +590,20 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("tls: %s's minion speaks no TLS to a destination", cmd.ID))
 	}
 	o.TLS = useTLS
+	program, _ := protocol.ArgString(wire, protocol.ParamProgram)
+	argsLine, _ := protocol.ArgString(wire, protocol.ParamArgs)
+	program, argsLine = strings.TrimSpace(program), strings.TrimSpace(argsLine)
+	if front != protocol.FrontTerminal && (program != "" || argsLine != "") {
+		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "program, args: a terminal's")
+	}
 	switch front {
+	case protocol.FrontTerminal:
+		if err := terminal(&o, cmd, wire, program, argsLine); err != nil {
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+		}
 	case protocol.FrontSOCKS:
-		// Its UDP ASSOCIATE, when the minion opens udp.
-		o.Purpose, o.UDP = models.OperationalPurposeSOCKS, cmd.CanOpen(protocol.OpenUDP)
+		// Its UDP ASSOCIATE, when the minion opens udp; BIND, accept.
+		o.Purpose, o.UDP, o.Accept = models.OperationalPurposeSOCKS, cmd.CanOpen(protocol.OpenUDP), cmd.CanOpen(protocol.OpenAccept)
 	case protocol.FrontHTTP:
 		o.Purpose = models.OperationalPurposeHTTP
 	case protocol.FrontForward:
@@ -590,6 +621,40 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	}
 	wire[protocol.ParamPort] = int64(port)
 	return port, front, nil
+}
+
+// terminal makes o a terminal's: the minion runs program (none: its
+// host's shell) with args, a command line split as a shell's words, in a
+// terminal of rows and cols on the raw port; where the command opens
+// process.
+func terminal(o *miniontunnels.Opening, cmd protocol.BuildCommand, wire map[string]any, program, argsLine string) error {
+	if !cmd.CanOpen(protocol.OpenProcess) {
+		return fmt.Errorf("front terminal: %s's minion runs no processes (its opens: %s)", cmd.ID, strings.Join(cmd.Opens, ", "))
+	}
+	args, err := protocol.TunnelArgs(argsLine)
+	if err != nil {
+		return err
+	}
+	rows, ok := protocol.ArgInt(wire, protocol.ParamRows)
+	if !ok {
+		rows = 24
+	}
+	cols, ok := protocol.ArgInt(wire, protocol.ParamCols)
+	if !ok {
+		cols = 80
+	}
+	if err := protocol.TunnelProcess(program, args, uint64(max(rows, 0)), uint64(max(cols, 0))); err != nil || rows < 1 {
+		if err == nil {
+			err = fmt.Errorf("a terminal is 1 to %d rows and cols", protocol.MaxTunnelTerm)
+		}
+		return fmt.Errorf("the terminal: %w", err)
+	}
+	o.Purpose, o.Program, o.Args, o.Rows, o.Cols = models.OperationalPurposeTerminal, program, args, int(rows), int(cols)
+	// The task's args say what it runs with, defaults too (a command line
+	// may leave the size out).
+	wire[protocol.ParamProgram], wire[protocol.ParamArgs] = program, argsLine
+	wire[protocol.ParamRows], wire[protocol.ParamCols] = rows, cols
+	return nil
 }
 
 // overKind refuses a task of a command that does not work over the kind of

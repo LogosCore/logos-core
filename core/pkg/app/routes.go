@@ -171,6 +171,8 @@ func (a *App) mountBuildRoutes(v1 *gin.RouterGroup, c *controllers) {
 	v1.GET("/builds/:id/artifact", c.build.DownloadArtifact)
 	v1.GET("/minion-tasks/:id/output", c.task.DownloadOutput)
 	v1.GET("/minion-tasks/:id/data", c.task.DownloadData)
+	// A terminal task's web terminal: a WebSocket, for an operator.
+	v1.GET("/minion-tasks/:id/terminal", c.terminal.Terminal)
 	v1.GET("/minion-files/:id", c.task.DownloadFile)
 	v1.POST("/minion-files", c.task.UploadFile)
 }

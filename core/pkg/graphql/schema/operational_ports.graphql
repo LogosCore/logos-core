@@ -6,12 +6,15 @@ type OperationalPort {
   id: ID!
   port: Int!
   # What core puts in front of it, its task's front: socks (a SOCKS
-  # proxy), http (an HTTP proxy) or forward (a port forward to to,
-  # host:port; null for the others).
+  # proxy), http (an HTTP proxy), forward (a port forward to to,
+  # host:port; null for the others) or terminal (a process for each
+  # connection).
   front: String!
   to: String
   # A forward's to a unix socket's path or a named pipe, instead of to.
   path: String
+  # A terminal's program (null: the host's shell, or not a terminal).
+  program: String
   # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
   # host the web app is reached at.
   address: String

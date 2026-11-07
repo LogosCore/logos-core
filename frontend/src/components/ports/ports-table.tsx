@@ -55,6 +55,8 @@ export function PortsTable({
       emptyState={emptyState}
       renderRow={(p) => {
         const address = hostPort(p.address ?? window.location.hostname, p.port)
+        // Where it goes: a forward's destination, a terminal's program.
+        const to = p.to ?? p.path ?? (p.front === "terminal" ? (p.program ?? "the host's shell") : null)
         return (
           <button type="button" className={dataTableRowClass(GRID_COLS, "cursor-pointer")} onClick={() => modals.open({ kind: "session", id: p.sessionId })}
             title={`Open session #${p.sessionNumber}`}>
@@ -65,9 +67,9 @@ export function PortsTable({
               </span>
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="truncate" title={(p.to ?? p.path) ? `to ${p.to ?? p.path}` : undefined}>
+              <span className="truncate" title={to ? `to ${to}` : undefined}>
                 {frontLabel(p.front)}
-                {(p.to ?? p.path) && <span className="font-mono text-xs text-muted-foreground"> → {p.to ?? p.path}</span>}
+                {to && <span className="font-mono text-xs text-muted-foreground"> → {to}</span>}
               </span>
               <span className={cn("text-xs", p.listening ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
                 {p.listening ? "listening" : "opening again"}

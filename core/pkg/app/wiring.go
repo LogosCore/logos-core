@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/logoscore/logos-core/core/pkg/controller"
+	gql "github.com/logoscore/logos-core/core/pkg/graphql"
 	"github.com/logoscore/logos-core/core/pkg/repository"
 	"github.com/logoscore/logos-core/core/pkg/resolver"
 	"github.com/logoscore/logos-core/core/pkg/wiki"
@@ -29,6 +30,7 @@ type controllers struct {
 	build    *controller.BuildController
 	task     *controller.MinionTaskController
 	stream   *controller.MinionStreamController
+	terminal *controller.MinionTerminalController
 	wiki     *controller.WikiController
 	transfer *controller.WikiTransferController
 	webhook  *wiki.WebhookHandler
@@ -101,7 +103,9 @@ func (a *App) buildControllers() *controllers {
 		build:   controller.NewBuildController(a.builds, a.repos.Operation, a.logger, a.env.BuildFileMaxSize),
 		task:    controller.NewMinionTaskController(a.repos.MinionTask, a.minionFiles, a.repos.Operation, a.logger),
 		stream:  controller.NewMinionStreamController(a.minionStreams, a.repos.Operation, a.logger),
-		wiki:    controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
+		terminal: controller.NewMinionTerminalController(a.minionTunnels, a.repos.MinionTask, a.repos.Operation,
+			gql.WSOriginCheck(a.env.CORSAllowedOrigins), a.logger),
+		wiki: controller.NewWikiController(a.repos.WikiDocument, a.repos.Operation, a.env.HocuspocusTicketSecret, a.logger),
 
 		// The runner and its pipeline are built in NewApp; this controller only
 		// stages uploads, queues jobs and serves status and downloads.

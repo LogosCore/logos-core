@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"reflect"
 	"testing"
 
 	"github.com/logoscore/logos-golang-protocol/protocol"
@@ -37,11 +38,13 @@ func TestReadRequest(t *testing.T) {
 		{"socks4", []byte{4, 1, 0, 80, 192, 168, 1, 2, 'b', 'o', 'b', 0, 'x'}, request{version: 4, host: "192.168.1.2", port: 80}, nil},
 		{"socks4a", []byte{4, 1, 1, 187, 0, 0, 0, 9, 0, 'd', 'c', '0', '1', 0, 'x'}, request{version: 4, host: "dc01", port: 443}, nil},
 		{"socks5 udp associate", []byte{5, 1, 0, 5, 3, 0, 1, 0, 0, 0, 0, 0, 0, 'x'}, request{version: 5, host: "0.0.0.0", port: 0, udp: true}, []byte{5, 0}},
+		{"socks5 bind", []byte{5, 1, 0, 5, 2, 0, 1, 10, 0, 0, 9, 0, 21, 'x'},
+			request{version: 5, host: "10.0.0.9", port: 21, bind: true, kind: protocol.TunnelKindAccept}, []byte{5, 0}},
 	}
 	for _, c := range cases {
 		cl := client(c.in...)
 		got, err := readRequest(cl, nil)
-		if err != nil || got != c.want {
+		if err != nil || !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %+v %v, want %+v", c.name, got, err, c.want)
 			continue
 		}
@@ -55,8 +58,8 @@ func TestReadRequest(t *testing.T) {
 }
 
 // What core does not do is refused, and the client told: credentials only
-// (no acceptable method), BIND (not supported), an address type it does not
-// know, SOCKS4 BIND.
+// (no acceptable method), an address type it does not know, SOCKS4 BIND
+// (SOCKS5's BIND reads: serveBind takes it, where the command opens accept).
 func TestReadRequestRefuses(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -64,7 +67,6 @@ func TestReadRequestRefuses(t *testing.T) {
 		reply []byte
 	}{
 		{"credentials only", []byte{5, 1, 2}, []byte{5, 0xff}},
-		{"bind", []byte{5, 1, 0, 5, 2, 0, 1, 10, 0, 0, 5, 0, 80}, []byte{5, 0, 5, socks5CommandNotSupported, 0, 1, 0, 0, 0, 0, 0, 0}},
 		{"address type", []byte{5, 1, 0, 5, 1, 0, 9}, []byte{5, 0, 5, socks5AddressNotSupported, 0, 1, 0, 0, 0, 0, 0, 0}},
 		{"socks4 bind", []byte{4, 2, 0, 80, 10, 0, 0, 1, 0}, []byte{0, socks4Rejected, 0, 0, 0, 0, 0, 0}},
 	}

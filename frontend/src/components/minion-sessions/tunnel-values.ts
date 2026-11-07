@@ -45,6 +45,7 @@ export const RESULT_LABEL: Record<string, string> = {
   unsupported: "unsupported: the minion does not take this open",
   not_found: "not found: no such socket or pipe",
   denied: "denied: the minion may not open it",
+  in_use: "in use: something listens there already",
 }
 
 /** How a stream ended. */
@@ -79,7 +80,7 @@ export function streamState(s: TunnelStream, reverse = false): { label: string; 
     (reverse ? REVERSE_END_LABEL[end] : undefined) ??
     END_LABEL[end]
   if (s.state === "OPENING") return { label: "Opening", tone: "pending", detail: reverse ? "core connects" : "the minion connects" }
-  if (s.state === "OPEN") return { label: "Open", tone: "good", detail: s.bound ? (reverse ? `core from ${s.bound}` : `from ${s.bound}`) : null }
+  if (s.state === "OPEN") return { label: "Open", tone: "good", detail: openDetail(s, reverse) }
   if (s.result && s.result !== "open") {
     const why = RESULT_LABEL[s.result] ?? s.result.replaceAll("_", " ")
     return { label: "Not opened", tone: "bad", detail: s.msg ? `${why} (${s.msg})` : why }
@@ -88,7 +89,34 @@ export function streamState(s: TunnelStream, reverse = false): { label: string; 
     return { label: "Not opened", tone: "bad", detail: s.end ? (endLabel(s.end) ?? s.end) : null }
   }
   const how = s.end ? (endLabel(s.end) ?? s.end.replaceAll("_", " ")) : null
+  if (s.kind === "process" && s.exit != null) {
+    // A process said how it ended: that is how its stream went.
+    return { label: `Exited ${s.exit}`, tone: s.exit === 0 ? "muted" : "bad", detail: how }
+  }
   return { label: "Closed", tone: s.end === "done" ? "muted" : "bad", detail: how }
+}
+
+/** What an open stream says: where the minion's socket is; a process's, whether it got a terminal; an accept's, where it listens and who came. */
+function openDetail(s: TunnelStream, reverse: boolean): string | null {
+  if (s.kind === "process") {
+    if (s.terminal === false) return "on pipes: the host gave no terminal"
+    return s.terminal ? "in a terminal" : null
+  }
+  if (s.kind === "accept") {
+    if (s.came) return `${s.came} came`
+    return s.bound ? `listening at ${s.bound}` : null
+  }
+  return s.bound ? (reverse ? `core from ${s.bound}` : `from ${s.bound}`) : null
+}
+
+/** Where a stream goes, for its row: a process's program, an accept's listening, a path, a host and port. */
+export function streamDestination(s: TunnelStream, reverse = false): string {
+  if (s.kind === "process") return s.program ?? "the host's shell"
+  if (s.kind === "accept") return s.bound ? `BIND: listens at ${s.bound}` : "BIND: the minion listens"
+  if (s.udp && !reverse) return "UDP: each datagram its own"
+  if (s.path) return s.path
+  if (s.host) return hostPort(s.host, s.port)
+  return "as its tool asks"
 }
 
 /** Where the proxy stands, as its task does. */
@@ -104,6 +132,8 @@ export function proxyState(t: Tunnel, taskState: string): { label: string; tone:
 export const FRONT_SOCKS = "socks"
 export const FRONT_HTTP = "http"
 export const FRONT_FORWARD = "forward"
+/** A terminal: a process on the minion's host for each connection, raw on the port, or the web app's. */
+export const FRONT_TERMINAL = "terminal"
 
 /** What a tunnel is, for a person: its front, and which way it goes. */
 export function frontLabel(front: string, reverse = false): string {
@@ -115,8 +145,21 @@ export function frontLabel(front: string, reverse = false): string {
       return "SOCKS proxy"
     case FRONT_HTTP:
       return "HTTP proxy"
+    case FRONT_TERMINAL:
+      return "Terminal"
   }
   return front.replaceAll("_", " ")
+}
+
+/** What a terminal runs: its program and args, or the host's shell. */
+export function terminalProgram(t: Pick<Tunnel, "program" | "args">): string {
+  const program = t.program ?? "the host's shell"
+  return t.args ? `${program} ${t.args}` : program
+}
+
+/** A command that puts a local terminal on a terminal's raw port, raw (keys as typed, no local echo). */
+export function socatCommand(host: string, port: number): string {
+  return `socat file:\`tty\`,raw,echo=0 tcp:${hostPort(host, port)}`
 }
 
 /** What a forward's path is: a named pipe when it starts "\\\\" (\\\\.\\pipe\\name), else a unix socket (protocol.TunnelPathKind). */

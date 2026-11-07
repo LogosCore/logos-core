@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"github.com/qiniu/qmgo/field"
 )
 
@@ -40,8 +41,17 @@ type OperationalPort struct {
 	// TLS: a forward's speak TLS to its destination.
 	Source string `bson:"source,omitempty" json:"source,omitempty"`
 	TLS    bool   `bson:"tls,omitempty" json:"tls,omitempty"`
-	// UDP: its SOCKS proxy takes UDP ASSOCIATE (its command opens udp).
-	UDP bool `bson:"udp,omitempty" json:"udp,omitempty"`
+	// UDP: its SOCKS proxy takes UDP ASSOCIATE (its command opens udp);
+	// Accept: BIND (it opens accept).
+	UDP    bool `bson:"udp,omitempty" json:"udp,omitempty"`
+	Accept bool `bson:"accept,omitempty" json:"accept,omitempty"`
+	// Program and Args are a terminal's (OperationalPurposeTerminal): what
+	// each connection runs on the minion's host (none: its shell); Rows and
+	// Cols the terminal's size on the raw port.
+	Program string   `bson:"program,omitempty" json:"program,omitempty"`
+	Args    []string `bson:"args,omitempty" json:"args,omitempty"`
+	Rows    int      `bson:"rows,omitempty" json:"rows,omitempty"`
+	Cols    int      `bson:"cols,omitempty" json:"cols,omitempty"`
 	// Streams is the highest stream number core took for the task, a
 	// thousand at a time (miniontunnels.StreamBlock): a stream's is never
 	// used again in the task, a restart's streams' neither, as a restart
@@ -75,6 +85,9 @@ const (
 	// OperationalPurposeForward: a port forward, to its destination
 	// (protocol.FrontForward).
 	OperationalPurposeForward = "forward"
+	// OperationalPurposeTerminal: a process for each connection, in a
+	// terminal (protocol.FrontTerminal): raw on the port, or the web app's.
+	OperationalPurposeTerminal = "terminal"
 	// OperationalPurposeReverse: a reverse tunnel, which listens on the
 	// minion's host (protocol.ActionReverseTunnel): no operational port, a
 	// MinionListener, whose Front says what core does with its streams.
@@ -161,6 +174,9 @@ func OperationalPortSearchText(p *OperationalPort) string {
 	if p.Path != "" {
 		text += " " + p.Path
 	}
+	if p.Program != "" {
+		text += " " + p.Program
+	}
 	return text
 }
 
@@ -178,10 +194,20 @@ type MinionTunnelStream struct {
 	// Host and Port: the destination, as the tool named it; none for a UDP
 	// association (UDP), whose datagrams each name their own. Path: a unix
 	// socket's or a pipe's, a forward's to one, instead.
-	Host     string
-	Port     int
-	Path     string
-	UDP      bool
+	Host string
+	Port int
+	Path string
+	UDP  bool
+	// Kind is what it opened past a TCP connection or a UDP association
+	// (protocol.TunnelKindUnix, ...). A process's: its Program (none: the
+	// host's shell), whether it got a terminal (Terminal, as the reply
+	// says), and its Exit code once it said it. An accept's (SOCKS BIND):
+	// Came, who connected.
+	Kind     int
+	Program  string
+	Terminal *bool
+	Exit     *int64
+	Came     string
 	OpenedAt time.Time
 	// Result is the minion's reply (protocol.TunnelOpen, ...): nil while
 	// it has not come. Bound is the minion's socket's address when open;
@@ -205,6 +231,13 @@ func TunnelStreamSearchText(s *MinionTunnelStream) string {
 	switch {
 	case s.UDP:
 		return s.Client + " udp"
+	case s.Kind == protocol.TunnelKindProcess:
+		if s.Program == "" {
+			return s.Client + " shell"
+		}
+		return s.Client + " " + s.Program
+	case s.Kind == protocol.TunnelKindAccept:
+		return fmt.Sprintf("%s bind %s", s.Client, s.Came)
 	case s.Path != "":
 		return s.Client + " " + s.Path
 	}
