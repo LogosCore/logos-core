@@ -1352,10 +1352,13 @@ export type MinionTunnel = {
   listening: Scalars['Boolean']['output'];
   open: Scalars['Int']['output'];
   password?: Maybe<Scalars['String']['output']>;
+  path?: Maybe<Scalars['String']['output']>;
   port: Scalars['Int']['output'];
   reverse: Scalars['Boolean']['output'];
+  source?: Maybe<Scalars['String']['output']>;
   stopsAt?: Maybe<Scalars['String']['output']>;
   streams: Scalars['Int']['output'];
+  tls: Scalars['Boolean']['output'];
   to?: Maybe<Scalars['String']['output']>;
   udp?: Maybe<Scalars['Boolean']['output']>;
   up: Scalars['Int']['output'];
@@ -1371,6 +1374,7 @@ export type MinionTunnelStream = {
   host: Scalars['String']['output'];
   msg?: Maybe<Scalars['String']['output']>;
   openedAt: Scalars['String']['output'];
+  path?: Maybe<Scalars['String']['output']>;
   port: Scalars['Int']['output'];
   result?: Maybe<Scalars['String']['output']>;
   state: Scalars['String']['output'];
@@ -2400,6 +2404,7 @@ export type OperationalPort = {
   openedAt: Scalars['String']['output'];
   openedBy: Scalars['ID']['output'];
   openedByName?: Maybe<Scalars['String']['output']>;
+  path?: Maybe<Scalars['String']['output']>;
   port: Scalars['Int']['output'];
   sessionId: Scalars['ID']['output'];
   sessionNumber: Scalars['Int']['output'];
@@ -4295,7 +4300,7 @@ export type MinionTaskQueryVariables = Exact<{
 }>;
 
 
-export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } | null };
+export type MinionTaskQuery = { minionTask?: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } | null };
 
 export type PublishOperatorFocusMutationVariables = Exact<{
   input: OperatorFocusInput;
@@ -4794,7 +4799,7 @@ export type MinionSessionTargetQueryVariables = Exact<{
 
 export type MinionSessionTargetQuery = { minionSession?: { id: string, operationId: string, connKind?: string | null, bindTarget?: { id: string, operationId: string, buildId: string, buildDescription?: string | null, conn: number, connName?: string | null, moduleName: string, kind: string, values: unknown, name: string, retries: boolean, policy?: string | null, state: string, stateDetail?: string | null, stateAt: string, sessionId?: string | null, failures: number, unreachableSince?: string | null, nextCallAt?: string | null, lastCallAt?: string | null, lastOkAt?: string | null, calls: number, createdAt: string, updatedAt: string, problems: Array<{ key?: string | null, message: string }>, session?: { id: string, number: number } | null, createdBy: { type: string, id: string, name?: string | null } } | null } | null };
 
-export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null };
+export type MinionTaskFieldsFragment = { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null };
 
 export type MinionTunnelStreamsQueryVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4805,7 +4810,7 @@ export type MinionTunnelStreamsQueryVariables = Exact<{
 }>;
 
 
-export type MinionTunnelStreamsQuery = { minionTunnelStreams: { before?: string | null, streams: Array<{ stream: number, client: string, host: string, port: number, udp: boolean, openedAt: string, state: string, result?: string | null, bound?: string | null, msg?: string | null, endedAt?: string | null, end?: string | null, up: number, down: number }> } };
+export type MinionTunnelStreamsQuery = { minionTunnelStreams: { before?: string | null, streams: Array<{ stream: number, client: string, host: string, port: number, path?: string | null, udp: boolean, openedAt: string, state: string, result?: string | null, bound?: string | null, msg?: string | null, endedAt?: string | null, end?: string | null, up: number, down: number }> } };
 
 export type MinionTaskOutputQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4840,7 +4845,7 @@ export type MinionTasksQueryVariables = Exact<{
 }>;
 
 
-export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null }> } };
+export type MinionTasksQuery = { minionTasks: { before?: string | null, tasks: Array<{ id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null }> } };
 
 export type MinionTaskDocumentQueryVariables = Exact<{
   id: Scalars['ID']['input'];
@@ -4863,14 +4868,14 @@ export type QueueMinionTaskMutationVariables = Exact<{
 }>;
 
 
-export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } };
+export type QueueMinionTaskMutation = { queueMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } };
 
 export type CancelMinionTaskMutationVariables = Exact<{
   id: Scalars['ID']['input'];
 }>;
 
 
-export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } };
+export type CancelMinionTaskMutation = { cancelMinionTask: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } };
 
 export type SetMinionTunnelCapMutationVariables = Exact<{
   taskId: Scalars['ID']['input'];
@@ -4892,7 +4897,7 @@ export type MinionTaskChangedSubscriptionVariables = Exact<{
 }>;
 
 
-export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } };
+export type MinionTaskChangedSubscription = { minionTaskChanged: { id: string, rev: number, sessionId: string, operationId: string, command: string, args?: unknown | null, issuedBy: string, issuedByName?: string | null, state: string, queuedAt: string, sentAt?: string | null, sendCount: number, ackedAt?: string | null, startedAt?: string | null, doneAt?: string | null, cancelRequestedAt?: string | null, cancelReason?: string | null, ok?: boolean | null, exit?: number | null, err?: string | null, outputSize: number, outputTruncated: boolean, parts: number, dataParts: number, result?: string | null, action?: string | null, dataSize: number, dataTruncated: boolean, dataProblem?: string | null, missingParts: number, feedbackErrors: number, feedbackWarnings: number, as?: { user?: string | null, domain?: string | null, integrity?: string | null, how?: string | null, credentialId?: string | null, taskId?: string | null, since: string } | null, file?: { id: string, name: string, size: number, received: number, sha256?: string | null, state: string, err?: string | null, contentType?: string | null, doneAt?: string | null } | null, upload?: { fileId: string, name: string, size: number, sha256: string, acked: number, state: string, firstAckAt?: string | null, lastAckAt?: string | null, stream: boolean, sized: boolean, received: number, uploaderState?: string | null, from: number, attachedAt?: string | null, uploaderAt?: string | null } | null, stream?: { name: string, size: number, sent: number, delivered: number, state: string, sha256?: string | null, announcedAt: string, from: number, attachedAt?: string | null, readerAt?: string | null } | null, tunnel?: { port: number, address?: string | null, front: string, reverse: boolean, to?: string | null, path?: string | null, source?: string | null, tls: boolean, user?: string | null, password?: string | null, cap: number, bind?: string | null, listen?: number | null, bound?: string | null, udp?: boolean | null, listening: boolean, stopsAt?: string | null, open: number, streams: number, kept: number, up: number, down: number } | null } };
 
 export type ModuleFieldsFragment = { instance: string, type: string, name: string, version: string, description: string, icon: string, iconLight: string, status: string, lastStatus: string, registeredAt: string, lastHeartbeatAt?: string | null, deregisteredAt?: string | null, deregisterReason: string, declaredDeadAt?: string | null, blockedAt?: string | null, blockReason: string, blockedBy?: { type: string, id: string, name?: string | null } | null };
 
@@ -4989,7 +4994,7 @@ export type ModuleLogsSubscriptionVariables = Exact<{
 
 export type ModuleLogsSubscription = { moduleLogs: { backlog: boolean, dropped: number, lost: boolean, state?: ModuleLogStreamState | null, reason?: string | null, records: Array<{ time: string, level: ModuleLogLevel, message: string, attrs?: unknown | null }> } };
 
-export type OperationalPortFieldsFragment = { id: string, port: number, front: string, to?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null };
+export type OperationalPortFieldsFragment = { id: string, port: number, front: string, to?: string | null, path?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null };
 
 export type OperationalPortsQueryVariables = Exact<{
   operationId: Scalars['ID']['input'];
@@ -4999,14 +5004,14 @@ export type OperationalPortsQueryVariables = Exact<{
 }>;
 
 
-export type OperationalPortsQuery = { operationalPorts: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, port: number, front: string, to?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
+export type OperationalPortsQuery = { operationalPorts: { totalCount: number, edges: Array<{ cursor: string, node: { id: string, port: number, front: string, to?: string | null, path?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } }>, pageInfo: { hasNextPage: boolean, endCursor?: string | null } } };
 
 export type OperationalPortChangedSubscriptionVariables = Exact<{
   operationId: Scalars['ID']['input'];
 }>;
 
 
-export type OperationalPortChangedSubscription = { operationalPortChanged: { action: EventAction, id: string, operationId: string, port?: { id: string, port: number, front: string, to?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
+export type OperationalPortChangedSubscription = { operationalPortChanged: { action: EventAction, id: string, operationId: string, port?: { id: string, port: number, front: string, to?: string | null, path?: string | null, address?: string | null, sessionId: string, sessionNumber: number, taskId: string, openedBy: string, openedByName?: string | null, openedAt: string, listening: boolean, open: number, streams: number, stopsAt?: string | null } | null } };
 
 export type OperationMemberFieldsFragment = { role: OperationRole, user: { id: string, username: string, roles: Array<string>, active: boolean, createdAt: string, updatedAt: string } };
 
@@ -6604,6 +6609,9 @@ export const MinionTaskFieldsFragmentDoc = new TypedDocumentString(`
     front
     reverse
     to
+    path
+    source
+    tls
     user
     password
     cap
@@ -6927,6 +6935,7 @@ export const OperationalPortFieldsFragmentDoc = new TypedDocumentString(`
   port
   front
   to
+  path
   address
   sessionId
   sessionNumber
@@ -9151,6 +9160,9 @@ export const MinionTaskDocument = new TypedDocumentString(`
     front
     reverse
     to
+    path
+    source
+    tls
     user
     password
     cap
@@ -11318,6 +11330,7 @@ export const MinionTunnelStreamsDocument = new TypedDocumentString(`
       client
       host
       port
+      path
       udp
       openedAt
       state
@@ -11481,6 +11494,9 @@ export const MinionTasksDocument = new TypedDocumentString(`
     front
     reverse
     to
+    path
+    source
+    tls
     user
     password
     cap
@@ -11639,6 +11655,9 @@ export const QueueMinionTaskDocument = new TypedDocumentString(`
     front
     reverse
     to
+    path
+    source
+    tls
     user
     password
     cap
@@ -11749,6 +11768,9 @@ export const CancelMinionTaskDocument = new TypedDocumentString(`
     front
     reverse
     to
+    path
+    source
+    tls
     user
     password
     cap
@@ -11874,6 +11896,9 @@ export const MinionTaskChangedDocument = new TypedDocumentString(`
     front
     reverse
     to
+    path
+    source
+    tls
     user
     password
     cap
@@ -12463,6 +12488,7 @@ export const OperationalPortsDocument = new TypedDocumentString(`
   port
   front
   to
+  path
   address
   sessionId
   sessionNumber
@@ -12491,6 +12517,7 @@ export const OperationalPortChangedDocument = new TypedDocumentString(`
   port
   front
   to
+  path
   address
   sessionId
   sessionNumber

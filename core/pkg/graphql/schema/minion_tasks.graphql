@@ -209,6 +209,13 @@ type MinionTunnel {
   front: String!
   reverse: Boolean!
   to: String
+  # A forward's to a unix socket's path or a named pipe (\\.\pipe\name,
+  # \\host\pipe\name) instead of to; null for any other.
+  path: String
+  # The address of the minion's host a tunnel's TCP streams go from; null:
+  # as the host routes. tls: a forward's speak TLS to its destination.
+  source: String
+  tls: Boolean!
   # A reverse SOCKS proxy's clients' user and password, while it runs;
   # null for any other tunnel, and once it ended.
   user: String
@@ -257,6 +264,9 @@ type MinionTunnelStream {
   client: String!
   host: String!
   port: Int!
+  # A forward's to a unix socket or a pipe: its path, instead of host and
+  # port.
+  path: String
   udp: Boolean!
   openedAt: String!
   # OPENING (the minion connects), OPEN or ENDED.

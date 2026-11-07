@@ -431,3 +431,102 @@ func TestCommandsHaveCoreParams(t *testing.T) {
 		t.Errorf("args %v %v", wire, problems)
 	}
 }
+
+// A build's tunnel command opens what its target lets it (a Linux build,
+// no pipes), and core offers a path, a source address and TLS only where
+// it opens them.
+func TestCommandsByTarget(t *testing.T) {
+	full := protocol.BuildCommand{ID: "tunnel", Op: 15, Action: protocol.ActionTunnel, Opens: []string{protocol.OpenTCP, protocol.OpenUDP,
+		protocol.OpenUnix, protocol.OpenPipe, protocol.OpenSource, protocol.OpenTLS}}
+	sc := protocol.BuildSchema{Targets: []protocol.BuildTarget{
+		{ID: "linux-elf", Opens: []string{protocol.OpenTCP, protocol.OpenUDP, protocol.OpenUnix, protocol.OpenSource, protocol.OpenTLS}},
+		{ID: "windows-exe"}}, Commands: []protocol.BuildCommand{full}}
+	keys := func(c protocol.BuildCommand) string {
+		var out []string
+		for _, p := range c.Params {
+			out = append(out, p.Key)
+		}
+		return strings.Join(out, ",")
+	}
+	linux := tunnelCommand(sc, full, "linux-elf")
+	if strings.Join(linux.Opens, ",") != "tcp,udp,unix,source,tls" || keys(linux) != "front,port,host,to,path,source,tls,cap" {
+		t.Errorf("linux: opens %v, params %s", linux.Opens, keys(linux))
+	}
+	if win := tunnelCommand(sc, full, "windows-exe"); !win.CanOpen(protocol.OpenPipe) {
+		t.Errorf("windows: opens %v", win.Opens)
+	}
+	if plain := tunnelCommand(sc, tunnelCmd, "linux-elf"); keys(plain) != "front,port,host,to,cap" {
+		t.Errorf("a command that opens tcp and udp: %s", keys(plain))
+	}
+}
+
+// A forward goes to a unix socket or a pipe where its minion opens them,
+// the path's kind its own; a tunnel's TCP streams go from a source address
+// where it takes one, and a forward speaks TLS where it does: each checked
+// as the task is queued.
+func TestOpenPathsAndOptions(t *testing.T) {
+	ctx := context.Background()
+	s := &models.MinionSession{SessionID: uuid.New(), OperationID: uuid.New()}
+	f := &fakeTaskTunnels{}
+	r := &minionTaskResolver{tunnels: f}
+	all := tunnelCmd
+	all.Opens = []string{protocol.OpenTCP, protocol.OpenUnix, protocol.OpenPipe, protocol.OpenSource, protocol.OpenTLS}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), all, map[string]any{"front": "forward", "path": " /var/run/docker.sock "}); err != nil {
+		t.Fatal(err)
+	}
+	if o := f.opened[0]; o.Kind != protocol.TunnelKindUnix || o.Path != "/var/run/docker.sock" || o.Host != "" || o.Purpose != models.OperationalPurposeForward {
+		t.Errorf("a unix socket: %+v", o)
+	}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), all, map[string]any{"front": "forward", "path": `\\dc01\pipe\lsarpc`}); err != nil {
+		t.Fatal(err)
+	}
+	if o := f.opened[1]; o.Kind != protocol.TunnelKindPipe || o.Path != `\\dc01\pipe\lsarpc` {
+		t.Errorf("a pipe: %+v", o)
+	}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), all, map[string]any{"front": "forward", "host": "intranet", "to": int64(443),
+		"tls": true, "source": "10.0.0.7"}); err != nil {
+		t.Fatal(err)
+	}
+	if o := f.opened[2]; !o.TLS || o.Source != "10.0.0.7" || o.Host != "intranet" {
+		t.Errorf("tls from a source: %+v", o)
+	}
+	if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), all, map[string]any{"source": "fe80::1"}); err != nil || f.opened[3].Source != "fe80::1" {
+		t.Errorf("a SOCKS proxy from a source: %+v %v", f.opened[3], err)
+	}
+	tcpOnly := tunnelCmd
+	for name, c := range map[string]struct {
+		cmd  protocol.BuildCommand
+		wire map[string]any
+		want string
+	}{
+		"no pipes":          {tcpOnly, map[string]any{"front": "forward", "path": `\\.\pipe\x`}, "opens no named pipes"},
+		"no unix sockets":   {tcpOnly, map[string]any{"front": "forward", "path": "/run/x.sock"}, "opens no unix sockets"},
+		"a bad pipe":        {all, map[string]any{"front": "forward", "path": `\\.\nopipe`}, "the forward's path"},
+		"a SOCKS path":      {all, map[string]any{"path": "/run/x.sock"}, "a forward's destination"},
+		"no source taken":   {tcpOnly, map[string]any{"source": "10.0.0.7"}, "takes no source address"},
+		"a source name":     {all, map[string]any{"source": "eth0"}, "an IP"},
+		"a path's source":   {all, map[string]any{"front": "forward", "path": "/run/x.sock", "source": "10.0.0.7"}, "not a path's"},
+		"no TLS spoken":     {tcpOnly, map[string]any{"front": "forward", "host": "h", "to": int64(443), "tls": true}, "speaks no TLS"},
+		"TLS through SOCKS": {all, map[string]any{"tls": true}, "a forward's to a host and a port"},
+		"TLS to a path":     {all, map[string]any{"front": "forward", "path": "/run/x.sock", "tls": true}, "a forward's to a host and a port"},
+	} {
+		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), c.cmd, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if len(f.opened) != 4 {
+		t.Errorf("a bad one opened: %d", len(f.opened))
+	}
+	// The tunnel says its path, its source and TLS.
+	tunnel := protocol.ActionTunnel
+	got, _ := r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Action: &tunnel, Args: map[string]any{"front": "forward",
+		"path": "/var/run/docker.sock", "source": "10.0.0.7"}})
+	if got.To != nil || got.Path == nil || *got.Path != "/var/run/docker.sock" || got.Source == nil || *got.Source != "10.0.0.7" || got.TLS {
+		t.Errorf("a path's tunnel: %+v", got)
+	}
+	got, _ = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Action: &tunnel, Args: map[string]any{"front": "forward", "host": "h",
+		"to": float64(443), "tls": true}})
+	if got.To == nil || *got.To != "h:443" || !got.TLS || got.Path != nil {
+		t.Errorf("a TLS forward's tunnel: %+v", got)
+	}
+}

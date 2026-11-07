@@ -10,6 +10,8 @@ type OperationalPort {
   # host:port; null for the others).
   front: String!
   to: String
+  # A forward's to a unix socket's path or a named pipe, instead of to.
+  path: String
   # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
   # host the web app is reached at.
   address: String

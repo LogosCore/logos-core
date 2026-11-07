@@ -482,7 +482,11 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			go m.readUDP(it.Stream, st)
 			return
 		}
-		c, err := net.DialTimeout("tcp", net.JoinHostPort(it.Host, strconv.Itoa(int(it.Port))), time.Second)
+		network, address := "tcp", net.JoinHostPort(it.Host, strconv.Itoa(int(it.Port)))
+		if it.Kind == protocol.TunnelKindUnix {
+			network, address = "unix", it.Path
+		}
+		c, err := net.DialTimeout(network, address, time.Second)
 		if err != nil {
 			result := protocol.TunnelFailed
 			if errors.Is(err, syscall.ECONNREFUSED) {
@@ -512,7 +516,7 @@ func (m *fakeMinion) handle(raw cbor.RawMessage) {
 			if d.EOF {
 				st.eofIn = true
 				st.next++
-				_ = st.conn.(*net.TCPConn).CloseWrite()
+				_ = st.conn.(interface{ CloseWrite() error }).CloseWrite()
 			}
 		}
 		m.out = append(m.out, m.marshal(protocol.TunnelAckItem{T: protocol.ItemTunnelAck, Task: task, Stream: d.Stream, Next: st.next}))

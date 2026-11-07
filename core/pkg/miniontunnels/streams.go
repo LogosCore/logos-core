@@ -97,6 +97,13 @@ type tunnel struct {
 	// (protocol.FrontForward, protocol.FrontSOCKS behind user and
 	// password).
 	front, user, password string
+	// fwdKind and fwdPath: a forward's to a unix socket or a pipe, instead
+	// of fwdHost and fwdPort. source: the address of the minion's host its
+	// TCP streams go from; tls: a forward's speak TLS to its destination.
+	fwdKind int
+	fwdPath string
+	source  string
+	tls     bool
 	// last is the last stream's number; blockEnd the last core took for it
 	// (a port's streams are numbered from blocks: nextNumber), numMu
 	// numbering one at a time. opened is how many streams it has opened
@@ -140,7 +147,8 @@ func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel
 		purpose = models.OperationalPurposeSOCKS
 	}
 	return &tunnel{task: rec.TaskID, session: rec.SessionID, operation: rec.OperationID, port: rec.Port, ln: ln,
-		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort, stopIdle: rec.StopIdle, udpRelay: rec.UDP, cap: rec.Cap,
+		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort, fwdKind: rec.Kind, fwdPath: rec.Path, source: rec.Source, tls: rec.TLS,
+		stopIdle: rec.StopIdle, udpRelay: rec.UDP, cap: rec.Cap,
 		maxStreams: maxStreams, connectWait: timeout, acked: acked, streams: map[uint64]*stream{}, handshaking: map[net.Conn]bool{},
 		last: rec.Streams, blockEnd: rec.Streams, opened: rec.Opened, keptOpened: rec.Opened, up: rec.Up, down: rec.Down,
 		keptUp: rec.Up, keptDown: rec.Down}
@@ -406,7 +414,7 @@ func (s *Service) serveForward(t *tunnel, c net.Conn) {
 		reset()
 		return
 	}
-	st, _ := s.newStream(t, c, request{host: t.fwdHost, port: t.fwdPort}, true)
+	st, _ := s.newStream(t, c, request{host: t.fwdHost, port: t.fwdPort, path: t.fwdPath}, true)
 	if st == nil {
 		reset()
 		return
@@ -496,7 +504,7 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request, early bool) (*st
 	st := &stream{t: t, id: id, client: c, replied: make(chan protocol.TunnelReplyItem, 1), done: make(chan struct{}),
 		upSignal: make(chan struct{}, 1), downSignal: make(chan struct{}, 1), window: downWindow, early: early,
 		rec: models.MinionTunnelStream{TaskID: t.task, Stream: id, Client: c.RemoteAddr().String(), Host: req.host, Port: req.port,
-			OpenedAt: s.now()}}
+			Path: req.path, OpenedAt: s.now()}}
 	if req.udp {
 		var ip net.IP
 		if ra, ok := c.RemoteAddr().(*net.TCPAddr); ok {
@@ -929,7 +937,13 @@ func (st *stream) openItem() protocol.TunnelItem {
 	if st.udp != nil {
 		return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, UDP: true}
 	}
-	return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, Host: st.rec.Host, Port: uint64(st.rec.Port)}
+	if st.rec.Path != "" {
+		return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, Kind: st.t.fwdKind, Path: st.rec.Path}
+	}
+	// A TCP stream: from the task's source address, TLS on top for a
+	// forward that says it.
+	return protocol.TunnelItem{T: protocol.ItemTunnel, Task: st.t.task[:], Stream: st.id, Host: st.rec.Host, Port: uint64(st.rec.Port),
+		Source: st.t.source, TLS: st.t.tls}
 }
 
 // ackItem says how far core has the minion's bytes, and the room past: no

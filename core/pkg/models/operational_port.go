@@ -31,6 +31,15 @@ type OperationalPort struct {
 	// every connection to the port is a stream to it.
 	Host     string `bson:"host,omitempty" json:"host,omitempty"`
 	HostPort int    `bson:"host_port,omitempty" json:"host_port,omitempty"`
+	// Path is a forward's destination when it is a unix socket or a named
+	// pipe (Kind: protocol.TunnelKindUnix, TunnelKindPipe), instead of Host
+	// and HostPort.
+	Kind int    `bson:"kind,omitempty" json:"kind,omitempty"`
+	Path string `bson:"path,omitempty" json:"path,omitempty"`
+	// Source is the address of the minion's host its TCP streams go from;
+	// TLS: a forward's speak TLS to its destination.
+	Source string `bson:"source,omitempty" json:"source,omitempty"`
+	TLS    bool   `bson:"tls,omitempty" json:"tls,omitempty"`
 	// UDP: its SOCKS proxy takes UDP ASSOCIATE (its command opens udp).
 	UDP bool `bson:"udp,omitempty" json:"udp,omitempty"`
 	// Streams is the highest stream number core took for the task, a
@@ -149,6 +158,9 @@ func OperationalPortSearchText(p *OperationalPort) string {
 	if p.Host != "" {
 		text += fmt.Sprintf(" %s:%d", p.Host, p.HostPort)
 	}
+	if p.Path != "" {
+		text += " " + p.Path
+	}
 	return text
 }
 
@@ -164,9 +176,11 @@ type MinionTunnelStream struct {
 	// client's).
 	Client string
 	// Host and Port: the destination, as the tool named it; none for a UDP
-	// association (UDP), whose datagrams each name their own.
+	// association (UDP), whose datagrams each name their own. Path: a unix
+	// socket's or a pipe's, a forward's to one, instead.
 	Host     string
 	Port     int
+	Path     string
 	UDP      bool
 	OpenedAt time.Time
 	// Result is the minion's reply (protocol.TunnelOpen, ...): nil while
@@ -188,8 +202,11 @@ type MinionTunnelStream struct {
 
 // TunnelStreamSearchText is a stream's SearchText.
 func TunnelStreamSearchText(s *MinionTunnelStream) string {
-	if s.UDP {
+	switch {
+	case s.UDP:
 		return s.Client + " udp"
+	case s.Path != "":
+		return s.Client + " " + s.Path
 	}
 	return fmt.Sprintf("%s %s:%d", s.Client, s.Host, s.Port)
 }

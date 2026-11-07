@@ -43,6 +43,8 @@ export const RESULT_LABEL: Record<string, string> = {
   not_allowed: "not allowed: as many streams open as the task takes",
   failed: "failed",
   unsupported: "unsupported: the minion does not take this open",
+  not_found: "not found: no such socket or pipe",
+  denied: "denied: the minion may not open it",
 }
 
 /** How a stream ended. */
@@ -115,6 +117,16 @@ export function frontLabel(front: string, reverse = false): string {
       return "HTTP proxy"
   }
   return front.replaceAll("_", " ")
+}
+
+/** What a forward's path is: a named pipe when it starts "\\\\" (\\\\.\\pipe\\name), else a unix socket (protocol.TunnelPathKind). */
+export function pathKind(path: string): "named pipe" | "unix socket" {
+  return path.startsWith("\\\\") ? "named pipe" : "unix socket"
+}
+
+/** Where a forward goes: its host and port, or its path. */
+export function forwardTo(t: Pick<Tunnel, "to" | "path">): string | null {
+  return t.path ?? t.to ?? null
 }
 
 /** The most a cap may be: GraphQL's Int, 2 GiB a second. */

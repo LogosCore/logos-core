@@ -68,12 +68,20 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		StopsAt: taskTime(stopsAt(sum)), Cap: int(max(capNow, 0))}
 	if front == protocol.FrontForward {
 		// Its destination, as its args say (core checked them when it
-		// queued the task).
+		// queued the task): a host and a port, or a path.
 		host, _ := protocol.ArgString(args, protocol.ParamHost)
-		if to, ok := protocol.ArgInt(args, protocol.ParamTo); ok && host != "" {
+		path, _ := protocol.ArgString(args, protocol.ParamPath)
+		if to, ok := protocol.ArgInt(args, protocol.ParamTo); ok && host != "" && path == "" {
 			dest := net.JoinHostPort(host, strconv.FormatInt(to, 10))
 			m.To = &dest
 		}
+		m.Path = strPtr(path)
+		tlsOn, _ := protocol.ArgBool(args, protocol.ParamTLS)
+		m.TLS = tlsOn && path == ""
+	}
+	if !reverse {
+		source, _ := protocol.ArgString(args, protocol.ParamSource)
+		m.Source = strPtr(source)
 	}
 	if reverse {
 		// No operational port: the minion listens, where its args ask and
@@ -193,8 +201,9 @@ func (r *minionTaskResolver) MinionTunnelStreams(ctx context.Context, taskID str
 
 // tunnelStreamModel is a stream as GraphQL has it.
 func tunnelStreamModel(s *models.MinionTunnelStream) *model.MinionTunnelStream {
-	m := &model.MinionTunnelStream{Stream: int(s.Stream), Client: s.Client, Host: s.Host, Port: s.Port, UDP: s.UDP, OpenedAt: s.OpenedAt.UTC().Format(time.RFC3339Nano),
-		State: "OPENING", Bound: strPtr(s.Bound), Msg: strPtr(s.Msg), EndedAt: taskTime(s.EndedAt), End: strPtr(s.End), Up: int(s.Up), Down: int(s.Down)}
+	m := &model.MinionTunnelStream{Stream: int(s.Stream), Client: s.Client, Host: s.Host, Port: s.Port, Path: strPtr(s.Path), UDP: s.UDP,
+		OpenedAt: s.OpenedAt.UTC().Format(time.RFC3339Nano),
+		State:    "OPENING", Bound: strPtr(s.Bound), Msg: strPtr(s.Msg), EndedAt: taskTime(s.EndedAt), End: strPtr(s.End), Up: int(s.Up), Down: int(s.Down)}
 	if s.Result != nil {
 		name := protocol.TunnelResultName(*s.Result)
 		m.Result, m.State = &name, "OPEN"
@@ -254,7 +263,7 @@ func (r *minionTaskResolver) portModel(p *models.OperationalPort) *model.Operati
 		dest := net.JoinHostPort(p.Host, strconv.Itoa(p.HostPort))
 		to = &dest
 	}
-	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Front: p.Purpose, To: to, Address: strPtr(r.tunnels.Address()),
+	node := &model.OperationalPort{ID: p.TaskID.String(), Port: p.Port, Front: p.Purpose, To: to, Path: strPtr(p.Path), Address: strPtr(r.tunnels.Address()),
 		SessionID: p.SessionID.String(), SessionNumber: p.SessionNumber, TaskID: p.TaskID.String(), OpenedBy: p.OpenedBy.String(),
 		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Opened)}
 	if sum, ok := r.tunnels.Summary(p.TaskID); ok {

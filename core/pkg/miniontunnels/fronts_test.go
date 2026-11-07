@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -168,7 +169,7 @@ func TestHTTPTarget(t *testing.T) {
 		}
 	}
 	for result, want := range map[int]int{protocol.TunnelRefused: 502, protocol.TunnelTimedOut: 504, protocol.TunnelNotAllowed: 503,
-		protocol.TunnelUnsupported: 501, 42: 502} {
+		protocol.TunnelUnsupported: 501, protocol.TunnelDenied: 403, 42: 502} {
 		if got, why := httpStatus(result); got != want || why == "" {
 			t.Errorf("result %d: %d %q", result, got, why)
 		}
@@ -718,5 +719,79 @@ func TestReadRequestAuth(t *testing.T) {
 	}
 	if socksCode(protocol.TunnelUnsupported) != socks5CommandNotSupported {
 		t.Error("unsupported's SOCKS reply")
+	}
+}
+
+// unixEcho is a unix socket that sends back what it gets: its path.
+func unixEcho(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "echo.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = c.Close() }()
+				_, _ = io.Copy(c, c)
+				_ = c.(*net.UnixConn).CloseWrite()
+			}()
+		}
+	}()
+	return path
+}
+
+// A forward to a unix socket opens each stream to its path, its kind
+// said: its bytes both ways, its record naming the path.
+func TestForwardToAPath(t *testing.T) {
+	path := unixEcho(t)
+	r := newRig(t, 0, nil, func(o *Opening) {
+		o.Purpose, o.Kind, o.Path = models.OperationalPurposeForward, protocol.TunnelKindUnix, path
+	})
+	r.tasks.ack(r.task)
+	startMinion(t, r)
+	c := dialPort(t, r.port)
+	_ = c.SetDeadline(time.Time{})
+	roundTrip(t, c, 64<<10)
+	eventually(t, "the stream ends done", func() bool { return r.stream(1).End == models.TunnelEndDone })
+	if rec := r.stream(1); rec.Path != path || rec.Host != "" || !strings.Contains(rec.SearchText, path) {
+		t.Errorf("record %+v", rec)
+	}
+}
+
+// A tunnel's TCP streams say its source address; a forward's, TLS when it
+// says it; a path's, neither.
+func TestOpensSayTheirOptions(t *testing.T) {
+	r := newRig(t, 0, nil, func(o *Opening) {
+		o.Purpose, o.Host, o.HostPort, o.Source, o.TLS = models.OperationalPurposeForward, "intranet.corp", 443, "10.0.0.7", true
+	})
+	r.tasks.ack(r.task)
+	_ = dialPort(t, r.port)
+	var open protocol.TunnelItem
+	eventually(t, "the open", func() bool {
+		r.svc.Fill(context.Background(), r.session, 1<<20, protocol.MaxMinionMessageItems, func(it cbor.RawMessage) bool {
+			if protocol.ItemType(it) == protocol.ItemTunnel {
+				o, err := protocol.ReadTunnel(it)
+				if err != nil {
+					t.Fatalf("an open that does not read: %v", err)
+				}
+				open = o
+			}
+			return true
+		})
+		return open.Stream != 0
+	})
+	if open.Host != "intranet.corp" || open.Port != 443 || open.Source != "10.0.0.7" || !open.TLS || open.Kind != 0 {
+		t.Errorf("open %+v", open)
+	}
+	st := &stream{t: &tunnel{source: "10.0.0.7", tls: true, fwdKind: protocol.TunnelKindPipe}, id: 1, rec: models.MinionTunnelStream{Path: `\\.\pipe\x`}}
+	if it := st.openItem(); it.Kind != protocol.TunnelKindPipe || it.Path != `\\.\pipe\x` || it.Source != "" || it.TLS || it.Validate() != nil {
+		t.Errorf("a pipe's open %+v", it)
 	}
 }

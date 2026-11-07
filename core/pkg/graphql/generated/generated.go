@@ -1053,10 +1053,13 @@ type ComplexityRoot struct {
 		Listening func(childComplexity int) int
 		Open      func(childComplexity int) int
 		Password  func(childComplexity int) int
+		Path      func(childComplexity int) int
 		Port      func(childComplexity int) int
 		Reverse   func(childComplexity int) int
+		Source    func(childComplexity int) int
 		StopsAt   func(childComplexity int) int
 		Streams   func(childComplexity int) int
+		TLS       func(childComplexity int) int
 		To        func(childComplexity int) int
 		UDP       func(childComplexity int) int
 		Up        func(childComplexity int) int
@@ -1072,6 +1075,7 @@ type ComplexityRoot struct {
 		Host     func(childComplexity int) int
 		Msg      func(childComplexity int) int
 		OpenedAt func(childComplexity int) int
+		Path     func(childComplexity int) int
 		Port     func(childComplexity int) int
 		Result   func(childComplexity int) int
 		State    func(childComplexity int) int
@@ -1430,6 +1434,7 @@ type ComplexityRoot struct {
 		OpenedAt      func(childComplexity int) int
 		OpenedBy      func(childComplexity int) int
 		OpenedByName  func(childComplexity int) int
+		Path          func(childComplexity int) int
 		Port          func(childComplexity int) int
 		SessionID     func(childComplexity int) int
 		SessionNumber func(childComplexity int) int
@@ -6736,6 +6741,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Password(childComplexity), true
+	case "MinionTunnel.path":
+		if e.ComplexityRoot.MinionTunnel.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Path(childComplexity), true
 	case "MinionTunnel.port":
 		if e.ComplexityRoot.MinionTunnel.Port == nil {
 			break
@@ -6748,6 +6759,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Reverse(childComplexity), true
+	case "MinionTunnel.source":
+		if e.ComplexityRoot.MinionTunnel.Source == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Source(childComplexity), true
 	case "MinionTunnel.stopsAt":
 		if e.ComplexityRoot.MinionTunnel.StopsAt == nil {
 			break
@@ -6760,6 +6777,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Streams(childComplexity), true
+	case "MinionTunnel.tls":
+		if e.ComplexityRoot.MinionTunnel.TLS == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.TLS(childComplexity), true
 	case "MinionTunnel.to":
 		if e.ComplexityRoot.MinionTunnel.To == nil {
 			break
@@ -6833,6 +6856,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnelStream.OpenedAt(childComplexity), true
+	case "MinionTunnelStream.path":
+		if e.ComplexityRoot.MinionTunnelStream.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnelStream.Path(childComplexity), true
 	case "MinionTunnelStream.port":
 		if e.ComplexityRoot.MinionTunnelStream.Port == nil {
 			break
@@ -9045,6 +9074,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OperationalPort.OpenedByName(childComplexity), true
+	case "OperationalPort.path":
+		if e.ComplexityRoot.OperationalPort.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.Path(childComplexity), true
 	case "OperationalPort.port":
 		if e.ComplexityRoot.OperationalPort.Port == nil {
 			break
@@ -15264,6 +15299,13 @@ type MinionTunnel {
   front: String!
   reverse: Boolean!
   to: String
+  # A forward's to a unix socket's path or a named pipe (\\.\pipe\name,
+  # \\host\pipe\name) instead of to; null for any other.
+  path: String
+  # The address of the minion's host a tunnel's TCP streams go from; null:
+  # as the host routes. tls: a forward's speak TLS to its destination.
+  source: String
+  tls: Boolean!
   # A reverse SOCKS proxy's clients' user and password, while it runs;
   # null for any other tunnel, and once it ended.
   user: String
@@ -15312,6 +15354,9 @@ type MinionTunnelStream {
   client: String!
   host: String!
   port: Int!
+  # A forward's to a unix socket or a pipe: its path, instead of host and
+  # port.
+  path: String
   udp: Boolean!
   openedAt: String!
   # OPENING (the minion connects), OPEN or ENDED.
@@ -15876,6 +15921,8 @@ type OperationalPort {
   # host:port; null for the others).
   front: String!
   to: String
+  # A forward's to a unix socket's path or a named pipe, instead of to.
+  path: String
   # The host operators reach it at (core's OPERATIONAL_ADDRESS); null: the
   # host the web app is reached at.
   address: String
@@ -43163,6 +43210,12 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_reverse(ctx, field)
 			case "to":
 				return ec.fieldContext_MinionTunnel_to(ctx, field)
+			case "path":
+				return ec.fieldContext_MinionTunnel_path(ctx, field)
+			case "source":
+				return ec.fieldContext_MinionTunnel_source(ctx, field)
+			case "tls":
+				return ec.fieldContext_MinionTunnel_tls(ctx, field)
 			case "user":
 				return ec.fieldContext_MinionTunnel_user(ctx, field)
 			case "password":
@@ -44549,6 +44602,93 @@ func (ec *executionContext) fieldContext_MinionTunnel_to(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTunnel_path(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_source(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_source,
+		func(ctx context.Context) (any, error) {
+			return obj.Source, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_source(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_tls(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_tls,
+		func(ctx context.Context) (any, error) {
+			return obj.TLS, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_tls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTunnel_user(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -45071,6 +45211,35 @@ func (ec *executionContext) fieldContext_MinionTunnelStream_port(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTunnelStream_path(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnelStream_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnelStream_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnelStream",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTunnelStream_udp(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnelStream) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -45393,6 +45562,8 @@ func (ec *executionContext) fieldContext_MinionTunnelStreamPage_streams(_ contex
 				return ec.fieldContext_MinionTunnelStream_host(ctx, field)
 			case "port":
 				return ec.fieldContext_MinionTunnelStream_port(ctx, field)
+			case "path":
+				return ec.fieldContext_MinionTunnelStream_path(ctx, field)
 			case "udp":
 				return ec.fieldContext_MinionTunnelStream_udp(ctx, field)
 			case "openedAt":
@@ -60673,6 +60844,35 @@ func (ec *executionContext) fieldContext_OperationalPort_to(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _OperationalPort_path(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_path,
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OperationalPort_address(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -61127,6 +61327,8 @@ func (ec *executionContext) fieldContext_OperationalPortEdge_node(_ context.Cont
 				return ec.fieldContext_OperationalPort_front(ctx, field)
 			case "to":
 				return ec.fieldContext_OperationalPort_to(ctx, field)
+			case "path":
+				return ec.fieldContext_OperationalPort_path(ctx, field)
 			case "address":
 				return ec.fieldContext_OperationalPort_address(ctx, field)
 			case "sessionId":
@@ -61304,6 +61506,8 @@ func (ec *executionContext) fieldContext_OperationalPortEvent_port(_ context.Con
 				return ec.fieldContext_OperationalPort_front(ctx, field)
 			case "to":
 				return ec.fieldContext_OperationalPort_to(ctx, field)
+			case "path":
+				return ec.fieldContext_OperationalPort_path(ctx, field)
 			case "address":
 				return ec.fieldContext_OperationalPort_address(ctx, field)
 			case "sessionId":
@@ -91772,6 +91976,15 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			}
 		case "to":
 			out.Values[i] = ec._MinionTunnel_to(ctx, field, obj)
+		case "path":
+			out.Values[i] = ec._MinionTunnel_path(ctx, field, obj)
+		case "source":
+			out.Values[i] = ec._MinionTunnel_source(ctx, field, obj)
+		case "tls":
+			out.Values[i] = ec._MinionTunnel_tls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "user":
 			out.Values[i] = ec._MinionTunnel_user(ctx, field, obj)
 		case "password":
@@ -91875,6 +92088,8 @@ func (ec *executionContext) _MinionTunnelStream(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "path":
+			out.Values[i] = ec._MinionTunnelStream_path(ctx, field, obj)
 		case "udp":
 			out.Values[i] = ec._MinionTunnelStream_udp(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -94692,6 +94907,8 @@ func (ec *executionContext) _OperationalPort(ctx context.Context, sel ast.Select
 			}
 		case "to":
 			out.Values[i] = ec._OperationalPort_to(ctx, field, obj)
+		case "path":
+			out.Values[i] = ec._OperationalPort_path(ctx, field, obj)
 		case "address":
 			out.Values[i] = ec._OperationalPort_address(ctx, field, obj)
 		case "sessionId":

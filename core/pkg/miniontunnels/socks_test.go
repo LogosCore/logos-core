@@ -115,7 +115,7 @@ func TestReply(t *testing.T) {
 func TestSocksCode(t *testing.T) {
 	for result, want := range map[int]int{
 		protocol.TunnelOpen: 0, protocol.TunnelRefused: 5, protocol.TunnelHostUnreachable: 4, protocol.TunnelNetUnreachable: 3,
-		protocol.TunnelTimedOut: 6, protocol.TunnelNotAllowed: 2, protocol.TunnelFailed: 1, 42: 1,
+		protocol.TunnelTimedOut: 6, protocol.TunnelNotAllowed: 2, protocol.TunnelFailed: 1, protocol.TunnelDenied: 2, 42: 1,
 	} {
 		if got := socksCode(result); got != want {
 			t.Errorf("result %d: %d, want %d", result, got, want)

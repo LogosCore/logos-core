@@ -1113,6 +1113,9 @@ type MinionTunnel struct {
 	Front     string  `json:"front"`
 	Reverse   bool    `json:"reverse"`
 	To        *string `json:"to,omitempty"`
+	Path      *string `json:"path,omitempty"`
+	Source    *string `json:"source,omitempty"`
+	TLS       bool    `json:"tls"`
 	User      *string `json:"user,omitempty"`
 	Password  *string `json:"password,omitempty"`
 	Cap       int     `json:"cap"`
@@ -1134,6 +1137,7 @@ type MinionTunnelStream struct {
 	Client   string  `json:"client"`
 	Host     string  `json:"host"`
 	Port     int     `json:"port"`
+	Path     *string `json:"path,omitempty"`
 	UDP      bool    `json:"udp"`
 	OpenedAt string  `json:"openedAt"`
 	State    string  `json:"state"`
@@ -1348,6 +1352,7 @@ type OperationalPort struct {
 	Port          int     `json:"port"`
 	Front         string  `json:"front"`
 	To            *string `json:"to,omitempty"`
+	Path          *string `json:"path,omitempty"`
 	Address       *string `json:"address,omitempty"`
 	SessionID     string  `json:"sessionId"`
 	SessionNumber int     `json:"sessionNumber"`

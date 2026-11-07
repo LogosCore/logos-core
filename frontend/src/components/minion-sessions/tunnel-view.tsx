@@ -46,11 +46,13 @@ import {
   FRONT_HTTP,
   FRONT_SOCKS,
   capLabel,
+  forwardTo,
   frontLabel,
   hostPort,
   httpProxyURL,
   listenAddress,
   parseCap,
+  pathKind,
   proxyState,
   proxyURL,
   proxychainsLine,
@@ -106,9 +108,11 @@ export function TunnelView({
   const state = reverse
     ? reverseState(tunnel, t.state)
     : proxyState(tunnel, t.state);
-  // A forward (either way): every connection goes to its destination; a
-  // proxy: where each tool says.
+  // A forward (either way): every connection goes to its destination (a
+  // host and port, or a unix socket's or a pipe's path); a proxy: where each
+  // tool says.
   const forward = front === FRONT_FORWARD;
+  const destination = forwardTo(tunnel);
   // A proxy's URL and proxychains line, by what it speaks.
   const url = http ? httpProxyURL(host, tunnel.port) : proxyURL(host, tunnel.port);
   const line = proxychainsLine(host, tunnel.port, http ? "http" : "socks5");
@@ -148,9 +152,9 @@ export function TunnelView({
             <span className="shrink-0 text-xs text-muted-foreground">UDP</span>
           )}
           <span className="truncate font-mono text-xs">{address}</span>
-          {forward && tunnel.to && (
+          {forward && destination && (
             <span className="truncate font-mono text-xs text-muted-foreground">
-              → {tunnel.to}
+              → {destination}
             </span>
           )}
           <span
@@ -240,14 +244,18 @@ export function TunnelView({
             {forward ? (
               <LabelRow label="Forwards to">
                 <span className="font-mono text-xs break-all">
-                  {tunnel.to ?? "?"}
+                  {destination ?? "?"}
                 </span>
                 <span className="text-muted-foreground">
                   {reverse
                     ? tunnel.udp
                       ? " · from core's network, a socket for each address datagrams come from"
                       : " · from core's network, each connection"
-                    : " · from the minion's host, each connection"}
+                    : tunnel.path
+                      ? ` · a ${pathKind(tunnel.path)} on the minion's host, each connection`
+                      : tunnel.tls
+                        ? " · from the minion's host, each connection, over TLS (no certificate checked)"
+                        : " · from the minion's host, each connection"}
                 </span>
               </LabelRow>
             ) : reverseSocks ? (
@@ -295,6 +303,12 @@ export function TunnelView({
                 <span className="text-muted-foreground">: {state.detail}</span>
               )}
             </LabelRow>
+            {tunnel.source && (
+              <LabelRow label="Goes from">
+                <span className="font-mono text-xs break-all">{tunnel.source}</span>
+                <span className="text-muted-foreground"> · on the minion&apos;s host, its connections</span>
+              </LabelRow>
+            )}
             <LabelRow label="Bandwidth cap">
               {capLabel(tunnel.cap)}
               {tunnel.listening && keeps && <ChangeCap task={t} cap={tunnel.cap} />}
@@ -446,7 +460,7 @@ export function TunnelView({
                           : !tunnel.listening
                             ? "No tool connected through it."
                             : forward
-                              ? `Each connection to ${address} is one: the minion connects to ${tunnel.to ?? "the destination"} from its host.`
+                              ? `Each connection to ${address} is one: the minion connects to ${destination ?? "the destination"} from its host.`
                               : `Each connection a tool makes through ${address} is one: the minion connects to its destination from its host.`}
                     </p>
                   </>
@@ -468,9 +482,11 @@ function StreamRow({ s, reverse }: { s: TunnelStream; reverse: boolean }) {
   const destination =
     s.udp && !reverse
       ? "UDP: each datagram its own"
-      : s.host
-        ? hostPort(s.host, s.port)
-        : "as its tool asks";
+      : s.path
+        ? s.path
+        : s.host
+          ? hostPort(s.host, s.port)
+          : "as its tool asks";
   return (
     <div className={dataTableRowClass(GRID_COLS)}>
       <span className="font-mono text-xs text-muted-foreground tabular-nums">

@@ -192,6 +192,8 @@ func httpStatus(result int) (int, string) {
 		return http.StatusServiceUnavailable, "not allowed: as many streams open as the task takes"
 	case protocol.TunnelUnsupported:
 		return http.StatusNotImplemented, "the minion does not take this open"
+	case protocol.TunnelDenied:
+		return http.StatusForbidden, "denied: the minion's host does not let it connect there"
 	}
 	return http.StatusBadGateway, "the minion could not connect"
 }

@@ -181,6 +181,14 @@ type Opening struct {
 	// StopIdle stops the task once no stream has been open that long (its
 	// stop_idle); 0, never.
 	StopIdle time.Duration
+	// Kind and Path: a forward's destination when it is a unix socket or a
+	// named pipe, instead of Host and HostPort. Source: the address of the
+	// minion's host a tunnel's TCP streams go from; TLS: a forward's speak
+	// TLS to its destination.
+	Kind   int
+	Path   string
+	Source string
+	TLS    bool
 }
 
 // Open takes an operational port for a tunnel task about to be queued, and
@@ -208,7 +216,8 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 		}
 		rec := &models.OperationalPort{Port: port, Purpose: purpose, Host: o.Host, HostPort: o.HostPort, OperationID: o.Operation, SessionID: o.Session,
 			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle,
-			SessionNumber: o.SessionNumber, OpenedByName: o.ByName, UDP: o.UDP && purpose == models.OperationalPurposeSOCKS, Cap: o.Cap}
+			SessionNumber: o.SessionNumber, OpenedByName: o.ByName, UDP: o.UDP && purpose == models.OperationalPurposeSOCKS, Cap: o.Cap,
+			Kind: o.Kind, Path: o.Path, Source: o.Source, TLS: o.TLS}
 		err := s.ports.Insert(ctx, rec)
 		if errors.Is(err, repository.ErrPortTaken) {
 			continue

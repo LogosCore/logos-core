@@ -44,6 +44,9 @@ type request struct {
 	host    string
 	port    int
 	udp     bool
+	// path: a forward's to a unix socket or a pipe, instead of host and
+	// port.
+	path string
 }
 
 // errRefused: the client asked for something core does not do, and was
@@ -342,7 +345,7 @@ func socksCode(result int) int {
 		return socks5NetworkUnreachable
 	case protocol.TunnelTimedOut:
 		return socks5TTLExpired
-	case protocol.TunnelNotAllowed:
+	case protocol.TunnelNotAllowed, protocol.TunnelDenied:
 		return socks5NotAllowed
 	case protocol.TunnelUnsupported:
 		return socks5CommandNotSupported

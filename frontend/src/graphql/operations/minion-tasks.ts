@@ -93,6 +93,9 @@ export const MinionTaskFields = graphql(`
       front
       reverse
       to
+      path
+      source
+      tls
       user
       password
       cap
@@ -121,6 +124,7 @@ export const MinionTunnelStreamsQuery = graphql(`
         client
         host
         port
+        path
         udp
         openedAt
         state

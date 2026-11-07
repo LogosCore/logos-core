@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
   capLabel,
+  forwardTo,
   frontLabel,
   hostPort,
   httpProxyURL,
   parseCap,
+  pathKind,
   reverseSocksURL,
   listenAddress,
   proxyState,
@@ -42,6 +44,9 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   front: "socks",
   reverse: false,
   to: null,
+  path: null,
+  source: null,
+  tls: false,
   cap: 0,
   listening: true,
   open: 0,
@@ -63,6 +68,16 @@ describe("the proxy's address", () => {
     expect(proxychainsLine("10.0.0.1", 41001, "http")).toBe("http 10.0.0.1 41001")
     expect(httpProxyURL("fe80::1", 41001)).toBe("http://[fe80::1]:41001")
     expect(reverseSocksURL("10.0.0.7:1080", "logos", "a/b")).toBe("socks5h://logos:a%2Fb@10.0.0.7:1080")
+  })
+})
+
+describe("a forward's destination", () => {
+  it("is its host and port, or its path, a pipe's when in \\\\", () => {
+    expect(forwardTo({ to: "10.0.0.5:3389", path: null })).toBe("10.0.0.5:3389")
+    expect(forwardTo({ to: null, path: "/var/run/docker.sock" })).toBe("/var/run/docker.sock")
+    expect(pathKind("/var/run/docker.sock")).toBe("unix socket")
+    expect(pathKind("@/tmp/.X11-unix/X0")).toBe("unix socket")
+    expect(pathKind("\\\\dc01\\pipe\\lsarpc")).toBe("named pipe")
   })
 })
 

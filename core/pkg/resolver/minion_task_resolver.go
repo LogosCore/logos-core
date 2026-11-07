@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"sort"
 	"strconv"
@@ -275,9 +276,7 @@ func (r *minionTaskResolver) commandsOf(ctx context.Context, s *models.MinionSes
 		// they were reserved does not shadow them.
 		if slices.Contains(b.Commands, c.ID) && !protocol.IsCoreCommand(c.ID) {
 			if protocol.IsTunnelAction(c.Action) {
-				// Core's own params of a tunnel (its front, port,
-				// destination, cap), beside the command's: no num.
-				c.Params = append(slices.Clone(c.Params), protocol.TunnelCoreParams(c.Action)...)
+				c = tunnelCommand(sc.BuildSchema, c, b.Target)
 			}
 			out = append(out, c)
 		}
@@ -380,8 +379,11 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 			// The task shows the port it serves on.
 			values[protocol.ParamPort] = port
 		}
-		if host, ok := wire[protocol.ParamHost]; ok && front == protocol.FrontForward {
-			values[protocol.ParamHost] = host
+		for _, key := range []string{protocol.ParamHost, protocol.ParamPath, protocol.ParamSource} {
+			// As core read them: trimmed, a source as an address.
+			if v, ok := wire[key]; ok && v != "" && (front == protocol.FrontForward || key == protocol.ParamSource) {
+				values[key] = v
+			}
 		}
 		// And when core stops it: a command line that leaves stop_idle out
 		// runs by its default, as the form (which sends every field) does.
@@ -408,6 +410,26 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	}
 	r.publish(t)
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
+}
+
+// tunnelCommand is a tunnel command as a build of target has it: what it
+// opens narrowed by the target, and core's own params beside the command's
+// (no num): its front, port, destination and cap, and a path, a source
+// address and TLS where its minion opens them.
+func tunnelCommand(sc protocol.BuildSchema, c protocol.BuildCommand, target string) protocol.BuildCommand {
+	c.Opens = sc.CommandOpens(c, target)
+	params := slices.Clone(c.Params)
+	for _, p := range protocol.TunnelCoreParams(c.Action) {
+		switch {
+		case p.Key == protocol.ParamPath && !c.CanOpen(protocol.OpenUnix) && !c.CanOpen(protocol.OpenPipe),
+			p.Key == protocol.ParamSource && !c.CanOpen(protocol.OpenSource),
+			p.Key == protocol.ParamTLS && !c.CanOpen(protocol.OpenTLS):
+			continue
+		}
+		params = append(params, p)
+	}
+	c.Params = params
+	return c
 }
 
 // withDefault puts a param's default in a task's args where the operator
@@ -446,13 +468,31 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	o := miniontunnels.Opening{Task: taskID, Session: s.SessionID, Operation: s.OperationID, By: uid, Port: int(max(min(asked, 65536), -1)),
 		MaxStreams: miniontunnels.DefaultMaxStreams, Timeout: miniontunnels.DefaultConnectTimeout, SessionNumber: int(s.Number),
 		ByName: gqlctx.AuthFromContext(ctx).Username}
-	// A forward's destination: core checks it as a stream's.
+	// A forward's destination: core checks it as a stream's. A tunnel's
+	// forward goes to a path instead, a unix socket's or a pipe's, where
+	// its minion opens it.
+	path, _ := protocol.ArgString(wire, protocol.ParamPath)
+	path = strings.TrimSpace(path)
 	destination := func() error {
+		if path != "" {
+			kind := protocol.TunnelPathKind(path)
+			open := map[int]string{protocol.TunnelKindUnix: protocol.OpenUnix, protocol.TunnelKindPipe: protocol.OpenPipe}[kind]
+			if !cmd.CanOpen(open) {
+				return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("path: %s's minion opens no %s (its opens: %s)", cmd.ID,
+					map[int]string{protocol.TunnelKindUnix: "unix sockets", protocol.TunnelKindPipe: "named pipes"}[kind], strings.Join(cmd.Opens, ", ")))
+			}
+			if err := protocol.TunnelPath(kind, path); err != nil {
+				return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the forward's path: %v", err))
+			}
+			o.Kind, o.Path = kind, path
+			wire[protocol.ParamPath] = path
+			return nil
+		}
 		host, _ := protocol.ArgString(wire, protocol.ParamHost)
 		to, _ := protocol.ArgInt(wire, protocol.ParamTo)
 		dest := protocol.TunnelItem{T: protocol.ItemTunnel, Task: taskID[:], Stream: 1, Host: strings.TrimSpace(host), Port: uint64(max(to, 0))}
 		if err := dest.Validate(); err != nil {
-			return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the forward's destination (host, to): %v", err))
+			return moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("the forward's destination (host, to; or a path): %v", err))
 		}
 		o.Host, o.HostPort = dest.Host, int(to)
 		wire[protocol.ParamHost] = dest.Host
@@ -503,6 +543,32 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		}
 		return 0, front, nil
 	}
+	// Where its TCP streams go from, and TLS to a forward's destination,
+	// where the minion opens them.
+	source, _ := protocol.ArgString(wire, protocol.ParamSource)
+	useTLS, _ := protocol.ArgBool(wire, protocol.ParamTLS)
+	if source = strings.TrimSpace(source); source != "" {
+		ip := net.ParseIP(source)
+		switch {
+		case !cmd.CanOpen(protocol.OpenSource):
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("source: %s's minion takes no source address", cmd.ID))
+		case ip == nil:
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: an address of the minion's host, an IP")
+		case path != "":
+			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "source: a TCP connection's, not a path's")
+		}
+		o.Source = ip.String()
+		wire[protocol.ParamSource] = o.Source
+	}
+	switch {
+	case path != "" && front != protocol.FrontForward:
+		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "path: a forward's destination")
+	case useTLS && (front != protocol.FrontForward || path != ""):
+		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "tls: a forward's to a host and a port")
+	case useTLS && !cmd.CanOpen(protocol.OpenTLS):
+		return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("tls: %s's minion speaks no TLS to a destination", cmd.ID))
+	}
+	o.TLS = useTLS
 	switch front {
 	case protocol.FrontSOCKS:
 		// Its UDP ASSOCIATE, when the minion opens udp.
