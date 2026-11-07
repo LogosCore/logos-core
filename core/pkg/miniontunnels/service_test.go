@@ -84,6 +84,17 @@ func (f *fakePorts) NextStream(_ context.Context, task uuid.UUID) (uint64, error
 	return r.Streams, nil
 }
 
+func (f *fakePorts) SetBytes(_ context.Context, task uuid.UUID, up, down int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r := f.recs[task]
+	if r == nil {
+		return repository.ErrNotFound
+	}
+	r.Up, r.Down = up, down
+	return nil
+}
+
 func (f *fakePorts) Release(_ context.Context, task uuid.UUID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -95,56 +106,6 @@ func (f *fakePorts) held(task uuid.UUID) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.recs[task] != nil
-}
-
-// fakeRecords keeps the streams' records.
-type fakeRecords struct {
-	mu   sync.Mutex
-	recs map[uint64]models.MinionTunnelStream
-}
-
-func (f *fakeRecords) Insert(_ context.Context, s *models.MinionTunnelStream) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.recs[s.Stream] = *s
-	return nil
-}
-
-func (f *fakeRecords) Update(_ context.Context, s *models.MinionTunnelStream) error {
-	return f.Insert(context.Background(), s)
-}
-
-func (f *fakeRecords) Page(_ context.Context, _ uuid.UUID, _ repository.TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var out []models.MinionTunnelStream
-	for n := uint64(len(f.recs) + 64); n > 0 && int64(len(out)) < limit; n-- {
-		if s, ok := f.recs[n]; ok && (before == 0 || n < before) {
-			out = append(out, s)
-		}
-	}
-	return out, nil
-}
-
-func (f *fakeRecords) Totals(context.Context, uuid.UUID) (repository.TunnelTotals, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	var t repository.TunnelTotals
-	for n, s := range f.recs {
-		t.Streams++
-		t.Last = max(t.Last, n)
-		t.Up += s.Up
-		t.Down += s.Down
-	}
-	return t, nil
-}
-
-func (f *fakeRecords) DeleteByOperationID(context.Context, uuid.UUID) error { return nil }
-
-func (f *fakeRecords) get(stream uint64) models.MinionTunnelStream {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.recs[stream]
 }
 
 // fakeTasks is the tunnel's task.
@@ -163,13 +124,41 @@ func (f *fakeTasks) FindByTaskID(_ context.Context, id uuid.UUID) (*models.Minio
 	return &t, nil
 }
 
-func (f *fakeTasks) RequestCancel(_ context.Context, id uuid.UUID, at time.Time) (*models.MinionTask, error) {
+func (f *fakeTasks) RequestCancelWhy(_ context.Context, id uuid.UUID, at time.Time, why string) (*models.MinionTask, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t := f.tasks[id]
-	t.CancelRequestedAt = &at
+	t.CancelRequestedAt, t.CancelReason = &at, why
 	f.tasks[id] = t
 	return &t, nil
+}
+
+func (f *fakeTasks) SetTunnel(_ context.Context, id uuid.UUID, totals models.MinionTaskTunnel) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tasks[id]
+	if !ok {
+		return nil
+	}
+	t.Tunnel = &totals
+	f.tasks[id] = t
+	return nil
+}
+
+func (f *fakeTasks) TunnelOf(_ context.Context, id uuid.UUID) (*models.MinionTaskTunnel, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	t, ok := f.tasks[id]
+	if !ok {
+		return nil, repository.ErrNotFound
+	}
+	return t.Tunnel, nil
+}
+
+// tunnel is what the task keeps of its tunnel: nil before it closed.
+func (f *fakeTasks) tunnel(id uuid.UUID) *models.MinionTaskTunnel {
+	t, _ := f.TunnelOf(context.Background(), id)
+	return t
 }
 
 func (f *fakeTasks) ack(id uuid.UUID) {
@@ -186,11 +175,24 @@ type rig struct {
 	bus     *recordingBus
 	svc     *Service
 	ports   *fakePorts
-	records *fakeRecords
 	tasks   *fakeTasks
 	task    uuid.UUID
 	session uuid.UUID
 	port    int
+}
+
+// stream is the tunnel's stream n as its task's Streams tab lists it: zero
+// when core keeps it no longer.
+func (r *rig) stream(n uint64) models.MinionTunnelStream {
+	return streamOf(r.svc, r.task, n)
+}
+
+func streamOf(svc *Service, task uuid.UUID, n uint64) models.MinionTunnelStream {
+	recs, _ := svc.Streams(context.Background(), task, StreamFilter{}, n+1, 1)
+	if len(recs) == 1 && recs[0].Stream == n {
+		return recs[0]
+	}
+	return models.MinionTunnelStream{}
 }
 
 func freePort(t *testing.T) int {
@@ -205,8 +207,8 @@ func freePort(t *testing.T) int {
 
 func newRig(t *testing.T, maxStreams int, cfg func(*Config), opening ...func(*Opening)) *rig {
 	t.Helper()
-	r := &rig{ports: &fakePorts{recs: map[uuid.UUID]*models.OperationalPort{}}, records: &fakeRecords{recs: map[uint64]models.MinionTunnelStream{}},
-		tasks: &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}}, task: uuid.New(), session: uuid.New()}
+	r := &rig{ports: &fakePorts{recs: map[uuid.UUID]*models.OperationalPort{}}, tasks: &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}},
+		task: uuid.New(), session: uuid.New()}
 	c := DefaultConfig()
 	c.Ports, c.Bind = []int{freePort(t)}, "127.0.0.1"
 	c.ResendAfter, c.ConnectSlack, c.Tell = 200*time.Millisecond, 2*time.Second, 20*time.Millisecond
@@ -214,7 +216,7 @@ func newRig(t *testing.T, maxStreams int, cfg func(*Config), opening ...func(*Op
 		cfg(&c)
 	}
 	r.bus = &recordingBus{}
-	r.svc = New(c, r.ports, r.records, r.tasks, r.bus, zap.NewNop())
+	r.svc = New(c, r.ports, r.tasks, r.bus, zap.NewNop())
 	r.svc.Start(context.Background())
 	t.Cleanup(r.svc.Stop)
 	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskSent, Action: protocol.ActionSocksProxy}
@@ -708,8 +710,8 @@ func TestTunnelCarriesAStream(t *testing.T) {
 		t.Fatalf("reply %d", code)
 	}
 	roundTrip(t, c, 1<<20)
-	eventually(t, "the stream ends done", func() bool { return r.records.get(1).End == models.TunnelEndDone })
-	rec := r.records.get(1)
+	eventually(t, "the stream ends done", func() bool { return r.stream(1).End == models.TunnelEndDone })
+	rec := r.stream(1)
 	if rec.Host != host || rec.Port != port || rec.Up != 1<<20 || rec.Down != 1<<20 || rec.Result == nil || *rec.Result != protocol.TunnelOpen || rec.Bound == "" {
 		t.Errorf("record %+v", rec)
 	}
@@ -780,7 +782,7 @@ func TestTunnelOpening(t *testing.T) {
 		t.Errorf("past max_streams: reply %d, want not allowed", code)
 	}
 	roundTrip(t, res.c, 1000)
-	eventually(t, "the first stream ends", func() bool { return r.records.get(1).End != "" })
+	eventually(t, "the first stream ends", func() bool { return r.stream(1).End != "" })
 	closed := freePort(t)
 	c, code := socks5(t, r.port, "127.0.0.1", closed)
 	_ = c.Close()
@@ -812,7 +814,16 @@ func TestTunnelClose(t *testing.T) {
 	if _, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(r.port)), time.Second); err == nil {
 		t.Error("the port still listens")
 	}
-	eventually(t, "the stream's record ends", func() bool { return r.records.get(1).End == models.TunnelEndTaskEnded })
+	// Its streams go with it; what it came to stays with its task.
+	if recs, _ := r.svc.Streams(context.Background(), r.task, StreamFilter{}, 0, -1); len(recs) != 0 {
+		t.Errorf("its streams kept: %d", len(recs))
+	}
+	if tot := r.tasks.tunnel(r.task); tot == nil || tot.Streams != 1 {
+		t.Errorf("its totals: %+v", tot)
+	}
+	if sum, live, err := r.svc.View(context.Background(), r.task); err != nil || live || sum.Streams != 1 {
+		t.Errorf("its view: %+v %v %v", sum, live, err)
+	}
 }
 
 // Opening takes a free port of the range, or the one asked for; one not in
@@ -875,24 +886,37 @@ func TestTakeUnknown(t *testing.T) {
 	}
 }
 
-// A restart opens again the port of a tunnel whose task still runs, and
-// gives back that of one which ended.
+// A restart opens again the port of a tunnel whose task still runs, its
+// bytes counted on from what stopping kept, and gives back that of one
+// which ended, what it came to kept with its task.
 func TestRestartReopens(t *testing.T) {
 	r := newRig(t, 0, nil)
 	r.tasks.ack(r.task)
 	ended := uuid.New()
-	r.ports.recs[ended] = &models.OperationalPort{Port: freePort(t), TaskID: ended}
+	r.ports.recs[ended] = &models.OperationalPort{Port: freePort(t), TaskID: ended, Streams: 7, Up: 70, Down: 700}
 	r.tasks.tasks[ended] = models.MinionTask{TaskID: ended, State: models.MinionTaskDone}
+	r.svc.mu.Lock()
+	r.svc.tunnels[r.task].up, r.svc.tunnels[r.task].down = 100, 200
+	r.svc.mu.Unlock()
 	r.svc.Stop()
 	if !r.ports.held(r.task) {
 		t.Fatal("stopping gave the port back")
 	}
-	again := New(r.svc.cfg, r.ports, r.records, r.tasks, nil, zap.NewNop())
+	if p, _ := r.ports.FindByTaskID(context.Background(), r.task); p.Up != 100 || p.Down != 200 {
+		t.Fatalf("stopping kept the bytes as %d and %d", p.Up, p.Down)
+	}
+	again := New(r.svc.cfg, r.ports, r.tasks, nil, zap.NewNop())
 	again.Start(context.Background())
 	defer again.Stop()
 	r.svc = again
 	if r.ports.held(ended) {
 		t.Error("an ended task's port is kept")
+	}
+	if tot := r.tasks.tunnel(ended); tot == nil || *tot != (models.MinionTaskTunnel{Streams: 7, Up: 70, Down: 700}) {
+		t.Errorf("an ended task's totals: %+v", tot)
+	}
+	if sum, ok := again.Summary(r.task); !ok || sum.Up != 100 || sum.Down != 200 {
+		t.Errorf("after a restart: %+v %v", sum, ok)
 	}
 	startMinion(t, r)
 	host, port := splitAddr(t, echo(t))
@@ -1028,13 +1052,13 @@ func TestTunnelCarriesDatagrams(t *testing.T) {
 		}
 	}
 	_ = ctl.Close()
-	eventually(t, "the association ends", func() bool { return r.records.get(1).End == models.TunnelEndDone })
+	eventually(t, "the association ends", func() bool { return r.stream(1).End == models.TunnelEndDone })
 	eventually(t, "the minion told", func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return len(m.closed) == 1 && m.closed[0].Reason == protocol.TunnelCloseDone
 	})
-	rec := r.records.get(1)
+	rec := r.stream(1)
 	if !rec.UDP || rec.Up == 0 || rec.Down == 0 {
 		t.Errorf("record %+v", rec)
 	}
@@ -1059,8 +1083,8 @@ func TestForwardCarriesAStream(t *testing.T) {
 	}
 	defer func() { _ = c.Close() }()
 	roundTrip(t, c, 256<<10)
-	eventually(t, "the stream ends done", func() bool { return r.records.get(1).End == models.TunnelEndDone })
-	if rec := r.records.get(1); rec.Host != host || rec.Port != port || rec.UDP || rec.Up != 256<<10 || rec.Down != 256<<10 {
+	eventually(t, "the stream ends done", func() bool { return r.stream(1).End == models.TunnelEndDone })
+	if rec := r.stream(1); rec.Host != host || rec.Port != port || rec.UDP || rec.Up != 256<<10 || rec.Down != 256<<10 {
 		t.Errorf("record %+v", rec)
 	}
 	r.svc.mu.Lock()
@@ -1086,8 +1110,8 @@ func TestForwardRefused(t *testing.T) {
 	if _, err := c.Read(make([]byte, 1)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Errorf("the client's connection stays: %v", err)
 	}
-	eventually(t, "its record ends", func() bool { return r.records.get(1).End == models.TunnelEndNotOpened })
-	if rec := r.records.get(1); rec.Result == nil || *rec.Result != protocol.TunnelRefused {
+	eventually(t, "its record ends", func() bool { return r.stream(1).End == models.TunnelEndNotOpened })
+	if rec := r.stream(1); rec.Result == nil || *rec.Result != protocol.TunnelRefused {
 		t.Errorf("record %+v", rec)
 	}
 }

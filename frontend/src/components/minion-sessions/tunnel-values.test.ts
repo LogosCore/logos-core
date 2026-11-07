@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   frontLabel,
   hostPort,
+  listenAddress,
   proxyState,
+  stopIdleOf,
+  reverseState,
   proxyURL,
   proxychainsLine,
   streamState,
@@ -37,6 +40,7 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   listening: true,
   open: 0,
   streams: 0,
+  kept: 1000,
   up: 0,
   down: 0,
   ...t,
@@ -87,5 +91,68 @@ describe("the proxy's state", () => {
 
   it("changes its version as the tunnel moves on", () => {
     expect(tunnelVersion(tunnel({}))).not.toBe(tunnelVersion(tunnel({ up: 1 })))
+  })
+})
+
+describe("reverse port forwards", () => {
+  const reverse = (t: Partial<Tunnel>): Tunnel =>
+    ({
+      port: 0,
+      address: null,
+      purpose: "reverse_port_forward",
+      to: "10.8.0.2:4444",
+      bind: "0.0.0.0",
+      listen: 8080,
+      bound: null,
+      udp: false,
+      listening: false,
+      open: 0,
+      streams: 0,
+      up: 0,
+      down: 0,
+      ...t,
+    }) as Tunnel
+
+  it("says what it is", () => {
+    expect(frontLabel("reverse_port_forward")).toBe("Reverse port forward")
+  })
+
+  it("listens where the minion said, else where the task asked", () => {
+    expect(listenAddress(reverse({}))).toBe("0.0.0.0:8080")
+    expect(listenAddress(reverse({ bound: "10.0.0.7:8080" }))).toBe("10.0.0.7:8080")
+    expect(listenAddress(reverse({ bind: "::", listen: 0 }))).toBe("[::]:0")
+  })
+
+  it("waits for the minion, listens once it said, and closes with its task", () => {
+    expect(reverseState(reverse({}), "SENT")).toMatchObject({ label: "Waiting", tone: "pending" })
+    expect(reverseState(reverse({}), "RUNNING")).toMatchObject({ label: "Waiting", tone: "pending" })
+    expect(reverseState(reverse({ listening: true, bound: "0.0.0.0:8080" }), "RUNNING")).toEqual({
+      label: "Listening",
+      tone: "good",
+      detail: "on the minion's host, at 0.0.0.0:8080",
+    })
+    expect(reverseState(reverse({}), "DONE")).toMatchObject({ label: "Closed", tone: "muted" })
+  })
+
+  it("names core's side in its streams", () => {
+    expect(streamState(stream({ state: "OPENING", result: null, bound: null }), true).detail).toBe("core connects")
+    expect(streamState(stream({ bound: "172.18.0.5:40000" }), true).detail).toBe("core from 172.18.0.5:40000")
+    expect(streamState(stream({ state: "ENDED", end: "client_reset" }), true).detail).toBe("the destination aborted it")
+    expect(streamState(stream({ state: "ENDED", end: "client_reset" })).detail).toBe("the tool aborted it")
+    expect(streamState(stream({ state: "ENDED", end: "done", udp: true }), true).detail).toBe("idle: no datagram either way for two minutes")
+    expect(streamState(stream({ state: "ENDED", end: "done", udp: true })).detail).toBe("closed by both ends")
+  })
+})
+
+describe("stopIdleOf", () => {
+  it("reads a tunnel's stop_idle, none or 0 as never", () => {
+    expect(stopIdleOf({ stop_idle: "1h" })).toBe("1h")
+    expect(stopIdleOf({ stop_idle: " 90m " })).toBe("90m")
+    expect(stopIdleOf({ stop_idle: "0s" })).toBeNull()
+    expect(stopIdleOf({ stop_idle: "0" })).toBeNull()
+    expect(stopIdleOf({ stop_idle: 3600000 })).toBe("3600s")
+    expect(stopIdleOf({ stop_idle: 0 })).toBeNull()
+    expect(stopIdleOf({})).toBeNull()
+    expect(stopIdleOf(null)).toBeNull()
   })
 })

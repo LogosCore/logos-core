@@ -240,6 +240,8 @@ func extractOperationID(event eventbus.Event) string {
 		return p.OperationID
 	case eventbus.OperationalPortEventPayload:
 		return p.OperationID
+	case eventbus.MinionListenerEventPayload:
+		return p.OperationID
 	case eventbus.MinionTaskEventPayload:
 		return p.OperationID
 	case eventbus.FileBrowserEventPayload:
@@ -931,6 +933,31 @@ func (r *subscriptionResolver) operationalPortEvent(ctx context.Context, event e
 		evt.Port = r.MinionTaskResolver.LoadPort(ctx, p.TaskID)
 	}
 	if evt.Port == nil {
+		// Gone meanwhile: closed.
+		evt.Action = model.EventActionDeleted
+	}
+	return evt
+}
+
+// minionListenerEvent is a reverse port forward's listener changing: the
+// listener as it is now, none once it closed.
+func (r *subscriptionResolver) minionListenerEvent(ctx context.Context, event eventbus.Event) *model.MinionListenerEvent {
+	p, ok := event.Payload.(eventbus.MinionListenerEventPayload)
+	if !ok {
+		return nil
+	}
+	evt := &model.MinionListenerEvent{Action: model.EventActionUpdated, ID: p.TaskID, OperationID: p.OperationID}
+	switch {
+	case p.Closed:
+		evt.Action = model.EventActionDeleted
+		return evt
+	case p.Opened:
+		evt.Action = model.EventActionCreated
+	}
+	if r.MinionTaskResolver != nil {
+		evt.Listener = r.MinionTaskResolver.LoadListener(ctx, p.TaskID)
+	}
+	if evt.Listener == nil {
 		// Gone meanwhile: closed.
 		evt.Action = model.EventActionDeleted
 	}

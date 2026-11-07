@@ -12,6 +12,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/authorization"
 	"github.com/logoscore/logos-core/core/pkg/graphql/gqlctx"
 	"github.com/logoscore/logos-core/core/pkg/graphql/model"
+	"github.com/logoscore/logos-core/core/pkg/miniontunnels"
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
@@ -51,8 +52,8 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		}
 	}
 	m := &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Purpose: models.OperationalPurposeSOCKS, Listening: listening,
-		Open: sum.Open, Streams: int(sum.Streams), Up: int(sum.Up), Down: int(sum.Down)}
-	if t.Action != nil && *t.Action == protocol.ActionPortForward {
+		Open: sum.Open, Streams: int(sum.Streams), Kept: miniontunnels.KeptStreams, Up: int(sum.Up), Down: int(sum.Down), StopsAt: taskTime(stopsAt(sum))}
+	if t.Action != nil && (*t.Action == protocol.ActionPortForward || *t.Action == protocol.ActionReversePortForward) {
 		// Its destination, as its args say (core checked them when it
 		// queued the task).
 		m.Purpose = models.OperationalPurposeForward
@@ -61,6 +62,21 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 			dest := net.JoinHostPort(host, strconv.FormatInt(to, 10))
 			m.To = &dest
 		}
+	}
+	if t.Action != nil && *t.Action == protocol.ActionReversePortForward {
+		// No operational port: the minion listens, where its args ask and
+		// where it says it does.
+		m.Purpose, m.Port, m.Address = models.OperationalPurposeReverse, 0, nil
+		bind, _ := protocol.ArgString(args, "bind")
+		m.Bind = strPtr(bind)
+		if l, ok := protocol.ArgInt(args, "listen"); ok {
+			n := int(l)
+			m.Listen = &n
+		}
+		m.Bound = strPtr(sum.Bound)
+		m.Listening = listening && sum.Bound != ""
+		udp, _ := protocol.ArgBool(args, "udp")
+		m.UDP = &udp
 	}
 	return m, nil
 }
@@ -96,16 +112,16 @@ func (r *minionTaskResolver) MinionTunnelStreams(ctx context.Context, taskID str
 			return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid cursor")
 		}
 	}
-	filter := repository.TunnelStreamFilter{}
+	filter := miniontunnels.StreamFilter{}
 	if search != nil {
 		filter.Search = strings.TrimSpace(*search)
 	}
 	if state != nil {
 		switch strings.ToUpper(*state) {
 		case "OPEN":
-			filter.State = repository.TunnelStreamsOpen
+			filter.State = miniontunnels.StreamsOpen
 		case "ENDED":
-			filter.State = repository.TunnelStreamsEnded
+			filter.State = miniontunnels.StreamsEnded
 		case "":
 		default:
 			return nil, moduleGQLError(ctx, errCodeBadUserInput, "state is OPEN or ENDED")
@@ -194,8 +210,93 @@ func (r *minionTaskResolver) portModel(p *models.OperationalPort) *model.Operati
 		OpenedByName: strPtr(p.OpenedByName), OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(p.Streams)}
 	if sum, ok := r.tunnels.Summary(p.TaskID); ok {
 		node.Listening, node.Open, node.Streams = true, sum.Open, int(max(sum.Streams, p.Streams))
+		node.StopsAt = taskTime(stopsAt(sum))
 	}
 	return node
+}
+
+// stopsAt is when core stops a tunnel unless a stream opens first; nil for
+// not now.
+func stopsAt(sum miniontunnels.Summary) *time.Time {
+	if sum.StopsAt.IsZero() {
+		return nil
+	}
+	return &sum.StopsAt
+}
+
+// MinionListeners is a page of an operation's reverse port forwards'
+// listeners, for a member of it: each one's task's tunnel as it is now.
+func (r *minionTaskResolver) MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error) {
+	opID, err := uuid.Parse(operationID)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, "invalid operation ID")
+	}
+	op, err := gqlctx.LoadOperation(ctx, r.operationRepo, opID)
+	if err != nil {
+		return nil, fmt.Errorf("operation not found: %w", err)
+	}
+	if err := authorization.AuthorizeOperationRole(ctx, &op, models.OperationRoleViewer); err != nil {
+		return nil, err
+	}
+	empty := &model.MinionListenerConnection{Edges: []*model.MinionListenerEdge{}, PageInfo: &pagination.PageInfo{}}
+	if r.tunnels == nil {
+		return empty, nil
+	}
+	args, err := pagination.ParseArgs(first, after, last, before)
+	if err != nil {
+		return nil, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("invalid pagination args: %v", err))
+	}
+	q := ""
+	if search != nil {
+		q = strings.TrimSpace(*search)
+	}
+	total, err := r.tunnels.CountListeners(ctx, opID, q)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.tunnels.Listeners(ctx, opID, q, args.Cursor, args.Limit+1, args.Forward)
+	if err != nil {
+		return nil, err
+	}
+	edges, pageInfo := pagination.BuildEdges(rows, args,
+		func(l *models.MinionListener) string { return repository.MinionListenerCursor(l) },
+		func(l *models.MinionListener, cursor string) *model.MinionListenerEdge {
+			return &model.MinionListenerEdge{Node: r.listenerModel(l), Cursor: cursor}
+		})
+	return &model.MinionListenerConnection{Edges: edges, PageInfo: &pageInfo, TotalCount: int(total)}, nil
+}
+
+// listenerModel is a listener as GraphQL has it: its task's tunnel as it is
+// now.
+func (r *minionTaskResolver) listenerModel(l *models.MinionListener) *model.MinionListener {
+	node := &model.MinionListener{ID: l.TaskID.String(), Bind: l.Bind, Listen: l.Listen, Bound: strPtr(l.Bound), UDP: l.UDP,
+		To: net.JoinHostPort(l.Host, strconv.Itoa(l.HostPort)), SessionID: l.SessionID.String(), SessionNumber: l.SessionNumber,
+		TaskID: l.TaskID.String(), OpenedBy: l.OpenedBy.String(), OpenedByName: strPtr(l.OpenedByName),
+		OpenedAt: l.OpenedAt.UTC().Format(time.RFC3339Nano), Streams: int(l.Streams)}
+	if sum, ok := r.tunnels.Summary(l.TaskID); ok {
+		node.Open, node.Streams = sum.Open, int(max(sum.Streams, l.Streams))
+		if sum.Bound != "" {
+			node.Bound = strPtr(sum.Bound)
+		}
+		node.Listening = sum.Bound != ""
+		node.StopsAt = taskTime(stopsAt(sum))
+	}
+	return node
+}
+
+// LoadListener is a task's reverse port forward's listener as GraphQL has
+// it, for a subscriber (whose operation the subscription checked): nil when
+// it has none.
+func (r *minionTaskResolver) LoadListener(ctx context.Context, taskID string) *model.MinionListener {
+	id, err := uuid.Parse(taskID)
+	if err != nil || r.tunnels == nil {
+		return nil
+	}
+	l, err := r.tunnels.Listener(ctx, id)
+	if err != nil {
+		return nil
+	}
+	return r.listenerModel(l)
 }
 
 // LoadPort is a task's port as GraphQL has it, for a subscriber (whose

@@ -1,0 +1,69 @@
+# A reverse port forward's listener (docs:
+# contracts/minion-messages/tunnels.md, Reverse port forward): the port its
+# task's minion listens on until the task ends, and the destination core
+# connects each connection that comes there to.
+type MinionListener {
+  # The task's id: a listener serves one task.
+  id: ID!
+  # Where the minion is to listen, as the task asked (listen 0: any free
+  # port), and where it says it does: null until it says.
+  bind: String!
+  listen: Int!
+  bound: String
+  # It listens for UDP datagrams, a stream for each address they come
+  # from; else for TCP connections.
+  udp: Boolean!
+  # The destination core connects each stream to, host:port.
+  to: String!
+  sessionId: ID!
+  # The session's number when it opened.
+  sessionNumber: Int!
+  taskId: ID!
+  openedBy: ID!
+  # Who opened it, by name when it opened; null for one gone.
+  openedByName: String
+  openedAt: String!
+  # The minion listens: it said so, and the task runs.
+  listening: Boolean!
+  # Its streams now, and how many it has had.
+  open: Int!
+  streams: Int!
+  # When core stops its task unless a stream opens first; null for none.
+  stopsAt: String
+}
+
+type MinionListenerEdge {
+  node: MinionListener!
+  cursor: String!
+}
+
+type MinionListenerConnection {
+  edges: [MinionListenerEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# A listener changing: opened (CREATED), where the minion listens or its
+# streams' numbers (UPDATED), closed with its task (DELETED: no listener).
+type MinionListenerEvent {
+  action: EventAction!
+  # The listener's id: its task's.
+  id: ID!
+  operationId: ID!
+  listener: MinionListener
+}
+
+extend type Subscription {
+  # An operation's reverse port forwards' listeners as they change. Needs
+  # at least viewer.
+  minionListenerChanged(operationId: ID!): MinionListenerEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Query {
+  # An operation's reverse port forwards' listeners, the latest opened
+  # first, a page at a time; search matches the port, the session's number,
+  # who opened it, where it listens and what to. Needs at least viewer.
+  minionListeners(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): MinionListenerConnection!
+    @hasPermission(permission: "operation:member")
+}

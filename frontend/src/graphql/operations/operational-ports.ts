@@ -19,6 +19,7 @@ export const OperationalPortFields = graphql(`
     listening
     open
     streams
+    stopsAt
   }
 `)
 

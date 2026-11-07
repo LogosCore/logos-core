@@ -26,6 +26,7 @@ import (
 	"github.com/logoscore/logos-core/core/pkg/models"
 	"github.com/logoscore/logos-core/core/pkg/pagination"
 	"github.com/logoscore/logos-core/core/pkg/repository"
+	"github.com/logoscore/logos-golang-protocol/protocol"
 	"go.uber.org/zap"
 )
 
@@ -46,6 +47,10 @@ type Config struct {
 	// ResendAfter: what was sent and not acked in that long is sent again,
 	// from the ack.
 	ResendAfter time.Duration
+	// UDPIdle ends a UDP reverse port forward's stream with no datagram
+	// either way for that long: core's backstop, past the minion's own
+	// (protocol.TunnelUDPIdle).
+	UDPIdle time.Duration
 	// Sweep is how often the tunnels' tasks are read again, should an
 	// event about one have been dropped.
 	Sweep time.Duration
@@ -64,13 +69,20 @@ type Config struct {
 // deployment's.
 func DefaultConfig() Config {
 	return Config{HandshakeWait: 10 * time.Second, ConnectSlack: 30 * time.Second, ResendAfter: 5 * time.Second,
-		Sweep: 15 * time.Second, IdlePoll: 250 * time.Millisecond, TaskPoll: time.Second, Tell: time.Second}
+		UDPIdle: protocol.TunnelUDPIdle + time.Minute,
+		Sweep:   15 * time.Second, IdlePoll: 250 * time.Millisecond, TaskPoll: time.Second, Tell: time.Second}
 }
 
-// Tasks is what the service reads of tasks (the minion task repository).
+// Tasks is what the service reads and keeps of tasks (the minion task
+// repository).
 type Tasks interface {
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.MinionTask, error)
-	RequestCancel(ctx context.Context, taskID uuid.UUID, at time.Time) (*models.MinionTask, error)
+	// RequestCancelWhy asks the task to stop, as Stop does, keeping why.
+	RequestCancelWhy(ctx context.Context, taskID uuid.UUID, at time.Time, why string) (*models.MinionTask, error)
+	// SetTunnel keeps what the task's tunnel came to, as it closes;
+	// TunnelOf reads it back (nil before).
+	SetTunnel(ctx context.Context, taskID uuid.UUID, totals models.MinionTaskTunnel) error
+	TunnelOf(ctx context.Context, taskID uuid.UUID) (*models.MinionTaskTunnel, error)
 }
 
 // Waker is told a session has tunnel items to go (minionsync's
@@ -85,14 +97,16 @@ var ErrNoPort = errors.New("no operational port")
 
 // Service holds the tunnels.
 type Service struct {
-	cfg     Config
-	ports   repository.IOperationalPortRepository
-	records repository.IMinionTunnelStreamRepository
-	tasks   Tasks
-	bus     eventbus.IEventBus
-	waker   Waker
-	logger  *zap.Logger
-	now     func() time.Time
+	cfg   Config
+	ports repository.IOperationalPortRepository
+	// listeners keeps reverse port forwards' (WithListeners): none, and
+	// core opens none.
+	listeners repository.IMinionListenerRepository
+	tasks     Tasks
+	bus       eventbus.IEventBus
+	waker     Waker
+	logger    *zap.Logger
+	now       func() time.Time
 
 	mu sync.Mutex
 	// tunnels by task.
@@ -101,18 +115,16 @@ type Service struct {
 	// so every stream has its turn.
 	rotation map[uuid.UUID]int
 
-	writes      chan recordWrite
 	unsubscribe func()
 	stop        chan struct{}
 	done        sync.WaitGroup
 }
 
 // New is the service; Start opens the ports of tunnels still running.
-func New(cfg Config, ports repository.IOperationalPortRepository, records repository.IMinionTunnelStreamRepository, tasks Tasks,
-	bus eventbus.IEventBus, logger *zap.Logger) *Service {
-	return &Service{cfg: cfg, ports: ports, records: records, tasks: tasks, bus: bus, logger: logger.Named("miniontunnels"),
+func New(cfg Config, ports repository.IOperationalPortRepository, tasks Tasks, bus eventbus.IEventBus, logger *zap.Logger) *Service {
+	return &Service{cfg: cfg, ports: ports, tasks: tasks, bus: bus, logger: logger.Named("miniontunnels"),
 		now: func() time.Time { return time.Now().UTC() }, tunnels: map[uuid.UUID]*tunnel{}, rotation: map[uuid.UUID]int{},
-		writes: make(chan recordWrite, 1024), stop: make(chan struct{})}
+		stop: make(chan struct{})}
 }
 
 // WithWaker gives the service the waker: without one, a session's items
@@ -141,10 +153,19 @@ type Opening struct {
 	ByName        string
 	// Purpose is what core puts in front of the port: a SOCKS proxy
 	// (models.OperationalPurposeSOCKS, the default) or a port forward to
-	// Host:HostPort (models.OperationalPurposeForward).
+	// Host:HostPort (models.OperationalPurposeForward). A reverse port
+	// forward (OpenReverse) has no port: the minion listens at Bind:Listen,
+	// and core connects its streams to Host:HostPort.
 	Purpose  string
 	Host     string
 	HostPort int
+	Bind     string
+	Listen   int
+	// UDP: the minion listens for datagrams (a reverse port forward's).
+	UDP bool
+	// StopIdle stops the task once no stream has been open that long (its
+	// stop_idle); 0, never.
+	StopIdle time.Duration
 }
 
 // Open takes an operational port for a tunnel task about to be queued, and
@@ -171,7 +192,7 @@ func (s *Service) Open(ctx context.Context, o Opening) (int, error) {
 			purpose = models.OperationalPurposeSOCKS
 		}
 		rec := &models.OperationalPort{Port: port, Purpose: purpose, Host: o.Host, HostPort: o.HostPort, OperationID: o.Operation, SessionID: o.Session,
-			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout,
+			TaskID: o.Task, OpenedBy: o.By, OpenedAt: s.now(), MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle,
 			SessionNumber: o.SessionNumber, OpenedByName: o.ByName}
 		err := s.ports.Insert(ctx, rec)
 		if errors.Is(err, repository.ErrPortTaken) {
@@ -231,35 +252,66 @@ func (s *Service) listen(rec *models.OperationalPort, acked bool) (*tunnel, erro
 }
 
 // Close ends the task's tunnel: its port closes, its clients' connections
-// with it, and the port goes back to the range. A task with none: nothing.
+// with it, and the port goes back to the range. What it came to stays with
+// its task (SetTunnel); its streams go. A task with none: nothing.
 func (s *Service) Close(ctx context.Context, task uuid.UUID) {
 	s.mu.Lock()
 	t := s.tunnels[task]
+	if t != nil && t.closing {
+		// Another Close has it.
+		s.mu.Unlock()
+		return
+	}
 	var waiting []net.Conn
+	var totals models.MinionTaskTunnel
 	if t != nil {
-		delete(s.tunnels, task)
 		t.closing = true
 		for _, st := range t.streams {
 			s.drop(st, models.TunnelEndTaskEnded, false)
 		}
 		waiting = t.everyClient()
-		if len(s.ofSession(t.session)) == 0 {
-			delete(s.rotation, t.session)
-		}
+		totals = models.MinionTaskTunnel{Streams: t.last, Up: t.up, Down: t.down}
 	}
 	s.mu.Unlock()
 	if t != nil {
-		_ = t.ln.Close()
+		// Its totals are kept before it goes: its task never shows it
+		// without them.
+		if err := s.tasks.SetTunnel(ctx, task, totals); err != nil {
+			s.logger.Warn("tunnels: keep a tunnel's totals", zap.String("task_id", task.String()), zap.Error(err))
+		}
+		s.mu.Lock()
+		delete(s.tunnels, task)
+		if len(s.ofSession(t.session)) == 0 {
+			delete(s.rotation, t.session)
+		}
+		s.mu.Unlock()
+		if t.ln != nil {
+			_ = t.ln.Close()
+		}
 		s.closeRelay(t)
 		for _, c := range waiting {
 			_ = c.Close()
 		}
-		s.logger.Info("tunnels: SOCKS port closed", zap.Int("port", t.port), zap.String("task_id", task.String()))
+		if t.reverse {
+			s.logger.Info("tunnels: reverse port forward ended", zap.String("task_id", task.String()))
+		} else {
+			s.logger.Info("tunnels: SOCKS port closed", zap.Int("port", t.port), zap.String("task_id", task.String()))
+		}
 	}
-	if err := s.ports.Release(ctx, task); err != nil {
-		s.logger.Warn("tunnels: give back a task's port", zap.String("task_id", task.String()), zap.Error(err))
+	if t == nil || !t.reverse {
+		if err := s.ports.Release(ctx, task); err != nil {
+			s.logger.Warn("tunnels: give back a task's port", zap.String("task_id", task.String()), zap.Error(err))
+		}
 	}
-	if t != nil {
+	if s.listeners != nil && (t == nil || t.reverse) {
+		if err := s.listeners.Release(ctx, task); err != nil {
+			s.logger.Warn("tunnels: forget a task's reverse port forward", zap.String("task_id", task.String()), zap.Error(err))
+		}
+	}
+	switch {
+	case t != nil && t.reverse:
+		s.listenerChanged(task, t.operation, false, true)
+	case t != nil:
 		s.portChanged(task, t.operation, false, true)
 	}
 }
@@ -287,14 +339,21 @@ func (s *Service) portChanged(task, operation uuid.UUID, opened, closed bool) {
 // Start opens again the ports of tunnels whose tasks still run, ends those
 // whose port cannot open, and watches the tasks.
 func (s *Service) Start(ctx context.Context) {
-	s.done.Add(1)
-	go s.writeRecords()
 	recs, err := s.ports.All(ctx)
 	if err != nil {
 		s.logger.Error("tunnels: read the ports in use", zap.Error(err))
 	}
 	for i := range recs {
 		s.reopen(ctx, &recs[i])
+	}
+	if s.listeners != nil {
+		listeners, err := s.listeners.All(ctx)
+		if err != nil {
+			s.logger.Error("tunnels: read the reverse port forwards", zap.Error(err))
+		}
+		for i := range listeners {
+			s.reopenReverse(ctx, &listeners[i])
+		}
 	}
 	if s.bus != nil {
 		s.unsubscribe = s.bus.Subscribe([]eventbus.Topic{eventbus.TopicMinionTaskChanged}, s.onTask)
@@ -313,6 +372,11 @@ func (s *Service) reopen(ctx context.Context, rec *models.OperationalPort) {
 	t, err := s.tasks.FindByTaskID(ctx, rec.TaskID)
 	switch {
 	case repository.IsNotFound(err) || (err == nil && (t.Finished() || t.CancelRequestedAt != nil)):
+		if err == nil {
+			// It ended while core was down: what it came to, as its port
+			// last kept it.
+			s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Streams, Up: rec.Up, Down: rec.Down})
+		}
 		if err := s.ports.Release(ctx, rec.TaskID); err != nil {
 			s.logger.Warn("tunnels: give back an ended task's port", zap.Error(err))
 		}
@@ -321,27 +385,29 @@ func (s *Service) reopen(ctx context.Context, rec *models.OperationalPort) {
 		s.logger.Error("tunnels: read a tunnel's task", zap.String("task_id", rec.TaskID.String()), zap.Error(err))
 		return
 	}
-	tun, err := s.listen(rec, t.AckedAt != nil)
-	if err != nil {
+	// Its numbers so far come with its port (newTunnel).
+	if _, err := s.listen(rec, t.AckedAt != nil); err != nil {
 		s.logger.Warn("tunnels: a running tunnel's port does not open again, its task ends", zap.Int("port", rec.Port),
 			zap.String("task_id", rec.TaskID.String()), zap.Error(err))
-		s.cancel(ctx, rec.TaskID)
+		s.cancel(ctx, rec.TaskID, fmt.Sprintf("stopped by core: its port %d did not open again after core restarted", rec.Port))
+		s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Streams, Up: rec.Up, Down: rec.Down})
 		_ = s.ports.Release(ctx, rec.TaskID)
 		s.portChanged(rec.TaskID, rec.OperationID, false, true)
 		return
 	}
 	s.portChanged(rec.TaskID, rec.OperationID, false, false)
-	// Its bytes so far, as its streams' records say.
-	if tot, err := s.records.Totals(ctx, rec.TaskID); err == nil {
-		s.mu.Lock()
-		tun.up, tun.down, tun.last = tun.up+tot.Up, tun.down+tot.Down, max(tun.last, tot.Last)
-		s.mu.Unlock()
+}
+
+// keepTotals keeps what a task's tunnel came to with the task.
+func (s *Service) keepTotals(ctx context.Context, task uuid.UUID, totals models.MinionTaskTunnel) {
+	if err := s.tasks.SetTunnel(ctx, task, totals); err != nil {
+		s.logger.Warn("tunnels: keep a tunnel's totals", zap.String("task_id", task.String()), zap.Error(err))
 	}
 }
 
-// cancel asks the task to end, as Stop does.
-func (s *Service) cancel(ctx context.Context, task uuid.UUID) {
-	t, err := s.tasks.RequestCancel(ctx, task, s.now())
+// cancel asks the task to end, as Stop does, saying why.
+func (s *Service) cancel(ctx context.Context, task uuid.UUID, why string) {
+	t, err := s.tasks.RequestCancelWhy(ctx, task, s.now(), why)
 	if err != nil {
 		s.logger.Warn("tunnels: cancel a task", zap.String("task_id", task.String()), zap.Error(err))
 		return
@@ -352,8 +418,9 @@ func (s *Service) cancel(ctx context.Context, task uuid.UUID) {
 	}
 }
 
-// Stop closes every port and connection: the tunnels' records stay, so a
-// restart opens their ports again.
+// Stop closes every port and connection: the tunnels' ports and listeners
+// stay kept, their bytes so far with them, so a restart opens them again
+// and counts on. Their streams go.
 func (s *Service) Stop() {
 	select {
 	case <-s.stop:
@@ -377,13 +444,17 @@ func (s *Service) Stop() {
 	}
 	s.mu.Unlock()
 	for _, t := range all {
-		_ = t.ln.Close()
+		if t.ln != nil {
+			_ = t.ln.Close()
+		}
 		s.closeRelay(t)
 	}
 	for _, c := range waiting {
 		_ = c.Close()
 	}
-	// The records of the streams it ended go before the writer stops.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	s.keepBytes(ctx, all)
+	cancel()
 	close(s.stop)
 	s.done.Wait()
 }
@@ -425,6 +496,9 @@ func (s *Service) check(ctx context.Context, id uuid.UUID) {
 	if t.AckedAt != nil && s.acked(id) {
 		s.wake(t.SessionID)
 	}
+	if t.AckedAt != nil {
+		s.idleCheck(ctx, id)
+	}
 }
 
 // acked marks the tunnel's task as the minion's: true when that is news.
@@ -460,6 +534,8 @@ func (s *Service) sweep() {
 		for _, id := range ids {
 			s.check(context.Background(), id)
 		}
+		s.endIdleUDP()
+		s.keepBytes(context.Background(), nil)
 	}
 }
 
@@ -495,7 +571,11 @@ func (s *Service) tell() {
 			s.bus.Publish(eventbus.NewMinionTaskChangedEvent(p))
 		}
 		for _, t := range counted {
-			s.portChanged(t.task, t.operation, false, false)
+			if t.reverse {
+				s.listenerChanged(t.task, t.operation, false, false)
+			} else {
+				s.portChanged(t.task, t.operation, false, false)
+			}
 		}
 	}
 }
@@ -509,6 +589,13 @@ type Summary struct {
 	Streams uint64
 	// Up and Down: the bytes its tools sent through it, and got back.
 	Up, Down int64
+	// Bound is where a reverse port forward's minion says it listens, ""
+	// until it says.
+	Bound string
+	// StopsAt is when core stops the task, unless a stream opens first:
+	// zero while a stream is open, before the minion has the task, or with
+	// no stop_idle.
+	StopsAt time.Time
 }
 
 // Summary is the task's tunnel while core listens for it; false when it
@@ -520,49 +607,24 @@ func (s *Service) Summary(task uuid.UUID) (Summary, bool) {
 	if t == nil {
 		return Summary{}, false
 	}
-	return Summary{Port: t.port, Open: len(t.streams), Streams: t.last, Up: t.up, Down: t.down}, true
-}
-
-// Live puts what core has now of the task's streams over their records
-// (their bytes so far, the minion's reply before its record has it).
-func (s *Service) Live(task uuid.UUID, recs []models.MinionTunnelStream) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	t := s.tunnels[task]
-	if t == nil {
-		return
-	}
-	for i := range recs {
-		if st := t.streams[recs[i].Stream]; st != nil {
-			recs[i] = st.rec
-			recs[i].Up, recs[i].Down = st.upBytes, st.downBytes
-		}
-	}
+	return Summary{Port: t.port, Open: len(t.streams), Streams: t.last, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt()}, true
 }
 
 // View is the task's tunnel as its task shows it: live while core listens
-// for it (true); otherwise what its streams' records add up to.
+// for it (true); otherwise what it came to, as its task keeps it (nothing
+// before it closed).
 func (s *Service) View(ctx context.Context, task uuid.UUID) (Summary, bool, error) {
 	if sum, ok := s.Summary(task); ok {
 		return sum, true, nil
 	}
-	tot, err := s.records.Totals(ctx, task)
-	if err != nil {
+	tot, err := s.tasks.TunnelOf(ctx, task)
+	if err != nil && !repository.IsNotFound(err) {
 		return Summary{}, false, err
 	}
-	return Summary{Streams: tot.Last, Up: tot.Up, Down: tot.Down}, false, nil
-}
-
-// Streams is a page of the task's streams, the latest first, before the
-// stream before (0: from the latest), as filter narrows them: their
-// records with what core has now over them.
-func (s *Service) Streams(ctx context.Context, task uuid.UUID, filter repository.TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error) {
-	recs, err := s.records.Page(ctx, task, filter, before, limit)
-	if err != nil {
-		return nil, err
+	if tot == nil {
+		return Summary{}, false, nil
 	}
-	s.Live(task, recs)
-	return recs, nil
+	return Summary{Streams: tot.Streams, Up: tot.Up, Down: tot.Down}, false, nil
 }
 
 // Port is the task's port in use; IsNotFound for none.
@@ -584,59 +646,5 @@ func (s *Service) CountPorts(ctx context.Context, operationID uuid.UUID, search 
 func (s *Service) wake(session uuid.UUID) {
 	if s.waker != nil {
 		go s.waker.WakeTunnels(session)
-	}
-}
-
-// recordWrite is a stream's record to write: new, or as it is now.
-type recordWrite struct {
-	rec models.MinionTunnelStream
-	new bool
-}
-
-// record writes a stream's record, behind the stream: a slow database
-// holds no byte up. When the queue is full the write is dropped, said in
-// the log.
-func (s *Service) record(st *stream, isNew bool) {
-	w := recordWrite{rec: st.rec, new: isNew}
-	w.rec.Up, w.rec.Down = st.upBytes, st.downBytes
-	select {
-	case s.writes <- w:
-	default:
-		s.logger.Warn("tunnels: a stream's record dropped, the queue is full", zap.String("task_id", st.t.task.String()),
-			zap.Uint64("stream", st.id))
-	}
-}
-
-func (s *Service) writeRecords() {
-	defer s.done.Done()
-	for {
-		select {
-		case w := <-s.writes:
-			s.write(w)
-		case <-s.stop:
-			// What is queued still goes.
-			for {
-				select {
-				case w := <-s.writes:
-					s.write(w)
-				default:
-					return
-				}
-			}
-		}
-	}
-}
-
-func (s *Service) write(w recordWrite) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	var err error
-	if w.new {
-		err = s.records.Insert(ctx, &w.rec)
-	} else {
-		err = s.records.Update(ctx, &w.rec)
-	}
-	if err != nil {
-		s.logger.Warn("tunnels: write a stream's record", zap.String("task_id", w.rec.TaskID.String()), zap.Uint64("stream", w.rec.Stream), zap.Error(err))
 	}
 }

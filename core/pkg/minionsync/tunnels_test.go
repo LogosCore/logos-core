@@ -60,9 +60,9 @@ func tunnelRig(t *testing.T) (*rig, uuid.UUID, *fakeTunnels) {
 	return r, sid, tunnels
 }
 
-// The minion's tunnel items go to the tunnels, in order, and what they
-// answer goes back in the reply; a tunnel item the minion sends (core
-// opens them), and one the tunnels find bad, are bad messages.
+// The minion's tunnel items go to the tunnels, in order (its tunnel, a
+// reverse port forward's stream, and its tunnel_listen too), and what they
+// answer goes back in the reply; one the tunnels find bad is a bad message.
 func TestTunnelItemsGoToTheTunnels(t *testing.T) {
 	r, sid, tunnels := tunnelRig(t)
 	task := bytes.Repeat([]byte{4}, 16)
@@ -74,11 +74,13 @@ func TestTunnelItemsGoToTheTunnels(t *testing.T) {
 		protocol.TunnelAckItem{T: protocol.ItemTunnelAck, Task: task, Stream: 1, Next: 3, Room: &room},
 		protocol.TunnelCloseItem{T: protocol.ItemTunnelClose, Task: task, Stream: 2, Reason: protocol.TunnelCloseReset},
 		protocol.TunnelDatagramItem{T: protocol.ItemTunnelDatagram, Task: task, Stream: 3, Host: "10.0.0.53", Port: 53, Data: []byte{1}},
-		protocol.TunnelItem{T: protocol.ItemTunnel, Task: task, Stream: 4, Host: "h", Port: 1})
+		protocol.TunnelItem{T: protocol.ItemTunnel, Task: task, Stream: 4, Host: "h", Port: 1},
+		protocol.TunnelListenItem{T: protocol.ItemTunnelListen, Task: task, Bound: "0.0.0.0:8080"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []int{protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose, protocol.ItemTunnelDatagram}
+	want := []int{protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose, protocol.ItemTunnelDatagram,
+		protocol.ItemTunnel, protocol.ItemTunnelListen}
 	if len(tunnels.took) != len(want) {
 		t.Fatalf("took %v, want %v", tunnels.took, want)
 	}
@@ -91,17 +93,16 @@ func TestTunnelItemsGoToTheTunnels(t *testing.T) {
 	if closes := itemsOf(msg, protocol.ItemTunnelClose); len(closes) != len(want) {
 		t.Errorf("answers %d, want one per item", len(closes))
 	}
-	errs := itemsOf(msg, protocol.ItemErr)
-	var e protocol.ErrItem
-	if len(errs) != 1 || protocol.UnmarshalCBOR(errs[0], &e) != nil || e.Code != protocol.ErrItemBadMessage || e.Item == nil || *e.Item != 5 {
-		t.Fatalf("the minion's tunnel item: %d errs, %+v", len(errs), e)
+	if errs := itemsOf(msg, protocol.ItemErr); len(errs) != 0 {
+		t.Fatalf("the minion's tunnel items: %d errs", len(errs))
 	}
 	tunnels.bad, tunnels.answers = errors.New("stream is 1 or more"), nil
 	reply, err = r.sendUnder(t, sid, r.keys, protocol.NewMessageID(), protocol.TunnelAckItem{T: protocol.ItemTunnelAck, Task: task, Next: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
-	errs = itemsOf(r.openUnder(t, sid, r.keys, reply), protocol.ItemErr)
+	errs := itemsOf(r.openUnder(t, sid, r.keys, reply), protocol.ItemErr)
+	var e protocol.ErrItem
 	if len(errs) != 1 || protocol.UnmarshalCBOR(errs[0], &e) != nil || e.Code != protocol.ErrItemBadMessage || e.Msg != "stream is 1 or more" {
 		t.Fatalf("a bad tunnel item: %d errs, %+v", len(errs), e)
 	}

@@ -22,6 +22,7 @@ export const MinionTaskFields = graphql(`
     startedAt
     doneAt
     cancelRequestedAt
+    cancelReason
     ok
     exit
     err
@@ -91,9 +92,15 @@ export const MinionTaskFields = graphql(`
       address
       purpose
       to
+      bind
+      listen
+      bound
+      udp
       listening
+      stopsAt
       open
       streams
+      kept
       up
       down
     }

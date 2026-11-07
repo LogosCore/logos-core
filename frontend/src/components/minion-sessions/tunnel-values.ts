@@ -47,18 +47,33 @@ export const END_LABEL: Record<string, string> = {
 
 export type Tone = "pending" | "good" | "muted" | "bad"
 
-/** A stream's state for its row: a word, its tone, and what to say of it. */
-export function streamState(s: TunnelStream): { label: string; tone: Tone; detail: string | null } {
-  if (s.state === "OPENING") return { label: "Opening", tone: "pending", detail: "the minion connects" }
-  if (s.state === "OPEN") return { label: "Open", tone: "good", detail: s.bound ? `from ${s.bound}` : null }
+/** How a reverse port forward's stream ended, where it differs: core's end of it is the destination. */
+export const REVERSE_END_LABEL: Record<string, string> = {
+  client_reset: "the destination aborted it",
+  reset: "reset by who connected to the minion, or the minion",
+}
+
+/**
+ * A stream's state for its row: a word, its tone, and what to say of it. A
+ * reverse port forward's (reverse) is one core connects, from its own
+ * network.
+ */
+export function streamState(s: TunnelStream, reverse = false): { label: string; tone: Tone; detail: string | null } {
+  const endLabel = (end: string) =>
+    // A UDP reverse stream has no ends to close: done is its idling out.
+    (reverse && s.udp && end === "done" ? "idle: no datagram either way for two minutes" : undefined) ??
+    (reverse ? REVERSE_END_LABEL[end] : undefined) ??
+    END_LABEL[end]
+  if (s.state === "OPENING") return { label: "Opening", tone: "pending", detail: reverse ? "core connects" : "the minion connects" }
+  if (s.state === "OPEN") return { label: "Open", tone: "good", detail: s.bound ? (reverse ? `core from ${s.bound}` : `from ${s.bound}`) : null }
   if (s.result && s.result !== "open") {
     const why = RESULT_LABEL[s.result] ?? s.result.replaceAll("_", " ")
     return { label: "Not opened", tone: "bad", detail: s.msg ? `${why} (${s.msg})` : why }
   }
   if (!s.result) {
-    return { label: "Not opened", tone: "bad", detail: s.end ? (END_LABEL[s.end] ?? s.end) : null }
+    return { label: "Not opened", tone: "bad", detail: s.end ? (endLabel(s.end) ?? s.end) : null }
   }
-  const how = s.end ? (END_LABEL[s.end] ?? s.end.replaceAll("_", " ")) : null
+  const how = s.end ? (endLabel(s.end) ?? s.end.replaceAll("_", " ")) : null
   return { label: "Closed", tone: s.end === "done" ? "muted" : "bad", detail: how }
 }
 
@@ -71,16 +86,51 @@ export function proxyState(t: Tunnel, taskState: string): { label: string; tone:
   return { label: "Listening", tone: "good", detail: null }
 }
 
-/** What core puts in front of a tunnel's port (its task's tunnel action): a port forward, or else a SOCKS proxy. */
+/** What core puts in front of a tunnel's port (its task's tunnel action): a port forward, or else a SOCKS proxy; a reverse port forward listens on the minion's host. */
 export const PORT_FORWARD = "port_forward"
 export const SOCKS_PROXY = "socks_proxy"
+export const REVERSE_PORT_FORWARD = "reverse_port_forward"
 
-/** What core puts in front of a tunnel's port, for a person. */
+/** What a tunnel is, for a person. */
 export function frontLabel(purpose: string): string {
-  return purpose === PORT_FORWARD ? "Port forward" : purpose === SOCKS_PROXY ? "SOCKS proxy" : purpose.replaceAll("_", " ")
+  switch (purpose) {
+    case PORT_FORWARD:
+      return "Port forward"
+    case SOCKS_PROXY:
+      return "SOCKS proxy"
+    case REVERSE_PORT_FORWARD:
+      return "Reverse port forward"
+  }
+  return purpose.replaceAll("_", " ")
+}
+
+/** Where a reverse port forward's minion listens: where it said, else where its task asked. */
+export function listenAddress(t: Tunnel): string {
+  return t.bound ?? hostPort(t.bind ?? "?", t.listen ?? 0)
+}
+
+/** Where a reverse port forward stands: the minion listens once it has the task, and says where. */
+export function reverseState(t: Tunnel, taskState: string): { label: string; tone: Tone; detail: string | null } {
+  if (t.listening) return { label: "Listening", tone: "good", detail: t.bound ? `on the minion's host, at ${t.bound}` : null }
+  if (taskState === "QUEUED" || taskState === "SENT" || taskState === "RUNNING") {
+    return { label: "Waiting", tone: "pending", detail: "the minion listens once it has the task, and says where" }
+  }
+  return { label: "Closed", tone: "muted", detail: "its task ended: the minion no longer listens" }
+}
+
+/**
+ * A tunnel task's stop_idle as its args say it ("1h"): null for none, or 0
+ * (never). Core stops the task once no stream has been open that long.
+ */
+export function stopIdleOf(args: unknown): string | null {
+  const v = args && typeof args === "object" ? (args as Record<string, unknown>).stop_idle : undefined
+  if (typeof v === "number") return v > 0 ? `${Math.round(v / 1000)}s` : null
+  if (typeof v !== "string") return null
+  const s = v.trim()
+  return s === "" || /^0+(\.0+)?[a-zµ]*$/i.test(s) ? null : s
 }
 
 /** The version a task's live updates bring: the streams list is read again when it changes. */
 export function tunnelVersion(t: Tunnel): string {
-  return [t.listening, t.open, t.streams, t.up, t.down].join(":")
+  return [t.listening, t.open, t.streams, t.up, t.down, t.bound ?? ""].join(":")
 }

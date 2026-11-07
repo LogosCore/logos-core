@@ -188,6 +188,10 @@ func (s *Service) takeDatagram(session uuid.UUID, d protocol.TunnelDatagramItem)
 		s.mu.Unlock()
 		return closeItem(d.Task, d.Stream, reason)
 	}
+	if st.t.reverse {
+		s.takeReverseDatagram(st, d)
+		return nil, nil
+	}
 	a := st.udp
 	if a == nil || !st.opened || !a.in.take(d.Seq) || a.from == nil || st.t.relay == nil {
 		s.mu.Unlock()

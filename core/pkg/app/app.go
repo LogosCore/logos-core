@@ -95,7 +95,7 @@ type Repositories struct {
 	MinionFeedback     repository.IMinionFeedbackRepository
 	MinionIdentity     repository.IMinionIdentityRepository
 	OperationalPort    repository.IOperationalPortRepository
-	MinionTunnelStream repository.IMinionTunnelStreamRepository
+	MinionListener     repository.IMinionListenerRepository
 	FsListing          repository.IFsListingRepository
 	WikiTransferJob    repository.IWikiTransferJobRepository
 	Skill              repository.ISkillRepository
@@ -264,7 +264,8 @@ func NewApp() (*App, error) {
 		minionstreams.DefaultConfig(), l)
 	tunnelsCfg := miniontunnels.DefaultConfig()
 	tunnelsCfg.Ports, tunnelsCfg.Bind, tunnelsCfg.Address = e.OperationalPorts, e.OperationalBind, e.OperationalAddress
-	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTunnelStream, repos.MinionTask, bus, l)
+	minionTunnels := miniontunnels.New(tunnelsCfg, repos.OperationalPort, repos.MinionTask, bus, l).
+		WithListeners(repos.MinionListener)
 	minionSync := minionsync.NewService(repos.Build, repos.MinionStaging, repos.MinionSession, repos.MinionReservation, infra.cache, bus, l).
 		WithTasks(repos.MinionTask).WithFiles(minionFiles).WithStreams(minionStreams).WithFileBrowser(fileBrowser).
 		WithFeedback(repos.MinionFeedback).WithIdentities(repos.MinionIdentity).WithCredentials(credentialRefs).

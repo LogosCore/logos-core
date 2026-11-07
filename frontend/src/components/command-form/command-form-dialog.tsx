@@ -5,13 +5,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { errorMessage } from "@/components/modules/management/api-errors"
 import { ParamFields } from "@/components/modules/management/param-fields"
 import { evaluateParams, initialParamDrafts, type Draft, type FieldDef } from "@/components/modules/management/field-values"
+import { cn } from "@/lib/utils"
 
 // The app's one form for running something with typed params: a session's
 // command (the console's Shift+Enter, or its form button), a module's
 // action. It is the fields, checked as they change, and a Run: what is
 // around them is its owner's (a command picker above, a confirmation or an
 // equivalent command line below). Enter runs (Ctrl+Enter from a text
-// area), Esc closes. Each opening starts from initialDrafts.
+// area), Esc closes. Each opening starts from initialDrafts. It is never
+// taller than the window: the fields scroll between the title and Run, and
+// a failure stays in sight above Run.
 
 export interface CommandFormDialogProps {
   open: boolean
@@ -45,7 +48,7 @@ export interface CommandFormDialogProps {
 export function CommandFormDialog(props: CommandFormDialogProps) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className={props.className ?? "sm:max-w-lg"}>
+      <DialogContent className={cn("max-h-[calc(100dvh-2rem)] grid-rows-[minmax(0,1fr)]", props.className ?? "sm:max-w-lg")}>
         {/* Keyed so each opening starts from its drafts; the dialog drops
             it once closed. */}
         <CommandForm key={props.formKey ?? "form"} {...props} />
@@ -103,7 +106,7 @@ function CommandForm({
 
   return (
     <form
-      className="flex min-w-0 flex-col gap-4"
+      className="flex min-h-0 min-w-0 flex-col gap-4"
       onKeyDown={onKeyDown}
       onSubmit={(e) => {
         e.preventDefault()
@@ -115,20 +118,22 @@ function CommandForm({
         {description && <DialogDescription>{description}</DialogDescription>}
       </DialogHeader>
       {before}
-      {fields.length > 0 && (
-        <ParamFields
-          params={fields}
-          drafts={drafts}
-          onChange={(key, d) => {
-            setDrafts((prev) => ({ ...prev, [key]: d }))
-            setTouched((prev) => (prev.has(key) ? prev : new Set([...prev, key])))
-          }}
-          errors={shown}
-          idPrefix={idPrefix}
-          disabled={pending}
-        />
-      )}
-      {after?.(valid ? values : null)}
+      <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1">
+        {fields.length > 0 && (
+          <ParamFields
+            params={fields}
+            drafts={drafts}
+            onChange={(key, d) => {
+              setDrafts((prev) => ({ ...prev, [key]: d }))
+              setTouched((prev) => (prev.has(key) ? prev : new Set([...prev, key])))
+            }}
+            errors={shown}
+            idPrefix={idPrefix}
+            disabled={pending}
+          />
+        )}
+        {after?.(valid ? values : null)}
+      </div>
       {failure && <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{failure}</p>}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -34,7 +34,7 @@ import { FileView } from "./file-view"
 import { UploadView } from "./upload-view"
 import { StreamView } from "./stream-view"
 import { TunnelView } from "./tunnel-view"
-import { PORT_FORWARD } from "./tunnel-values"
+import { PORT_FORWARD, REVERSE_PORT_FORWARD } from "./tunnel-values"
 import type { DeleteTarget } from "./delete-dialog"
 import type { UploadTarget } from "./upload-target"
 import { TabButton } from "./tab-button"
@@ -233,7 +233,7 @@ export function TaskDetail({
           </TabButton>
           {hasData && (
             <TabButton active={shown === "data"} onClick={() => setTab("data")}>
-              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.purpose === PORT_FORWARD ? "Forward" : "Proxy") : "Data"}
+              {isFile ? "File" : isUpload ? "Upload" : isStream ? "Stream" : isTunnel ? (t.tunnel?.purpose === PORT_FORWARD || t.tunnel?.purpose === REVERSE_PORT_FORWARD ? "Forward" : "Proxy") : "Data"}
             </TabButton>
           )}
           {hasFeedback && (
@@ -315,6 +315,7 @@ export function TaskDetail({
         </div>
       </div>
       {t.err && <div className="border-b px-3 py-1 font-mono text-xs whitespace-pre-wrap text-red-600 dark:text-red-400">{t.err}</div>}
+      {t.cancelReason && <div className="border-b px-3 py-1 text-xs text-muted-foreground">{t.cancelReason}</div>}
 
       {shown === "feedback" ? (
         <TaskFeedbackView

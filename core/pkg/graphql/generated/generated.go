@@ -717,6 +717,43 @@ type ComplexityRoot struct {
 		Next    func(childComplexity int) int
 	}
 
+	MinionListener struct {
+		Bind          func(childComplexity int) int
+		Bound         func(childComplexity int) int
+		ID            func(childComplexity int) int
+		Listen        func(childComplexity int) int
+		Listening     func(childComplexity int) int
+		Open          func(childComplexity int) int
+		OpenedAt      func(childComplexity int) int
+		OpenedBy      func(childComplexity int) int
+		OpenedByName  func(childComplexity int) int
+		SessionID     func(childComplexity int) int
+		SessionNumber func(childComplexity int) int
+		StopsAt       func(childComplexity int) int
+		Streams       func(childComplexity int) int
+		TaskID        func(childComplexity int) int
+		To            func(childComplexity int) int
+		UDP           func(childComplexity int) int
+	}
+
+	MinionListenerConnection struct {
+		Edges      func(childComplexity int) int
+		PageInfo   func(childComplexity int) int
+		TotalCount func(childComplexity int) int
+	}
+
+	MinionListenerEdge struct {
+		Cursor func(childComplexity int) int
+		Node   func(childComplexity int) int
+	}
+
+	MinionListenerEvent struct {
+		Action      func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Listener    func(childComplexity int) int
+		OperationID func(childComplexity int) int
+	}
+
 	MinionSession struct {
 		Acting           func(childComplexity int) int
 		Address          func(childComplexity int) int
@@ -927,6 +964,7 @@ type ComplexityRoot struct {
 		Action            func(childComplexity int) int
 		Args              func(childComplexity int) int
 		As                func(childComplexity int) int
+		CancelReason      func(childComplexity int) int
 		CancelRequestedAt func(childComplexity int) int
 		Command           func(childComplexity int) int
 		Data              func(childComplexity int) int
@@ -1004,13 +1042,19 @@ type ComplexityRoot struct {
 
 	MinionTunnel struct {
 		Address   func(childComplexity int) int
+		Bind      func(childComplexity int) int
+		Bound     func(childComplexity int) int
 		Down      func(childComplexity int) int
+		Kept      func(childComplexity int) int
+		Listen    func(childComplexity int) int
 		Listening func(childComplexity int) int
 		Open      func(childComplexity int) int
 		Port      func(childComplexity int) int
 		Purpose   func(childComplexity int) int
+		StopsAt   func(childComplexity int) int
 		Streams   func(childComplexity int) int
 		To        func(childComplexity int) int
+		UDP       func(childComplexity int) int
 		Up        func(childComplexity int) int
 	}
 
@@ -1383,6 +1427,7 @@ type ComplexityRoot struct {
 		Purpose       func(childComplexity int) int
 		SessionID     func(childComplexity int) int
 		SessionNumber func(childComplexity int) int
+		StopsAt       func(childComplexity int) int
 		Streams       func(childComplexity int) int
 		TaskID        func(childComplexity int) int
 		To            func(childComplexity int) int
@@ -1456,6 +1501,7 @@ type ComplexityRoot struct {
 		MinionFeedback                     func(childComplexity int, sessionID string, level *string, search *string, after *string, first *int) int
 		MinionFileStrings                  func(childComplexity int, fileID string, after *int, first *int, minLength *int, encoding *string, search *string) int
 		MinionIdentities                   func(childComplexity int, sessionID string, after *string, first *int) int
+		MinionListeners                    func(childComplexity int, operationID string, search *string, first *int, after *string, last *int, before *string) int
 		MinionSession                      func(childComplexity int, id string) int
 		MinionSessionCommands              func(childComplexity int, sessionID string) int
 		MinionSessionCount                 func(childComplexity int, operationID string) int
@@ -1620,6 +1666,7 @@ type ComplexityRoot struct {
 		FileBrowserChanged          func(childComplexity int, sessionID string) int
 		HashChanged                 func(childComplexity int, operationID string) int
 		HostChanged                 func(childComplexity int, operationID string) int
+		MinionListenerChanged       func(childComplexity int, operationID string) int
 		MinionSessionChanged        func(childComplexity int, operationID string) int
 		MinionTargetChanged         func(childComplexity int, operationID string) int
 		MinionTaskChanged           func(childComplexity int, sessionID string) int
@@ -2206,6 +2253,7 @@ type QueryResolver interface {
 	WikiDocumentsReferencingHash(ctx context.Context, hashID string) ([]*models.WikiDocument, error)
 	Host(ctx context.Context, id string) (*models.Host, error)
 	Hosts(ctx context.Context, operationID string, search *string, sortBy *model.HostSortField, sortDirection *model.SortDirection, first *int, after *string, last *int, before *string) (*model.HostConnection, error)
+	MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
 	MinionSessionFolders(ctx context.Context, operationID string) ([]*model.MinionSessionFolder, error)
 	MinionSessionCount(ctx context.Context, operationID string) (int, error)
 	MinionFeedback(ctx context.Context, sessionID string, level *string, search *string, after *string, first *int) (*model.MinionFeedbackPage, error)
@@ -2285,6 +2333,7 @@ type SubscriptionResolver interface {
 	HashChanged(ctx context.Context, operationID string) (<-chan *model.HashEvent, error)
 	MyHashChanged(ctx context.Context, operationIds []string) (<-chan *model.HashEvent, error)
 	HostChanged(ctx context.Context, operationID string) (<-chan *model.HostEvent, error)
+	MinionListenerChanged(ctx context.Context, operationID string) (<-chan *model.MinionListenerEvent, error)
 	MinionSessionChanged(ctx context.Context, operationID string) (<-chan *model.MinionSessionEvent, error)
 	MinionTargetChanged(ctx context.Context, operationID string) (<-chan *model.MinionTargetEvent, error)
 	MinionTaskChanged(ctx context.Context, sessionID string) (<-chan *model.MinionTask, error)
@@ -5112,6 +5161,160 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MinionIdentityPage.Next(childComplexity), true
 
+	case "MinionListener.bind":
+		if e.ComplexityRoot.MinionListener.Bind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.Bind(childComplexity), true
+	case "MinionListener.bound":
+		if e.ComplexityRoot.MinionListener.Bound == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.Bound(childComplexity), true
+	case "MinionListener.id":
+		if e.ComplexityRoot.MinionListener.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.ID(childComplexity), true
+	case "MinionListener.listen":
+		if e.ComplexityRoot.MinionListener.Listen == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.Listen(childComplexity), true
+	case "MinionListener.listening":
+		if e.ComplexityRoot.MinionListener.Listening == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.Listening(childComplexity), true
+	case "MinionListener.open":
+		if e.ComplexityRoot.MinionListener.Open == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.Open(childComplexity), true
+	case "MinionListener.openedAt":
+		if e.ComplexityRoot.MinionListener.OpenedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.OpenedAt(childComplexity), true
+	case "MinionListener.openedBy":
+		if e.ComplexityRoot.MinionListener.OpenedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.OpenedBy(childComplexity), true
+	case "MinionListener.openedByName":
+		if e.ComplexityRoot.MinionListener.OpenedByName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.OpenedByName(childComplexity), true
+	case "MinionListener.sessionId":
+		if e.ComplexityRoot.MinionListener.SessionID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.SessionID(childComplexity), true
+	case "MinionListener.sessionNumber":
+		if e.ComplexityRoot.MinionListener.SessionNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.SessionNumber(childComplexity), true
+	case "MinionListener.stopsAt":
+		if e.ComplexityRoot.MinionListener.StopsAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.StopsAt(childComplexity), true
+	case "MinionListener.streams":
+		if e.ComplexityRoot.MinionListener.Streams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.Streams(childComplexity), true
+	case "MinionListener.taskId":
+		if e.ComplexityRoot.MinionListener.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.TaskID(childComplexity), true
+	case "MinionListener.to":
+		if e.ComplexityRoot.MinionListener.To == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.To(childComplexity), true
+	case "MinionListener.udp":
+		if e.ComplexityRoot.MinionListener.UDP == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListener.UDP(childComplexity), true
+
+	case "MinionListenerConnection.edges":
+		if e.ComplexityRoot.MinionListenerConnection.Edges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerConnection.Edges(childComplexity), true
+	case "MinionListenerConnection.pageInfo":
+		if e.ComplexityRoot.MinionListenerConnection.PageInfo == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerConnection.PageInfo(childComplexity), true
+	case "MinionListenerConnection.totalCount":
+		if e.ComplexityRoot.MinionListenerConnection.TotalCount == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerConnection.TotalCount(childComplexity), true
+
+	case "MinionListenerEdge.cursor":
+		if e.ComplexityRoot.MinionListenerEdge.Cursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerEdge.Cursor(childComplexity), true
+	case "MinionListenerEdge.node":
+		if e.ComplexityRoot.MinionListenerEdge.Node == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerEdge.Node(childComplexity), true
+
+	case "MinionListenerEvent.action":
+		if e.ComplexityRoot.MinionListenerEvent.Action == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerEvent.Action(childComplexity), true
+	case "MinionListenerEvent.id":
+		if e.ComplexityRoot.MinionListenerEvent.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerEvent.ID(childComplexity), true
+	case "MinionListenerEvent.listener":
+		if e.ComplexityRoot.MinionListenerEvent.Listener == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerEvent.Listener(childComplexity), true
+	case "MinionListenerEvent.operationId":
+		if e.ComplexityRoot.MinionListenerEvent.OperationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionListenerEvent.OperationID(childComplexity), true
+
 	case "MinionSession.acting":
 		if e.ComplexityRoot.MinionSession.Acting == nil {
 			break
@@ -6060,6 +6263,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTask.As(childComplexity), true
+	case "MinionTask.cancelReason":
+		if e.ComplexityRoot.MinionTask.CancelReason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTask.CancelReason(childComplexity), true
 	case "MinionTask.cancelRequestedAt":
 		if e.ComplexityRoot.MinionTask.CancelRequestedAt == nil {
 			break
@@ -6454,12 +6663,36 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Address(childComplexity), true
+	case "MinionTunnel.bind":
+		if e.ComplexityRoot.MinionTunnel.Bind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Bind(childComplexity), true
+	case "MinionTunnel.bound":
+		if e.ComplexityRoot.MinionTunnel.Bound == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Bound(childComplexity), true
 	case "MinionTunnel.down":
 		if e.ComplexityRoot.MinionTunnel.Down == nil {
 			break
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Down(childComplexity), true
+	case "MinionTunnel.kept":
+		if e.ComplexityRoot.MinionTunnel.Kept == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Kept(childComplexity), true
+	case "MinionTunnel.listen":
+		if e.ComplexityRoot.MinionTunnel.Listen == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.Listen(childComplexity), true
 	case "MinionTunnel.listening":
 		if e.ComplexityRoot.MinionTunnel.Listening == nil {
 			break
@@ -6484,6 +6717,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Purpose(childComplexity), true
+	case "MinionTunnel.stopsAt":
+		if e.ComplexityRoot.MinionTunnel.StopsAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.StopsAt(childComplexity), true
 	case "MinionTunnel.streams":
 		if e.ComplexityRoot.MinionTunnel.Streams == nil {
 			break
@@ -6496,6 +6735,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.To(childComplexity), true
+	case "MinionTunnel.udp":
+		if e.ComplexityRoot.MinionTunnel.UDP == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.UDP(childComplexity), true
 	case "MinionTunnel.up":
 		if e.ComplexityRoot.MinionTunnel.Up == nil {
 			break
@@ -8770,6 +9015,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.OperationalPort.SessionNumber(childComplexity), true
+	case "OperationalPort.stopsAt":
+		if e.ComplexityRoot.OperationalPort.StopsAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OperationalPort.StopsAt(childComplexity), true
 	case "OperationalPort.streams":
 		if e.ComplexityRoot.OperationalPort.Streams == nil {
 			break
@@ -9212,6 +9463,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.MinionIdentities(childComplexity, args["sessionId"].(string), args["after"].(*string), args["first"].(*int)), true
+	case "Query.minionListeners":
+		if e.ComplexityRoot.Query.MinionListeners == nil {
+			break
+		}
+
+		args, err := ec.field_Query_minionListeners_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.MinionListeners(childComplexity, args["operationId"].(string), args["search"].(*string), args["first"].(*int), args["after"].(*string), args["last"].(*int), args["before"].(*string)), true
 	case "Query.minionSession":
 		if e.ComplexityRoot.Query.MinionSession == nil {
 			break
@@ -10327,6 +10589,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.HostChanged(childComplexity, args["operationId"].(string)), true
+	case "Subscription.minionListenerChanged":
+		if e.ComplexityRoot.Subscription.MinionListenerChanged == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_minionListenerChanged_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.MinionListenerChanged(childComplexity, args["operationId"].(string)), true
 	case "Subscription.minionSessionChanged":
 		if e.ComplexityRoot.Subscription.MinionSessionChanged == nil {
 			break
@@ -13848,6 +14121,76 @@ extend type Subscription {
     @hasPermission(permission: "operation:member")
 }
 `, BuiltIn: false},
+	{Name: "../schema/minion_listeners.graphql", Input: `# A reverse port forward's listener (docs:
+# contracts/minion-messages/tunnels.md, Reverse port forward): the port its
+# task's minion listens on until the task ends, and the destination core
+# connects each connection that comes there to.
+type MinionListener {
+  # The task's id: a listener serves one task.
+  id: ID!
+  # Where the minion is to listen, as the task asked (listen 0: any free
+  # port), and where it says it does: null until it says.
+  bind: String!
+  listen: Int!
+  bound: String
+  # It listens for UDP datagrams, a stream for each address they come
+  # from; else for TCP connections.
+  udp: Boolean!
+  # The destination core connects each stream to, host:port.
+  to: String!
+  sessionId: ID!
+  # The session's number when it opened.
+  sessionNumber: Int!
+  taskId: ID!
+  openedBy: ID!
+  # Who opened it, by name when it opened; null for one gone.
+  openedByName: String
+  openedAt: String!
+  # The minion listens: it said so, and the task runs.
+  listening: Boolean!
+  # Its streams now, and how many it has had.
+  open: Int!
+  streams: Int!
+  # When core stops its task unless a stream opens first; null for none.
+  stopsAt: String
+}
+
+type MinionListenerEdge {
+  node: MinionListener!
+  cursor: String!
+}
+
+type MinionListenerConnection {
+  edges: [MinionListenerEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+# A listener changing: opened (CREATED), where the minion listens or its
+# streams' numbers (UPDATED), closed with its task (DELETED: no listener).
+type MinionListenerEvent {
+  action: EventAction!
+  # The listener's id: its task's.
+  id: ID!
+  operationId: ID!
+  listener: MinionListener
+}
+
+extend type Subscription {
+  # An operation's reverse port forwards' listeners as they change. Needs
+  # at least viewer.
+  minionListenerChanged(operationId: ID!): MinionListenerEvent!
+    @hasPermission(permission: "operation:member")
+}
+
+extend type Query {
+  # An operation's reverse port forwards' listeners, the latest opened
+  # first, a page at a time; search matches the port, the session's number,
+  # who opened it, where it listens and what to. Needs at least viewer.
+  minionListeners(operationId: ID!, search: String, first: Int = 50, after: String, last: Int, before: String): MinionListenerConnection!
+    @hasPermission(permission: "operation:member")
+}
+`, BuiltIn: false},
 	{Name: "../schema/minion_sessions.graphql", Input: `# =============================================================================
 # Minion sessions — the running processes of an operation's minions
 # =============================================================================
@@ -14701,6 +15044,10 @@ type MinionTask {
   ackedAt: String
   startedAt: String
   doneAt: String
+  # Why core asked to stop it, when core did (a tunnel no stream used for
+  # its stop_idle, its port not opening again after a restart); null when an
+  # operator did, or nobody.
+  cancelReason: String
   # When an operator asked to stop it; a cancel goes with every reply to the
   # minion until it ends.
   cancelRequestedAt: String
@@ -14850,29 +15197,52 @@ type MinionTaskStream {
 # A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md):
 # core's SOCKS on one of its operational ports while the task runs, each
 # connection a tool makes through it a stream the minion connects from its
-# host.
+# host. A reverse port forward's goes the other way: the minion listens on
+# its host, and core connects each connection that comes there to to.
 type MinionTunnel {
   # The operational port, and the host operators reach it at (core's
-  # OPERATIONAL_ADDRESS); null: the host the web app is reached at.
+  # OPERATIONAL_ADDRESS); null: the host the web app is reached at. 0 for
+  # a reverse port forward, which has none.
   port: Int!
   address: String
-  # What core puts in front of the port: socks (its SOCKS proxy) or
-  # forward (every connection a stream to to, the forward's destination,
-  # host:port; null for socks).
+  # What it is: socks_proxy (core's SOCKS proxy in front of the port),
+  # port_forward (every connection a stream to to, the forward's
+  # destination, host:port; null for socks) or reverse_port_forward (the
+  # minion listens; core connects each of its streams to to).
   purpose: String!
   to: String
-  # Core listens on it: the task runs.
+  # A reverse port forward's: where the minion is to listen, as the task
+  # asked (listen 0: any free port), and where it says it does (null until
+  # it says). Null for any other tunnel.
+  bind: String
+  listen: Int
+  bound: String
+  # A reverse port forward's: it listens for UDP datagrams, a stream for
+  # each address they come from. Null for any other tunnel.
+  udp: Boolean
+  # Core listens on it: the task runs. A reverse port forward's: the
+  # minion said it listens, and the task runs.
   listening: Boolean!
+  # When core stops the task unless a stream opens first (its stop_idle):
+  # null while a stream is open, before the minion has the task, or with
+  # none.
+  stopsAt: String
   # Its streams now (opening or open), and how many it has had.
   open: Int!
   streams: Int!
+  # How many of its ended streams core keeps to list while its task runs,
+  # the latest (the open ones it always has). Once the task ended it keeps
+  # none: what is left is these numbers.
+  kept: Int!
   # The bytes its tools sent through it (up), and got back (down).
   up: Int!
   down: Int!
 }
 
 # One stream of a tunnel task: a connection a tool made through its proxy,
-# who reached what through the minion. The bytes are never kept.
+# who reached what through the minion. Core keeps them only while the task
+# runs, the open ones and the latest ended ones (MinionTunnel.kept); the
+# bytes never.
 type MinionTunnelStream {
   # Its number in the task, from 1.
   stream: Int!
@@ -14956,7 +15326,8 @@ extend type Query {
 
   # A tunnel task's streams, the latest first, at most last (50 by default,
   # 200 at most), before a page's cursor: search matches the tool's address
-  # and the destination, state (OPEN or ENDED) narrows them. Needs at least
+  # and the destination, state (OPEN or ENDED) narrows them. Those core
+  # keeps: none once the task ended (MinionTunnel.kept). Needs at least
   # viewer.
   minionTunnelStreams(taskId: ID!, last: Int, before: String, search: String, state: String): MinionTunnelStreamPage!
     @hasPermission(permission: "operation:member")
@@ -15456,6 +15827,8 @@ type OperationalPort {
   # Its streams now, and how many it has had.
   open: Int!
   streams: Int!
+  # When core stops its task unless a stream opens first; null for none.
+  stopsAt: String
 }
 
 type OperationalPortEdge {
@@ -19540,6 +19913,42 @@ func (ec *executionContext) field_Query_minionIdentities_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_minionListeners_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "search", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["search"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "first", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "after", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "last", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["last"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "before", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["before"] = arg5
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_minionSessionCommands_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -20952,6 +21361,17 @@ func (ec *executionContext) field_Subscription_hashChanged_args(ctx context.Cont
 }
 
 func (ec *executionContext) field_Subscription_hostChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
+	if err != nil {
+		return nil, err
+	}
+	args["operationId"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_minionListenerChanged_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "operationId", ec.unmarshalNID2string)
@@ -35764,6 +36184,815 @@ func (ec *executionContext) fieldContext_MinionIdentityPage_next(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionListener_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_bind(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_bind,
+		func(ctx context.Context) (any, error) {
+			return obj.Bind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_bind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_listen(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_listen,
+		func(ctx context.Context) (any, error) {
+			return obj.Listen, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_listen(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_bound(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_bound,
+		func(ctx context.Context) (any, error) {
+			return obj.Bound, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_bound(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_udp(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_udp,
+		func(ctx context.Context) (any, error) {
+			return obj.UDP, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_udp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_to(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_to,
+		func(ctx context.Context) (any, error) {
+			return obj.To, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_to(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_sessionId(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_sessionId,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_sessionId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_sessionNumber(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_sessionNumber,
+		func(ctx context.Context) (any, error) {
+			return obj.SessionNumber, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_sessionNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_taskId(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_taskId,
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_openedBy(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_openedBy,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedBy, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_openedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_openedByName(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_openedByName,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedByName, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_openedByName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_openedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_openedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.OpenedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_openedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_listening(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_listening,
+		func(ctx context.Context) (any, error) {
+			return obj.Listening, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_listening(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_open(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_open,
+		func(ctx context.Context) (any, error) {
+			return obj.Open, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_open(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_streams(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_streams,
+		func(ctx context.Context) (any, error) {
+			return obj.Streams, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListener_stopsAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionListener) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListener_stopsAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StopsAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListener_stopsAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListener",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerConnection_edges,
+		func(ctx context.Context) (any, error) {
+			return obj.Edges, nil
+		},
+		nil,
+		ec.marshalNMinionListenerEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEdgeᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerConnection_edges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "node":
+				return ec.fieldContext_MinionListenerEdge_node(ctx, field)
+			case "cursor":
+				return ec.fieldContext_MinionListenerEdge_cursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionListenerEdge", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerConnection_pageInfo(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerConnection_pageInfo,
+		func(ctx context.Context) (any, error) {
+			return obj.PageInfo, nil
+		},
+		nil,
+		ec.marshalNPageInfo2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋpaginationᚐPageInfo,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerConnection_pageInfo(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "hasNextPage":
+				return ec.fieldContext_PageInfo_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_PageInfo_hasPreviousPage(ctx, field)
+			case "startCursor":
+				return ec.fieldContext_PageInfo_startCursor(ctx, field)
+			case "endCursor":
+				return ec.fieldContext_PageInfo_endCursor(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type PageInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerConnection_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerConnection) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerConnection_totalCount,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalCount, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerConnection_totalCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerEdge_node(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerEdge_node,
+		func(ctx context.Context) (any, error) {
+			return obj.Node, nil
+		},
+		nil,
+		ec.marshalNMinionListener2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListener,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerEdge_node(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionListener_id(ctx, field)
+			case "bind":
+				return ec.fieldContext_MinionListener_bind(ctx, field)
+			case "listen":
+				return ec.fieldContext_MinionListener_listen(ctx, field)
+			case "bound":
+				return ec.fieldContext_MinionListener_bound(ctx, field)
+			case "udp":
+				return ec.fieldContext_MinionListener_udp(ctx, field)
+			case "to":
+				return ec.fieldContext_MinionListener_to(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionListener_sessionId(ctx, field)
+			case "sessionNumber":
+				return ec.fieldContext_MinionListener_sessionNumber(ctx, field)
+			case "taskId":
+				return ec.fieldContext_MinionListener_taskId(ctx, field)
+			case "openedBy":
+				return ec.fieldContext_MinionListener_openedBy(ctx, field)
+			case "openedByName":
+				return ec.fieldContext_MinionListener_openedByName(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_MinionListener_openedAt(ctx, field)
+			case "listening":
+				return ec.fieldContext_MinionListener_listening(ctx, field)
+			case "open":
+				return ec.fieldContext_MinionListener_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_MinionListener_streams(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_MinionListener_stopsAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionListener", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerEdge_cursor(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerEdge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerEdge_cursor,
+		func(ctx context.Context) (any, error) {
+			return obj.Cursor, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerEdge_cursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerEdge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerEvent_action(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerEvent_action,
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		ec.marshalNEventAction2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐEventAction,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerEvent_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type EventAction does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerEvent_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerEvent_id,
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerEvent_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerEvent_operationId(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerEvent_operationId,
+		func(ctx context.Context) (any, error) {
+			return obj.OperationID, nil
+		},
+		nil,
+		ec.marshalNID2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerEvent_operationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionListenerEvent_listener(ctx context.Context, field graphql.CollectedField, obj *model.MinionListenerEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionListenerEvent_listener,
+		func(ctx context.Context) (any, error) {
+			return obj.Listener, nil
+		},
+		nil,
+		ec.marshalOMinionListener2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListener,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionListenerEvent_listener(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionListenerEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_MinionListener_id(ctx, field)
+			case "bind":
+				return ec.fieldContext_MinionListener_bind(ctx, field)
+			case "listen":
+				return ec.fieldContext_MinionListener_listen(ctx, field)
+			case "bound":
+				return ec.fieldContext_MinionListener_bound(ctx, field)
+			case "udp":
+				return ec.fieldContext_MinionListener_udp(ctx, field)
+			case "to":
+				return ec.fieldContext_MinionListener_to(ctx, field)
+			case "sessionId":
+				return ec.fieldContext_MinionListener_sessionId(ctx, field)
+			case "sessionNumber":
+				return ec.fieldContext_MinionListener_sessionNumber(ctx, field)
+			case "taskId":
+				return ec.fieldContext_MinionListener_taskId(ctx, field)
+			case "openedBy":
+				return ec.fieldContext_MinionListener_openedBy(ctx, field)
+			case "openedByName":
+				return ec.fieldContext_MinionListener_openedByName(ctx, field)
+			case "openedAt":
+				return ec.fieldContext_MinionListener_openedAt(ctx, field)
+			case "listening":
+				return ec.fieldContext_MinionListener_listening(ctx, field)
+			case "open":
+				return ec.fieldContext_MinionListener_open(ctx, field)
+			case "streams":
+				return ec.fieldContext_MinionListener_streams(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_MinionListener_stopsAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionListener", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionSession_id(ctx context.Context, field graphql.CollectedField, obj *model.MinionSession) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -41408,6 +42637,35 @@ func (ec *executionContext) fieldContext_MinionTask_doneAt(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTask_cancelReason(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTask_cancelReason,
+		func(ctx context.Context) (any, error) {
+			return obj.CancelReason, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTask_cancelReason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTask_cancelRequestedAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTask) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -41788,12 +43046,24 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_purpose(ctx, field)
 			case "to":
 				return ec.fieldContext_MinionTunnel_to(ctx, field)
+			case "bind":
+				return ec.fieldContext_MinionTunnel_bind(ctx, field)
+			case "listen":
+				return ec.fieldContext_MinionTunnel_listen(ctx, field)
+			case "bound":
+				return ec.fieldContext_MinionTunnel_bound(ctx, field)
+			case "udp":
+				return ec.fieldContext_MinionTunnel_udp(ctx, field)
 			case "listening":
 				return ec.fieldContext_MinionTunnel_listening(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_MinionTunnel_stopsAt(ctx, field)
 			case "open":
 				return ec.fieldContext_MinionTunnel_open(ctx, field)
 			case "streams":
 				return ec.fieldContext_MinionTunnel_streams(ctx, field)
+			case "kept":
+				return ec.fieldContext_MinionTunnel_kept(ctx, field)
 			case "up":
 				return ec.fieldContext_MinionTunnel_up(ctx, field)
 			case "down":
@@ -42204,6 +43474,8 @@ func (ec *executionContext) fieldContext_MinionTaskPage_tasks(_ context.Context,
 				return ec.fieldContext_MinionTask_startedAt(ctx, field)
 			case "doneAt":
 				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
 			case "cancelRequestedAt":
 				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
 			case "ok":
@@ -43125,6 +44397,122 @@ func (ec *executionContext) fieldContext_MinionTunnel_to(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _MinionTunnel_bind(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_bind,
+		func(ctx context.Context) (any, error) {
+			return obj.Bind, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_bind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_listen(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_listen,
+		func(ctx context.Context) (any, error) {
+			return obj.Listen, nil
+		},
+		nil,
+		ec.marshalOInt2ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_listen(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_bound(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_bound,
+		func(ctx context.Context) (any, error) {
+			return obj.Bound, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_bound(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_udp(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_udp,
+		func(ctx context.Context) (any, error) {
+			return obj.UDP, nil
+		},
+		nil,
+		ec.marshalOBoolean2ᚖbool,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_udp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MinionTunnel_listening(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -43149,6 +44537,35 @@ func (ec *executionContext) fieldContext_MinionTunnel_listening(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_stopsAt(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_stopsAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StopsAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_stopsAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -43200,6 +44617,35 @@ func (ec *executionContext) _MinionTunnel_streams(ctx context.Context, field gra
 }
 
 func (ec *executionContext) fieldContext_MinionTunnel_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_kept(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_kept,
+		func(ctx context.Context) (any, error) {
+			return obj.Kept, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_kept(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTunnel",
 		Field:      field,
@@ -54068,6 +55514,8 @@ func (ec *executionContext) fieldContext_Mutation_queueMinionTask(ctx context.Co
 				return ec.fieldContext_MinionTask_startedAt(ctx, field)
 			case "doneAt":
 				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
 			case "cancelRequestedAt":
 				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
 			case "ok":
@@ -54211,6 +55659,8 @@ func (ec *executionContext) fieldContext_Mutation_cancelMinionTask(ctx context.C
 				return ec.fieldContext_MinionTask_startedAt(ctx, field)
 			case "doneAt":
 				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
 			case "cancelRequestedAt":
 				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
 			case "ok":
@@ -59129,6 +60579,35 @@ func (ec *executionContext) fieldContext_OperationalPort_streams(_ context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _OperationalPort_stopsAt(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPort) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_OperationalPort_stopsAt,
+		func(ctx context.Context) (any, error) {
+			return obj.StopsAt, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_OperationalPort_stopsAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OperationalPort",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _OperationalPortConnection_edges(ctx context.Context, field graphql.CollectedField, obj *model.OperationalPortConnection) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -59284,6 +60763,8 @@ func (ec *executionContext) fieldContext_OperationalPortEdge_node(_ context.Cont
 				return ec.fieldContext_OperationalPort_open(ctx, field)
 			case "streams":
 				return ec.fieldContext_OperationalPort_streams(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_OperationalPort_stopsAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type OperationalPort", field.Name)
 		},
@@ -59459,6 +60940,8 @@ func (ec *executionContext) fieldContext_OperationalPortEvent_port(_ context.Con
 				return ec.fieldContext_OperationalPort_open(ctx, field)
 			case "streams":
 				return ec.fieldContext_OperationalPort_streams(ctx, field)
+			case "stopsAt":
+				return ec.fieldContext_OperationalPort_stopsAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type OperationalPort", field.Name)
 		},
@@ -62733,6 +64216,73 @@ func (ec *executionContext) fieldContext_Query_hosts(ctx context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_minionListeners(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_minionListeners,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().MinionListeners(ctx, fc.Args["operationId"].(string), fc.Args["search"].(*string), fc.Args["first"].(*int), fc.Args["after"].(*string), fc.Args["last"].(*int), fc.Args["before"].(*string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionListenerConnection
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionListenerConnection
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionListenerConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerConnection,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_minionListeners(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "edges":
+				return ec.fieldContext_MinionListenerConnection_edges(ctx, field)
+			case "pageInfo":
+				return ec.fieldContext_MinionListenerConnection_pageInfo(ctx, field)
+			case "totalCount":
+				return ec.fieldContext_MinionListenerConnection_totalCount(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionListenerConnection", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_minionListeners_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_minionSessionFolders(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -63620,6 +65170,8 @@ func (ec *executionContext) fieldContext_Query_minionTask(ctx context.Context, f
 				return ec.fieldContext_MinionTask_startedAt(ctx, field)
 			case "doneAt":
 				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
 			case "cancelRequestedAt":
 				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
 			case "ok":
@@ -69803,6 +71355,75 @@ func (ec *executionContext) fieldContext_Subscription_hostChanged(ctx context.Co
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_minionListenerChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Subscription_minionListenerChanged,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().MinionListenerChanged(ctx, fc.Args["operationId"].(string))
+		},
+		func(ctx context.Context, next graphql.Resolver) graphql.Resolver {
+			directive0 := next
+
+			directive1 := func(ctx context.Context) (any, error) {
+				permission, err := ec.unmarshalNString2string(ctx, "operation:member")
+				if err != nil {
+					var zeroVal *model.MinionListenerEvent
+					return zeroVal, err
+				}
+				if ec.Directives.HasPermission == nil {
+					var zeroVal *model.MinionListenerEvent
+					return zeroVal, errors.New("directive hasPermission is not implemented")
+				}
+				return ec.Directives.HasPermission(ctx, nil, directive0, permission)
+			}
+
+			next = directive1
+			return next
+		},
+		ec.marshalNMinionListenerEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEvent,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Subscription_minionListenerChanged(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "action":
+				return ec.fieldContext_MinionListenerEvent_action(ctx, field)
+			case "id":
+				return ec.fieldContext_MinionListenerEvent_id(ctx, field)
+			case "operationId":
+				return ec.fieldContext_MinionListenerEvent_operationId(ctx, field)
+			case "listener":
+				return ec.fieldContext_MinionListenerEvent_listener(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MinionListenerEvent", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_minionListenerChanged_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Subscription_minionSessionChanged(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
 	return graphql.ResolveFieldStream(
 		ctx,
@@ -70022,6 +71643,8 @@ func (ec *executionContext) fieldContext_Subscription_minionTaskChanged(ctx cont
 				return ec.fieldContext_MinionTask_startedAt(ctx, field)
 			case "doneAt":
 				return ec.fieldContext_MinionTask_doneAt(ctx, field)
+			case "cancelReason":
+				return ec.fieldContext_MinionTask_cancelReason(ctx, field)
 			case "cancelRequestedAt":
 				return ec.fieldContext_MinionTask_cancelRequestedAt(ctx, field)
 			case "ok":
@@ -87497,6 +89120,255 @@ func (ec *executionContext) _MinionIdentityPage(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var minionListenerImplementors = []string{"MinionListener"}
+
+func (ec *executionContext) _MinionListener(ctx context.Context, sel ast.SelectionSet, obj *model.MinionListener) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionListenerImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionListener")
+		case "id":
+			out.Values[i] = ec._MinionListener_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bind":
+			out.Values[i] = ec._MinionListener_bind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "listen":
+			out.Values[i] = ec._MinionListener_listen(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bound":
+			out.Values[i] = ec._MinionListener_bound(ctx, field, obj)
+		case "udp":
+			out.Values[i] = ec._MinionListener_udp(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "to":
+			out.Values[i] = ec._MinionListener_to(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessionId":
+			out.Values[i] = ec._MinionListener_sessionId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sessionNumber":
+			out.Values[i] = ec._MinionListener_sessionNumber(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "taskId":
+			out.Values[i] = ec._MinionListener_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedBy":
+			out.Values[i] = ec._MinionListener_openedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "openedByName":
+			out.Values[i] = ec._MinionListener_openedByName(ctx, field, obj)
+		case "openedAt":
+			out.Values[i] = ec._MinionListener_openedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "listening":
+			out.Values[i] = ec._MinionListener_listening(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "open":
+			out.Values[i] = ec._MinionListener_open(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "streams":
+			out.Values[i] = ec._MinionListener_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stopsAt":
+			out.Values[i] = ec._MinionListener_stopsAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionListenerConnectionImplementors = []string{"MinionListenerConnection"}
+
+func (ec *executionContext) _MinionListenerConnection(ctx context.Context, sel ast.SelectionSet, obj *model.MinionListenerConnection) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionListenerConnectionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionListenerConnection")
+		case "edges":
+			out.Values[i] = ec._MinionListenerConnection_edges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pageInfo":
+			out.Values[i] = ec._MinionListenerConnection_pageInfo(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalCount":
+			out.Values[i] = ec._MinionListenerConnection_totalCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionListenerEdgeImplementors = []string{"MinionListenerEdge"}
+
+func (ec *executionContext) _MinionListenerEdge(ctx context.Context, sel ast.SelectionSet, obj *model.MinionListenerEdge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionListenerEdgeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionListenerEdge")
+		case "node":
+			out.Values[i] = ec._MinionListenerEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "cursor":
+			out.Values[i] = ec._MinionListenerEdge_cursor(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var minionListenerEventImplementors = []string{"MinionListenerEvent"}
+
+func (ec *executionContext) _MinionListenerEvent(ctx context.Context, sel ast.SelectionSet, obj *model.MinionListenerEvent) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, minionListenerEventImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MinionListenerEvent")
+		case "action":
+			out.Values[i] = ec._MinionListenerEvent_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "id":
+			out.Values[i] = ec._MinionListenerEvent_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "operationId":
+			out.Values[i] = ec._MinionListenerEvent_operationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "listener":
+			out.Values[i] = ec._MinionListenerEvent_listener(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.ProcessDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var minionSessionImplementors = []string{"MinionSession"}
 
 func (ec *executionContext) _MinionSession(ctx context.Context, sel ast.SelectionSet, obj *model.MinionSession) graphql.Marshaler {
@@ -88989,6 +90861,8 @@ func (ec *executionContext) _MinionTask(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = ec._MinionTask_startedAt(ctx, field, obj)
 		case "doneAt":
 			out.Values[i] = ec._MinionTask_doneAt(ctx, field, obj)
+		case "cancelReason":
+			out.Values[i] = ec._MinionTask_cancelReason(ctx, field, obj)
 		case "cancelRequestedAt":
 			out.Values[i] = ec._MinionTask_cancelRequestedAt(ctx, field, obj)
 		case "ok":
@@ -89507,11 +91381,21 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			}
 		case "to":
 			out.Values[i] = ec._MinionTunnel_to(ctx, field, obj)
+		case "bind":
+			out.Values[i] = ec._MinionTunnel_bind(ctx, field, obj)
+		case "listen":
+			out.Values[i] = ec._MinionTunnel_listen(ctx, field, obj)
+		case "bound":
+			out.Values[i] = ec._MinionTunnel_bound(ctx, field, obj)
+		case "udp":
+			out.Values[i] = ec._MinionTunnel_udp(ctx, field, obj)
 		case "listening":
 			out.Values[i] = ec._MinionTunnel_listening(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "stopsAt":
+			out.Values[i] = ec._MinionTunnel_stopsAt(ctx, field, obj)
 		case "open":
 			out.Values[i] = ec._MinionTunnel_open(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -89519,6 +91403,11 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			}
 		case "streams":
 			out.Values[i] = ec._MinionTunnel_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kept":
+			out.Values[i] = ec._MinionTunnel_kept(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -92440,6 +94329,8 @@ func (ec *executionContext) _OperationalPort(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "stopsAt":
+			out.Values[i] = ec._OperationalPort_stopsAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -93570,6 +95461,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_hosts(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "minionListeners":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_minionListeners(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -95720,6 +97633,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_myHashChanged(ctx, fields[0])
 	case "hostChanged":
 		return ec._Subscription_hostChanged(ctx, fields[0])
+	case "minionListenerChanged":
+		return ec._Subscription_minionListenerChanged(ctx, fields[0])
 	case "minionSessionChanged":
 		return ec._Subscription_minionSessionChanged(ctx, fields[0])
 	case "minionTargetChanged":
@@ -101672,6 +103587,70 @@ func (ec *executionContext) marshalNMinionIdentityPage2ᚖgithubᚗcomᚋlogosco
 	return ec._MinionIdentityPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMinionListener2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListener(ctx context.Context, sel ast.SelectionSet, v *model.MinionListener) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionListener(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionListenerConnection2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerConnection(ctx context.Context, sel ast.SelectionSet, v model.MinionListenerConnection) graphql.Marshaler {
+	return ec._MinionListenerConnection(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionListenerConnection2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerConnection(ctx context.Context, sel ast.SelectionSet, v *model.MinionListenerConnection) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionListenerConnection(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionListenerEdge2ᚕᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEdgeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MinionListenerEdge) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNMinionListenerEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEdge(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMinionListenerEdge2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEdge(ctx context.Context, sel ast.SelectionSet, v *model.MinionListenerEdge) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionListenerEdge(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNMinionListenerEvent2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEvent(ctx context.Context, sel ast.SelectionSet, v model.MinionListenerEvent) graphql.Marshaler {
+	return ec._MinionListenerEvent(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMinionListenerEvent2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListenerEvent(ctx context.Context, sel ast.SelectionSet, v *model.MinionListenerEvent) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MinionListenerEvent(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNMinionSession2githubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v model.MinionSession) graphql.Marshaler {
 	return ec._MinionSession(ctx, sel, &v)
 }
@@ -104602,6 +106581,13 @@ func (ec *executionContext) marshalOMinionIdentity2ᚖgithubᚗcomᚋlogoscore�
 		return graphql.Null
 	}
 	return ec._MinionIdentity(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOMinionListener2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionListener(ctx context.Context, sel ast.SelectionSet, v *model.MinionListener) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MinionListener(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOMinionSession2ᚖgithubᚗcomᚋlogoscoreᚋlogosᚑcoreᚋcoreᚋpkgᚋgraphqlᚋmodelᚐMinionSession(ctx context.Context, sel ast.SelectionSet, v *model.MinionSession) graphql.Marshaler {

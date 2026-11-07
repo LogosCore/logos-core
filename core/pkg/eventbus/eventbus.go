@@ -106,6 +106,11 @@ const (
 	// for a tunnel task, its streams' numbers changed, or it closed
 	// (pkg/miniontunnels). Powers the Ports page.
 	TopicOperationalPortChanged Topic = "operational_port.changed"
+	// TopicMinionListenerChanged: a reverse port forward's listener opened
+	// for its task, the minion said where it listens, its streams'
+	// numbers changed, or it closed (pkg/miniontunnels). Powers the Ports
+	// page's minions' list.
+	TopicMinionListenerChanged Topic = "minion_listener.changed"
 	// TopicFileBrowserChanged: a machine's file system snapshot changed
 	// (docs: contracts/file-browser.md); subscribers re-read its folders.
 	TopicFileBrowserChanged Topic = "file_browser.changed"

@@ -35,6 +35,14 @@ func searchPattern(search string) string {
 	return regexp.QuoteMeta(search)
 }
 
+// SearchMatcher is searchPattern for a list core searches in memory (a
+// running tunnel's streams): the same query language as every
+// repository's, case-insensitive.
+func SearchMatcher(search string) func(string) bool {
+	// searchPattern quotes the search: always a valid pattern.
+	return regexp.MustCompile("(?i)" + searchPattern(search)).MatchString
+}
+
 // searchPrefixPattern is the anchored form of searchPattern, used by the
 // wiki title-prefix branch where the term has to start the field. The leading
 // `^` is what lets MongoDB answer the regex from the {operation_id,

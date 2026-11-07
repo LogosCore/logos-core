@@ -82,7 +82,12 @@ export function StateLabel({ t, held }: { t: Task; held?: string | null }) {
       <StateIcon t={t} />
       <span className={failedExit ? STATE.FAILED.className : s?.className}>{text}</span>
       {took(t) && <span className={muted}>· {took(t)}</span>}
-      {stopping && <span className="text-amber-600 dark:text-amber-400">· stopping</span>}
+      {stopping && <span className="text-amber-600 dark:text-amber-400">· stopping{t.cancelReason && " (core)"}</span>}
+      {!stopping && t.cancelReason && (
+        <span className={muted} title={t.cancelReason}>
+          · stopped by core
+        </span>
+      )}
     </span>
   )
 }

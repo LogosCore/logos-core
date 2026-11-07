@@ -68,6 +68,10 @@ type MinionTask struct {
 	// cancel goes with every reply until its last part comes. CancelSends
 	// counts them.
 	CancelRequestedAt *time.Time `bson:"cancel_requested_at,omitempty" json:"cancel_requested_at,omitempty"`
+	// CancelReason is why core asked to stop it, when core did (a tunnel
+	// idle past its stop_idle, its port not opening again); empty when an
+	// operator did.
+	CancelReason string `bson:"cancel_reason,omitempty" json:"cancel_reason,omitempty"`
 	// ResumeCtx is the ctx of the task's newest part that said one (its
 	// ResumeSeq): where a minion that keeps nothing stands with it (a
 	// bind-call page's walk). Core gives it back with a resume, and with a
@@ -116,6 +120,19 @@ type MinionTask struct {
 	// it (docs: contracts/minion-messages.md, Streaming a file), from its
 	// announcement; nil before, and for other tasks.
 	Stream *MinionTaskStream `bson:"stream,omitempty" json:"stream,omitempty"`
+	// Tunnel is what a tunnel task's tunnel came to, kept when it closed:
+	// its streams are not (core holds them in memory while it runs). Nil
+	// before, and for other tasks.
+	Tunnel *MinionTaskTunnel `bson:"tunnel,omitempty" json:"tunnel,omitempty"`
+}
+
+// MinionTaskTunnel is a tunnel task's totals: how many streams it had (the
+// last one's number), and their bytes each way (Up: what its tools sent,
+// Down: what came back).
+type MinionTaskTunnel struct {
+	Streams uint64 `bson:"streams" json:"streams"`
+	Up      int64  `bson:"up" json:"up"`
+	Down    int64  `bson:"down" json:"down"`
 }
 
 // MinionTaskStream is a file a minion streams: what it announced, and

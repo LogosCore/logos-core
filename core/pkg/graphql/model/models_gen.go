@@ -716,6 +716,43 @@ type MinionIdentityPage struct {
 	Next    *string                `json:"next,omitempty"`
 }
 
+type MinionListener struct {
+	ID            string  `json:"id"`
+	Bind          string  `json:"bind"`
+	Listen        int     `json:"listen"`
+	Bound         *string `json:"bound,omitempty"`
+	UDP           bool    `json:"udp"`
+	To            string  `json:"to"`
+	SessionID     string  `json:"sessionId"`
+	SessionNumber int     `json:"sessionNumber"`
+	TaskID        string  `json:"taskId"`
+	OpenedBy      string  `json:"openedBy"`
+	OpenedByName  *string `json:"openedByName,omitempty"`
+	OpenedAt      string  `json:"openedAt"`
+	Listening     bool    `json:"listening"`
+	Open          int     `json:"open"`
+	Streams       int     `json:"streams"`
+	StopsAt       *string `json:"stopsAt,omitempty"`
+}
+
+type MinionListenerConnection struct {
+	Edges      []*MinionListenerEdge `json:"edges"`
+	PageInfo   *pagination.PageInfo  `json:"pageInfo"`
+	TotalCount int                   `json:"totalCount"`
+}
+
+type MinionListenerEdge struct {
+	Node   *MinionListener `json:"node"`
+	Cursor string          `json:"cursor"`
+}
+
+type MinionListenerEvent struct {
+	Action      EventAction     `json:"action"`
+	ID          string          `json:"id"`
+	OperationID string          `json:"operationId"`
+	Listener    *MinionListener `json:"listener,omitempty"`
+}
+
 type MinionSession struct {
 	ID               string                  `json:"id"`
 	Rev              int                     `json:"rev"`
@@ -1008,6 +1045,7 @@ type MinionTask struct {
 	AckedAt           *string           `json:"ackedAt,omitempty"`
 	StartedAt         *string           `json:"startedAt,omitempty"`
 	DoneAt            *string           `json:"doneAt,omitempty"`
+	CancelReason      *string           `json:"cancelReason,omitempty"`
 	CancelRequestedAt *string           `json:"cancelRequestedAt,omitempty"`
 	Ok                *bool             `json:"ok,omitempty"`
 	Exit              *int              `json:"exit,omitempty"`
@@ -1073,9 +1111,15 @@ type MinionTunnel struct {
 	Address   *string `json:"address,omitempty"`
 	Purpose   string  `json:"purpose"`
 	To        *string `json:"to,omitempty"`
+	Bind      *string `json:"bind,omitempty"`
+	Listen    *int    `json:"listen,omitempty"`
+	Bound     *string `json:"bound,omitempty"`
+	UDP       *bool   `json:"udp,omitempty"`
 	Listening bool    `json:"listening"`
+	StopsAt   *string `json:"stopsAt,omitempty"`
 	Open      int     `json:"open"`
 	Streams   int     `json:"streams"`
+	Kept      int     `json:"kept"`
 	Up        int     `json:"up"`
 	Down      int     `json:"down"`
 }
@@ -1309,6 +1353,7 @@ type OperationalPort struct {
 	Listening     bool    `json:"listening"`
 	Open          int     `json:"open"`
 	Streams       int     `json:"streams"`
+	StopsAt       *string `json:"stopsAt,omitempty"`
 }
 
 type OperationalPortConnection struct {

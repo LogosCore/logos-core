@@ -76,9 +76,16 @@ export function PortsTable({
             <span className="font-mono text-sm">#{p.sessionNumber}</span>
             <span className="truncate">{p.openedByName ?? <span className="text-muted-foreground">someone gone</span>}</span>
             <span className="truncate text-sm tabular-nums">{formatDateTime(p.openedAt)}</span>
-            <span className="text-sm tabular-nums">
-              {p.open}
-              <span className="text-muted-foreground"> open · {p.streams} in all</span>
+            <span className="flex min-w-0 flex-col text-sm tabular-nums">
+              <span>
+                {p.open}
+                <span className="text-muted-foreground"> open · {p.streams} in all</span>
+              </span>
+              {p.stopsAt && (
+                <span className="truncate text-xs text-muted-foreground" title="Core stops it then, unless a stream opens first">
+                  stops {formatDateTime(p.stopsAt)}
+                </span>
+              )}
             </span>
           </button>
         )

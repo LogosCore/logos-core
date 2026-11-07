@@ -146,9 +146,10 @@ export function useMinionFileStrings(fileId: string, filter: MinionFileStringsFi
  * A tunnel task's streams, the latest first a page at a time, as the server
  * searches and filters them. The pages read are read again, in place, when
  * version changes (the tunnel's numbers, which its task's live updates
- * carry): a list scrolled down stays where it is.
+ * carry): a list scrolled down stays where it is. Core keeps them only
+ * while the task runs: enabled false reads none.
  */
-export function useMinionTunnelStreams(taskId: string, filter: TunnelStreamsFilter, version: string) {
+export function useMinionTunnelStreams(taskId: string, filter: TunnelStreamsFilter, version: string, enabled = true) {
   const query = useInfiniteQuery({
     queryKey: minionTaskKeys.tunnelStreams(taskId, filter),
     queryFn: ({ pageParam }) =>
@@ -163,14 +164,15 @@ export function useMinionTunnelStreams(taskId: string, filter: TunnelStreamsFilt
     getNextPageParam: (last) => last.minionTunnelStreams.before ?? undefined,
     // A new search shows the rows before it until its own come.
     placeholderData: keepPreviousData,
+    enabled,
   })
   const { refetch } = query
   const seen = useRef(version)
   useEffect(() => {
     if (seen.current === version) return
     seen.current = version
-    void refetch()
-  }, [version, refetch])
+    if (enabled) void refetch()
+  }, [version, refetch, enabled])
   return query
 }
 

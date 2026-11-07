@@ -40,6 +40,10 @@ type MinionTask {
   ackedAt: String
   startedAt: String
   doneAt: String
+  # Why core asked to stop it, when core did (a tunnel no stream used for
+  # its stop_idle, its port not opening again after a restart); null when an
+  # operator did, or nobody.
+  cancelReason: String
   # When an operator asked to stop it; a cancel goes with every reply to the
   # minion until it ends.
   cancelRequestedAt: String
@@ -189,29 +193,52 @@ type MinionTaskStream {
 # A tunnel task's proxy (docs: contracts/minion-messages/tunnels.md):
 # core's SOCKS on one of its operational ports while the task runs, each
 # connection a tool makes through it a stream the minion connects from its
-# host.
+# host. A reverse port forward's goes the other way: the minion listens on
+# its host, and core connects each connection that comes there to to.
 type MinionTunnel {
   # The operational port, and the host operators reach it at (core's
-  # OPERATIONAL_ADDRESS); null: the host the web app is reached at.
+  # OPERATIONAL_ADDRESS); null: the host the web app is reached at. 0 for
+  # a reverse port forward, which has none.
   port: Int!
   address: String
-  # What core puts in front of the port: socks (its SOCKS proxy) or
-  # forward (every connection a stream to to, the forward's destination,
-  # host:port; null for socks).
+  # What it is: socks_proxy (core's SOCKS proxy in front of the port),
+  # port_forward (every connection a stream to to, the forward's
+  # destination, host:port; null for socks) or reverse_port_forward (the
+  # minion listens; core connects each of its streams to to).
   purpose: String!
   to: String
-  # Core listens on it: the task runs.
+  # A reverse port forward's: where the minion is to listen, as the task
+  # asked (listen 0: any free port), and where it says it does (null until
+  # it says). Null for any other tunnel.
+  bind: String
+  listen: Int
+  bound: String
+  # A reverse port forward's: it listens for UDP datagrams, a stream for
+  # each address they come from. Null for any other tunnel.
+  udp: Boolean
+  # Core listens on it: the task runs. A reverse port forward's: the
+  # minion said it listens, and the task runs.
   listening: Boolean!
+  # When core stops the task unless a stream opens first (its stop_idle):
+  # null while a stream is open, before the minion has the task, or with
+  # none.
+  stopsAt: String
   # Its streams now (opening or open), and how many it has had.
   open: Int!
   streams: Int!
+  # How many of its ended streams core keeps to list while its task runs,
+  # the latest (the open ones it always has). Once the task ended it keeps
+  # none: what is left is these numbers.
+  kept: Int!
   # The bytes its tools sent through it (up), and got back (down).
   up: Int!
   down: Int!
 }
 
 # One stream of a tunnel task: a connection a tool made through its proxy,
-# who reached what through the minion. The bytes are never kept.
+# who reached what through the minion. Core keeps them only while the task
+# runs, the open ones and the latest ended ones (MinionTunnel.kept); the
+# bytes never.
 type MinionTunnelStream {
   # Its number in the task, from 1.
   stream: Int!
@@ -295,7 +322,8 @@ extend type Query {
 
   # A tunnel task's streams, the latest first, at most last (50 by default,
   # 200 at most), before a page's cursor: search matches the tool's address
-  # and the destination, state (OPEN or ENDED) narrows them. Needs at least
+  # and the destination, state (OPEN or ENDED) narrows them. Those core
+  # keeps: none once the task ended (MinionTunnel.kept). Needs at least
   # viewer.
   minionTunnelStreams(taskId: ID!, last: Int, before: String, search: String, state: String): MinionTunnelStreamPage!
     @hasPermission(permission: "operation:member")

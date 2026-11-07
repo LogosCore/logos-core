@@ -18,7 +18,10 @@ import (
 )
 
 const (
-	operationalPortCollection    = "operational_ports"
+	operationalPortCollection = "operational_ports"
+	// minionTunnelStreamCollection held tunnel tasks' streams, which core
+	// no longer stores (it holds a running tunnel's in memory): an older
+	// core's collection is dropped.
 	minionTunnelStreamCollection = "minion_tunnel_streams"
 )
 
@@ -42,6 +45,8 @@ type IOperationalPortRepository interface {
 	FindByTaskID(ctx context.Context, taskID uuid.UUID) (*models.OperationalPort, error)
 	// NextStream counts a new stream of the task's: its number.
 	NextStream(ctx context.Context, taskID uuid.UUID) (uint64, error)
+	// SetBytes keeps the task's tunnel's bytes so far, each way.
+	SetBytes(ctx context.Context, taskID uuid.UUID, up, down int64) error
 	// Release gives the task's port back.
 	Release(ctx context.Context, taskID uuid.UUID) error
 }
@@ -54,6 +59,8 @@ func NewOperationalPortRepository(db database.Database) IOperationalPortReposito
 		{Key: []string{"task_id"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
 		{Key: []string{"operation_id", "-createAt", "-_id"}},
 	})
+	// Dropping a collection that is not there is no error.
+	_ = db.Collection(minionTunnelStreamCollection).DropCollection(context.Background())
 	return &operationalPortRepository{coll: db.Collection(operationalPortCollection)}
 }
 
@@ -125,112 +132,11 @@ func (r *operationalPortRepository) NextStream(ctx context.Context, taskID uuid.
 	return p.Streams, nil
 }
 
+func (r *operationalPortRepository) SetBytes(ctx context.Context, taskID uuid.UUID, up, down int64) error {
+	return r.coll.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"up": up, "down": down}})
+}
+
 func (r *operationalPortRepository) Release(ctx context.Context, taskID uuid.UUID) error {
 	_, err := r.coll.RemoveAll(ctx, bson.M{"task_id": taskID})
-	return err
-}
-
-// IMinionTunnelStreamRepository keeps tunnel tasks' streams
-// (models.MinionTunnelStream), the operation's record of what was reached
-// through its minions.
-type IMinionTunnelStreamRepository interface {
-	Insert(ctx context.Context, s *models.MinionTunnelStream) error
-	// Update writes the stream as it is now: its reply, its end, its byte
-	// counts.
-	Update(ctx context.Context, s *models.MinionTunnelStream) error
-	// Page is the task's streams, the latest first: limit at most, before
-	// the stream before (0: from the latest), as filter narrows them.
-	Page(ctx context.Context, taskID uuid.UUID, filter TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error)
-	// Totals are the task's streams counted, and their bytes each way.
-	Totals(ctx context.Context, taskID uuid.UUID) (TunnelTotals, error)
-	DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error
-}
-
-type minionTunnelStreamRepository struct{ coll database.Collection }
-
-func NewMinionTunnelStreamRepository(db database.Database) IMinionTunnelStreamRepository {
-	db.EnsureIndexes(context.Background(), minionTunnelStreamCollection, []opts.IndexModel{
-		{Key: []string{"task_id", "stream"}, IndexOptions: new(options.IndexOptions).SetUnique(true)},
-		{Key: []string{"operation_id"}},
-	})
-	return &minionTunnelStreamRepository{coll: db.Collection(minionTunnelStreamCollection)}
-}
-
-// TunnelStreamFilter narrows a task's streams: search matches the tool's
-// address and the destination; State "open" (not ended) or "ended".
-type TunnelStreamFilter struct {
-	Search string
-	State  string
-}
-
-// The streams' states a filter names.
-const (
-	TunnelStreamsOpen  = "open"
-	TunnelStreamsEnded = "ended"
-)
-
-// TunnelTotals are a task's streams counted, the last one's number, and
-// their bytes each way.
-type TunnelTotals struct {
-	Streams  int64
-	Last     uint64
-	Up, Down int64
-}
-
-func (r *minionTunnelStreamRepository) Insert(ctx context.Context, s *models.MinionTunnelStream) error {
-	s.SearchText = models.TunnelStreamSearchText(s)
-	_, err := r.coll.InsertOne(ctx, s)
-	return err
-}
-
-func (r *minionTunnelStreamRepository) Update(ctx context.Context, s *models.MinionTunnelStream) error {
-	set := bson.M{"up": s.Up, "down": s.Down}
-	if s.Result != nil {
-		set["result"], set["bound"], set["msg"] = *s.Result, s.Bound, s.Msg
-	}
-	if s.EndedAt != nil {
-		set["ended_at"], set["end"] = *s.EndedAt, s.End
-	}
-	return r.coll.UpdateOne(ctx, bson.M{"task_id": s.TaskID, "stream": s.Stream}, bson.M{"$set": set})
-}
-
-func (r *minionTunnelStreamRepository) Page(ctx context.Context, taskID uuid.UUID, filter TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error) {
-	q := bson.M{"task_id": taskID}
-	if before > 0 {
-		q["stream"] = bson.M{"$lt": before}
-	}
-	if search := strings.TrimSpace(filter.Search); search != "" {
-		q["search_text"] = bson.M{"$regex": searchPattern(search), "$options": "i"}
-	}
-	switch filter.State {
-	case TunnelStreamsOpen:
-		q["ended_at"] = bson.M{"$exists": false}
-	case TunnelStreamsEnded:
-		q["ended_at"] = bson.M{"$exists": true}
-	}
-	out := []models.MinionTunnelStream{}
-	err := r.coll.Find(ctx, q).Sort("-stream").Limit(limit).All(&out)
-	return out, err
-}
-
-func (r *minionTunnelStreamRepository) Totals(ctx context.Context, taskID uuid.UUID) (TunnelTotals, error) {
-	var out []struct {
-		N    int64  `bson:"n"`
-		Last uint64 `bson:"last"`
-		Up   int64  `bson:"up"`
-		Down int64  `bson:"down"`
-	}
-	err := r.coll.Aggregate(ctx, bson.A{
-		bson.M{"$match": bson.M{"task_id": taskID}},
-		bson.M{"$group": bson.M{"_id": nil, "n": bson.M{"$sum": 1}, "last": bson.M{"$max": "$stream"}, "up": bson.M{"$sum": "$up"}, "down": bson.M{"$sum": "$down"}}},
-	}).All(&out)
-	if err != nil || len(out) == 0 {
-		return TunnelTotals{}, err
-	}
-	return TunnelTotals{Streams: out[0].N, Last: out[0].Last, Up: out[0].Up, Down: out[0].Down}, nil
-}
-
-func (r *minionTunnelStreamRepository) DeleteByOperationID(ctx context.Context, operationID uuid.UUID) error {
-	_, err := r.coll.RemoveAll(ctx, bson.M{"operation_id": operationID})
 	return err
 }

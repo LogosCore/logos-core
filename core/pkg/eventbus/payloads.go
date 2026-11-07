@@ -334,6 +334,20 @@ func NewOperationalPortChangedEvent(p OperationalPortEventPayload) Event {
 	return NewEvent(TopicOperationalPortChanged, SystemActor(), p)
 }
 
+// MinionListenerEventPayload is a reverse port forward's listener changing:
+// opened (Opened), where the minion listens, its streams' numbers, or
+// closed (Closed).
+type MinionListenerEventPayload struct {
+	TaskID      string
+	OperationID string
+	Opened      bool
+	Closed      bool
+}
+
+func NewMinionListenerChangedEvent(p MinionListenerEventPayload) Event {
+	return NewEvent(TopicMinionListenerChanged, SystemActor(), p)
+}
+
 // FileBrowserEventPayload is a machine's snapshot changing: its operation,
 // its key (models.FsMachineKey), and the folder that changed most.
 type FileBrowserEventPayload struct {

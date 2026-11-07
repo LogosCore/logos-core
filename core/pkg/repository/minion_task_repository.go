@@ -119,6 +119,14 @@ type IMinionTaskRepository interface {
 	// once, one sent gets cancels until its last part comes. Nothing for a
 	// finished one. It returns the task after.
 	RequestCancel(ctx context.Context, taskID uuid.UUID, at time.Time) (*models.MinionTask, error)
+	// RequestCancelWhy is RequestCancel for core's own stop, keeping why
+	// (CancelReason) with the request.
+	RequestCancelWhy(ctx context.Context, taskID uuid.UUID, at time.Time, why string) (*models.MinionTask, error)
+	// SetTunnel keeps what a tunnel task's tunnel came to (Tunnel), as it
+	// closes; TunnelOf reads it back: nil before. Neither counts as a
+	// change of the task's (no Rev).
+	SetTunnel(ctx context.Context, taskID uuid.UUID, totals models.MinionTaskTunnel) error
+	TunnelOf(ctx context.Context, taskID uuid.UUID) (*models.MinionTaskTunnel, error)
 	// CancelsToSend returns the session's tasks an operator asked to stop
 	// that are not over, and counts a cancel sent for each; one never acked
 	// that has had MinionCancelGiveUp is counted cancelled instead.
@@ -250,6 +258,25 @@ func (r *minionTaskRepository) FindByTaskID(ctx context.Context, taskID uuid.UUI
 		return nil, err
 	}
 	return &t, nil
+}
+
+func (r *minionTaskRepository) SetTunnel(ctx context.Context, taskID uuid.UUID, totals models.MinionTaskTunnel) error {
+	err := r.tasks.UpdateOne(ctx, bson.M{"task_id": taskID}, bson.M{"$set": bson.M{"tunnel": totals}})
+	if IsNotFound(err) {
+		// A task never stored (its queueing failed): nothing to keep.
+		return nil
+	}
+	return err
+}
+
+func (r *minionTaskRepository) TunnelOf(ctx context.Context, taskID uuid.UUID) (*models.MinionTaskTunnel, error) {
+	var t struct {
+		Tunnel *models.MinionTaskTunnel `bson:"tunnel"`
+	}
+	if err := r.tasks.Find(ctx, bson.M{"task_id": taskID}).Select(bson.M{"tunnel": 1}).One(&t); err != nil {
+		return nil, err
+	}
+	return t.Tunnel, nil
 }
 
 func (r *minionTaskRepository) Document(ctx context.Context, taskID uuid.UUID) (bson.D, error) {
@@ -523,10 +550,22 @@ func (r *minionTaskRepository) AddResult(ctx context.Context, sessionID, taskID 
 }
 
 func (r *minionTaskRepository) RequestCancel(ctx context.Context, taskID uuid.UUID, at time.Time) (*models.MinionTask, error) {
+	return r.RequestCancelWhy(ctx, taskID, at, "")
+}
+
+func (r *minionTaskRepository) RequestCancelWhy(ctx context.Context, taskID uuid.UUID, at time.Time, why string) (*models.MinionTask, error) {
 	var after models.MinionTask
+	asked := bson.M{"cancel_requested_at": at}
+	if why != "" {
+		asked["cancel_reason"] = why
+	}
 	// Never sent: cancelled now.
+	cancelled := bson.M{"state": models.MinionTaskCancelled, "done_at": at}
+	for k, v := range asked {
+		cancelled[k] = v
+	}
 	err := r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": models.MinionTaskQueued}).Apply(qmgo.Change{
-		Update:    bson.M{"$set": bson.M{"state": models.MinionTaskCancelled, "done_at": at, "cancel_requested_at": at}, "$inc": bumpRev},
+		Update:    bson.M{"$set": cancelled, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
 	if err == nil {
@@ -538,7 +577,7 @@ func (r *minionTaskRepository) RequestCancel(ctx context.Context, taskID uuid.UU
 	// Sent and not over: the minion is told.
 	err = r.tasks.Find(ctx, bson.M{"task_id": taskID, "state": bson.M{"$in": bson.A{models.MinionTaskSent, models.MinionTaskRunning}},
 		"cancel_requested_at": bson.M{"$exists": false}}).Apply(qmgo.Change{
-		Update:    bson.M{"$set": bson.M{"cancel_requested_at": at}, "$inc": bumpRev},
+		Update:    bson.M{"$set": asked, "$inc": bumpRev},
 		ReturnNew: true,
 	}, &after)
 	if err == nil {

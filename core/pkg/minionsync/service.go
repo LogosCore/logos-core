@@ -836,10 +836,11 @@ func (s *Service) underSession(ctx context.Context, session *models.MinionSessio
 					err = s.endUnknown(ctx, session, e)
 				}
 			}
-		case protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose, protocol.ItemTunnelDatagram:
+		case protocol.ItemTunnel, protocol.ItemTunnelReply, protocol.ItemTunnelData, protocol.ItemTunnelAck, protocol.ItemTunnelClose,
+			protocol.ItemTunnelDatagram, protocol.ItemTunnelListen:
+			// A tunnel from the minion opens a reverse port forward's
+			// stream; miniontunnels closes one for any other task.
 			out, err = s.takeTunnel(ctx, session, raw, i)
-		case protocol.ItemTunnel:
-			out, err = errItem(protocol.ErrItemBadMessage, "a tunnel opens from core", i)
 		default:
 			out, err = errItem(protocol.ErrItemUnknownItem, "not taken under a session yet", i)
 		}

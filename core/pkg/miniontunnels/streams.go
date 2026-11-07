@@ -44,7 +44,10 @@ const (
 )
 
 // tunnel is a tunnel task's: its port, what core puts in front of it (a
-// SOCKS proxy, or a forward to fwdHost:fwdPort), and its streams.
+// SOCKS proxy, or a forward to fwdHost:fwdPort), and its streams. A
+// reverse port forward's (reverse) has no port and no listener of core's:
+// the minion listens, at bind:listen as asked and bound as it says, and
+// opens its streams, each of which core connects to fwdHost:fwdPort.
 type tunnel struct {
 	task, session, operation uuid.UUID
 	port                     int
@@ -64,15 +67,36 @@ type tunnel struct {
 	numbering int
 	// handshaking are the clients still saying what they want.
 	handshaking map[net.Conn]bool
-	// closes go to the minion with the session's next message.
-	closes []protocol.TunnelCloseItem
+	// closes go to the minion with the session's next message, and so do
+	// replies, core's answers to a reverse port forward's streams.
+	closes  []protocol.TunnelCloseItem
+	replies []protocol.TunnelReplyItem
+	reverse bool
+	bind    string
+	listen  int
+	bound   string
+	// reverseUDP: a reverse port forward whose minion listens for
+	// datagrams: its streams are UDP ones, each a source's.
+	reverseUDP bool
+	// stopIdle stops the task once no stream has been open that long (0:
+	// never); idleSince is since when none has been (zero while one is,
+	// or before the clock runs), and the clock runs once core has seen the
+	// minion has the task (idleArmed): from then, or a restart, on.
+	stopIdle  time.Duration
+	idleSince time.Time
+	idleArmed bool
+	stopping  bool
 	// relay is its UDP relay (udp.go); nil when the port's UDP is taken.
 	relay net.PacketConn
 	// last is the last stream's number; up and down the bytes its tools
-	// sent through it and got back (since a restart: what its streams'
-	// records said then, and on).
-	last     uint64
-	up, down int64
+	// sent through it and got back (since a restart: what its port or
+	// listener kept, and on); keptUp and keptDown what was last kept
+	// (keepBytes).
+	last             uint64
+	up, down         int64
+	keptUp, keptDown int64
+	// ended are its latest ended streams, to list (kept.go).
+	ended endedStreams
 	// changed: its task's view changed since the last event said so;
 	// counted: its streams' numbers did (the Ports page's).
 	changed bool
@@ -93,9 +117,9 @@ func newTunnel(rec *models.OperationalPort, ln net.Listener, acked bool) *tunnel
 		purpose = models.OperationalPurposeSOCKS
 	}
 	return &tunnel{task: rec.TaskID, session: rec.SessionID, operation: rec.OperationID, port: rec.Port, ln: ln,
-		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort,
+		purpose: purpose, fwdHost: rec.Host, fwdPort: rec.HostPort, stopIdle: rec.StopIdle,
 		maxStreams: maxStreams, connectWait: timeout, acked: acked, streams: map[uint64]*stream{}, handshaking: map[net.Conn]bool{},
-		last: rec.Streams}
+		last: rec.Streams, up: rec.Up, down: rec.Down, keptUp: rec.Up, keptDown: rec.Down}
 }
 
 // The command's defaults, as the docs give them, for a task whose args
@@ -188,6 +212,12 @@ type stream struct {
 	finishing bool
 
 	upBytes, downBytes int64
+	// A UDP reverse port forward's stream: the source its datagrams come
+	// from (where core's go back to), and when a datagram last went either
+	// way.
+	srcHost    string
+	srcPort    int
+	lastActive time.Time
 }
 
 func signal(ch chan struct{}) {
@@ -381,8 +411,8 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
 	}
 	st := &stream{t: t, id: id, client: c, replied: make(chan protocol.TunnelReplyItem, 1), done: make(chan struct{}),
 		upSignal: make(chan struct{}, 1), downSignal: make(chan struct{}, 1),
-		rec: models.MinionTunnelStream{TaskID: t.task, Stream: id, OperationID: t.operation, SessionID: t.session,
-			Client: c.RemoteAddr().String(), Host: req.host, Port: req.port, OpenedAt: s.now()}}
+		rec: models.MinionTunnelStream{TaskID: t.task, Stream: id, Client: c.RemoteAddr().String(), Host: req.host, Port: req.port,
+			OpenedAt: s.now()}}
 	if req.udp {
 		var ip net.IP
 		if ra, ok := c.RemoteAddr().(*net.TCPAddr); ok {
@@ -391,9 +421,10 @@ func (s *Service) newStream(t *tunnel, c net.Conn, req request) (*stream, int) {
 		st.udp = &assoc{clientIP: ip}
 		st.rec.UDP, st.rec.Host, st.rec.Port = true, "", 0
 	}
+	st.rec.SearchText = models.TunnelStreamSearchText(&st.rec)
 	t.streams[id] = st
+	t.streamsChanged(s.now())
 	t.last, t.changed, t.counted = max(t.last, id), true, true
-	s.record(st, true)
 	s.wake(t.session)
 	return st, 0
 }
@@ -538,7 +569,7 @@ func (s *Service) abort(st *stream, end string) {
 	if st.gone {
 		return
 	}
-	if !st.openSent.IsZero() {
+	if st.t.reverse || !st.openSent.IsZero() {
 		st.t.closes = append(st.t.closes, protocol.TunnelCloseItem{T: protocol.ItemTunnelClose, Task: st.t.task[:], Stream: st.id,
 			Reason: protocol.TunnelCloseReset})
 		s.wake(st.t.session)
@@ -567,16 +598,21 @@ func (s *Service) drop(st *stream, end string, reset bool) {
 	st.gone = true
 	close(st.done)
 	delete(st.t.streams, st.id)
-	if reset {
-		if tc, ok := st.client.(*net.TCPConn); ok {
-			_ = tc.SetLinger(0)
+	st.t.streamsChanged(s.now())
+	if st.client != nil {
+		if reset {
+			if tc, ok := st.client.(*net.TCPConn); ok {
+				_ = tc.SetLinger(0)
+			}
 		}
+		_ = st.client.Close()
 	}
-	_ = st.client.Close()
 	now := s.now()
 	st.rec.EndedAt, st.rec.End = &now, end
 	st.t.changed, st.t.counted = true, true
-	s.record(st, false)
+	rec := st.rec
+	rec.Up, rec.Down = st.upBytes, st.downBytes
+	st.t.ended.add(rec)
 }
 
 // Fill adds to a message for the session's minion, through add, what its
@@ -596,6 +632,11 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 	f := &filler{room: room, most: most, add: add}
 	work := false
 	for _, t := range tunnels {
+		// A reply before the stream's bytes, and before a close of it.
+		for len(t.replies) > 0 && f.put(t.replies[0]) {
+			t.replies = t.replies[1:]
+			work = true
+		}
 		for len(t.closes) > 0 && f.put(t.closes[0]) {
 			t.closes = t.closes[1:]
 			work = true
@@ -608,7 +649,9 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 				open = append(open, st)
 				continue
 			}
-			if t.acked && st.openDue(now, s.cfg.ResendAfter) && f.put(st.openItem()) {
+			// The minion's own streams open from its side: core answers
+			// once its connect ends.
+			if !t.reverse && t.acked && st.openDue(now, s.cfg.ResendAfter) && f.put(st.openItem()) {
 				st.openSent, work = now, true
 			}
 		}
@@ -655,9 +698,9 @@ func (s *Service) Fill(ctx context.Context, session uuid.UUID, room, most int, a
 	}
 	pending := false
 	for _, t := range tunnels {
-		pending = pending || len(t.closes) > 0
+		pending = pending || len(t.closes) > 0 || len(t.replies) > 0
 		for _, st := range t.streams {
-			pending = pending || (t.acked && !st.opened && st.openDue(now, s.cfg.ResendAfter)) ||
+			pending = pending || (!t.reverse && t.acked && !st.opened && st.openDue(now, s.cfg.ResendAfter)) ||
 				(st.opened && st.udp != nil && len(st.udp.out) > 0) ||
 				(st.opened && st.udp == nil && (st.ackDue || st.dataItem(now, protocol.MaxTunnelData, s.cfg.ResendAfter) != nil))
 		}
@@ -818,11 +861,26 @@ func (st *stream) sent(d protocol.TunnelDataItem, now time.Time) {
 	st.upSent, st.upSentAt = d.End(), now
 }
 
-// Take takes one of the minion's tunnel items for the session (22 to 26):
+// Take takes one of the minion's tunnel items for the session (21 to 27):
 // what goes back with the reply at once (a close for a stream core does not
 // have); bad when the item does not read.
 func (s *Service) Take(ctx context.Context, session uuid.UUID, raw cbor.RawMessage) (answers []cbor.RawMessage, bad error) {
 	switch protocol.ItemType(raw) {
+	case protocol.ItemTunnel:
+		var it protocol.TunnelItem
+		if err := read(raw, &it); err != nil {
+			return nil, err
+		}
+		return s.takeOpen(session, it)
+	case protocol.ItemTunnelListen:
+		var l protocol.TunnelListenItem
+		if err := read(raw, &l); err != nil {
+			return nil, err
+		}
+		if s.listeners != nil {
+			s.takeListen(ctx, session, l)
+		}
+		return nil, nil
 	case protocol.ItemTunnelReply:
 		var r protocol.TunnelReplyItem
 		if err := read(raw, &r); err != nil {
@@ -904,7 +962,9 @@ func (s *Service) takeReply(session uuid.UUID, r protocol.TunnelReplyItem) ([]cb
 		// Opened for a client gone (it waited too long): closed again.
 		return closeItem(r.Task, r.Stream, reason)
 	}
-	if st.opened || st.rec.Result != nil {
+	// A reverse port forward's streams are the minion's: core answers
+	// them, and takes no reply.
+	if st.t.reverse || st.opened || st.rec.Result != nil {
 		return nil, nil
 	}
 	result := r.Result
@@ -915,7 +975,6 @@ func (s *Service) takeReply(session uuid.UUID, r protocol.TunnelReplyItem) ([]cb
 		st.ackedEnd = downWindow
 	}
 	st.t.changed = true
-	s.record(st, false)
 	st.replied <- r
 	return nil, nil
 }

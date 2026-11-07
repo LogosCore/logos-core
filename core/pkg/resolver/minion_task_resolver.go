@@ -64,6 +64,10 @@ type IMinionTaskResolver interface {
 	OperationalPorts(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.OperationalPortConnection, error)
 	// LoadPort is a task's port, for a subscriber: nil when it has none.
 	LoadPort(ctx context.Context, taskID string) *model.OperationalPort
+	// MinionListeners is a page of the operation's reverse port forwards'
+	// listeners; LoadListener a task's, for a subscriber: nil for none.
+	MinionListeners(ctx context.Context, operationID string, search *string, first *int, after *string, last *int, before *string) (*model.MinionListenerConnection, error)
+	LoadListener(ctx context.Context, taskID string) *model.MinionListener
 	// Load is one task as GraphQL, for a subscriber: nil when it cannot be
 	// read.
 	Load(ctx context.Context, taskID string) *model.MinionTask
@@ -135,10 +139,16 @@ type TaskTunnels interface {
 	Address() string
 	View(ctx context.Context, task uuid.UUID) (miniontunnels.Summary, bool, error)
 	Summary(task uuid.UUID) (miniontunnels.Summary, bool)
-	Streams(ctx context.Context, task uuid.UUID, filter repository.TunnelStreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error)
+	Streams(ctx context.Context, task uuid.UUID, filter miniontunnels.StreamFilter, before uint64, limit int64) ([]models.MinionTunnelStream, error)
 	Port(ctx context.Context, task uuid.UUID) (*models.OperationalPort, error)
 	Ports(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.OperationalPort, error)
 	CountPorts(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
+	// OpenReverse keeps a reverse port forward's listener for a task about
+	// to be queued; Listener, Listeners and CountListeners read them.
+	OpenReverse(ctx context.Context, o miniontunnels.Opening) error
+	Listener(ctx context.Context, task uuid.UUID) (*models.MinionListener, error)
+	Listeners(ctx context.Context, operationID uuid.UUID, search string, cursor *pagination.Cursor, limit int64, forward bool) ([]models.MinionListener, error)
+	CountListeners(ctx context.Context, operationID uuid.UUID, search string) (int64, error)
 }
 
 // TaskCredentials resolves the credentials a task's args name (credential
@@ -352,8 +362,17 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 		if err != nil {
 			return nil, err
 		}
-		// The task shows the port it serves on.
-		values["port"] = port
+		if commands[i].Action == protocol.ActionReversePortForward {
+			// Where the minion listens, as core checked it (its port its
+			// own: no operational port).
+			values["bind"] = wire["bind"]
+		} else {
+			// The task shows the port it serves on.
+			values["port"] = port
+		}
+		// And when core stops it: a command line that leaves stop_idle out
+		// runs by its default, as the form (which sends every field) does.
+		withDefault(values, commands[i].Params, protocol.ParamStopIdle)
 	}
 	// On the wire the args go by their params' numbers.
 	var wireBytes []byte
@@ -378,6 +397,19 @@ func (r *minionTaskResolver) QueueMinionTask(ctx context.Context, sessionID, com
 	return r.toModel(ctx, t, r.names(ctx, []models.MinionTask{*t}))
 }
 
+// withDefault puts a param's default in a task's args where the operator
+// gave the param no value: TaskArgs ran the task by that default, and its
+// args now say so. A param the command does not declare, or declares with
+// no default, stays out.
+func withDefault(values map[string]any, params []protocol.FieldSpec, key string) {
+	if v, ok := values[key]; ok && v != nil {
+		return
+	}
+	if i := slices.IndexFunc(params, func(p protocol.FieldSpec) bool { return p.Key == key }); i >= 0 && params[i].Default != nil {
+		values[key] = params[i].Default
+	}
+}
+
 // openTunnel takes an operational port for a tunnel task about to be
 // queued (its port arg: 0 for any free one) and puts it in the task's
 // args: core's SOCKS proxy, or a forward to the task's host and to,
@@ -390,7 +422,7 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	o := miniontunnels.Opening{Task: taskID, Session: s.SessionID, Operation: s.OperationID, By: uid, Port: int(max(min(asked, 65536), -1)),
 		MaxStreams: miniontunnels.DefaultMaxStreams, Timeout: miniontunnels.DefaultConnectTimeout, SessionNumber: int(s.Number),
 		ByName: gqlctx.AuthFromContext(ctx).Username, Purpose: models.OperationalPurposeSOCKS}
-	if action == protocol.ActionPortForward {
+	if action == protocol.ActionPortForward || action == protocol.ActionReversePortForward {
 		host, _ := protocol.ArgString(wire, "host")
 		to, _ := protocol.ArgInt(wire, "to")
 		dest := protocol.TunnelItem{T: protocol.ItemTunnel, Task: taskID[:], Stream: 1, Host: strings.TrimSpace(host), Port: uint64(max(to, 0))}
@@ -405,6 +437,30 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 	}
 	if d, ok := protocol.ArgDuration(wire, "timeout"); ok && d > 0 {
 		o.Timeout = d
+	}
+	// Core's alone (no num): when to stop the tunnel no stream uses.
+	if d, ok := protocol.ArgDuration(wire, protocol.ParamStopIdle); ok && d > 0 {
+		o.StopIdle = d
+	}
+	if action == protocol.ActionReversePortForward {
+		// The minion listens; core connects each of its streams to the
+		// destination, which stays core's (its params carry no num).
+		bind, _ := protocol.ArgString(wire, "bind")
+		listen, _ := protocol.ArgInt(wire, "listen")
+		bind = strings.TrimSpace(bind)
+		if err := protocol.TunnelListen(bind, listen); err != nil {
+			return 0, moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("where the minion listens: %v", err))
+		}
+		udp, _ := protocol.ArgBool(wire, "udp")
+		o.Purpose, o.Bind, o.Listen, o.UDP, o.Port = models.OperationalPurposeReverse, bind, int(listen), udp, 0
+		wire["bind"] = bind
+		if err := r.tunnels.OpenReverse(ctx, o); err != nil {
+			if errors.Is(err, miniontunnels.ErrNoListeners) {
+				return 0, moduleGQLError(ctx, errCodeBadUserInput, err.Error())
+			}
+			return 0, err
+		}
+		return 0, nil
 	}
 	port, err := r.tunnels.Open(ctx, o)
 	if errors.Is(err, miniontunnels.ErrNoPort) {
@@ -817,7 +873,7 @@ func (r *minionTaskResolver) toModel(_ context.Context, t *models.MinionTask, na
 		ID: t.TaskID.String(), Rev: int(t.Rev), SessionID: t.SessionID.String(), OperationID: t.OperationID.String(), Command: t.Command,
 		IssuedBy: t.IssuedBy.String(), State: t.State, QueuedAt: t.QueuedAt.UTC().Format(time.RFC3339Nano),
 		SentAt: taskTime(t.SentAt), SendCount: t.SendCount, AckedAt: taskTime(t.AckedAt), StartedAt: taskTime(t.StartedAt),
-		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), Ok: t.OK, Err: strPtr(t.Err),
+		DoneAt: taskTime(t.DoneAt), CancelRequestedAt: taskTime(t.CancelRequestedAt), CancelReason: strPtr(t.CancelReason), Ok: t.OK, Err: strPtr(t.Err),
 		OutputSize: int(t.OutSize), OutputTruncated: t.OutTruncated, Parts: t.Parts, DataParts: t.DataParts,
 		Result: strPtr(t.Result), Action: strPtr(t.Action), DataSize: int(t.DataSize), DataTruncated: t.DataTruncated,
 		DataProblem: strPtr(t.DataProblem), MissingParts: t.MissingParts(),

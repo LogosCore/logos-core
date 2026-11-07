@@ -196,7 +196,6 @@ func (a *App) buildResolvers() *resolvers {
 			resolver.WithFsEntryRepo(a.repos.FsEntry),
 			resolver.WithMinionFeedbackRepo(a.repos.MinionFeedback),
 			resolver.WithMinionIdentityRepo(a.repos.MinionIdentity),
-			resolver.WithMinionTunnelStreamRepo(a.repos.MinionTunnelStream),
 			resolver.WithEventBus(a.eventBus)),
 		session:    resolver.NewSessionResolver(a.repos.Session, a.repos.User, a.tokenStore, a.eventBus),
 		wikiDoc:    wikiDoc,

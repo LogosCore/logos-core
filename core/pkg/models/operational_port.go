@@ -35,11 +35,19 @@ type OperationalPort struct {
 	// number: a stream's is never used again in the task, a restart's
 	// streams' neither.
 	Streams uint64 `bson:"streams" json:"streams"`
+	// Up and Down are its tools' bytes so far, each way, as core last kept
+	// them (every sweep, and when it stops): where a restart's count goes
+	// on from.
+	Up   int64 `bson:"up,omitempty" json:"up,omitempty"`
+	Down int64 `bson:"down,omitempty" json:"down,omitempty"`
 	// MaxStreams and Timeout are the task's max_streams and timeout args:
 	// how many streams may be open at once, and how long the minion tries
 	// a connect.
 	MaxStreams int           `bson:"max_streams,omitempty" json:"max_streams,omitempty"`
 	Timeout    time.Duration `bson:"timeout,omitempty" json:"timeout,omitempty"`
+	// StopIdle is the task's stop_idle: core stops it once no stream has
+	// been open that long; 0, never.
+	StopIdle time.Duration `bson:"stop_idle,omitempty" json:"stop_idle,omitempty"`
 }
 
 // What an operational port serves: its task's tunnel action's name.
@@ -49,7 +57,68 @@ const (
 	// OperationalPurposeForward: a port forward, to its destination
 	// (protocol.ActionPortForward).
 	OperationalPurposeForward = "port_forward"
+	// OperationalPurposeReverse: a reverse port forward, which listens on
+	// the minion's host (protocol.ActionReversePortForward): no operational
+	// port, a MinionListener.
+	OperationalPurposeReverse = "reverse_port_forward"
 )
+
+// MinionListener is a reverse port forward's listener
+// (contracts/minion-messages/tunnels.md, Reverse port forward): the port
+// its task's minion listens on, the destination core connects each of its
+// connections to, and how many streams the minion has opened. It goes when
+// the task ends; a restart takes up the tasks still running.
+type MinionListener struct {
+	field.DefaultField `bson:",inline"`
+
+	TaskID      uuid.UUID `bson:"task_id" json:"task_id"`
+	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
+	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
+	OpenedBy    uuid.UUID `bson:"opened_by" json:"opened_by"`
+	OpenedAt    time.Time `bson:"opened_at" json:"opened_at"`
+	// SessionNumber and OpenedByName, as they were when it opened: what
+	// the Ports list shows and searches (SearchText).
+	SessionNumber int    `bson:"session_number" json:"session_number"`
+	OpenedByName  string `bson:"opened_by_name,omitempty" json:"opened_by_name,omitempty"`
+	SearchText    string `bson:"search_text" json:"-"`
+	// Bind and Listen are where the minion is to listen, as the task asks
+	// (Listen 0: any free port); Bound where it does, as its tunnel_listen
+	// said ("" until it says).
+	Bind   string `bson:"bind" json:"bind"`
+	Listen int    `bson:"listen" json:"listen"`
+	Bound  string `bson:"bound,omitempty" json:"bound,omitempty"`
+	// UDP: the minion listens for datagrams, a stream for each address
+	// they come from.
+	UDP bool `bson:"udp,omitempty" json:"udp,omitempty"`
+	// Host and HostPort are the destination core connects each stream to,
+	// from its own network: the minion never learns them.
+	Host     string `bson:"host" json:"host"`
+	HostPort int    `bson:"host_port" json:"host_port"`
+	// Streams is the highest stream number the minion has opened: a tunnel
+	// item for one at or below it that core no longer has is an old one's
+	// (sent again, or a restart's), never connected again.
+	Streams uint64 `bson:"streams" json:"streams"`
+	// Up and Down are its bytes so far, as an operational port's.
+	Up   int64 `bson:"up,omitempty" json:"up,omitempty"`
+	Down int64 `bson:"down,omitempty" json:"down,omitempty"`
+	// MaxStreams and Timeout are the task's max_streams and timeout args:
+	// how many streams may be open at once, and how long core tries a
+	// connect.
+	MaxStreams int           `bson:"max_streams,omitempty" json:"max_streams,omitempty"`
+	Timeout    time.Duration `bson:"timeout,omitempty" json:"timeout,omitempty"`
+	// StopIdle is the task's stop_idle, as an operational port's.
+	StopIdle time.Duration `bson:"stop_idle,omitempty" json:"stop_idle,omitempty"`
+}
+
+// MinionListenerSearchText is what the Ports list's search matches: the
+// port, the session's number, who opened it, where it listens and what to.
+func MinionListenerSearchText(l *MinionListener) string {
+	text := fmt.Sprintf("%d #%d %s %s %s:%d %s", l.Listen, l.SessionNumber, l.OpenedByName, l.Bind, l.Host, l.HostPort, l.Bound)
+	if l.UDP {
+		text += " udp"
+	}
+	return text
+}
 
 // OperationalPortSearchText is what the Ports list's search matches: the
 // port, the session's number, who opened it and for what.
@@ -61,38 +130,38 @@ func OperationalPortSearchText(p *OperationalPort) string {
 	return text
 }
 
-// MinionTunnelStream is one stream of a tunnel task, as the operation's
-// record: who reached what through the minion, when, and how much went
-// each way. The bytes are never kept.
+// MinionTunnelStream is one stream of a tunnel task: who reached what
+// through the minion, when, and how much went each way. Core holds it in
+// memory while the task runs, every open one and the latest ended ones
+// (miniontunnels.KeptStreams), and stores none: once the task ends, what
+// is left is its totals (MinionTaskTunnel). The bytes are never kept.
 type MinionTunnelStream struct {
-	TaskID      uuid.UUID `bson:"task_id" json:"task_id"`
-	Stream      uint64    `bson:"stream" json:"stream"`
-	OperationID uuid.UUID `bson:"operation_id" json:"operation_id"`
-	SessionID   uuid.UUID `bson:"session_id" json:"session_id"`
+	TaskID uuid.UUID
+	Stream uint64
 	// Client is the address of the tool that asked for it (the SOCKS
 	// client's).
-	Client string `bson:"client" json:"client"`
+	Client string
 	// Host and Port: the destination, as the tool named it; none for a UDP
 	// association (UDP), whose datagrams each name their own.
-	Host     string    `bson:"host" json:"host"`
-	Port     int       `bson:"port" json:"port"`
-	UDP      bool      `bson:"udp,omitempty" json:"udp,omitempty"`
-	OpenedAt time.Time `bson:"opened_at" json:"opened_at"`
+	Host     string
+	Port     int
+	UDP      bool
+	OpenedAt time.Time
 	// Result is the minion's reply (protocol.TunnelOpen, ...): nil while
 	// it has not come. Bound is the minion's socket's address when open;
 	// Msg why not.
-	Result *int   `bson:"result,omitempty" json:"result,omitempty"`
-	Bound  string `bson:"bound,omitempty" json:"bound,omitempty"`
-	Msg    string `bson:"msg,omitempty" json:"msg,omitempty"`
+	Result *int
+	Bound  string
+	Msg    string
 	// EndedAt and End: when and how it ended (TunnelEnd...).
-	EndedAt *time.Time `bson:"ended_at,omitempty" json:"ended_at,omitempty"`
-	End     string     `bson:"end,omitempty" json:"end,omitempty"`
+	EndedAt *time.Time
+	End     string
 	// Up: bytes the tool sent the destination; Down: back.
-	Up   int64 `bson:"up" json:"up"`
-	Down int64 `bson:"down" json:"down"`
+	Up   int64
+	Down int64
 	// SearchText is what a task's streams' search matches: the tool's
 	// address and the destination.
-	SearchText string `bson:"search_text" json:"-"`
+	SearchText string
 }
 
 // TunnelStreamSearchText is a stream's SearchText.

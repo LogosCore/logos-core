@@ -26,6 +26,8 @@ type OperationalPort {
   # Its streams now, and how many it has had.
   open: Int!
   streams: Int!
+  # When core stops its task unless a stream opens first; null for none.
+  stopsAt: String
 }
 
 type OperationalPortEdge {
