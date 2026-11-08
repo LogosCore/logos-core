@@ -121,16 +121,12 @@ type MinionListener struct {
 	// UDP: the minion listens for datagrams, a stream for each address
 	// they come from.
 	UDP bool `bson:"udp,omitempty" json:"udp,omitempty"`
-	// Front is what core does with each stream (protocol.FrontForward,
-	// protocol.FrontSOCKS): forward connects it to Host:HostPort, from its
-	// own network (the minion never learns it); socks reads a SOCKS5
-	// request from it, behind User and Password, and connects where it
-	// asks.
+	// Front is what core does with each stream (protocol.FrontForward):
+	// connect it to Host:HostPort, from its own network (the minion never
+	// learns it).
 	Front    string `bson:"front" json:"front"`
 	Host     string `bson:"host,omitempty" json:"host,omitempty"`
 	HostPort int    `bson:"host_port,omitempty" json:"host_port,omitempty"`
-	User     string `bson:"user,omitempty" json:"user,omitempty"`
-	Password string `bson:"password,omitempty" json:"password,omitempty"`
 	// Streams is the highest stream number the minion has opened: a tunnel
 	// item for one at or below it that core no longer has is an old one's
 	// (sent again, or a restart's), never connected again. Opened is how

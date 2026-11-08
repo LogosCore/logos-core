@@ -7,7 +7,6 @@ import {
   httpProxyURL,
   parseCap,
   pathKind,
-  reverseSocksURL,
   listenAddress,
   proxyState,
   stopIdleOf,
@@ -71,7 +70,6 @@ describe("the proxy's address", () => {
     expect(proxychainsLine("[fe80::1]", 41000)).toBe("socks5 fe80::1 41000")
     expect(proxychainsLine("10.0.0.1", 41001, "http")).toBe("http 10.0.0.1 41001")
     expect(httpProxyURL("fe80::1", 41001)).toBe("http://[fe80::1]:41001")
-    expect(reverseSocksURL("10.0.0.7:1080", "logos", "a/b")).toBe("socks5h://logos:a%2Fb@10.0.0.7:1080")
   })
 })
 
@@ -142,7 +140,7 @@ describe("the proxy's state", () => {
     expect(frontLabel("forward")).toBe("Port forward")
     expect(frontLabel("a_later_one")).toBe("a later one")
     expect(frontLabel("forward", true)).toBe("Reverse port forward")
-    expect(frontLabel("socks", true)).toBe("Reverse SOCKS")
+    expect(frontLabel("socks", true)).toBe("Reverse socks")
   })
 
   it("changes its version as the tunnel moves on", () => {

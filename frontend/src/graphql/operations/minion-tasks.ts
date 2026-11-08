@@ -101,8 +101,6 @@ export const MinionTaskFields = graphql(`
       rows
       cols
       socksBind
-      user
-      password
       cap
       bind
       listen

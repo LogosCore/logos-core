@@ -94,9 +94,8 @@ type tunnel struct {
 	relay    net.PacketConn
 	udpRelay bool
 	// front is a reverse tunnel's: what core does with its streams
-	// (protocol.FrontForward, protocol.FrontSOCKS behind user and
-	// password).
-	front, user, password string
+	// (protocol.FrontForward).
+	front string
 	// fwdKind and fwdPath: a forward's to a unix socket or a pipe, instead
 	// of fwdHost and fwdPort. source: the address of the minion's host its
 	// TCP streams go from; tls: a forward's speak TLS to its destination.
@@ -350,7 +349,7 @@ func (s *Service) serve(t *tunnel, c net.Conn) {
 		return
 	}
 	_ = c.SetDeadline(time.Now().Add(s.cfg.HandshakeWait))
-	req, err := readRequest(c, nil)
+	req, err := readRequest(c)
 	_ = c.SetDeadline(time.Time{})
 	s.mu.Lock()
 	delete(t.handshaking, c)

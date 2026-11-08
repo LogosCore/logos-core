@@ -43,7 +43,7 @@ func TestReadRequest(t *testing.T) {
 	}
 	for _, c := range cases {
 		cl := client(c.in...)
-		got, err := readRequest(cl, nil)
+		got, err := readRequest(cl)
 		if err != nil || !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s: %+v %v, want %+v", c.name, got, err, c.want)
 			continue
@@ -72,7 +72,7 @@ func TestReadRequestRefuses(t *testing.T) {
 	}
 	for _, c := range cases {
 		cl := client(c.in...)
-		if _, err := readRequest(cl, nil); !errors.Is(err, errRefused) {
+		if _, err := readRequest(cl); !errors.Is(err, errRefused) {
 			t.Errorf("%s: %v, want refused", c.name, err)
 		}
 		if !bytes.Equal(cl.out.Bytes(), c.reply) {
@@ -82,7 +82,7 @@ func TestReadRequestRefuses(t *testing.T) {
 	for name, in := range map[string][]byte{
 		"version 6": {6, 1, 0}, "cut short": {5, 1, 0, 5, 1, 0, 1, 10}, "socks4 user id too long": append([]byte{4, 1, 0, 80, 10, 0, 0, 1}, bytes.Repeat([]byte{'u'}, 300)...),
 	} {
-		if _, err := readRequest(client(in...), nil); err == nil || errors.Is(err, errRefused) {
+		if _, err := readRequest(client(in...)); err == nil || errors.Is(err, errRefused) {
 			t.Errorf("%s: %v, want an error", name, err)
 		}
 	}
@@ -174,5 +174,12 @@ func TestReplayWindow(t *testing.T) {
 		if got := w.take(c.seq); got != c.want {
 			t.Errorf("seq %d: %v, want %v", c.seq, got, c.want)
 		}
+	}
+}
+
+// A result of unsupported is answered SOCKS5's command not supported.
+func TestSOCKSCodeUnsupported(t *testing.T) {
+	if socksCode(protocol.TunnelUnsupported) != socks5CommandNotSupported {
+		t.Error("unsupported's SOCKS reply")
 	}
 }

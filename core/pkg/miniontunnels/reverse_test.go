@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -546,4 +547,40 @@ func TestReverseUDPIdle(t *testing.T) {
 		t.Fatalf("still open: %+v", sum)
 	}
 	eventually(t, "the record's end", func() bool { return r.stream(1).End == models.TunnelEndDone })
+}
+
+// A restart's reverse SOCKS listener (core no longer serves them) is not
+// taken up: its task is stopped, saying why, its listener forgotten and
+// its totals kept with the task.
+func TestReverseSOCKSListenerStopped(t *testing.T) {
+	listeners := &fakeListeners{recs: map[uuid.UUID]models.MinionListener{}}
+	tasks := &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}}
+	task, session := uuid.New(), uuid.New()
+	listeners.recs[task] = models.MinionListener{TaskID: task, SessionID: session, Front: protocol.FrontSOCKS, Bind: "0.0.0.0", Listen: 1080,
+		Opened: 3, Up: 10, Down: 20}
+	tasks.tasks[task] = models.MinionTask{TaskID: task, SessionID: session, State: models.MinionTaskRunning, Action: protocol.ActionReverseTunnel}
+	svc := newReverseService(t, listeners, tasks, &recordingBus{})
+	if _, ok := svc.Summary(task); ok {
+		t.Fatal("a reverse SOCKS proxy taken up")
+	}
+	if _, ok := listeners.get(task); ok {
+		t.Error("its listener kept")
+	}
+	tasks.mu.Lock()
+	why := tasks.tasks[task].CancelReason
+	tasks.mu.Unlock()
+	if !strings.Contains(why, "reverse SOCKS") {
+		t.Errorf("why %q", why)
+	}
+	if tot := tasks.tunnel(task); tot == nil || tot.Streams != 3 || tot.Up != 10 {
+		t.Errorf("its totals %+v", tot)
+	}
+	// Its minion's next word of a stream is closed: no tunnel answers it.
+	raw, err := protocol.MarshalCBOR(protocol.TunnelItem{T: protocol.ItemTunnel, Task: task[:], Stream: 1, Host: "10.0.0.9", Port: 50000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := svc.Take(context.Background(), session, raw); err != nil || len(out) != 1 {
+		t.Errorf("a stream of it: %d items, %v", len(out), err)
+	}
 }

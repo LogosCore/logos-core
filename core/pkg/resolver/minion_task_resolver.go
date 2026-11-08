@@ -543,8 +543,6 @@ func (r *minionTaskResolver) openTunnel(ctx context.Context, s *models.MinionSes
 		}
 		udp, _ := protocol.ArgBool(wire, "udp")
 		switch {
-		case udp && front == protocol.FrontSOCKS:
-			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, "a reverse SOCKS proxy takes TCP alone: leave udp off")
 		case udp && !cmd.CanOpen(protocol.OpenUDP):
 			return 0, "", moduleGQLError(ctx, errCodeBadUserInput, fmt.Sprintf("%s's minion listens for TCP alone (its opens)", cmd.ID))
 		}

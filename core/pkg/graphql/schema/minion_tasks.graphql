@@ -202,10 +202,10 @@ type MinionTunnel {
   port: Int!
   address: String
   # What core puts in front, the task's front: socks (core's SOCKS proxy
-  # on the port), http (its HTTP proxy) or forward (every connection a
-  # stream to to, host:port). A reverse tunnel's (reverse: the minion
-  # listens): forward (core connects each of its streams to to) or socks
-  # (a SOCKS5 proxy into core's network, behind user and password).
+  # on the port), http (its HTTP proxy), forward (every connection a
+  # stream to to, host:port) or terminal (a process for each connection).
+  # A reverse tunnel's (reverse: the minion listens): forward (core
+  # connects each of its streams to to).
   front: String!
   reverse: Boolean!
   to: String
@@ -227,10 +227,6 @@ type MinionTunnel {
   # A SOCKS proxy's: it takes BIND (its command opens accept), while it
   # runs.
   socksBind: Boolean!
-  # A reverse SOCKS proxy's clients' user and password, while it runs;
-  # null for any other tunnel, and once it ended.
-  user: String
-  password: String
   # Its bandwidth cap, bytes a second each way, over all of its streams;
   # 0 for none. setMinionTunnelCap changes it while it runs.
   cap: Int!

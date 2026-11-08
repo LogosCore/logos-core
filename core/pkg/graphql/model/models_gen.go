@@ -1121,8 +1121,6 @@ type MinionTunnel struct {
 	Rows      *int    `json:"rows,omitempty"`
 	Cols      *int    `json:"cols,omitempty"`
 	SocksBind bool    `json:"socksBind"`
-	User      *string `json:"user,omitempty"`
-	Password  *string `json:"password,omitempty"`
 	Cap       int     `json:"cap"`
 	Bind      *string `json:"bind,omitempty"`
 	Listen    *int    `json:"listen,omitempty"`

@@ -308,8 +308,8 @@ func TestTunnelFront(t *testing.T) {
 
 // A reverse tunnel's task takes no operational port: the minion listens
 // where its args say (checked); a forward's destination is core's,
-// checked as a stream's; SOCKS needs none, and takes TCP alone. UDP only
-// through a command that opens it. One that does not read is the
+// checked as a stream's, and forward is its one front (no reverse SOCKS).
+// UDP only through a command that opens it. One that does not read is the
 // operator's to fix.
 func TestOpenReverse(t *testing.T) {
 	ctx := context.Background()
@@ -329,13 +329,6 @@ func TestOpenReverse(t *testing.T) {
 	if wire["bind"] != "0.0.0.0" || wire["host"] != "10.8.0.2" {
 		t.Errorf("args %v", wire)
 	}
-	if _, front, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), reverseCmd, map[string]any{"front": "socks", "bind": "0.0.0.0",
-		"listen": int64(1080)}); err != nil || front != protocol.FrontSOCKS {
-		t.Fatalf("reverse socks: %s %v", front, err)
-	}
-	if o := f.opened[1]; o.Front != protocol.FrontSOCKS || o.Host != "" || o.UDP {
-		t.Errorf("reverse socks: %+v", o)
-	}
 	tcpOnly := reverseCmd
 	tcpOnly.Opens = nil
 	for name, c := range map[string]struct {
@@ -348,15 +341,15 @@ func TestOpenReverse(t *testing.T) {
 		"listen 70000":  {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(70000), "host": "h", "to": int64(1)}, "where the minion listens"},
 		"no host":       {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "to": int64(1)}, "destination"},
 		"to 0":          {reverseCmd, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "host": "h"}, "destination"},
-		"udp socks":     {reverseCmd, map[string]any{"front": "socks", "bind": "0.0.0.0", "listen": int64(1), "udp": true}, "TCP alone"},
+		"socks":         {reverseCmd, map[string]any{"front": "socks", "bind": "0.0.0.0", "listen": int64(1080)}, "front: one of forward"},
 		"udp, tcp only": {tcpOnly, map[string]any{"bind": "0.0.0.0", "listen": int64(1), "udp": true, "host": "h", "to": int64(1)}, "TCP alone"},
-		"http":          {reverseCmd, map[string]any{"front": "http", "bind": "0.0.0.0", "listen": int64(1)}, "front: one of forward, socks"},
+		"http":          {reverseCmd, map[string]any{"front": "http", "bind": "0.0.0.0", "listen": int64(1)}, "front: one of forward"},
 	} {
 		if _, _, err := r.openTunnel(ctx, s, uuid.New(), uuid.New(), c.cmd, c.wire); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if len(f.opened) != 2 {
+	if len(f.opened) != 1 {
 		t.Errorf("a bad reverse tunnel kept: %+v", f.opened)
 	}
 	f.err = miniontunnels.ErrNoListeners
@@ -368,30 +361,23 @@ func TestOpenReverse(t *testing.T) {
 
 // A reverse tunnel's tunnel has no port: it says where the minion is to
 // listen, where it says it does (live), and the destination; it listens
-// only once the minion said so. A reverse SOCKS proxy's says its user and
-// password while it runs.
+// only once the minion said so.
 func TestReverseTunnel(t *testing.T) {
 	ctx := context.Background()
-	live, quiet, socks := uuid.New(), uuid.New(), uuid.New()
+	live, quiet := uuid.New(), uuid.New()
 	r := &minionTaskResolver{tunnels: &fakeTaskTunnels{address: "core.example", live: map[uuid.UUID]miniontunnels.Summary{
-		live: {Open: 1, Streams: 3, Bound: "0.0.0.0:8080"}, quiet: {}, socks: {Bound: "0.0.0.0:1080", User: "logos", Password: "pw"}}}}
+		live: {Open: 1, Streams: 3, Bound: "0.0.0.0:8080"}, quiet: {}}}}
 	reverse := protocol.ActionReverseTunnel
 	args := map[string]any{"bind": "0.0.0.0", "listen": float64(8080), "udp": true, "host": "10.8.0.2", "to": float64(4444)}
 	got, err := r.Tunnel(ctx, &model.MinionTask{ID: live.String(), Action: &reverse, Args: args})
 	if err != nil || got.Front != protocol.FrontForward || !got.Reverse || got.Port != 0 || got.Address != nil || got.To == nil ||
 		*got.To != "10.8.0.2:4444" || got.Bind == nil || *got.Bind != "0.0.0.0" || got.Listen == nil || *got.Listen != 8080 ||
-		got.Bound == nil || *got.Bound != "0.0.0.0:8080" || !got.Listening || got.Open != 1 || got.Streams != 3 || got.UDP == nil || !*got.UDP ||
-		got.User != nil || got.Password != nil {
+		got.Bound == nil || *got.Bound != "0.0.0.0:8080" || !got.Listening || got.Open != 1 || got.Streams != 3 || got.UDP == nil || !*got.UDP {
 		t.Fatalf("reverse: %+v %v", got, err)
 	}
 	got, err = r.Tunnel(ctx, &model.MinionTask{ID: quiet.String(), Action: &reverse, Args: args})
 	if err != nil || got.Listening || got.Bound != nil {
 		t.Fatalf("not listening yet: %+v %v", got, err)
-	}
-	got, _ = r.Tunnel(ctx, &model.MinionTask{ID: socks.String(), Action: &reverse, Args: map[string]any{"front": "socks", "bind": "0.0.0.0",
-		"listen": float64(1080)}})
-	if got.Front != protocol.FrontSOCKS || got.To != nil || got.User == nil || *got.User != "logos" || got.Password == nil || *got.Password != "pw" {
-		t.Errorf("reverse socks: %+v", got)
 	}
 }
 

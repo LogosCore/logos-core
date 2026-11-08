@@ -164,8 +164,7 @@ type Opening struct {
 	// (OperationalPurposeForward). A reverse tunnel (OpenReverse) has no
 	// port: the minion listens at Bind:Listen, and core does with its
 	// streams what Front says (protocol.FrontForward: connect each to
-	// Host:HostPort; protocol.FrontSOCKS: a SOCKS5 proxy behind a password
-	// core makes).
+	// Host:HostPort).
 	Purpose  string
 	Front    string
 	Host     string
@@ -626,8 +625,6 @@ type Summary struct {
 	Streams uint64
 	// Cap is its bandwidth cap now, bytes a second each way (0: none).
 	Cap int64
-	// User and Password are what a reverse SOCKS proxy's clients give.
-	User, Password string
 	// Up and Down: the bytes its tools sent through it, and got back.
 	Up, Down int64
 	// Bound is where a reverse port forward's minion says it listens, ""
@@ -651,7 +648,7 @@ func (s *Service) Summary(task uuid.UUID) (Summary, bool) {
 		return Summary{}, false
 	}
 	return Summary{Port: t.port, Open: len(t.streams), Streams: t.opened, Up: t.up, Down: t.down, Bound: t.bound, StopsAt: t.stopsAt(),
-		Cap: t.cap, User: t.user, Password: t.password, Accept: t.accept}, true
+		Cap: t.cap, Accept: t.accept}, true
 }
 
 // View is the task's tunnel as its task shows it: live while core listens

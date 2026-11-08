@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -528,145 +526,6 @@ func TestResendWakes(t *testing.T) {
 	}
 }
 
-// newReverseSOCKSRig is a reverse tunnel whose front is socks.
-func newReverseSOCKSRig(t *testing.T) *reverseRig {
-	t.Helper()
-	r := &reverseRig{listeners: &fakeListeners{recs: map[uuid.UUID]models.MinionListener{}},
-		tasks: &fakeTasks{tasks: map[uuid.UUID]models.MinionTask{}}, bus: &recordingBus{}, task: uuid.New(), session: uuid.New(),
-		operation: uuid.New()}
-	r.svc = newReverseService(t, r.listeners, r.tasks, r.bus)
-	r.tasks.tasks[r.task] = models.MinionTask{TaskID: r.task, SessionID: r.session, State: models.MinionTaskRunning,
-		Action: protocol.ActionReverseTunnel}
-	err := r.svc.OpenReverse(context.Background(), Opening{Task: r.task, Session: r.session, Operation: r.operation, By: uuid.New(),
-		Purpose: models.OperationalPurposeReverse, Front: protocol.FrontSOCKS, Bind: "0.0.0.0", Listen: 1080, MaxStreams: 8, Timeout: time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r
-}
-
-// rsClient is a client of a reverse SOCKS proxy, at the minion: its bytes
-// go to core as the minion's tunnel_data, core's come back.
-type rsClient struct {
-	t         *testing.T
-	r         *reverseRig
-	stream    uint64
-	off, next uint64
-	got       []byte
-	eof       bool
-}
-
-func (c *rsClient) send(b []byte) {
-	c.t.Helper()
-	c.r.take(c.t, protocol.TunnelDataItem{T: protocol.ItemTunnelData, Task: c.r.task[:], Stream: c.stream, Off: c.off, Data: b})
-	c.off += uint64(len(b))
-}
-
-// recv is core's next n bytes; n 0 waits for core's eof.
-func (c *rsClient) recv(n int) []byte {
-	c.t.Helper()
-	eventually(c.t, "core's bytes", func() bool {
-		for _, it := range c.r.fill() {
-			if protocol.ItemType(it) != protocol.ItemTunnelData {
-				continue
-			}
-			var d protocol.TunnelDataItem
-			if protocol.UnmarshalCBOR(it, &d) != nil || d.Stream != c.stream || d.Off != c.next {
-				continue
-			}
-			c.got = append(c.got, d.Data...)
-			c.next += uint64(len(d.Data))
-			if d.EOF {
-				c.eof = true
-				c.next++
-			}
-		}
-		if n == 0 {
-			return c.eof
-		}
-		return len(c.got) >= n
-	})
-	out := c.got[:n]
-	c.got = c.got[n:]
-	return out
-}
-
-// A reverse SOCKS proxy's stream is open at once: core speaks SOCKS5 on
-// its end, takes the client's user and password, connects where it asks
-// from its own network and says no address of its; then the bytes go
-// both ways. The record says the destination the client asked for.
-func TestReverseSOCKS(t *testing.T) {
-	dest := echo(t)
-	host, port := splitAddr(t, dest)
-	r := newReverseSOCKSRig(t)
-	sum, _ := r.svc.Summary(r.task)
-	if sum.User != ReverseSOCKSUser || len(sum.Password) != 24 {
-		t.Fatalf("its user and password: %q %q", sum.User, sum.Password)
-	}
-	if l, _ := r.listeners.get(r.task); l.Front != protocol.FrontSOCKS || l.Password != sum.Password || l.Host != "" {
-		t.Fatalf("its listener %+v", l)
-	}
-	r.take(t, r.open(1))
-	if rep := r.replyFor(t, 1); rep.Result != protocol.TunnelOpen {
-		t.Fatalf("reply %+v", rep)
-	}
-	c := &rsClient{t: t, r: r, stream: 1}
-	c.send([]byte{5, 1, 2})
-	if got := c.recv(2); !bytes.Equal(got, []byte{5, 2}) {
-		t.Fatalf("method % x", got)
-	}
-	auth := append([]byte{1, byte(len(sum.User))}, sum.User...)
-	auth = append(append(auth, byte(len(sum.Password))), sum.Password...)
-	c.send(auth)
-	if got := c.recv(2); !bytes.Equal(got, []byte{1, 0}) {
-		t.Fatalf("auth % x", got)
-	}
-	req := append([]byte{5, 1, 0, 1}, net.ParseIP(host).To4()...)
-	c.send(binary.BigEndian.AppendUint16(req, uint16(port)))
-	if rep := c.recv(10); rep[1] != socks5Succeeded || !bytes.Equal(rep[4:], make([]byte, 6)) {
-		t.Fatalf("reply % x", rep)
-	}
-	c.send([]byte("hello"))
-	if got := c.recv(5); string(got) != "hello" {
-		t.Fatalf("back %q", got)
-	}
-	rec := r.stream(1)
-	if rec.Host != host || rec.Port != port || rec.Result == nil || *rec.Result != protocol.TunnelOpen || rec.Client != "10.0.0.9:50001" {
-		t.Errorf("record %+v", rec)
-	}
-
-	// The wrong password: refused, and the stream ends.
-	r.take(t, r.open(2))
-	r.replyFor(t, 2)
-	bad := &rsClient{t: t, r: r, stream: 2}
-	bad.send([]byte{5, 1, 2})
-	bad.recv(2)
-	bad.send([]byte{1, 5, 'l', 'o', 'g', 'o', 's', 3, 'b', 'a', 'd'})
-	if got := bad.recv(2); !bytes.Equal(got, []byte{1, 1}) {
-		t.Errorf("a wrong password: % x", got)
-	}
-	bad.recv(0)
-
-	// SOCKS4 has no password: rejected.
-	r.take(t, r.open(3))
-	r.replyFor(t, 3)
-	four := &rsClient{t: t, r: r, stream: 3}
-	four.send([]byte{4, 1, 0, 80, 127, 0, 0, 1, 0})
-	if got := four.recv(2); got[1] != socks4Rejected {
-		t.Errorf("SOCKS4: % x", got)
-	}
-}
-
-// A reverse SOCKS proxy takes TCP alone: a UDP stream of its minion's is
-// answered failed.
-func TestReverseSOCKSNoUDP(t *testing.T) {
-	r := newReverseSOCKSRig(t)
-	r.take(t, protocol.TunnelItem{T: protocol.ItemTunnel, Task: r.task[:], Stream: 1, Host: "10.0.0.9", Port: 5353, UDP: true})
-	if rep := r.replyFor(t, 1); rep.Result != protocol.TunnelFailed {
-		t.Errorf("a UDP stream: %+v", rep)
-	}
-}
-
 // An open of the minion's that core does not take as it is (a later
 // version's key) is answered unsupported, and its number is used up: it
 // never connects.
@@ -692,33 +551,6 @@ func TestReverseOpenUnsupported(t *testing.T) {
 	none, _ := protocol.MarshalCBOR(map[int]any{0: protocol.ItemTunnel, 2: 2, 3: "h", 4: 1})
 	if _, err := r.svc.Take(context.Background(), r.session, none); err == nil {
 		t.Error("an open with no task taken")
-	}
-}
-
-// A SOCKS5 client gives a user and password where core asks for them, and
-// a wrong one is refused; one that offers no such method, or speaks
-// SOCKS4, is too.
-func TestReadRequestAuth(t *testing.T) {
-	auth := &socksAuth{user: "logos", password: "pw"}
-	ok := client(append([]byte{5, 1, 2, 1, 5, 'l', 'o', 'g', 'o', 's', 2, 'p', 'w'}, 5, 1, 0, 3, 2, 'd', 'c', 1, 187)...)
-	req, err := readRequest(ok, auth)
-	if err != nil || req.host != "dc" || req.port == 0 || !bytes.Equal(ok.out.Bytes(), []byte{5, 2, 1, 0}) {
-		t.Fatalf("%+v %v % x", req, err, ok.out.Bytes())
-	}
-	wrong := client(5, 1, 2, 1, 5, 'l', 'o', 'g', 'o', 's', 1, 'x')
-	if _, err := readRequest(wrong, auth); !errors.Is(err, errRefused) || !bytes.Equal(wrong.out.Bytes(), []byte{5, 2, 1, 1}) {
-		t.Errorf("a wrong password: %v % x", err, wrong.out.Bytes())
-	}
-	noAuth := client(5, 1, 0)
-	if _, err := readRequest(noAuth, auth); !errors.Is(err, errRefused) || !bytes.Equal(noAuth.out.Bytes(), []byte{5, 0xff}) {
-		t.Errorf("no password offered: %v % x", err, noAuth.out.Bytes())
-	}
-	four := client(4, 1, 0, 80, 127, 0, 0, 1, 0)
-	if _, err := readRequest(four, auth); !errors.Is(err, errRefused) || four.out.Bytes()[1] != socks4Rejected {
-		t.Errorf("SOCKS4: %v % x", err, four.out.Bytes())
-	}
-	if socksCode(protocol.TunnelUnsupported) != socks5CommandNotSupported {
-		t.Error("unsupported's SOCKS reply")
 	}
 }
 

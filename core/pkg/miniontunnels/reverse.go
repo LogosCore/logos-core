@@ -45,8 +45,7 @@ func (s *Service) WithListeners(l repository.IMinionListenerRepository) *Service
 
 // OpenReverse keeps a reverse tunnel's listener for a task about to be
 // queued: the minion listens at o.Bind:o.Listen once it has the task, and
-// core connects its streams to o.Host:o.HostPort (o.Front forward), or
-// serves SOCKS5 on them behind a password it makes now (socks).
+// core connects its streams to o.Host:o.HostPort (its front, forward).
 func (s *Service) OpenReverse(ctx context.Context, o Opening) error {
 	if s.listeners == nil {
 		return ErrNoListeners
@@ -58,11 +57,7 @@ func (s *Service) OpenReverse(ctx context.Context, o Opening) error {
 	rec := &models.MinionListener{TaskID: o.Task, OperationID: o.Operation, SessionID: o.Session, OpenedBy: o.By, OpenedAt: s.now(),
 		SessionNumber: o.SessionNumber, OpenedByName: o.ByName, Bind: o.Bind, Listen: o.Listen, UDP: o.UDP, Front: front,
 		MaxStreams: o.MaxStreams, Timeout: o.Timeout, StopIdle: o.StopIdle, Cap: o.Cap}
-	if front == protocol.FrontSOCKS {
-		rec.User, rec.Password = ReverseSOCKSUser, newPassword()
-	} else {
-		rec.Host, rec.HostPort = o.Host, o.HostPort
-	}
+	rec.Host, rec.HostPort = o.Host, o.HostPort
 	if err := s.listeners.Insert(ctx, rec); err != nil {
 		return fmt.Errorf("keep a reverse port forward: %w", err)
 	}
@@ -78,7 +73,7 @@ func (s *Service) takeUp(rec *models.MinionListener) *tunnel {
 		Purpose: models.OperationalPurposeReverse, Host: rec.Host, HostPort: rec.HostPort, Streams: rec.Streams, Opened: rec.Opened,
 		Up: rec.Up, Down: rec.Down, MaxStreams: rec.MaxStreams, Timeout: rec.Timeout, StopIdle: rec.StopIdle, Cap: rec.Cap}, nil, true)
 	t.reverse, t.bind, t.listen, t.bound, t.reverseUDP = true, rec.Bind, rec.Listen, rec.Bound, rec.UDP
-	t.front, t.user, t.password = rec.Front, rec.User, rec.Password
+	t.front = rec.Front
 	s.mu.Lock()
 	s.tunnels[rec.TaskID] = t
 	s.mu.Unlock()
@@ -104,6 +99,17 @@ func (s *Service) reopenReverse(ctx context.Context, rec *models.MinionListener)
 		return
 	case err != nil:
 		s.logger.Error("tunnels: read a reverse port forward's task", zap.String("task_id", rec.TaskID.String()), zap.Error(err))
+		return
+	}
+	if rec.Front != "" && rec.Front != protocol.FrontForward {
+		// A reverse SOCKS proxy's, from before core dropped them: its task
+		// is stopped, never served again.
+		s.keepTotals(ctx, rec.TaskID, models.MinionTaskTunnel{Streams: rec.Opened, Up: rec.Up, Down: rec.Down})
+		if err := s.listeners.Release(ctx, rec.TaskID); err != nil {
+			s.logger.Warn("tunnels: forget a reverse SOCKS proxy", zap.Error(err))
+		}
+		s.cancel(ctx, rec.TaskID, "stopped by core: reverse SOCKS is no longer served")
+		s.listenerChanged(rec.TaskID, rec.OperationID, false, true)
 		return
 	}
 	s.takeUp(rec)
@@ -173,9 +179,9 @@ func (s *Service) takeOpen(session uuid.UUID, it protocol.TunnelItem) ([]cbor.Ra
 	t.last, t.counted = it.Stream, true
 	refuse := 0
 	switch {
-	case it.UDP != t.reverseUDP, it.UDP && it.Host == "", it.UDP && t.front == protocol.FrontSOCKS:
+	case it.UDP != t.reverseUDP, it.UDP && it.Host == "":
 		// A TCP stream of a UDP forward, or the other way; a UDP one that
-		// names no source to send back to; any but TCP for SOCKS.
+		// names no source to send back to.
 		refuse = protocol.TunnelFailed
 	case len(t.streams) >= t.maxStreams:
 		refuse = protocol.TunnelNotAllowed
@@ -208,8 +214,6 @@ func (s *Service) takeOpen(session uuid.UUID, it protocol.TunnelItem) ([]cbor.Ra
 	switch {
 	case it.UDP:
 		go s.connectUDP(st)
-	case t.front == protocol.FrontSOCKS:
-		go s.takeSOCKS(st, protocol.TunnelRoom(it.Room))
 	default:
 		go s.connect(st, protocol.TunnelRoom(it.Room))
 	}

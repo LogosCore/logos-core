@@ -28,11 +28,6 @@ export function httpProxyURL(host: string, port: number): string {
   return `http://${hostPort(host, port)}`
 }
 
-/** A reverse SOCKS proxy as a URL for a tool on the minion's side: its user and password in it, names resolved at core's end. */
-export function reverseSocksURL(address: string, user: string, password: string): string {
-  return `socks5h://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${address}`
-}
-
 /** Why the minion could not connect, by its reply's result. */
 export const RESULT_LABEL: Record<string, string> = {
   open: "open",
@@ -128,7 +123,7 @@ export function proxyState(t: Tunnel, taskState: string): { label: string; tone:
   return { label: "Listening", tone: "good", detail: null }
 }
 
-/** What core puts in front of a tunnel (its task's front): a SOCKS proxy, an HTTP proxy, or a port forward; a reverse tunnel's minion listens on its host, and core forwards each connection or speaks SOCKS on it. */
+/** What core puts in front of a tunnel (its task's front): a SOCKS proxy, an HTTP proxy, a port forward or a terminal; a reverse tunnel's minion listens on its host, and core forwards each connection (its one front). */
 export const FRONT_SOCKS = "socks"
 export const FRONT_HTTP = "http"
 export const FRONT_FORWARD = "forward"
@@ -137,7 +132,7 @@ export const FRONT_TERMINAL = "terminal"
 
 /** What a tunnel is, for a person: its front, and which way it goes. */
 export function frontLabel(front: string, reverse = false): string {
-  if (reverse) return front === FRONT_SOCKS ? "Reverse SOCKS" : "Reverse port forward"
+  if (reverse) return front === FRONT_FORWARD ? "Reverse port forward" : `Reverse ${front.replaceAll("_", " ")}`
   switch (front) {
     case FRONT_FORWARD:
       return "Port forward"

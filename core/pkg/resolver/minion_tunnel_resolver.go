@@ -113,8 +113,6 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 		m.Listening = listening && sum.Bound != ""
 		udp, _ := protocol.ArgBool(args, "udp")
 		m.UDP = &udp
-		// A reverse SOCKS proxy's clients' user and password, while it runs.
-		m.User, m.Password = strPtr(sum.User), strPtr(sum.Password)
 	}
 	return m, nil
 }

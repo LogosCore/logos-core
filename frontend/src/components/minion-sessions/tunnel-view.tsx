@@ -49,7 +49,6 @@ import { laggyKind } from "./terminal-socket";
 import {
   FRONT_FORWARD,
   FRONT_HTTP,
-  FRONT_SOCKS,
   FRONT_TERMINAL,
   capLabel,
   forwardTo,
@@ -62,7 +61,6 @@ import {
   proxyState,
   proxyURL,
   proxychainsLine,
-  reverseSocksURL,
   reverseState,
   socatCommand,
   stopIdleOf,
@@ -107,12 +105,11 @@ export function TunnelView({
   tunnel: Tunnel;
 }) {
   // A reverse tunnel listens on the minion's host: no port of core's. Its
-  // front: a forward to one destination, or SOCKS behind a password.
+  // front: a forward to one destination.
   const reverse = tunnel.reverse;
   const front = tunnel.front;
   const http = !reverse && front === FRONT_HTTP;
   const terminal = !reverse && front === FRONT_TERMINAL;
-  const reverseSocks = reverse && front === FRONT_SOCKS;
   // Core's address for its ports, else the host this page came from; a
   // reverse port forward's, where its minion listens.
   const host = tunnel.address ?? window.location.hostname;
@@ -249,22 +246,6 @@ export function TunnelView({
                 </Button>
               </>
             )}
-            {reverseSocks && tunnel.user && tunnel.password && (
-              <Button
-                variant="ghost"
-                size="xs"
-                title="Copy its URL, user and password in it: for a tool on the minion's side (names resolve at core's end)"
-                onClick={() =>
-                  void copyToClipboard(
-                    reverseSocksURL(address, tunnel.user ?? "", tunnel.password ?? ""),
-                    "proxy URL",
-                  )
-                }
-              >
-                <LinkIcon />
-                URL
-              </Button>
-            )}
           </div>
         )}
       </div>
@@ -329,39 +310,7 @@ export function TunnelView({
                   {laggy && <span className="text-amber-600 dark:text-amber-400"> · {laggy}</span>}
                 </LabelRow>
               </>
-            ) : reverseSocks ? (
-              <>
-                <LabelRow label="Speaks">
-                  SOCKS5 (connect), with a user and password, into core&apos;s
-                  network
-                </LabelRow>
-                <LabelRow label="Login">
-                  {tunnel.user && tunnel.password ? (
-                    <>
-                      <span className="font-mono text-xs break-all">
-                        {tunnel.user} / {tunnel.password}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="ml-1 align-middle"
-                        title="Copy the password"
-                        aria-label="Copy the password"
-                        onClick={() =>
-                          void copyToClipboard(tunnel.password ?? "", "password")
-                        }
-                      >
-                        <CopyIcon />
-                      </Button>
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">
-                      core keeps it while the task runs
-                    </span>
-                  )}
-                </LabelRow>
-              </>
-            ) : (
+            ) : reverse ? null : (
               <LabelRow label="Speaks">
                 {http
                   ? "HTTP: CONNECT, and plain requests (one a connection); no credentials"
@@ -450,9 +399,7 @@ export function TunnelView({
               onValueChange={(search) => setFilter((f) => ({ ...f, search }))}
               placeholder={
                 reverse
-                  ? reverseSocks
-                    ? "Search who connected, or where they asked..."
-                    : "Search who connected, or the destination..."
+                  ? "Search who connected, or the destination..."
                   : terminal
                     ? "Search who opened it, or the program..."
                     : "Search the tool or the destination..."
@@ -526,9 +473,7 @@ export function TunnelView({
                     <WaypointsIcon className="size-8 opacity-50" />
                     <p className="text-sm">No stream yet.</p>
                     <p className="max-w-md text-center text-xs">
-                      {reverseSocks
-                        ? `Each connection to ${address} on the minion's host is one: its tool says where to go in core's network, with the task's user and password.`
-                        : reverse && tunnel.udp
+                      {reverse && tunnel.udp
                         ? `Each address that sends datagrams to ${address} on the minion's host is one: core sends them on to ${tunnel.to ?? "the destination"} from its own network.`
                         : reverse
                           ? `Each connection to ${address} on the minion's host is one: core connects it to ${tunnel.to ?? "the destination"} from its own network.`
