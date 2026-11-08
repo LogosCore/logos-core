@@ -249,6 +249,12 @@ type MinionTunnel {
   # Its streams now (opening or open), and how many it has had.
   open: Int!
   streams: Int!
+  # How many streams it carries at once (its max_streams): one past it is
+  # refused (a reverse tunnel's, reset). timeoutMs: how long a connect may
+  # take (its timeout), milliseconds: the minion's to a destination, or a
+  # reverse tunnel's core's. Each its args', else core's default.
+  maxStreams: Int!
+  timeoutMs: Int!
   # How many of its ended streams core keeps to list while its task runs,
   # the latest (the open ones it always has). Once the task ended it keeps
   # none: what is left is these numbers.

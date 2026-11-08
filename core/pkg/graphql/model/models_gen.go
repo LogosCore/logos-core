@@ -1130,6 +1130,8 @@ type MinionTunnel struct {
 	StopsAt    *string            `json:"stopsAt,omitempty"`
 	Open       int                `json:"open"`
 	Streams    int                `json:"streams"`
+	MaxStreams int                `json:"maxStreams"`
+	TimeoutMs  int                `json:"timeoutMs"`
 	Kept       int                `json:"kept"`
 	Up         int                `json:"up"`
 	Down       int                `json:"down"`

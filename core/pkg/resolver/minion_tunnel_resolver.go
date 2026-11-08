@@ -66,6 +66,16 @@ func (r *minionTaskResolver) Tunnel(ctx context.Context, t *model.MinionTask) (*
 	m := &model.MinionTunnel{Port: port, Address: strPtr(r.tunnels.Address()), Front: front, Reverse: reverse, Listening: listening,
 		Open: sum.Open, Streams: int(sum.Streams), Kept: miniontunnels.KeptStreams, Up: int(sum.Up), Down: int(sum.Down),
 		StopsAt: taskTime(stopsAt(sum)), Cap: int(max(capNow, 0))}
+	// Its limits, as core took them when it queued the task: its args',
+	// else the defaults (openTunnel).
+	m.MaxStreams = miniontunnels.DefaultMaxStreams
+	if n, ok := protocol.ArgInt(args, "max_streams"); ok && n > 0 {
+		m.MaxStreams = int(min(n, 1<<16))
+	}
+	m.TimeoutMs = int(miniontunnels.DefaultConnectTimeout.Milliseconds())
+	if d, ok := protocol.ArgDuration(args, "timeout"); ok && d > 0 {
+		m.TimeoutMs = int(d.Milliseconds())
+	}
 	if front == protocol.FrontForward {
 		// Its destination, as its args say (core checked them when it
 		// queued the task): a host and a port, or a path.

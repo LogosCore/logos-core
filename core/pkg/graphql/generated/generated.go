@@ -1053,6 +1053,7 @@ type ComplexityRoot struct {
 		Kept       func(childComplexity int) int
 		Listen     func(childComplexity int) int
 		Listening  func(childComplexity int) int
+		MaxStreams func(childComplexity int) int
 		Open       func(childComplexity int) int
 		Path       func(childComplexity int) int
 		Port       func(childComplexity int) int
@@ -1065,6 +1066,7 @@ type ComplexityRoot struct {
 		StopsAt    func(childComplexity int) int
 		Streams    func(childComplexity int) int
 		TLS        func(childComplexity int) int
+		TimeoutMs  func(childComplexity int) int
 		To         func(childComplexity int) int
 		UDP        func(childComplexity int) int
 		Up         func(childComplexity int) int
@@ -6825,6 +6827,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.Listening(childComplexity), true
+	case "MinionTunnel.maxStreams":
+		if e.ComplexityRoot.MinionTunnel.MaxStreams == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.MaxStreams(childComplexity), true
 	case "MinionTunnel.open":
 		if e.ComplexityRoot.MinionTunnel.Open == nil {
 			break
@@ -6897,6 +6905,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MinionTunnel.TLS(childComplexity), true
+	case "MinionTunnel.timeoutMs":
+		if e.ComplexityRoot.MinionTunnel.TimeoutMs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MinionTunnel.TimeoutMs(childComplexity), true
 	case "MinionTunnel.to":
 		if e.ComplexityRoot.MinionTunnel.To == nil {
 			break
@@ -15803,6 +15817,12 @@ type MinionTunnel {
   # Its streams now (opening or open), and how many it has had.
   open: Int!
   streams: Int!
+  # How many streams it carries at once (its max_streams): one past it is
+  # refused (a reverse tunnel's, reset). timeoutMs: how long a connect may
+  # take (its timeout), milliseconds: the minion's to a destination, or a
+  # reverse tunnel's core's. Each its args', else core's default.
+  maxStreams: Int!
+  timeoutMs: Int!
   # How many of its ended streams core keeps to list while its task runs,
   # the latest (the open ones it always has). Once the task ended it keeps
   # none: what is left is these numbers.
@@ -43972,6 +43992,10 @@ func (ec *executionContext) fieldContext_MinionTask_tunnel(_ context.Context, fi
 				return ec.fieldContext_MinionTunnel_open(ctx, field)
 			case "streams":
 				return ec.fieldContext_MinionTunnel_streams(ctx, field)
+			case "maxStreams":
+				return ec.fieldContext_MinionTunnel_maxStreams(ctx, field)
+			case "timeoutMs":
+				return ec.fieldContext_MinionTunnel_timeoutMs(ctx, field)
 			case "kept":
 				return ec.fieldContext_MinionTunnel_kept(ctx, field)
 			case "up":
@@ -45821,6 +45845,64 @@ func (ec *executionContext) _MinionTunnel_streams(ctx context.Context, field gra
 }
 
 func (ec *executionContext) fieldContext_MinionTunnel_streams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_maxStreams(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_maxStreams,
+		func(ctx context.Context) (any, error) {
+			return obj.MaxStreams, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_maxStreams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MinionTunnel",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MinionTunnel_timeoutMs(ctx context.Context, field graphql.CollectedField, obj *model.MinionTunnel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MinionTunnel_timeoutMs,
+		func(ctx context.Context) (any, error) {
+			return obj.TimeoutMs, nil
+		},
+		nil,
+		ec.marshalNInt2int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MinionTunnel_timeoutMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "MinionTunnel",
 		Field:      field,
@@ -94929,6 +95011,16 @@ func (ec *executionContext) _MinionTunnel(ctx context.Context, sel ast.Selection
 			}
 		case "streams":
 			out.Values[i] = ec._MinionTunnel_streams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "maxStreams":
+			out.Values[i] = ec._MinionTunnel_maxStreams(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "timeoutMs":
+			out.Values[i] = ec._MinionTunnel_timeoutMs(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

@@ -155,6 +155,21 @@ func TestTaskTunnel(t *testing.T) {
 	}
 }
 
+// A tunnel's limits are its args' (max_streams, timeout
+// as core keeps them: a duration in milliseconds), else core's defaults.
+func TestTunnelLimits(t *testing.T) {
+	ctx := context.Background()
+	r := &minionTaskResolver{tunnels: &fakeTaskTunnels{}}
+	got, err := r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String()})
+	if err != nil || got.MaxStreams != miniontunnels.DefaultMaxStreams || got.TimeoutMs != 10_000 {
+		t.Fatalf("defaults: %+v %v", got, err)
+	}
+	got, err = r.Tunnel(ctx, &model.MinionTask{ID: uuid.New().String(), Args: map[string]any{"max_streams": float64(32), "timeout": float64(2500)}})
+	if err != nil || got.MaxStreams != 32 || got.TimeoutMs != 2500 {
+		t.Fatalf("its args: %+v %v", got, err)
+	}
+}
+
 // A stream reads OPENING until the minion's reply, OPEN after it, ENDED
 // once it ended; its result by name.
 func TestTunnelStreamModel(t *testing.T) {

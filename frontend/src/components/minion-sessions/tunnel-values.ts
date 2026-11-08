@@ -219,6 +219,17 @@ export function stopIdleOf(args: unknown): string | null {
   return s === "" || /^0+(\.0+)?[a-zµ]*$/i.test(s) ? null : s
 }
 
+/** A connect timeout as people read it: 10s, 1.5s, 2m, 1m 30s. */
+export function timeoutLabel(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const tenths = Math.round(ms / 100) / 10
+  if (tenths < 60) return `${tenths}s`
+  const total = Math.round(ms / 1000)
+  const m = Math.floor(total / 60)
+  const sec = total % 60
+  return sec > 0 ? `${m}m ${sec}s` : `${m}m`
+}
+
 /** The version a task's live updates bring: the streams list is read again when it changes. */
 export function tunnelVersion(t: Tunnel): string {
   const clients = t.vpnClients.map((c) => `${c.id}/${c.open}/${c.streams}/${c.connected}`).join(",")

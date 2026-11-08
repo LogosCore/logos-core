@@ -10,6 +10,7 @@ import {
   listenAddress,
   proxyState,
   stopIdleOf,
+  timeoutLabel,
   reverseState,
   proxyURL,
   proxychainsLine,
@@ -59,6 +60,8 @@ const tunnel = (t: Partial<Tunnel>): Tunnel => ({
   listening: true,
   open: 0,
   streams: 0,
+  maxStreams: 256,
+  timeoutMs: 10000,
   kept: 1000,
   up: 0,
   down: 0,
@@ -276,5 +279,18 @@ describe("a VPN", () => {
   })
   it("reads the streams again as its machines change", () => {
     expect(tunnelVersion(tunnel({ vpnClients: [client] }))).not.toBe(tunnelVersion(tunnel({ vpnClients: [{ ...client, open: 2 }] })))
+  })
+})
+
+describe("timeoutLabel", () => {
+  it("says a connect timeout as people read it", () => {
+    expect(timeoutLabel(10_000)).toBe("10s")
+    expect(timeoutLabel(1_500)).toBe("1.5s")
+    expect(timeoutLabel(500)).toBe("500ms")
+    expect(timeoutLabel(120_000)).toBe("2m")
+    expect(timeoutLabel(90_000)).toBe("1m 30s")
+    // Rounded before it is split: never "60s".
+    expect(timeoutLabel(59_950)).toBe("1m")
+    expect(timeoutLabel(119_600)).toBe("2m")
   })
 })

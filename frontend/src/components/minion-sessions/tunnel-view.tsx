@@ -65,6 +65,7 @@ import {
   reverseState,
   socatCommand,
   stopIdleOf,
+  timeoutLabel,
   streamDestination,
   streamState,
   terminalProgram,
@@ -366,6 +367,16 @@ export function TunnelView({
               {capLabel(tunnel.cap)}
               {tunnel.listening && keeps && <ChangeCap task={t} cap={tunnel.cap} />}
             </LabelRow>
+            {!terminal && (
+              <LabelRow label="Connect timeout">
+                {timeoutLabel(tunnel.timeoutMs)}
+                <span className="text-muted-foreground">
+                  {reverse
+                    ? " · core's, to the destination; a connection to the minion waits that long, and 30 s more"
+                    : " · the minion's, to each destination"}
+                </span>
+              </LabelRow>
+            )}
             <LabelRow label="Stops when idle">
               {stopIdle ? (
                 <>
@@ -398,6 +409,10 @@ export function TunnelView({
                   · {tunnel.open} open now
                 </span>
               )}
+              <span className="text-muted-foreground tabular-nums">
+                {" "}
+                · at most {tunnel.maxStreams} at once
+              </span>
               {keeps && tunnel.streams > tunnel.kept && (
                 <span className="text-muted-foreground tabular-nums">
                   {" "}

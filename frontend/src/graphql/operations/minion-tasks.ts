@@ -110,6 +110,8 @@ export const MinionTaskFields = graphql(`
       stopsAt
       open
       streams
+      maxStreams
+      timeoutMs
       kept
       up
       down
